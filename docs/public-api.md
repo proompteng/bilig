@@ -21,6 +21,7 @@
 - `getCell(sheet, address)`
 - `getDependencies(sheet, address)`
 - `getDependents(sheet, address)`
+- `explainCell(sheet, address)`
 - `exportSnapshot()`
 - `importSnapshot(snapshot)`
 - `exportSheetCsv(sheet)`

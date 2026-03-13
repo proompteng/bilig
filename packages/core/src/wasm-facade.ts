@@ -83,11 +83,23 @@ export class WasmKernelFacade {
     const errors = this.kernel.readErrors();
     changedCellIndices.forEach((cellIndex) => {
       if (cellIndex >= store.size) return;
+      const previousTag = store.tags[cellIndex]!;
+      const previousNumber = store.numbers[cellIndex]!;
+      const previousError = store.errors[cellIndex]!;
       store.tags[cellIndex] = tags[cellIndex]!;
       store.numbers[cellIndex] = numbers[cellIndex]!;
       store.errors[cellIndex] = errors[cellIndex]!;
       if (tags[cellIndex] === ValueTag.String) {
         store.stringIds[cellIndex] = 0;
+      } else {
+        store.stringIds[cellIndex] = 0;
+      }
+      if (
+        previousTag !== store.tags[cellIndex] ||
+        previousNumber !== store.numbers[cellIndex] ||
+        previousError !== store.errors[cellIndex]
+      ) {
+        store.versions[cellIndex] = (store.versions[cellIndex] ?? 0) + 1;
       }
     });
   }

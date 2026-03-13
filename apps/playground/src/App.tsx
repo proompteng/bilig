@@ -191,7 +191,7 @@ export function App() {
     }
   }, [selection, sheetNames]);
 
-  const dependencySnapshot = engine.getDependencies(selection.sheetName, selection.address);
+  const dependencySnapshot = engine.explainCell(selection.sheetName, selection.address);
   const resolvedValue =
     selectedCell.value.tag === 1
       ? String(selectedCell.value.value)

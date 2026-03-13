@@ -28,6 +28,20 @@ export interface DependencySnapshot {
   directDependents: string[];
 }
 
+export interface ExplainCellSnapshot {
+  sheetName: string;
+  address: string;
+  formula?: string;
+  mode?: FormulaMode;
+  value: CellValue;
+  flags: number;
+  version: number;
+  topoRank?: number;
+  inCycle: boolean;
+  directPrecedents: string[];
+  directDependents: string[];
+}
+
 export interface RecalcMetrics {
   batchId: number;
   changedInputCount: number;

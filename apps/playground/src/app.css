@@ -430,6 +430,23 @@ body {
   color: var(--ink-700);
 }
 
+.dependency-meta {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dependency-meta div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.inspector-formula {
+  margin: 6px 0 12px;
+  color: var(--ink-500);
+  word-break: break-word;
+}
+
 .dependency-panel ul {
   margin: 6px 0 12px;
   padding-left: 18px;

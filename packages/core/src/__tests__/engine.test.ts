@@ -128,4 +128,21 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
     expect(engine.getCellValue("Sheet1", "C3")).toEqual({ tag: ValueTag.Empty });
   });
+
+  it("explains formula cells with mode, version, and dependencies", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 5);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+
+    const explanation = engine.explainCell("Sheet1", "B1");
+
+    expect(explanation.formula).toBe("A1*2");
+    expect(explanation.mode).toBeDefined();
+    expect(explanation.version).toBeGreaterThan(0);
+    expect(explanation.directPrecedents).toEqual(["Sheet1!A1"]);
+    expect(explanation.directDependents).toEqual([]);
+    expect(explanation.inCycle).toBe(false);
+  });
 });

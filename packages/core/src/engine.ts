@@ -7,6 +7,7 @@ import {
   type CellValue,
   type DependencySnapshot,
   type EngineEvent,
+  type ExplainCellSnapshot,
   type LiteralInput,
   type RecalcMetrics,
   type WorkbookSnapshot
@@ -263,6 +264,46 @@ export class SpreadsheetEngine {
 
   getDependents(sheetName: string, address: string): DependencySnapshot {
     return this.getDependencies(sheetName, address);
+  }
+
+  explainCell(sheetName: string, address: string): ExplainCellSnapshot {
+    const cellIndex = this.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return {
+        sheetName,
+        address,
+        value: emptyValue(),
+        flags: 0,
+        version: 0,
+        inCycle: false,
+        directPrecedents: [],
+        directDependents: []
+      };
+    }
+
+    const snapshot = this.getCellByIndex(cellIndex);
+    const formula = this.formulas.get(cellIndex);
+    const flags = this.workbook.cellStore.flags[cellIndex] ?? 0;
+    const isFormula = ((flags & CellFlags.HasFormula) !== 0) && formula !== undefined;
+    const dependencies = this.getDependencies(sheetName, address);
+
+    const explanation: ExplainCellSnapshot = {
+      ...snapshot,
+      version: this.workbook.cellStore.versions[cellIndex] ?? 0,
+      inCycle: (flags & CellFlags.InCycle) !== 0,
+      directPrecedents: dependencies.directPrecedents,
+      directDependents: dependencies.directDependents
+    };
+
+    if (formula?.source !== undefined) {
+      explanation.formula = formula.source;
+    }
+    if (isFormula) {
+      explanation.mode = formula.compiled.mode;
+      explanation.topoRank = this.workbook.cellStore.topoRanks[cellIndex] ?? 0;
+    }
+
+    return explanation;
   }
 
   exportSnapshot(): WorkbookSnapshot {
