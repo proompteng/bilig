@@ -7,6 +7,11 @@
   - downstream edit scenarios at 100, 1k, and 10k dependent formulas
   - renderer commit-style scenarios at 1k and 10k declared cells
 - `scripts/perf-smoke.mjs` enforces a lightweight CI threshold against a 1k-downstream edit and asserts that the run actually dirties the expected formulas and hits the WASM fast path.
+- `scripts/bench-contracts.mjs` enforces the documented performance contracts in CI:
+  - 100k materialized-cell load under 1.5s
+  - 10k-downstream edit under 120ms end to end
+  - 10k-downstream recalc under 50ms
+  - 10k-cell render commit under 50ms
 - `scripts/release-check.mjs` enforces artifact budgets after the playground build:
   - largest built app JS asset must stay under 350KB gzip
   - largest built WASM asset must stay under 250KB gzip
@@ -24,6 +29,7 @@
   - typecheck
   - unit/integration tests
   - perf smoke
+  - benchmark contract checks
   - browser smoke
   - artifact budget enforcement
 - Local pre-push verification should use `pnpm run ci:strict`, which mirrors the Forgejo cleanliness gate in one command.
