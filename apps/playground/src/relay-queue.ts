@@ -1,4 +1,4 @@
-import { compactLog, compareBatches, type EngineOpBatch } from "@bilig/crdt";
+import { compactLog, compareBatches, type EngineOpBatch } from "../../../packages/crdt/src/index.js";
 
 export type RelayTarget = "primary" | "mirror";
 
