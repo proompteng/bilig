@@ -9,6 +9,6 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "bench": "tsx src/benchmark-edit.ts"
+    "bench": "tsx src/index.ts"
   }
 }

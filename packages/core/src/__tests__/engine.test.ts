@@ -70,6 +70,22 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
   });
 
+  it("preserves topo order across mixed wasm and js formula runs", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 5);
+    engine.setCellFormula("Sheet1", "B2", "A1+A2");
+    engine.setCellFormula("Sheet1", "D1", "SUM(2:2)");
+
+    engine.setCellValue("Sheet1", "A1", 12);
+
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 22 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+    expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
+  });
+
   it("rebinds formulas when a referenced sheet appears later", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

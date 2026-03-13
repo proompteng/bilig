@@ -710,8 +710,19 @@ export class SpreadsheetEngine {
       (left, right) => (this.workbook.cellStore.topoRanks[left] ?? 0) - (this.workbook.cellStore.topoRanks[right] ?? 0)
     );
 
-    const wasmBatch: number[] = [];
+    const flushWasmBatch = (batch: number[]): number => {
+      if (batch.length === 0) {
+        return 0;
+      }
+      this.wasm.syncFromStore(this.workbook.cellStore);
+      this.wasm.evalBatch(Uint32Array.from(batch));
+      this.wasm.syncToStore(this.workbook.cellStore, Uint32Array.from(batch));
+      return batch.length;
+    };
+
+    let wasmCount = 0;
     let jsCount = 0;
+    let wasmBatch: number[] = [];
     ordered.forEach((cellIndex) => {
       const formula = this.formulas.get(cellIndex);
       if (!formula) return;
@@ -722,19 +733,17 @@ export class SpreadsheetEngine {
         wasmBatch.push(cellIndex);
         return;
       }
+      wasmCount += flushWasmBatch(wasmBatch);
+      wasmBatch = [];
       jsCount += 1;
       this.evaluateFormulaJs(cellIndex, formula);
     });
 
-    if (wasmBatch.length > 0) {
-      this.wasm.syncFromStore(this.workbook.cellStore);
-      this.wasm.evalBatch(Uint32Array.from(wasmBatch));
-      this.wasm.syncToStore(this.workbook.cellStore, Uint32Array.from(wasmBatch));
-    }
+    wasmCount += flushWasmBatch(wasmBatch);
 
     this.lastMetrics.dirtyFormulaCount = ordered.length;
     this.lastMetrics.jsFormulaCount = jsCount;
-    this.lastMetrics.wasmFormulaCount = wasmBatch.length;
+    this.lastMetrics.wasmFormulaCount = wasmCount;
     this.lastMetrics.recalcMs = performance.now() - started;
 
     return Uint32Array.from([...new Set([...changedRoots, ...ordered])]);

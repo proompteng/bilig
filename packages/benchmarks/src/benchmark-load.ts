@@ -1,12 +1,25 @@
 import { performance } from "node:perf_hooks";
 import { SpreadsheetEngine } from "@bilig/core";
-import { seedWorkbook } from "./generate-workbook.js";
+import { seedLoadWorkbook } from "./generate-workbook.js";
 
-const engine = new SpreadsheetEngine({ workbookName: "benchmark-load" });
-await engine.ready();
+export interface LoadBenchmarkResult {
+  scenario: "load";
+  materializedCells: number;
+  elapsedMs: number;
+}
 
-const started = performance.now();
-seedWorkbook(engine, 5000);
-const elapsed = performance.now() - started;
+export async function runLoadBenchmark(materializedCells = 10_000): Promise<LoadBenchmarkResult> {
+  const engine = new SpreadsheetEngine({ workbookName: "benchmark-load" });
+  await engine.ready();
 
-console.log(JSON.stringify({ scenario: "load", elapsedMs: elapsed }, null, 2));
+  const started = performance.now();
+  seedLoadWorkbook(engine, materializedCells);
+  const elapsed = performance.now() - started;
+
+  return { scenario: "load", materializedCells, elapsedMs: elapsed };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const materializedCells = Number.parseInt(process.argv[2] ?? "10000", 10);
+  console.log(JSON.stringify(await runLoadBenchmark(materializedCells), null, 2));
+}

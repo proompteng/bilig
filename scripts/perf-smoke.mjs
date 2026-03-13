@@ -1,27 +1,16 @@
-import { performance } from "node:perf_hooks";
-import { SpreadsheetEngine } from "../packages/core/src/index.ts";
+import { runEditBenchmark } from "../packages/benchmarks/src/benchmark-edit.ts";
 
-const engine = new SpreadsheetEngine({ workbookName: "perf-smoke" });
-await engine.ready();
-engine.createSheet("Sheet1");
-
-for (let i = 1; i <= 1000; i += 1) {
-  const addr = `A${i}`;
-  engine.setCellValue("Sheet1", addr, i);
-}
-
-for (let i = 1; i <= 1000; i += 1) {
-  const addr = `B${i}`;
-  engine.setCellFormula("Sheet1", addr, `A${i}*2`);
-}
-
-const started = performance.now();
-engine.setCellValue("Sheet1", "A1", 42);
-const metrics = engine.getLastMetrics();
-const elapsed = performance.now() - started;
+const { elapsedMs: elapsed, metrics, downstreamCount } = await runEditBenchmark(1_000);
 
 if (elapsed > 250) {
   console.error(`perf smoke exceeded threshold: ${elapsed.toFixed(2)}ms`);
+  process.exit(1);
+}
+
+if (metrics.dirtyFormulaCount < downstreamCount) {
+  console.error(
+    `perf smoke failed to mark the expected downstream formulas dirty: expected at least ${downstreamCount}, got ${metrics.dirtyFormulaCount}`
+  );
   process.exit(1);
 }
 
@@ -30,4 +19,4 @@ if (metrics.wasmFormulaCount === 0) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ elapsedMs: elapsed, metrics }, null, 2));
+console.log(JSON.stringify({ elapsedMs: elapsed, downstreamCount, metrics }, null, 2));
