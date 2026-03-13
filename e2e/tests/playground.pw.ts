@@ -37,3 +37,39 @@ test("playground smoke exercises the custom renderer and wasm-backed recalculati
   await expect(page.getByRole("button", { name: /^Cell D1$/ })).toHaveText("22");
   await expect(page.getByTestId("replica-value")).toHaveText("12");
 });
+
+test("paused relay queue survives reload and resumes replication", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.clear();
+  });
+  await page.reload();
+
+  const formulaInput = page.getByLabel("Formula");
+
+  await expect(page.getByTestId("replica-status")).toHaveText("Live");
+  await expect(page.getByTestId("replica-value")).toHaveText("10");
+
+  await page.getByRole("button", { name: "Pause sync" }).click();
+  await expect(page.getByTestId("replica-status")).toHaveText("Paused");
+
+  await formulaInput.fill("15");
+  await page.getByRole("button", { name: "Commit" }).click();
+
+  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("15");
+  await expect(page.getByTestId("replica-value")).toHaveText("10");
+  await expect(page.getByTestId("replica-queued")).toHaveText("1");
+
+  await page.reload();
+
+  await expect(page.getByTestId("replica-status")).toHaveText("Paused");
+  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("15");
+  await expect(page.getByTestId("replica-value")).toHaveText("10");
+  await expect(page.getByTestId("replica-queued")).toHaveText("1");
+
+  await page.getByRole("button", { name: "Resume sync" }).click();
+
+  await expect(page.getByTestId("replica-status")).toHaveText("Live");
+  await expect(page.getByTestId("replica-value")).toHaveText("15");
+  await expect(page.getByTestId("replica-queued")).toHaveText("0");
+});

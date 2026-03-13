@@ -50,6 +50,7 @@ pnpm run ci:strict
 - The cell inspector now exposes formula mode, topo rank, versioning, and dependency edges from the core engine.
 - The playground also demonstrates local-first replica mirroring through the engine’s outbound and inbound batch APIs.
 - The playground persists workbook and replica snapshots in local storage so the demo survives reloads as a local-first app surface.
+- The playground relay queue now persists paused replica traffic across reloads, so offline-style catch-up is visible instead of being memory-only.
 - The imperative engine now includes a single-sheet CSV bridge for import/export without pulling React into shared packages.
 - CI now enforces performance contracts for 100k snapshot load, 10k-downstream edits, and 10k-cell render commits instead of relying on a loose smoke check alone.
 - `pnpm release:check` enforces the documented production budgets for the built app JS and bundled WASM asset.

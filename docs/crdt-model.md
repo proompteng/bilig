@@ -40,3 +40,5 @@ This order is used for both merge sorting and entity-level last-writer-wins chec
 - sheet delete tombstones
 
 That keeps restart, replay, and duplicate-delivery behavior deterministic without needing a transport-specific store.
+
+The playground layers a persisted relay queue on top of that engine contract. Paused replica traffic survives reloads and replays through `applyRemoteBatch()` after resume, which makes the local-first behavior visible without baking transport policy into shared packages.

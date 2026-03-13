@@ -18,10 +18,24 @@ import {
 
 const PRIMARY_STORAGE_KEY = "bilig:playground:primary";
 const MIRROR_STORAGE_KEY = "bilig:playground:mirror";
+const RELAY_STORAGE_KEY = "bilig:playground:relay";
 
 interface PersistedReplicaState {
   snapshot: ReturnType<SpreadsheetEngine["exportSnapshot"]>;
   replica: ReturnType<SpreadsheetEngine["exportReplicaSnapshot"]>;
+}
+
+type RelayTarget = "primary" | "mirror";
+
+interface RelayEntry {
+  target: RelayTarget;
+  batch: EngineOpBatch;
+  deliverAt: number;
+}
+
+interface PersistedRelayState {
+  syncPaused: boolean;
+  queue: RelayEntry[];
 }
 
 export function App() {
@@ -36,14 +50,19 @@ export function App() {
   const [editorValue, setEditorValue] = useState("");
   const [replicationReady, setReplicationReady] = useState(false);
   const [syncPaused, setSyncPaused] = useState(false);
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  const [queuedSyncCount, setQueuedSyncCount] = useState(0);
+  const [relayQueue, setRelayQueue] = useState<RelayEntry[]>([]);
   const syncLatencyMs = 120;
-  const queuedBatchesRef = useRef<Array<{ target: "primary" | "mirror"; batch: EngineOpBatch }>>([]);
-  const pendingTimersRef = useRef(new Set<number>());
+  const relayQueueRef = useRef<RelayEntry[]>([]);
+  const relayTimerRef = useRef<number | null>(null);
   const sheetNames = [...engine.workbook.sheetsByName.values()]
     .sort((left, right) => left.order - right.order)
     .map((sheet) => sheet.name);
+  const pendingSyncCount = syncPaused ? 0 : relayQueue.length;
+  const queuedSyncCount = syncPaused ? relayQueue.length : 0;
+
+  useEffect(() => {
+    relayQueueRef.current = relayQueue;
+  }, [relayQueue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +70,7 @@ export function App() {
     void Promise.all([engine.ready(), mirrorEngine.ready()]).then(async () => {
       const primaryPersisted = window.localStorage.getItem(PRIMARY_STORAGE_KEY);
       const mirrorPersisted = window.localStorage.getItem(MIRROR_STORAGE_KEY);
+      const relayPersisted = window.localStorage.getItem(RELAY_STORAGE_KEY);
 
       if (primaryPersisted) {
         const restored = JSON.parse(primaryPersisted) as PersistedReplicaState;
@@ -68,6 +88,15 @@ export function App() {
         mirrorEngine.importSnapshot(engine.exportSnapshot());
       }
 
+      if (relayPersisted) {
+        const restoredRelay = JSON.parse(relayPersisted) as PersistedRelayState;
+        relayQueueRef.current = restoredRelay.queue;
+        if (!cancelled) {
+          setRelayQueue(restoredRelay.queue);
+          setSyncPaused(restoredRelay.syncPaused);
+        }
+      }
+
       if (!cancelled) {
         setReplicationReady(true);
       }
@@ -75,9 +104,11 @@ export function App() {
 
     return () => {
       cancelled = true;
-      pendingTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-      pendingTimersRef.current.clear();
-      queuedBatchesRef.current = [];
+      if (relayTimerRef.current !== null) {
+        window.clearTimeout(relayTimerRef.current);
+        relayTimerRef.current = null;
+      }
+      relayQueueRef.current = [];
       void rendererRoot.unmount();
     };
   }, [engine, mirrorEngine, rendererRoot]);
@@ -118,51 +149,81 @@ export function App() {
   useEffect(() => {
     if (!replicationReady) return;
 
-    const scheduleBatch = (target: SpreadsheetEngine, batch: EngineOpBatch) => {
-      setPendingSyncCount((current) => current + 1);
-      const timer = window.setTimeout(() => {
-        pendingTimersRef.current.delete(timer);
-        target.applyRemoteBatch(batch);
-        setPendingSyncCount((current) => Math.max(0, current - 1));
-      }, syncLatencyMs);
-      pendingTimersRef.current.add(timer);
+    const enqueueBatch = (target: RelayTarget, batch: EngineOpBatch) => {
+      setRelayQueue((current) => [
+        ...current,
+        {
+          target,
+          batch,
+          deliverAt: Date.now() + syncLatencyMs
+        }
+      ]);
     };
 
-    const routeBatch = (target: "primary" | "mirror", batch: EngineOpBatch) => {
-      if (syncPaused) {
-        queuedBatchesRef.current.push({ target, batch });
-        setQueuedSyncCount(queuedBatchesRef.current.length);
-        return;
-      }
-      scheduleBatch(target === "mirror" ? mirrorEngine : engine, batch);
-    };
-
-    const unsubscribeLocal = engine.subscribeBatches((batch) => routeBatch("mirror", batch));
-    const unsubscribeMirror = mirrorEngine.subscribeBatches((batch) => routeBatch("primary", batch));
+    const unsubscribeLocal = engine.subscribeBatches((batch) => enqueueBatch("mirror", batch));
+    const unsubscribeMirror = mirrorEngine.subscribeBatches((batch) => enqueueBatch("primary", batch));
 
     return () => {
       unsubscribeLocal();
       unsubscribeMirror();
     };
-  }, [engine, mirrorEngine, replicationReady, syncPaused]);
+  }, [engine, mirrorEngine, replicationReady]);
 
   useEffect(() => {
-    if (syncPaused || queuedBatchesRef.current.length === 0) {
+    if (!replicationReady) {
       return;
     }
 
-    const queuedBatches = queuedBatchesRef.current.splice(0);
-    setQueuedSyncCount(0);
-    queuedBatches.forEach(({ target, batch }) => {
-      setPendingSyncCount((current) => current + 1);
-      const timer = window.setTimeout(() => {
-        pendingTimersRef.current.delete(timer);
+    const persistedRelayState: PersistedRelayState = {
+      syncPaused,
+      queue: relayQueue
+    };
+    window.localStorage.setItem(RELAY_STORAGE_KEY, JSON.stringify(persistedRelayState));
+  }, [relayQueue, replicationReady, syncPaused]);
+
+  useEffect(() => {
+    if (!replicationReady) {
+      return;
+    }
+
+    if (relayTimerRef.current !== null) {
+      window.clearTimeout(relayTimerRef.current);
+      relayTimerRef.current = null;
+    }
+
+    if (syncPaused || relayQueue.length === 0) {
+      return;
+    }
+
+    const nextDeliverAt = relayQueue.reduce((earliest, entry) => Math.min(earliest, entry.deliverAt), Number.POSITIVE_INFINITY);
+    const delay = Math.max(0, nextDeliverAt - Date.now());
+
+    relayTimerRef.current = window.setTimeout(() => {
+      relayTimerRef.current = null;
+      const now = Date.now();
+      const due: RelayEntry[] = [];
+      const pending: RelayEntry[] = [];
+      relayQueueRef.current.forEach((entry) => {
+        if (entry.deliverAt <= now) {
+          due.push(entry);
+          return;
+        }
+        pending.push(entry);
+      });
+      relayQueueRef.current = pending;
+      setRelayQueue(pending);
+      due.forEach(({ target, batch }) => {
         (target === "mirror" ? mirrorEngine : engine).applyRemoteBatch(batch);
-        setPendingSyncCount((current) => Math.max(0, current - 1));
-      }, syncLatencyMs);
-      pendingTimersRef.current.add(timer);
-    });
-  }, [engine, mirrorEngine, syncPaused]);
+      });
+    }, delay);
+
+    return () => {
+      if (relayTimerRef.current !== null) {
+        window.clearTimeout(relayTimerRef.current);
+        relayTimerRef.current = null;
+      }
+    };
+  }, [engine, mirrorEngine, relayQueue, replicationReady, syncPaused]);
 
   useEffect(() => {
     if (selectedCell.formula) {
@@ -238,6 +299,7 @@ export function App() {
   const resetWorkspace = () => {
     window.localStorage.removeItem(PRIMARY_STORAGE_KEY);
     window.localStorage.removeItem(MIRROR_STORAGE_KEY);
+    window.localStorage.removeItem(RELAY_STORAGE_KEY);
     window.location.reload();
   };
 

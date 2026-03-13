@@ -38,10 +38,10 @@ export function ReplicaPanel({
         </button>
       </div>
       <dl className="replica-stats">
-        <div><dt>Status</dt><dd>{syncPaused ? "Paused" : "Live"}</dd></div>
+        <div><dt>Status</dt><dd data-testid="replica-status">{syncPaused ? "Paused" : "Live"}</dd></div>
         <div><dt>Latency</dt><dd>{latencyMs} ms</dd></div>
-        <div><dt>In flight</dt><dd>{pendingSyncCount}</dd></div>
-        <div><dt>Queued</dt><dd>{queuedSyncCount}</dd></div>
+        <div><dt>In flight</dt><dd data-testid="replica-pending">{pendingSyncCount}</dd></div>
+        <div><dt>Queued</dt><dd data-testid="replica-queued">{queuedSyncCount}</dd></div>
         <div><dt>Replica batch</dt><dd>{remoteMetrics.batchId}</dd></div>
       </dl>
       <div className="replica-selected">
