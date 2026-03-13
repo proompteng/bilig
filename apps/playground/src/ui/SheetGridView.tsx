@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
-import { ValueTag } from "@bilig/protocol";
+import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
 import { useCell } from "./useCell.js";
 
@@ -11,8 +11,8 @@ interface SheetGridViewProps {
   onSelect(addr: string): void;
 }
 
-const GRID_ROW_COUNT = 2000;
-const GRID_COL_COUNT = 52;
+const GRID_ROW_COUNT = Math.min(MAX_ROWS, 100_000);
+const GRID_COL_COUNT = Math.min(MAX_COLS, 256);
 const ROW_HEIGHT = 42;
 const COL_WIDTH = 120;
 const HEADER_HEIGHT = 46;
@@ -177,6 +177,7 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
         <div className="viewport-meta">
           <span>{GRID_ROW_COUNT.toLocaleString()} rows</span>
           <span>{GRID_COL_COUNT} columns</span>
+          <span>engine {MAX_ROWS.toLocaleString()} x {MAX_COLS.toLocaleString()}</span>
         </div>
       </div>
       <div

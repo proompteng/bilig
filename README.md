@@ -46,6 +46,7 @@ pnpm run ci:strict
 - The WASM kernel is a custom AssemblyScript fast path, not an embedded proprietary spreadsheet runtime.
 - The TS protocol enums/opcodes and AssemblyScript protocol mirror are generated from `scripts/gen-protocol.mjs` so JS/WASM ABI drift fails fast in CI.
 - The playground includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
+- The playground operator surface now spans a 100k-row by 256-column virtualized window while keeping the engine hard limits at 1,048,576 rows by 16,384 columns.
 - The demo workbook now exercises JS row/column range formulas and a WASM-backed branch formula in the visible UI so browser smoke covers both paths.
 - The cell inspector now exposes formula mode, topo rank, versioning, and dependency edges from the core engine.
 - The playground also demonstrates local-first replica mirroring through the engine’s outbound and inbound batch APIs.
