@@ -2,6 +2,7 @@ export * from "./CellEditorOverlay.js";
 export * from "./DependencyInspector.js";
 export * from "./FormulaBar.js";
 export * from "./MetricsPanel.js";
+export * from "./ReplicaPanel.js";
 export * from "./SheetGridView.js";
 export * from "./WorkbookView.js";
 export * from "./useCell.js";

@@ -186,7 +186,8 @@ body {
 
 .workbook-header h2,
 .metrics-panel h3,
-.dependency-panel h3 {
+.dependency-panel h3,
+.replica-panel h3 {
   margin: 0;
 }
 
@@ -374,6 +375,36 @@ body {
 .metrics-panel dl div {
   display: flex;
   justify-content: space-between;
+}
+
+.replica-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.replica-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.replica-stats {
+  display: grid;
+  gap: 8px;
+}
+
+.replica-stats div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.replica-selected {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(16, 36, 62, 0.04);
 }
 
 .metrics-panel dt,

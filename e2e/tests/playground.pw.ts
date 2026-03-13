@@ -13,6 +13,7 @@ test("playground smoke exercises the custom renderer and wasm-backed recalculati
   await page.getByRole("button", { name: "Commit" }).click();
 
   await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("24");
+  await expect(page.getByTestId("replica-value")).toHaveText("12");
   await page.getByRole("tab", { name: "Sheet2" }).click();
   await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("25");
   await page.getByTestId("sheet-grid").focus();
