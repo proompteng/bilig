@@ -6,6 +6,12 @@ import type {
   WorkbookDescriptor
 } from "./descriptors.js";
 
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
 function pushCellUpsert(ops: CommitOp[], sheetName: string, cell: CellDescriptor): void {
   const op: CommitOp = {
     kind: "upsertCell",
@@ -23,7 +29,12 @@ function collectSheetMountOps(ops: CommitOp[], sheet: Extract<Descriptor, { kind
     name: sheet.props.name,
     order
   });
-  sheet.children.forEach((cell) => pushCellUpsert(ops, sheet.props.name, cell));
+  sheet.children.forEach((cell) => {
+    assert(cell.kind === "Cell", "Only <Cell> can be nested inside <Sheet>.");
+    assert(Boolean(cell.props.addr), "<Cell> requires an addr prop.");
+    assert(!(cell.props.value !== undefined && cell.props.formula !== undefined), "<Cell> cannot specify both value and formula.");
+    pushCellUpsert(ops, sheet.props.name, cell);
+  });
 }
 
 export function collectMountOps(descriptor: Descriptor): CommitOp[] {
@@ -34,7 +45,10 @@ export function collectMountOps(descriptor: Descriptor): CommitOp[] {
       kind: "upsertWorkbook",
       name: descriptor.props.name ?? "Workbook"
     });
-    descriptor.children.forEach((sheet, order) => collectSheetMountOps(ops, sheet, order));
+    descriptor.children.forEach((sheet, order) => {
+      assert(sheet.kind === "Sheet", "Only <Sheet> nodes can exist under <Workbook>.");
+      collectSheetMountOps(ops, sheet, order);
+    });
     return ops;
   }
 

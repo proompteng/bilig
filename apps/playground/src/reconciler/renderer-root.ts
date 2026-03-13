@@ -14,7 +14,8 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
     root: null,
     model: emptyRenderModel(),
     pendingOps: [],
-    shouldSyncSheetOrders: false
+    shouldSyncSheetOrders: false,
+    lastError: null
   };
 
   const fiberRoot = (WorkbookReconciler as any).createContainer(
@@ -32,13 +33,39 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
 
   return {
     render(element: ReactNode) {
-      return new Promise<void>((resolve) => {
-        (WorkbookReconciler as any).updateContainer(element, fiberRoot, null, resolve);
+      container.lastError = null;
+      return new Promise<void>((resolve, reject) => {
+        try {
+          (WorkbookReconciler as any).updateContainer(element, fiberRoot, null, () => {
+            if (container.lastError) {
+              const error = container.lastError;
+              container.lastError = null;
+              reject(error);
+              return;
+            }
+            resolve();
+          });
+        } catch (error) {
+          reject(error);
+        }
       });
     },
     unmount() {
-      return new Promise<void>((resolve) => {
-        (WorkbookReconciler as any).updateContainer(null, fiberRoot, null, resolve);
+      container.lastError = null;
+      return new Promise<void>((resolve, reject) => {
+        try {
+          (WorkbookReconciler as any).updateContainer(null, fiberRoot, null, () => {
+            if (container.lastError) {
+              const error = container.lastError;
+              container.lastError = null;
+              reject(error);
+              return;
+            }
+            resolve();
+          });
+        } catch (error) {
+          reject(error);
+        }
       });
     }
   };

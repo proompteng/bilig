@@ -18,6 +18,7 @@ export interface WorkbookContainer {
   model: RenderModel;
   pendingOps: import("@bilig/core").CommitOp[];
   shouldSyncSheetOrders: boolean;
+  lastError: Error | null;
 }
 
 let currentUpdatePriority = DefaultEventPriority;
@@ -47,6 +48,16 @@ function removeChild(parent: Descriptor, child: Descriptor): void {
 
 function containerFor(descriptor: Descriptor): WorkbookContainer {
   return descriptor.container as WorkbookContainer;
+}
+
+function pushCollectedOps(container: WorkbookContainer, collector: () => CommitOp[]): void {
+  try {
+    container.pendingOps.push(...collector());
+  } catch (error) {
+    container.pendingOps = [];
+    container.shouldSyncSheetOrders = false;
+    container.lastError = error instanceof Error ? error : new Error(String(error));
+  }
 }
 
 function pushCellUpsert(
@@ -89,7 +100,15 @@ const hostConfig = {
     return rootHostContext;
   },
   resetAfterCommit(container: WorkbookContainer) {
-    const nextModel = buildRenderModel(container.root);
+    let nextModel: RenderModel;
+    try {
+      nextModel = buildRenderModel(container.root);
+    } catch (error) {
+      container.pendingOps = [];
+      container.shouldSyncSheetOrders = false;
+      container.lastError = error instanceof Error ? error : new Error(String(error));
+      return;
+    }
     if (container.shouldSyncSheetOrders) {
       container.pendingOps.push(...collectSheetOrderOps(container.root));
     }
@@ -178,40 +197,44 @@ const hostConfig = {
   appendChild(parent: Descriptor, child: Descriptor) {
     insertChild(parent, child);
     const container = containerFor(parent);
-    container.pendingOps.push(...collectMountOps(child));
-    if (parent.kind === "Workbook" && child.kind === "Sheet") {
+    pushCollectedOps(container, () => collectMountOps(child));
+    if (container.lastError === null && parent.kind === "Workbook" && child.kind === "Sheet") {
       container.shouldSyncSheetOrders = true;
     }
   },
   appendChildToContainer(container: WorkbookContainer, child: WorkbookDescriptor) {
     container.root = child;
-    container.pendingOps.push(...collectMountOps(child));
-    container.shouldSyncSheetOrders = true;
+    pushCollectedOps(container, () => collectMountOps(child));
+    if (container.lastError === null) {
+      container.shouldSyncSheetOrders = true;
+    }
   },
   insertBefore(parent: Descriptor, child: Descriptor, beforeChild: Descriptor) {
     removeChild(parent, child);
     insertChild(parent, child, beforeChild);
     const container = containerFor(parent);
-    container.pendingOps.push(...collectMountOps(child));
-    if (parent.kind === "Workbook" && child.kind === "Sheet") {
+    pushCollectedOps(container, () => collectMountOps(child));
+    if (container.lastError === null && parent.kind === "Workbook" && child.kind === "Sheet") {
       container.shouldSyncSheetOrders = true;
     }
   },
   insertInContainerBefore(container: WorkbookContainer, child: WorkbookDescriptor) {
     container.root = child;
-    container.pendingOps.push(...collectMountOps(child));
-    container.shouldSyncSheetOrders = true;
+    pushCollectedOps(container, () => collectMountOps(child));
+    if (container.lastError === null) {
+      container.shouldSyncSheetOrders = true;
+    }
   },
   removeChild(parent: Descriptor, child: Descriptor) {
     removeChild(parent, child);
     const container = containerFor(parent);
-    container.pendingOps.push(...collectDeleteOps(child));
-    if (parent.kind === "Workbook" && child.kind === "Sheet") {
+    pushCollectedOps(container, () => collectDeleteOps(child));
+    if (container.lastError === null && parent.kind === "Workbook" && child.kind === "Sheet") {
       container.shouldSyncSheetOrders = true;
     }
   },
   removeChildFromContainer(container: WorkbookContainer, child: WorkbookDescriptor) {
-    container.pendingOps.push(...collectDeleteOps(child));
+    pushCollectedOps(container, () => collectDeleteOps(child));
     if (container.root === child) {
       container.root = null;
     }
@@ -242,8 +265,10 @@ const hostConfig = {
       instance.props = newProps as SheetProps;
       const workbook = instance.parent;
       const order = workbook?.kind === "Workbook" ? workbook.children.indexOf(instance) : 0;
+      const previousName = (previousProps as SheetProps).name;
+      const previousOrder = container.model.sheets.get(previousName)?.order;
       if ((previousProps as SheetProps).name !== instance.props.name) {
-        container.pendingOps.push({ kind: "deleteSheet", name: (previousProps as SheetProps).name });
+        container.pendingOps.push({ kind: "deleteSheet", name: previousName });
         container.pendingOps.push({
           kind: "upsertSheet",
           name: instance.props.name,
@@ -252,14 +277,18 @@ const hostConfig = {
         instance.children.forEach((cell) => {
           pushCellUpsert(container.pendingOps, instance.props.name, cell.props);
         });
+        container.shouldSyncSheetOrders = true;
       } else {
-        container.pendingOps.push({
-          kind: "upsertSheet",
-          name: instance.props.name,
-          order: Math.max(order, 0)
-        });
+        const nextOrder = Math.max(order, 0);
+        if (previousOrder !== undefined && previousOrder !== nextOrder) {
+          container.pendingOps.push({
+            kind: "upsertSheet",
+            name: instance.props.name,
+            order: nextOrder
+          });
+          container.shouldSyncSheetOrders = true;
+        }
       }
-      container.shouldSyncSheetOrders = true;
       return;
     }
 
@@ -291,7 +320,7 @@ const hostConfig = {
   unhideInstance() {},
   unhideTextInstance() {},
   clearContainer(container: WorkbookContainer) {
-    container.pendingOps.push(...collectModelDeleteOps(container.model));
+    pushCollectedOps(container, () => collectModelDeleteOps(container.model));
     container.root = null;
   }
 };

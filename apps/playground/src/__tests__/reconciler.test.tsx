@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import { Cell, Sheet, Workbook, createWorkbookRendererRoot } from "../reconciler/index.js";
 
@@ -54,6 +54,91 @@ describe("playground reconciler", () => {
 
     unsubscribe();
     await root.unmount();
+  });
+
+  it("does not emit a new engine batch for an identical rerender", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-idempotent-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+    const batches: number[] = [];
+    const unsubscribe = engine.subscribe((event) => {
+      batches.push(event.metrics.batchId);
+    });
+
+    await root.render(
+      <Workbook name="same-tree">
+        <Sheet name="Sheet1">
+          <Cell addr="A1" value={10} />
+          <Cell addr="B1" formula="A1*2" />
+        </Sheet>
+      </Workbook>
+    );
+    await root.render(
+      <Workbook name="same-tree">
+        <Sheet name="Sheet1">
+          <Cell addr="A1" value={10} />
+          <Cell addr="B1" formula="A1*2" />
+        </Sheet>
+      </Workbook>
+    );
+
+    expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 20 });
+    expect(batches).toHaveLength(1);
+
+    unsubscribe();
+    await root.unmount();
+  });
+
+  it("keeps commit behavior stable under StrictMode", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-strict-mode-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+    const batches: number[] = [];
+    const unsubscribe = engine.subscribe((event) => {
+      batches.push(event.metrics.batchId);
+    });
+
+    await root.render(
+      <React.StrictMode>
+        <Workbook name="strict">
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={10} />
+            <Cell addr="B1" formula="A1*2" />
+          </Sheet>
+        </Workbook>
+      </React.StrictMode>
+    );
+
+    expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 20 });
+    expect(batches).toHaveLength(1);
+
+    unsubscribe();
+    await root.unmount();
+  });
+
+  it("rejects invalid workbook trees without mutating the engine", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-invalid-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await expect(
+        root.render(
+          <Workbook name="invalid">
+            <Cell addr="A1" value={10} />
+          </Workbook>
+        )
+      ).rejects.toThrow("Only <Sheet> nodes can exist under <Workbook>.");
+
+      expect(engine.exportSnapshot()).toEqual({
+        version: 1,
+        workbook: { name: "reconciler-invalid-test" },
+        sheets: []
+      });
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("clears workbook state on unmount", async () => {
