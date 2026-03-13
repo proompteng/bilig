@@ -19,6 +19,7 @@ export interface CellProps {
 export interface BaseDescriptor {
   kind: "Workbook" | "Sheet" | "Cell";
   parent: Descriptor | null;
+  container: unknown;
 }
 
 export interface WorkbookDescriptor extends BaseDescriptor {

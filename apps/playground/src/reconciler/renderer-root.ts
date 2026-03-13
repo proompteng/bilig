@@ -12,7 +12,9 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
   const container: WorkbookContainer = {
     engine,
     root: null,
-    model: emptyRenderModel()
+    model: emptyRenderModel(),
+    pendingOps: [],
+    shouldSyncSheetOrders: false
   };
 
   const fiberRoot = (WorkbookReconciler as any).createContainer(

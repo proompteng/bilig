@@ -1,4 +1,3 @@
-import type { CommitOp } from "@bilig/core";
 import type { CellDescriptor, Descriptor, RenderModel, RenderSheetModel, SheetDescriptor, WorkbookDescriptor } from "./descriptors.js";
 import { emptyRenderModel } from "./descriptors.js";
 
