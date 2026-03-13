@@ -47,6 +47,21 @@ export function parseFormula(source: string): FormulaNode {
       return { kind: "StringLiteral", value: token.value };
     }
 
+    if (token.kind === "quotedIdentifier") {
+      const first = eat("quotedIdentifier").value;
+      if (current().kind === "bang") {
+        eat("bang");
+        const ref = eat("identifier").value.toUpperCase();
+        if (current().kind === "colon") {
+          eat("colon");
+          const end = eat("identifier").value.toUpperCase();
+          return { kind: "RangeRef", sheetName: first, start: ref, end } satisfies RangeRefNode;
+        }
+        return { kind: "CellRef", sheetName: first, ref } satisfies CellRefNode;
+      }
+      return { kind: "StringLiteral", value: first };
+    }
+
     if (token.kind === "plus" || token.kind === "minus") {
       eat(token.kind);
       return {

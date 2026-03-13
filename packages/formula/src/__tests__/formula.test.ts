@@ -7,6 +7,10 @@ describe("formula", () => {
     expect(parseCellAddress("B12")).toMatchObject({ row: 11, col: 1, text: "B12" });
   });
 
+  it("parses quoted sheet addresses", () => {
+    expect(parseCellAddress("'My Sheet'!B12")).toMatchObject({ sheetName: "My Sheet", row: 11, col: 1, text: "B12" });
+  });
+
   it("normalizes ranges", () => {
     expect(parseRangeAddress("B2:A1")).toMatchObject({
       start: { text: "A1" },
@@ -42,5 +46,23 @@ describe("formula", () => {
       resolveRange: () => []
     });
     expect(value).toEqual({ tag: ValueTag.Number, value: 5 });
+  });
+
+  it("parses quoted sheet references inside formulas", () => {
+    const ast = parseFormula("'My Sheet'!A1+1");
+    expect(ast).toMatchObject({
+      kind: "BinaryExpr",
+      left: { kind: "CellRef", sheetName: "My Sheet", ref: "A1" }
+    });
+  });
+
+  it("compiles quoted sheet ranges into symbolic refs", () => {
+    const compiled = compileFormula("SUM('My Sheet'!A1:B2)");
+    expect([...compiled.symbolicRefs]).toEqual([
+      "My Sheet!A1",
+      "My Sheet!B1",
+      "My Sheet!A2",
+      "My Sheet!B2"
+    ]);
   });
 });

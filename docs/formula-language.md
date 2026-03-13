@@ -7,6 +7,7 @@ Current implementation supports:
 - string literals
 - scalar cell refs such as `A1`
 - cross-sheet refs such as `Sheet2!B3`
+- quoted cross-sheet refs such as `'My Sheet'!B3`
 - bounded ranges such as `A1:B3`
 - arithmetic operators `+ - * / ^`
 - comparisons `= <> > >= < <=`
