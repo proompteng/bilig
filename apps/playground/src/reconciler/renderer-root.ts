@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
-import { WorkbookReconciler, type WorkbookContainer } from "./host-config.js";
+import type { WorkbookContainer } from "./host-config.js";
+import { createFiberRoot, updateFiberRoot } from "./compat.js";
 
 export interface WorkbookRendererRoot {
   render(element: ReactNode): Promise<void>;
@@ -16,25 +17,14 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
     lastError: null
   };
 
-  const fiberRoot = (WorkbookReconciler as any).createContainer(
-    container,
-    1,
-    null,
-    false,
-    null,
-    "",
-    console.error,
-    console.error,
-    console.error,
-    null
-  );
+  const fiberRoot = createFiberRoot(container);
 
   return {
     render(element: ReactNode) {
       container.lastError = null;
       return new Promise<void>((resolve, reject) => {
         try {
-          (WorkbookReconciler as any).updateContainer(element, fiberRoot, null, () => {
+          updateFiberRoot(fiberRoot, element, () => {
             if (container.lastError) {
               const error = container.lastError;
               container.lastError = null;
@@ -52,7 +42,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
       container.lastError = null;
       return new Promise<void>((resolve, reject) => {
         try {
-          (WorkbookReconciler as any).updateContainer(null, fiberRoot, null, () => {
+          updateFiberRoot(fiberRoot, null, () => {
             if (container.lastError) {
               const error = container.lastError;
               container.lastError = null;
