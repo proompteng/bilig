@@ -98,9 +98,12 @@ export class SpreadsheetEngine {
   private readonly formulas = new Map<number, RuntimeFormula>();
   private readonly dependents = new Map<number, Set<number>>();
   private readonly dependencies = new Map<number, Set<number>>();
+  private readonly dynamicRangeFormulas = new Set<number>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
+  private batchMutationDepth = 0;
+  private wasmProgramSyncPending = false;
   private lastMetrics: RecalcMetrics = {
     batchId: 0,
     changedInputCount: 0,
@@ -426,77 +429,86 @@ export class SpreadsheetEngine {
     const materializedCells: MaterializedCell[] = [];
     let appliedOps = 0;
 
-    batch.ops.forEach((op, opIndex) => {
-      const order = batchOpOrder(batch, opIndex);
-      if (!this.shouldApplyOp(op, order)) {
-        return;
-      }
+    this.batchMutationDepth += 1;
+    try {
+      batch.ops.forEach((op, opIndex) => {
+        const order = batchOpOrder(batch, opIndex);
+        if (!this.shouldApplyOp(op, order)) {
+          return;
+        }
 
-      switch (op.kind) {
-        case "upsertWorkbook":
-          this.workbook.workbookName = op.name;
-          this.entityVersions.set(this.entityKeyForOp(op), order);
-          break;
-        case "upsertSheet":
-          this.workbook.createSheet(op.name, op.order);
-          this.entityVersions.set(this.entityKeyForOp(op), order);
-          const tombstone = this.sheetDeleteVersions.get(op.name);
-          if (!tombstone || compareOpOrder(order, tombstone) > 0) {
-            this.sheetDeleteVersions.delete(op.name);
-          }
-          this.rebindFormulasForSheet(op.name).forEach((cellIndex) => formulaChanged.add(cellIndex));
-          break;
-        case "deleteSheet":
-          this.removeSheetRuntime(op.name, changedInputs, formulaChanged);
-          this.entityVersions.set(this.entityKeyForOp(op), order);
-          this.sheetDeleteVersions.set(op.name, order);
-          break;
-        case "setCellValue": {
-          const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
-          this.removeFormula(cellIndex);
-          const value = literalToValue(op.value, this.strings);
-          this.workbook.cellStore.setValue(
-            cellIndex,
-            value,
-            value.tag === ValueTag.String ? value.stringId : 0
-          );
-          this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
-          changedInputs.add(cellIndex);
-          this.entityVersions.set(this.entityKeyForOp(op), order);
-          break;
-        }
-        case "setCellFormula": {
-          const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
-          const compileStarted = performance.now();
-          const compiled = compileFormula(op.formula);
-          this.lastMetrics.compileMs = performance.now() - compileStarted;
-          const dependencyIndices = this.materializeDependencies(op.sheetName, compiled.deps, materializedCells);
-          this.setFormula(cellIndex, op.formula, compiled, dependencyIndices, materializedCells);
-          formulaChanged.add(cellIndex);
-          this.entityVersions.set(this.entityKeyForOp(op), order);
-          break;
-        }
-        case "clearCell": {
-          const cellIndex = this.workbook.getCellIndex(op.sheetName, op.address);
-          if (cellIndex === undefined) {
+        switch (op.kind) {
+          case "upsertWorkbook":
+            this.workbook.workbookName = op.name;
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          case "upsertSheet":
+            this.workbook.createSheet(op.name, op.order);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            const tombstone = this.sheetDeleteVersions.get(op.name);
+            if (!tombstone || compareOpOrder(order, tombstone) > 0) {
+              this.sheetDeleteVersions.delete(op.name);
+            }
+            this.rebindFormulasForSheet(op.name).forEach((cellIndex) => formulaChanged.add(cellIndex));
+            break;
+          case "deleteSheet":
+            this.removeSheetRuntime(op.name, changedInputs, formulaChanged);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            this.sheetDeleteVersions.set(op.name, order);
+            break;
+          case "setCellValue": {
+            const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
+            this.removeFormula(cellIndex);
+            const value = literalToValue(op.value, this.strings);
+            this.workbook.cellStore.setValue(
+              cellIndex,
+              value,
+              value.tag === ValueTag.String ? value.stringId : 0
+            );
+            this.workbook.cellStore.flags[cellIndex] =
+              (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
+            changedInputs.add(cellIndex);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
-          this.removeFormula(cellIndex);
-          this.workbook.cellStore.setValue(cellIndex, emptyValue());
-          changedInputs.add(cellIndex);
-          this.entityVersions.set(this.entityKeyForOp(op), order);
-          break;
+          case "setCellFormula": {
+            const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
+            const compileStarted = performance.now();
+            const compiled = compileFormula(op.formula);
+            this.lastMetrics.compileMs = performance.now() - compileStarted;
+            const dependencyIndices = this.materializeDependencies(op.sheetName, compiled.deps, materializedCells);
+            this.setFormula(cellIndex, op.formula, compiled, dependencyIndices, materializedCells);
+            formulaChanged.add(cellIndex);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          }
+          case "clearCell": {
+            const cellIndex = this.workbook.getCellIndex(op.sheetName, op.address);
+            if (cellIndex === undefined) {
+              this.entityVersions.set(this.entityKeyForOp(op), order);
+              break;
+            }
+            this.removeFormula(cellIndex);
+            this.workbook.cellStore.setValue(cellIndex, emptyValue());
+            changedInputs.add(cellIndex);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          }
         }
-      }
-      appliedOps += 1;
-    });
+        appliedOps += 1;
+      });
+    } finally {
+      this.batchMutationDepth -= 1;
+      this.flushWasmProgramSync();
+    }
 
-    for (let index = 0; index < materializedCells.length; index += 1) {
-      const materialized = materializedCells[index]!;
-      this.rebindDynamicRangeFormulasForAddress(materialized.sheetName, materialized.address).forEach((cellIndex) =>
-        formulaChanged.add(cellIndex)
-      );
+    if (this.dynamicRangeFormulas.size > 0) {
+      for (let index = 0; index < materializedCells.length; index += 1) {
+        const materialized = materializedCells[index]!;
+        this.rebindDynamicRangeFormulasForAddress(materialized.sheetName, materialized.address).forEach((cellIndex) =>
+          formulaChanged.add(cellIndex)
+        );
+      }
     }
 
     markBatchApplied(this.replica, batch);
@@ -591,6 +603,12 @@ export class SpreadsheetEngine {
       runtimeProgram,
       constants: effectiveCompiled.constants
     });
+    const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+    if (ownerSheetName && this.formulaHasDynamicRanges(ownerSheetName, compiled.deps)) {
+      this.dynamicRangeFormulas.add(cellIndex);
+    } else {
+      this.dynamicRangeFormulas.delete(cellIndex);
+    }
     this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.HasFormula;
     if (effectiveCompiled.mode === FormulaMode.JsOnly) {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
@@ -607,7 +625,7 @@ export class SpreadsheetEngine {
       }
       dependents.add(cellIndex);
     });
-    this.syncWasmPrograms();
+    this.scheduleWasmProgramSync();
   }
 
   private removeFormula(cellIndex: number): void {
@@ -619,10 +637,11 @@ export class SpreadsheetEngine {
     }
     this.dependencies.delete(cellIndex);
     this.formulas.delete(cellIndex);
+    this.dynamicRangeFormulas.delete(cellIndex);
     this.workbook.cellStore.flags[cellIndex] =
       (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
     this.workbook.cellStore.formulaIds[cellIndex] = 0;
-    this.syncWasmPrograms();
+    this.scheduleWasmProgramSync();
   }
 
   private rebuildTopoRanks(): void {
@@ -783,6 +802,22 @@ export class SpreadsheetEngine {
         mode: formula.compiled.mode
       }))
     );
+  }
+
+  private scheduleWasmProgramSync(): void {
+    if (this.batchMutationDepth > 0) {
+      this.wasmProgramSyncPending = true;
+      return;
+    }
+    this.syncWasmPrograms();
+  }
+
+  private flushWasmProgramSync(): void {
+    if (!this.wasmProgramSyncPending) {
+      return;
+    }
+    this.wasmProgramSyncPending = false;
+    this.syncWasmPrograms();
   }
 
   private emitBatch(batch: EngineOpBatch): void {
@@ -968,9 +1003,12 @@ export class SpreadsheetEngine {
   private rebindDynamicRangeFormulasForAddress(sheetName: string, address: string): Set<number> {
     const rebound = new Set<number>();
     const parsedAddress = parseCellAddress(address, sheetName);
-    const formulas = [...this.formulas.entries()];
+    const formulas = [...this.dynamicRangeFormulas].map((cellIndex) => [cellIndex, this.formulas.get(cellIndex)] as const);
 
     formulas.forEach(([cellIndex, formula]) => {
+      if (!formula) {
+        return;
+      }
       const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
       if (!ownerSheetName) {
         return;
@@ -1015,6 +1053,7 @@ export class SpreadsheetEngine {
     this.formulas.clear();
     this.dependents.clear();
     this.dependencies.clear();
+    this.dynamicRangeFormulas.clear();
     this.entityVersions.clear();
     this.sheetDeleteVersions.clear();
     this.lastMetrics = {
@@ -1027,7 +1066,22 @@ export class SpreadsheetEngine {
       recalcMs: 0,
       compileMs: 0
     };
+    this.wasmProgramSyncPending = false;
     this.syncWasmPrograms();
+  }
+
+  private formulaHasDynamicRanges(ownerSheetName: string, deps: string[]): boolean {
+    return deps.some((dep) => {
+      if (!dep.includes(":")) {
+        return false;
+      }
+      try {
+        const range = parseRangeAddress(dep, ownerSheetName);
+        return range.kind === "rows" || range.kind === "cols";
+      } catch {
+        return false;
+      }
+    });
   }
 }
 

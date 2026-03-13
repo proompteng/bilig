@@ -3,7 +3,7 @@
 - Vitest covers protocol, formula parsing/evaluation, CRDT ordering, engine behavior, WASM parity, and playground reconciler behavior.
 - Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`.
 - `packages/benchmarks` emits JSON benchmark payloads for:
-  - load scenarios at 10k, 50k, and 100k materialized cells
+  - load scenarios at 10k, 50k, and 100k materialized cells through snapshot import
   - downstream edit scenarios at 100, 1k, and 10k dependent formulas
   - renderer commit-style scenarios at 1k and 10k declared cells
 - `scripts/perf-smoke.mjs` enforces a lightweight CI threshold against a 1k-downstream edit and asserts that the run actually dirties the expected formulas and hits the WASM fast path.
