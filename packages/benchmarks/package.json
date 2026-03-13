@@ -1,0 +1,14 @@
+{
+  "name": "@bilig/benchmarks",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@bilig/core": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "bench": "tsx src/benchmark-edit.ts"
+  }
+}

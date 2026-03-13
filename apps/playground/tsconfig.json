@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vite/client"]
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/crdt" },
+    { "path": "../../packages/formula" },
+    { "path": "../../packages/protocol" },
+    { "path": "../../packages/wasm-kernel" }
+  ],
+  "include": ["src/**/*", "vite.config.ts"]
+}

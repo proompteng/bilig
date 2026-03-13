@@ -1,0 +1,587 @@
+import {
+  ErrorCode,
+  FormulaMode,
+  ValueTag,
+  type CellIndex,
+  type CellSnapshot,
+  type CellValue,
+  type DependencySnapshot,
+  type EngineEvent,
+  type LiteralInput,
+  type RecalcMetrics,
+  type WorkbookSnapshot
+} from "@bilig/protocol";
+import { compileFormula, evaluateAst, formatAddress, parseCellAddress, parseRangeAddress } from "@bilig/formula";
+import {
+  createBatch,
+  createReplicaState,
+  mergeBatches,
+  shouldApplyBatch,
+  type EngineOp,
+  type EngineOpBatch,
+  type ReplicaState
+} from "@bilig/crdt";
+import { CellFlags } from "./cell-store.js";
+import { EngineEventBus } from "./events.js";
+import { selectCellSnapshot, selectViewportCells } from "./selectors.js";
+import { StringPool } from "./string-pool.js";
+import { WasmKernelFacade } from "./wasm-facade.js";
+import { WorkbookStore } from "./workbook-store.js";
+
+export interface CommitOp {
+  kind: "upsertWorkbook" | "upsertSheet" | "deleteSheet" | "upsertCell" | "deleteCell";
+  name?: string;
+  order?: number;
+  sheetName?: string;
+  addr?: string;
+  value?: LiteralInput;
+  formula?: string;
+  format?: string;
+}
+
+export interface SpreadsheetEngineOptions {
+  workbookName?: string;
+  replicaId?: string;
+}
+
+interface RuntimeFormula {
+  cellIndex: number;
+  source: string;
+  compiled: ReturnType<typeof compileFormula>;
+  dependencyIndices: number[];
+  runtimeProgram: Uint32Array;
+  constants: number[];
+}
+
+function emptyValue(): CellValue {
+  return { tag: ValueTag.Empty };
+}
+
+function errorValue(code: ErrorCode): CellValue {
+  return { tag: ValueTag.Error, code };
+}
+
+function literalToValue(input: LiteralInput, stringPool: StringPool): CellValue {
+  if (input === null) return emptyValue();
+  if (typeof input === "number") return { tag: ValueTag.Number, value: input };
+  if (typeof input === "boolean") return { tag: ValueTag.Boolean, value: input };
+  return { tag: ValueTag.String, value: input, stringId: stringPool.intern(input) };
+}
+
+export class SpreadsheetEngine {
+  readonly workbook: WorkbookStore;
+  readonly strings = new StringPool();
+  readonly events = new EngineEventBus();
+  readonly replica: ReplicaState;
+  readonly wasm = new WasmKernelFacade();
+
+  private readonly formulas = new Map<number, RuntimeFormula>();
+  private readonly dependents = new Map<number, Set<number>>();
+  private readonly dependencies = new Map<number, Set<number>>();
+  private lastMetrics: RecalcMetrics = {
+    batchId: 0,
+    changedInputCount: 0,
+    dirtyFormulaCount: 0,
+    wasmFormulaCount: 0,
+    jsFormulaCount: 0,
+    rangeNodeVisits: 0,
+    recalcMs: 0,
+    compileMs: 0
+  };
+
+  constructor(options: SpreadsheetEngineOptions = {}) {
+    this.workbook = new WorkbookStore(options.workbookName ?? "Workbook");
+    this.replica = createReplicaState(options.replicaId ?? "local");
+    void this.wasm.init();
+  }
+
+  async ready(): Promise<void> {
+    await this.wasm.init();
+  }
+
+  subscribe(listener: (event: EngineEvent) => void): () => void {
+    return this.events.subscribe(listener);
+  }
+
+  getLastMetrics(): RecalcMetrics {
+    return this.lastMetrics;
+  }
+
+  createSheet(name: string): void {
+    this.applyLocalOps([{ kind: "upsertSheet", name, order: this.workbook.sheetsByName.size }]);
+  }
+
+  deleteSheet(name: string): void {
+    this.applyLocalOps([{ kind: "deleteSheet", name }]);
+  }
+
+  setCellValue(sheetName: string, address: string, value: LiteralInput): CellValue {
+    this.applyLocalOps([{ kind: "setCellValue", sheetName, address, value }]);
+    return this.getCellValue(sheetName, address);
+  }
+
+  setCellFormula(sheetName: string, address: string, formula: string): CellValue {
+    this.applyLocalOps([{ kind: "setCellFormula", sheetName, address, formula }]);
+    return this.getCellValue(sheetName, address);
+  }
+
+  clearCell(sheetName: string, address: string): void {
+    this.applyLocalOps([{ kind: "clearCell", sheetName, address }]);
+  }
+
+  getCellValue(sheetName: string, address: string): CellValue {
+    const cellIndex = this.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return emptyValue();
+    }
+    return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+  }
+
+  getCell(sheetName: string, address: string): CellSnapshot {
+    const cellIndex = this.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return {
+        sheetName,
+        address,
+        value: emptyValue(),
+        flags: 0
+      };
+    }
+    return this.getCellByIndex(cellIndex);
+  }
+
+  getCellByIndex(cellIndex: number): CellSnapshot {
+    const address = this.workbook.getAddress(cellIndex);
+    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+    const snapshot: CellSnapshot = {
+      sheetName,
+      address,
+      value: this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id)),
+      flags: this.workbook.cellStore.flags[cellIndex]!
+    };
+    const formula = this.formulas.get(cellIndex)?.source;
+    if (formula !== undefined) {
+      snapshot.formula = formula;
+    }
+    return snapshot;
+  }
+
+  getDependencies(sheetName: string, address: string): DependencySnapshot {
+    const cellIndex = this.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) return { directDependents: [], directPrecedents: [] };
+    return {
+      directPrecedents: [...(this.dependencies.get(cellIndex) ?? new Set())].map((index) =>
+        this.workbook.getQualifiedAddress(index)
+      ),
+      directDependents: [...(this.dependents.get(cellIndex) ?? new Set())].map((index) =>
+        this.workbook.getQualifiedAddress(index)
+      )
+    };
+  }
+
+  getDependents(sheetName: string, address: string): DependencySnapshot {
+    return this.getDependencies(sheetName, address);
+  }
+
+  exportSnapshot(): WorkbookSnapshot {
+    return {
+      version: 1,
+      workbook: { name: this.workbook.workbookName },
+      sheets: [...this.workbook.sheetsByName.values()]
+        .sort((left, right) => left.order - right.order)
+        .map((sheet) => {
+          const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
+          sheet.grid.forEachInRange(0, 0, 10_000, 10_000, (cellIndex) => {
+            const snapshot = this.getCellByIndex(cellIndex);
+            const cell: WorkbookSnapshot["sheets"][number]["cells"][number] = {
+              address: snapshot.address
+            };
+            if (snapshot.formula) {
+              cell.formula = snapshot.formula;
+            } else if (snapshot.value.tag === ValueTag.Number) {
+              cell.value = snapshot.value.value;
+            } else if (snapshot.value.tag === ValueTag.Boolean) {
+              cell.value = snapshot.value.value;
+            } else if (snapshot.value.tag === ValueTag.String) {
+              cell.value = snapshot.value.value;
+            } else {
+              cell.value = null;
+            }
+            cells.push(cell);
+          });
+          return { name: sheet.name, order: sheet.order, cells };
+        })
+    };
+  }
+
+  importSnapshot(snapshot: WorkbookSnapshot): void {
+    this.workbook.workbookName = snapshot.workbook.name;
+    const ops: EngineOp[] = [];
+    snapshot.sheets.forEach((sheet) => {
+      ops.push({ kind: "upsertSheet", name: sheet.name, order: sheet.order });
+      sheet.cells.forEach((cell) => {
+        if (cell.formula) {
+          ops.push({ kind: "setCellFormula", sheetName: sheet.name, address: cell.address, formula: cell.formula });
+        } else {
+          ops.push({ kind: "setCellValue", sheetName: sheet.name, address: cell.address, value: cell.value ?? null });
+        }
+      });
+    });
+    this.applyLocalOps(ops);
+  }
+
+  renderCommit(ops: CommitOp[]): void {
+    const engineOps: EngineOp[] = [];
+    ops.forEach((op) => {
+      switch (op.kind) {
+        case "upsertWorkbook":
+          if (op.name) engineOps.push({ kind: "upsertWorkbook", name: op.name });
+          break;
+        case "upsertSheet":
+          if (op.name) engineOps.push({ kind: "upsertSheet", name: op.name, order: op.order ?? 0 });
+          break;
+        case "deleteSheet":
+          if (op.name) engineOps.push({ kind: "deleteSheet", name: op.name });
+          break;
+        case "upsertCell":
+          if (!op.sheetName || !op.addr) break;
+          if (op.formula !== undefined) {
+            engineOps.push({ kind: "setCellFormula", sheetName: op.sheetName, address: op.addr, formula: op.formula });
+            break;
+          }
+          engineOps.push({ kind: "setCellValue", sheetName: op.sheetName, address: op.addr, value: op.value ?? null });
+          break;
+        case "deleteCell":
+          if (op.sheetName && op.addr) {
+            engineOps.push({ kind: "clearCell", sheetName: op.sheetName, address: op.addr });
+          }
+          break;
+      }
+    });
+    this.applyLocalOps(engineOps);
+  }
+
+  applyRemoteBatch(batch: EngineOpBatch): void {
+    if (!shouldApplyBatch(this.replica, batch)) return;
+    this.applyBatch(batch);
+  }
+
+  private applyLocalOps(ops: EngineOp[]): void {
+    if (ops.length === 0) return;
+    const batch = createBatch(this.replica, ops);
+    this.applyBatch(batch);
+  }
+
+  private applyBatch(batch: EngineOpBatch): void {
+    const changedInputs = new Set<number>();
+    const formulaChanged = new Set<number>();
+
+    for (const op of batch.ops) {
+      switch (op.kind) {
+        case "upsertWorkbook":
+          this.workbook.workbookName = op.name;
+          break;
+        case "upsertSheet":
+          this.workbook.createSheet(op.name, op.order);
+          break;
+        case "deleteSheet":
+          this.workbook.deleteSheet(op.name);
+          break;
+        case "setCellValue": {
+          const cellIndex = this.workbook.ensureCell(op.sheetName, op.address);
+          this.removeFormula(cellIndex);
+          const value = literalToValue(op.value, this.strings);
+          this.workbook.cellStore.setValue(
+            cellIndex,
+            value,
+            value.tag === ValueTag.String ? value.stringId : 0
+          );
+          this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
+          changedInputs.add(cellIndex);
+          break;
+        }
+        case "setCellFormula": {
+          const cellIndex = this.workbook.ensureCell(op.sheetName, op.address);
+          const compileStarted = performance.now();
+          const compiled = compileFormula(op.formula);
+          this.lastMetrics.compileMs = performance.now() - compileStarted;
+          const dependencyIndices = this.materializeDependencies(op.sheetName, compiled.deps);
+          this.setFormula(cellIndex, op.formula, compiled, dependencyIndices);
+          formulaChanged.add(cellIndex);
+          break;
+        }
+        case "clearCell": {
+          const cellIndex = this.workbook.getCellIndex(op.sheetName, op.address);
+          if (cellIndex === undefined) break;
+          this.removeFormula(cellIndex);
+          this.workbook.cellStore.setValue(cellIndex, emptyValue());
+          changedInputs.add(cellIndex);
+          break;
+        }
+      }
+    }
+
+    this.rebuildTopoRanks();
+    this.detectCycles();
+    const changed = this.recalculate([...changedInputs, ...formulaChanged]);
+    this.lastMetrics.batchId += 1;
+    this.lastMetrics.changedInputCount = changedInputs.size + formulaChanged.size;
+    this.events.emit({
+      kind: "batch",
+      changedCellIndices: changed,
+      metrics: this.lastMetrics
+    });
+  }
+
+  private materializeDependencies(currentSheet: string, deps: string[]): number[] {
+    const indices: number[] = [];
+    for (const dep of deps) {
+      if (dep.includes(":")) {
+        const range = parseRangeAddress(dep, currentSheet);
+        const sheetName = range.sheetName ?? currentSheet;
+        for (let row = range.start.row; row <= range.end.row; row += 1) {
+          for (let col = range.start.col; col <= range.end.col; col += 1) {
+            indices.push(this.workbook.ensureCell(sheetName, formatAddress(row, col)));
+          }
+        }
+        continue;
+      }
+      const parsed = parseCellAddress(dep, currentSheet);
+      const sheetName = parsed.sheetName ?? currentSheet;
+      indices.push(this.workbook.ensureCell(sheetName, parsed.text));
+    }
+    return [...new Set(indices)];
+  }
+
+  private setFormula(
+    cellIndex: number,
+    source: string,
+    compiled: ReturnType<typeof compileFormula>,
+    dependencyIndices: number[]
+  ): void {
+    this.removeFormula(cellIndex);
+
+    const symbolicRefToIndex = new Map<string, number>();
+    compiled.symbolicRefs.forEach((ref) => {
+      const [qualifiedSheetName, qualifiedAddress] = ref.includes("!") ? ref.split("!") : [undefined, ref];
+      const parsed = parseCellAddress(qualifiedAddress!, qualifiedSheetName);
+      const sheetName = qualifiedSheetName ?? this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+      symbolicRefToIndex.set(ref, this.workbook.ensureCell(sheetName, parsed.text));
+    });
+
+    const runtimeProgram = new Uint32Array(compiled.program.length);
+    runtimeProgram.set(compiled.program);
+    compiled.program.forEach((instruction, index) => {
+      const opcode = instruction >>> 24;
+      const operand = instruction & 0x00ff_ffff;
+      if (opcode === 3) {
+        const cellRef = compiled.symbolicRefs[operand];
+        const targetIndex = cellRef ? symbolicRefToIndex.get(cellRef) ?? 0 : 0;
+        runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
+      }
+    });
+
+    this.formulas.set(cellIndex, {
+      cellIndex,
+      source,
+      compiled,
+      dependencyIndices,
+      runtimeProgram,
+      constants: compiled.constants
+    });
+    this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.HasFormula;
+    if (compiled.mode === FormulaMode.JsOnly) {
+      this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
+    } else {
+      this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly;
+    }
+
+    this.dependencies.set(cellIndex, new Set(dependencyIndices));
+    dependencyIndices.forEach((dependencyIndex) => {
+      let dependents = this.dependents.get(dependencyIndex);
+      if (!dependents) {
+        dependents = new Set<number>();
+        this.dependents.set(dependencyIndex, dependents);
+      }
+      dependents.add(cellIndex);
+    });
+    this.syncWasmPrograms();
+  }
+
+  private removeFormula(cellIndex: number): void {
+    const existingDeps = this.dependencies.get(cellIndex);
+    if (existingDeps) {
+      existingDeps.forEach((depIndex) => {
+        this.dependents.get(depIndex)?.delete(cellIndex);
+      });
+    }
+    this.dependencies.delete(cellIndex);
+    this.formulas.delete(cellIndex);
+    this.workbook.cellStore.flags[cellIndex] =
+      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
+    this.workbook.cellStore.formulaIds[cellIndex] = 0;
+    this.syncWasmPrograms();
+  }
+
+  private rebuildTopoRanks(): void {
+    const indegree = new Map<number, number>();
+    this.formulas.forEach((_formula, cellIndex) => indegree.set(cellIndex, 0));
+    this.formulas.forEach((formula, cellIndex) => {
+      formula.dependencyIndices.forEach((dep) => {
+        if (this.formulas.has(dep)) {
+          indegree.set(cellIndex, (indegree.get(cellIndex) ?? 0) + 1);
+        }
+      });
+    });
+
+    const queue = [...indegree.entries()].filter(([, count]) => count === 0).map(([cellIndex]) => cellIndex);
+    let rank = 0;
+    while (queue.length > 0) {
+      const cellIndex = queue.shift()!;
+      this.workbook.cellStore.topoRanks[cellIndex] = rank++;
+      const dependents = this.dependents.get(cellIndex);
+      if (!dependents) continue;
+      dependents.forEach((dependent) => {
+        if (!indegree.has(dependent)) return;
+        const next = (indegree.get(dependent) ?? 0) - 1;
+        indegree.set(dependent, next);
+        if (next === 0) queue.push(dependent);
+      });
+    }
+  }
+
+  private detectCycles(): void {
+    const visiting = new Set<number>();
+    const visited = new Set<number>();
+
+    const visit = (cellIndex: number, stack: number[]): void => {
+      if (visiting.has(cellIndex)) {
+        stack.forEach((member) => {
+          this.workbook.cellStore.flags[member] = (this.workbook.cellStore.flags[member] ?? 0) | CellFlags.InCycle;
+          this.workbook.cellStore.setValue(member, errorValue(ErrorCode.Cycle));
+        });
+        return;
+      }
+      if (visited.has(cellIndex)) return;
+      visited.add(cellIndex);
+      visiting.add(cellIndex);
+      const deps = this.dependencies.get(cellIndex) ?? new Set<number>();
+      deps.forEach((dep) => {
+        if (this.formulas.has(dep)) {
+          visit(dep, [...stack, dep]);
+        }
+      });
+      visiting.delete(cellIndex);
+    };
+
+    this.formulas.forEach((_formula, cellIndex) => {
+      this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.InCycle;
+    });
+
+    this.formulas.forEach((_formula, cellIndex) => visit(cellIndex, [cellIndex]));
+  }
+
+  private recalculate(changedRoots: number[]): Uint32Array {
+    const started = performance.now();
+    const dirty = new Set<number>();
+    const queue = [...changedRoots];
+
+    changedRoots.forEach((cellIndex) => {
+      if (this.formulas.has(cellIndex)) {
+        dirty.add(cellIndex);
+      }
+    });
+
+    while (queue.length > 0) {
+      const cellIndex = queue.shift()!;
+      const dependents = this.dependents.get(cellIndex);
+      if (!dependents) continue;
+      dependents.forEach((dependent) => {
+        if (!dirty.has(dependent)) {
+          dirty.add(dependent);
+          queue.push(dependent);
+        }
+      });
+    }
+
+    const ordered = [...dirty].sort(
+      (left, right) => (this.workbook.cellStore.topoRanks[left] ?? 0) - (this.workbook.cellStore.topoRanks[right] ?? 0)
+    );
+
+    const wasmBatch: number[] = [];
+    let jsCount = 0;
+    ordered.forEach((cellIndex) => {
+      const formula = this.formulas.get(cellIndex);
+      if (!formula) return;
+      if (((this.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+        return;
+      }
+      if (formula.compiled.mode === FormulaMode.WasmFastPath && this.wasm.ready) {
+        wasmBatch.push(cellIndex);
+        return;
+      }
+      jsCount += 1;
+      this.evaluateFormulaJs(cellIndex, formula);
+    });
+
+    if (wasmBatch.length > 0) {
+      this.wasm.syncFromStore(this.workbook.cellStore);
+      this.wasm.evalBatch(Uint32Array.from(wasmBatch));
+      this.wasm.syncToStore(this.workbook.cellStore, Uint32Array.from(wasmBatch));
+    }
+
+    this.lastMetrics.dirtyFormulaCount = ordered.length;
+    this.lastMetrics.jsFormulaCount = jsCount;
+    this.lastMetrics.wasmFormulaCount = wasmBatch.length;
+    this.lastMetrics.recalcMs = performance.now() - started;
+
+    return Uint32Array.from([...new Set([...changedRoots, ...ordered])]);
+  }
+
+  private evaluateFormulaJs(cellIndex: number, formula: RuntimeFormula): void {
+    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+    const value = evaluateAst(formula.compiled.ast, {
+      sheetName,
+      resolveCell: (targetSheetName, address) => {
+        const targetCell = this.workbook.getCellIndex(targetSheetName, address);
+        if (targetCell === undefined) {
+          return targetSheetName ? emptyValue() : errorValue(ErrorCode.Ref);
+        }
+        return this.workbook.cellStore.getValue(targetCell, (id) => this.strings.get(id));
+      },
+      resolveRange: (targetSheetName, start, end) => {
+        const range = parseRangeAddress(`${start}:${end}`, targetSheetName);
+        const values: CellValue[] = [];
+        for (let row = range.start.row; row <= range.end.row; row += 1) {
+          for (let col = range.start.col; col <= range.end.col; col += 1) {
+            const addr = formatAddress(row, col);
+            const index = this.workbook.ensureCell(targetSheetName, addr);
+            values.push(this.workbook.cellStore.getValue(index, (id) => this.strings.get(id)));
+          }
+        }
+        return values;
+      }
+    });
+    this.workbook.cellStore.setValue(
+      cellIndex,
+      value,
+      value.tag === ValueTag.String ? this.strings.intern(value.value) : 0
+    );
+  }
+
+  private syncWasmPrograms(): void {
+    this.wasm.uploadFormulas(
+      [...this.formulas.values()].map((formula) => ({
+        cellIndex: formula.cellIndex,
+        program: formula.runtimeProgram,
+        constants: formula.constants,
+        mode: formula.compiled.mode
+      }))
+    );
+  }
+}
+
+export const selectors = {
+  selectCellSnapshot,
+  selectViewportCells
+};

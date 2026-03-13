@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "useDefineForClassFields": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "composite": true,
+    "baseUrl": ".",
+    "types": ["node"],
+    "paths": {
+      "@bilig/protocol": ["packages/protocol/src/index.ts"],
+      "@bilig/formula": ["packages/formula/src/index.ts"],
+      "@bilig/core": ["packages/core/src/index.ts"],
+      "@bilig/crdt": ["packages/crdt/src/index.ts"],
+      "@bilig/wasm-kernel": ["packages/wasm-kernel/src/index.ts"]
+    }
+  }
+}

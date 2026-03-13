@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/protocol" },
+    { "path": "./packages/formula" },
+    { "path": "./packages/crdt" },
+    { "path": "./packages/wasm-kernel" },
+    { "path": "./packages/core" },
+    { "path": "./packages/benchmarks" },
+    { "path": "./apps/playground" }
+  ]
+}

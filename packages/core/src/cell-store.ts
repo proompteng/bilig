@@ -1,0 +1,142 @@
+import { ErrorCode, ValueTag } from "@bilig/protocol";
+import type { CellValue } from "@bilig/protocol";
+
+export const enum CellFlags {
+  Dirty = 1 << 0,
+  HasFormula = 1 << 1,
+  JsOnly = 1 << 2,
+  InCycle = 1 << 3,
+  Materialized = 1 << 4,
+  PendingDelete = 1 << 5
+}
+
+export class CellStore {
+  size = 0;
+  capacity: number;
+  tags: Uint8Array;
+  numbers: Float64Array;
+  stringIds: Uint32Array;
+  errors: Uint16Array;
+  formulaIds: Uint32Array;
+  versions: Uint32Array;
+  flags: Uint32Array;
+  sheetIds: Uint16Array;
+  rows: Uint32Array;
+  cols: Uint16Array;
+  topoRanks: Uint32Array;
+  cycleGroupIds: Int32Array;
+
+  constructor(initialCapacity = 64) {
+    this.capacity = initialCapacity;
+    this.tags = new Uint8Array(initialCapacity);
+    this.numbers = new Float64Array(initialCapacity);
+    this.stringIds = new Uint32Array(initialCapacity);
+    this.errors = new Uint16Array(initialCapacity);
+    this.formulaIds = new Uint32Array(initialCapacity);
+    this.versions = new Uint32Array(initialCapacity);
+    this.flags = new Uint32Array(initialCapacity);
+    this.sheetIds = new Uint16Array(initialCapacity);
+    this.rows = new Uint32Array(initialCapacity);
+    this.cols = new Uint16Array(initialCapacity);
+    this.topoRanks = new Uint32Array(initialCapacity);
+    this.cycleGroupIds = new Int32Array(initialCapacity);
+    this.cycleGroupIds.fill(-1);
+  }
+
+  ensureCapacity(nextSize: number): void {
+    if (nextSize <= this.capacity) return;
+    let nextCapacity = this.capacity;
+    while (nextCapacity < nextSize) nextCapacity *= 2;
+    this.tags = grow(this.tags, nextCapacity) as Uint8Array;
+    this.numbers = grow(this.numbers, nextCapacity) as Float64Array;
+    this.stringIds = grow(this.stringIds, nextCapacity) as Uint32Array;
+    this.errors = grow(this.errors, nextCapacity) as Uint16Array;
+    this.formulaIds = grow(this.formulaIds, nextCapacity) as Uint32Array;
+    this.versions = grow(this.versions, nextCapacity) as Uint32Array;
+    this.flags = grow(this.flags, nextCapacity) as Uint32Array;
+    this.sheetIds = grow(this.sheetIds, nextCapacity) as Uint16Array;
+    this.rows = grow(this.rows, nextCapacity) as Uint32Array;
+    this.cols = grow(this.cols, nextCapacity) as Uint16Array;
+    this.topoRanks = grow(this.topoRanks, nextCapacity) as Uint32Array;
+    const nextCycle = grow(this.cycleGroupIds, nextCapacity) as Int32Array;
+    nextCycle.fill(-1, this.capacity);
+    this.cycleGroupIds = nextCycle;
+    this.capacity = nextCapacity;
+  }
+
+  allocate(sheetId: number, row: number, col: number): number {
+    this.ensureCapacity(this.size + 1);
+    const index = this.size;
+    this.size += 1;
+    this.sheetIds[index] = sheetId;
+    this.rows[index] = row;
+    this.cols[index] = col;
+    this.tags[index] = ValueTag.Empty;
+    this.errors[index] = ErrorCode.None;
+    this.flags[index] = CellFlags.Materialized;
+    return index;
+  }
+
+  setValue(index: number, value: CellValue, stringId = 0): void {
+    this.tags[index] = value.tag;
+    this.errors[index] = value.tag === ValueTag.Error ? value.code : ErrorCode.None;
+    this.stringIds[index] = value.tag === ValueTag.String ? stringId : 0;
+    this.numbers[index] =
+      value.tag === ValueTag.Number
+        ? value.value
+        : value.tag === ValueTag.Boolean
+          ? value.value
+            ? 1
+            : 0
+          : 0;
+    this.versions[index] = (this.versions[index] ?? 0) + 1;
+  }
+
+  getValue(index: number, stringLookup: (id: number) => string): CellValue {
+    switch (this.tags[index]) {
+      case ValueTag.Number:
+        return { tag: ValueTag.Number, value: this.numbers[index]! };
+      case ValueTag.Boolean:
+        return { tag: ValueTag.Boolean, value: this.numbers[index]! !== 0 };
+      case ValueTag.String:
+        return {
+          tag: ValueTag.String,
+          value: stringLookup(this.stringIds[index]!),
+          stringId: this.stringIds[index]!
+        };
+      case ValueTag.Error:
+        return { tag: ValueTag.Error, code: this.errors[index]! };
+      default:
+        return { tag: ValueTag.Empty };
+    }
+  }
+}
+
+function grow(
+  buffer: Uint8Array | Uint16Array | Uint32Array | Int32Array | Float64Array,
+  capacity: number
+): Uint8Array | Uint16Array | Uint32Array | Int32Array | Float64Array {
+  if (buffer instanceof Uint8Array) {
+    const next = new Uint8Array(capacity);
+    next.set(buffer);
+    return next;
+  }
+  if (buffer instanceof Uint16Array) {
+    const next = new Uint16Array(capacity);
+    next.set(buffer);
+    return next;
+  }
+  if (buffer instanceof Uint32Array) {
+    const next = new Uint32Array(capacity);
+    next.set(buffer);
+    return next;
+  }
+  if (buffer instanceof Int32Array) {
+    const next = new Int32Array(capacity);
+    next.set(buffer);
+    return next;
+  }
+  const next = new Float64Array(capacity);
+  next.set(buffer);
+  return next;
+}

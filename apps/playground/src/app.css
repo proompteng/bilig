@@ -1,0 +1,172 @@
+:root {
+  color: #10243e;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.15), transparent 30%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  font-family:
+    "IBM Plex Sans",
+    "Avenir Next",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app-shell {
+  padding: 24px;
+}
+
+.hero {
+  margin-bottom: 24px;
+  padding: 28px;
+  border: 1px solid rgba(16, 36, 62, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 30px 80px rgba(16, 36, 62, 0.08);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  color: #0f766e;
+}
+
+.lede {
+  max-width: 64ch;
+  color: #3c5676;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+}
+
+.sidebar {
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(16, 36, 62, 0.08);
+  box-shadow: 0 12px 40px rgba(16, 36, 62, 0.06);
+}
+
+.formula-bar,
+.editor-panel {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.formula-bar input,
+.editor-panel input {
+  padding: 10px 12px;
+  border: 1px solid rgba(16, 36, 62, 0.12);
+  border-radius: 12px;
+  font: inherit;
+}
+
+.formula-bar button,
+.editor-panel button,
+.grid-cell {
+  font: inherit;
+}
+
+.formula-bar button,
+.editor-panel button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #0f766e;
+  color: white;
+  cursor: pointer;
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.sheet-tab {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(16, 36, 62, 0.06);
+}
+
+.sheet-tab.active {
+  background: #10243e;
+  color: white;
+}
+
+.sheet-grid {
+  overflow: auto;
+}
+
+.grid-row {
+  display: grid;
+  grid-template-columns: 56px repeat(8, minmax(96px, 1fr));
+}
+
+.grid-header,
+.grid-corner,
+.grid-cell {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid rgba(16, 36, 62, 0.08);
+  border-bottom: 1px solid rgba(16, 36, 62, 0.08);
+}
+
+.grid-header,
+.grid-corner {
+  background: rgba(16, 36, 62, 0.04);
+  font-weight: 600;
+}
+
+.grid-cell {
+  background: white;
+  border-left: 0;
+  border-top: 0;
+  cursor: pointer;
+}
+
+.grid-cell.selected {
+  outline: 2px solid #0f766e;
+  outline-offset: -2px;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.metrics-panel dl {
+  display: grid;
+  gap: 8px;
+}
+
+.metrics-panel dl div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.dependency-panel ul {
+  margin: 6px 0 12px;
+  padding-left: 18px;
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}

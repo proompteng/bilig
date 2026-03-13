@@ -1,0 +1,37 @@
+{
+  "name": "bilig",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first spreadsheet engine monorepo with React playground, custom reconciler, and AssemblyScript/WASM fast path.",
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @bilig/playground dev",
+    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/playground build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "bench": "pnpm --filter @bilig/benchmarks bench",
+    "bench:smoke": "tsx scripts/perf-smoke.mjs",
+    "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
+    "ci": "pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm --filter @bilig/playground build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.0",
+    "assemblyscript": "0.28.10",
+    "jsdom": "27.0.1",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vite": "8.0.0",
+    "vitest": "4.1.0"
+  }
+}

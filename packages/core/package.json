@@ -1,0 +1,22 @@
+{
+  "name": "@bilig/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@bilig/crdt": "workspace:*",
+    "@bilig/formula": "workspace:*",
+    "@bilig/protocol": "workspace:*",
+    "@bilig/wasm-kernel": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}
