@@ -6,6 +6,7 @@
   - load scenarios at 10k, 50k, and 100k materialized cells through snapshot import
   - downstream edit scenarios at 100, 1k, and 10k dependent formulas
   - renderer commit-style scenarios at 1k and 10k declared cells
+  - the benchmark matrix runs sequentially so reported numbers are not distorted by inter-scenario CPU contention
 - `scripts/perf-smoke.mjs` enforces a lightweight CI threshold against a 1k-downstream edit and asserts that the run actually dirties the expected formulas and hits the WASM fast path.
 - `scripts/bench-contracts.mjs` enforces the documented performance contracts in CI:
   - 100k materialized-cell load under 1.5s
