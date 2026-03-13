@@ -151,6 +151,42 @@ describe("SpreadsheetEngine", () => {
     expect(restored.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 2 });
   });
 
+  it("ignores duplicate remote batches and stale cell replays behind sheet tombstones", async () => {
+    const primary = new SpreadsheetEngine({ workbookName: "spec", replicaId: "a" });
+    const replica = new SpreadsheetEngine({ workbookName: "spec", replicaId: "b" });
+    await Promise.all([primary.ready(), replica.ready()]);
+
+    const outbound: EngineOpBatch[] = [];
+    primary.subscribeBatches((batch) => outbound.push(batch));
+
+    primary.createSheet("Sheet1");
+    const createBatch = outbound[outbound.length - 1]!;
+
+    primary.setCellValue("Sheet1", "A1", 7);
+    const valueBatch = outbound[outbound.length - 1]!;
+
+    replica.applyRemoteBatch(createBatch);
+    replica.applyRemoteBatch(valueBatch);
+    const versionBeforeDuplicate = replica.explainCell("Sheet1", "A1").version;
+
+    replica.applyRemoteBatch(valueBatch);
+    expect(replica.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(replica.explainCell("Sheet1", "A1").version).toBe(versionBeforeDuplicate);
+
+    primary.deleteSheet("Sheet1");
+    const deleteBatch = outbound[outbound.length - 1]!;
+    replica.applyRemoteBatch(deleteBatch);
+    expect(replica.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored", replicaId: "b" });
+    await restored.ready();
+    restored.importSnapshot(replica.exportSnapshot());
+    restored.importReplicaSnapshot(replica.exportReplicaSnapshot());
+
+    restored.applyRemoteBatch(valueBatch);
+    expect(restored.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+  });
+
   it("exports sparse high-row cells without truncating the sheet", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
