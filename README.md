@@ -43,7 +43,6 @@ pnpm run ci
 
 ## CI
 
-- Forgejo Actions is the primary CI surface for this repo via `.forgejo/workflows/ci.yml`.
+- Forgejo Actions is the primary CI surface for this repo via `.forgejo/workflows/forgejo-ci.yml`.
 - The workflow is strict: frozen lockfile install, full `pnpm run ci`, and a tracked-file cleanliness check.
 - Forgejo runners must expose the `docker` label because the workflow uses a Node 24 container job instead of assuming a host toolchain.
-- `.github/workflows/ci.yml` mirrors the same policy for the public GitHub mirror.

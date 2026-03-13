@@ -7,10 +7,10 @@
 
 ## CI policy
 
-- Forgejo CI lives in `.forgejo/workflows/ci.yml` and is the canonical pipeline for the private origin.
+- Forgejo CI lives in `.forgejo/workflows/forgejo-ci.yml` and is the canonical pipeline for the private origin.
 - The workflow targets Forgejo runners with the `docker` label and runs inside a pinned `node:24.14.0-bookworm` container so the toolchain is explicit.
 - CI is strict by design:
   - `pnpm install --frozen-lockfile`
   - `pnpm run ci`
   - `git diff --exit-code` after the full pipeline
-- The public GitHub mirror keeps a matching workflow in `.github/workflows/ci.yml`, but Forgejo is the source of truth.
+- The private origin keeps Forgejo-native workflow definitions only so Forgejo does not have to resolve duplicate workflow paths.
