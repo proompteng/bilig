@@ -8,7 +8,7 @@
 ## CI policy
 
 - Forgejo CI lives in `.forgejo/workflows/ci.yml` and is the canonical pipeline for the private origin.
-- The workflow targets Forgejo runners with the `docker` label and runs inside a `node:24-bookworm` container so the toolchain is explicit.
+- The workflow targets Forgejo runners with the `docker` label and runs inside a pinned `node:24.14.0-bookworm` container so the toolchain is explicit.
 - CI is strict by design:
   - `pnpm install --frozen-lockfile`
   - `pnpm run ci`
