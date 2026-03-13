@@ -2,7 +2,6 @@ import type { CommitOp } from "@bilig/core";
 import type {
   CellDescriptor,
   Descriptor,
-  RenderModel,
   WorkbookDescriptor
 } from "./descriptors.js";
 
@@ -83,12 +82,6 @@ export function collectDeleteOps(descriptor: Descriptor): CommitOp[] {
     return [];
   }
   return [{ kind: "deleteCell", sheetName: sheet.props.name, addr: descriptor.props.addr }];
-}
-
-export function collectModelDeleteOps(model: RenderModel): CommitOp[] {
-  return [...model.sheets.keys()]
-    .reverse()
-    .map((sheetName) => ({ kind: "deleteSheet", name: sheetName }) satisfies CommitOp);
 }
 
 export function collectSheetOrderOps(root: WorkbookDescriptor | null): CommitOp[] {

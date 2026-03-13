@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
 import { WorkbookReconciler, type WorkbookContainer } from "./host-config.js";
-import { emptyRenderModel } from "./descriptors.js";
 
 export interface WorkbookRendererRoot {
   render(element: ReactNode): Promise<void>;
@@ -12,7 +11,6 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
   const container: WorkbookContainer = {
     engine,
     root: null,
-    model: emptyRenderModel(),
     pendingOps: [],
     shouldSyncSheetOrders: false,
     lastError: null

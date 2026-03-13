@@ -141,6 +141,36 @@ describe("playground reconciler", () => {
     }
   });
 
+  it("rejects duplicate sheet names without mutating the engine", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-duplicate-sheet-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await expect(
+        root.render(
+          <Workbook name="duplicate-sheets">
+            <Sheet name="Sheet1">
+              <Cell addr="A1" value={10} />
+            </Sheet>
+            <Sheet name="Sheet1">
+              <Cell addr="B1" value={11} />
+            </Sheet>
+          </Workbook>
+        )
+      ).rejects.toThrow("Duplicate sheet name 'Sheet1'.");
+
+      expect(engine.exportSnapshot()).toEqual({
+        version: 1,
+        workbook: { name: "reconciler-duplicate-sheet-test" },
+        sheets: []
+      });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it("clears workbook state on unmount", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "reconciler-unmount-test" });
     await engine.ready();

@@ -4,18 +4,16 @@ import { DefaultEventPriority } from "react-reconciler/constants";
 import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
 import {
   collectDeleteOps,
-  collectModelDeleteOps,
   collectMountOps,
   collectSheetOrderOps,
   normalizeCommitOps
 } from "./commit-log.js";
-import type { CellProps, Descriptor, RenderModel, SheetProps, WorkbookDescriptor, WorkbookProps } from "./descriptors.js";
-import { buildRenderModel } from "./validation.js";
+import type { CellProps, Descriptor, SheetProps, WorkbookDescriptor, WorkbookProps } from "./descriptors.js";
+import { validateDescriptorTree } from "./validation.js";
 
 export interface WorkbookContainer {
   engine: SpreadsheetEngine;
   root: WorkbookDescriptor | null;
-  model: RenderModel;
   pendingOps: import("@bilig/core").CommitOp[];
   shouldSyncSheetOrders: boolean;
   lastError: Error | null;
@@ -100,9 +98,8 @@ const hostConfig = {
     return rootHostContext;
   },
   resetAfterCommit(container: WorkbookContainer) {
-    let nextModel: RenderModel;
     try {
-      nextModel = buildRenderModel(container.root);
+      validateDescriptorTree(container.root);
     } catch (error) {
       container.pendingOps = [];
       container.shouldSyncSheetOrders = false;
@@ -115,7 +112,6 @@ const hostConfig = {
     const ops = normalizeCommitOps(container.pendingOps);
     container.pendingOps = [];
     container.shouldSyncSheetOrders = false;
-    container.model = nextModel;
     if (ops.length > 0) {
       container.engine.renderCommit(ops);
     }
@@ -266,7 +262,6 @@ const hostConfig = {
       const workbook = instance.parent;
       const order = workbook?.kind === "Workbook" ? workbook.children.indexOf(instance) : 0;
       const previousName = (previousProps as SheetProps).name;
-      const previousOrder = container.model.sheets.get(previousName)?.order;
       if ((previousProps as SheetProps).name !== instance.props.name) {
         container.pendingOps.push({ kind: "deleteSheet", name: previousName });
         container.pendingOps.push({
@@ -278,16 +273,6 @@ const hostConfig = {
           pushCellUpsert(container.pendingOps, instance.props.name, cell.props);
         });
         container.shouldSyncSheetOrders = true;
-      } else {
-        const nextOrder = Math.max(order, 0);
-        if (previousOrder !== undefined && previousOrder !== nextOrder) {
-          container.pendingOps.push({
-            kind: "upsertSheet",
-            name: instance.props.name,
-            order: nextOrder
-          });
-          container.shouldSyncSheetOrders = true;
-        }
       }
       return;
     }
@@ -320,7 +305,9 @@ const hostConfig = {
   unhideInstance() {},
   unhideTextInstance() {},
   clearContainer(container: WorkbookContainer) {
-    pushCollectedOps(container, () => collectModelDeleteOps(container.model));
+    if (container.root) {
+      pushCollectedOps(container, () => collectDeleteOps(container.root!));
+    }
     container.root = null;
   }
 };

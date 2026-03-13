@@ -40,27 +40,3 @@ export interface CellDescriptor extends BaseDescriptor {
 }
 
 export type Descriptor = WorkbookDescriptor | SheetDescriptor | CellDescriptor;
-
-export interface RenderCellModel {
-  addr: string;
-  value?: LiteralInput;
-  formula?: string;
-}
-
-export interface RenderSheetModel {
-  name: string;
-  order: number;
-  cells: Map<string, RenderCellModel>;
-}
-
-export interface RenderModel {
-  workbookName: string;
-  sheets: Map<string, RenderSheetModel>;
-}
-
-export function emptyRenderModel(): RenderModel {
-  return {
-    workbookName: "Workbook",
-    sheets: new Map()
-  };
-}
