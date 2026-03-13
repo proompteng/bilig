@@ -8,7 +8,7 @@ flowchart TB
 
   subgraph PG["apps/playground"]
     UI["React shell and grid UI"]
-    HOOKS["useSyncExternalStore selectors"]
+    HOOKS["useSyncExternalStore selectors<br/>with fine-grained cell subscriptions"]
     REC["Custom workbook reconciler"]
   end
 
@@ -48,8 +48,10 @@ sequenceDiagram
   REC->>CORE: renderCommit(commitOps)
   CORE->>CRDT: create local EngineOpBatch
   CORE->>WASM: evaluate eligible numeric runs
-  CORE-->>UI: emit batch event + selector updates
+  CORE-->>UI: emit batch event + targeted selector updates
   CORE-->>CRDT: emit outbound batch stream
 ```
 
 The TS protocol enums/opcodes and the AssemblyScript protocol mirror are generated together from `scripts/gen-protocol.mjs`. That keeps the JS/WASM contract deterministic and makes drift a CI failure instead of a runtime surprise.
+
+The UI does not subscribe through a single global revision for visible cells. `@bilig/core` maintains keyed cell listener routing so `useCell(...)` and viewport watchers wake only when one of their watched addresses changes. That keeps the grid aligned with the production requirement for localized rerenders rather than whole-viewport invalidation on every batch.

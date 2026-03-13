@@ -3,7 +3,7 @@ import type { SpreadsheetEngine } from "@bilig/core";
 
 export function useCell(engine: SpreadsheetEngine, sheetName: string, addr: string) {
   const revision = useSyncExternalStore(
-    engine.subscribe.bind(engine),
+    (listener) => engine.subscribeCell(sheetName, addr, listener),
     () => engine.getLastMetrics().batchId,
     () => engine.getLastMetrics().batchId
   );

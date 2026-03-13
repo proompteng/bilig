@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
+import { ValueTag } from "@bilig/protocol";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
-import { useViewport } from "./useViewport.js";
+import { useCell } from "./useCell.js";
 
 interface SheetGridViewProps {
   engine: SpreadsheetEngine;
@@ -22,18 +23,62 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function cellContent(engine: SpreadsheetEngine, sheetName: string, addr: string) {
-  const snapshot = engine.getCell(sheetName, addr);
-  return snapshot.value.tag === 1
-    ? String(snapshot.value.value)
-    : snapshot.value.tag === 2
-      ? String(snapshot.value.value)
-      : snapshot.value.tag === 3
-        ? snapshot.value.value
-        : snapshot.value.tag === 4
-          ? `#${snapshot.value.code}`
-          : "";
+function cellContent(snapshot: ReturnType<typeof useCell>) {
+  switch (snapshot.value.tag) {
+    case ValueTag.Number:
+      return String(snapshot.value.value);
+    case ValueTag.Boolean:
+      return String(snapshot.value.value);
+    case ValueTag.String:
+      return snapshot.value.value;
+    case ValueTag.Error:
+      return `#${snapshot.value.code}`;
+    default:
+      return "";
+  }
 }
+
+interface GridCellProps {
+  engine: SpreadsheetEngine;
+  sheetName: string;
+  addr: string;
+  row: number;
+  col: number;
+  isSelected: boolean;
+  onSelect(addr: string): void;
+}
+
+const GridCell = React.memo(function GridCell({
+  engine,
+  sheetName,
+  addr,
+  row,
+  col,
+  isSelected,
+  onSelect
+}: GridCellProps) {
+  const snapshot = useCell(engine, sheetName, addr);
+
+  return (
+    <button
+      aria-label={`Cell ${addr}`}
+      aria-selected={isSelected}
+      className={isSelected ? "grid-cell selected" : "grid-cell"}
+      data-addr={addr}
+      data-selected={isSelected ? "true" : "false"}
+      onClick={() => onSelect(addr)}
+      style={{
+        left: ROW_HEADER_WIDTH + col * COL_WIDTH,
+        top: HEADER_HEIGHT + row * ROW_HEIGHT,
+        width: COL_WIDTH,
+        height: ROW_HEIGHT
+      }}
+      type="button"
+    >
+      <span className="grid-cell-value">{cellContent(snapshot)}</span>
+    </button>
+  );
+});
 
 export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: SheetGridViewProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -80,11 +125,6 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
     };
   }, [scrollLeft, scrollTop, visibleColCount, visibleRowCount]);
 
-  const materializedCells = useViewport(engine, sheetName, viewport);
-  const visibleCellMap = useMemo(
-    () => new Map(materializedCells.map((snapshot) => [snapshot.address, snapshot])),
-    [materializedCells]
-  );
   const rows = useMemo(
     () => Array.from({ length: viewport.rowEnd - viewport.rowStart + 1 }, (_, rowIndex) => viewport.rowStart + rowIndex),
     [viewport]
@@ -204,40 +244,19 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
             {rows.flatMap((row) =>
               cols.map((col) => {
                 const addr = formatAddress(row, col);
-                const snapshot = visibleCellMap.get(addr);
                 const isSelected = addr === selectedAddr;
-                const content =
-                  snapshot !== undefined
-                    ? snapshot.value.tag === 1
-                      ? String(snapshot.value.value)
-                      : snapshot.value.tag === 2
-                        ? String(snapshot.value.value)
-                        : snapshot.value.tag === 3
-                          ? snapshot.value.value
-                          : snapshot.value.tag === 4
-                            ? `#${snapshot.value.code}`
-                            : ""
-                    : cellContent(engine, sheetName, addr);
 
                 return (
-                  <button
-                    aria-label={`Cell ${addr}`}
-                    aria-selected={isSelected}
-                    className={isSelected ? "grid-cell selected" : "grid-cell"}
-                    data-addr={addr}
-                    data-selected={isSelected ? "true" : "false"}
+                  <GridCell
+                    addr={addr}
+                    col={col}
+                    engine={engine}
+                    isSelected={isSelected}
                     key={`${row}-${col}`}
-                    onClick={() => onSelect(addr)}
-                    style={{
-                      left: ROW_HEADER_WIDTH + col * COL_WIDTH,
-                      top: HEADER_HEIGHT + row * ROW_HEIGHT,
-                      width: COL_WIDTH,
-                      height: ROW_HEIGHT
-                    }}
-                    type="button"
-                  >
-                    <span className="grid-cell-value">{content}</span>
-                  </button>
+                    onSelect={onSelect}
+                    row={row}
+                    sheetName={sheetName}
+                  />
                 );
               })
             )}

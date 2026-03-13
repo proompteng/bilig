@@ -248,4 +248,72 @@ describe("SpreadsheetEngine", () => {
     expect(explanation.directDependents).toEqual([]);
     expect(explanation.inCycle).toBe(false);
   });
+
+  it("notifies per-cell listeners only for the cells that changed", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    let a1Notifications = 0;
+    let b1Notifications = 0;
+    const unsubscribeA1 = engine.subscribeCell("Sheet1", "A1", () => {
+      a1Notifications += 1;
+    });
+    const unsubscribeB1 = engine.subscribeCell("Sheet1", "B1", () => {
+      b1Notifications += 1;
+    });
+
+    engine.setCellValue("Sheet1", "A1", 1);
+    expect(a1Notifications).toBe(1);
+    expect(b1Notifications).toBe(0);
+
+    engine.setCellValue("Sheet1", "B1", 2);
+    expect(a1Notifications).toBe(1);
+    expect(b1Notifications).toBe(1);
+
+    engine.setCellValue("Sheet1", "C1", 3);
+    expect(a1Notifications).toBe(1);
+    expect(b1Notifications).toBe(1);
+
+    unsubscribeA1();
+    unsubscribeB1();
+  });
+
+  it("notifies grouped watched cells only when one of them changes", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    let notifications = 0;
+    const unsubscribe = engine.subscribeCells("Sheet1", ["A1", "A2"], () => {
+      notifications += 1;
+    });
+
+    engine.setCellValue("Sheet1", "B1", 5);
+    expect(notifications).toBe(0);
+
+    engine.setCellValue("Sheet1", "A2", 8);
+    expect(notifications).toBe(1);
+
+    unsubscribe();
+  });
+
+  it("notifies watched cells when sheet deletion clears them", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 7);
+
+    let notifications = 0;
+    const unsubscribe = engine.subscribeCell("Sheet1", "A1", () => {
+      notifications += 1;
+    });
+
+    engine.deleteSheet("Sheet1");
+
+    expect(notifications).toBe(1);
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+
+    unsubscribe();
+  });
 });

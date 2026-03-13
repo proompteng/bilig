@@ -129,6 +129,14 @@ export class SpreadsheetEngine {
     return this.events.subscribe(listener);
   }
 
+  subscribeCell(sheetName: string, address: string, listener: () => void): () => void {
+    return this.events.subscribeCell(`${sheetName}!${address}`, listener);
+  }
+
+  subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void {
+    return this.events.subscribeCells(addresses.map((address) => `${sheetName}!${address}`), listener);
+  }
+
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void {
     this.batchListeners.add(listener);
     return () => {
@@ -426,6 +434,7 @@ export class SpreadsheetEngine {
   private applyBatch(batch: EngineOpBatch, source: "local" | "remote"): void {
     const changedInputs = new Set<number>();
     const formulaChanged = new Set<number>();
+    const changedQualifiedAddresses = new Set<string>();
     const materializedCells: MaterializedCell[] = [];
     let appliedOps = 0;
 
@@ -452,7 +461,7 @@ export class SpreadsheetEngine {
             this.rebindFormulasForSheet(op.name).forEach((cellIndex) => formulaChanged.add(cellIndex));
             break;
           case "deleteSheet":
-            this.removeSheetRuntime(op.name, changedInputs, formulaChanged);
+            this.removeSheetRuntime(op.name, changedInputs, formulaChanged, changedQualifiedAddresses);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             this.sheetDeleteVersions.set(op.name, order);
             break;
@@ -468,6 +477,7 @@ export class SpreadsheetEngine {
             this.workbook.cellStore.flags[cellIndex] =
               (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
             changedInputs.add(cellIndex);
+            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
@@ -479,6 +489,7 @@ export class SpreadsheetEngine {
             const dependencyIndices = this.materializeDependencies(op.sheetName, compiled.deps, materializedCells);
             this.setFormula(cellIndex, op.formula, compiled, dependencyIndices, materializedCells);
             formulaChanged.add(cellIndex);
+            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
@@ -491,6 +502,7 @@ export class SpreadsheetEngine {
             this.removeFormula(cellIndex);
             this.workbook.cellStore.setValue(cellIndex, emptyValue());
             changedInputs.add(cellIndex);
+            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
@@ -524,11 +536,17 @@ export class SpreadsheetEngine {
     const changed = this.recalculate([...changedInputs, ...formulaChanged]);
     this.lastMetrics.batchId += 1;
     this.lastMetrics.changedInputCount = changedInputs.size + formulaChanged.size;
+    changed.forEach((cellIndex) => {
+      const qualifiedAddress = this.workbook.getQualifiedAddress(cellIndex);
+      if (!qualifiedAddress.startsWith("!")) {
+        changedQualifiedAddresses.add(qualifiedAddress);
+      }
+    });
     this.events.emit({
       kind: "batch",
       changedCellIndices: changed,
       metrics: this.lastMetrics
-    });
+    }, [...changedQualifiedAddresses]);
     if (source === "local") {
       this.emitBatch(batch);
     }
@@ -863,7 +881,12 @@ export class SpreadsheetEngine {
     }
   }
 
-  private removeSheetRuntime(sheetName: string, changedInputs: Set<number>, formulaChanged: Set<number>): void {
+  private removeSheetRuntime(
+    sheetName: string,
+    changedInputs: Set<number>,
+    formulaChanged: Set<number>,
+    changedQualifiedAddresses: Set<string>
+  ): void {
     const sheet = this.workbook.getSheet(sheetName);
     if (!sheet) return;
 
@@ -879,6 +902,7 @@ export class SpreadsheetEngine {
     });
 
     cellIndices.forEach((cellIndex) => {
+      changedQualifiedAddresses.add(`${sheetName}!${this.workbook.getAddress(cellIndex)}`);
       this.removeFormula(cellIndex);
       this.dependencies.delete(cellIndex);
       this.dependents.delete(cellIndex);
