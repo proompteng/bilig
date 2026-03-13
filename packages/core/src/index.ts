@@ -1,4 +1,5 @@
 export * from "./cell-store.js";
+export * from "./csv.js";
 export * from "./engine.js";
 export * from "./events.js";
 export * from "./selectors.js";

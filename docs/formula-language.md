@@ -14,3 +14,12 @@ Current implementation supports:
 - builtins including `SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ABS`, `ROUND`, `FLOOR`, `CEILING`, `MOD`, `IF`, `AND`, `OR`, `NOT`, `LEN`, `CONCAT`
 
 The WASM fast path is intentionally narrower than the full JS evaluator.
+
+## CSV bridge
+
+- `exportSheetCsv(sheetName)` exports a single sheet as CSV.
+- `importSheetCsv(sheetName, csv)` replaces one sheet from CSV content.
+- Cells beginning with `=` import as formulas.
+- `TRUE` and `FALSE` import as booleans.
+- Numeric scalars import as numbers.
+- All other CSV fields import as strings.

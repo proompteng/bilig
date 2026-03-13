@@ -34,6 +34,7 @@ import { selectCellSnapshot, selectViewportCells } from "./selectors.js";
 import { StringPool } from "./string-pool.js";
 import { WasmKernelFacade } from "./wasm-facade.js";
 import { WorkbookStore } from "./workbook-store.js";
+import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
 
 export interface CommitOp {
   kind: "upsertWorkbook" | "upsertSheet" | "deleteSheet" | "upsertCell" | "deleteCell";
@@ -150,6 +151,64 @@ export class SpreadsheetEngine {
 
   clearCell(sheetName: string, address: string): void {
     this.applyLocalOps([{ kind: "clearCell", sheetName, address }]);
+  }
+
+  exportSheetCsv(sheetName: string): string {
+    const sheet = this.workbook.getSheet(sheetName);
+    if (!sheet) {
+      return "";
+    }
+
+    let maxRow = -1;
+    let maxCol = -1;
+    const cells = new Map<string, string>();
+
+    sheet.grid.forEachCell((cellIndex) => {
+      const cell = this.getCellByIndex(cellIndex);
+      const parsed = parseCellAddress(cell.address, sheetName);
+      maxRow = Math.max(maxRow, parsed.row);
+      maxCol = Math.max(maxCol, parsed.col);
+      cells.set(`${parsed.row}:${parsed.col}`, cellToCsvValue(cell));
+    });
+
+    if (maxRow < 0 || maxCol < 0) {
+      return "";
+    }
+
+    const rows = Array.from({ length: maxRow + 1 }, (_, row) =>
+      Array.from({ length: maxCol + 1 }, (_, col) => cells.get(`${row}:${col}`) ?? "")
+    );
+
+    return serializeCsv(rows);
+  }
+
+  importSheetCsv(sheetName: string, csv: string): void {
+    const rows = parseCsv(csv);
+    const existingSheet = this.workbook.getSheet(sheetName);
+    const order = existingSheet?.order ?? this.workbook.sheetsByName.size;
+    const ops: EngineOp[] = [];
+
+    if (existingSheet) {
+      ops.push({ kind: "deleteSheet", name: sheetName });
+    }
+    ops.push({ kind: "upsertSheet", name: sheetName, order });
+
+    rows.forEach((row, rowIndex) => {
+      row.forEach((raw, colIndex) => {
+        const parsed = parseCsvCellInput(raw);
+        if (!parsed) {
+          return;
+        }
+        const address = formatAddress(rowIndex, colIndex);
+        if (parsed.formula !== undefined) {
+          ops.push({ kind: "setCellFormula", sheetName, address, formula: parsed.formula });
+          return;
+        }
+        ops.push({ kind: "setCellValue", sheetName, address, value: parsed.value ?? null });
+      });
+    });
+
+    this.applyLocalOps(ops);
   }
 
   getCellValue(sheetName: string, address: string): CellValue {

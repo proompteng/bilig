@@ -93,4 +93,39 @@ describe("SpreadsheetEngine", () => {
     const snapshot = engine.exportSnapshot();
     expect(snapshot.sheets[0]?.cells).toContainEqual({ address: "A10002", value: 7 });
   });
+
+  it("roundtrips a single sheet through CSV with formulas and quoted strings", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 12);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+    engine.setCellValue("Sheet1", "A2", "alpha,beta");
+
+    const csv = engine.exportSheetCsv("Sheet1");
+    expect(csv).toBe('12,=A1*2\n"alpha,beta",');
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSheetCsv("Sheet1", csv);
+
+    expect(restored.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(restored.getCell("Sheet1", "B1").formula).toBe("A1*2");
+    expect(restored.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 24 });
+    expect(restored.getCell("Sheet1", "A2").value).toEqual({ tag: ValueTag.String, value: "alpha,beta", stringId: 1 });
+  });
+
+  it("replaces existing sheet contents on CSV import", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "C3", 9);
+
+    engine.importSheetCsv("Sheet1", "7,8");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
+    expect(engine.getCellValue("Sheet1", "C3")).toEqual({ tag: ValueTag.Empty });
+  });
 });

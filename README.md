@@ -43,6 +43,7 @@ pnpm run ci:strict
 - The WASM kernel is a custom AssemblyScript fast path, not an embedded proprietary spreadsheet runtime.
 - The playground includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
 - The playground also demonstrates local-first replica mirroring through the engine’s outbound and inbound batch APIs.
+- The imperative engine now includes a single-sheet CSV bridge for import/export without pulling React into shared packages.
 
 ## CI
 

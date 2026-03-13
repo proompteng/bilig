@@ -23,6 +23,8 @@
 - `getDependents(sheet, address)`
 - `exportSnapshot()`
 - `importSnapshot(snapshot)`
+- `exportSheetCsv(sheet)`
+- `importSheetCsv(sheet, csv)`
 - `subscribe(listener)`
 - `subscribeBatches(listener)`
 - `applyRemoteBatch(batch)`
