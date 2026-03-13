@@ -20,7 +20,11 @@
 ## CI policy
 
 - Forgejo CI lives in `.forgejo/workflows/forgejo-ci.yml` and is the canonical pipeline for the private origin.
-- The workflow targets Forgejo runners with the `docker` label and runs inside a pinned `node:24.14.0-bookworm` container so the toolchain is explicit.
+- The workflow targets the Forgejo runner label `bilig-ci`.
+- The runner contract is explicit in the workflow:
+  - host Node must be `>=24.14.0`
+  - Corepack must activate `pnpm 10.32.1`
+  - Chromium is installed during the run for browser smoke instead of relying on ambient runner state
 - CI is strict by design:
   - `pnpm install --frozen-lockfile`
   - `pnpm run ci`

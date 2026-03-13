@@ -57,4 +57,4 @@ pnpm run ci:strict
 - Forgejo Actions is the primary CI surface for this repo via `.forgejo/workflows/forgejo-ci.yml`.
 - The workflow is strict: frozen lockfile install, full `pnpm run ci`, artifact budget checks, browser smoke, and a tracked-file cleanliness check.
 - `pnpm run ci:strict` mirrors the remote cleanliness gate locally before a direct push to `main`.
-- Forgejo runners must expose the `docker` label because the workflow uses a Node 24 container job instead of assuming a host toolchain.
+- Forgejo runners must expose the `bilig-ci` label, provide Node `>=24.14.0`, and allow Corepack to activate `pnpm 10.32.1` during the job.
