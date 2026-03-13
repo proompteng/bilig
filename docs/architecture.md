@@ -51,3 +51,5 @@ sequenceDiagram
   CORE-->>UI: emit batch event + selector updates
   CORE-->>CRDT: emit outbound batch stream
 ```
+
+The TS protocol enums/opcodes and the AssemblyScript protocol mirror are generated together from `scripts/gen-protocol.mjs`. That keeps the JS/WASM contract deterministic and makes drift a CI failure instead of a runtime surprise.

@@ -10,6 +10,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter @bilig/playground dev",
+    "protocol:generate": "node scripts/gen-protocol.mjs",
+    "protocol:check": "node scripts/gen-protocol.mjs --check",
     "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
@@ -20,7 +22,7 @@
     "bench:contracts": "tsx scripts/bench-contracts.mjs",
     "release:check": "node scripts/release-check.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
+    "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
     "ci:strict": "pnpm run ci && git diff --exit-code && git diff --cached --exit-code"
   },
   "repository": {

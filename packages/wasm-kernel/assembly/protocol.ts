@@ -1,3 +1,6 @@
+// GENERATED FILE. DO NOT EDIT DIRECTLY.
+// Source: scripts/gen-protocol.mjs
+
 export enum ValueTag {
   Empty = 0,
   Number = 1,
@@ -14,6 +17,11 @@ export enum ErrorCode {
   Name = 4,
   NA = 5,
   Cycle = 6
+}
+
+export enum FormulaMode {
+  JsOnly = 0,
+  WasmFastPath = 1
 }
 
 export enum Opcode {

@@ -17,6 +17,7 @@
 - `scripts/release-check.mjs` enforces artifact budgets after the playground build:
   - largest built app JS asset must stay under 350KB gzip
   - largest built WASM asset must stay under 250KB gzip
+- `scripts/gen-protocol.mjs --check` verifies that the TypeScript protocol surface and the AssemblyScript protocol mirror are generated from the same manifest before the rest of CI runs.
 
 ## CI policy
 

@@ -1,3 +1,6 @@
+// GENERATED FILE. DO NOT EDIT DIRECTLY.
+// Source: scripts/gen-protocol.mjs
+
 export enum ValueTag {
   Empty = 0,
   Number = 1,

@@ -27,6 +27,7 @@ pnpm dev
 
 ```bash
 pnpm dev
+pnpm protocol:generate
 pnpm build
 pnpm typecheck
 pnpm test
@@ -43,6 +44,7 @@ pnpm run ci:strict
 - The spreadsheet engine remains usable without React.
 - The custom reconciler lives under `apps/playground/src/reconciler`.
 - The WASM kernel is a custom AssemblyScript fast path, not an embedded proprietary spreadsheet runtime.
+- The TS protocol enums/opcodes and AssemblyScript protocol mirror are generated from `scripts/gen-protocol.mjs` so JS/WASM ABI drift fails fast in CI.
 - The playground includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
 - The demo workbook now exercises JS row/column range formulas and a WASM-backed branch formula in the visible UI so browser smoke covers both paths.
 - The cell inspector now exposes formula mode, topo rank, versioning, and dependency edges from the core engine.

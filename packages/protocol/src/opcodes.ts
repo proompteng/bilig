@@ -1,3 +1,6 @@
+// GENERATED FILE. DO NOT EDIT DIRECTLY.
+// Source: scripts/gen-protocol.mjs
+
 import { BuiltinId, Opcode } from "./enums.js";
 
 export interface BuiltinDescriptor {
