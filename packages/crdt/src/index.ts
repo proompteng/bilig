@@ -4,7 +4,6 @@ export type ReplicaId = string;
 export type OpId = string;
 
 export interface Clock {
-  replicaId: ReplicaId;
   counter: number;
 }
 
@@ -25,62 +24,119 @@ export interface EngineOpBatch {
 
 export interface ReplicaState {
   replicaId: ReplicaId;
-  counter: number;
+  clock: Clock;
   appliedBatchIds: Set<OpId>;
+}
+
+export interface ReplicaSnapshot {
+  replicaId: ReplicaId;
+  counter: number;
+  appliedBatchIds: OpId[];
+}
+
+export interface OpOrder {
+  counter: number;
+  replicaId: ReplicaId;
+  batchId: OpId;
+  opIndex: number;
+}
+
+export interface ReplicaVersionSnapshot {
+  entityKey: string;
+  order: OpOrder;
 }
 
 export function createReplicaState(replicaId: ReplicaId): ReplicaState {
   return {
     replicaId,
-    counter: 0,
+    clock: { counter: 0 },
     appliedBatchIds: new Set<OpId>()
   };
 }
 
+export function hydrateReplicaState(state: ReplicaState, snapshot: ReplicaSnapshot): void {
+  state.replicaId = snapshot.replicaId;
+  state.clock.counter = snapshot.counter;
+  state.appliedBatchIds.clear();
+  snapshot.appliedBatchIds.forEach((id) => state.appliedBatchIds.add(id));
+}
+
+export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): ReplicaSnapshot {
+  const appliedBatchIds = [...state.appliedBatchIds].sort();
+  const trimmed = appliedBatchIds.slice(Math.max(0, appliedBatchIds.length - limit));
+  return {
+    replicaId: state.replicaId,
+    counter: state.clock.counter,
+    appliedBatchIds: trimmed
+  };
+}
+
+export function importReplicaSnapshot(snapshot: ReplicaSnapshot): ReplicaState {
+  const state = createReplicaState(snapshot.replicaId);
+  hydrateReplicaState(state, snapshot);
+  return state;
+}
+
 export function nextClock(state: ReplicaState): Clock {
-  state.counter += 1;
-  return { replicaId: state.replicaId, counter: state.counter };
+  state.clock.counter += 1;
+  return { counter: state.clock.counter };
 }
 
 export function createBatch(state: ReplicaState, ops: EngineOp[]): EngineOpBatch {
   const clock = nextClock(state);
   const batch: EngineOpBatch = {
-    id: `${clock.replicaId}:${clock.counter}`,
+    id: `${state.replicaId}:${clock.counter}`,
     replicaId: state.replicaId,
     clock,
     ops
   };
-  state.appliedBatchIds.add(batch.id);
+  markBatchApplied(state, batch);
   return batch;
 }
 
-export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
-  const byId = new Map<OpId, EngineOpBatch>();
-  for (const batch of batches) {
-    if (!byId.has(batch.id)) {
-      byId.set(batch.id, batch);
-    }
-  }
-  return mergeBatches([...byId.values()]);
-}
-
-export function mergeBatches(batches: EngineOpBatch[]): EngineOpBatch[] {
-  return [...batches].sort((left, right) => {
-    if (left.clock.counter !== right.clock.counter) {
-      return left.clock.counter - right.clock.counter;
-    }
-    if (left.replicaId !== right.replicaId) {
-      return left.replicaId.localeCompare(right.replicaId);
-    }
-    return left.id.localeCompare(right.id);
-  });
+export function markBatchApplied(state: ReplicaState, batch: EngineOpBatch): void {
+  state.appliedBatchIds.add(batch.id);
+  state.clock.counter = Math.max(state.clock.counter, batch.clock.counter);
 }
 
 export function shouldApplyBatch(state: ReplicaState, batch: EngineOpBatch): boolean {
-  if (state.appliedBatchIds.has(batch.id)) {
-    return false;
-  }
-  state.appliedBatchIds.add(batch.id);
-  state.counter = Math.max(state.counter, batch.clock.counter);
-  return true;
+  return !state.appliedBatchIds.has(batch.id);
+}
+
+export function compareBatches(left: EngineOpBatch, right: EngineOpBatch): number {
+  return (
+    left.clock.counter - right.clock.counter ||
+    left.replicaId.localeCompare(right.replicaId) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+export function batchOpOrder(batch: EngineOpBatch, opIndex: number): OpOrder {
+  return {
+    counter: batch.clock.counter,
+    replicaId: batch.replicaId,
+    batchId: batch.id,
+    opIndex
+  };
+}
+
+export function compareOpOrder(left: OpOrder, right: OpOrder): number {
+  return (
+    left.counter - right.counter ||
+    left.replicaId.localeCompare(right.replicaId) ||
+    left.batchId.localeCompare(right.batchId) ||
+    left.opIndex - right.opIndex
+  );
+}
+
+export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
+  const deduped = new Map<OpId, EngineOpBatch>();
+  batches.forEach((batch) => {
+    deduped.set(batch.id, batch);
+  });
+  return [...deduped.values()].sort(compareBatches);
+}
+
+export function mergeBatches(batches: EngineOpBatch[]): EngineOpBatch[] {
+  return compactLog(batches);
 }

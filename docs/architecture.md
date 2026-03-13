@@ -8,6 +8,7 @@ flowchart TB
 
   subgraph PG["apps/playground"]
     UI["React shell and grid UI"]
+    HOOKS["useSyncExternalStore selectors"]
     REC["Custom workbook reconciler"]
   end
 
@@ -19,7 +20,8 @@ flowchart TB
     WASM["@bilig/wasm-kernel"]
   end
 
-  UI --> CORE
+  UI --> HOOKS
+  HOOKS --> CORE
   UI --> REC
   REC --> CORE
   CORE --> FORMULA
@@ -29,7 +31,23 @@ flowchart TB
   FORMULA --> PROTOCOL
   WASM --> PROTOCOL
 
-  class UI,REC react
+  class UI,HOOKS,REC react
   class CORE,FORMULA,CRDT,PROTOCOL core
   class WASM wasm
+```
+
+```mermaid
+sequenceDiagram
+  participant UI as React playground UI
+  participant REC as Custom reconciler
+  participant CORE as @bilig/core
+  participant CRDT as @bilig/crdt
+  participant WASM as @bilig/wasm-kernel
+
+  UI->>REC: render Workbook / Sheet / Cell tree
+  REC->>CORE: renderCommit(commitOps)
+  CORE->>CRDT: create local EngineOpBatch
+  CORE->>WASM: evaluate eligible numeric runs
+  CORE-->>UI: emit batch event + selector updates
+  CORE-->>CRDT: emit outbound batch stream
 ```

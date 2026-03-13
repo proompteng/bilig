@@ -50,4 +50,22 @@ export class SheetGrid {
       }
     }
   }
+
+  forEachCell(fn: (cellIndex: number) => void): void {
+    this.blocks.forEach((block, key) => {
+      const blockRow = Math.floor(key / 1_000_000);
+      const blockCol = key % 1_000_000;
+      for (let offset = 0; offset < block.length; offset += 1) {
+        const value = block[offset]!;
+        if (value === 0) continue;
+        const localRow = Math.floor(offset / BLOCK_COLS);
+        const localCol = offset % BLOCK_COLS;
+        const row = blockRow * BLOCK_ROWS + localRow;
+        const col = blockCol * BLOCK_COLS + localCol;
+        if (row >= 0 && col >= 0) {
+          fn(value - 1);
+        }
+      }
+    });
+  }
 }

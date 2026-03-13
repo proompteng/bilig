@@ -77,6 +77,22 @@ export class CellStore {
     return index;
   }
 
+  reset(): void {
+    this.size = 0;
+    this.tags.fill(0);
+    this.numbers.fill(0);
+    this.stringIds.fill(0);
+    this.errors.fill(0);
+    this.formulaIds.fill(0);
+    this.versions.fill(0);
+    this.flags.fill(0);
+    this.sheetIds.fill(0);
+    this.rows.fill(0);
+    this.cols.fill(0);
+    this.topoRanks.fill(0);
+    this.cycleGroupIds.fill(-1);
+  }
+
   setValue(index: number, value: CellValue, stringId = 0): void {
     this.tags[index] = value.tag;
     this.errors[index] = value.tag === ValueTag.Error ? value.code : ErrorCode.None;

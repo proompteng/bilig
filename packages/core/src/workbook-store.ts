@@ -44,6 +44,10 @@ export class WorkbookStore {
   deleteSheet(name: string): void {
     const sheet = this.sheetsByName.get(name);
     if (!sheet) return;
+    sheet.grid.forEachCell((cellIndex) => {
+      const key = makeCellKey(sheet.id, this.cellStore.rows[cellIndex]!, this.cellStore.cols[cellIndex]!);
+      this.cellKeyToIndex.delete(key);
+    });
     this.sheetsByName.delete(name);
     this.sheetsById.delete(sheet.id);
   }
@@ -87,6 +91,15 @@ export class WorkbookStore {
 
   getQualifiedAddress(index: number): string {
     return `${this.getSheetNameById(this.cellStore.sheetIds[index]!)}!${this.getAddress(index)}`;
+  }
+
+  reset(workbookName = "Workbook"): void {
+    this.workbookName = workbookName;
+    this.sheetsByName.clear();
+    this.sheetsById.clear();
+    this.cellKeyToIndex.clear();
+    this.nextSheetId = 1;
+    this.cellStore.reset();
   }
 }
 
