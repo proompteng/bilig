@@ -20,6 +20,9 @@ export function App() {
   const selectedCell = useCell(engine, selection.sheetName, selection.address);
   const metrics = useMetrics(engine);
   const [editorValue, setEditorValue] = useState("");
+  const sheetNames = [...engine.workbook.sheetsByName.values()]
+    .sort((left, right) => left.order - right.order)
+    .map((sheet) => sheet.name);
 
   useEffect(() => {
     void engine.ready().then(() => rendererRoot.render(buildDemoWorkbook()));
@@ -48,7 +51,24 @@ export function App() {
     setEditorValue("");
   }, [selectedCell]);
 
+  useEffect(() => {
+    if (sheetNames.length === 0) return;
+    if (!sheetNames.includes(selection.sheetName)) {
+      selection.select(sheetNames[0]!, "A1");
+    }
+  }, [selection, sheetNames]);
+
   const dependencySnapshot = engine.getDependencies(selection.sheetName, selection.address);
+  const resolvedValue =
+    selectedCell.value.tag === 1
+      ? String(selectedCell.value.value)
+      : selectedCell.value.tag === 2
+        ? String(selectedCell.value.value)
+        : selectedCell.value.tag === 3
+          ? selectedCell.value.value
+          : selectedCell.value.tag === 4
+            ? `#${selectedCell.value.code}`
+            : "";
 
   const commitEditor = () => {
     const normalized = editorValue.trim();
@@ -85,20 +105,37 @@ export function App() {
         </div>
       </header>
 
-      <FormulaBar value={editorValue} onChange={setEditorValue} onCommit={commitEditor} />
+      <FormulaBar
+        label={`${selection.sheetName}!${selection.address}`}
+        value={editorValue}
+        onChange={setEditorValue}
+        onClear={() => {
+          engine.clearCell(selection.sheetName, selection.address);
+          setEditorValue("");
+        }}
+        onCommit={commitEditor}
+      />
 
       <main className="workspace">
         <WorkbookView
           engine={engine}
+          sheetNames={sheetNames}
+          workbookName={engine.workbook.workbookName}
           sheetName={selection.sheetName}
           selectedAddr={selection.address}
+          onSelectSheet={(sheetName) => selection.select(sheetName, selection.address)}
           onSelect={(addr) => selection.select(selection.sheetName, addr)}
         />
         <aside className="sidebar">
           <CellEditorOverlay
             label={`${selection.sheetName}!${selection.address}`}
+            resolvedValue={resolvedValue}
             value={editorValue}
             onChange={setEditorValue}
+            onClear={() => {
+              engine.clearCell(selection.sheetName, selection.address);
+              setEditorValue("");
+            }}
             onCommit={commitEditor}
           />
           <MetricsPanel metrics={metrics} />

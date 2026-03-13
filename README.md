@@ -40,6 +40,7 @@ pnpm run ci
 - The spreadsheet engine remains usable without React.
 - The custom reconciler lives under `apps/playground/src/reconciler`.
 - The WASM kernel is a custom AssemblyScript fast path, not an embedded proprietary spreadsheet runtime.
+- The playground includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
 
 ## CI
 

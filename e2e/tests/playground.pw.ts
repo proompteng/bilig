@@ -13,5 +13,10 @@ test("playground smoke exercises the custom renderer and wasm-backed recalculati
   await page.getByRole("button", { name: "Commit" }).click();
 
   await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("24");
+  await page.getByRole("tab", { name: "Sheet2" }).click();
+  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("25");
+  await page.getByTestId("sheet-grid").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet2!B1");
   await expect(page.getByTestId("metric-wasm")).not.toHaveText("0");
 });
