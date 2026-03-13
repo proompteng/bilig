@@ -1,6 +1,6 @@
 import { BuiltinId, FormulaMode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
-import { parseRangeAddress } from "./addressing.js";
+import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
 import { getBuiltin } from "./builtins.js";
 
 export interface BoundFormula {
@@ -21,8 +21,11 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "CellRef":
         deps.add(node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref);
         break;
+      case "RowRef":
+      case "ColumnRef":
+        throw new Error("Row and column references must appear inside a range");
       case "RangeRef":
-        deps.add(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`);
+        deps.add(formatRangeAddress(parseRangeAddress(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`)));
         break;
       case "UnaryExpr":
         collectDeps(node.argument);
@@ -48,11 +51,17 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         return false;
       case "CellRef":
         return true;
+      case "RowRef":
+      case "ColumnRef":
+        return false;
       case "RangeRef":
         if (!allowRange) return false;
         try {
           const sheetPrefix = node.sheetName ? `${node.sheetName}!` : "";
           const range = parseRangeAddress(`${sheetPrefix}${node.start}:${node.end}`);
+          if (range.kind !== "cells") {
+            return false;
+          }
           const cellCount = (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1);
           return cellCount <= MAX_WASM_RANGE_CELLS;
         } catch {

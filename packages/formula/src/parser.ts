@@ -1,4 +1,14 @@
-import type { BinaryExprNode, CallExprNode, CellRefNode, FormulaNode, RangeRefNode, UnaryExprNode } from "./ast.js";
+import type {
+  BinaryExprNode,
+  CallExprNode,
+  CellRefNode,
+  ColumnRefNode,
+  FormulaNode,
+  RangeRefNode,
+  RowRefNode,
+  UnaryExprNode
+} from "./ast.js";
+import { isCellReferenceText, isColumnReferenceText, isRowReferenceText } from "./addressing.js";
 import { lexFormula, type Token } from "./lexer.js";
 
 const PRECEDENCE: Record<string, number> = {
@@ -34,11 +44,104 @@ export function parseFormula(source: string): FormulaNode {
     return token;
   }
 
+  function parseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode {
+    const upper = ref.toUpperCase();
+    if (isCellReferenceText(upper)) {
+      const result: CellRefNode = { kind: "CellRef", ref: upper };
+      if (sheetName !== undefined) {
+        result.sheetName = sheetName;
+      }
+      return result;
+    }
+    if (isColumnReferenceText(upper)) {
+      const result: ColumnRefNode = { kind: "ColumnRef", ref: upper };
+      if (sheetName !== undefined) {
+        result.sheetName = sheetName;
+      }
+      return result;
+    }
+    throw new Error(`Unsupported reference '${ref}'`);
+  }
+
+  function parseSheetQualifiedReference(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode {
+    const token = current();
+    if (token.kind === "identifier") {
+      eat("identifier");
+      return parseReferenceValue(token.value, sheetName);
+    }
+    if (token.kind === "number" && isRowReferenceText(token.value)) {
+      eat("number");
+      return { kind: "RowRef", ref: token.value, sheetName };
+    }
+    throw new Error(`Expected a sheet-qualified reference, received ${token.kind}`);
+  }
+
+  function buildRange(left: CellRefNode | ColumnRefNode | RowRefNode, right: CellRefNode | ColumnRefNode | RowRefNode): RangeRefNode {
+    if (left.kind !== right.kind) {
+      throw new Error("Range endpoints must use the same reference type");
+    }
+
+    const sheetName = left.sheetName ?? right.sheetName;
+    if (left.sheetName && right.sheetName && left.sheetName !== right.sheetName) {
+      throw new Error("Range endpoints must target the same sheet");
+    }
+
+    const range: RangeRefNode = {
+      kind: "RangeRef",
+      refKind: left.kind === "CellRef" ? "cells" : left.kind === "ColumnRef" ? "cols" : "rows",
+      start: left.ref,
+      end: right.ref
+    };
+    if (sheetName !== undefined) {
+      range.sheetName = sheetName;
+    }
+    return range;
+  }
+
+  function toRangeEndpoint(node: FormulaNode): CellRefNode | ColumnRefNode | RowRefNode | undefined {
+    switch (node.kind) {
+      case "CellRef":
+      case "ColumnRef":
+      case "RowRef":
+        return node;
+      case "NumberLiteral":
+        if (Number.isInteger(node.value) && node.value >= 1) {
+          return { kind: "RowRef", ref: `${node.value}` };
+        }
+        return undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  function assertNoStandaloneAxisRefs(node: FormulaNode): void {
+    switch (node.kind) {
+      case "ColumnRef":
+      case "RowRef":
+        throw new Error("Row and column references must appear inside a range");
+      case "UnaryExpr":
+        assertNoStandaloneAxisRefs(node.argument);
+        return;
+      case "BinaryExpr":
+        assertNoStandaloneAxisRefs(node.left);
+        assertNoStandaloneAxisRefs(node.right);
+        return;
+      case "CallExpr":
+        node.args.forEach(assertNoStandaloneAxisRefs);
+        return;
+      default:
+        return;
+    }
+  }
+
   function parsePrimary(): FormulaNode {
     const token = current();
 
     if (token.kind === "number") {
       eat("number");
+      if (isRowReferenceText(token.value) && current().kind === "colon") {
+        return { kind: "RowRef", ref: token.value };
+      }
       return { kind: "NumberLiteral", value: Number(token.value) };
     }
 
@@ -51,13 +154,7 @@ export function parseFormula(source: string): FormulaNode {
       const first = eat("quotedIdentifier").value;
       if (current().kind === "bang") {
         eat("bang");
-        const ref = eat("identifier").value.toUpperCase();
-        if (current().kind === "colon") {
-          eat("colon");
-          const end = eat("identifier").value.toUpperCase();
-          return { kind: "RangeRef", sheetName: first, start: ref, end } satisfies RangeRefNode;
-        }
-        return { kind: "CellRef", sheetName: first, ref } satisfies CellRefNode;
+        return parseSheetQualifiedReference(first);
       }
       return { kind: "StringLiteral", value: first };
     }
@@ -83,13 +180,7 @@ export function parseFormula(source: string): FormulaNode {
 
       if (current().kind === "bang") {
         eat("bang");
-        const ref = eat("identifier").value.toUpperCase();
-        if (current().kind === "colon") {
-          eat("colon");
-          const end = eat("identifier").value.toUpperCase();
-          return { kind: "RangeRef", sheetName: first, start: ref, end } satisfies RangeRefNode;
-        }
-        return { kind: "CellRef", sheetName: first, ref } satisfies CellRefNode;
+        return parseSheetQualifiedReference(first);
       }
 
       if (current().kind === "lparen") {
@@ -111,7 +202,7 @@ export function parseFormula(source: string): FormulaNode {
         return { kind: "BooleanLiteral", value: upper === "TRUE" };
       }
 
-      return { kind: "CellRef", ref: upper } satisfies CellRefNode;
+      return parseReferenceValue(upper);
     }
 
     throw new Error(`Unexpected token ${token.kind}`);
@@ -130,23 +221,16 @@ export function parseFormula(source: string): FormulaNode {
       eat(token.kind);
 
       if (token.kind === "colon") {
-        if (left.kind !== "CellRef") {
+        const start = toRangeEndpoint(left);
+        if (!start) {
           throw new Error("Range start must be a cell reference");
         }
         const right = parsePrimary();
-        if (right.kind !== "CellRef") {
+        const end = toRangeEndpoint(right);
+        if (!end) {
           throw new Error("Range end must be a cell reference");
         }
-        const nextRange: RangeRefNode = {
-          kind: "RangeRef",
-          start: left.ref,
-          end: right.ref
-        };
-        const sheetName = left.sheetName ?? right.sheetName;
-        if (sheetName !== undefined) {
-          nextRange.sheetName = sheetName;
-        }
-        left = nextRange;
+        left = buildRange(start, end);
         continue;
       }
 
@@ -181,6 +265,7 @@ export function parseFormula(source: string): FormulaNode {
   }
 
   const result = parseExpression();
+  assertNoStandaloneAxisRefs(result);
   eat("eof");
   return result;
 }

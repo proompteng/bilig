@@ -1,4 +1,6 @@
 const CELL_RE = /^\$?([A-Z]+)\$?([1-9][0-9]*)$/;
+const COLUMN_RE = /^\$?([A-Z]+)$/;
+const ROW_RE = /^\$?([1-9][0-9]*)$/;
 const QUALIFIED_RE = /^(?:(?:'((?:[^']|'')+)'|([^!]+))!)?(.+)$/;
 
 export interface CellAddress {
@@ -8,10 +10,63 @@ export interface CellAddress {
   text: string;
 }
 
-export interface RangeAddress {
+export interface RowAddress {
+  sheetName?: string;
+  row: number;
+  text: string;
+}
+
+export interface ColumnAddress {
+  sheetName?: string;
+  col: number;
+  text: string;
+}
+
+export type ParsedReference = CellReference | RowReference | ColumnReference;
+
+interface CellReference {
+  kind: "cell";
+  sheetName?: string;
+  row: number;
+  col: number;
+  text: string;
+}
+
+interface RowReference {
+  kind: "row";
+  sheetName?: string;
+  row: number;
+  text: string;
+}
+
+interface ColumnReference {
+  kind: "col";
+  sheetName?: string;
+  col: number;
+  text: string;
+}
+
+export type RangeAddress = CellRangeAddress | RowRangeAddress | ColumnRangeAddress;
+
+export interface CellRangeAddress {
+  kind: "cells";
   sheetName?: string;
   start: CellAddress;
   end: CellAddress;
+}
+
+export interface RowRangeAddress {
+  kind: "rows";
+  sheetName?: string;
+  start: RowAddress;
+  end: RowAddress;
+}
+
+export interface ColumnRangeAddress {
+  kind: "cols";
+  sheetName?: string;
+  start: ColumnAddress;
+  end: ColumnAddress;
 }
 
 export function columnToIndex(column: string): number {
@@ -37,56 +92,164 @@ export function formatAddress(row: number, col: number): string {
   return `${indexToColumn(col)}${row + 1}`;
 }
 
+export function isCellReferenceText(value: string): boolean {
+  return CELL_RE.test(value.toUpperCase());
+}
+
+export function isColumnReferenceText(value: string): boolean {
+  return COLUMN_RE.test(value.toUpperCase());
+}
+
+export function isRowReferenceText(value: string): boolean {
+  return ROW_RE.test(value);
+}
+
 export function parseCellAddress(raw: string, defaultSheetName?: string): CellAddress {
-  const trimmed = raw.trim();
-  const qualified = QUALIFIED_RE.exec(trimmed);
-  if (!qualified) {
+  const parsed = parseReference(raw, defaultSheetName);
+  if (parsed.kind !== "cell") {
     throw new Error(`Invalid cell address: ${raw}`);
   }
-
-  const [, quotedSheet, plainSheet, cellPart] = qualified;
-  const normalizedCellPart = cellPart!;
-  const match = CELL_RE.exec(normalizedCellPart.toUpperCase());
-  if (!match) {
-    throw new Error(`Invalid cell address: ${raw}`);
-  }
-
-  const sheetName = quotedSheet?.replaceAll("''", "'") ?? plainSheet ?? defaultSheetName;
   const result: CellAddress = {
-    col: columnToIndex(match[1]!),
-    row: Number.parseInt(match[2]!, 10) - 1,
-    text: `${match[1]!}${match[2]!}`
+    col: parsed.col,
+    row: parsed.row,
+    text: parsed.text
   };
-  if (sheetName !== undefined) {
-    result.sheetName = sheetName;
+  if (parsed.sheetName !== undefined) {
+    result.sheetName = parsed.sheetName;
   }
   return result;
 }
 
 export function parseRangeAddress(raw: string, defaultSheetName?: string): RangeAddress {
-  const [left, right] = raw.split(":");
-  if (!left || !right) {
+  const separator = raw.indexOf(":");
+  if (separator <= 0 || separator >= raw.length - 1) {
     throw new Error(`Invalid range address: ${raw}`);
   }
 
-  const start = parseCellAddress(left, defaultSheetName);
-  const end = parseCellAddress(right, start.sheetName ?? defaultSheetName);
-  const row1 = Math.min(start.row, end.row);
-  const row2 = Math.max(start.row, end.row);
-  const col1 = Math.min(start.col, end.col);
-  const col2 = Math.max(start.col, end.col);
+  const left = raw.slice(0, separator).trim();
+  const right = raw.slice(separator + 1).trim();
+  const start = parseReference(left, defaultSheetName);
+  const end = parseReference(right, start.sheetName ?? defaultSheetName);
+  const sheetName = start.sheetName ?? end.sheetName ?? defaultSheetName;
 
-  const sheetName = start.sheetName ?? end.sheetName;
-  const result: RangeAddress = {
-    start: { ...start, row: row1, col: col1, text: formatAddress(row1, col1) },
-    end: { ...end, row: row2, col: col2, text: formatAddress(row2, col2) }
-  };
-  if (sheetName !== undefined) {
-    result.sheetName = sheetName;
+  if (start.kind !== end.kind) {
+    throw new Error(`Range endpoints must use the same reference type: ${raw}`);
   }
-  return result;
+  if (start.sheetName && end.sheetName && start.sheetName !== end.sheetName) {
+    throw new Error(`Range endpoints must target the same sheet: ${raw}`);
+  }
+
+  switch (start.kind) {
+    case "cell": {
+      const endCell = end as CellReference;
+      const row1 = Math.min(start.row, endCell.row);
+      const row2 = Math.max(start.row, endCell.row);
+      const col1 = Math.min(start.col, endCell.col);
+      const col2 = Math.max(start.col, endCell.col);
+      const result: CellRangeAddress = {
+        kind: "cells",
+        start: { ...start, row: row1, col: col1, text: formatAddress(row1, col1) },
+        end: { ...endCell, row: row2, col: col2, text: formatAddress(row2, col2) }
+      };
+      if (sheetName !== undefined) {
+        result.sheetName = sheetName;
+      }
+      return result;
+    }
+    case "row": {
+      const endRow = end as RowReference;
+      const row1 = Math.min(start.row, endRow.row);
+      const row2 = Math.max(start.row, endRow.row);
+      const result: RowRangeAddress = {
+        kind: "rows",
+        start: { ...start, row: row1, text: `${row1 + 1}` },
+        end: { ...endRow, row: row2, text: `${row2 + 1}` }
+      };
+      if (sheetName !== undefined) {
+        result.sheetName = sheetName;
+      }
+      return result;
+    }
+    case "col": {
+      const endColumn = end as ColumnReference;
+      const col1 = Math.min(start.col, endColumn.col);
+      const col2 = Math.max(start.col, endColumn.col);
+      const result: ColumnRangeAddress = {
+        kind: "cols",
+        start: { ...start, col: col1, text: indexToColumn(col1) },
+        end: { ...endColumn, col: col2, text: indexToColumn(col2) }
+      };
+      if (sheetName !== undefined) {
+        result.sheetName = sheetName;
+      }
+      return result;
+    }
+  }
 }
 
 export function toQualifiedAddress(sheetName: string, addr: string): string {
   return `${sheetName}!${parseCellAddress(addr, sheetName).text}`;
+}
+
+export function formatRangeAddress(range: RangeAddress): string {
+  const prefix = range.sheetName ? `${quoteSheetNameIfNeeded(range.sheetName)}!` : "";
+  return `${prefix}${range.start.text}:${range.end.text}`;
+}
+
+function parseReference(raw: string, defaultSheetName?: string): ParsedReference {
+  const trimmed = raw.trim();
+  const qualified = QUALIFIED_RE.exec(trimmed);
+  if (!qualified) {
+    throw new Error(`Invalid reference: ${raw}`);
+  }
+
+  const [, quotedSheet, plainSheet, refPart] = qualified;
+  const sheetName = quotedSheet?.replaceAll("''", "'") ?? plainSheet ?? defaultSheetName;
+  const normalizedRefPart = refPart!.toUpperCase();
+
+  const cellMatch = CELL_RE.exec(normalizedRefPart);
+  if (cellMatch) {
+    const result: CellReference = {
+      kind: "cell",
+      col: columnToIndex(cellMatch[1]!),
+      row: Number.parseInt(cellMatch[2]!, 10) - 1,
+      text: `${cellMatch[1]!}${cellMatch[2]!}`
+    };
+    if (sheetName !== undefined) {
+      result.sheetName = sheetName;
+    }
+    return result;
+  }
+
+  const columnMatch = COLUMN_RE.exec(normalizedRefPart);
+  if (columnMatch) {
+    const result: ColumnReference = {
+      kind: "col",
+      col: columnToIndex(columnMatch[1]!),
+      text: columnMatch[1]!
+    };
+    if (sheetName !== undefined) {
+      result.sheetName = sheetName;
+    }
+    return result;
+  }
+
+  const rowMatch = ROW_RE.exec(refPart!);
+  if (rowMatch) {
+    const result: RowReference = {
+      kind: "row",
+      row: Number.parseInt(rowMatch[1]!, 10) - 1,
+      text: rowMatch[1]!
+    };
+    if (sheetName !== undefined) {
+      result.sheetName = sheetName;
+    }
+    return result;
+  }
+
+  throw new Error(`Invalid reference: ${raw}`);
+}
+
+function quoteSheetNameIfNeeded(sheetName: string): string {
+  return /^[A-Za-z0-9_.$]+$/.test(sheetName) ? sheetName : `'${sheetName.replaceAll("'", "''")}'`;
 }

@@ -12,6 +12,11 @@ export interface SheetRecord {
   grid: SheetGrid;
 }
 
+export interface EnsuredCell {
+  cellIndex: number;
+  created: boolean;
+}
+
 export class WorkbookStore {
   readonly cellStore = new CellStore();
   readonly sheetsByName = new Map<string, SheetRecord>();
@@ -61,17 +66,21 @@ export class WorkbookStore {
   }
 
   ensureCell(sheetName: string, address: string): number {
+    return this.ensureCellRecord(sheetName, address).cellIndex;
+  }
+
+  ensureCellRecord(sheetName: string, address: string): EnsuredCell {
     const sheet = this.getOrCreateSheet(sheetName);
     const parsed = parseCellAddress(address, sheetName);
     const key = makeCellKey(sheet.id, parsed.row, parsed.col);
     const existing = this.cellKeyToIndex.get(key);
     if (existing !== undefined) {
-      return existing;
+      return { cellIndex: existing, created: false };
     }
     const cellIndex = this.cellStore.allocate(sheet.id, parsed.row, parsed.col);
     this.cellKeyToIndex.set(key, cellIndex);
     sheet.grid.set(parsed.row, parsed.col, cellIndex);
-    return cellIndex;
+    return { cellIndex, created: true };
   }
 
   getCellIndex(sheetName: string, address: string): number | undefined {

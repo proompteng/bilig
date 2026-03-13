@@ -27,6 +27,21 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet2", "B2")).toEqual({ tag: ValueTag.Number, value: 12 });
   });
 
+  it("evaluates row and column aggregate ranges on the JS path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A3", 5);
+    engine.setCellValue("Sheet1", "B3", 7);
+    engine.setCellFormula("Sheet1", "C1", "SUM(A:A)");
+    engine.setCellFormula("Sheet1", "C2", "SUM(3:3)");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(engine.getLastMetrics().jsFormulaCount).toBeGreaterThanOrEqual(1);
+  });
+
   it("uses the wasm fast path for supported aggregate formulas", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -52,6 +67,26 @@ describe("SpreadsheetEngine", () => {
 
     engine.setCellValue("Sheet2", "B1", 3);
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
+  });
+
+  it("rebinds column and row range formulas when new cells materialize later", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A:A)");
+    engine.setCellFormula("Sheet1", "B3", "SUM(2:2)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 0 });
+
+    engine.setCellValue("Sheet1", "A4", 3);
+    engine.setCellValue("Sheet1", "C2", 5);
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getDependencies("Sheet1", "B1").directPrecedents).toEqual(["Sheet1!A1", "Sheet1!A4"]);
+    expect(engine.getDependencies("Sheet1", "B3").directPrecedents).toEqual(["Sheet1!C2"]);
   });
 
   it("converges under reordered replicated batches and restores replica state", async () => {

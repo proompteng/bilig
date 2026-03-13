@@ -3,6 +3,8 @@ export type FormulaNode =
   | BooleanLiteralNode
   | StringLiteralNode
   | CellRefNode
+  | RowRefNode
+  | ColumnRefNode
   | RangeRefNode
   | UnaryExprNode
   | BinaryExprNode
@@ -29,8 +31,21 @@ export interface CellRefNode {
   sheetName?: string;
 }
 
+export interface RowRefNode {
+  kind: "RowRef";
+  ref: string;
+  sheetName?: string;
+}
+
+export interface ColumnRefNode {
+  kind: "ColumnRef";
+  ref: string;
+  sheetName?: string;
+}
+
 export interface RangeRefNode {
   kind: "RangeRef";
+  refKind: "cells" | "rows" | "cols";
   start: string;
   end: string;
   sheetName?: string;

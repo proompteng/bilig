@@ -5,7 +5,7 @@ import { getBuiltin } from "./builtins.js";
 export interface EvaluationContext {
   sheetName: string;
   resolveCell: (sheetName: string, address: string) => CellValue;
-  resolveRange: (sheetName: string, start: string, end: string) => CellValue[];
+  resolveRange: (sheetName: string, start: string, end: string, refKind: "cells" | "rows" | "cols") => CellValue[];
 }
 
 function emptyValue(): CellValue {
@@ -58,8 +58,11 @@ export function evaluateAst(node: FormulaNode, context: EvaluationContext): Cell
       return { tag: ValueTag.String, value: node.value, stringId: 0 };
     case "CellRef":
       return context.resolveCell(node.sheetName ?? context.sheetName, node.ref);
+    case "RowRef":
+    case "ColumnRef":
+      return error(ErrorCode.Ref);
     case "RangeRef": {
-      const values = context.resolveRange(node.sheetName ?? context.sheetName, node.start, node.end);
+      const values = context.resolveRange(node.sheetName ?? context.sheetName, node.start, node.end, node.refKind);
       return values[0] ?? emptyValue();
     }
     case "UnaryExpr": {
@@ -115,7 +118,7 @@ export function evaluateAst(node: FormulaNode, context: EvaluationContext): Cell
         if (arg.kind !== "RangeRef") {
           return [evaluateAst(arg, context)];
         }
-        return context.resolveRange(arg.sheetName ?? context.sheetName, arg.start, arg.end);
+        return context.resolveRange(arg.sheetName ?? context.sheetName, arg.start, arg.end, arg.refKind);
       });
       return builtin(...args);
     }

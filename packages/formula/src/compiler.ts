@@ -29,6 +29,9 @@ function emitArgument(node: FormulaNode, state: CompilerState): number {
 
   const prefix = node.sheetName ? `${node.sheetName}!` : "";
   const range = parseRangeAddress(`${prefix}${node.start}:${node.end}`);
+  if (range.kind !== "cells") {
+    throw new Error("Only bounded cell ranges are eligible for the wasm fast path");
+  }
   let argc = 0;
   for (let row = range.start.row; row <= range.end.row; row += 1) {
     for (let col = range.start.col; col <= range.end.col; col += 1) {
@@ -53,6 +56,9 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       emitCellRef(node.ref, node.sheetName, state);
       return;
     }
+    case "RowRef":
+    case "ColumnRef":
+      throw new Error("Row and column references must appear inside a range");
     case "UnaryExpr":
       emitNode(node.argument, state);
       if (node.operator === "-") {

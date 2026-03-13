@@ -13,8 +13,22 @@ describe("formula", () => {
 
   it("normalizes ranges", () => {
     expect(parseRangeAddress("B2:A1")).toMatchObject({
+      kind: "cells",
       start: { text: "A1" },
       end: { text: "B2" }
+    });
+  });
+
+  it("normalizes row and column ranges", () => {
+    expect(parseRangeAddress("10:1")).toMatchObject({
+      kind: "rows",
+      start: { text: "1" },
+      end: { text: "10" }
+    });
+    expect(parseRangeAddress("C:A")).toMatchObject({
+      kind: "cols",
+      start: { text: "A" },
+      end: { text: "C" }
     });
   });
 
@@ -33,6 +47,11 @@ describe("formula", () => {
     const compiled = compileFormula("SUM(A1:B2)");
     expect(compiled.mode).toBe(1);
     expect([...compiled.symbolicRefs]).toEqual(["A1", "B1", "A2", "B2"]);
+  });
+
+  it("keeps row and column aggregate formulas on the JS path", () => {
+    expect(compileFormula("SUM(A:A)").mode).toBe(0);
+    expect(compileFormula("SUM(1:10)").mode).toBe(0);
   });
 
   it("evaluates AST against a context", () => {
@@ -64,5 +83,13 @@ describe("formula", () => {
       "My Sheet!A2",
       "My Sheet!B2"
     ]);
+  });
+
+  it("parses quoted sheet column ranges inside formulas", () => {
+    const ast = parseFormula("SUM('My Sheet'!A:A)");
+    expect(ast).toMatchObject({
+      kind: "CallExpr",
+      args: [{ kind: "RangeRef", refKind: "cols", sheetName: "My Sheet", start: "A", end: "A" }]
+    });
   });
 });
