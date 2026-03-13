@@ -3,6 +3,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/crdt";
 import { buildDemoWorkbook } from "./demoWorkbook.js";
 import { createWorkbookRendererRoot } from "./reconciler/index.js";
+import { renderSnapshotWorkbook } from "./snapshotWorkbook.js";
 import {
   CellEditorOverlay,
   DependencyInspector,
@@ -14,6 +15,14 @@ import {
   useMetrics,
   useSelection
 } from "./ui/index.js";
+
+const PRIMARY_STORAGE_KEY = "bilig:playground:primary";
+const MIRROR_STORAGE_KEY = "bilig:playground:mirror";
+
+interface PersistedReplicaState {
+  snapshot: ReturnType<SpreadsheetEngine["exportSnapshot"]>;
+  replica: ReturnType<SpreadsheetEngine["exportReplicaSnapshot"]>;
+}
 
 export function App() {
   const engine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "playground" }), []);
@@ -40,8 +49,25 @@ export function App() {
     let cancelled = false;
 
     void Promise.all([engine.ready(), mirrorEngine.ready()]).then(async () => {
-      await rendererRoot.render(buildDemoWorkbook());
-      mirrorEngine.importSnapshot(engine.exportSnapshot());
+      const primaryPersisted = window.localStorage.getItem(PRIMARY_STORAGE_KEY);
+      const mirrorPersisted = window.localStorage.getItem(MIRROR_STORAGE_KEY);
+
+      if (primaryPersisted) {
+        const restored = JSON.parse(primaryPersisted) as PersistedReplicaState;
+        await rendererRoot.render(renderSnapshotWorkbook(restored.snapshot));
+        engine.importReplicaSnapshot(restored.replica);
+      } else {
+        await rendererRoot.render(buildDemoWorkbook());
+      }
+
+      if (mirrorPersisted) {
+        const restoredMirror = JSON.parse(mirrorPersisted) as PersistedReplicaState;
+        mirrorEngine.importSnapshot(restoredMirror.snapshot);
+        mirrorEngine.importReplicaSnapshot(restoredMirror.replica);
+      } else {
+        mirrorEngine.importSnapshot(engine.exportSnapshot());
+      }
+
       if (!cancelled) {
         setReplicationReady(true);
       }
@@ -55,6 +81,39 @@ export function App() {
       void rendererRoot.unmount();
     };
   }, [engine, mirrorEngine, rendererRoot]);
+
+  useEffect(() => {
+    if (!replicationReady) {
+      return;
+    }
+
+    const persistPrimary = () => {
+      const persisted: PersistedReplicaState = {
+        snapshot: engine.exportSnapshot(),
+        replica: engine.exportReplicaSnapshot()
+      };
+      window.localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(persisted));
+    };
+
+    const persistMirror = () => {
+      const persisted: PersistedReplicaState = {
+        snapshot: mirrorEngine.exportSnapshot(),
+        replica: mirrorEngine.exportReplicaSnapshot()
+      };
+      window.localStorage.setItem(MIRROR_STORAGE_KEY, JSON.stringify(persisted));
+    };
+
+    persistPrimary();
+    persistMirror();
+
+    const unsubscribePrimary = engine.subscribe(() => persistPrimary());
+    const unsubscribeMirror = mirrorEngine.subscribe(() => persistMirror());
+
+    return () => {
+      unsubscribePrimary();
+      unsubscribeMirror();
+    };
+  }, [engine, mirrorEngine, replicationReady]);
 
   useEffect(() => {
     if (!replicationReady) return;
@@ -176,10 +235,16 @@ export function App() {
     engine.setCellValue(selection.sheetName, selection.address, normalized);
   };
 
+  const resetWorkspace = () => {
+    window.localStorage.removeItem(PRIMARY_STORAGE_KEY);
+    window.localStorage.removeItem(MIRROR_STORAGE_KEY);
+    window.location.reload();
+  };
+
   return (
     <div className="app-shell">
       <header className="hero">
-        <div>
+        <div className="hero-copy">
           <p className="eyebrow">bilig</p>
           <h1>Custom reconciler playground for a local-first spreadsheet engine</h1>
           <p className="lede">
@@ -187,6 +252,9 @@ export function App() {
             handles the numeric fast path.
           </p>
         </div>
+        <button className="hero-reset" onClick={resetWorkspace} type="button">
+          Reset local workspace
+        </button>
       </header>
 
       <FormulaBar

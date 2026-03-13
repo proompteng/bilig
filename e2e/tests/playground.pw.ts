@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 
 test("playground smoke exercises the custom renderer and wasm-backed recalculation", async ({ page }) => {
   await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.clear();
+  });
+  await page.reload();
 
   await expect(page.getByRole("heading", { name: /custom reconciler playground/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("20");
@@ -20,4 +24,9 @@ test("playground smoke exercises the custom renderer and wasm-backed recalculati
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet2!B1");
   await expect(page.getByTestId("metric-wasm")).not.toHaveText("0");
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("12");
+  await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("24");
+  await expect(page.getByTestId("replica-value")).toHaveText("12");
 });
