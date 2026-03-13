@@ -1,5 +1,6 @@
 import { BuiltinId, FormulaMode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
+import { parseRangeAddress } from "./addressing.js";
 import { getBuiltin } from "./builtins.js";
 
 export interface BoundFormula {
@@ -8,51 +9,78 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const WASM_SAFE_BUILTINS = new Set(["ABS"]);
+const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "ROUND", "FLOOR", "CEILING", "MOD", "AND", "OR", "NOT"]);
+const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
+const MAX_WASM_RANGE_CELLS = 255;
 
 export function bindFormula(ast: FormulaNode): BoundFormula {
   const deps = new Set<string>();
-  let wasmSafe = true;
 
-  function visit(node: FormulaNode): void {
+  function collectDeps(node: FormulaNode): void {
     switch (node.kind) {
       case "CellRef":
         deps.add(node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref);
         break;
       case "RangeRef":
-        wasmSafe = false;
         deps.add(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`);
         break;
       case "UnaryExpr":
-        visit(node.argument);
+        collectDeps(node.argument);
         break;
       case "BinaryExpr":
-        if (!["+", "-", "*", "/"].includes(node.operator)) {
-          wasmSafe = false;
-        }
-        visit(node.left);
-        visit(node.right);
+        collectDeps(node.left);
+        collectDeps(node.right);
         break;
       case "CallExpr":
-        if (!getBuiltin(node.callee)) {
-          wasmSafe = false;
-          break;
-        }
-        if (!WASM_SAFE_BUILTINS.has(node.callee)) {
-          wasmSafe = false;
-        }
-        node.args.forEach(visit);
+        node.args.forEach(collectDeps);
         break;
       default:
         break;
     }
   }
 
-  visit(ast);
+  function isWasmSafe(node: FormulaNode, allowRange = false): boolean {
+    switch (node.kind) {
+      case "NumberLiteral":
+      case "BooleanLiteral":
+        return true;
+      case "StringLiteral":
+        return false;
+      case "CellRef":
+        return true;
+      case "RangeRef":
+        if (!allowRange) return false;
+        try {
+          const sheetPrefix = node.sheetName ? `${node.sheetName}!` : "";
+          const range = parseRangeAddress(`${sheetPrefix}${node.start}:${node.end}`);
+          const cellCount = (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1);
+          return cellCount <= MAX_WASM_RANGE_CELLS;
+        } catch {
+          return false;
+        }
+      case "UnaryExpr":
+        return ["+", "-"].includes(node.operator) && isWasmSafe(node.argument);
+      case "BinaryExpr":
+        return node.operator !== "&" && isWasmSafe(node.left) && isWasmSafe(node.right);
+      case "CallExpr": {
+        const callee = node.callee.toUpperCase();
+        if (!getBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
+          return false;
+        }
+        const allowRangeArgs = RANGE_SAFE_BUILTINS.has(callee);
+        return node.args.every((arg) => isWasmSafe(arg, allowRangeArgs));
+      }
+    }
+  }
+
+  collectDeps(ast);
   return {
     ast,
     deps: [...deps],
-    mode: wasmSafe ? FormulaMode.WasmFastPath : FormulaMode.JsOnly
+    mode:
+      ast.kind === "CellRef" || ast.kind === "RangeRef" || ast.kind === "StringLiteral" || !isWasmSafe(ast)
+        ? FormulaMode.JsOnly
+        : FormulaMode.WasmFastPath
   };
 }
 
@@ -62,7 +90,20 @@ export function isBuiltinAvailable(name: string): boolean {
 
 export function encodeBuiltin(name: string): BuiltinId {
   const builtins: Record<string, BuiltinId> = {
-    ABS: BuiltinId.Abs
+    SUM: BuiltinId.Sum,
+    AVG: BuiltinId.Avg,
+    MIN: BuiltinId.Min,
+    MAX: BuiltinId.Max,
+    COUNT: BuiltinId.Count,
+    COUNTA: BuiltinId.CountA,
+    ABS: BuiltinId.Abs,
+    ROUND: BuiltinId.Round,
+    FLOOR: BuiltinId.Floor,
+    CEILING: BuiltinId.Ceiling,
+    MOD: BuiltinId.Mod,
+    AND: BuiltinId.And,
+    OR: BuiltinId.Or,
+    NOT: BuiltinId.Not
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

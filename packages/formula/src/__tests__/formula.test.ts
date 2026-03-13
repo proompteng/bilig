@@ -20,6 +20,17 @@ describe("formula", () => {
     expect([...compiled.symbolicRefs]).toEqual(["A1"]);
   });
 
+  it("keeps pass-through cell refs on the JS path", () => {
+    const compiled = compileFormula("A1");
+    expect(compiled.mode).toBe(0);
+  });
+
+  it("compiles bounded aggregate formulas into the wasm-safe path", () => {
+    const compiled = compileFormula("SUM(A1:B2)");
+    expect(compiled.mode).toBe(1);
+    expect([...compiled.symbolicRefs]).toEqual(["A1", "B1", "A2", "B2"]);
+  });
+
   it("evaluates AST against a context", () => {
     const ast = parseFormula("A1+A2");
     const value = evaluateAst(ast, {

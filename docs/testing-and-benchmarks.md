@@ -3,7 +3,7 @@
 - Vitest covers protocol, formula parsing/evaluation, CRDT ordering, engine behavior, WASM parity, and playground reconciler behavior.
 - Playwright is reserved for browser smoke coverage in CI.
 - `packages/benchmarks` emits JSON benchmark payloads for edit and load scenarios.
-- `scripts/perf-smoke.mjs` enforces a lightweight smoke threshold for CI.
+- `scripts/perf-smoke.mjs` enforces a lightweight smoke threshold for CI and asserts that the run actually hits the WASM fast path.
 
 ## CI policy
 

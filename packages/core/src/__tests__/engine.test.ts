@@ -27,6 +27,18 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet2", "B2")).toEqual({ tag: ValueTag.Number, value: 12 });
   });
 
+  it("uses the wasm fast path for supported aggregate formulas", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 3);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)+ROUND(A1/2)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+  });
+
   it("rebinds formulas when a referenced sheet appears later", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

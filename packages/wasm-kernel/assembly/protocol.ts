@@ -41,5 +41,21 @@ export enum Opcode {
 }
 
 export enum BuiltinId {
-  Abs = 7
+  Sum = 1,
+  Avg = 2,
+  Min = 3,
+  Max = 4,
+  Count = 5,
+  CountA = 6,
+  Abs = 7,
+  Round = 8,
+  Floor = 9,
+  Ceiling = 10,
+  Mod = 11,
+  If = 12,
+  And = 13,
+  Or = 14,
+  Not = 15,
+  Len = 16,
+  Concat = 17
 }

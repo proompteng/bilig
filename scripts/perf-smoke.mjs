@@ -2,6 +2,7 @@ import { performance } from "node:perf_hooks";
 import { SpreadsheetEngine } from "../packages/core/src/index.ts";
 
 const engine = new SpreadsheetEngine({ workbookName: "perf-smoke" });
+await engine.ready();
 engine.createSheet("Sheet1");
 
 for (let i = 1; i <= 1000; i += 1) {
@@ -21,6 +22,11 @@ const elapsed = performance.now() - started;
 
 if (elapsed > 250) {
   console.error(`perf smoke exceeded threshold: ${elapsed.toFixed(2)}ms`);
+  process.exit(1);
+}
+
+if (metrics.wasmFormulaCount === 0) {
+  console.error("perf smoke did not exercise the wasm fast path");
   process.exit(1);
 }
 

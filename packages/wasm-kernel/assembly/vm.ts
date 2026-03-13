@@ -18,6 +18,12 @@ let formulaCount = 0;
 const valueStack = new Float64Array(256);
 const tagStack = new Uint8Array(256);
 
+function toNumeric(tag: u8, value: f64): f64 {
+  if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
+  if (tag == ValueTag.Empty) return 0;
+  return NaN;
+}
+
 function ensureU8(buffer: Uint8Array, size: i32): Uint8Array {
   if (buffer.length >= size) return buffer;
   let nextLength = buffer.length;
@@ -182,8 +188,14 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         sp--;
         continue;
       }
-      const left = valueStack[sp - 2];
-      const right = valueStack[sp - 1];
+      const left = toNumeric(leftTag, valueStack[sp - 2]);
+      const right = toNumeric(rightTag, valueStack[sp - 1]);
+      if (isNaN(left) || isNaN(right)) {
+        tagStack[sp - 2] = ValueTag.Error;
+        valueStack[sp - 2] = ErrorCode.Value;
+        sp--;
+        continue;
+      }
       const next = binaryNumeric(opcode, left, right);
       if (opcode == Opcode.Div && right == 0) {
         tagStack[sp - 2] = ValueTag.Error;
@@ -198,8 +210,31 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     }
 
     if (opcode == Opcode.Neg) {
-      valueStack[sp - 1] = -valueStack[sp - 1];
-      tagStack[sp - 1] = ValueTag.Number;
+      if (tagStack[sp - 1] == ValueTag.Error) {
+        continue;
+      }
+      const numeric = toNumeric(tagStack[sp - 1], valueStack[sp - 1]);
+      if (isNaN(numeric)) {
+        valueStack[sp - 1] = ErrorCode.Value;
+        tagStack[sp - 1] = ValueTag.Error;
+      } else {
+        valueStack[sp - 1] = -numeric;
+        tagStack[sp - 1] = ValueTag.Number;
+      }
+      continue;
+    }
+
+    if (opcode == Opcode.Jump) {
+      pc = operand - 1;
+      continue;
+    }
+
+    if (opcode == Opcode.JumpIfFalse) {
+      const numeric = toNumeric(tagStack[sp - 1], valueStack[sp - 1]);
+      sp--;
+      if (isNaN(numeric) || numeric == 0) {
+        pc = operand - 1;
+      }
       continue;
     }
 

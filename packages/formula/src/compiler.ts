@@ -1,5 +1,6 @@
 import { FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
+import { formatAddress, parseRangeAddress } from "./addressing.js";
 import { bindFormula, encodeBuiltin } from "./binder.js";
 import { parseFormula } from "./parser.js";
 
@@ -13,6 +14,31 @@ interface CompilerState {
   refs: string[];
 }
 
+function emitCellRef(ref: string, sheetName: string | undefined, state: CompilerState): void {
+  const qualifiedRef = sheetName ? `${sheetName}!${ref}` : ref;
+  let index = state.refs.indexOf(qualifiedRef);
+  if (index === -1) index = state.refs.push(qualifiedRef) - 1;
+  state.program.push(encodeInstruction(Opcode.PushCell, index));
+}
+
+function emitArgument(node: FormulaNode, state: CompilerState): number {
+  if (node.kind !== "RangeRef") {
+    emitNode(node, state);
+    return 1;
+  }
+
+  const prefix = node.sheetName ? `${node.sheetName}!` : "";
+  const range = parseRangeAddress(`${prefix}${node.start}:${node.end}`);
+  let argc = 0;
+  for (let row = range.start.row; row <= range.end.row; row += 1) {
+    for (let col = range.start.col; col <= range.end.col; col += 1) {
+      emitCellRef(formatAddress(row, col), range.sheetName, state);
+      argc += 1;
+    }
+  }
+  return argc;
+}
+
 function emitNode(node: FormulaNode, state: CompilerState): void {
   switch (node.kind) {
     case "NumberLiteral": {
@@ -24,10 +50,7 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       state.program.push(encodeInstruction(Opcode.PushBoolean, node.value ? 1 : 0));
       return;
     case "CellRef": {
-      const ref = node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref;
-      let index = state.refs.indexOf(ref);
-      if (index === -1) index = state.refs.push(ref) - 1;
-      state.program.push(encodeInstruction(Opcode.PushCell, index));
+      emitCellRef(node.ref, node.sheetName, state);
       return;
     }
     case "UnaryExpr":
@@ -59,8 +82,13 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       );
       return;
     case "CallExpr":
-      node.args.forEach((arg) => emitNode(arg, state));
-      state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(node.callee) << 8) | node.args.length));
+      {
+        let argc = 0;
+        node.args.forEach((arg) => {
+          argc += emitArgument(arg, state);
+        });
+        state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(node.callee) << 8) | argc));
+      }
       return;
     default:
       return;

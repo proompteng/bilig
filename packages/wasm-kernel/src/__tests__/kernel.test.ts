@@ -21,4 +21,31 @@ describe("wasm kernel", () => {
     kernel.evalBatch(new Uint32Array([1]));
     expect(kernel.readNumbers()[1]).toBe(20);
   });
+
+  it("evaluates aggregate and numeric builtins", async () => {
+    const kernel = await createKernel();
+    kernel.init(6, 6, 2);
+    kernel.writeCells(
+      new Uint8Array([1, 1, 0, 0, 0, 0]),
+      new Float64Array([2, 3, 0, 0, 0, 0]),
+      new Uint16Array(6)
+    );
+    kernel.uploadPrograms(
+      new Uint32Array([
+        (3 << 24) | 0,
+        (3 << 24) | 1,
+        (20 << 24) | (1 << 8) | 2,
+        (1 << 24) | 0,
+        5 << 24,
+        255 << 24
+      ]),
+      new Uint32Array([0]),
+      new Uint32Array([6]),
+      new Uint32Array([2])
+    );
+    kernel.uploadConstants(new Float64Array([4]), new Uint32Array([0]), new Uint32Array([1]));
+
+    kernel.evalBatch(new Uint32Array([2]));
+    expect(kernel.readNumbers()[2]).toBe(9);
+  });
 });
