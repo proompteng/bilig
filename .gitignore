@@ -8,5 +8,6 @@ test-results/
 .DS_Store
 npm-debug.log*
 pnpm-debug.log*
-assembly/
-build/
+/assembly/
+/build/
+packages/*/build/
