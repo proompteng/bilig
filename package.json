@@ -18,7 +18,8 @@
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "tsx scripts/perf-smoke.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm exec playwright install chromium && pnpm test:browser"
+    "ci": "pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm exec playwright install chromium && pnpm test:browser",
+    "ci:strict": "pnpm run ci && git diff --exit-code && git diff --cached --exit-code"
   },
   "repository": {
     "type": "git",

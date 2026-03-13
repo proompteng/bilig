@@ -13,5 +13,6 @@
   - `pnpm install --frozen-lockfile`
   - `pnpm run ci`
   - `git diff --exit-code` after the full pipeline
+- Local pre-push verification should use `pnpm run ci:strict`, which mirrors the Forgejo cleanliness gate in one command.
 - Browser smoke runs only after the playground build and installs Chromium explicitly so Forgejo runners do not rely on ambient browser state.
 - The private origin keeps Forgejo-native workflow definitions only so Forgejo does not have to resolve duplicate workflow paths.
