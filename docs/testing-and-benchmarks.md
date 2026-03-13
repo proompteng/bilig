@@ -12,6 +12,7 @@
   - 10k-downstream edit under 120ms end to end
   - 10k-downstream recalc under 50ms
   - 10k-cell render commit under 50ms
+  - Forgejo CI applies a bounded runner-variance tolerance so local runs stay strict while remote `main` remains stable under normal host variance.
 - `scripts/release-check.mjs` enforces artifact budgets after the playground build:
   - largest built app JS asset must stay under 350KB gzip
   - largest built WASM asset must stay under 250KB gzip

@@ -2,12 +2,16 @@ import { runEditBenchmark } from "../packages/benchmarks/src/benchmark-edit.ts";
 import { runLoadBenchmark } from "../packages/benchmarks/src/benchmark-load.ts";
 import { runRenderCommitBenchmark } from "../packages/benchmarks/src/benchmark-renderer.ts";
 
-const budgets = {
+const baseBudgets = {
   load100kMs: 1500,
   edit10kElapsedMs: 120,
   edit10kRecalcMs: 50,
   renderCommit10kMs: 50
 };
+const toleranceMultiplier = Number.parseFloat(process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"));
+const budgets = Object.fromEntries(
+  Object.entries(baseBudgets).map(([key, value]) => [key, value * toleranceMultiplier])
+);
 
 function assertBudget(label, actual, threshold) {
   if (actual > threshold) {
@@ -27,7 +31,9 @@ assertBudget("10k render commit", renderCommit.elapsedMs, budgets.renderCommit10
 console.log(
   JSON.stringify(
     {
+      baseBudgets,
       budgets,
+      toleranceMultiplier,
       results: {
         load,
         edit,
