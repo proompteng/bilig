@@ -45,7 +45,9 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
                       : "";
             return (
               <button
+                aria-label={`Cell ${addr}`}
                 className={isSelected ? "grid-cell selected" : "grid-cell"}
+                data-addr={addr}
                 key={`${row}-${col}`}
                 onClick={() => onSelect(addr)}
                 type="button"

@@ -13,11 +13,12 @@
     "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
+    "test:browser": "pnpm --filter @bilig/playground build && playwright test",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "tsx scripts/perf-smoke.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm --filter @bilig/playground build"
+    "ci": "pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm exec playwright install chromium && pnpm test:browser"
   },
   "repository": {
     "type": "git",

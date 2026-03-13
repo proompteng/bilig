@@ -1,7 +1,7 @@
 # Testing and Benchmarks
 
 - Vitest covers protocol, formula parsing/evaluation, CRDT ordering, engine behavior, WASM parity, and playground reconciler behavior.
-- Playwright is reserved for browser smoke coverage in CI.
+- Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`.
 - `packages/benchmarks` emits JSON benchmark payloads for edit and load scenarios.
 - `scripts/perf-smoke.mjs` enforces a lightweight smoke threshold for CI and asserts that the run actually hits the WASM fast path.
 
@@ -13,4 +13,5 @@
   - `pnpm install --frozen-lockfile`
   - `pnpm run ci`
   - `git diff --exit-code` after the full pipeline
+- Browser smoke runs only after the playground build and installs Chromium explicitly so Forgejo runners do not rely on ambient browser state.
 - The private origin keeps Forgejo-native workflow definitions only so Forgejo does not have to resolve duplicate workflow paths.
