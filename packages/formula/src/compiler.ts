@@ -89,11 +89,27 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       return;
     case "CallExpr":
       {
+        const callee = node.callee.toUpperCase();
+        if (callee === "IF") {
+          if (node.args.length !== 3) {
+            throw new Error("IF requires exactly three arguments on the wasm fast path");
+          }
+          emitNode(node.args[0]!, state);
+          const jumpIfFalseIndex = state.program.push(encodeInstruction(Opcode.JumpIfFalse, 0)) - 1;
+          emitNode(node.args[1]!, state);
+          const jumpIndex = state.program.push(encodeInstruction(Opcode.Jump, 0)) - 1;
+          const falseBranchStart = state.program.length;
+          emitNode(node.args[2]!, state);
+          const end = state.program.length;
+          state.program[jumpIfFalseIndex] = encodeInstruction(Opcode.JumpIfFalse, falseBranchStart);
+          state.program[jumpIndex] = encodeInstruction(Opcode.Jump, end);
+          return;
+        }
         let argc = 0;
         node.args.forEach((arg) => {
           argc += emitArgument(arg, state);
         });
-        state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(node.callee) << 8) | argc));
+        state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(callee) << 8) | argc));
       }
       return;
     default:

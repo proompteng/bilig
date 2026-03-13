@@ -54,6 +54,22 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
   });
 
+  it("uses the wasm fast path for branch formulas", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 3);
+    engine.setCellValue("Sheet1", "A2", 9);
+    engine.setCellFormula("Sheet1", "B1", "IF(A1>0,A1*2,A2-1)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellValue("Sheet1", "A1", 0);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+  });
+
   it("rebinds formulas when a referenced sheet appears later", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

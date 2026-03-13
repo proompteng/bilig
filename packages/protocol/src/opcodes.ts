@@ -42,7 +42,7 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Floor, name: "FLOOR", supportsWasm: true },
   { id: BuiltinId.Ceiling, name: "CEILING", supportsWasm: true },
   { id: BuiltinId.Mod, name: "MOD", supportsWasm: true },
-  { id: BuiltinId.If, name: "IF", supportsWasm: false },
+  { id: BuiltinId.If, name: "IF", supportsWasm: true },
   { id: BuiltinId.And, name: "AND", supportsWasm: true },
   { id: BuiltinId.Or, name: "OR", supportsWasm: true },
   { id: BuiltinId.Not, name: "NOT", supportsWasm: true },

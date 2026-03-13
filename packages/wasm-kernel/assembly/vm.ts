@@ -225,7 +225,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     }
 
     if (opcode == Opcode.Jump) {
-      pc = operand - 1;
+      pc = start + operand - 1;
       continue;
     }
 
@@ -233,7 +233,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       const numeric = toNumeric(tagStack[sp - 1], valueStack[sp - 1]);
       sp--;
       if (isNaN(numeric) || numeric == 0) {
-        pc = operand - 1;
+        pc = start + operand - 1;
       }
       continue;
     }

@@ -16,7 +16,7 @@ Current implementation supports:
 - text concat `&`
 - builtins including `SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ABS`, `ROUND`, `FLOOR`, `CEILING`, `MOD`, `IF`, `AND`, `OR`, `NOT`, `LEN`, `CONCAT`
 
-The WASM fast path is intentionally narrower than the full JS evaluator.
+The WASM fast path is intentionally narrower than the full JS evaluator. It currently covers arithmetic, comparisons, numeric aggregates, and branch-safe boolean/numeric formulas such as `IF(A1>0,A1*2,A2-1)`.
 
 ## Range semantics
 

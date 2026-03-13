@@ -9,7 +9,7 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "ROUND", "FLOOR", "CEILING", "MOD", "AND", "OR", "NOT"]);
+const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "ROUND", "FLOOR", "CEILING", "MOD", "IF", "AND", "OR", "NOT"]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 const MAX_WASM_RANGE_CELLS = 255;
 
@@ -76,6 +76,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         if (!getBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
           return false;
         }
+        if (callee === "IF") {
+          return node.args.length === 3 && node.args.every((arg) => isWasmSafe(arg));
+        }
         const allowRangeArgs = RANGE_SAFE_BUILTINS.has(callee);
         return node.args.every((arg) => isWasmSafe(arg, allowRangeArgs));
       }
@@ -110,6 +113,7 @@ export function encodeBuiltin(name: string): BuiltinId {
     FLOOR: BuiltinId.Floor,
     CEILING: BuiltinId.Ceiling,
     MOD: BuiltinId.Mod,
+    IF: BuiltinId.If,
     AND: BuiltinId.And,
     OR: BuiltinId.Or,
     NOT: BuiltinId.Not

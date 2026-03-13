@@ -54,6 +54,12 @@ describe("formula", () => {
     expect(compileFormula("SUM(1:10)").mode).toBe(0);
   });
 
+  it("compiles numeric IF formulas into the wasm-safe path", () => {
+    const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
+    expect(compiled.mode).toBe(1);
+    expect([...compiled.symbolicRefs]).toEqual(["A1", "A2"]);
+  });
+
   it("evaluates AST against a context", () => {
     const ast = parseFormula("A1+A2");
     const value = evaluateAst(ast, {
