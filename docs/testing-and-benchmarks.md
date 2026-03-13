@@ -3,6 +3,7 @@
 - Vitest covers protocol, formula parsing/evaluation, CRDT ordering, engine behavior, WASM parity, and playground reconciler behavior.
 - Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`.
 - Browser smoke covers both live recalculation and paused-relay resume behavior so local-first replication survives a full reload path in CI, not just in ad hoc manual testing.
+- CRDT unit tests now verify real compaction semantics, including stale cell writes behind sheet tombstones and recreate-after-delete flows.
 - `packages/benchmarks` emits JSON benchmark payloads for:
   - load scenarios at 10k, 50k, and 100k materialized cells through snapshot import
   - downstream edit scenarios at 100, 1k, and 10k dependent formulas

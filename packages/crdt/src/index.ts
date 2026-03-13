@@ -129,14 +129,73 @@ export function compareOpOrder(left: OpOrder, right: OpOrder): number {
   );
 }
 
+function entityKeyForOp(op: EngineOp): string {
+  switch (op.kind) {
+    case "upsertWorkbook":
+      return "workbook";
+    case "upsertSheet":
+    case "deleteSheet":
+      return `sheet:${op.name}`;
+    case "setCellValue":
+    case "setCellFormula":
+    case "clearCell":
+      return `cell:${op.sheetName}!${op.address}`;
+  }
+}
+
+function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, OpOrder>): OpOrder | undefined {
+  switch (op.kind) {
+    case "setCellValue":
+    case "setCellFormula":
+    case "clearCell":
+      return latestSheetDeletes.get(op.sheetName);
+    case "upsertSheet":
+      return latestSheetDeletes.get(op.name);
+    default:
+      return undefined;
+  }
+}
+
 export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
   const deduped = new Map<OpId, EngineOpBatch>();
   batches.forEach((batch) => {
     deduped.set(batch.id, batch);
   });
-  return [...deduped.values()].sort(compareBatches);
+  const ordered = [...deduped.values()].sort(compareBatches);
+  const latestByEntity = new Map<string, OpOrder>();
+  const latestSheetDeletes = new Map<string, OpOrder>();
+
+  ordered.forEach((batch) => {
+    batch.ops.forEach((op, opIndex) => {
+      const order = batchOpOrder(batch, opIndex);
+      latestByEntity.set(entityKeyForOp(op), order);
+      if (op.kind === "deleteSheet") {
+        latestSheetDeletes.set(op.name, order);
+      }
+    });
+  });
+
+  return ordered
+    .map((batch) => ({
+      ...batch,
+      ops: batch.ops.filter((op, opIndex) => {
+        const order = batchOpOrder(batch, opIndex);
+        const sheetDeleteBarrier = sheetDeleteBarrierForOp(op, latestSheetDeletes);
+        if (sheetDeleteBarrier && compareOpOrder(order, sheetDeleteBarrier) <= 0) {
+          return false;
+        }
+
+        const latestOrder = latestByEntity.get(entityKeyForOp(op));
+        return latestOrder !== undefined && compareOpOrder(order, latestOrder) === 0;
+      })
+    }))
+    .filter((batch) => batch.ops.length > 0);
 }
 
 export function mergeBatches(batches: EngineOpBatch[]): EngineOpBatch[] {
-  return compactLog(batches);
+  const deduped = new Map<OpId, EngineOpBatch>();
+  batches.forEach((batch) => {
+    deduped.set(batch.id, batch);
+  });
+  return [...deduped.values()].sort(compareBatches);
 }

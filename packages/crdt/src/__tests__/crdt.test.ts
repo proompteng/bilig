@@ -26,6 +26,43 @@ describe("crdt", () => {
     expect(compactLog([batch, batch])).toHaveLength(1);
   });
 
+  it("compacts stale entity writes down to the latest op", () => {
+    const state = createReplicaState("replica");
+    const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
+    const firstWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }]);
+    const secondWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 2 }]);
+
+    expect(compactLog([createSheet, firstWrite, secondWrite])).toEqual([
+      createSheet,
+      secondWrite
+    ]);
+  });
+
+  it("drops stale cell writes that sit behind a later sheet tombstone", () => {
+    const state = createReplicaState("replica");
+    const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
+    const firstWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }]);
+    const deleteSheet = createBatch(state, [{ kind: "deleteSheet", name: "Sheet1" }]);
+
+    expect(compactLog([createSheet, firstWrite, deleteSheet])).toEqual([
+      deleteSheet
+    ]);
+  });
+
+  it("retains recreated sheets and newer cell writes after tombstones", () => {
+    const state = createReplicaState("replica");
+    const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
+    const firstWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }]);
+    const deleteSheet = createBatch(state, [{ kind: "deleteSheet", name: "Sheet1" }]);
+    const recreateSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
+    const secondWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 }]);
+
+    expect(compactLog([createSheet, firstWrite, deleteSheet, recreateSheet, secondWrite])).toEqual([
+      recreateSheet,
+      secondWrite
+    ]);
+  });
+
   it("roundtrips replica snapshots", () => {
     const state = createReplicaState("replica");
     createBatch(state, [{ kind: "upsertWorkbook", name: "book" }]);

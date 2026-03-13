@@ -3,6 +3,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/crdt";
 import { buildDemoWorkbook } from "./demoWorkbook.js";
 import { createWorkbookRendererRoot } from "./reconciler/index.js";
+import { compactRelayEntries, type RelayEntry } from "./relay-queue.js";
 import { renderSnapshotWorkbook } from "./snapshotWorkbook.js";
 import {
   CellEditorOverlay,
@@ -23,14 +24,6 @@ const RELAY_STORAGE_KEY = "bilig:playground:relay";
 interface PersistedReplicaState {
   snapshot: ReturnType<SpreadsheetEngine["exportSnapshot"]>;
   replica: ReturnType<SpreadsheetEngine["exportReplicaSnapshot"]>;
-}
-
-type RelayTarget = "primary" | "mirror";
-
-interface RelayEntry {
-  target: RelayTarget;
-  batch: EngineOpBatch;
-  deliverAt: number;
 }
 
 interface PersistedRelayState {
@@ -149,15 +142,17 @@ export function App() {
   useEffect(() => {
     if (!replicationReady) return;
 
-    const enqueueBatch = (target: RelayTarget, batch: EngineOpBatch) => {
-      setRelayQueue((current) => [
-        ...current,
-        {
-          target,
-          batch,
-          deliverAt: Date.now() + syncLatencyMs
-        }
-      ]);
+    const enqueueBatch = (target: RelayEntry["target"], batch: EngineOpBatch) => {
+      setRelayQueue((current) =>
+        compactRelayEntries([
+          ...current,
+          {
+            target,
+            batch,
+            deliverAt: Date.now() + syncLatencyMs
+          }
+        ])
+      );
     };
 
     const unsubscribeLocal = engine.subscribeBatches((batch) => enqueueBatch("mirror", batch));

@@ -60,16 +60,23 @@ test("paused relay queue survives reload and resumes replication", async ({ page
   await expect(page.getByTestId("replica-value")).toHaveText("10");
   await expect(page.getByTestId("replica-queued")).toHaveText("1");
 
+  await formulaInput.fill("18");
+  await page.getByRole("button", { name: "Commit" }).click();
+
+  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("18");
+  await expect(page.getByTestId("replica-value")).toHaveText("10");
+  await expect(page.getByTestId("replica-queued")).toHaveText("1");
+
   await page.reload();
 
   await expect(page.getByTestId("replica-status")).toHaveText("Paused");
-  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("15");
+  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("18");
   await expect(page.getByTestId("replica-value")).toHaveText("10");
   await expect(page.getByTestId("replica-queued")).toHaveText("1");
 
   await page.getByRole("button", { name: "Resume sync" }).click();
 
   await expect(page.getByTestId("replica-status")).toHaveText("Live");
-  await expect(page.getByTestId("replica-value")).toHaveText("15");
+  await expect(page.getByTestId("replica-value")).toHaveText("18");
   await expect(page.getByTestId("replica-queued")).toHaveText("0");
 });
