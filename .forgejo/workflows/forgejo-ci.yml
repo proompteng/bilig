@@ -16,7 +16,7 @@ jobs:
       image: docker.io/library/node:24.14.0-bookworm
     steps:
       - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: https://data.forgejo.org/actions/checkout@v4
 
       - name: Verify Node baseline
         run: |
