@@ -66,6 +66,10 @@ export class EdgeArena {
     return this.buffer.slice(slice.ptr, slice.ptr + slice.len);
   }
 
+  view(): Uint32Array {
+    return this.buffer.slice(0, this.nextPtr);
+  }
+
   appendUnique(slice: EdgeSlice, value: number): EdgeSlice {
     const values = this.read(slice);
     for (let index = 0; index < values.length; index += 1) {

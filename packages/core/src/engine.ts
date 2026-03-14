@@ -132,7 +132,6 @@ export class SpreadsheetEngine {
   private readonly programArena = new Uint32Arena();
   private readonly constantArena = new Float64Arena();
   private readonly rangeListArena = new Uint32Arena();
-  private readonly rangeMemberArena = new Uint32Arena();
   private readonly reverseEdges = new Map<number, EdgeSlice>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
@@ -1010,7 +1009,6 @@ export class SpreadsheetEngine {
     this.programArena.reset();
     this.constantArena.reset();
     this.rangeListArena.reset();
-    this.rangeMemberArena.reset();
 
     const orderedFormulas = [...this.formulas.values()].filter((formula) => formula.compiled.mode === FormulaMode.WasmFastPath);
     const targets = new Uint32Array(orderedFormulas.length);
@@ -1064,14 +1062,12 @@ export class SpreadsheetEngine {
     const rangeLengths = new Uint32Array(rangeCapacity);
     for (let rangeIndex = 0; rangeIndex < this.ranges.size; rangeIndex += 1) {
       const descriptor = this.ranges.getDescriptor(rangeIndex);
-      const members = descriptor.refCount > 0 ? this.ranges.getMembers(rangeIndex) : new Uint32Array();
-      const rangeSlice = this.rangeMemberArena.append(members);
-      rangeOffsets[rangeIndex] = rangeSlice.offset;
-      rangeLengths[rangeIndex] = rangeSlice.length;
+      rangeOffsets[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersOffset : 0;
+      rangeLengths[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersLength : 0;
     }
 
     this.wasm.uploadRanges({
-      members: this.rangeMemberArena.view(),
+      members: this.ranges.getMemberPoolView(),
       offsets: rangeOffsets,
       lengths: rangeLengths
     });

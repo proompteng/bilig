@@ -57,9 +57,10 @@ The TS protocol enums/opcodes and the AssemblyScript protocol mirror are generat
 Within `@bilig/core`, the runtime is no longer a single inline dependency map. The current production shape is:
 
 - `WorkbookStore` for sheet metadata, sparse grids, and typed-array-backed cells
-- `RangeRegistry` for interned range entities and dynamic row/column membership tracking
+- `RangeRegistry` for interned range entities, a shared range-member pool, descriptor `membersOffset`/`membersLength`, and dynamic row/column membership tracking
 - `EdgeArena` for forward and reverse graph slices
 - `RecalcScheduler` for epoch-based dirty propagation and rank-bucket ordering
 - `cycle-detection` for deterministic SCC grouping and `cycleGroupIds`
+- shared program/constant/range arenas in the engine so formula metadata matches the packed runtime/WASM contract instead of ad hoc per-formula blobs
 
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` maintains keyed cell listener routing so `useCell(...)` and viewport watchers wake only when one of their watched addresses changes. That keeps the grid aligned with the production requirement for localized rerenders rather than whole-viewport invalidation on every batch.

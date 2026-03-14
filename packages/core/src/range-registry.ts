@@ -10,7 +10,8 @@ export interface RangeDescriptor {
   col1: number;
   row2: number;
   col2: number;
-  members: EdgeSlice;
+  membersOffset: number;
+  membersLength: number;
   refCount: number;
   dynamic: boolean;
 }
@@ -36,6 +37,7 @@ export class RangeRegistry {
   private readonly byKey = new Map<string, RangeIndex>();
   private readonly dynamicBySheet = new Map<number, DynamicRangeIndex[]>();
   private readonly members = new EdgeArena();
+  private readonly memberSlices: EdgeSlice[] = [];
 
   get size(): number {
     return this.descriptors.length;
@@ -46,6 +48,7 @@ export class RangeRegistry {
     this.byKey.clear();
     this.dynamicBySheet.clear();
     this.members.reset();
+    this.memberSlices.length = 0;
   }
 
   intern(sheetId: number, range: RangeAddress, materializer: RangeMaterializer): RegisteredCellRange {
@@ -71,7 +74,8 @@ export class RangeRegistry {
       col1: cellRange.start.col,
       row2: cellRange.end.row,
       col2: cellRange.end.col,
-      members: this.members.empty(),
+      membersOffset: 0,
+      membersLength: 0,
       refCount: 1,
       dynamic
     };
@@ -80,7 +84,8 @@ export class RangeRegistry {
       range.kind === "cells"
         ? materializeBoundedMembers(sheetId, cellRange, materializer)
         : materializeDynamicMembers(sheetId, cellRange, range.kind, materializer);
-    descriptor.members = this.members.replace(descriptor.members, memberIndices);
+    this.memberSlices[descriptor.index] = this.members.replace(this.members.empty(), memberIndices);
+    syncDescriptorMembers(descriptor, this.memberSlices[descriptor.index]!);
     this.descriptors.push(descriptor);
     this.byKey.set(descriptorKey, descriptor.index);
 
@@ -102,16 +107,18 @@ export class RangeRegistry {
     if (!descriptor) {
       return { removed: false, members: new Uint32Array() };
     }
+    const memberSlice = this.memberSlices[rangeIndex] ?? this.members.empty();
 
     descriptor.refCount -= 1;
     if (descriptor.refCount > 0) {
-      return { removed: false, members: this.members.read(descriptor.members) };
+      return { removed: false, members: this.members.read(memberSlice) };
     }
 
     this.byKey.delete(keyForDescriptor(descriptor));
-    const members = this.members.read(descriptor.members);
-    this.members.free(descriptor.members);
-    descriptor.members = this.members.empty();
+    const members = this.members.read(memberSlice);
+    this.members.free(memberSlice);
+    this.memberSlices[rangeIndex] = this.members.empty();
+    syncDescriptorMembers(descriptor, this.memberSlices[rangeIndex]!);
     if (descriptor.dynamic) {
       const dynamic = this.dynamicBySheet.get(descriptor.sheetId);
       if (dynamic) {
@@ -134,7 +141,11 @@ export class RangeRegistry {
   }
 
   getMembers(rangeIndex: RangeIndex): Uint32Array {
-    return this.members.read(this.getDescriptor(rangeIndex).members);
+    return this.members.read(this.memberSlices[rangeIndex] ?? this.members.empty());
+  }
+
+  getMemberPoolView(): Uint32Array {
+    return this.members.view();
   }
 
   addDynamicMember(sheetId: number, row: number, col: number, cellIndex: number): RangeIndex[] {
@@ -150,9 +161,11 @@ export class RangeRegistry {
       if (!matchesDynamicRange(descriptor, row, col)) {
         continue;
       }
-      const nextMembers = this.members.appendUnique(descriptor.members, cellIndex);
-      if (nextMembers.ptr !== descriptor.members.ptr || nextMembers.len !== descriptor.members.len) {
-        descriptor.members = nextMembers;
+      const currentSlice = this.memberSlices[rangeIndex] ?? this.members.empty();
+      const nextMembers = this.members.appendUnique(currentSlice, cellIndex);
+      if (nextMembers.ptr !== currentSlice.ptr || nextMembers.len !== currentSlice.len) {
+        this.memberSlices[rangeIndex] = nextMembers;
+        syncDescriptorMembers(descriptor, nextMembers);
         matched.push(rangeIndex);
       }
     }
@@ -214,6 +227,11 @@ function matchesDynamicRange(descriptor: RangeDescriptor, row: number, col: numb
     return col >= descriptor.col1 && col <= descriptor.col2;
   }
   return false;
+}
+
+function syncDescriptorMembers(descriptor: RangeDescriptor, slice: EdgeSlice): void {
+  descriptor.membersOffset = slice.ptr < 0 ? 0 : slice.ptr;
+  descriptor.membersLength = slice.len;
 }
 
 function toCellRange(range: RangeAddress): CellRangeAddress {
