@@ -12,6 +12,8 @@
 - `packages/benchmarks` emits JSON benchmark payloads for:
   - load scenarios at 10k, 50k, and 100k materialized cells through snapshot import
   - downstream edit scenarios at 100, 1k, and 10k dependent formulas
+  - a range-aggregate-heavy scenario that reuses the same bounded range across thousands of formulas to exercise range interning and the WASM aggregate path under repeated fan-out
+  - a formula-topology edit scenario that rewrites the head of a long dependency chain so compile cost, topology rebuild, and downstream recalculation are visible in one benchmark payload
   - renderer commit-style scenarios at 1k and 10k declared cells
   - the benchmark matrix runs sequentially so reported numbers are not distorted by inter-scenario CPU contention
 - `scripts/perf-smoke.mjs` enforces a lightweight CI threshold against a 1k-downstream edit and asserts that the run actually dirties the expected formulas and hits the WASM fast path.

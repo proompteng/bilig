@@ -67,3 +67,65 @@ export function buildRenderCommitOps(cellCount = 1000): CommitOp[] {
 
   return ops;
 }
+
+export function seedRangeAggregateWorkbook(
+  engine: SpreadsheetEngine,
+  sourceCount = 1_024,
+  aggregateCount = 10_000
+): void {
+  engine.importSnapshot(buildRangeAggregateSnapshot(sourceCount, aggregateCount));
+}
+
+export function buildRangeAggregateSnapshot(sourceCount = 1_024, aggregateCount = 10_000): WorkbookSnapshot {
+  return {
+    version: 1,
+    workbook: { name: "benchmark-range-aggregates" },
+    sheets: [
+      {
+        name: "Sheet1",
+        order: 0,
+        cells: [
+          ...Array.from({ length: sourceCount }, (_, index) => ({
+            address: `A${index + 1}`,
+            value: index + 1
+          })),
+          ...Array.from({ length: aggregateCount }, (_, index) => ({
+            address: `B${index + 1}`,
+            formula: `SUM(A1:A${sourceCount})+${index + 1}`
+          }))
+        ]
+      }
+    ]
+  };
+}
+
+export function seedTopologyEditWorkbook(engine: SpreadsheetEngine, chainLength = 10_000): void {
+  engine.importSnapshot(buildTopologyEditSnapshot(chainLength));
+}
+
+export function buildTopologyEditSnapshot(chainLength = 10_000): WorkbookSnapshot {
+  const cells: WorkbookSnapshot["sheets"][number]["cells"] = [
+    { address: "A1", value: 1 },
+    { address: "A2", value: 2 },
+    { address: "B1", formula: "A1*2" }
+  ];
+
+  for (let index = 2; index <= chainLength; index += 1) {
+    cells.push({
+      address: `B${index}`,
+      formula: `B${index - 1}+1`
+    });
+  }
+
+  return {
+    version: 1,
+    workbook: { name: "benchmark-topology-edit" },
+    sheets: [
+      {
+        name: "Sheet1",
+        order: 0,
+        cells
+      }
+    ]
+  };
+}
