@@ -128,7 +128,10 @@ export interface CompiledFormula extends FormulaRecord {
   optimizedAst: FormulaNode;
   deps: string[];
   jsPlan: JsPlanInstruction[];
+  program: Uint32Array;
   constants: Float64Array;
+  symbolicRefs: string[];
+  symbolicRanges: string[];
 }
 
 function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
