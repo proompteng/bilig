@@ -92,12 +92,6 @@ interface RuntimeFormula {
 
 type U32 = Uint32Array<ArrayBufferLike>;
 
-interface MaterializedCell {
-  sheetName: string;
-  address: string;
-  cellIndex: number;
-}
-
 interface MaterializedDependencies {
   dependencyIndices: Uint32Array;
   dependencyEntities: Uint32Array;
@@ -156,6 +150,8 @@ export class SpreadsheetEngine {
   private changedUnionEpoch = 1;
   private changedUnionSeen: U32 = new Uint32Array(128);
   private changedUnion: U32 = new Uint32Array(128);
+  private materializedCellCount = 0;
+  private materializedCells: U32 = new Uint32Array(128);
   private explicitChangedEpoch = 1;
   private explicitChangedSeen: U32 = new Uint32Array(128);
   private explicitChangedBuffer: U32 = new Uint32Array(128);
@@ -515,20 +511,20 @@ export class SpreadsheetEngine {
     this.beginMutationCollection();
     let changedInputCount = 0;
     let formulaChangedCount = 0;
-    const materializedCells: MaterializedCell[] = [];
     let compileMs = 0;
+    this.resetMaterializedCellScratch(totalCells);
 
     this.batchMutationDepth += 1;
     try {
       snapshot.sheets.forEach((sheet) => {
         sheet.cells.forEach((cell) => {
-          const cellIndex = this.ensureCellTracked(sheet.name, cell.address, materializedCells);
+          const cellIndex = this.ensureCellTracked(sheet.name, cell.address);
           if (cell.formula !== undefined) {
             const compileStarted = performance.now();
             const compiled = compileFormula(cell.formula);
             compileMs += performance.now() - compileStarted;
-            const dependencies = this.materializeDependencies(sheet.name, compiled, materializedCells);
-            this.setFormula(cellIndex, cell.formula, compiled, dependencies, materializedCells);
+            const dependencies = this.materializeDependencies(sheet.name, compiled);
+            this.setFormula(cellIndex, cell.formula, compiled, dependencies);
             formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
           } else {
             const value = literalToValue(cell.value ?? null, this.strings);
@@ -547,7 +543,7 @@ export class SpreadsheetEngine {
         });
       });
 
-      formulaChangedCount = this.syncDynamicRanges(materializedCells, formulaChangedCount);
+      formulaChangedCount = this.syncDynamicRanges(formulaChangedCount);
     } finally {
       this.batchMutationDepth -= 1;
       this.flushWasmProgramSync();
@@ -652,15 +648,14 @@ export class SpreadsheetEngine {
     let changedInputCount = 0;
     let formulaChangedCount = 0;
     let explicitChangedCount = 0;
-    const materializedCells: MaterializedCell[] = [];
     let topologyChanged = false;
     let sheetDeleted = false;
     let appliedOps = 0;
     const canSkipOrderChecks = source === "local";
 
-    this.workbook.cellStore.ensureCapacity(
-      this.workbook.cellStore.size + (potentialNewCells ?? this.estimatePotentialNewCells(batch.ops))
-    );
+    const reservedNewCells = potentialNewCells ?? this.estimatePotentialNewCells(batch.ops);
+    this.workbook.cellStore.ensureCapacity(this.workbook.cellStore.size + reservedNewCells);
+    this.resetMaterializedCellScratch(reservedNewCells);
 
     this.batchMutationDepth += 1;
     try {
@@ -697,7 +692,7 @@ export class SpreadsheetEngine {
             sheetDeleted = true;
             break;
           case "setCellValue": {
-            const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
+            const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
             topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
             const value = literalToValue(op.value, this.strings);
             this.workbook.cellStore.setValue(
@@ -713,12 +708,12 @@ export class SpreadsheetEngine {
             break;
           }
           case "setCellFormula": {
-            const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
+            const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
             const compileStarted = performance.now();
             const compiled = compileFormula(op.formula);
             this.lastMetrics.compileMs = performance.now() - compileStarted;
-            const dependencies = this.materializeDependencies(op.sheetName, compiled, materializedCells);
-            this.setFormula(cellIndex, op.formula, compiled, dependencies, materializedCells);
+            const dependencies = this.materializeDependencies(op.sheetName, compiled);
+            this.setFormula(cellIndex, op.formula, compiled, dependencies);
             formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
             explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
             this.entityVersions.set(this.entityKeyForOp(op), order);
@@ -726,7 +721,7 @@ export class SpreadsheetEngine {
             break;
           }
           case "setCellFormat": {
-            const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
+            const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
             this.workbook.setCellFormat(cellIndex, op.format);
             explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
             this.entityVersions.set(this.entityKeyForOp(op), order);
@@ -750,7 +745,7 @@ export class SpreadsheetEngine {
       });
 
       const reboundCount = formulaChangedCount;
-      formulaChangedCount = this.syncDynamicRanges(materializedCells, formulaChangedCount);
+      formulaChangedCount = this.syncDynamicRanges(formulaChangedCount);
       topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
     } finally {
       this.batchMutationDepth -= 1;
@@ -794,8 +789,7 @@ export class SpreadsheetEngine {
 
   private materializeDependencies(
     currentSheet: string,
-    compiled: ReturnType<typeof compileFormula>,
-    materializedCells: MaterializedCell[]
+    compiled: ReturnType<typeof compileFormula>
   ): MaterializedDependencies {
     const deps = compiled.deps;
     this.ensureDependencyBuildCapacity(
@@ -827,7 +821,7 @@ export class SpreadsheetEngine {
           continue;
         }
         const registered = this.ranges.intern(sheet.id, range, {
-          ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col, materializedCells),
+          ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col),
           forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn)
         });
         const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
@@ -859,7 +853,7 @@ export class SpreadsheetEngine {
       if (parsed.sheetName && !this.workbook.getSheet(sheetName)) {
         continue;
       }
-      const cellIndex = this.ensureCellTracked(sheetName, parsed.text, materializedCells);
+      const cellIndex = this.ensureCellTracked(sheetName, parsed.text);
       if (this.dependencyBuildSeen[cellIndex] !== this.dependencyBuildEpoch) {
         this.dependencyBuildSeen[cellIndex] = this.dependencyBuildEpoch;
         this.dependencyBuildCells[dependencyIndexCount] = cellIndex;
@@ -882,8 +876,7 @@ export class SpreadsheetEngine {
     cellIndex: number,
     source: string,
     compiled: ReturnType<typeof compileFormula>,
-    dependencies: MaterializedDependencies,
-    materializedCells: MaterializedCell[]
+    dependencies: MaterializedDependencies
   ): void {
     this.removeFormula(cellIndex);
 
@@ -904,7 +897,7 @@ export class SpreadsheetEngine {
         this.symbolicRefBindings[index] = 0;
         continue;
       }
-      this.symbolicRefBindings[index] = this.ensureCellTracked(sheetName, parsed.text, materializedCells);
+      this.symbolicRefBindings[index] = this.ensureCellTracked(sheetName, parsed.text);
     }
 
     const effectiveCompiled =
@@ -1575,8 +1568,8 @@ export class SpreadsheetEngine {
           return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
         });
         if (!touchesSheet) continue;
-        const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled, []);
-        this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
+        const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled);
+        this.setFormula(cellIndex, formula.source, formula.compiled, dependencies);
         formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
       }
       return formulaChangedCount;
@@ -1592,8 +1585,8 @@ export class SpreadsheetEngine {
         return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
       });
       if (!touchesSheet) return;
-      const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled, []);
-      this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
+      const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled);
+      this.setFormula(cellIndex, formula.source, formula.compiled, dependencies);
       formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
     });
 
@@ -1745,22 +1738,18 @@ export class SpreadsheetEngine {
     return this.changedUnion.subarray(0, changedCount);
   }
 
-  private ensureCellTracked(sheetName: string, address: string, materializedCells: MaterializedCell[]): number {
+  private ensureCellTracked(sheetName: string, address: string): number {
     const ensured = this.workbook.ensureCellRecord(sheetName, address);
     if (ensured.created) {
-      materializedCells.push({ sheetName, address, cellIndex: ensured.cellIndex });
+      this.pushMaterializedCell(ensured.cellIndex);
     }
     return ensured.cellIndex;
   }
 
-  private ensureCellTrackedByCoords(sheetId: number, row: number, col: number, materializedCells: MaterializedCell[]): number {
-    const sheet = this.workbook.getSheetById(sheetId);
-    if (!sheet) {
-      throw new Error(`Unknown sheet id: ${sheetId}`);
-    }
+  private ensureCellTrackedByCoords(sheetId: number, row: number, col: number): number {
     const ensured = this.workbook.ensureCellAt(sheetId, row, col);
     if (ensured.created) {
-      materializedCells.push({ sheetName: sheet.name, address: formatAddress(row, col), cellIndex: ensured.cellIndex });
+      this.pushMaterializedCell(ensured.cellIndex);
     }
     return ensured.cellIndex;
   }
@@ -1812,23 +1801,23 @@ export class SpreadsheetEngine {
     return matches.map((match) => match.value);
   }
 
-  private syncDynamicRanges(materializedCells: readonly MaterializedCell[], formulaChangedCount: number): number {
-    for (let index = 0; index < materializedCells.length; index += 1) {
-      const materialized = materializedCells[index]!;
-      const sheet = this.workbook.getSheet(materialized.sheetName);
-      if (!sheet) {
+  private syncDynamicRanges(formulaChangedCount: number): number {
+    for (let index = 0; index < this.materializedCellCount; index += 1) {
+      const cellIndex = this.materializedCells[index]!;
+      const sheetId = this.workbook.cellStore.sheetIds[cellIndex] ?? 0;
+      if (sheetId === 0) {
         continue;
       }
-      const row = this.workbook.cellStore.rows[materialized.cellIndex] ?? 0;
-      const col = this.workbook.cellStore.cols[materialized.cellIndex] ?? 0;
-      const rangeIndices = this.ranges.addDynamicMember(sheet.id, row, col, materialized.cellIndex);
+      const row = this.workbook.cellStore.rows[cellIndex] ?? 0;
+      const col = this.workbook.cellStore.cols[cellIndex] ?? 0;
+      const rangeIndices = this.ranges.addDynamicMember(sheetId, row, col, cellIndex);
       if (rangeIndices.length > 0) {
         this.scheduleWasmProgramSync();
       }
       for (let rangeCursor = 0; rangeCursor < rangeIndices.length; rangeCursor += 1) {
         const rangeIndex = rangeIndices[rangeCursor]!;
         const rangeEntity = makeRangeEntity(rangeIndex);
-        this.appendReverseEdge(makeCellEntity(materialized.cellIndex), rangeEntity);
+        this.appendReverseEdge(makeCellEntity(cellIndex), rangeEntity);
         const formulas = this.getEntityDependents(rangeEntity);
         for (let formulaCursor = 0; formulaCursor < formulas.length; formulaCursor += 1) {
           const formulaEntity = formulas[formulaCursor]!;
@@ -1840,7 +1829,7 @@ export class SpreadsheetEngine {
           if (!formula) {
             continue;
           }
-          const nextDependencyIndices = appendPackedCellIndex(formula.dependencyIndices, materialized.cellIndex);
+          const nextDependencyIndices = appendPackedCellIndex(formula.dependencyIndices, cellIndex);
           if (nextDependencyIndices !== formula.dependencyIndices) {
             formula.dependencyIndices = nextDependencyIndices;
             formulaChangedCount = this.markFormulaChanged(formulaCellIndex, formulaChangedCount);
@@ -1872,7 +1861,24 @@ export class SpreadsheetEngine {
       compileMs: 0
     };
     this.wasmProgramSyncPending = false;
+    this.materializedCellCount = 0;
     this.syncWasmPrograms();
+  }
+
+  private resetMaterializedCellScratch(expectedSize: number): void {
+    this.materializedCellCount = 0;
+    if (expectedSize > this.materializedCells.length) {
+      this.materializedCells = growUint32(this.materializedCells, expectedSize);
+    }
+  }
+
+  private pushMaterializedCell(cellIndex: number): void {
+    const nextCount = this.materializedCellCount + 1;
+    if (nextCount > this.materializedCells.length) {
+      this.materializedCells = growUint32(this.materializedCells, nextCount);
+    }
+    this.materializedCells[this.materializedCellCount] = cellIndex;
+    this.materializedCellCount = nextCount;
   }
 }
 
