@@ -76,6 +76,7 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 - `FormulaRecord` in `@bilig/protocol` is back to packed runtime metadata only; compiler-only artifacts such as symbolic refs, symbolic ranges, and raw program buffers now stay inside `@bilig/formula` instead of leaking into the shared ABI contract
 - packed symbolic binding scratch in the engine so formula materialization patches `PushCell`/`PushRange` operands from reusable typed buffers instead of rebuilding per-formula `Map<string, number>` lookup tables
 - packed materialized-cell scratch in the engine so snapshot import, formula binding, and dynamic range sync track newly created cells as `Uint32Array` indices instead of boxing `{ sheetName, address, cellIndex }` records per batch
+- packed newly-interned range scratch in the engine so reverse-edge linking reuses `RangeRegistry` member views directly instead of allocating `{ rangeIndex, memberIndices }` tuples while binding formulas
 
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` now routes watched cells by `cellIndex` in the hot path and only falls back to qualified-address listeners for still-unmaterialized cells, so `useCell(...)` and viewport watchers wake only when one of their watched cells changes. That keeps the grid aligned with the production requirement for localized rerenders without pushing string-address routing into every batch emission.
 

@@ -98,7 +98,8 @@ interface MaterializedDependencies {
   rangeDependencies: Uint32Array;
   symbolicRangeIndices: U32;
   symbolicRangeCount: number;
-  newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }>;
+  newRangeIndices: U32;
+  newRangeCount: number;
 }
 
 function emptyValue(): CellValue {
@@ -160,6 +161,7 @@ export class SpreadsheetEngine {
   private dependencyBuildCells: U32 = new Uint32Array(128);
   private dependencyBuildEntities: U32 = new Uint32Array(128);
   private dependencyBuildRanges: U32 = new Uint32Array(128);
+  private dependencyBuildNewRanges: U32 = new Uint32Array(128);
   private symbolicRefBindings: U32 = new Uint32Array(128);
   private symbolicRangeBindings: U32 = new Uint32Array(128);
   private impactedFormulaEpoch = 1;
@@ -807,8 +809,8 @@ export class SpreadsheetEngine {
     let dependencyIndexCount = 0;
     let dependencyEntityCount = 0;
     let rangeDependencyCount = 0;
+    let newRangeCount = 0;
     this.symbolicRangeBindings.fill(0, 0, compiled.symbolicRanges.length);
-    const newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }> = [];
     for (const dep of deps) {
       if (dep.includes(":")) {
         const range = parseRangeAddress(dep, currentSheet);
@@ -844,7 +846,8 @@ export class SpreadsheetEngine {
           dependencyIndexCount += 1;
         }
         if (registered.materialized) {
-          newRangeLinks.push({ rangeIndex: registered.rangeIndex, memberIndices });
+          this.dependencyBuildNewRanges[newRangeCount] = registered.rangeIndex;
+          newRangeCount += 1;
         }
         continue;
       }
@@ -868,7 +871,8 @@ export class SpreadsheetEngine {
       rangeDependencies: this.dependencyBuildRanges.slice(0, rangeDependencyCount),
       symbolicRangeIndices: this.symbolicRangeBindings,
       symbolicRangeCount: compiled.symbolicRanges.length,
-      newRangeLinks
+      newRangeIndices: this.dependencyBuildNewRanges,
+      newRangeCount
     };
   }
 
@@ -951,12 +955,14 @@ export class SpreadsheetEngine {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly;
     }
 
-    dependencies.newRangeLinks.forEach(({ rangeIndex, memberIndices }) => {
+    for (let rangeCursor = 0; rangeCursor < dependencies.newRangeCount; rangeCursor += 1) {
+      const rangeIndex = dependencies.newRangeIndices[rangeCursor]!;
+      const memberIndices = this.ranges.expandToCells(rangeIndex);
       const rangeEntity = makeRangeEntity(rangeIndex);
       for (let index = 0; index < memberIndices.length; index += 1) {
         this.appendReverseEdge(makeCellEntity(memberIndices[index]!), rangeEntity);
       }
-    });
+    }
     const formulaEntity = makeCellEntity(cellIndex);
     for (let index = 0; index < dependencies.dependencyEntities.length; index += 1) {
       this.appendReverseEdge(dependencies.dependencyEntities[index]!, formulaEntity);
@@ -1199,6 +1205,9 @@ export class SpreadsheetEngine {
     }
     if (dependencyCapacity > this.dependencyBuildRanges.length) {
       this.dependencyBuildRanges = growUint32(this.dependencyBuildRanges, dependencyCapacity);
+    }
+    if (dependencyCapacity > this.dependencyBuildNewRanges.length) {
+      this.dependencyBuildNewRanges = growUint32(this.dependencyBuildNewRanges, dependencyCapacity);
     }
     if (symbolicRefCapacity > this.symbolicRefBindings.length) {
       this.symbolicRefBindings = growUint32(this.symbolicRefBindings, symbolicRefCapacity);
