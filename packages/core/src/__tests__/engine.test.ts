@@ -286,6 +286,26 @@ describe("SpreadsheetEngine", () => {
     });
   });
 
+  it("includes format-only mutations in changed cell events", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 12);
+
+    const changed: number[][] = [];
+    const unsubscribe = engine.subscribe((event) => {
+      changed.push(Array.from(event.changedCellIndices));
+    });
+
+    engine.setCellFormat("Sheet1", "A1", "currency-usd");
+
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    expect(a1Index).toBeDefined();
+    expect(changed.at(-1)).toEqual([a1Index!]);
+
+    unsubscribe();
+  });
+
   it("replaces existing sheet contents on CSV import", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

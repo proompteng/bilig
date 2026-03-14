@@ -8,7 +8,7 @@
 - Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`, exercising the extracted `@bilig/renderer` and `@bilig/grid` packages through the app shell.
 - Browser smoke covers both live recalculation and paused-relay resume behavior so local-first replication survives a full reload path in CI, not just in ad hoc manual testing.
 - CRDT unit tests now verify real compaction semantics, including stale cell writes behind sheet tombstones and recreate-after-delete flows.
-- Core and playground tests now also verify fine-grained cell subscription behavior so unrelated edits do not rerender watched cells or viewport listeners.
+- Core and playground tests now also verify fine-grained cell subscription behavior so unrelated edits do not rerender watched cells or viewport listeners, format-only mutations still notify the right subscribers, and previously empty watched cells rerender on first materialization.
 - `packages/benchmarks` emits JSON benchmark payloads for:
   - load scenarios at 10k, 50k, and 100k materialized cells through snapshot import
   - downstream edit scenarios at 100, 1k, and 10k dependent formulas

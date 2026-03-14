@@ -53,6 +53,47 @@ describe("playground cell subscriptions", () => {
     expect(renders.get("B1")).toBe(1);
 
     await act(async () => {
+      engine.setCellFormat("Sheet1", "A1", "currency");
+    });
+
+    expect(renders.get("A1")).toBe(3);
+    expect(renders.get("B1")).toBe(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it("rerenders a watched empty cell when it materializes later", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const engine = new SpreadsheetEngine({ workbookName: "materialize-test" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const renders: string[] = [];
+
+    function Probe() {
+      const snapshot = useCell(engine, "Sheet1", "D4");
+      renders.push(String(snapshot.value.tag));
+      return null;
+    }
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<Probe />);
+    });
+
+    await act(async () => {
+      engine.setCellValue("Sheet1", "D4", 42);
+    });
+
+    expect(renders).toHaveLength(2);
+
+    await act(async () => {
       root.unmount();
     });
     host.remove();

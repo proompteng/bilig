@@ -74,6 +74,6 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 - packed formula constants at compile time so runtime metadata and WASM uploads no longer carry boxed `number[]` constant pools
 - widened WASM constant-pool views so the kernel exposes constant offsets, lengths, and packed numeric constants alongside program and range metadata for ABI-level parity
 
-The UI does not subscribe through a single global revision for visible cells. `@bilig/core` maintains keyed cell listener routing so `useCell(...)` and viewport watchers wake only when one of their watched addresses changes. That keeps the grid aligned with the production requirement for localized rerenders rather than whole-viewport invalidation on every batch.
+The UI does not subscribe through a single global revision for visible cells. `@bilig/core` now routes watched cells by `cellIndex` in the hot path and only falls back to qualified-address listeners for still-unmaterialized cells, so `useCell(...)` and viewport watchers wake only when one of their watched cells changes. That keeps the grid aligned with the production requirement for localized rerenders without pushing string-address routing into every batch emission.
 
 Selection state now follows the same rule: the engine owns the current `{ sheetName, address }` selection snapshot and `@bilig/grid` consumes it through `useSyncExternalStore`, so the playground no longer keeps workbook selection in a parallel React-only state tree.
