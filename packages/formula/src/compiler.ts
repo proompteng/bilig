@@ -178,6 +178,8 @@ export function compileFormula(source: string): CompiledFormula {
     id: 0,
     source,
     mode: bound.mode,
+    depsPtr: 0,
+    depsLen: 0,
     programOffset: 0,
     programLength: state.program.length,
     constNumberOffset: 0,

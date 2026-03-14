@@ -37,6 +37,11 @@ describe("formula", () => {
     expect(compiled.mode).toBe(1);
     expect([...compiled.symbolicRefs]).toEqual(["A1"]);
     expect(compiled.maxStackDepth).toBeGreaterThan(0);
+    expect(compiled.id).toBe(0);
+    expect(compiled.depsPtr).toBe(0);
+    expect(compiled.depsLen).toBe(0);
+    expect(compiled.programOffset).toBe(0);
+    expect(compiled.constNumberOffset).toBe(0);
   });
 
   it("keeps pass-through cell refs on the JS path", () => {

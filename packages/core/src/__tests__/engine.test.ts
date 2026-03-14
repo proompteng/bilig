@@ -271,6 +271,44 @@ describe("SpreadsheetEngine", () => {
     expect(explanation.inCycle).toBe(false);
   });
 
+  it("stores runtime formula metadata with real formula ids and dependency slices", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellFormula("Sheet1", "C3", "A1*2");
+
+    const cellIndex = engine.workbook.getCellIndex("Sheet1", "C3");
+    expect(cellIndex).toBeDefined();
+
+    const formulaId = engine.workbook.cellStore.formulaIds[cellIndex!]!;
+    const runtimeFormula = (
+      engine as unknown as {
+        formulas: {
+          get(cellIndex: number): {
+            compiled: {
+              id: number;
+              depsPtr: number;
+              depsLen: number;
+              programOffset: number;
+              programLength: number;
+            };
+            dependencyEntities: { ptr: number; len: number };
+            runtimeProgram: Uint32Array;
+          } | undefined;
+        };
+      }
+    ).formulas.get(cellIndex!);
+
+    expect(formulaId).toBeGreaterThan(0);
+    expect(runtimeFormula).toBeDefined();
+    expect(runtimeFormula?.compiled.id).toBe(formulaId);
+    expect(runtimeFormula?.compiled.depsPtr).toBe(runtimeFormula?.dependencyEntities.ptr);
+    expect(runtimeFormula?.compiled.depsLen).toBe(runtimeFormula?.dependencyEntities.len);
+    expect(runtimeFormula?.compiled.programOffset).toBe(0);
+    expect(runtimeFormula?.compiled.programLength).toBe(runtimeFormula?.runtimeProgram.length);
+  });
+
   it("assigns deterministic cycle group ids for cyclic formulas", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "cycle-spec" });
     await engine.ready();

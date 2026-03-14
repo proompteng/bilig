@@ -800,12 +800,17 @@ export class SpreadsheetEngine {
       }
     });
 
-    this.formulas.set(cellIndex, {
+    const dependencyEntities = this.edgeArena.replace(this.edgeArena.empty(), dependencies.dependencyEntities);
+    const runtimeFormula: RuntimeFormula = {
       cellIndex,
       source,
-      compiled: effectiveCompiled,
+      compiled: {
+        ...effectiveCompiled,
+        depsPtr: dependencyEntities.ptr,
+        depsLen: dependencyEntities.len
+      },
       dependencyIndices: dependencies.dependencyIndices,
-      dependencyEntities: this.edgeArena.replace(this.edgeArena.empty(), dependencies.dependencyEntities),
+      dependencyEntities,
       rangeDependencies: dependencies.rangeDependencies,
       runtimeProgram,
       constants: effectiveCompiled.constants,
@@ -815,7 +820,9 @@ export class SpreadsheetEngine {
       constNumberLength: effectiveCompiled.constants.length,
       rangeListOffset: 0,
       rangeListLength: dependencies.rangeDependencies.length
-    });
+    };
+    const formulaId = this.formulas.set(cellIndex, runtimeFormula);
+    runtimeFormula.compiled.id = formulaId;
     this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.HasFormula;
     if (effectiveCompiled.mode === FormulaMode.JsOnly) {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
@@ -1024,6 +1031,14 @@ export class SpreadsheetEngine {
       formula.constNumberLength = constantSlice.length;
       formula.rangeListOffset = rangeSlice.offset;
       formula.rangeListLength = rangeSlice.length;
+      formula.compiled.programOffset = programSlice.offset;
+      formula.compiled.programLength = programSlice.length;
+      formula.compiled.constNumberOffset = constantSlice.offset;
+      formula.compiled.constNumberLength = constantSlice.length;
+      formula.compiled.rangeListOffset = rangeSlice.offset;
+      formula.compiled.rangeListLength = rangeSlice.length;
+      formula.compiled.depsPtr = formula.dependencyEntities.ptr;
+      formula.compiled.depsLen = formula.dependencyEntities.len;
 
       targets[index] = formula.cellIndex;
       programOffsets[index] = programSlice.offset;

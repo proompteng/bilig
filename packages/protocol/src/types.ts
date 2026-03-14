@@ -94,6 +94,8 @@ export interface FormulaRecord {
   id: FormulaId;
   source: string;
   mode: FormulaMode;
+  depsPtr: number;
+  depsLen: number;
   programOffset: number;
   programLength: number;
   constNumberOffset: number;
