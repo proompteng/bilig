@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SpreadsheetEngine } from "../index.js";
-import { ErrorCode, ValueTag } from "@bilig/protocol";
+import { ErrorCode, Opcode, ValueTag } from "@bilig/protocol";
 import type { EngineOpBatch } from "@bilig/crdt";
 
 describe("SpreadsheetEngine", () => {
@@ -373,6 +373,41 @@ describe("SpreadsheetEngine", () => {
     expect(runtimeFormula?.compiled.depsLen).toBe(runtimeFormula?.dependencyEntities.len);
     expect(runtimeFormula?.compiled.programOffset).toBe(0);
     expect(runtimeFormula?.compiled.programLength).toBe(runtimeFormula?.runtimeProgram.length);
+  });
+
+  it("patches runtime cell and range operands from packed symbolic binding buffers", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "symbolic-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellValue("Sheet1", "C1", 5);
+    engine.setCellFormula("Sheet1", "D1", "SUM(A1:B1)+C1");
+
+    const cellIndex = engine.workbook.getCellIndex("Sheet1", "D1");
+    const c1Index = engine.workbook.getCellIndex("Sheet1", "C1");
+    expect(cellIndex).toBeDefined();
+    expect(c1Index).toBeDefined();
+
+    const runtimeFormula = (
+      engine as unknown as {
+        formulas: {
+          get(cellIndex: number): {
+            rangeDependencies: Uint32Array;
+            runtimeProgram: Uint32Array;
+          } | undefined;
+        };
+      }
+    ).formulas.get(cellIndex!);
+
+    expect(runtimeFormula).toBeDefined();
+    const pushCell = runtimeFormula?.runtimeProgram.find((instruction) => (instruction >>> 24) === Opcode.PushCell);
+    const pushRange = runtimeFormula?.runtimeProgram.find((instruction) => (instruction >>> 24) === Opcode.PushRange);
+
+    expect(pushCell).toBeDefined();
+    expect(pushRange).toBeDefined();
+    expect(pushCell! & 0x00ff_ffff).toBe(c1Index);
+    expect(pushRange! & 0x00ff_ffff).toBe(runtimeFormula?.rangeDependencies[0]);
   });
 
   it("assigns deterministic cycle group ids for cyclic formulas", async () => {

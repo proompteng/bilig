@@ -102,7 +102,8 @@ interface MaterializedDependencies {
   dependencyIndices: Uint32Array;
   dependencyEntities: Uint32Array;
   rangeDependencies: Uint32Array;
-  rangeIndexByRef: Map<string, number>;
+  symbolicRangeIndices: U32;
+  symbolicRangeCount: number;
   newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }>;
 }
 
@@ -163,6 +164,8 @@ export class SpreadsheetEngine {
   private dependencyBuildCells: U32 = new Uint32Array(128);
   private dependencyBuildEntities: U32 = new Uint32Array(128);
   private dependencyBuildRanges: U32 = new Uint32Array(128);
+  private symbolicRefBindings: U32 = new Uint32Array(128);
+  private symbolicRangeBindings: U32 = new Uint32Array(128);
   private impactedFormulaEpoch = 1;
   private impactedFormulaSeen: U32 = new Uint32Array(128);
   private impactedFormulaBuffer: U32 = new Uint32Array(128);
@@ -524,7 +527,7 @@ export class SpreadsheetEngine {
             const compileStarted = performance.now();
             const compiled = compileFormula(cell.formula);
             compileMs += performance.now() - compileStarted;
-            const dependencies = this.materializeDependencies(sheet.name, compiled.deps, materializedCells);
+            const dependencies = this.materializeDependencies(sheet.name, compiled, materializedCells);
             this.setFormula(cellIndex, cell.formula, compiled, dependencies, materializedCells);
             formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
           } else {
@@ -714,7 +717,7 @@ export class SpreadsheetEngine {
             const compileStarted = performance.now();
             const compiled = compileFormula(op.formula);
             this.lastMetrics.compileMs = performance.now() - compileStarted;
-            const dependencies = this.materializeDependencies(op.sheetName, compiled.deps, materializedCells);
+            const dependencies = this.materializeDependencies(op.sheetName, compiled, materializedCells);
             this.setFormula(cellIndex, op.formula, compiled, dependencies, materializedCells);
             formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
             explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
@@ -789,8 +792,18 @@ export class SpreadsheetEngine {
     }
   }
 
-  private materializeDependencies(currentSheet: string, deps: string[], materializedCells: MaterializedCell[]): MaterializedDependencies {
-    this.ensureDependencyBuildCapacity(this.workbook.cellStore.size + 1, deps.length + 1);
+  private materializeDependencies(
+    currentSheet: string,
+    compiled: ReturnType<typeof compileFormula>,
+    materializedCells: MaterializedCell[]
+  ): MaterializedDependencies {
+    const deps = compiled.deps;
+    this.ensureDependencyBuildCapacity(
+      this.workbook.cellStore.size + 1,
+      deps.length + 1,
+      compiled.symbolicRefs.length + 1,
+      compiled.symbolicRanges.length + 1
+    );
     this.dependencyBuildEpoch += 1;
     if (this.dependencyBuildEpoch === 0xffff_ffff) {
       this.dependencyBuildEpoch = 1;
@@ -800,7 +813,7 @@ export class SpreadsheetEngine {
     let dependencyIndexCount = 0;
     let dependencyEntityCount = 0;
     let rangeDependencyCount = 0;
-    const rangeIndexByRef = new Map<string, number>();
+    this.symbolicRangeBindings.fill(0, 0, compiled.symbolicRanges.length);
     const newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }> = [];
     for (const dep of deps) {
       if (dep.includes(":")) {
@@ -817,7 +830,10 @@ export class SpreadsheetEngine {
           ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col, materializedCells),
           forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn)
         });
-        rangeIndexByRef.set(dep, registered.rangeIndex);
+        const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
+        if (symbolicRangeIndex !== -1) {
+          this.symbolicRangeBindings[symbolicRangeIndex] = registered.rangeIndex;
+        }
         const rangeEntity = makeRangeEntity(registered.rangeIndex);
         this.dependencyBuildEntities[dependencyEntityCount] = rangeEntity;
         dependencyEntityCount += 1;
@@ -856,7 +872,8 @@ export class SpreadsheetEngine {
       dependencyIndices: this.dependencyBuildCells.slice(0, dependencyIndexCount),
       dependencyEntities: this.dependencyBuildEntities.slice(0, dependencyEntityCount),
       rangeDependencies: this.dependencyBuildRanges.slice(0, rangeDependencyCount),
-      rangeIndexByRef,
+      symbolicRangeIndices: this.symbolicRangeBindings,
+      symbolicRangeCount: compiled.symbolicRanges.length,
       newRangeLinks
     };
   }
@@ -870,18 +887,25 @@ export class SpreadsheetEngine {
   ): void {
     this.removeFormula(cellIndex);
 
-    const symbolicRefToIndex = new Map<string, number>();
+    this.ensureDependencyBuildCapacity(
+      this.workbook.cellStore.size + 1,
+      compiled.deps.length + 1,
+      compiled.symbolicRefs.length + 1,
+      compiled.symbolicRanges.length + 1
+    );
     let hasUnresolvedSymbolicRef = false;
-    compiled.symbolicRefs.forEach((ref) => {
+    for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
+      const ref = compiled.symbolicRefs[index]!;
       const [qualifiedSheetName, qualifiedAddress] = ref.includes("!") ? ref.split("!") : [undefined, ref];
       const parsed = parseCellAddress(qualifiedAddress!, qualifiedSheetName);
       const sheetName = qualifiedSheetName ?? this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
       if (qualifiedSheetName && !this.workbook.getSheet(sheetName)) {
         hasUnresolvedSymbolicRef = true;
-        return;
+        this.symbolicRefBindings[index] = 0;
+        continue;
       }
-      symbolicRefToIndex.set(ref, this.ensureCellTracked(sheetName, parsed.text, materializedCells));
-    });
+      this.symbolicRefBindings[index] = this.ensureCellTracked(sheetName, parsed.text, materializedCells);
+    }
 
     const effectiveCompiled =
       hasUnresolvedSymbolicRef && compiled.mode === FormulaMode.WasmFastPath
@@ -894,14 +918,12 @@ export class SpreadsheetEngine {
       const opcode = instruction >>> 24;
       const operand = instruction & 0x00ff_ffff;
       if (opcode === 3) {
-        const cellRef = compiled.symbolicRefs[operand];
-        const targetIndex = cellRef ? symbolicRefToIndex.get(cellRef) ?? 0 : 0;
+        const targetIndex = operand < compiled.symbolicRefs.length ? this.symbolicRefBindings[operand] ?? 0 : 0;
         runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
         return;
       }
       if (opcode === 4) {
-        const rangeRef = compiled.symbolicRanges[operand];
-        const targetIndex = rangeRef ? dependencies.rangeIndexByRef.get(rangeRef) ?? 0 : 0;
+        const targetIndex = operand < dependencies.symbolicRangeCount ? dependencies.symbolicRangeIndices[operand] ?? 0 : 0;
         runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
       }
     });
@@ -1167,7 +1189,12 @@ export class SpreadsheetEngine {
     }
   }
 
-  private ensureDependencyBuildCapacity(cellCapacity: number, dependencyCapacity: number): void {
+  private ensureDependencyBuildCapacity(
+    cellCapacity: number,
+    dependencyCapacity: number,
+    symbolicRefCapacity = 0,
+    symbolicRangeCapacity = 0
+  ): void {
     if (cellCapacity > this.dependencyBuildSeen.length) {
       this.dependencyBuildSeen = growUint32(this.dependencyBuildSeen, cellCapacity);
     }
@@ -1179,6 +1206,12 @@ export class SpreadsheetEngine {
     }
     if (dependencyCapacity > this.dependencyBuildRanges.length) {
       this.dependencyBuildRanges = growUint32(this.dependencyBuildRanges, dependencyCapacity);
+    }
+    if (symbolicRefCapacity > this.symbolicRefBindings.length) {
+      this.symbolicRefBindings = growUint32(this.symbolicRefBindings, symbolicRefCapacity);
+    }
+    if (symbolicRangeCapacity > this.symbolicRangeBindings.length) {
+      this.symbolicRangeBindings = growUint32(this.symbolicRangeBindings, symbolicRangeCapacity);
     }
   }
 
@@ -1542,7 +1575,7 @@ export class SpreadsheetEngine {
           return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
         });
         if (!touchesSheet) continue;
-        const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled.deps, []);
+        const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled, []);
         this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
         formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
       }
@@ -1559,7 +1592,7 @@ export class SpreadsheetEngine {
         return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
       });
       if (!touchesSheet) return;
-      const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled.deps, []);
+      const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled, []);
       this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
       formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
     });

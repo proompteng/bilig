@@ -74,6 +74,7 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 - packed formula constants at compile time so runtime metadata and WASM uploads no longer carry boxed `number[]` constant pools
 - widened WASM constant-pool views so the kernel exposes constant offsets, lengths, and packed numeric constants alongside program and range metadata for ABI-level parity
 - `FormulaRecord` in `@bilig/protocol` is back to packed runtime metadata only; compiler-only artifacts such as symbolic refs, symbolic ranges, and raw program buffers now stay inside `@bilig/formula` instead of leaking into the shared ABI contract
+- packed symbolic binding scratch in the engine so formula materialization patches `PushCell`/`PushRange` operands from reusable typed buffers instead of rebuilding per-formula `Map<string, number>` lookup tables
 
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` now routes watched cells by `cellIndex` in the hot path and only falls back to qualified-address listeners for still-unmaterialized cells, so `useCell(...)` and viewport watchers wake only when one of their watched cells changes. That keeps the grid aligned with the production requirement for localized rerenders without pushing string-address routing into every batch emission.
 
