@@ -10,6 +10,10 @@ const baseBudgets = {
   edit10kElapsedP95Ms: 120,
   edit10kRecalcMedianMs: 50,
   edit10kRecalcP95Ms: 120,
+  rangeAggregates10kElapsedP95Ms: 120,
+  rangeAggregates10kRecalcP95Ms: 100,
+  topologyEdit10kElapsedP95Ms: 80,
+  topologyEdit10kRecalcP95Ms: 80,
   renderCommit10kP95Ms: 50
 };
 const toleranceMultiplier = Number.parseFloat(process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"));
@@ -59,7 +63,8 @@ function quantile(sortedValues, percentile) {
 }
 
 function runBenchmarkScript(scriptRelativePath, arg) {
-  const result = spawnSync(tsxBin, [scriptRelativePath, String(arg)], {
+  const args = Array.isArray(arg) ? arg.map(String) : [String(arg)];
+  const result = spawnSync(tsxBin, [scriptRelativePath, ...args], {
     cwd: rootDir,
     encoding: "utf8"
   });
@@ -81,6 +86,8 @@ function sampleBenchmark(scriptRelativePath, arg, iterations) {
 
 const loadRuns = sampleBenchmark("packages/benchmarks/src/benchmark-load.ts", 100_000, 3);
 const editRuns = sampleBenchmark("packages/benchmarks/src/benchmark-edit.ts", 10_000, 5);
+const rangeRuns = sampleBenchmark("packages/benchmarks/src/benchmark-range-heavy.ts", [1_024, 10_000], 3);
+const topologyRuns = sampleBenchmark("packages/benchmarks/src/benchmark-topology-edit.ts", 10_000, 3);
 const renderRuns = sampleBenchmark("packages/benchmarks/src/benchmark-renderer.ts", 10_000, 5);
 
 const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
@@ -92,6 +99,14 @@ const loadHeapUsedAfter = summarizeNumbers(loadRuns.map((run) => run.memory.afte
 const editElapsed = summarizeNumbers(editRuns.map((run) => run.elapsedMs));
 const editRecalc = summarizeNumbers(editRuns.map((run) => run.metrics.recalcMs));
 const editRssAfter = summarizeNumbers(editRuns.map((run) => run.memory.after.rssBytes));
+
+const rangeElapsed = summarizeNumbers(rangeRuns.map((run) => run.elapsedMs));
+const rangeRecalc = summarizeNumbers(rangeRuns.map((run) => run.metrics.recalcMs));
+const rangeRssAfter = summarizeNumbers(rangeRuns.map((run) => run.memory.after.rssBytes));
+
+const topologyElapsed = summarizeNumbers(topologyRuns.map((run) => run.elapsedMs));
+const topologyRecalc = summarizeNumbers(topologyRuns.map((run) => run.metrics.recalcMs));
+const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.after.rssBytes));
 
 const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
 const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
@@ -106,6 +121,10 @@ assertBudget(
 assertBudget("10k downstream edit p95", editElapsed.p95, budgets.edit10kElapsedP95Ms);
 assertBudget("10k downstream recalc median", editRecalc.median, budgets.edit10kRecalcMedianMs);
 assertBudget("10k downstream recalc p95", editRecalc.p95, budgets.edit10kRecalcP95Ms);
+assertBudget("10k range aggregate edit p95", rangeElapsed.p95, budgets.rangeAggregates10kElapsedP95Ms);
+assertBudget("10k range aggregate recalc p95", rangeRecalc.p95, budgets.rangeAggregates10kRecalcP95Ms);
+assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
+assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
 assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
 
 console.log(
@@ -117,6 +136,8 @@ console.log(
       sampleCounts: {
         load100k: loadRuns.length,
         edit10k: editRuns.length,
+        rangeAggregates10k: rangeRuns.length,
+        topologyEdit10k: topologyRuns.length,
         renderCommit10k: renderRuns.length
       },
       results: {
@@ -135,6 +156,23 @@ console.log(
           recalcMs: editRecalc,
           rssAfterBytes: editRssAfter,
           runs: editRuns
+        },
+        rangeAggregates10k: {
+          scenario: "range-aggregates",
+          sourceCount: 1_024,
+          aggregateCount: 10_000,
+          elapsedMs: rangeElapsed,
+          recalcMs: rangeRecalc,
+          rssAfterBytes: rangeRssAfter,
+          runs: rangeRuns
+        },
+        topologyEdit10k: {
+          scenario: "topology-edit",
+          chainLength: 10_000,
+          elapsedMs: topologyElapsed,
+          recalcMs: topologyRecalc,
+          rssAfterBytes: topologyRssAfter,
+          runs: topologyRuns
         },
         renderCommit10k: {
           scenario: "render-commit",

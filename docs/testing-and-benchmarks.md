@@ -22,6 +22,8 @@
   - 100k materialized-cell load working-set delta (`heapUsed + external`) under 250MB
   - 10k-downstream edit `p95` under 120ms end to end
   - 10k-downstream recalc median under 50ms and `p95` under 120ms
+  - 10k range-aggregate edit `p95` under 120ms and aggregate recalc `p95` under 100ms
+  - 10k topology-edit rewrite `p95` under 80ms and rewrite recalc `p95` under 80ms
   - 10k-cell render commit `p95` under 50ms
   - Forgejo CI applies a bounded runner-variance tolerance so local runs stay strict while remote `main` remains stable under normal host variance.
 - Each benchmark contract scenario is executed in fresh child processes so sample distributions are not distorted by cross-scenario heap reuse or previous engine instances lingering in-process.
