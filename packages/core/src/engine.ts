@@ -131,6 +131,7 @@ export class SpreadsheetEngine {
   private readonly programArena = new Uint32Arena();
   private readonly constantArena = new Float64Arena();
   private readonly rangeListArena = new Uint32Arena();
+  private readonly rangeMemberArena = new Uint32Arena();
   private readonly reverseEdges = new Map<number, EdgeSlice>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
@@ -1002,6 +1003,7 @@ export class SpreadsheetEngine {
     this.programArena.reset();
     this.constantArena.reset();
     this.rangeListArena.reset();
+    this.rangeMemberArena.reset();
 
     const orderedFormulas = [...this.formulas.values()].filter((formula) => formula.compiled.mode === FormulaMode.WasmFastPath);
     const targets = new Uint32Array(orderedFormulas.length);
@@ -1041,15 +1043,23 @@ export class SpreadsheetEngine {
       constantOffsets,
       constantLengths
     });
-    this.wasm.uploadRanges(
-      Array.from({ length: this.ranges.size }, (_, rangeIndex) => {
-        const descriptor = this.ranges.getDescriptor(rangeIndex);
-        return {
-          rangeIndex,
-          members: descriptor.refCount > 0 ? this.ranges.getMembers(rangeIndex) : new Uint32Array()
-        };
-      })
-    );
+
+    const rangeCapacity = Math.max(this.ranges.size, 1);
+    const rangeOffsets = new Uint32Array(rangeCapacity);
+    const rangeLengths = new Uint32Array(rangeCapacity);
+    for (let rangeIndex = 0; rangeIndex < this.ranges.size; rangeIndex += 1) {
+      const descriptor = this.ranges.getDescriptor(rangeIndex);
+      const members = descriptor.refCount > 0 ? this.ranges.getMembers(rangeIndex) : new Uint32Array();
+      const rangeSlice = this.rangeMemberArena.append(members);
+      rangeOffsets[rangeIndex] = rangeSlice.offset;
+      rangeLengths[rangeIndex] = rangeSlice.length;
+    }
+
+    this.wasm.uploadRanges({
+      members: this.rangeMemberArena.view(),
+      offsets: rangeOffsets,
+      lengths: rangeLengths
+    });
   }
 
   private scheduleWasmProgramSync(): void {

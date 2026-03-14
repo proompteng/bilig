@@ -13,9 +13,10 @@ export interface WasmFormulaUploadLayout {
   constantLengths: Uint32Array;
 }
 
-export interface WasmRangeBinding {
-  rangeIndex: number;
+export interface WasmRangeUploadLayout {
   members: Uint32Array;
+  offsets: Uint32Array;
+  lengths: Uint32Array;
 }
 
 export class WasmKernelFacade {
@@ -66,29 +67,19 @@ export class WasmKernelFacade {
     this.kernel.uploadConstants(layout.constants, layout.constantOffsets, layout.constantLengths);
   }
 
-  uploadRanges(ranges: WasmRangeBinding[]): void {
+  uploadRanges(layout: WasmRangeUploadLayout): void {
     if (!this.kernel) return;
-    const rangeCapacity = Math.max(ranges.length, 1);
-    const memberOffsets = new Uint32Array(rangeCapacity);
-    const memberLengths = new Uint32Array(rangeCapacity);
-    const members: number[] = [];
-    let cursor = 0;
-
-    ranges.forEach((range) => {
-      memberOffsets[range.rangeIndex] = cursor;
-      memberLengths[range.rangeIndex] = range.members.length;
-      members.push(...range.members);
-      cursor += range.members.length;
-    });
+    const rangeCapacity = Math.max(layout.offsets.length, 1);
+    const memberCapacity = Math.max(layout.members.length, 1);
 
     this.ensureCapacity(
       this.kernel.getCellCapacity(),
       this.kernel.getFormulaCapacity(),
       this.kernel.getConstantCapacity(),
       rangeCapacity,
-      Math.max(members.length, 1)
+      memberCapacity
     );
-    this.kernel.uploadRangeMembers(Uint32Array.from(members), memberOffsets, memberLengths);
+    this.kernel.uploadRangeMembers(layout.members, layout.offsets, layout.lengths);
   }
 
   syncFromStore(store: CellStore, changedCellIndices?: readonly number[] | Uint32Array): void {
@@ -158,5 +149,41 @@ export class WasmKernelFacade {
         store.versions[cellIndex] = (store.versions[cellIndex] ?? 0) + 1;
       }
     });
+  }
+
+  get tags(): Uint8Array {
+    return this.kernel?.readTags() ?? new Uint8Array();
+  }
+
+  get numbers(): Float64Array {
+    return this.kernel?.readNumbers() ?? new Float64Array();
+  }
+
+  get stringIds(): Uint32Array {
+    return this.kernel?.readStringIds() ?? new Uint32Array();
+  }
+
+  get errors(): Uint16Array {
+    return this.kernel?.readErrors() ?? new Uint16Array();
+  }
+
+  get programOffsets(): Uint32Array {
+    return this.kernel?.readProgramOffsets() ?? new Uint32Array();
+  }
+
+  get programLengths(): Uint32Array {
+    return this.kernel?.readProgramLengths() ?? new Uint32Array();
+  }
+
+  get rangeOffsets(): Uint32Array {
+    return this.kernel?.readRangeOffsets() ?? new Uint32Array();
+  }
+
+  get rangeLengths(): Uint32Array {
+    return this.kernel?.readRangeLengths() ?? new Uint32Array();
+  }
+
+  get rangeMembers(): Uint32Array {
+    return this.kernel?.readRangeMembers() ?? new Uint32Array();
   }
 }
