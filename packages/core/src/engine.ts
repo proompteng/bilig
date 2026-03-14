@@ -10,6 +10,7 @@ import {
   type ExplainCellSnapshot,
   type LiteralInput,
   type RecalcMetrics,
+  type SelectionState,
   type WorkbookSnapshot
 } from "@bilig/protocol";
 import {
@@ -138,8 +139,10 @@ export class SpreadsheetEngine {
   private reverseCellEdges: Array<EdgeSlice | undefined> = [];
   private reverseRangeEdges: Array<EdgeSlice | undefined> = [];
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
+  private readonly selectionListeners = new Set<() => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
+  private selection: SelectionState = { sheetName: "Sheet1", address: "A1" };
   private pendingKernelSync: U32 = new Uint32Array(128);
   private wasmBatch: U32 = new Uint32Array(128);
   private mutationRoots: U32 = new Uint32Array(128);
@@ -216,6 +219,25 @@ export class SpreadsheetEngine {
     return () => {
       this.batchListeners.delete(listener);
     };
+  }
+
+  subscribeSelection(listener: () => void): () => void {
+    this.selectionListeners.add(listener);
+    return () => {
+      this.selectionListeners.delete(listener);
+    };
+  }
+
+  getSelectionState(): SelectionState {
+    return this.selection;
+  }
+
+  setSelection(sheetName: string, address: string | null): void {
+    if (this.selection.sheetName === sheetName && this.selection.address === address) {
+      return;
+    }
+    this.selection = { sheetName, address };
+    this.selectionListeners.forEach((listener) => listener());
   }
 
   getLastMetrics(): RecalcMetrics {
@@ -1487,6 +1509,10 @@ export class SpreadsheetEngine {
     });
 
     this.workbook.deleteSheet(sheetName);
+    if (this.selection.sheetName === sheetName) {
+      const nextSheet = [...this.workbook.sheetsByName.values()].sort((left, right) => left.order - right.order)[0];
+      this.setSelection(nextSheet?.name ?? sheetName, "A1");
+    }
     formulaChangedCount = this.rebindFormulasForSheet(
       sheetName,
       formulaChangedCount,
@@ -1723,6 +1749,7 @@ export class SpreadsheetEngine {
     this.edgeArena.reset();
     this.entityVersions.clear();
     this.sheetDeleteVersions.clear();
+    this.selection = { sheetName: "Sheet1", address: "A1" };
     this.lastMetrics = {
       batchId: 0,
       changedInputCount: 0,

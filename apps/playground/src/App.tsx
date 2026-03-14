@@ -35,9 +35,10 @@ export function App() {
   const engine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "playground" }), []);
   const mirrorEngine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "replica-beta" }), []);
   const rendererRoot = useMemo(() => createWorkbookRendererRoot(engine), [engine]);
-  const selection = useSelection("Sheet1", "A1");
-  const selectedCell = useCell(engine, selection.sheetName, selection.address);
-  const mirroredSelectedCell = useCell(mirrorEngine, selection.sheetName, selection.address);
+  const selection = useSelection(engine);
+  const selectedAddr = selection.address ?? "A1";
+  const selectedCell = useCell(engine, selection.sheetName, selectedAddr);
+  const mirroredSelectedCell = useCell(mirrorEngine, selection.sheetName, selectedAddr);
   const metrics = useMetrics(engine);
   const mirrorMetrics = useMetrics(mirrorEngine);
   const [editorValue, setEditorValue] = useState("");
@@ -247,7 +248,7 @@ export function App() {
     }
   }, [selection, sheetNames]);
 
-  const dependencySnapshot = engine.explainCell(selection.sheetName, selection.address);
+  const dependencySnapshot = engine.explainCell(selection.sheetName, selectedAddr);
   const resolvedValue =
     selectedCell.value.tag === 1
       ? String(selectedCell.value.value)
@@ -272,23 +273,23 @@ export function App() {
   const commitEditor = () => {
     const normalized = editorValue.trim();
     if (normalized.startsWith("=")) {
-      engine.setCellFormula(selection.sheetName, selection.address, normalized.slice(1));
+      engine.setCellFormula(selection.sheetName, selectedAddr, normalized.slice(1));
       return;
     }
     if (normalized === "") {
-      engine.clearCell(selection.sheetName, selection.address);
+      engine.clearCell(selection.sheetName, selectedAddr);
       return;
     }
     if (normalized === "TRUE" || normalized === "FALSE") {
-      engine.setCellValue(selection.sheetName, selection.address, normalized === "TRUE");
+      engine.setCellValue(selection.sheetName, selectedAddr, normalized === "TRUE");
       return;
     }
     const numeric = Number(normalized);
     if (!Number.isNaN(numeric) && /^-?\d+(\.\d+)?$/.test(normalized)) {
-      engine.setCellValue(selection.sheetName, selection.address, numeric);
+      engine.setCellValue(selection.sheetName, selectedAddr, numeric);
       return;
     }
-    engine.setCellValue(selection.sheetName, selection.address, normalized);
+    engine.setCellValue(selection.sheetName, selectedAddr, normalized);
   };
 
   const resetWorkspace = () => {
@@ -315,11 +316,11 @@ export function App() {
       </header>
 
       <FormulaBar
-        label={`${selection.sheetName}!${selection.address}`}
+        label={`${selection.sheetName}!${selectedAddr}`}
         value={editorValue}
         onChange={setEditorValue}
         onClear={() => {
-          engine.clearCell(selection.sheetName, selection.address);
+          engine.clearCell(selection.sheetName, selectedAddr);
           setEditorValue("");
         }}
         onCommit={commitEditor}
@@ -331,18 +332,18 @@ export function App() {
           sheetNames={sheetNames}
           workbookName={engine.workbook.workbookName}
           sheetName={selection.sheetName}
-          selectedAddr={selection.address}
-          onSelectSheet={(sheetName) => selection.select(sheetName, selection.address)}
+          selectedAddr={selectedAddr}
+          onSelectSheet={(sheetName) => selection.select(sheetName, selectedAddr)}
           onSelect={(addr) => selection.select(selection.sheetName, addr)}
         />
         <aside className="sidebar">
           <CellEditorOverlay
-            label={`${selection.sheetName}!${selection.address}`}
+            label={`${selection.sheetName}!${selectedAddr}`}
             resolvedValue={resolvedValue}
             value={editorValue}
             onChange={setEditorValue}
             onClear={() => {
-              engine.clearCell(selection.sheetName, selection.address);
+              engine.clearCell(selection.sheetName, selectedAddr);
               setEditorValue("");
             }}
             onCommit={commitEditor}
@@ -357,7 +358,7 @@ export function App() {
             remoteMetrics={mirrorMetrics}
             remoteReplicaId={mirrorEngine.replica.replicaId}
             remoteValue={mirroredValue}
-            selectedLabel={`${selection.sheetName}!${selection.address}`}
+            selectedLabel={`${selection.sheetName}!${selectedAddr}`}
             syncPaused={syncPaused}
           />
           <DependencyInspector snapshot={dependencySnapshot} />

@@ -456,4 +456,24 @@ describe("SpreadsheetEngine", () => {
 
     unsubscribe();
   });
+
+  it("tracks selection state inside the engine and notifies subscribers", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+
+    const seen: string[] = [];
+    const unsubscribe = engine.subscribeSelection(() => {
+      const snapshot = engine.getSelectionState();
+      seen.push(`${snapshot.sheetName}!${snapshot.address ?? "null"}`);
+    });
+
+    engine.setSelection("Sheet2", "B3");
+    engine.setSelection("Sheet2", "B3");
+    engine.setSelection("Sheet1", "A1");
+
+    expect(engine.getSelectionState()).toEqual({ sheetName: "Sheet1", address: "A1" });
+    expect(seen).toEqual(["Sheet2!B3", "Sheet1!A1"]);
+
+    unsubscribe();
+  });
 });

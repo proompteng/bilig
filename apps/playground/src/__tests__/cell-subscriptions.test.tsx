@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
-import { useCell } from "@bilig/grid";
+import { useCell, useSelection } from "@bilig/grid";
 
 describe("playground cell subscriptions", () => {
   it("rerenders only the subscribed cell when an unrelated cell changes", async () => {
@@ -51,6 +51,39 @@ describe("playground cell subscriptions", () => {
 
     expect(renders.get("A1")).toBe(2);
     expect(renders.get("B1")).toBe(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it("rerenders selection subscribers when the engine selection changes", async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const engine = new SpreadsheetEngine({ workbookName: "selection-test" });
+    await engine.ready();
+
+    const seen: string[] = [];
+
+    function Probe() {
+      const selection = useSelection(engine);
+      seen.push(`${selection.sheetName}!${selection.address ?? "null"}`);
+      return null;
+    }
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<Probe />);
+    });
+
+    await act(async () => {
+      engine.setSelection("Sheet9", "C7");
+    });
+
+    expect(seen).toEqual(["Sheet1!A1", "Sheet9!C7"]);
 
     await act(async () => {
       root.unmount();

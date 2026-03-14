@@ -1,16 +1,19 @@
-import { useCallback, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+import type { SpreadsheetEngine } from "@bilig/core";
 
-export function useSelection(initialSheet = "Sheet1", initialAddr = "A1") {
-  const [sheetName, setSheetName] = useState(initialSheet);
-  const [address, setAddress] = useState(initialAddr);
-  const select = useCallback((nextSheetName: string, nextAddress: string) => {
-    setSheetName(nextSheetName);
-    setAddress(nextAddress);
-  }, []);
+export function useSelection(engine: SpreadsheetEngine) {
+  const selection = useSyncExternalStore(
+    (listener) => engine.subscribeSelection(listener),
+    () => engine.getSelectionState(),
+    () => engine.getSelectionState()
+  );
+  const select = useCallback((nextSheetName: string, nextAddress: string | null) => {
+    engine.setSelection(nextSheetName, nextAddress);
+  }, [engine]);
 
   return {
-    sheetName,
-    address,
+    sheetName: selection.sheetName,
+    address: selection.address,
     select
   };
 }
