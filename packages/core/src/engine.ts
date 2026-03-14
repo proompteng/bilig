@@ -89,6 +89,8 @@ interface RuntimeFormula {
   rangeListLength: number;
 }
 
+type U32 = Uint32Array<ArrayBufferLike>;
+
 interface MaterializedCell {
   sheetName: string;
   address: string;
@@ -136,6 +138,11 @@ export class SpreadsheetEngine {
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
+  private pendingKernelSync: U32 = new Uint32Array(128);
+  private wasmBatch: U32 = new Uint32Array(128);
+  private changedUnionEpoch = 1;
+  private changedUnionSeen: U32 = new Uint32Array(128);
+  private changedUnion: U32 = new Uint32Array(128);
   private batchMutationDepth = 0;
   private wasmProgramSyncPending = false;
   private lastMetrics: RecalcMetrics = {
@@ -928,25 +935,32 @@ export class SpreadsheetEngine {
       this.ranges.size
     );
     const ordered = scheduled.orderedFormulaCellIndices;
+    const orderedCount = scheduled.orderedFormulaCount;
 
-    const pendingKernelSync = [...kernelSyncRoots];
+    this.ensureRecalcScratchCapacity(Math.max(this.workbook.cellStore.size + 1, changedRoots.length + orderedCount + 1));
 
-    const flushWasmBatch = (batch: number[]): number => {
-      if (batch.length === 0) {
+    let pendingKernelSyncCount = 0;
+    for (let index = 0; index < kernelSyncRoots.length; index += 1) {
+      this.pendingKernelSync[pendingKernelSyncCount] = kernelSyncRoots[index]!;
+      pendingKernelSyncCount += 1;
+    }
+
+    const flushWasmBatch = (batchCount: number): number => {
+      if (batchCount === 0) {
         return 0;
       }
-      this.wasm.syncFromStore(this.workbook.cellStore, pendingKernelSync);
-      pendingKernelSync.length = 0;
-      const batchIndices = Uint32Array.from(batch);
+      this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
+      pendingKernelSyncCount = 0;
+      const batchIndices = this.wasmBatch.subarray(0, batchCount);
       this.wasm.evalBatch(batchIndices);
       this.wasm.syncToStore(this.workbook.cellStore, batchIndices);
-      return batch.length;
+      return batchCount;
     };
 
     let wasmCount = 0;
     let jsCount = 0;
-    let wasmBatch: number[] = [];
-    for (let index = 0; index < ordered.length; index += 1) {
+    let wasmBatchCount = 0;
+    for (let index = 0; index < orderedCount; index += 1) {
       const cellIndex = ordered[index]!;
       const formula = this.formulas.get(cellIndex);
       if (!formula) {
@@ -956,28 +970,66 @@ export class SpreadsheetEngine {
         continue;
       }
       if (formula.compiled.mode === FormulaMode.WasmFastPath && this.wasm.ready) {
-        wasmBatch.push(cellIndex);
+        this.wasmBatch[wasmBatchCount] = cellIndex;
+        wasmBatchCount += 1;
         continue;
       }
-      wasmCount += flushWasmBatch(wasmBatch);
-      wasmBatch = [];
+      wasmCount += flushWasmBatch(wasmBatchCount);
+      wasmBatchCount = 0;
       jsCount += 1;
       this.evaluateFormulaJs(cellIndex, formula);
-      pendingKernelSync.push(cellIndex);
+      this.pendingKernelSync[pendingKernelSyncCount] = cellIndex;
+      pendingKernelSyncCount += 1;
     }
 
-    wasmCount += flushWasmBatch(wasmBatch);
-    if (pendingKernelSync.length > 0) {
-      this.wasm.syncFromStore(this.workbook.cellStore, pendingKernelSync);
+    wasmCount += flushWasmBatch(wasmBatchCount);
+    if (pendingKernelSyncCount > 0) {
+      this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
     }
 
-    this.lastMetrics.dirtyFormulaCount = ordered.length;
+    this.lastMetrics.dirtyFormulaCount = orderedCount;
     this.lastMetrics.jsFormulaCount = jsCount;
     this.lastMetrics.wasmFormulaCount = wasmCount;
     this.lastMetrics.rangeNodeVisits = scheduled.rangeNodeVisits;
     this.lastMetrics.recalcMs = performance.now() - started;
 
-    return Uint32Array.from([...new Set([...changedRoots, ...ordered])]);
+    this.changedUnionEpoch += 1;
+    let changedCount = 0;
+    for (let index = 0; index < changedRoots.length; index += 1) {
+      const cellIndex = changedRoots[index]!;
+      if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
+        continue;
+      }
+      this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
+      this.changedUnion[changedCount] = cellIndex;
+      changedCount += 1;
+    }
+    for (let index = 0; index < orderedCount; index += 1) {
+      const cellIndex = ordered[index]!;
+      if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
+        continue;
+      }
+      this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
+      this.changedUnion[changedCount] = cellIndex;
+      changedCount += 1;
+    }
+
+    return this.changedUnion.subarray(0, changedCount);
+  }
+
+  private ensureRecalcScratchCapacity(size: number): void {
+    if (size > this.pendingKernelSync.length) {
+      this.pendingKernelSync = growUint32(this.pendingKernelSync, size);
+    }
+    if (size > this.wasmBatch.length) {
+      this.wasmBatch = growUint32(this.wasmBatch, size);
+    }
+    if (size > this.changedUnion.length) {
+      this.changedUnion = growUint32(this.changedUnion, size);
+    }
+    if (size > this.changedUnionSeen.length) {
+      this.changedUnionSeen = growUint32(this.changedUnionSeen, size);
+    }
   }
 
   private evaluateFormulaJs(cellIndex: number, formula: RuntimeFormula): void {
@@ -1386,6 +1438,16 @@ export class SpreadsheetEngine {
     this.wasmProgramSyncPending = false;
     this.syncWasmPrograms();
   }
+}
+
+function growUint32(buffer: U32, required: number): U32 {
+  let capacity = buffer.length;
+  while (capacity < required) {
+    capacity *= 2;
+  }
+  const next = new Uint32Array(capacity);
+  next.set(buffer);
+  return next as U32;
 }
 
 export const selectors = {

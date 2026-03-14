@@ -9,6 +9,7 @@ export interface SchedulerReverseGraph {
 
 export interface SchedulerResult {
   orderedFormulaCellIndices: U32;
+  orderedFormulaCount: number;
   rangeNodeVisits: number;
 }
 
@@ -97,7 +98,8 @@ export class RecalcScheduler {
 
     if (dirtyLength === 0) {
       return {
-        orderedFormulaCellIndices: new Uint32Array(),
+        orderedFormulaCellIndices: this.orderedDirty,
+        orderedFormulaCount: 0,
         rangeNodeVisits
       };
     }
@@ -128,7 +130,8 @@ export class RecalcScheduler {
     }
 
     return {
-      orderedFormulaCellIndices: this.orderedDirty.slice(0, dirtyLength) as U32,
+      orderedFormulaCellIndices: this.orderedDirty,
+      orderedFormulaCount: dirtyLength,
       rangeNodeVisits
     };
   }
