@@ -372,6 +372,18 @@ export function getProgramLengthsPtr(): usize {
   return changetype<usize>(programLengths.dataStart);
 }
 
+export function getConstantOffsetsPtr(): usize {
+  return changetype<usize>(constantOffsets.dataStart);
+}
+
+export function getConstantLengthsPtr(): usize {
+  return changetype<usize>(constantLengths.dataStart);
+}
+
+export function getConstantArenaPtr(): usize {
+  return changetype<usize>(constantArena.dataStart);
+}
+
 export function getRangeOffsetsPtr(): usize {
   return changetype<usize>(rangeOffsets.dataStart);
 }

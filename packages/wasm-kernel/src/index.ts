@@ -28,6 +28,9 @@ interface RawKernelExports {
   getErrorsPtr(): number;
   getProgramOffsetsPtr(): number;
   getProgramLengthsPtr(): number;
+  getConstantOffsetsPtr(): number;
+  getConstantLengthsPtr(): number;
+  getConstantArenaPtr(): number;
   getRangeOffsetsPtr(): number;
   getRangeLengthsPtr(): number;
   getRangeMembersPtr(): number;
@@ -69,6 +72,9 @@ export interface SpreadsheetKernel {
   readErrors(): Uint16Array;
   readProgramOffsets(): Uint32Array;
   readProgramLengths(): Uint32Array;
+  readConstantOffsets(): Uint32Array;
+  readConstantLengths(): Uint32Array;
+  readConstants(): Float64Array;
   readRangeOffsets(): Uint32Array;
   readRangeLengths(): Uint32Array;
   readRangeMembers(): Uint32Array;
@@ -237,6 +243,9 @@ class KernelHandle implements SpreadsheetKernel {
   private errors = new Uint16Array();
   private programOffsets = new Uint32Array();
   private programLengths = new Uint32Array();
+  private constantOffsets = new Uint32Array();
+  private constantLengths = new Uint32Array();
+  private constants = new Float64Array();
   private rangeOffsets = new Uint32Array();
   private rangeLengths = new Uint32Array();
   private rangeMembers = new Uint32Array();
@@ -330,6 +339,18 @@ class KernelHandle implements SpreadsheetKernel {
     return this.programLengths;
   }
 
+  readConstantOffsets(): Uint32Array {
+    return this.constantOffsets;
+  }
+
+  readConstantLengths(): Uint32Array {
+    return this.constantLengths;
+  }
+
+  readConstants(): Float64Array {
+    return this.constants;
+  }
+
   readRangeOffsets(): Uint32Array {
     return this.rangeOffsets;
   }
@@ -370,6 +391,9 @@ class KernelHandle implements SpreadsheetKernel {
     this.errors = new Uint16Array(memory, this.raw.getErrorsPtr(), this.raw.getCellCapacity());
     this.programOffsets = new Uint32Array(memory, this.raw.getProgramOffsetsPtr(), this.raw.getFormulaCapacity());
     this.programLengths = new Uint32Array(memory, this.raw.getProgramLengthsPtr(), this.raw.getFormulaCapacity());
+    this.constantOffsets = new Uint32Array(memory, this.raw.getConstantOffsetsPtr(), this.raw.getFormulaCapacity());
+    this.constantLengths = new Uint32Array(memory, this.raw.getConstantLengthsPtr(), this.raw.getFormulaCapacity());
+    this.constants = new Float64Array(memory, this.raw.getConstantArenaPtr(), this.raw.getConstantCapacity());
     this.rangeOffsets = new Uint32Array(memory, this.raw.getRangeOffsetsPtr(), this.raw.getRangeCapacity());
     this.rangeLengths = new Uint32Array(memory, this.raw.getRangeLengthsPtr(), this.raw.getRangeCapacity());
     this.rangeMembers = new Uint32Array(memory, this.raw.getRangeMembersPtr(), this.raw.getMemberCapacity());

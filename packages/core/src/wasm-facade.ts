@@ -173,6 +173,18 @@ export class WasmKernelFacade {
     return this.kernel?.readProgramLengths() ?? new Uint32Array();
   }
 
+  get constantOffsets(): Uint32Array {
+    return this.kernel?.readConstantOffsets() ?? new Uint32Array();
+  }
+
+  get constantLengths(): Uint32Array {
+    return this.kernel?.readConstantLengths() ?? new Uint32Array();
+  }
+
+  get constants(): Float64Array {
+    return this.kernel?.readConstants() ?? new Float64Array();
+  }
+
   get rangeOffsets(): Uint32Array {
     return this.kernel?.readRangeOffsets() ?? new Uint32Array();
   }

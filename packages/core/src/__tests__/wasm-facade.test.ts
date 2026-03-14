@@ -26,6 +26,8 @@ describe("WasmKernelFacade", () => {
 
     expect(facade.programOffsets[0]).toBe(0);
     expect(facade.programLengths[0]).toBe(3);
+    expect(facade.constantOffsets[0]).toBe(0);
+    expect(facade.constantLengths[0]).toBe(0);
     expect(facade.rangeOffsets[0]).toBe(0);
     expect(facade.rangeLengths[0]).toBe(2);
     expect(Array.from(facade.rangeMembers.slice(0, 2))).toEqual([0, 1]);
@@ -59,5 +61,8 @@ describe("WasmKernelFacade", () => {
 
     expect(store.numbers[targetIndex]).toBe(20);
     expect(store.versions[targetIndex]).toBe(1);
+    expect(facade.constantOffsets[0]).toBe(0);
+    expect(facade.constantLengths[0]).toBe(1);
+    expect(facade.constants[0]).toBe(2);
   });
 });

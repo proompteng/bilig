@@ -20,6 +20,9 @@ describe("wasm kernel", () => {
     kernel.uploadConstants(new Float64Array([2]), new Uint32Array([0]), new Uint32Array([1]));
     kernel.evalBatch(new Uint32Array([1]));
     expect(kernel.readNumbers()[1]).toBe(20);
+    expect(kernel.readConstantOffsets()[0]).toBe(0);
+    expect(kernel.readConstantLengths()[0]).toBe(1);
+    expect(kernel.readConstants()[0]).toBe(2);
   });
 
   it("evaluates aggregate and numeric builtins", async () => {
