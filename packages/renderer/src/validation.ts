@@ -16,6 +16,7 @@ export function validateDescriptorTree(root: WorkbookDescriptor | null): void {
 
   root.children.forEach((sheet) => {
     assert(sheet.kind === "Sheet", "Only <Sheet> nodes can exist under <Workbook>.");
+    assert(Boolean(sheet.props.name), "<Sheet> requires a name prop.");
     assert(!sheetNames.has(sheet.props.name), `Duplicate sheet name '${sheet.props.name}'.`);
     sheetNames.add(sheet.props.name);
 

@@ -9,9 +9,7 @@ function createContainer(engine: SpreadsheetEngine): WorkbookContainer {
     root: null,
     pendingOps: [],
     shouldSyncSheetOrders: false,
-    lastError: null,
-    committedSnapshot: null,
-    pendingSnapshot: null
+    lastError: null
   };
 }
 
@@ -86,10 +84,6 @@ describe("workbook host config", () => {
 
     workbookHostConfig.prepareForCommit(container);
     workbookHostConfig.appendChildToContainer(container, workbook as never);
-    container.pendingSnapshot = {
-      workbookName: "Book",
-      sheets: [{ name: "Sheet1", order: 0, cells: ["A1"] }]
-    };
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: 1, value: 10 });
 
@@ -107,10 +101,6 @@ describe("workbook host config", () => {
       { name: "Sheet1" } satisfies SheetProps,
       { name: "Renamed" } satisfies SheetProps
     );
-    container.pendingSnapshot = {
-      workbookName: "Book",
-      sheets: [{ name: "Renamed", order: 0, cells: ["A1", "B2"] }]
-    };
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.getCell("Renamed", "B2").format).toBe("currency-usd");
     expect(engine.getCellValue("Renamed", "B2")).toEqual({ tag: 1, value: 30 });
@@ -118,31 +108,16 @@ describe("workbook host config", () => {
     const secondSheet = workbookHostConfig.createInstance("Sheet", { name: "Sheet2" } satisfies SheetProps, container);
     workbookHostConfig.prepareForCommit(container);
     workbookHostConfig.insertBefore(workbook, secondSheet, sheet);
-    container.pendingSnapshot = {
-      workbookName: "Book",
-      sheets: [
-        { name: "Sheet2", order: 0, cells: [] },
-        { name: "Renamed", order: 1, cells: ["A1", "B2"] }
-      ]
-    };
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.exportSnapshot().sheets.map((entry) => `${entry.order}:${entry.name}`)).toEqual(["0:Sheet2", "1:Renamed"]);
 
     workbookHostConfig.prepareForCommit(container);
     workbookHostConfig.removeChild(sheet, cell);
-    container.pendingSnapshot = {
-      workbookName: "Book",
-      sheets: [
-        { name: "Sheet2", order: 0, cells: [] },
-        { name: "Renamed", order: 1, cells: ["B2"] }
-      ]
-    };
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.getCellValue("Renamed", "A1")).toEqual({ tag: 0 });
 
     workbookHostConfig.prepareForCommit(container);
     workbookHostConfig.removeChildFromContainer(container, workbook as never);
-    container.pendingSnapshot = null;
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.exportSnapshot().sheets).toEqual([]);
 
@@ -170,10 +145,6 @@ describe("workbook host config", () => {
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      container.pendingSnapshot = {
-        workbookName: "BadBook",
-        sheets: [{ name: "Sheet1", order: 0, cells: ["A1"] }]
-      };
       workbookHostConfig.resetAfterCommit(container);
       expect(container.lastError?.message).toContain("<Cell> cannot specify both value and formula.");
     } finally {

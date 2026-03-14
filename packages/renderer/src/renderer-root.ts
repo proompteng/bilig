@@ -1,7 +1,6 @@
 import React, { type ReactNode } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
 import type { WorkbookContainer } from "./host-config.js";
-import type { DescriptorSnapshot } from "./commit-log.js";
 import { createFiberRoot, updateFiberRoot } from "./compat.js";
 
 export interface WorkbookRendererRoot {
@@ -49,65 +48,7 @@ function isRendererElement(node: ReactNode): node is React.ReactElement<Renderer
   return React.isValidElement<RendererElementProps>(node);
 }
 
-function buildCellAddresses(children: ReactNode): string[] {
-  const cells: string[] = [];
-  for (const child of toRenderableChildren(children)) {
-    if (typeof child === "string" || typeof child === "number") {
-      throw new Error("Workbook DSL does not support text nodes.");
-    }
-    if (!isRendererElement(child)) {
-      continue;
-    }
-    const kind = kindOfNode(child);
-    if (kind === "wrapper") {
-      cells.push(...buildCellAddresses(child.props.children));
-      continue;
-    }
-    if (kind !== "Cell") {
-      throw new Error("Only <Cell> can be nested inside <Sheet>.");
-    }
-    const addr = child.props.addr;
-    if (!addr) {
-      throw new Error("<Cell> requires an addr prop.");
-    }
-    if (child.props.value !== undefined && child.props.formula !== undefined) {
-      throw new Error("<Cell> cannot specify both value and formula.");
-    }
-    cells.push(addr);
-  }
-  return cells;
-}
-
-function buildSheetSnapshots(children: ReactNode): DescriptorSnapshot["sheets"] {
-  const sheets: DescriptorSnapshot["sheets"] = [];
-  for (const child of toRenderableChildren(children)) {
-    if (typeof child === "string" || typeof child === "number") {
-      throw new Error("Workbook DSL does not support text nodes.");
-    }
-    if (!isRendererElement(child)) {
-      continue;
-    }
-    const kind = kindOfNode(child);
-    if (kind === "wrapper") {
-      sheets.push(...buildSheetSnapshots(child.props.children));
-      continue;
-    }
-    if (kind !== "Sheet") {
-      throw new Error("Only <Sheet> nodes can exist under <Workbook>.");
-    }
-    if (!child.props.name) {
-      throw new Error("<Sheet> requires a name prop.");
-    }
-    sheets.push({
-      name: child.props.name,
-      order: sheets.length,
-      cells: buildCellAddresses(child.props.children)
-    });
-  }
-  return sheets;
-}
-
-function buildDescriptorSnapshot(node: ReactNode): DescriptorSnapshot | null {
+function validateSheetChildren(node: ReactNode): void {
   for (const child of toRenderableChildren(node)) {
     if (typeof child === "string" || typeof child === "number") {
       throw new Error("Workbook DSL does not support text nodes.");
@@ -117,21 +58,63 @@ function buildDescriptorSnapshot(node: ReactNode): DescriptorSnapshot | null {
     }
     const kind = kindOfNode(child);
     if (kind === "wrapper") {
-      const snapshot = buildDescriptorSnapshot(child.props.children);
-      if (snapshot) {
-        return snapshot;
-      }
+      validateSheetChildren(child.props.children);
       continue;
+    }
+    if (kind !== "Cell") {
+      throw new Error("Only <Cell> can be nested inside <Sheet>.");
+    }
+    if (!child.props.addr) {
+      throw new Error("<Cell> requires an addr prop.");
+    }
+    if (child.props.value !== undefined && child.props.formula !== undefined) {
+      throw new Error("<Cell> cannot specify both value and formula.");
+    }
+  }
+}
+
+function validateWorkbookChildren(node: ReactNode): void {
+  for (const child of toRenderableChildren(node)) {
+    if (typeof child === "string" || typeof child === "number") {
+      throw new Error("Workbook DSL does not support text nodes.");
+    }
+    if (!isRendererElement(child)) {
+      continue;
+    }
+    const kind = kindOfNode(child);
+    if (kind === "wrapper") {
+      validateWorkbookChildren(child.props.children);
+      continue;
+    }
+    if (kind !== "Sheet") {
+      throw new Error("Only <Sheet> nodes can exist under <Workbook>.");
+    }
+    if (!child.props.name) {
+      throw new Error("<Sheet> requires a name prop.");
+    }
+    validateSheetChildren(child.props.children);
+  }
+}
+
+function validateRootElement(node: ReactNode): void {
+  for (const child of toRenderableChildren(node)) {
+    if (typeof child === "string" || typeof child === "number") {
+      throw new Error("Workbook DSL does not support text nodes.");
+    }
+    if (!isRendererElement(child)) {
+      continue;
+    }
+    const kind = kindOfNode(child);
+    if (kind === "wrapper") {
+      validateRootElement(child.props.children);
+      return;
     }
     if (kind !== "Workbook") {
       throw new Error("Root descriptor must be a Workbook.");
     }
-    return {
-      workbookName: child.props.name ?? "Workbook",
-      sheets: buildSheetSnapshots(child.props.children)
-    };
+    validateWorkbookChildren(child.props.children);
+    return;
   }
-  return null;
 }
 
 export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookRendererRoot {
@@ -140,9 +123,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
     root: null,
     pendingOps: [],
     shouldSyncSheetOrders: false,
-    lastError: null,
-    committedSnapshot: null,
-    pendingSnapshot: null
+    lastError: null
   };
 
   const fiberRoot = createFiberRoot(container);
@@ -151,9 +132,8 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
     render(element: ReactNode) {
       container.lastError = null;
       try {
-        container.pendingSnapshot = buildDescriptorSnapshot(element);
+        validateRootElement(element);
       } catch (error) {
-        container.pendingSnapshot = null;
         return Promise.reject(error);
       }
       return new Promise<void>((resolve, reject) => {
@@ -177,7 +157,6 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
     },
     unmount() {
       container.lastError = null;
-      container.pendingSnapshot = null;
       return new Promise<void>((resolve, reject) => {
         const finish = () => {
           const error = container.lastError;

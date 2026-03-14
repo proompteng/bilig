@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   collectDeleteOps,
-  collectMissingDeleteOps,
   collectMountOps,
   collectSheetOrderOps,
-  normalizeCommitOps,
-  snapshotDescriptorTree,
-  type DescriptorSnapshot
+  normalizeCommitOps
 } from "../commit-log.js";
 import type { CellDescriptor, SheetDescriptor, WorkbookDescriptor } from "../descriptors.js";
 
@@ -48,7 +45,7 @@ function workbook(name: string, children: SheetDescriptor[]): WorkbookDescriptor
 }
 
 describe("renderer commit log", () => {
-  it("collects mount, delete, snapshot, and order ops for workbook trees", () => {
+  it("collects mount, delete, and order ops for workbook trees", () => {
     const root = workbook("book", [
       sheet("Sheet1", [
         cell({ addr: "A1", value: 10, format: "currency-usd" }),
@@ -74,40 +71,13 @@ describe("renderer commit log", () => {
     expect(collectDeleteOps(root.children[0]!.children[0]!)).toEqual([
       { kind: "deleteCell", sheetName: "Sheet1", addr: "A1" }
     ]);
-
-    expect(snapshotDescriptorTree(root)).toEqual({
-      workbookName: "book",
-      sheets: [
-        { name: "Sheet1", order: 0, cells: ["A1", "B1"] },
-        { name: "Sheet2", order: 1, cells: ["C3"] }
-      ]
-    });
     expect(collectSheetOrderOps(root)).toEqual([
       { kind: "upsertSheet", name: "Sheet1", order: 0 },
       { kind: "upsertSheet", name: "Sheet2", order: 1 }
     ]);
   });
 
-  it("normalizes commit streams and detects missing deletes", () => {
-    const previous: DescriptorSnapshot = {
-      workbookName: "book",
-      sheets: [
-        { name: "Sheet1", order: 0, cells: ["A1", "B1"] },
-        { name: "Sheet2", order: 1, cells: ["C3"] }
-      ]
-    };
-    const next: DescriptorSnapshot = {
-      workbookName: "book",
-      sheets: [
-        { name: "Sheet1", order: 0, cells: ["A1", "D4"] }
-      ]
-    };
-
-    expect(collectMissingDeleteOps(previous, next)).toEqual([
-      { kind: "deleteCell", sheetName: "Sheet1", addr: "B1" },
-      { kind: "deleteSheet", name: "Sheet2" }
-    ]);
-
+  it("normalizes semantic commit streams without a shadow snapshot diff", () => {
     expect(
       normalizeCommitOps([
         { kind: "upsertWorkbook", name: "old-book" },

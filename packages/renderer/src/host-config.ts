@@ -5,11 +5,8 @@ import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
 import {
   collectDeleteOps,
   collectMountOps,
-  collectMissingDeleteOps,
   collectSheetOrderOps,
-  normalizeCommitOps,
-  type DescriptorSnapshot,
-  snapshotDescriptorTree
+  normalizeCommitOps
 } from "./commit-log.js";
 import type { CellProps, Descriptor, SheetProps, WorkbookDescriptor, WorkbookProps } from "./descriptors.js";
 import { validateDescriptorTree } from "./validation.js";
@@ -20,8 +17,6 @@ export interface WorkbookContainer {
   pendingOps: import("@bilig/core").CommitOp[];
   shouldSyncSheetOrders: boolean;
   lastError: Error | null;
-  committedSnapshot: DescriptorSnapshot | null;
-  pendingSnapshot: DescriptorSnapshot | null;
 }
 
 let currentUpdatePriority = DefaultEventPriority;
@@ -104,28 +99,23 @@ export const workbookHostConfig = {
     return rootHostContext;
   },
   resetAfterCommit(container: WorkbookContainer) {
-    const nextSnapshot = container.pendingSnapshot ?? snapshotDescriptorTree(container.root);
     try {
       validateDescriptorTree(container.root);
     } catch (error) {
       container.pendingOps = [];
       container.shouldSyncSheetOrders = false;
-      container.pendingSnapshot = null;
       container.lastError = error instanceof Error ? error : new Error(String(error));
       return;
     }
-    container.pendingOps.push(...collectMissingDeleteOps(container.committedSnapshot, nextSnapshot));
     if (container.shouldSyncSheetOrders) {
       container.pendingOps.push(...collectSheetOrderOps(container.root));
     }
     const ops = normalizeCommitOps(container.pendingOps);
     container.pendingOps = [];
     container.shouldSyncSheetOrders = false;
-    container.pendingSnapshot = null;
     if (ops.length > 0) {
       container.engine.renderCommit(ops);
     }
-    container.committedSnapshot = nextSnapshot;
   },
   preparePortalMount() {},
   createInstance(type: string, props: WorkbookProps | SheetProps | CellProps, container: WorkbookContainer): Descriptor {
