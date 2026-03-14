@@ -154,6 +154,13 @@ export class SpreadsheetEngine {
   private impactedFormulaEpoch = 1;
   private impactedFormulaSeen: U32 = new Uint32Array(128);
   private impactedFormulaBuffer: U32 = new Uint32Array(128);
+  private wasmProgramTargets: U32 = new Uint32Array(128);
+  private wasmProgramOffsets: U32 = new Uint32Array(128);
+  private wasmProgramLengths: U32 = new Uint32Array(128);
+  private wasmConstantOffsets: U32 = new Uint32Array(128);
+  private wasmConstantLengths: U32 = new Uint32Array(128);
+  private wasmRangeOffsets: U32 = new Uint32Array(128);
+  private wasmRangeLengths: U32 = new Uint32Array(128);
   private topoIndegree: U32 = new Uint32Array(128);
   private topoQueue: U32 = new Uint32Array(128);
   private topoFormulaBuffer: U32 = new Uint32Array(128);
@@ -489,9 +496,7 @@ export class SpreadsheetEngine {
         });
       });
 
-      this.syncDynamicRanges(materializedCells).forEach((cellIndex) => {
-        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-      });
+      formulaChangedCount = this.syncDynamicRanges(materializedCells, formulaChangedCount);
     } finally {
       this.batchMutationDepth -= 1;
       this.flushWasmProgramSync();
@@ -626,10 +631,9 @@ export class SpreadsheetEngine {
             if (!tombstone || compareOpOrder(order, tombstone) > 0) {
               this.sheetDeleteVersions.delete(op.name);
             }
-            this.rebindFormulasForSheet(op.name).forEach((cellIndex) => {
-              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-              topologyChanged = true;
-            });
+            const reboundCount = formulaChangedCount;
+            formulaChangedCount = this.rebindFormulasForSheet(op.name, formulaChangedCount);
+            topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
             break;
           case "deleteSheet":
             const removal = this.removeSheetRuntime(op.name, changedQualifiedAddresses);
@@ -692,10 +696,9 @@ export class SpreadsheetEngine {
         appliedOps += 1;
       });
 
-      this.syncDynamicRanges(materializedCells).forEach((cellIndex) => {
-        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-        topologyChanged = true;
-      });
+      const reboundCount = formulaChangedCount;
+      formulaChangedCount = this.syncDynamicRanges(materializedCells, formulaChangedCount);
+      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
     } finally {
       this.batchMutationDepth -= 1;
       this.flushWasmProgramSync();
@@ -1104,6 +1107,30 @@ export class SpreadsheetEngine {
     }
   }
 
+  private ensureWasmProgramScratchCapacity(formulaSize: number, rangeSize: number): void {
+    if (formulaSize > this.wasmProgramTargets.length) {
+      this.wasmProgramTargets = growUint32(this.wasmProgramTargets, formulaSize);
+    }
+    if (formulaSize > this.wasmProgramOffsets.length) {
+      this.wasmProgramOffsets = growUint32(this.wasmProgramOffsets, formulaSize);
+    }
+    if (formulaSize > this.wasmProgramLengths.length) {
+      this.wasmProgramLengths = growUint32(this.wasmProgramLengths, formulaSize);
+    }
+    if (formulaSize > this.wasmConstantOffsets.length) {
+      this.wasmConstantOffsets = growUint32(this.wasmConstantOffsets, formulaSize);
+    }
+    if (formulaSize > this.wasmConstantLengths.length) {
+      this.wasmConstantLengths = growUint32(this.wasmConstantLengths, formulaSize);
+    }
+    if (rangeSize > this.wasmRangeOffsets.length) {
+      this.wasmRangeOffsets = growUint32(this.wasmRangeOffsets, rangeSize);
+    }
+    if (rangeSize > this.wasmRangeLengths.length) {
+      this.wasmRangeLengths = growUint32(this.wasmRangeLengths, rangeSize);
+    }
+  }
+
   private ensureTopoScratchCapacity(cellSize: number, entitySize: number, rangeSize: number): void {
     if (cellSize > this.topoIndegree.length) {
       this.topoIndegree = growUint32(this.topoIndegree, cellSize);
@@ -1155,15 +1182,19 @@ export class SpreadsheetEngine {
     this.constantArena.reset();
     this.rangeListArena.reset();
 
-    const orderedFormulas = [...this.formulas.values()].filter((formula) => formula.compiled.mode === FormulaMode.WasmFastPath);
-    const targets = new Uint32Array(orderedFormulas.length);
-    const programOffsets = new Uint32Array(orderedFormulas.length);
-    const programLengths = new Uint32Array(orderedFormulas.length);
-    const constantOffsets = new Uint32Array(orderedFormulas.length);
-    const constantLengths = new Uint32Array(orderedFormulas.length);
-    const modes: FormulaMode[] = [];
+    let wasmFormulaCount = 0;
+    this.formulas.forEach((formula) => {
+      if (formula.compiled.mode === FormulaMode.WasmFastPath) {
+        wasmFormulaCount += 1;
+      }
+    });
+    this.ensureWasmProgramScratchCapacity(Math.max(wasmFormulaCount, 1), Math.max(this.ranges.size, 1));
 
-    orderedFormulas.forEach((formula, index) => {
+    let formulaIndex = 0;
+    this.formulas.forEach((formula) => {
+      if (formula.compiled.mode !== FormulaMode.WasmFastPath) {
+        return;
+      }
       const programSlice = this.programArena.append(formula.runtimeProgram);
       const constantSlice = this.constantArena.append(formula.constants);
       const rangeSlice = this.rangeListArena.append(formula.rangeDependencies);
@@ -1183,38 +1214,39 @@ export class SpreadsheetEngine {
       formula.compiled.depsPtr = formula.dependencyEntities.ptr;
       formula.compiled.depsLen = formula.dependencyEntities.len;
 
-      targets[index] = formula.cellIndex;
-      programOffsets[index] = programSlice.offset;
-      programLengths[index] = programSlice.length;
-      constantOffsets[index] = constantSlice.offset;
-      constantLengths[index] = constantSlice.length;
-      modes.push(formula.compiled.mode);
+      this.wasmProgramTargets[formulaIndex] = formula.cellIndex;
+      this.wasmProgramOffsets[formulaIndex] = programSlice.offset;
+      this.wasmProgramLengths[formulaIndex] = programSlice.length;
+      this.wasmConstantOffsets[formulaIndex] = constantSlice.offset;
+      this.wasmConstantLengths[formulaIndex] = constantSlice.length;
+      formulaIndex += 1;
     });
 
     this.wasm.uploadFormulas({
-      targets,
-      modes,
+      targets: this.wasmProgramTargets.subarray(0, wasmFormulaCount),
       programs: this.programArena.view(),
-      programOffsets,
-      programLengths,
+      programOffsets: this.wasmProgramOffsets.subarray(0, wasmFormulaCount),
+      programLengths: this.wasmProgramLengths.subarray(0, wasmFormulaCount),
       constants: this.constantArena.view(),
-      constantOffsets,
-      constantLengths
+      constantOffsets: this.wasmConstantOffsets.subarray(0, wasmFormulaCount),
+      constantLengths: this.wasmConstantLengths.subarray(0, wasmFormulaCount)
     });
 
     const rangeCapacity = Math.max(this.ranges.size, 1);
-    const rangeOffsets = new Uint32Array(rangeCapacity);
-    const rangeLengths = new Uint32Array(rangeCapacity);
+    if (this.ranges.size === 0) {
+      this.wasmRangeOffsets[0] = 0;
+      this.wasmRangeLengths[0] = 0;
+    }
     for (let rangeIndex = 0; rangeIndex < this.ranges.size; rangeIndex += 1) {
       const descriptor = this.ranges.getDescriptor(rangeIndex);
-      rangeOffsets[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersOffset : 0;
-      rangeLengths[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersLength : 0;
+      this.wasmRangeOffsets[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersOffset : 0;
+      this.wasmRangeLengths[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersLength : 0;
     }
 
     this.wasm.uploadRanges({
       members: this.ranges.getMemberPoolView(),
-      offsets: rangeOffsets,
-      lengths: rangeLengths
+      offsets: this.wasmRangeOffsets.subarray(0, rangeCapacity),
+      lengths: this.wasmRangeLengths.subarray(0, rangeCapacity)
     });
   }
 
@@ -1395,14 +1427,19 @@ export class SpreadsheetEngine {
     });
 
     this.workbook.deleteSheet(sheetName);
-    this.rebindFormulasForSheet(sheetName, this.impactedFormulaBuffer.subarray(0, impactedCount)).forEach((cellIndex) => {
-      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-    });
+    formulaChangedCount = this.rebindFormulasForSheet(
+      sheetName,
+      formulaChangedCount,
+      this.impactedFormulaBuffer.subarray(0, impactedCount)
+    );
     return { changedInputCount, formulaChangedCount };
   }
 
-  private rebindFormulasForSheet(sheetName: string, candidates?: readonly number[] | U32): Set<number> {
-    const rebound = new Set<number>();
+  private rebindFormulasForSheet(
+    sheetName: string,
+    formulaChangedCount: number,
+    candidates?: readonly number[] | U32
+  ): number {
     if (candidates) {
       for (let index = 0; index < candidates.length; index += 1) {
         const cellIndex = candidates[index]!;
@@ -1418,9 +1455,9 @@ export class SpreadsheetEngine {
         if (!touchesSheet) continue;
         const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled.deps, []);
         this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
-        rebound.add(cellIndex);
+        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
       }
-      return rebound;
+      return formulaChangedCount;
     }
 
     this.formulas.forEach((formula, cellIndex) => {
@@ -1435,10 +1472,10 @@ export class SpreadsheetEngine {
       if (!touchesSheet) return;
       const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled.deps, []);
       this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
-      rebound.add(cellIndex);
+      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
     });
 
-    return rebound;
+    return formulaChangedCount;
   }
 
   private collectImpactedFormulasForCells(cellIndices: readonly number[]): number {
@@ -1586,8 +1623,7 @@ export class SpreadsheetEngine {
     return matches.map((match) => match.value);
   }
 
-  private syncDynamicRanges(materializedCells: readonly MaterializedCell[]): Set<number> {
-    const rebound = new Set<number>();
+  private syncDynamicRanges(materializedCells: readonly MaterializedCell[], formulaChangedCount: number): number {
     for (let index = 0; index < materializedCells.length; index += 1) {
       const materialized = materializedCells[index]!;
       const sheet = this.workbook.getSheet(materialized.sheetName);
@@ -1617,12 +1653,12 @@ export class SpreadsheetEngine {
           }
           if (!formula.dependencyIndices.includes(materialized.cellIndex)) {
             formula.dependencyIndices.push(materialized.cellIndex);
-            rebound.add(formulaCellIndex);
+            formulaChangedCount = this.markFormulaChanged(formulaCellIndex, formulaChangedCount);
           }
         }
       }
     }
-    return rebound;
+    return formulaChangedCount;
   }
 
   private resetWorkbook(workbookName = "Workbook"): void {

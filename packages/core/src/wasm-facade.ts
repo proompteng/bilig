@@ -1,10 +1,8 @@
-import { FormulaMode } from "@bilig/protocol";
 import { createKernel, type SpreadsheetKernel } from "@bilig/wasm-kernel";
 import type { CellStore } from "./cell-store.js";
 
 export interface WasmFormulaUploadLayout {
   targets: Uint32Array;
-  modes: FormulaMode[];
   programs: Uint32Array;
   programOffsets: Uint32Array;
   programLengths: Uint32Array;
@@ -56,7 +54,7 @@ export class WasmKernelFacade {
 
   uploadFormulas(layout: WasmFormulaUploadLayout): void {
     if (!this.kernel) return;
-    const wasmFormulaCount = layout.modes.filter((mode) => mode === FormulaMode.WasmFastPath).length;
+    const wasmFormulaCount = layout.targets.length;
 
     this.ensureCapacity(
       this.kernel.getCellCapacity(),

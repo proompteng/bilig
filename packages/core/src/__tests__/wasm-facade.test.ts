@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FormulaMode, ValueTag } from "@bilig/protocol";
+import { ValueTag } from "@bilig/protocol";
 import { CellStore } from "../cell-store.js";
 import { WasmKernelFacade } from "../wasm-facade.js";
 
@@ -10,7 +10,6 @@ describe("WasmKernelFacade", () => {
 
     facade.uploadFormulas({
       targets: new Uint32Array([2]),
-      modes: [FormulaMode.WasmFastPath],
       programs: new Uint32Array([(4 << 24) | 0, (20 << 24) | (1 << 8) | 1, 255 << 24]),
       programOffsets: new Uint32Array([0]),
       programLengths: new Uint32Array([3]),
@@ -38,7 +37,6 @@ describe("WasmKernelFacade", () => {
 
     facade.uploadFormulas({
       targets: new Uint32Array([1]),
-      modes: [FormulaMode.WasmFastPath],
       programs: new Uint32Array([(3 << 24) | 0, (1 << 24) | 0, (7 << 24), 255 << 24]),
       programOffsets: new Uint32Array([0]),
       programLengths: new Uint32Array([4]),
