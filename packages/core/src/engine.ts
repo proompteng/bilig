@@ -144,6 +144,9 @@ export class SpreadsheetEngine {
   private changedUnionEpoch = 1;
   private changedUnionSeen: U32 = new Uint32Array(128);
   private changedUnion: U32 = new Uint32Array(128);
+  private impactedFormulaEpoch = 1;
+  private impactedFormulaSeen: U32 = new Uint32Array(128);
+  private impactedFormulaBuffer: U32 = new Uint32Array(128);
   private topoIndegree: U32 = new Uint32Array(128);
   private topoQueue: U32 = new Uint32Array(128);
   private topoFormulaBuffer: U32 = new Uint32Array(128);
@@ -1058,6 +1061,12 @@ export class SpreadsheetEngine {
     if (size > this.changedUnionSeen.length) {
       this.changedUnionSeen = growUint32(this.changedUnionSeen, size);
     }
+    if (size > this.impactedFormulaSeen.length) {
+      this.impactedFormulaSeen = growUint32(this.impactedFormulaSeen, size);
+    }
+    if (size > this.impactedFormulaBuffer.length) {
+      this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
+    }
   }
 
   private ensureTopoScratchCapacity(cellSize: number, entitySize: number, rangeSize: number): void {
@@ -1235,18 +1244,6 @@ export class SpreadsheetEngine {
     this.setReverseEdgeSlice(entityId, this.edgeArena.removeValue(slice, dependentEntityId));
   }
 
-  private collectFormulaDependentsForEntity(entityId: number, output: Set<number>): void {
-    const dependents = this.getEntityDependents(entityId);
-    for (let index = 0; index < dependents.length; index += 1) {
-      const dependent = dependents[index]!;
-      if (isRangeEntity(dependent)) {
-        this.collectFormulaDependentsForEntity(dependent, output);
-        continue;
-      }
-      output.add(entityPayload(dependent));
-    }
-  }
-
   private collectFormulaDependentsForEntityInto(entityId: number): number {
     this.topoFormulaSeenEpoch += 1;
     this.topoRangeSeenEpoch += 1;
@@ -1345,11 +1342,10 @@ export class SpreadsheetEngine {
     if (!sheet) return;
 
     const cellIndices: number[] = [];
-    const impacted = new Set<number>();
     sheet.grid.forEachCell((cellIndex) => {
       cellIndices.push(cellIndex);
-      this.collectFormulaDependentsForEntity(makeCellEntity(cellIndex), impacted);
     });
+    const impactedCount = this.collectImpactedFormulasForCells(cellIndices);
 
     cellIndices.forEach((cellIndex) => {
       changedQualifiedAddresses?.add(`${sheetName}!${this.workbook.getAddress(cellIndex)}`);
@@ -1362,16 +1358,34 @@ export class SpreadsheetEngine {
     });
 
     this.workbook.deleteSheet(sheetName);
-    this.rebindFormulasForSheet(sheetName, impacted).forEach((cellIndex) => formulaChanged.add(cellIndex));
+    this.rebindFormulasForSheet(sheetName, this.impactedFormulaBuffer.subarray(0, impactedCount)).forEach((cellIndex) =>
+      formulaChanged.add(cellIndex)
+    );
   }
 
-  private rebindFormulasForSheet(sheetName: string, candidates?: Set<number>): Set<number> {
+  private rebindFormulasForSheet(sheetName: string, candidates?: readonly number[] | U32): Set<number> {
     const rebound = new Set<number>();
-    const targetFormulas = candidates
-      ? [...candidates].map((cellIndex) => [cellIndex, this.formulas.get(cellIndex)] as const)
-      : [...this.formulas.entries()];
+    if (candidates) {
+      for (let index = 0; index < candidates.length; index += 1) {
+        const cellIndex = candidates[index]!;
+        const formula = this.formulas.get(cellIndex);
+        if (!formula) continue;
+        const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+        if (!ownerSheetName) continue;
+        const touchesSheet = formula.compiled.deps.some((dep) => {
+          if (!dep.includes("!")) return false;
+          const [qualifiedSheet] = dep.split("!");
+          return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
+        });
+        if (!touchesSheet) continue;
+        const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled.deps, []);
+        this.setFormula(cellIndex, formula.source, formula.compiled, dependencies, []);
+        rebound.add(cellIndex);
+      }
+      return rebound;
+    }
 
-    targetFormulas.forEach(([cellIndex, formula]) => {
+    this.formulas.forEach((formula, cellIndex) => {
       if (!formula) return;
       const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
       if (!ownerSheetName) return;
@@ -1387,6 +1401,32 @@ export class SpreadsheetEngine {
     });
 
     return rebound;
+  }
+
+  private collectImpactedFormulasForCells(cellIndices: readonly number[]): number {
+    this.ensureRecalcScratchCapacity(this.workbook.cellStore.size + 1);
+    this.impactedFormulaEpoch += 1;
+    if (this.impactedFormulaEpoch === 0xffff_ffff) {
+      this.impactedFormulaEpoch = 1;
+      this.impactedFormulaSeen.fill(0);
+    }
+
+    let impactedCount = 0;
+    for (let cellCursor = 0; cellCursor < cellIndices.length; cellCursor += 1) {
+      const cellIndex = cellIndices[cellCursor]!;
+      const dependentCount = this.collectFormulaDependentsForEntityInto(makeCellEntity(cellIndex));
+      for (let dependentIndex = 0; dependentIndex < dependentCount; dependentIndex += 1) {
+        const formulaCellIndex = this.topoFormulaBuffer[dependentIndex]!;
+        if (this.impactedFormulaSeen[formulaCellIndex] === this.impactedFormulaEpoch) {
+          continue;
+        }
+        this.impactedFormulaSeen[formulaCellIndex] = this.impactedFormulaEpoch;
+        this.impactedFormulaBuffer[impactedCount] = formulaCellIndex;
+        impactedCount += 1;
+      }
+    }
+
+    return impactedCount;
   }
 
   private ensureCellTracked(sheetName: string, address: string, materializedCells: MaterializedCell[]): number {

@@ -101,6 +101,21 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
   });
 
+  it("rebinds formulas to #REF! when a referenced sheet is deleted", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Sheet2");
+    engine.setCellValue("Sheet2", "B1", 3);
+    engine.setCellFormula("Sheet1", "A1", "Sheet2!B1*2");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    engine.deleteSheet("Sheet2");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+  });
+
   it("rebinds column and row range formulas when new cells materialize later", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
