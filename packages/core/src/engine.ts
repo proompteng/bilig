@@ -80,7 +80,7 @@ interface RuntimeFormula {
   dependencyEntities: EdgeSlice;
   rangeDependencies: Uint32Array;
   runtimeProgram: Uint32Array;
-  constants: number[];
+  constants: Float64Array;
   programOffset: number;
   programLength: number;
   constNumberOffset: number;

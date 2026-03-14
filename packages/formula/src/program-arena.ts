@@ -49,7 +49,7 @@ export class Float64Arena {
     this.used = 0;
   }
 
-  append(values: readonly number[]): ArenaSlice {
+  append(values: ArrayLike<number>): ArenaSlice {
     const slice = { offset: this.used, length: values.length };
     this.ensureCapacity(this.used + values.length);
     for (let index = 0; index < values.length; index += 1) {

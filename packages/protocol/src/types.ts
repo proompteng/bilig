@@ -103,7 +103,7 @@ export interface FormulaRecord {
   rangeListOffset: number;
   rangeListLength: number;
   program: Uint32Array;
-  constants: number[];
+  constants: Float64Array;
   symbolicRefs: string[];
   symbolicRanges: string[];
   maxStackDepth: number;
