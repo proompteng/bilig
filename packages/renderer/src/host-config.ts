@@ -5,8 +5,11 @@ import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
 import {
   collectDeleteOps,
   collectMountOps,
+  collectMissingDeleteOps,
   collectSheetOrderOps,
-  normalizeCommitOps
+  normalizeCommitOps,
+  type DescriptorSnapshot,
+  snapshotDescriptorTree
 } from "./commit-log.js";
 import type { CellProps, Descriptor, SheetProps, WorkbookDescriptor, WorkbookProps } from "./descriptors.js";
 import { validateDescriptorTree } from "./validation.js";
@@ -17,6 +20,8 @@ export interface WorkbookContainer {
   pendingOps: import("@bilig/core").CommitOp[];
   shouldSyncSheetOrders: boolean;
   lastError: Error | null;
+  committedSnapshot: DescriptorSnapshot | null;
+  pendingSnapshot: DescriptorSnapshot | null;
 }
 
 let currentUpdatePriority = DefaultEventPriority;
@@ -61,7 +66,7 @@ function pushCollectedOps(container: WorkbookContainer, collector: () => CommitO
 function pushCellUpsert(
   ops: CommitOp[],
   sheetName: string,
-  props: { addr: string; value?: CellProps["value"]; formula?: string }
+  props: { addr: string; value?: CellProps["value"]; formula?: string; format?: string }
 ): void {
   const op: CommitOp = {
     kind: "upsertCell",
@@ -70,6 +75,7 @@ function pushCellUpsert(
   };
   if (props.value !== undefined) op.value = props.value;
   if (props.formula !== undefined) op.formula = props.formula;
+  if (props.format !== undefined) op.format = props.format;
   ops.push(op);
 }
 
@@ -98,23 +104,28 @@ const hostConfig = {
     return rootHostContext;
   },
   resetAfterCommit(container: WorkbookContainer) {
+    const nextSnapshot = container.pendingSnapshot ?? snapshotDescriptorTree(container.root);
     try {
       validateDescriptorTree(container.root);
     } catch (error) {
       container.pendingOps = [];
       container.shouldSyncSheetOrders = false;
+      container.pendingSnapshot = null;
       container.lastError = error instanceof Error ? error : new Error(String(error));
       return;
     }
+    container.pendingOps.push(...collectMissingDeleteOps(container.committedSnapshot, nextSnapshot));
     if (container.shouldSyncSheetOrders) {
       container.pendingOps.push(...collectSheetOrderOps(container.root));
     }
     const ops = normalizeCommitOps(container.pendingOps);
     container.pendingOps = [];
     container.shouldSyncSheetOrders = false;
+    container.pendingSnapshot = null;
     if (ops.length > 0) {
       container.engine.renderCommit(ops);
     }
+    container.committedSnapshot = nextSnapshot;
   },
   preparePortalMount() {},
   createInstance(type: string, props: WorkbookProps | SheetProps | CellProps, container: WorkbookContainer): Descriptor {
@@ -222,9 +233,9 @@ const hostConfig = {
     }
   },
   removeChild(parent: Descriptor, child: Descriptor) {
-    removeChild(parent, child);
     const container = containerFor(parent);
     pushCollectedOps(container, () => collectDeleteOps(child));
+    removeChild(parent, child);
     if (container.lastError === null && parent.kind === "Workbook" && child.kind === "Sheet") {
       container.shouldSyncSheetOrders = true;
     }
@@ -292,7 +303,8 @@ const hostConfig = {
     if (
       (previousProps as CellProps).addr !== instance.props.addr ||
       (previousProps as CellProps).value !== instance.props.value ||
-      (previousProps as CellProps).formula !== instance.props.formula
+      (previousProps as CellProps).formula !== instance.props.formula ||
+      (previousProps as CellProps).format !== instance.props.format
     ) {
       pushCellUpsert(container.pendingOps, sheet.props.name, instance.props);
     }

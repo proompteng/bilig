@@ -7,9 +7,30 @@
   <Sheet name="Sheet1">
     <Cell addr="A1" value={10} />
     <Cell addr="B1" formula="A1*2" />
+    <Cell addr="C1" format="currency-usd" value={42} />
   </Sheet>
 </Workbook>
 ```
+
+## Package exports
+
+- `@bilig/renderer`
+  - `Workbook`
+  - `Sheet`
+  - `Cell`
+  - `createWorkbookRendererRoot(engine)`
+- `@bilig/grid`
+  - `WorkbookView`
+  - `SheetGridView`
+  - `FormulaBar`
+  - `CellEditorOverlay`
+  - `MetricsPanel`
+  - `DependencyInspector`
+  - `ReplicaPanel`
+  - `useCell`
+  - `useMetrics`
+  - `useSelection`
+  - `useSheetViewport`
 
 ## Imperative engine
 
@@ -17,6 +38,7 @@
 - `deleteSheet(name)`
 - `setCellValue(sheet, address, value)`
 - `setCellFormula(sheet, address, formula)`
+- `setCellFormat(sheet, address, format)`
 - `clearCell(sheet, address)`
 - `getCell(sheet, address)`
 - `getDependencies(sheet, address)`
@@ -47,7 +69,7 @@ Replication is transport-agnostic. The engine emits deterministic local batches 
 
 ## Renderer root
 
-The custom workbook reconciler remains internal to the playground and exposes a minimal async root surface:
+`@bilig/renderer` owns the custom workbook reconciler and exposes a minimal async root surface:
 
 - `render(element)`
 - `unmount()`

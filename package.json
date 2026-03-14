@@ -12,9 +12,10 @@
     "dev": "pnpm --filter @bilig/playground dev",
     "protocol:generate": "node scripts/gen-protocol.mjs",
     "protocol:check": "node scripts/gen-protocol.mjs --check",
-    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/playground build",
+    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
+    "coverage": "vitest --run --coverage",
     "test:browser": "pnpm --filter @bilig/playground build && playwright test",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
@@ -22,7 +23,7 @@
     "bench:contracts": "tsx scripts/bench-contracts.mjs",
     "release:check": "node scripts/release-check.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm test && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
+    "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm coverage && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
     "ci:strict": "pnpm run ci && git diff --exit-code && git diff --cached --exit-code"
   },
   "repository": {
@@ -33,6 +34,9 @@
   "devDependencies": {
     "@playwright/test": "1.56.1",
     "@types/node": "24.10.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@vitest/coverage-v8": "4.1.0",
     "assemblyscript": "0.28.10",
     "jsdom": "27.0.1",
     "tsx": "4.21.0",

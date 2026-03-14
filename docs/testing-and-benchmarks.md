@@ -1,7 +1,7 @@
 # Testing and Benchmarks
 
 - Vitest covers protocol, formula parsing/evaluation, CRDT ordering, engine behavior, WASM parity, and playground reconciler behavior.
-- Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`.
+- Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`, exercising the extracted `@bilig/renderer` and `@bilig/grid` packages through the app shell.
 - Browser smoke covers both live recalculation and paused-relay resume behavior so local-first replication survives a full reload path in CI, not just in ad hoc manual testing.
 - CRDT unit tests now verify real compaction semantics, including stale cell writes behind sheet tombstones and recreate-after-delete flows.
 - Core and playground tests now also verify fine-grained cell subscription behavior so unrelated edits do not rerender watched cells or viewport listeners.
@@ -25,6 +25,7 @@
 ## CI policy
 
 - Forgejo CI lives in `.forgejo/workflows/forgejo-ci.yml` and is the canonical pipeline for the private origin.
+- GitHub Actions mirrors the repository verification contract in `.github/workflows/ci.yml`.
 - The workflow targets the Forgejo runner label `bilig-ci`.
 - The runner contract is explicit in the workflow:
   - host Node must be `>=24.14.0`
@@ -42,6 +43,7 @@
   - benchmark contract checks
   - browser smoke
   - artifact budget enforcement
+- GitHub Actions runs the same contract on Node 22 and Node 24.14.0; Forgejo remains the source of truth for the private origin.
 - Local pre-push verification should use `pnpm run ci:strict`, which mirrors the Forgejo cleanliness gate in one command.
 - Browser smoke runs only after the playground build and installs Chromium explicitly so Forgejo runners do not rely on ambient browser state.
 - The private origin keeps Forgejo-native workflow definitions only so Forgejo does not have to resolve duplicate workflow paths.

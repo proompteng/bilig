@@ -2,8 +2,8 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { SpreadsheetEngine } from "../../../../packages/core/src/index.js";
-import { useCell } from "../ui/useCell.js";
+import { SpreadsheetEngine } from "@bilig/core";
+import { useCell } from "@bilig/grid";
 
 describe("playground cell subscriptions", () => {
   it("rerenders only the subscribed cell when an unrelated cell changes", async () => {

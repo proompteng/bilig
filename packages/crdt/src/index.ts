@@ -13,6 +13,7 @@ export type EngineOp =
   | { kind: "deleteSheet"; name: string }
   | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
+  | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
   | { kind: "clearCell"; sheetName: string; address: string };
 
 export interface EngineOpBatch {
@@ -140,6 +141,8 @@ function entityKeyForOp(op: EngineOp): string {
     case "setCellFormula":
     case "clearCell":
       return `cell:${op.sheetName}!${op.address}`;
+    case "setCellFormat":
+      return `format:${op.sheetName}!${op.address}`;
   }
 }
 
@@ -147,6 +150,7 @@ function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, O
   switch (op.kind) {
     case "setCellValue":
     case "setCellFormula":
+    case "setCellFormat":
     case "clearCell":
       return latestSheetDeletes.get(op.sheetName);
     case "upsertSheet":

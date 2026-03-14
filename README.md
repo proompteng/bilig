@@ -1,14 +1,16 @@
 # bilig
 
-`bilig` is a local-first spreadsheet engine monorepo with a custom workbook reconciler, a React/Vite playground, a framework-agnostic core engine, CRDT-ready mutation pipelines, and an AssemblyScript/WASM numeric fast path.
+`bilig` is a local-first spreadsheet engine monorepo with a package-based custom workbook reconciler, a React/Vite playground shell, a framework-agnostic core engine, CRDT-ready mutation pipelines, and an AssemblyScript/WASM numeric fast path.
 
 ## Workspace layout
 
-- `apps/playground`: Vite 8 React app, custom reconciler, and playground UI
+- `apps/playground`: Vite 8 React app shell that composes the packages
 - `packages/protocol`: shared enums, opcodes, constants, and types
 - `packages/formula`: A1 addressing, lexer, parser, binder, compiler, JS evaluator
 - `packages/core`: spreadsheet engine, storage, scheduler, snapshots, selectors, WASM facade
 - `packages/crdt`: replica clocks, op batches, merge rules, log compaction
+- `packages/renderer`: custom workbook reconciler and workbook DSL
+- `packages/grid`: reusable React spreadsheet UI, hooks, selection, metrics, and inspectors
 - `packages/wasm-kernel`: AssemblyScript VM and numeric kernels
 - `packages/benchmarks`: benchmark harness
 - `docs`: architecture, API, reconciler layering, CRDT model, formula language
@@ -40,9 +42,10 @@ pnpm run ci:strict
 
 ## Notes
 
-- React is used only in `apps/playground`.
+- Reusable React code now lives in `packages/renderer` and `packages/grid`; `apps/playground` is a thin shell.
 - The spreadsheet engine remains usable without React.
-- The custom reconciler lives under `apps/playground/src/reconciler`.
+- The custom reconciler lives under `packages/renderer`.
+- The public cell model supports `format` as a persisted attribute alongside `addr`, `value`, and `formula`.
 - The WASM kernel is a custom AssemblyScript fast path, not an embedded proprietary spreadsheet runtime.
 - The TS protocol enums/opcodes and AssemblyScript protocol mirror are generated from `scripts/gen-protocol.mjs` so JS/WASM ABI drift fails fast in CI.
 - The playground includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
@@ -60,6 +63,8 @@ pnpm run ci:strict
 ## CI
 
 - Forgejo Actions is the primary CI surface for this repo via `.forgejo/workflows/forgejo-ci.yml`.
+- GitHub Actions mirrors the verification contract in `.github/workflows/ci.yml`.
 - The workflow is strict: frozen lockfile install, full `pnpm run ci`, artifact budget checks, browser smoke, and a tracked-file cleanliness check.
 - `pnpm run ci:strict` mirrors the remote cleanliness gate locally before a direct push to `main`.
 - Forgejo runners must expose the `bilig-ci` label, provide Node `>=24.14.0`, and allow Corepack to activate `pnpm 10.32.1` during the job.
+- GitHub Actions runs the same repository contract on Node 22 and Node 24.14.0 so compatibility drift is visible before release.

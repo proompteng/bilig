@@ -1,5 +1,5 @@
 import React from "react";
-import { Cell, Sheet, Workbook } from "./reconciler/index.js";
+import { Cell, Sheet, Workbook } from "@bilig/renderer";
 
 export function buildDemoWorkbook(): React.ReactNode {
   return (

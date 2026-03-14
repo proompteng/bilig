@@ -24,7 +24,14 @@ interface ReconcilerCompat {
 
 const reconcilerCompat = WorkbookReconciler as unknown as ReconcilerCompat;
 
+function bindRendererError(container: WorkbookContainer) {
+  return (error: unknown) => {
+    container.lastError = error instanceof Error ? error : new Error(String(error));
+  };
+}
+
 export function createFiberRoot(container: WorkbookContainer): unknown {
+  const onError = bindRendererError(container);
   return reconcilerCompat.createContainer(
     container,
     1,
@@ -32,9 +39,9 @@ export function createFiberRoot(container: WorkbookContainer): unknown {
     false,
     null,
     "",
-    console.error,
-    console.error,
-    console.error,
+    onError,
+    onError,
+    onError,
     null
   );
 }

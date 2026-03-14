@@ -1,0 +1,22 @@
+{
+  "name": "@bilig/renderer",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@bilig/core": "workspace:*",
+    "@bilig/protocol": "workspace:*",
+    "react": "19.2.4",
+    "react-reconciler": "0.33.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

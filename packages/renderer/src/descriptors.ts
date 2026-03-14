@@ -14,6 +14,7 @@ export interface CellProps {
   addr: string;
   value?: LiteralInput;
   formula?: string;
+  format?: string;
 }
 
 export interface BaseDescriptor {

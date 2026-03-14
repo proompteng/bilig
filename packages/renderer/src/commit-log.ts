@@ -5,6 +5,15 @@ import type {
   WorkbookDescriptor
 } from "./descriptors.js";
 
+export interface DescriptorSnapshot {
+  workbookName: string;
+  sheets: Array<{
+    name: string;
+    order: number;
+    cells: string[];
+  }>;
+}
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
@@ -19,6 +28,7 @@ function pushCellUpsert(ops: CommitOp[], sheetName: string, cell: CellDescriptor
   };
   if (cell.props.formula !== undefined) op.formula = cell.props.formula;
   if (cell.props.value !== undefined) op.value = cell.props.value;
+  if (cell.props.format !== undefined) op.format = cell.props.format;
   ops.push(op);
 }
 
@@ -114,4 +124,49 @@ export function normalizeCommitOps(ops: CommitOp[]): CommitOp[] {
   return orderedKeys
     .map((key) => lastByKey.get(key))
     .filter((op): op is CommitOp => Boolean(op));
+}
+
+export function snapshotDescriptorTree(root: WorkbookDescriptor | null): DescriptorSnapshot | null {
+  if (!root) {
+    return null;
+  }
+
+  return {
+    workbookName: root.props.name ?? "Workbook",
+    sheets: root.children.map((sheet, order) => ({
+      name: sheet.props.name,
+      order,
+      cells: sheet.children.map((cell) => cell.props.addr)
+    }))
+  };
+}
+
+export function collectMissingDeleteOps(
+  previous: DescriptorSnapshot | null,
+  next: DescriptorSnapshot | null
+): CommitOp[] {
+  if (!previous) {
+    return [];
+  }
+
+  const nextSheets = new Map(
+    (next?.sheets ?? []).map((sheet) => [sheet.name, new Set(sheet.cells)] as const)
+  );
+  const ops: CommitOp[] = [];
+
+  previous.sheets.forEach((sheet) => {
+    const nextCells = nextSheets.get(sheet.name);
+    if (!nextCells) {
+      ops.push({ kind: "deleteSheet", name: sheet.name });
+      return;
+    }
+
+    sheet.cells.forEach((addr) => {
+      if (!nextCells.has(addr)) {
+        ops.push({ kind: "deleteCell", sheetName: sheet.name, addr });
+      }
+    });
+  });
+
+  return ops;
 }

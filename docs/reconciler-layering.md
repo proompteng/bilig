@@ -1,6 +1,6 @@
 # Reconciler Layering
 
-React is playground-only. The custom workbook reconciler is not a DOM renderer and does not own spreadsheet state.
+The custom workbook reconciler is package-based, not app-local. It is not a DOM renderer and does not own spreadsheet state.
 
 ```mermaid
 flowchart TB
@@ -10,12 +10,13 @@ flowchart TB
   classDef wasm fill:#f8fafc,stroke:#475569,color:#0f172a,stroke-width:1.5px
 
   subgraph PG["apps/playground"]
-    JSX["React JSX Workbook DSL"]
-    REC["Custom reconciler host config"]
-    UI["React DOM operator UI"]
+    APP["Thin React app shell"]
   end
 
-  subgraph CORE["Framework-agnostic runtime"]
+  subgraph PKG["packages"]
+    JSX["@bilig/renderer workbook DSL"]
+    REC["@bilig/renderer host config"]
+    UI["@bilig/grid operator UI"]
     ENG["SpreadsheetEngine"]
     CRDT["CRDT ordering and compaction"]
     FORM["Formula parser / binder / JS evaluator"]
@@ -25,6 +26,8 @@ flowchart TB
     WASM["AssemblyScript / WASM kernel"]
   end
 
+  APP --> JSX
+  APP --> UI
   JSX --> REC
   UI --> ENG
   REC --> ENG
@@ -60,6 +63,6 @@ Rules:
 - one engine batch per React commit
 - the reconciler does not keep a parallel workbook shadow model; it validates the descriptor tree directly and flushes semantic commit ops into the engine
 - root creation and `updateContainer` calls are isolated behind a small compat layer so `react-reconciler` version drift stays contained
-- shared packages remain React-free
+- React-specific code is isolated to `@bilig/renderer`, `@bilig/grid`, and the thin playground shell
 - React is a declarative authoring surface and operator UI only; the spreadsheet graph lives in `@bilig/core`
 - the reconciler may translate tree diffs into semantic workbook ops, but it never owns formula, dependency, or CRDT semantics

@@ -22,6 +22,7 @@ export class WorkbookStore {
   readonly sheetsByName = new Map<string, SheetRecord>();
   readonly sheetsById = new Map<number, SheetRecord>();
   readonly cellKeyToIndex = new Map<number, number>();
+  readonly cellFormats = new Map<number, string>();
   workbookName: string;
   private nextSheetId = 1;
 
@@ -52,6 +53,7 @@ export class WorkbookStore {
     sheet.grid.forEachCell((cellIndex) => {
       const key = makeCellKey(sheet.id, this.cellStore.rows[cellIndex]!, this.cellStore.cols[cellIndex]!);
       this.cellKeyToIndex.delete(key);
+      this.cellFormats.delete(cellIndex);
     });
     this.sheetsByName.delete(name);
     this.sheetsById.delete(sheet.id);
@@ -59,6 +61,10 @@ export class WorkbookStore {
 
   getSheet(name: string): SheetRecord | undefined {
     return this.sheetsByName.get(name);
+  }
+
+  getSheetById(id: number): SheetRecord | undefined {
+    return this.sheetsById.get(id);
   }
 
   getOrCreateSheet(name: string): SheetRecord {
@@ -72,14 +78,22 @@ export class WorkbookStore {
   ensureCellRecord(sheetName: string, address: string): EnsuredCell {
     const sheet = this.getOrCreateSheet(sheetName);
     const parsed = parseCellAddress(address, sheetName);
-    const key = makeCellKey(sheet.id, parsed.row, parsed.col);
+    return this.ensureCellAt(sheet.id, parsed.row, parsed.col);
+  }
+
+  ensureCellAt(sheetId: number, row: number, col: number): EnsuredCell {
+    const sheet = this.getSheetById(sheetId);
+    if (!sheet) {
+      throw new Error(`Unknown sheet id: ${sheetId}`);
+    }
+    const key = makeCellKey(sheet.id, row, col);
     const existing = this.cellKeyToIndex.get(key);
     if (existing !== undefined) {
       return { cellIndex: existing, created: false };
     }
-    const cellIndex = this.cellStore.allocate(sheet.id, parsed.row, parsed.col);
+    const cellIndex = this.cellStore.allocate(sheet.id, row, col);
     this.cellKeyToIndex.set(key, cellIndex);
-    sheet.grid.set(parsed.row, parsed.col, cellIndex);
+    sheet.grid.set(row, col, cellIndex);
     return { cellIndex, created: true };
   }
 
@@ -102,11 +116,24 @@ export class WorkbookStore {
     return `${this.getSheetNameById(this.cellStore.sheetIds[index]!)}!${this.getAddress(index)}`;
   }
 
+  setCellFormat(index: number, format: string | null | undefined): void {
+    if (format === undefined || format === null || format === "") {
+      this.cellFormats.delete(index);
+      return;
+    }
+    this.cellFormats.set(index, format);
+  }
+
+  getCellFormat(index: number): string | undefined {
+    return this.cellFormats.get(index);
+  }
+
   reset(workbookName = "Workbook"): void {
     this.workbookName = workbookName;
     this.sheetsByName.clear();
     this.sheetsById.clear();
     this.cellKeyToIndex.clear();
+    this.cellFormats.clear();
     this.nextSheetId = 1;
     this.cellStore.reset();
   }

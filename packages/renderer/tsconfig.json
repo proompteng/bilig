@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "allowSyntheticDefaultImports": true,
+    "types": ["node", "react"]
+  },
+  "references": [
+    { "path": "../protocol" },
+    { "path": "../core" }
+  ],
+  "include": ["src/**/*"]
+}

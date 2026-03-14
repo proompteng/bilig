@@ -4,7 +4,7 @@ import type { Viewport } from "@bilig/protocol";
 import { formatAddress } from "@bilig/formula";
 import { selectors } from "@bilig/core";
 
-export function useViewport(engine: SpreadsheetEngine, sheetName: string, viewport: Viewport) {
+export function useSheetViewport(engine: SpreadsheetEngine, sheetName: string, viewport: Viewport) {
   const watchedAddresses = useMemo(() => {
     const addresses: string[] = [];
     for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
@@ -26,3 +26,5 @@ export function useViewport(engine: SpreadsheetEngine, sheetName: string, viewpo
     [engine, revision, sheetName, viewport]
   );
 }
+
+export const useViewport = useSheetViewport;

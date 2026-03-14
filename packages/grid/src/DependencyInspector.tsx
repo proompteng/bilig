@@ -22,6 +22,7 @@ export function DependencyInspector({ snapshot }: { snapshot: ExplainCellSnapsho
       <h3>Cell Inspector</h3>
       <dl className="dependency-meta">
         <div><dt>Value</dt><dd>{formatValue(snapshot)}</dd></div>
+        <div><dt>Format</dt><dd>{snapshot.format ?? "—"}</dd></div>
         <div><dt>Version</dt><dd>{snapshot.version}</dd></div>
         <div><dt>Mode</dt><dd>{snapshot.mode === FormulaMode.WasmFastPath ? "WASM fast path" : snapshot.mode === FormulaMode.JsOnly ? "JS evaluator" : "Literal"}</dd></div>
         <div><dt>Cycle</dt><dd>{snapshot.inCycle ? "Yes" : "No"}</dd></div>

@@ -218,6 +218,28 @@ describe("SpreadsheetEngine", () => {
     expect(restored.getCell("Sheet1", "A2").value).toEqual({ tag: ValueTag.String, value: "alpha,beta", stringId: 1 });
   });
 
+  it("persists cell formats through imperative updates and snapshot roundtrip", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 12);
+    engine.setCellFormat("Sheet1", "A1", "currency-usd");
+
+    expect(engine.getCell("Sheet1", "A1").format).toBe("currency-usd");
+    expect(engine.explainCell("Sheet1", "A1").format).toBe("currency-usd");
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(engine.exportSnapshot());
+
+    expect(restored.getCell("Sheet1", "A1").format).toBe("currency-usd");
+    expect(restored.exportSnapshot().sheets[0]?.cells).toContainEqual({
+      address: "A1",
+      value: 12,
+      format: "currency-usd"
+    });
+  });
+
   it("replaces existing sheet contents on CSV import", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -247,6 +269,24 @@ describe("SpreadsheetEngine", () => {
     expect(explanation.directPrecedents).toEqual(["Sheet1!A1"]);
     expect(explanation.directDependents).toEqual([]);
     expect(explanation.inCycle).toBe(false);
+  });
+
+  it("assigns deterministic cycle group ids for cyclic formulas", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "cycle-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "B1+1");
+    engine.setCellFormula("Sheet1", "B1", "A1+1");
+
+    const a1Index = engine.workbook.getCellIndex("Sheet1", "A1");
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+
+    expect(a1Index).toBeDefined();
+    expect(b1Index).toBeDefined();
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Cycle });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Cycle });
+    expect(engine.workbook.cellStore.cycleGroupIds[a1Index!]).toBeGreaterThanOrEqual(0);
+    expect(engine.workbook.cellStore.cycleGroupIds[a1Index!]).toBe(engine.workbook.cellStore.cycleGroupIds[b1Index!]);
   });
 
   it("notifies per-cell listeners only for the cells that changed", async () => {

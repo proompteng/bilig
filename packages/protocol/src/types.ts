@@ -18,6 +18,7 @@ export interface CellSnapshot {
   sheetName: string;
   address: string;
   formula?: string;
+  format?: string;
   input?: LiteralInput;
   value: CellValue;
   flags: number;
@@ -32,6 +33,7 @@ export interface ExplainCellSnapshot {
   sheetName: string;
   address: string;
   formula?: string;
+  format?: string;
   mode?: FormulaMode;
   value: CellValue;
   flags: number;

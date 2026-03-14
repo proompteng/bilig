@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBatch, createReplicaState } from "../../../../packages/crdt/src/index.js";
+import { createBatch, createReplicaState } from "@bilig/crdt";
 import { compactRelayEntries, type RelayEntry } from "../relay-queue.js";
 
 function relayEntriesForSameTarget(entries: RelayEntry[]) {

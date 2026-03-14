@@ -1,6 +1,6 @@
 import React from "react";
 import type { WorkbookSnapshot } from "@bilig/protocol";
-import { Cell, Sheet, Workbook } from "./reconciler/index.js";
+import { Cell, Sheet, Workbook } from "@bilig/renderer";
 
 export function renderSnapshotWorkbook(snapshot: WorkbookSnapshot): React.ReactNode {
   return (
@@ -12,9 +12,19 @@ export function renderSnapshotWorkbook(snapshot: WorkbookSnapshot): React.ReactN
           <Sheet key={sheet.name} name={sheet.name}>
             {sheet.cells.map((cell) =>
               cell.formula !== undefined ? (
-                <Cell addr={cell.address} formula={cell.formula} key={`${sheet.name}:${cell.address}`} />
+                <Cell
+                  addr={cell.address}
+                  {...(cell.format !== undefined ? { format: cell.format } : {})}
+                  formula={cell.formula}
+                  key={`${sheet.name}:${cell.address}`}
+                />
               ) : (
-                <Cell addr={cell.address} key={`${sheet.name}:${cell.address}`} value={cell.value ?? null} />
+                <Cell
+                  addr={cell.address}
+                  {...(cell.format !== undefined ? { format: cell.format } : {})}
+                  key={`${sheet.name}:${cell.address}`}
+                  value={cell.value ?? null}
+                />
               )
             )}
           </Sheet>

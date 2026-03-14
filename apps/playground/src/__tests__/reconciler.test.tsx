@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
-import { Cell, Sheet, Workbook, createWorkbookRendererRoot } from "../reconciler/index.js";
+import { Cell, Sheet, Workbook, createWorkbookRendererRoot } from "@bilig/renderer";
 
 describe("playground reconciler", () => {
   it("commits workbook DSL into the engine", async () => {
@@ -19,6 +19,24 @@ describe("playground reconciler", () => {
     );
 
     expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 20 });
+    expect(engine.getCell("Sheet1", "A1").format).toBeUndefined();
+    await root.unmount();
+  });
+
+  it("commits cell formats through the workbook DSL", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-format-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await root.render(
+      <Workbook name="format-test">
+        <Sheet name="Sheet1">
+          <Cell addr="A1" format="currency-usd" value={10} />
+        </Sheet>
+      </Workbook>
+    );
+
+    expect(engine.getCell("Sheet1", "A1").format).toBe("currency-usd");
     await root.unmount();
   });
 
@@ -169,6 +187,84 @@ describe("playground reconciler", () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it("renames sheets and moves child cells onto the new sheet identity", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-rename-sheet-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await root.render(
+      <Workbook name="rename-sheet">
+        <Sheet name="Sheet1">
+          <Cell addr="A1" value={10} />
+        </Sheet>
+      </Workbook>
+    );
+
+    await root.render(
+      <Workbook name="rename-sheet">
+        <Sheet name="Renamed">
+          <Cell addr="A1" value={10} />
+        </Sheet>
+      </Workbook>
+    );
+
+    expect(engine.getCell("Sheet1", "A1").value).toEqual({ tag: 0 });
+    expect(engine.getCell("Renamed", "A1").value).toEqual({ tag: 1, value: 10 });
+
+    await root.unmount();
+  });
+
+  it("moves and deletes cells across rerenders", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-cell-move-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await root.render(
+      <Workbook name="move-cell">
+        <Sheet name="Sheet1">
+          <Cell addr="A1" value={10} />
+          <Cell addr="B1" value={11} />
+        </Sheet>
+      </Workbook>
+    );
+
+    await root.render(
+      <Workbook name="move-cell">
+        <Sheet name="Sheet1">
+          <Cell addr="A2" value={10} />
+        </Sheet>
+      </Workbook>
+    );
+
+    expect(engine.getCell("Sheet1", "A1").value).toEqual({ tag: 0 });
+    expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 0 });
+    expect(engine.getCell("Sheet1", "A2").value).toEqual({ tag: 1, value: 10 });
+
+    await root.unmount();
+  });
+
+  it("rejects text nodes in the workbook DSL", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "reconciler-text-node-test" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Workbook name="invalid-text">
+          <Sheet name="Sheet1">
+            {"text node"}
+          </Sheet>
+        </Workbook>
+      )
+    ).rejects.toThrow("Workbook DSL does not support text nodes.");
+
+    expect(engine.exportSnapshot()).toEqual({
+      version: 1,
+      workbook: { name: "reconciler-text-node-test" },
+      sheets: []
+    });
   });
 
   it("clears workbook state on unmount", async () => {

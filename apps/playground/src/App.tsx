@@ -1,10 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/crdt";
-import { buildDemoWorkbook } from "./demoWorkbook.js";
-import { createWorkbookRendererRoot } from "./reconciler/index.js";
-import { compactRelayEntries, type RelayEntry } from "./relay-queue.js";
-import { renderSnapshotWorkbook } from "./snapshotWorkbook.js";
+import { createWorkbookRendererRoot } from "@bilig/renderer";
 import {
   CellEditorOverlay,
   DependencyInspector,
@@ -15,7 +12,10 @@ import {
   useCell,
   useMetrics,
   useSelection
-} from "./ui/index.js";
+} from "@bilig/grid";
+import { buildDemoWorkbook } from "./demoWorkbook.js";
+import { compactRelayEntries, type RelayEntry } from "./relay-queue.js";
+import { renderSnapshotWorkbook } from "./snapshotWorkbook.js";
 
 const PRIMARY_STORAGE_KEY = "bilig:playground:primary";
 const MIRROR_STORAGE_KEY = "bilig:playground:mirror";

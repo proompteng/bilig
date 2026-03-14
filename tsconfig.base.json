@@ -20,7 +20,9 @@
       "@bilig/formula": ["packages/formula/src/index.ts"],
       "@bilig/core": ["packages/core/src/index.ts"],
       "@bilig/crdt": ["packages/crdt/src/index.ts"],
-      "@bilig/wasm-kernel": ["packages/wasm-kernel/src/index.ts"]
+      "@bilig/wasm-kernel": ["packages/wasm-kernel/src/index.ts"],
+      "@bilig/renderer": ["packages/renderer/src/index.ts"],
+      "@bilig/grid": ["packages/grid/src/index.ts"]
     }
   }
 }

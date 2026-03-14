@@ -7,23 +7,23 @@ flowchart TB
   classDef wasm fill:#fff7ed,stroke:#ea580c,color:#431407,stroke-width:1.5px
 
   subgraph PG["apps/playground"]
-    UI["React shell and grid UI"]
-    HOOKS["useSyncExternalStore selectors<br/>with fine-grained cell subscriptions"]
-    REC["Custom workbook reconciler"]
+    APP["Thin React app shell"]
   end
 
   subgraph PKG["packages"]
-    CORE["@bilig/core"]
+    CORE["@bilig/core<br/>engine + range registry + edge arena + scheduler"]
     FORMULA["@bilig/formula"]
     CRDT["@bilig/crdt"]
     PROTOCOL["@bilig/protocol"]
+    RENDERER["@bilig/renderer"]
+    UI["@bilig/grid"]
     WASM["@bilig/wasm-kernel"]
   end
 
-  UI --> HOOKS
-  HOOKS --> CORE
-  UI --> REC
-  REC --> CORE
+  APP --> UI
+  APP --> RENDERER
+  UI --> CORE
+  RENDERER --> CORE
   CORE --> FORMULA
   CORE --> CRDT
   CORE --> PROTOCOL
@@ -31,15 +31,15 @@ flowchart TB
   FORMULA --> PROTOCOL
   WASM --> PROTOCOL
 
-  class UI,HOOKS,REC react
-  class CORE,FORMULA,CRDT,PROTOCOL core
+  class APP react
+  class CORE,FORMULA,CRDT,PROTOCOL,RENDERER,UI core
   class WASM wasm
 ```
 
 ```mermaid
 sequenceDiagram
-  participant UI as React playground UI
-  participant REC as Custom reconciler
+  participant UI as React playground shell
+  participant REC as @bilig/renderer
   participant CORE as @bilig/core
   participant CRDT as @bilig/crdt
   participant WASM as @bilig/wasm-kernel
@@ -53,5 +53,13 @@ sequenceDiagram
 ```
 
 The TS protocol enums/opcodes and the AssemblyScript protocol mirror are generated together from `scripts/gen-protocol.mjs`. That keeps the JS/WASM contract deterministic and makes drift a CI failure instead of a runtime surprise.
+
+Within `@bilig/core`, the runtime is no longer a single inline dependency map. The current production shape is:
+
+- `WorkbookStore` for sheet metadata, sparse grids, and typed-array-backed cells
+- `RangeRegistry` for interned range entities and dynamic row/column membership tracking
+- `EdgeArena` for forward and reverse graph slices
+- `RecalcScheduler` for epoch-based dirty propagation and rank-bucket ordering
+- `cycle-detection` for deterministic SCC grouping and `cycleGroupIds`
 
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` maintains keyed cell listener routing so `useCell(...)` and viewport watchers wake only when one of their watched addresses changes. That keeps the grid aligned with the production requirement for localized rerenders rather than whole-viewport invalidation on every batch.

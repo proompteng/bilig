@@ -6,6 +6,8 @@
     { "path": "./packages/crdt" },
     { "path": "./packages/wasm-kernel" },
     { "path": "./packages/core" },
+    { "path": "./packages/renderer" },
+    { "path": "./packages/grid" },
     { "path": "./packages/benchmarks" },
     { "path": "./apps/playground" }
   ]
