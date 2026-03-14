@@ -143,6 +143,14 @@ export class SpreadsheetEngine {
   private changedUnionEpoch = 1;
   private changedUnionSeen: U32 = new Uint32Array(128);
   private changedUnion: U32 = new Uint32Array(128);
+  private topoIndegree: U32 = new Uint32Array(128);
+  private topoQueue: U32 = new Uint32Array(128);
+  private topoFormulaBuffer: U32 = new Uint32Array(128);
+  private topoEntityQueue: U32 = new Uint32Array(128);
+  private topoFormulaSeenEpoch = 1;
+  private topoRangeSeenEpoch = 1;
+  private topoFormulaSeen: U32 = new Uint32Array(128);
+  private topoRangeSeen: U32 = new Uint32Array(128);
   private batchMutationDepth = 0;
   private wasmProgramSyncPending = false;
   private lastMetrics: RecalcMetrics = {
@@ -879,30 +887,46 @@ export class SpreadsheetEngine {
   }
 
   private rebuildTopoRanks(): void {
-    const indegree = new Map<number, number>();
-    this.formulas.forEach((_formula, cellIndex) => indegree.set(cellIndex, 0));
+    const requiredCellCapacity = this.workbook.cellStore.size + 1;
+    const requiredEntityCapacity = this.workbook.cellStore.size + this.ranges.size + 1;
+    this.ensureTopoScratchCapacity(requiredCellCapacity, requiredEntityCapacity, this.ranges.size + 1);
+
+    let queueLength = 0;
+    this.formulas.forEach((_formula, cellIndex) => {
+      this.topoIndegree[cellIndex] = 0;
+      this.workbook.cellStore.topoRanks[cellIndex] = 0;
+    });
     this.formulas.forEach((formula, cellIndex) => {
-      formula.dependencyIndices.forEach((dep) => {
-        if (this.formulas.has(dep)) {
-          indegree.set(cellIndex, (indegree.get(cellIndex) ?? 0) + 1);
+      for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
+        const dependency = formula.dependencyIndices[index]!;
+        if ((this.workbook.cellStore.formulaIds[dependency] ?? 0) !== 0) {
+          this.topoIndegree[cellIndex] = (this.topoIndegree[cellIndex] ?? 0) + 1;
         }
-      });
+      }
+    });
+    this.formulas.forEach((_formula, cellIndex) => {
+      if ((this.topoIndegree[cellIndex] ?? 0) === 0) {
+        this.topoQueue[queueLength] = cellIndex;
+        queueLength += 1;
+      }
     });
 
-    const queue = [...indegree.entries()].filter(([, count]) => count === 0).map(([cellIndex]) => cellIndex);
     let rank = 0;
-    for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
-      const cellIndex = queue[queueIndex]!;
+    for (let queueIndex = 0; queueIndex < queueLength; queueIndex += 1) {
+      const cellIndex = this.topoQueue[queueIndex]!;
       this.workbook.cellStore.topoRanks[cellIndex] = rank++;
-      const dependents = new Set<number>();
-      this.collectFormulaDependentsForEntity(makeCellEntity(cellIndex), dependents);
-      for (const dependent of dependents) {
-        if (!indegree.has(dependent)) {
+      const dependentCount = this.collectFormulaDependentsForEntityInto(makeCellEntity(cellIndex));
+      for (let dependentIndex = 0; dependentIndex < dependentCount; dependentIndex += 1) {
+        const dependent = this.topoFormulaBuffer[dependentIndex]!;
+        if ((this.workbook.cellStore.formulaIds[dependent] ?? 0) === 0) {
           continue;
         }
-        const next = (indegree.get(dependent) ?? 0) - 1;
-        indegree.set(dependent, next);
-        if (next === 0) queue.push(dependent);
+        const next = (this.topoIndegree[dependent] ?? 0) - 1;
+        this.topoIndegree[dependent] = next;
+        if (next === 0) {
+          this.topoQueue[queueLength] = dependent;
+          queueLength += 1;
+        }
       }
     }
   }
@@ -1029,6 +1053,27 @@ export class SpreadsheetEngine {
     }
     if (size > this.changedUnionSeen.length) {
       this.changedUnionSeen = growUint32(this.changedUnionSeen, size);
+    }
+  }
+
+  private ensureTopoScratchCapacity(cellSize: number, entitySize: number, rangeSize: number): void {
+    if (cellSize > this.topoIndegree.length) {
+      this.topoIndegree = growUint32(this.topoIndegree, cellSize);
+    }
+    if (cellSize > this.topoQueue.length) {
+      this.topoQueue = growUint32(this.topoQueue, cellSize);
+    }
+    if (cellSize > this.topoFormulaBuffer.length) {
+      this.topoFormulaBuffer = growUint32(this.topoFormulaBuffer, cellSize);
+    }
+    if (cellSize > this.topoFormulaSeen.length) {
+      this.topoFormulaSeen = growUint32(this.topoFormulaSeen, cellSize);
+    }
+    if (entitySize > this.topoEntityQueue.length) {
+      this.topoEntityQueue = growUint32(this.topoEntityQueue, entitySize);
+    }
+    if (rangeSize > this.topoRangeSeen.length) {
+      this.topoRangeSeen = growUint32(this.topoRangeSeen, rangeSize);
     }
   }
 
@@ -1196,6 +1241,43 @@ export class SpreadsheetEngine {
       }
       output.add(entityPayload(dependent));
     }
+  }
+
+  private collectFormulaDependentsForEntityInto(entityId: number): number {
+    this.topoFormulaSeenEpoch += 1;
+    this.topoRangeSeenEpoch += 1;
+
+    let entityQueueLength = 1;
+    let formulaCount = 0;
+    this.topoEntityQueue[0] = entityId;
+
+    for (let queueIndex = 0; queueIndex < entityQueueLength; queueIndex += 1) {
+      const currentEntity = this.topoEntityQueue[queueIndex]!;
+      const dependents = this.getEntityDependents(currentEntity);
+      for (let index = 0; index < dependents.length; index += 1) {
+        const dependent = dependents[index]!;
+        if (isRangeEntity(dependent)) {
+          const rangeIndex = entityPayload(dependent);
+          if (this.topoRangeSeen[rangeIndex] === this.topoRangeSeenEpoch) {
+            continue;
+          }
+          this.topoRangeSeen[rangeIndex] = this.topoRangeSeenEpoch;
+          this.topoEntityQueue[entityQueueLength] = dependent;
+          entityQueueLength += 1;
+          continue;
+        }
+
+        const formulaCellIndex = entityPayload(dependent);
+        if (this.topoFormulaSeen[formulaCellIndex] === this.topoFormulaSeenEpoch) {
+          continue;
+        }
+        this.topoFormulaSeen[formulaCellIndex] = this.topoFormulaSeenEpoch;
+        this.topoFormulaBuffer[formulaCount] = formulaCellIndex;
+        formulaCount += 1;
+      }
+    }
+
+    return formulaCount;
   }
 
   private getFormulaDependencyCells(cellIndex: number): number[] {

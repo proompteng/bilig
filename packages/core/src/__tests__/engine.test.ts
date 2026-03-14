@@ -327,6 +327,22 @@ describe("SpreadsheetEngine", () => {
     expect(engine.workbook.cellStore.cycleGroupIds[a1Index!]).toBe(engine.workbook.cellStore.cycleGroupIds[b1Index!]);
   });
 
+  it("assigns topo ranks through range-node dependents deterministically", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "topo-spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+    engine.setCellFormula("Sheet1", "D1", "SUM(A1:B1)");
+
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    const d1Index = engine.workbook.getCellIndex("Sheet1", "D1");
+
+    expect(b1Index).toBeDefined();
+    expect(d1Index).toBeDefined();
+    expect(engine.workbook.cellStore.topoRanks[b1Index!]!).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!]!);
+  });
+
   it("notifies per-cell listeners only for the cells that changed", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
