@@ -65,4 +65,8 @@ export class EngineEventBus {
       });
     });
   }
+
+  emitAllWatched(event: EngineEvent): void {
+    this.emit(event, this.cellListeners.size === 0 ? [] : [...this.cellListeners.keys()]);
+  }
 }

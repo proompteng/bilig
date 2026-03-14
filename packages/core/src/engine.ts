@@ -225,6 +225,7 @@ export class SpreadsheetEngine {
     const existingSheet = this.workbook.getSheet(sheetName);
     const order = existingSheet?.order ?? this.workbook.sheetsByName.size;
     const ops: EngineOp[] = [];
+    let potentialNewCells = 0;
 
     if (existingSheet) {
       ops.push({ kind: "deleteSheet", name: sheetName });
@@ -240,13 +241,15 @@ export class SpreadsheetEngine {
         const address = formatAddress(rowIndex, colIndex);
         if (parsed.formula !== undefined) {
           ops.push({ kind: "setCellFormula", sheetName, address, formula: parsed.formula });
+          potentialNewCells += 1;
           return;
         }
         ops.push({ kind: "setCellValue", sheetName, address, value: parsed.value ?? null });
+        potentialNewCells += 1;
       });
     });
 
-    this.applyLocalOps(ops);
+    this.applyLocalOps(ops, potentialNewCells);
   }
 
   getCellValue(sheetName: string, address: string): CellValue {
@@ -400,21 +403,76 @@ export class SpreadsheetEngine {
 
   importSnapshot(snapshot: WorkbookSnapshot): void {
     this.resetWorkbook(snapshot.workbook.name);
-    const ops: EngineOp[] = [];
+    const totalCells = snapshot.sheets.reduce((count, sheet) => count + sheet.cells.length, 0);
+    this.workbook.cellStore.ensureCapacity(totalCells);
+
     snapshot.sheets.forEach((sheet) => {
-      ops.push({ kind: "upsertSheet", name: sheet.name, order: sheet.order });
-      sheet.cells.forEach((cell) => {
-        if (cell.formula) {
-          ops.push({ kind: "setCellFormula", sheetName: sheet.name, address: cell.address, formula: cell.formula });
-        } else {
-          ops.push({ kind: "setCellValue", sheetName: sheet.name, address: cell.address, value: cell.value ?? null });
-        }
-        if (cell.format !== undefined) {
-          ops.push({ kind: "setCellFormat", sheetName: sheet.name, address: cell.address, format: cell.format });
-        }
-      });
+      this.workbook.createSheet(sheet.name, sheet.order);
     });
-    this.applyLocalOps(ops);
+
+    const changedInputs = new Set<number>();
+    const formulaChanged = new Set<number>();
+    const materializedCells: MaterializedCell[] = [];
+    let compileMs = 0;
+
+    this.batchMutationDepth += 1;
+    try {
+      snapshot.sheets.forEach((sheet) => {
+        sheet.cells.forEach((cell) => {
+          const cellIndex = this.ensureCellTracked(sheet.name, cell.address, materializedCells);
+          if (cell.formula !== undefined) {
+            const compileStarted = performance.now();
+            const compiled = compileFormula(cell.formula);
+            compileMs += performance.now() - compileStarted;
+            const dependencies = this.materializeDependencies(sheet.name, compiled.deps, materializedCells);
+            this.setFormula(cellIndex, cell.formula, compiled, dependencies, materializedCells);
+            formulaChanged.add(cellIndex);
+          } else {
+            const value = literalToValue(cell.value ?? null, this.strings);
+            this.workbook.cellStore.setValue(
+              cellIndex,
+              value,
+              value.tag === ValueTag.String ? value.stringId : 0
+            );
+            this.workbook.cellStore.flags[cellIndex] =
+              (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
+            changedInputs.add(cellIndex);
+          }
+          if (cell.format !== undefined) {
+            this.workbook.setCellFormat(cellIndex, cell.format);
+          }
+        });
+      });
+
+      this.syncDynamicRanges(materializedCells).forEach((cellIndex) => {
+        formulaChanged.add(cellIndex);
+      });
+    } finally {
+      this.batchMutationDepth -= 1;
+      this.flushWasmProgramSync();
+    }
+
+    this.lastMetrics.compileMs = compileMs;
+    if (formulaChanged.size > 0) {
+      this.rebuildTopoRanks();
+      this.detectCycles();
+    }
+
+    const changedInputArray = [...changedInputs];
+    const changed = this.recalculate([...changedInputArray, ...formulaChanged], changedInputArray);
+    this.lastMetrics.batchId += 1;
+    this.lastMetrics.changedInputCount = changedInputs.size + formulaChanged.size;
+
+    const event: EngineEvent = {
+      kind: "batch",
+      changedCellIndices: changed,
+      metrics: this.lastMetrics
+    };
+    if (this.events.hasCellListeners()) {
+      this.events.emitAllWatched(event);
+      return;
+    }
+    this.events.emit(event);
   }
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {
@@ -439,6 +497,7 @@ export class SpreadsheetEngine {
 
   renderCommit(ops: CommitOp[]): void {
     const engineOps: EngineOp[] = [];
+    let potentialNewCells = 0;
     ops.forEach((op) => {
       switch (op.kind) {
         case "upsertWorkbook":
@@ -457,6 +516,7 @@ export class SpreadsheetEngine {
           } else {
             engineOps.push({ kind: "setCellValue", sheetName: op.sheetName, address: op.addr, value: op.value ?? null });
           }
+          potentialNewCells += 1;
           if (op.format !== undefined) {
             engineOps.push({ kind: "setCellFormat", sheetName: op.sheetName, address: op.addr, format: op.format });
           }
@@ -469,7 +529,7 @@ export class SpreadsheetEngine {
           break;
       }
     });
-    this.applyLocalOps(engineOps);
+    this.applyLocalOps(engineOps, potentialNewCells);
   }
 
   applyRemoteBatch(batch: EngineOpBatch): void {
@@ -477,13 +537,13 @@ export class SpreadsheetEngine {
     this.applyBatch(batch, "remote");
   }
 
-  private applyLocalOps(ops: EngineOp[]): void {
+  private applyLocalOps(ops: EngineOp[], potentialNewCells?: number): void {
     if (ops.length === 0) return;
     const batch = createBatch(this.replica, ops);
-    this.applyBatch(batch, "local");
+    this.applyBatch(batch, "local", potentialNewCells);
   }
 
-  private applyBatch(batch: EngineOpBatch, source: "local" | "remote"): void {
+  private applyBatch(batch: EngineOpBatch, source: "local" | "remote", potentialNewCells?: number): void {
     const changedInputs = new Set<number>();
     const formulaChanged = new Set<number>();
     const trackQualifiedAddresses = this.events.hasCellListeners();
@@ -491,12 +551,17 @@ export class SpreadsheetEngine {
     const materializedCells: MaterializedCell[] = [];
     let topologyChanged = false;
     let appliedOps = 0;
+    const canSkipOrderChecks = source === "local";
+
+    this.workbook.cellStore.ensureCapacity(
+      this.workbook.cellStore.size + (potentialNewCells ?? this.estimatePotentialNewCells(batch.ops))
+    );
 
     this.batchMutationDepth += 1;
     try {
       batch.ops.forEach((op, opIndex) => {
         const order = batchOpOrder(batch, opIndex);
-        if (!this.shouldApplyOp(op, order)) {
+        if (!canSkipOrderChecks && !this.shouldApplyOp(op, order)) {
           return;
         }
 
@@ -949,6 +1014,21 @@ export class SpreadsheetEngine {
 
   private emitBatch(batch: EngineOpBatch): void {
     this.batchListeners.forEach((listener) => listener(batch));
+  }
+
+  private estimatePotentialNewCells(ops: readonly EngineOp[]): number {
+    let count = 0;
+    for (let index = 0; index < ops.length; index += 1) {
+      const op = ops[index]!;
+      if (
+        op.kind === "setCellValue" ||
+        op.kind === "setCellFormula" ||
+        op.kind === "setCellFormat"
+      ) {
+        count += 1;
+      }
+    }
+    return count;
   }
 
   private getEntityDependents(entityId: number): Uint32Array {
