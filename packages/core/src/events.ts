@@ -4,6 +4,14 @@ export class EngineEventBus {
   private readonly listeners = new Set<(event: EngineEvent) => void>();
   private readonly cellListeners = new Map<string, Set<() => void>>();
 
+  hasListeners(): boolean {
+    return this.listeners.size > 0;
+  }
+
+  hasCellListeners(): boolean {
+    return this.cellListeners.size > 0;
+  }
+
   subscribe(listener: (event: EngineEvent) => void): () => void {
     this.listeners.add(listener);
     return () => {

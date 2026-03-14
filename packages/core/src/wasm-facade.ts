@@ -108,7 +108,7 @@ export class WasmKernelFacade {
     this.kernel.uploadRangeMembers(Uint32Array.from(members), memberOffsets, memberLengths);
   }
 
-  syncFromStore(store: CellStore): void {
+  syncFromStore(store: CellStore, changedCellIndices?: readonly number[] | Uint32Array): void {
     if (!this.kernel) return;
     this.ensureCapacity(
       store.size,
@@ -117,12 +117,33 @@ export class WasmKernelFacade {
       this.kernel.getRangeCapacity(),
       this.kernel.getMemberCapacity()
     );
-    this.kernel.writeCells(
-      store.tags.slice(0, store.size),
-      store.numbers.slice(0, store.size),
-      store.stringIds.slice(0, store.size),
-      store.errors.slice(0, store.size)
-    );
+    if (changedCellIndices === undefined) {
+      this.kernel.writeCells(
+        store.tags.slice(0, store.size),
+        store.numbers.slice(0, store.size),
+        store.stringIds.slice(0, store.size),
+        store.errors.slice(0, store.size)
+      );
+      return;
+    }
+    if (changedCellIndices.length === 0) {
+      return;
+    }
+
+    const tags = this.kernel.readTags();
+    const numbers = this.kernel.readNumbers();
+    const stringIds = this.kernel.readStringIds();
+    const errors = this.kernel.readErrors();
+    for (let index = 0; index < changedCellIndices.length; index += 1) {
+      const cellIndex = changedCellIndices[index]!;
+      if (cellIndex >= store.size) {
+        continue;
+      }
+      tags[cellIndex] = store.tags[cellIndex]!;
+      numbers[cellIndex] = store.numbers[cellIndex]!;
+      stringIds[cellIndex] = store.stringIds[cellIndex]!;
+      errors[cellIndex] = store.errors[cellIndex]!;
+    }
   }
 
   evalBatch(cellIndices: Uint32Array): void {

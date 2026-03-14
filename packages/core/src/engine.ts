@@ -486,8 +486,10 @@ export class SpreadsheetEngine {
   private applyBatch(batch: EngineOpBatch, source: "local" | "remote"): void {
     const changedInputs = new Set<number>();
     const formulaChanged = new Set<number>();
-    const changedQualifiedAddresses = new Set<string>();
+    const trackQualifiedAddresses = this.events.hasCellListeners();
+    const changedQualifiedAddresses = trackQualifiedAddresses ? new Set<string>() : null;
     const materializedCells: MaterializedCell[] = [];
+    let topologyChanged = false;
     let appliedOps = 0;
 
     this.batchMutationDepth += 1;
@@ -510,16 +512,20 @@ export class SpreadsheetEngine {
             if (!tombstone || compareOpOrder(order, tombstone) > 0) {
               this.sheetDeleteVersions.delete(op.name);
             }
-            this.rebindFormulasForSheet(op.name).forEach((cellIndex) => formulaChanged.add(cellIndex));
+            this.rebindFormulasForSheet(op.name).forEach((cellIndex) => {
+              formulaChanged.add(cellIndex);
+              topologyChanged = true;
+            });
             break;
           case "deleteSheet":
             this.removeSheetRuntime(op.name, changedInputs, formulaChanged, changedQualifiedAddresses);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             this.sheetDeleteVersions.set(op.name, order);
+            topologyChanged = true;
             break;
           case "setCellValue": {
             const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
-            this.removeFormula(cellIndex);
+            topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
             const value = literalToValue(op.value, this.strings);
             this.workbook.cellStore.setValue(
               cellIndex,
@@ -529,7 +535,7 @@ export class SpreadsheetEngine {
             this.workbook.cellStore.flags[cellIndex] =
               (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
             changedInputs.add(cellIndex);
-            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
+            changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
@@ -541,14 +547,15 @@ export class SpreadsheetEngine {
             const dependencies = this.materializeDependencies(op.sheetName, compiled.deps, materializedCells);
             this.setFormula(cellIndex, op.formula, compiled, dependencies, materializedCells);
             formulaChanged.add(cellIndex);
-            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
+            changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
+            topologyChanged = true;
             break;
           }
           case "setCellFormat": {
             const cellIndex = this.ensureCellTracked(op.sheetName, op.address, materializedCells);
             this.workbook.setCellFormat(cellIndex, op.format);
-            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
+            changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
@@ -558,22 +565,25 @@ export class SpreadsheetEngine {
               this.entityVersions.set(this.entityKeyForOp(op), order);
               break;
             }
-            this.removeFormula(cellIndex);
+            topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
             this.workbook.cellStore.setValue(cellIndex, emptyValue());
             changedInputs.add(cellIndex);
-            changedQualifiedAddresses.add(`${op.sheetName}!${op.address}`);
+            changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
         }
         appliedOps += 1;
       });
+
+      this.syncDynamicRanges(materializedCells).forEach((cellIndex) => {
+        formulaChanged.add(cellIndex);
+        topologyChanged = true;
+      });
     } finally {
       this.batchMutationDepth -= 1;
       this.flushWasmProgramSync();
     }
-
-    this.syncDynamicRanges(materializedCells).forEach((cellIndex) => formulaChanged.add(cellIndex));
 
     markBatchApplied(this.replica, batch);
     if (appliedOps === 0) {
@@ -583,22 +593,27 @@ export class SpreadsheetEngine {
       return;
     }
 
-    this.rebuildTopoRanks();
-    this.detectCycles();
-    const changed = this.recalculate([...changedInputs, ...formulaChanged]);
+    if (topologyChanged) {
+      this.rebuildTopoRanks();
+      this.detectCycles();
+    }
+    const changedInputArray = [...changedInputs];
+    const changed = this.recalculate([...changedInputArray, ...formulaChanged], changedInputArray);
     this.lastMetrics.batchId += 1;
     this.lastMetrics.changedInputCount = changedInputs.size + formulaChanged.size;
-    changed.forEach((cellIndex) => {
-      const qualifiedAddress = this.workbook.getQualifiedAddress(cellIndex);
-      if (!qualifiedAddress.startsWith("!")) {
-        changedQualifiedAddresses.add(qualifiedAddress);
-      }
-    });
+    if (changedQualifiedAddresses) {
+      changed.forEach((cellIndex) => {
+        const qualifiedAddress = this.workbook.getQualifiedAddress(cellIndex);
+        if (!qualifiedAddress.startsWith("!")) {
+          changedQualifiedAddresses.add(qualifiedAddress);
+        }
+      });
+    }
     this.events.emit({
       kind: "batch",
       changedCellIndices: changed,
       metrics: this.lastMetrics
-    }, [...changedQualifiedAddresses]);
+    }, changedQualifiedAddresses ? [...changedQualifiedAddresses] : []);
     if (source === "local") {
       this.emitBatch(batch);
     }
@@ -732,7 +747,7 @@ export class SpreadsheetEngine {
     this.scheduleWasmProgramSync();
   }
 
-  private removeFormula(cellIndex: number): void {
+  private removeFormula(cellIndex: number): boolean {
     const existing = this.formulas.get(cellIndex);
     if (existing) {
       const dependencyEntities = this.edgeArena.read(existing.dependencyEntities);
@@ -759,6 +774,7 @@ export class SpreadsheetEngine {
       (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
     this.workbook.cellStore.formulaIds[cellIndex] = 0;
     this.scheduleWasmProgramSync();
+    return existing !== undefined;
   }
 
   private rebuildTopoRanks(): void {
@@ -808,7 +824,7 @@ export class SpreadsheetEngine {
     });
   }
 
-  private recalculate(changedRoots: number[]): Uint32Array {
+  private recalculate(changedRoots: number[], kernelSyncRoots: readonly number[] = changedRoots): Uint32Array {
     const started = performance.now();
     const scheduled = this.scheduler.collectDirty(
       changedRoots,
@@ -819,13 +835,17 @@ export class SpreadsheetEngine {
     );
     const ordered = scheduled.orderedFormulaCellIndices;
 
+    const pendingKernelSync = [...kernelSyncRoots];
+
     const flushWasmBatch = (batch: number[]): number => {
       if (batch.length === 0) {
         return 0;
       }
-      this.wasm.syncFromStore(this.workbook.cellStore);
-      this.wasm.evalBatch(Uint32Array.from(batch));
-      this.wasm.syncToStore(this.workbook.cellStore, Uint32Array.from(batch));
+      this.wasm.syncFromStore(this.workbook.cellStore, pendingKernelSync);
+      pendingKernelSync.length = 0;
+      const batchIndices = Uint32Array.from(batch);
+      this.wasm.evalBatch(batchIndices);
+      this.wasm.syncToStore(this.workbook.cellStore, batchIndices);
       return batch.length;
     };
 
@@ -849,9 +869,13 @@ export class SpreadsheetEngine {
       wasmBatch = [];
       jsCount += 1;
       this.evaluateFormulaJs(cellIndex, formula);
+      pendingKernelSync.push(cellIndex);
     }
 
     wasmCount += flushWasmBatch(wasmBatch);
+    if (pendingKernelSync.length > 0) {
+      this.wasm.syncFromStore(this.workbook.cellStore, pendingKernelSync);
+    }
 
     this.lastMetrics.dirtyFormulaCount = ordered.length;
     this.lastMetrics.jsFormulaCount = jsCount;
@@ -1020,7 +1044,7 @@ export class SpreadsheetEngine {
     sheetName: string,
     changedInputs: Set<number>,
     formulaChanged: Set<number>,
-    changedQualifiedAddresses: Set<string>
+    changedQualifiedAddresses: Set<string> | null
   ): void {
     const sheet = this.workbook.getSheet(sheetName);
     if (!sheet) return;
@@ -1033,7 +1057,7 @@ export class SpreadsheetEngine {
     });
 
     cellIndices.forEach((cellIndex) => {
-      changedQualifiedAddresses.add(`${sheetName}!${this.workbook.getAddress(cellIndex)}`);
+      changedQualifiedAddresses?.add(`${sheetName}!${this.workbook.getAddress(cellIndex)}`);
       this.removeFormula(cellIndex);
       this.reverseEdges.delete(makeCellEntity(cellIndex));
       this.workbook.cellStore.setValue(cellIndex, emptyValue());

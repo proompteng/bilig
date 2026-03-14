@@ -36,12 +36,23 @@ export function buildWorkbookSnapshot(materializedCells = 1000): WorkbookSnapsho
 }
 
 export function seedDownstreamWorkbook(engine: SpreadsheetEngine, downstreamCount = 1000): void {
-  engine.createSheet("Sheet1");
-  engine.setCellValue("Sheet1", "A1", 1);
-
-  for (let index = 1; index <= downstreamCount; index += 1) {
-    engine.setCellFormula("Sheet1", `B${index}`, `A1*2+${index}`);
-  }
+  engine.importSnapshot({
+    version: 1,
+    workbook: { name: "benchmark-edit" },
+    sheets: [
+      {
+        name: "Sheet1",
+        order: 0,
+        cells: [
+          { address: "A1", value: 1 },
+          ...Array.from({ length: downstreamCount }, (_, index) => ({
+            address: `B${index + 1}`,
+            formula: `A1*2+${index + 1}`
+          }))
+        ]
+      }
+    ]
+  });
 }
 
 export function buildRenderCommitOps(cellCount = 1000): CommitOp[] {
