@@ -141,6 +141,13 @@ export class SpreadsheetEngine {
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
   private pendingKernelSync: U32 = new Uint32Array(128);
   private wasmBatch: U32 = new Uint32Array(128);
+  private mutationRoots: U32 = new Uint32Array(128);
+  private changedInputEpoch = 1;
+  private changedInputSeen: U32 = new Uint32Array(128);
+  private changedInputBuffer: U32 = new Uint32Array(128);
+  private changedFormulaEpoch = 1;
+  private changedFormulaSeen: U32 = new Uint32Array(128);
+  private changedFormulaBuffer: U32 = new Uint32Array(128);
   private changedUnionEpoch = 1;
   private changedUnionSeen: U32 = new Uint32Array(128);
   private changedUnion: U32 = new Uint32Array(128);
@@ -447,8 +454,9 @@ export class SpreadsheetEngine {
       this.workbook.createSheet(sheet.name, sheet.order);
     });
 
-    const changedInputs = new Set<number>();
-    const formulaChanged = new Set<number>();
+    this.beginMutationCollection();
+    let changedInputCount = 0;
+    let formulaChangedCount = 0;
     const materializedCells: MaterializedCell[] = [];
     let compileMs = 0;
 
@@ -463,7 +471,7 @@ export class SpreadsheetEngine {
             compileMs += performance.now() - compileStarted;
             const dependencies = this.materializeDependencies(sheet.name, compiled.deps, materializedCells);
             this.setFormula(cellIndex, cell.formula, compiled, dependencies, materializedCells);
-            formulaChanged.add(cellIndex);
+            formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
           } else {
             const value = literalToValue(cell.value ?? null, this.strings);
             this.workbook.cellStore.setValue(
@@ -473,7 +481,7 @@ export class SpreadsheetEngine {
             );
             this.workbook.cellStore.flags[cellIndex] =
               (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
-            changedInputs.add(cellIndex);
+            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
           }
           if (cell.format !== undefined) {
             this.workbook.setCellFormat(cellIndex, cell.format);
@@ -482,7 +490,7 @@ export class SpreadsheetEngine {
       });
 
       this.syncDynamicRanges(materializedCells).forEach((cellIndex) => {
-        formulaChanged.add(cellIndex);
+        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
       });
     } finally {
       this.batchMutationDepth -= 1;
@@ -490,15 +498,18 @@ export class SpreadsheetEngine {
     }
 
     this.lastMetrics.compileMs = compileMs;
-    if (formulaChanged.size > 0) {
+    if (formulaChangedCount > 0) {
       this.rebuildTopoRanks();
       this.detectCycles();
     }
 
-    const changedInputArray = [...changedInputs];
-    const changed = this.recalculate([...changedInputArray, ...formulaChanged], changedInputArray);
+    const changedInputArray = this.changedInputBuffer.subarray(0, changedInputCount);
+    const changed = this.recalculate(
+      this.composeMutationRoots(changedInputCount, formulaChangedCount),
+      changedInputArray
+    );
     this.lastMetrics.batchId += 1;
-    this.lastMetrics.changedInputCount = changedInputs.size + formulaChanged.size;
+    this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
 
     const event: EngineEvent = {
       kind: "batch",
@@ -581,8 +592,9 @@ export class SpreadsheetEngine {
   }
 
   private applyBatch(batch: EngineOpBatch, source: "local" | "remote", potentialNewCells?: number): void {
-    const changedInputs = new Set<number>();
-    const formulaChanged = new Set<number>();
+    this.beginMutationCollection();
+    let changedInputCount = 0;
+    let formulaChangedCount = 0;
     const trackQualifiedAddresses = this.events.hasCellListeners();
     const changedQualifiedAddresses = trackQualifiedAddresses ? new Set<string>() : null;
     const materializedCells: MaterializedCell[] = [];
@@ -615,12 +627,14 @@ export class SpreadsheetEngine {
               this.sheetDeleteVersions.delete(op.name);
             }
             this.rebindFormulasForSheet(op.name).forEach((cellIndex) => {
-              formulaChanged.add(cellIndex);
+              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
               topologyChanged = true;
             });
             break;
           case "deleteSheet":
-            this.removeSheetRuntime(op.name, changedInputs, formulaChanged, changedQualifiedAddresses);
+            const removal = this.removeSheetRuntime(op.name, changedQualifiedAddresses);
+            changedInputCount += removal.changedInputCount;
+            formulaChangedCount += removal.formulaChangedCount;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             this.sheetDeleteVersions.set(op.name, order);
             topologyChanged = true;
@@ -636,7 +650,7 @@ export class SpreadsheetEngine {
             );
             this.workbook.cellStore.flags[cellIndex] =
               (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
-            changedInputs.add(cellIndex);
+            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
             changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
@@ -648,7 +662,7 @@ export class SpreadsheetEngine {
             this.lastMetrics.compileMs = performance.now() - compileStarted;
             const dependencies = this.materializeDependencies(op.sheetName, compiled.deps, materializedCells);
             this.setFormula(cellIndex, op.formula, compiled, dependencies, materializedCells);
-            formulaChanged.add(cellIndex);
+            formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
             changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             topologyChanged = true;
@@ -669,7 +683,7 @@ export class SpreadsheetEngine {
             }
             topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
             this.workbook.cellStore.setValue(cellIndex, emptyValue());
-            changedInputs.add(cellIndex);
+            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
             changedQualifiedAddresses?.add(`${op.sheetName}!${op.address}`);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
@@ -679,7 +693,7 @@ export class SpreadsheetEngine {
       });
 
       this.syncDynamicRanges(materializedCells).forEach((cellIndex) => {
-        formulaChanged.add(cellIndex);
+        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
         topologyChanged = true;
       });
     } finally {
@@ -699,10 +713,13 @@ export class SpreadsheetEngine {
       this.rebuildTopoRanks();
       this.detectCycles();
     }
-    const changedInputArray = [...changedInputs];
-    const changed = this.recalculate([...changedInputArray, ...formulaChanged], changedInputArray);
+    const changedInputArray = this.changedInputBuffer.subarray(0, changedInputCount);
+    const changed = this.recalculate(
+      this.composeMutationRoots(changedInputCount, formulaChangedCount),
+      changedInputArray
+    );
     this.lastMetrics.batchId += 1;
-    this.lastMetrics.changedInputCount = changedInputs.size + formulaChanged.size;
+    this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
     if (changedQualifiedAddresses) {
       changed.forEach((cellIndex) => {
         const qualifiedAddress = this.workbook.getQualifiedAddress(cellIndex);
@@ -956,7 +973,10 @@ export class SpreadsheetEngine {
     }
   }
 
-  private recalculate(changedRoots: number[], kernelSyncRoots: readonly number[] = changedRoots): Uint32Array {
+  private recalculate(
+    changedRoots: readonly number[] | U32,
+    kernelSyncRoots: readonly number[] | U32 = changedRoots
+  ): Uint32Array {
     const started = performance.now();
     const scheduled = this.scheduler.collectDirty(
       changedRoots,
@@ -1049,6 +1069,21 @@ export class SpreadsheetEngine {
   }
 
   private ensureRecalcScratchCapacity(size: number): void {
+    if (size > this.mutationRoots.length) {
+      this.mutationRoots = growUint32(this.mutationRoots, size);
+    }
+    if (size > this.changedInputSeen.length) {
+      this.changedInputSeen = growUint32(this.changedInputSeen, size);
+    }
+    if (size > this.changedInputBuffer.length) {
+      this.changedInputBuffer = growUint32(this.changedInputBuffer, size);
+    }
+    if (size > this.changedFormulaSeen.length) {
+      this.changedFormulaSeen = growUint32(this.changedFormulaSeen, size);
+    }
+    if (size > this.changedFormulaBuffer.length) {
+      this.changedFormulaBuffer = growUint32(this.changedFormulaBuffer, size);
+    }
     if (size > this.pendingKernelSync.length) {
       this.pendingKernelSync = growUint32(this.pendingKernelSync, size);
     }
@@ -1334,12 +1369,12 @@ export class SpreadsheetEngine {
 
   private removeSheetRuntime(
     sheetName: string,
-    changedInputs: Set<number>,
-    formulaChanged: Set<number>,
     changedQualifiedAddresses: Set<string> | null
-  ): void {
+  ): { changedInputCount: number; formulaChangedCount: number } {
     const sheet = this.workbook.getSheet(sheetName);
-    if (!sheet) return;
+    if (!sheet) {
+      return { changedInputCount: 0, formulaChangedCount: 0 };
+    }
 
     const cellIndices: number[] = [];
     sheet.grid.forEachCell((cellIndex) => {
@@ -1347,6 +1382,8 @@ export class SpreadsheetEngine {
     });
     const impactedCount = this.collectImpactedFormulasForCells(cellIndices);
 
+    let changedInputCount = 0;
+    let formulaChangedCount = 0;
     cellIndices.forEach((cellIndex) => {
       changedQualifiedAddresses?.add(`${sheetName}!${this.workbook.getAddress(cellIndex)}`);
       this.removeFormula(cellIndex);
@@ -1354,13 +1391,14 @@ export class SpreadsheetEngine {
       this.workbook.cellStore.setValue(cellIndex, emptyValue());
       this.workbook.cellStore.flags[cellIndex] =
         (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.PendingDelete;
-      changedInputs.add(cellIndex);
+      changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
     });
 
     this.workbook.deleteSheet(sheetName);
-    this.rebindFormulasForSheet(sheetName, this.impactedFormulaBuffer.subarray(0, impactedCount)).forEach((cellIndex) =>
-      formulaChanged.add(cellIndex)
-    );
+    this.rebindFormulasForSheet(sheetName, this.impactedFormulaBuffer.subarray(0, impactedCount)).forEach((cellIndex) => {
+      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+    });
+    return { changedInputCount, formulaChangedCount };
   }
 
   private rebindFormulasForSheet(sheetName: string, candidates?: readonly number[] | U32): Set<number> {
@@ -1427,6 +1465,50 @@ export class SpreadsheetEngine {
     }
 
     return impactedCount;
+  }
+
+  private beginMutationCollection(): void {
+    this.changedInputEpoch += 1;
+    if (this.changedInputEpoch === 0xffff_ffff) {
+      this.changedInputEpoch = 1;
+      this.changedInputSeen.fill(0);
+    }
+    this.changedFormulaEpoch += 1;
+    if (this.changedFormulaEpoch === 0xffff_ffff) {
+      this.changedFormulaEpoch = 1;
+      this.changedFormulaSeen.fill(0);
+    }
+    this.ensureRecalcScratchCapacity(this.workbook.cellStore.size + 1);
+  }
+
+  private markInputChanged(cellIndex: number, count: number): number {
+    if (this.changedInputSeen[cellIndex] === this.changedInputEpoch) {
+      return count;
+    }
+    this.changedInputSeen[cellIndex] = this.changedInputEpoch;
+    this.changedInputBuffer[count] = cellIndex;
+    return count + 1;
+  }
+
+  private markFormulaChanged(cellIndex: number, count: number): number {
+    if (this.changedFormulaSeen[cellIndex] === this.changedFormulaEpoch) {
+      return count;
+    }
+    this.changedFormulaSeen[cellIndex] = this.changedFormulaEpoch;
+    this.changedFormulaBuffer[count] = cellIndex;
+    return count + 1;
+  }
+
+  private composeMutationRoots(changedInputCount: number, formulaChangedCount: number): U32 {
+    const total = changedInputCount + formulaChangedCount;
+    this.ensureRecalcScratchCapacity(total + 1);
+    for (let index = 0; index < changedInputCount; index += 1) {
+      this.mutationRoots[index] = this.changedInputBuffer[index]!;
+    }
+    for (let index = 0; index < formulaChangedCount; index += 1) {
+      this.mutationRoots[changedInputCount + index] = this.changedFormulaBuffer[index]!;
+    }
+    return this.mutationRoots.subarray(0, total);
   }
 
   private ensureCellTracked(sheetName: string, address: string, materializedCells: MaterializedCell[]): number {

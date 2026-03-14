@@ -64,5 +64,6 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 - shared program/constant/range arenas in the engine so formula metadata matches the packed runtime/WASM contract instead of ad hoc per-formula blobs
 - vectorized topo rebuild scratch state in the engine so rank assignment no longer depends on `Map`/`Set` queue construction in the hot topology path
 - typed-array impacted-formula scratch in the engine so sheet deletion and formula rebinding no longer build recursive `Set` unions over the entity graph
+- typed-array mutation-root buffers in the engine so snapshot import and op-batch application no longer allocate `Set` unions before recalculation
 
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` maintains keyed cell listener routing so `useCell(...)` and viewport watchers wake only when one of their watched addresses changes. That keeps the grid aligned with the production requirement for localized rerenders rather than whole-viewport invalidation on every batch.

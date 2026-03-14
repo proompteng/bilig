@@ -24,7 +24,7 @@ export class RecalcScheduler {
   private orderedDirty: U32 = new Uint32Array(128);
 
   collectDirty(
-    changedRoots: readonly number[],
+    changedRoots: readonly number[] | U32,
     graph: SchedulerReverseGraph,
     cellStore: CellStore,
     hasFormula: (cellIndex: number) => boolean,
