@@ -24,7 +24,7 @@ export default defineWorkspace([
       environment: "node",
       coverage: {
         provider: "v8",
-        reporter: ["text", "lcov"],
+        reporter: ["text", "lcov", "json-summary"],
         include: [
           "packages/core/src/**/*.ts",
           "packages/formula/src/**/*.ts",

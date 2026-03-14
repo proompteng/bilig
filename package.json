@@ -23,7 +23,7 @@
     "bench:contracts": "tsx scripts/bench-contracts.mjs",
     "release:check": "node scripts/release-check.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm coverage && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
+    "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm coverage && node scripts/coverage-contracts.mjs && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
     "ci:strict": "pnpm run ci && git diff --exit-code && git diff --cached --exit-code"
   },
   "repository": {

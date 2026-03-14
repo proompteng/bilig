@@ -6,6 +6,8 @@ export * from "./benchmark-edit.js";
 export * from "./benchmark-load.js";
 export * from "./benchmark-renderer.js";
 export * from "./generate-workbook.js";
+export * from "./metrics.js";
+export * from "./stats.js";
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const results = [];

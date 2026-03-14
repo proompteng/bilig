@@ -1,6 +1,10 @@
 # Testing and Benchmarks
 
 - Vitest covers protocol, formula parsing/evaluation, CRDT ordering, engine behavior, WASM parity, and playground reconciler behavior.
+- `scripts/coverage-contracts.mjs` enforces the original design coverage floor directly from the generated JSON summary:
+  - `packages/core/src` line coverage must stay at or above `90%`
+  - `packages/formula/src` line coverage must stay at or above `90%`
+  - `packages/renderer/src` line coverage must stay at or above `90%`
 - Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`, exercising the extracted `@bilig/renderer` and `@bilig/grid` packages through the app shell.
 - Browser smoke covers both live recalculation and paused-relay resume behavior so local-first replication survives a full reload path in CI, not just in ad hoc manual testing.
 - CRDT unit tests now verify real compaction semantics, including stale cell writes behind sheet tombstones and recreate-after-delete flows.
@@ -11,12 +15,14 @@
   - renderer commit-style scenarios at 1k and 10k declared cells
   - the benchmark matrix runs sequentially so reported numbers are not distorted by inter-scenario CPU contention
 - `scripts/perf-smoke.mjs` enforces a lightweight CI threshold against a 1k-downstream edit and asserts that the run actually dirties the expected formulas and hits the WASM fast path.
-- `scripts/bench-contracts.mjs` enforces the documented performance contracts in CI:
-  - 100k materialized-cell load under 1.5s
-  - 10k-downstream edit under 120ms end to end
-  - 10k-downstream recalc under 50ms
-  - 10k-cell render commit under 50ms
+- `scripts/bench-contracts.mjs` enforces the documented performance contracts in CI with repeated isolated samples, percentile summaries, and memory snapshots:
+  - 100k materialized-cell load `p95` under 1.5s
+  - 100k materialized-cell load working-set delta (`heapUsed + external`) under 250MB
+  - 10k-downstream edit `p95` under 120ms end to end
+  - 10k-downstream recalc median under 50ms and `p95` under 120ms
+  - 10k-cell render commit `p95` under 50ms
   - Forgejo CI applies a bounded runner-variance tolerance so local runs stay strict while remote `main` remains stable under normal host variance.
+- Each benchmark contract scenario is executed in fresh child processes so sample distributions are not distorted by cross-scenario heap reuse or previous engine instances lingering in-process.
 - `scripts/release-check.mjs` enforces artifact budgets after the playground build:
   - largest built app JS asset must stay under 350KB gzip
   - largest built WASM asset must stay under 250KB gzip
@@ -38,7 +44,7 @@
 - `pnpm run ci` now includes:
   - WASM build
   - typecheck
-  - unit/integration tests
+  - unit/integration tests plus package coverage contracts
   - perf smoke
   - benchmark contract checks
   - browser smoke

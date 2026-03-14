@@ -79,7 +79,7 @@ function pushCellUpsert(
   ops.push(op);
 }
 
-const hostConfig = {
+export const workbookHostConfig = {
   rendererPackageName: "bilig-playground-reconciler",
   rendererVersion: "0.1.0",
   extraDevToolsConfig: null,
@@ -324,4 +324,4 @@ const hostConfig = {
   }
 };
 
-export const WorkbookReconciler = Reconciler(hostConfig as never);
+export const WorkbookReconciler = Reconciler(workbookHostConfig as never);
