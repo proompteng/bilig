@@ -1,11 +1,6 @@
 type U32 = Uint32Array<ArrayBufferLike>;
 type I32 = Int32Array<ArrayBufferLike>;
 
-export interface CycleDetectionResult {
-  inCycle: Set<number>;
-  cycleGroups: Map<number, number>;
-}
-
 export interface PackedCycleDetectionResult {
   cycleMembers: U32;
   cycleMemberCount: number;
@@ -157,27 +152,6 @@ export class CycleDetector {
     this.visitMarks.fill(0);
     this.onStackMarks.fill(0);
   }
-}
-
-export function detectFormulaCycles(
-  formulaCellIndices: Iterable<number>,
-  maxCellIndexExclusive: number,
-  forEachFormulaDependency: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void,
-  isFormula: (cellIndex: number) => boolean
-): CycleDetectionResult {
-  const detector = new CycleDetector();
-  const packed = detector.detect(formulaCellIndices, maxCellIndexExclusive, forEachFormulaDependency, isFormula);
-  const inCycle = new Set<number>();
-  const cycleGroups = new Map<number, number>();
-  for (let index = 0; index < packed.cycleMemberCount; index += 1) {
-    const cellIndex = packed.cycleMembers[index]!;
-    inCycle.add(cellIndex);
-    cycleGroups.set(cellIndex, packed.cycleGroups[cellIndex]!);
-  }
-  return {
-    inCycle,
-    cycleGroups
-  };
 }
 
 function createInt32(size: number, fillValue: number): I32 {

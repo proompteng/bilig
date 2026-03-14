@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CycleDetector, detectFormulaCycles } from "../cycle-detection.js";
+import { CycleDetector } from "../cycle-detection.js";
 
 describe("CycleDetector", () => {
   it("assigns deterministic group ids for separate strongly connected components", () => {
@@ -56,11 +56,9 @@ describe("CycleDetector", () => {
     expect(second.cycleGroups[2]).toBe(-1);
     expect(second.cycleGroups[3]).toBe(0);
   });
-});
-
-describe("detectFormulaCycles", () => {
-  it("preserves the compatibility wrapper for set/map consumers", () => {
-    const result = detectFormulaCycles(
+  it("returns packed cycle members and group ids directly", () => {
+    const detector = new CycleDetector();
+    const result = detector.detect(
       [1, 2],
       4,
       (cellIndex, fn) => {
@@ -70,8 +68,8 @@ describe("detectFormulaCycles", () => {
       (cellIndex) => cellIndex === 1 || cellIndex === 2
     );
 
-    expect(result.inCycle).toEqual(new Set([1, 2]));
-    expect(result.cycleGroups.get(1)).toBe(0);
-    expect(result.cycleGroups.get(2)).toBe(0);
+    expect(Array.from(result.cycleMembers.slice(0, result.cycleMemberCount))).toEqual([2, 1]);
+    expect(result.cycleGroups[1]).toBe(0);
+    expect(result.cycleGroups[2]).toBe(0);
   });
 });
