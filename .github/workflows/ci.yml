@@ -15,9 +15,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node:
-          - "22"
-          - "24.14.0"
+        include:
+          - node: "22"
+            bench_tolerance: "5"
+          - node: "24.14.0"
+            bench_tolerance: "1.5"
+    env:
+      BILIG_BENCH_TOLERANCE: ${{ matrix.bench_tolerance }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
