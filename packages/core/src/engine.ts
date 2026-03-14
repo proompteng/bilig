@@ -135,7 +135,8 @@ export class SpreadsheetEngine {
   private readonly programArena = new Uint32Arena();
   private readonly constantArena = new Float64Arena();
   private readonly rangeListArena = new Uint32Arena();
-  private readonly reverseEdges = new Map<number, EdgeSlice>();
+  private reverseCellEdges: Array<EdgeSlice | undefined> = [];
+  private reverseRangeEdges: Array<EdgeSlice | undefined> = [];
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
@@ -902,7 +903,7 @@ export class SpreadsheetEngine {
         for (let memberIndex = 0; memberIndex < released.members.length; memberIndex += 1) {
           this.removeReverseEdge(makeCellEntity(released.members[memberIndex]!), rangeEntity);
         }
-        this.reverseEdges.delete(rangeEntity);
+        this.setReverseEdgeSlice(rangeEntity, this.edgeArena.empty());
       }
       this.edgeArena.free(existing.dependencyEntities);
     }
@@ -1289,29 +1290,37 @@ export class SpreadsheetEngine {
   }
 
   private getEntityDependents(entityId: number): Uint32Array {
-    const slice = this.reverseEdges.get(entityId) ?? this.edgeArena.empty();
+    const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
     return this.edgeArena.read(slice);
   }
 
   private setReverseEdgeSlice(entityId: number, slice: EdgeSlice): void {
-    if (slice.ptr < 0 || slice.len === 0) {
-      this.reverseEdges.delete(entityId);
+    const empty = slice.ptr < 0 || slice.len === 0;
+    if (isRangeEntity(entityId)) {
+      this.reverseRangeEdges[entityPayload(entityId)] = empty ? undefined : slice;
       return;
     }
-    this.reverseEdges.set(entityId, slice);
+    this.reverseCellEdges[entityPayload(entityId)] = empty ? undefined : slice;
   }
 
   private appendReverseEdge(entityId: number, dependentEntityId: number): void {
-    const slice = this.reverseEdges.get(entityId) ?? this.edgeArena.empty();
+    const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
     this.setReverseEdgeSlice(entityId, this.edgeArena.appendUnique(slice, dependentEntityId));
   }
 
   private removeReverseEdge(entityId: number, dependentEntityId: number): void {
-    const slice = this.reverseEdges.get(entityId);
+    const slice = this.getReverseEdgeSlice(entityId);
     if (!slice) {
       return;
     }
     this.setReverseEdgeSlice(entityId, this.edgeArena.removeValue(slice, dependentEntityId));
+  }
+
+  private getReverseEdgeSlice(entityId: number): EdgeSlice | undefined {
+    if (isRangeEntity(entityId)) {
+      return this.reverseRangeEdges[entityPayload(entityId)];
+    }
+    return this.reverseCellEdges[entityPayload(entityId)];
   }
 
   private collectFormulaDependentsForEntityInto(entityId: number): number {
@@ -1424,7 +1433,7 @@ export class SpreadsheetEngine {
     cellIndices.forEach((cellIndex) => {
       changedQualifiedAddresses?.add(`${sheetName}!${this.workbook.getAddress(cellIndex)}`);
       this.removeFormula(cellIndex);
-      this.reverseEdges.delete(makeCellEntity(cellIndex));
+      this.setReverseEdgeSlice(makeCellEntity(cellIndex), this.edgeArena.empty());
       this.workbook.cellStore.setValue(cellIndex, emptyValue());
       this.workbook.cellStore.flags[cellIndex] =
         (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.PendingDelete;
@@ -1661,7 +1670,8 @@ export class SpreadsheetEngine {
   private resetWorkbook(workbookName = "Workbook"): void {
     this.workbook.reset(workbookName);
     this.formulas.clear();
-    this.reverseEdges.clear();
+    this.reverseCellEdges = [];
+    this.reverseRangeEdges = [];
     this.ranges.reset();
     this.edgeArena.reset();
     this.entityVersions.clear();

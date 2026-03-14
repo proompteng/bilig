@@ -116,6 +116,20 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
   });
 
+  it("clears reverse range edges when a range-backed formula is removed", async () => {
+    const engine = new SpreadsheetEngine();
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A:A)");
+
+    expect(engine.getDependencies("Sheet1", "A1").directDependents).toContain("Sheet1!B1");
+
+    engine.clearCell("Sheet1", "B1");
+
+    expect(engine.getDependencies("Sheet1", "A1").directDependents).toEqual([]);
+  });
+
   it("rebinds column and row range formulas when new cells materialize later", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
