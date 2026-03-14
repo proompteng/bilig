@@ -40,10 +40,10 @@ export default defineWorkspace([
           "packages/renderer/src/index.ts"
         ],
         thresholds: {
-          lines: 80,
-          statements: 80,
+          lines: 85,
+          statements: 85,
           functions: 85,
-          branches: 65
+          branches: 70
         }
       }
     }
