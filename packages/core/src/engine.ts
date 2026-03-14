@@ -45,7 +45,7 @@ import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
 import { RangeRegistry } from "./range-registry.js";
 import { RecalcScheduler } from "./scheduler.js";
-import { selectCellSnapshot, selectViewportCells } from "./selectors.js";
+import { selectCellSnapshot, selectMetrics, selectSelectionState, selectViewportCells } from "./selectors.js";
 import { StringPool } from "./string-pool.js";
 import { WasmKernelFacade } from "./wasm-facade.js";
 import { WorkbookStore } from "./workbook-store.js";
@@ -1867,5 +1867,7 @@ function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32A
 
 export const selectors = {
   selectCellSnapshot,
+  selectMetrics,
+  selectSelectionState,
   selectViewportCells
 };

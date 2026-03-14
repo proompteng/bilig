@@ -1,12 +1,12 @@
 import { useMemo, useSyncExternalStore } from "react";
-import type { SpreadsheetEngine } from "@bilig/core";
+import { selectors, type SpreadsheetEngine } from "@bilig/core";
 
 export function useMetrics(engine: SpreadsheetEngine) {
   const revision = useSyncExternalStore(
     engine.subscribe.bind(engine),
-    () => engine.getLastMetrics().batchId,
-    () => engine.getLastMetrics().batchId
+    () => selectors.selectMetrics(engine).batchId,
+    () => selectors.selectMetrics(engine).batchId
   );
 
-  return useMemo(() => ({ ...engine.getLastMetrics() }), [engine, revision]);
+  return useMemo(() => ({ ...selectors.selectMetrics(engine) }), [engine, revision]);
 }

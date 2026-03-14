@@ -78,3 +78,5 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` now routes watched cells by `cellIndex` in the hot path and only falls back to qualified-address listeners for still-unmaterialized cells, so `useCell(...)` and viewport watchers wake only when one of their watched cells changes. That keeps the grid aligned with the production requirement for localized rerenders without pushing string-address routing into every batch emission.
 
 Selection state now follows the same rule: the engine owns the current `{ sheetName, address }` selection snapshot and `@bilig/grid` consumes it through `useSyncExternalStore`, so the playground no longer keeps workbook selection in a parallel React-only state tree.
+
+The reusable hooks now read through `@bilig/core/selectors` for cell, metrics, selection, and viewport snapshots, so the UI package consumes a stable selector surface instead of reaching into ad hoc engine getters directly.

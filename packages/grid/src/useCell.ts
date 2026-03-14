@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
-import type { SpreadsheetEngine } from "@bilig/core";
+import { selectors, type SpreadsheetEngine } from "@bilig/core";
 
 export function useCell(engine: SpreadsheetEngine, sheetName: string, addr: string) {
   const revision = useSyncExternalStore(
@@ -8,5 +8,5 @@ export function useCell(engine: SpreadsheetEngine, sheetName: string, addr: stri
     () => engine.getLastMetrics().batchId
   );
 
-  return useMemo(() => engine.getCell(sheetName, addr), [addr, engine, revision, sheetName]);
+  return useMemo(() => selectors.selectCellSnapshot(engine, sheetName, addr), [addr, engine, revision, sheetName]);
 }
