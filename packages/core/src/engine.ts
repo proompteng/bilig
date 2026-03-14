@@ -76,7 +76,7 @@ interface RuntimeFormula {
   cellIndex: number;
   source: string;
   compiled: ReturnType<typeof compileFormula>;
-  dependencyIndices: number[];
+  dependencyIndices: Uint32Array;
   dependencyEntities: EdgeSlice;
   rangeDependencies: Uint32Array;
   runtimeProgram: Uint32Array;
@@ -98,7 +98,7 @@ interface MaterializedCell {
 }
 
 interface MaterializedDependencies {
-  dependencyIndices: number[];
+  dependencyIndices: Uint32Array;
   dependencyEntities: Uint32Array;
   rangeDependencies: Uint32Array;
   rangeIndexByRef: Map<string, number>;
@@ -789,7 +789,7 @@ export class SpreadsheetEngine {
       dependencyEntities.push(makeCellEntity(cellIndex));
     }
     return {
-      dependencyIndices: [...indices],
+      dependencyIndices: Uint32Array.from(indices),
       dependencyEntities: Uint32Array.from(dependencyEntities),
       rangeDependencies: Uint32Array.from(rangeDependencies),
       rangeIndexByRef,
@@ -1657,8 +1657,9 @@ export class SpreadsheetEngine {
           if (!formula) {
             continue;
           }
-          if (!formula.dependencyIndices.includes(materialized.cellIndex)) {
-            formula.dependencyIndices.push(materialized.cellIndex);
+          const nextDependencyIndices = appendPackedCellIndex(formula.dependencyIndices, materialized.cellIndex);
+          if (nextDependencyIndices !== formula.dependencyIndices) {
+            formula.dependencyIndices = nextDependencyIndices;
             formulaChangedCount = this.markFormulaChanged(formulaCellIndex, formulaChangedCount);
           }
         }
@@ -1699,6 +1700,18 @@ function growUint32(buffer: U32, required: number): U32 {
   const next = new Uint32Array(capacity);
   next.set(buffer);
   return next as U32;
+}
+
+function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32Array {
+  for (let index = 0; index < indices.length; index += 1) {
+    if (indices[index] === cellIndex) {
+      return indices;
+    }
+  }
+  const next = new Uint32Array(indices.length + 1);
+  next.set(indices);
+  next[indices.length] = cellIndex;
+  return next;
 }
 
 export const selectors = {

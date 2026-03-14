@@ -148,6 +148,11 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 5 });
     expect(engine.getDependencies("Sheet1", "B1").directPrecedents).toEqual(["Sheet1!A1", "Sheet1!A4"]);
     expect(engine.getDependencies("Sheet1", "B3").directPrecedents).toEqual(["Sheet1!C2"]);
+
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
+    expect(b1Index).toBeDefined();
+    const runtimeFormula = b1Index === undefined ? undefined : (engine as any).formulas.get(b1Index);
+    expect(runtimeFormula?.dependencyIndices).toBeInstanceOf(Uint32Array);
   });
 
   it("converges under reordered replicated batches and restores replica state", async () => {
