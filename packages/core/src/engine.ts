@@ -12,7 +12,14 @@ import {
   type RecalcMetrics,
   type WorkbookSnapshot
 } from "@bilig/protocol";
-import { compileFormula, evaluatePlan, formatAddress, parseCellAddress, parseRangeAddress } from "@bilig/formula";
+import {
+  compileFormula,
+  evaluatePlan,
+  formatAddress,
+  parseCellAddress,
+  parseRangeAddress
+} from "@bilig/formula";
+import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import {
   batchOpOrder,
   compareOpOrder,
@@ -73,6 +80,12 @@ interface RuntimeFormula {
   rangeDependencies: Uint32Array;
   runtimeProgram: Uint32Array;
   constants: number[];
+  programOffset: number;
+  programLength: number;
+  constNumberOffset: number;
+  constNumberLength: number;
+  rangeListOffset: number;
+  rangeListLength: number;
 }
 
 interface MaterializedCell {
@@ -115,6 +128,9 @@ export class SpreadsheetEngine {
 
   private readonly formulas = new Map<number, RuntimeFormula>();
   private readonly edgeArena = new EdgeArena();
+  private readonly programArena = new Uint32Arena();
+  private readonly constantArena = new Float64Arena();
+  private readonly rangeListArena = new Uint32Arena();
   private readonly reverseEdges = new Map<number, EdgeSlice>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
@@ -789,7 +805,13 @@ export class SpreadsheetEngine {
       dependencyEntities: this.edgeArena.replace(this.edgeArena.empty(), dependencies.dependencyEntities),
       rangeDependencies: dependencies.rangeDependencies,
       runtimeProgram,
-      constants: effectiveCompiled.constants
+      constants: effectiveCompiled.constants,
+      programOffset: 0,
+      programLength: runtimeProgram.length,
+      constNumberOffset: 0,
+      constNumberLength: effectiveCompiled.constants.length,
+      rangeListOffset: 0,
+      rangeListLength: dependencies.rangeDependencies.length
     });
     this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.HasFormula;
     this.workbook.cellStore.formulaIds[cellIndex] = cellIndex + 1;
@@ -977,14 +999,48 @@ export class SpreadsheetEngine {
   }
 
   private syncWasmPrograms(): void {
-    this.wasm.uploadFormulas(
-      [...this.formulas.values()].map((formula) => ({
-        cellIndex: formula.cellIndex,
-        program: formula.runtimeProgram,
-        constants: formula.constants,
-        mode: formula.compiled.mode
-      }))
-    );
+    this.programArena.reset();
+    this.constantArena.reset();
+    this.rangeListArena.reset();
+
+    const orderedFormulas = [...this.formulas.values()].filter((formula) => formula.compiled.mode === FormulaMode.WasmFastPath);
+    const targets = new Uint32Array(orderedFormulas.length);
+    const programOffsets = new Uint32Array(orderedFormulas.length);
+    const programLengths = new Uint32Array(orderedFormulas.length);
+    const constantOffsets = new Uint32Array(orderedFormulas.length);
+    const constantLengths = new Uint32Array(orderedFormulas.length);
+    const modes: FormulaMode[] = [];
+
+    orderedFormulas.forEach((formula, index) => {
+      const programSlice = this.programArena.append(formula.runtimeProgram);
+      const constantSlice = this.constantArena.append(formula.constants);
+      const rangeSlice = this.rangeListArena.append(formula.rangeDependencies);
+
+      formula.programOffset = programSlice.offset;
+      formula.programLength = programSlice.length;
+      formula.constNumberOffset = constantSlice.offset;
+      formula.constNumberLength = constantSlice.length;
+      formula.rangeListOffset = rangeSlice.offset;
+      formula.rangeListLength = rangeSlice.length;
+
+      targets[index] = formula.cellIndex;
+      programOffsets[index] = programSlice.offset;
+      programLengths[index] = programSlice.length;
+      constantOffsets[index] = constantSlice.offset;
+      constantLengths[index] = constantSlice.length;
+      modes.push(formula.compiled.mode);
+    });
+
+    this.wasm.uploadFormulas({
+      targets,
+      modes,
+      programs: this.programArena.view(),
+      programOffsets,
+      programLengths,
+      constants: this.constantArena.view(),
+      constantOffsets,
+      constantLengths
+    });
     this.wasm.uploadRanges(
       Array.from({ length: this.ranges.size }, (_, rangeIndex) => {
         const descriptor = this.ranges.getDescriptor(rangeIndex);

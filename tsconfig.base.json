@@ -18,6 +18,7 @@
     "paths": {
       "@bilig/protocol": ["packages/protocol/src/index.ts"],
       "@bilig/formula": ["packages/formula/src/index.ts"],
+      "@bilig/formula/program-arena": ["packages/formula/src/program-arena.ts"],
       "@bilig/core": ["packages/core/src/index.ts"],
       "@bilig/crdt": ["packages/crdt/src/index.ts"],
       "@bilig/wasm-kernel": ["packages/wasm-kernel/src/index.ts"],

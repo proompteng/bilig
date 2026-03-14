@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./program-arena": {
+      "types": "./dist/program-arena.d.ts",
+      "import": "./dist/program-arena.js"
     }
   },
   "dependencies": {

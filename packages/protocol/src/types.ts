@@ -94,6 +94,12 @@ export interface FormulaRecord {
   id: FormulaId;
   source: string;
   mode: FormulaMode;
+  programOffset: number;
+  programLength: number;
+  constNumberOffset: number;
+  constNumberLength: number;
+  rangeListOffset: number;
+  rangeListLength: number;
   program: Uint32Array;
   constants: number[];
   symbolicRefs: string[];

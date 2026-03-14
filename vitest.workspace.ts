@@ -5,6 +5,7 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const alias = {
   "@bilig/protocol": `${rootDir}packages/protocol/src/index.ts`,
   "@bilig/formula": `${rootDir}packages/formula/src/index.ts`,
+  "@bilig/formula/program-arena": `${rootDir}packages/formula/src/program-arena.ts`,
   "@bilig/core": `${rootDir}packages/core/src/index.ts`,
   "@bilig/crdt": `${rootDir}packages/crdt/src/index.ts`,
   "@bilig/wasm-kernel": `${rootDir}packages/wasm-kernel/src/index.ts`,

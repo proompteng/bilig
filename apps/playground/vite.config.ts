@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      "@bilig/formula/program-arena": fileURLToPath(new URL("../../packages/formula/src/program-arena.ts", import.meta.url)),
       "@bilig/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)),
       "@bilig/crdt": fileURLToPath(new URL("../../packages/crdt/src/index.ts", import.meta.url)),
       "@bilig/formula": fileURLToPath(new URL("../../packages/formula/src/index.ts", import.meta.url)),

@@ -2,11 +2,15 @@ import { FormulaMode } from "@bilig/protocol";
 import { createKernel, type SpreadsheetKernel } from "@bilig/wasm-kernel";
 import type { CellStore } from "./cell-store.js";
 
-export interface WasmFormulaBinding {
-  cellIndex: number;
-  program: Uint32Array;
-  constants: number[];
-  mode: FormulaMode;
+export interface WasmFormulaUploadLayout {
+  targets: Uint32Array;
+  modes: FormulaMode[];
+  programs: Uint32Array;
+  programOffsets: Uint32Array;
+  programLengths: Uint32Array;
+  constants: Float64Array;
+  constantOffsets: Uint32Array;
+  constantLengths: Uint32Array;
 }
 
 export interface WasmRangeBinding {
@@ -49,38 +53,17 @@ export class WasmKernelFacade {
     this.kernel?.ensureMemberCapacity(memberCapacity);
   }
 
-  uploadFormulas(formulas: WasmFormulaBinding[]): void {
+  uploadFormulas(layout: WasmFormulaUploadLayout): void {
     if (!this.kernel) return;
-    const wasmFormulas = formulas.filter((formula) => formula.mode === FormulaMode.WasmFastPath);
-    const programs: number[] = [];
-    const constants: number[] = [];
-    const programOffsets = new Uint32Array(wasmFormulas.length);
-    const programLengths = new Uint32Array(wasmFormulas.length);
-    const constantOffsets = new Uint32Array(wasmFormulas.length);
-    const constantLengths = new Uint32Array(wasmFormulas.length);
-    const targets = new Uint32Array(wasmFormulas.length);
-
-    let programCursor = 0;
-    let constantCursor = 0;
-    wasmFormulas.forEach((formula, index) => {
-      programOffsets[index] = programCursor;
-      programLengths[index] = formula.program.length;
-      constantOffsets[index] = constantCursor;
-      constantLengths[index] = formula.constants.length;
-      targets[index] = formula.cellIndex;
-      programs.push(...formula.program);
-      constants.push(...formula.constants);
-      programCursor += formula.program.length;
-      constantCursor += formula.constants.length;
-    });
+    const wasmFormulaCount = layout.modes.filter((mode) => mode === FormulaMode.WasmFastPath).length;
 
     this.ensureCapacity(
       this.kernel.getCellCapacity(),
-      Math.max(wasmFormulas.length, 1),
-      Math.max(constants.length, 1)
+      Math.max(wasmFormulaCount, 1),
+      Math.max(layout.constants.length, 1)
     );
-    this.kernel.uploadPrograms(Uint32Array.from(programs), programOffsets, programLengths, targets);
-    this.kernel.uploadConstants(Float64Array.from(constants), constantOffsets, constantLengths);
+    this.kernel.uploadPrograms(layout.programs, layout.programOffsets, layout.programLengths, layout.targets);
+    this.kernel.uploadConstants(layout.constants, layout.constantOffsets, layout.constantLengths);
   }
 
   uploadRanges(ranges: WasmRangeBinding[]): void {
