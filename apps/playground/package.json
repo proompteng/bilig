@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:ci": "pnpm build && vite preview --host 127.0.0.1 --port 4173"
   },
   "dependencies": {
     "@bilig/core": "workspace:*",

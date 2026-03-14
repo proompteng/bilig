@@ -2,13 +2,21 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
 import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
+import { CellEditorOverlay } from "./CellEditorOverlay.js";
 import { useCell } from "./useCell.js";
 
 interface SheetGridViewProps {
   engine: SpreadsheetEngine;
   sheetName: string;
   selectedAddr: string;
+  editorValue: string;
+  resolvedValue: string;
+  isEditingCell: boolean;
   onSelect(addr: string): void;
+  onBeginEdit(): void;
+  onEditorChange(next: string): void;
+  onCommitEdit(): void;
+  onCancelEdit(): void;
 }
 
 const GRID_ROW_COUNT = Math.min(MAX_ROWS, 100_000);
@@ -46,6 +54,7 @@ interface GridCellProps {
   col: number;
   isSelected: boolean;
   onSelect(addr: string): void;
+  onBeginEdit(): void;
 }
 
 const GridCell = React.memo(function GridCell({
@@ -55,7 +64,8 @@ const GridCell = React.memo(function GridCell({
   row,
   col,
   isSelected,
-  onSelect
+  onSelect,
+  onBeginEdit
 }: GridCellProps) {
   const snapshot = useCell(engine, sheetName, addr);
 
@@ -67,6 +77,10 @@ const GridCell = React.memo(function GridCell({
       data-addr={addr}
       data-selected={isSelected ? "true" : "false"}
       onClick={() => onSelect(addr)}
+      onDoubleClick={() => {
+        onSelect(addr);
+        onBeginEdit();
+      }}
       style={{
         left: ROW_HEADER_WIDTH + col * COL_WIDTH,
         top: HEADER_HEIGHT + row * ROW_HEIGHT,
@@ -80,7 +94,19 @@ const GridCell = React.memo(function GridCell({
   );
 });
 
-export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: SheetGridViewProps) {
+export function SheetGridView({
+  engine,
+  sheetName,
+  selectedAddr,
+  editorValue,
+  resolvedValue,
+  isEditingCell,
+  onSelect,
+  onBeginEdit,
+  onEditorChange,
+  onCommitEdit,
+  onCancelEdit
+}: SheetGridViewProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -180,58 +206,66 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
           <span>engine {MAX_ROWS.toLocaleString()} x {MAX_COLS.toLocaleString()}</span>
         </div>
       </div>
-      <div
-        className="sheet-grid-shell"
-        onKeyDown={(event) => {
-          const rowDelta =
-            event.key === "ArrowDown" || event.key === "Enter"
-              ? 1
-              : event.key === "ArrowUp"
-                ? -1
-                : 0;
-          const colDelta =
-            event.key === "ArrowRight" || event.key === "Tab"
-              ? 1
-              : event.key === "ArrowLeft"
-                ? -1
-                : 0;
-
-          if (event.key === "Home") {
-            event.preventDefault();
-            onSelect(formatAddress(selectedCell.row, 0));
-            return;
-          }
-
-          if (event.key === "End") {
-            event.preventDefault();
-            onSelect(formatAddress(selectedCell.row, GRID_COL_COUNT - 1));
-            return;
-          }
-
-          if (rowDelta === 0 && colDelta === 0) {
-            return;
-          }
-
-          event.preventDefault();
-          const nextRow = clamp(
-            selectedCell.row + (event.shiftKey && event.key === "Enter" ? -1 : rowDelta),
-            0,
-            GRID_ROW_COUNT - 1
-          );
-          const nextCol = clamp(
-            selectedCell.col + (event.shiftKey && event.key === "Tab" ? -1 : colDelta),
-            0,
-            GRID_COL_COUNT - 1
-          );
-          onSelect(formatAddress(nextRow, nextCol));
-        }}
-      >
+      <div className="sheet-grid-shell">
         <div
           aria-colcount={GRID_COL_COUNT}
           aria-label={`${sheetName} grid`}
           aria-rowcount={GRID_ROW_COUNT}
           className="sheet-grid-scroller"
           data-testid="sheet-grid"
+          onKeyDown={(event) => {
+            if (isEditingCell) {
+              return;
+            }
+
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onBeginEdit();
+              return;
+            }
+
+            const rowDelta =
+              event.key === "ArrowDown"
+                ? 1
+                : event.key === "ArrowUp"
+                  ? -1
+                  : 0;
+            const colDelta =
+              event.key === "ArrowRight" || event.key === "Tab"
+                ? 1
+                : event.key === "ArrowLeft"
+                  ? -1
+                  : 0;
+
+            if (event.key === "Home") {
+              event.preventDefault();
+              onSelect(formatAddress(selectedCell.row, 0));
+              return;
+            }
+
+            if (event.key === "End") {
+              event.preventDefault();
+              onSelect(formatAddress(selectedCell.row, GRID_COL_COUNT - 1));
+              return;
+            }
+
+            if (rowDelta === 0 && colDelta === 0) {
+              return;
+            }
+
+            event.preventDefault();
+            const nextRow = clamp(
+              selectedCell.row + (event.shiftKey && event.key === "Enter" ? -1 : rowDelta),
+              0,
+              GRID_ROW_COUNT - 1
+            );
+            const nextCol = clamp(
+              selectedCell.col + (event.shiftKey && event.key === "Tab" ? -1 : colDelta),
+              0,
+              GRID_COL_COUNT - 1
+            );
+            onSelect(formatAddress(nextRow, nextCol));
+          }}
           onScroll={(event) => {
             const target = event.currentTarget;
             setScrollTop(target.scrollTop);
@@ -254,6 +288,7 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
                     engine={engine}
                     isSelected={isSelected}
                     key={`${row}-${col}`}
+                    onBeginEdit={onBeginEdit}
                     onSelect={onSelect}
                     row={row}
                     sheetName={sheetName}
@@ -261,6 +296,21 @@ export function SheetGridView({ engine, sheetName, selectedAddr, onSelect }: She
                 );
               })
             )}
+            {isEditingCell ? (
+              <CellEditorOverlay
+                label={`${sheetName}!${selectedAddr}`}
+                onCancel={onCancelEdit}
+                onChange={onEditorChange}
+                onCommit={onCommitEdit}
+                resolvedValue={resolvedValue}
+                style={{
+                  left: ROW_HEADER_WIDTH + selectedCell.col * COL_WIDTH - 1,
+                  top: HEADER_HEIGHT + selectedCell.row * ROW_HEIGHT - 1,
+                  width: Math.max(COL_WIDTH * 2, 240)
+                }}
+                value={editorValue}
+              />
+            ) : null}
           </div>
         </div>
         <div className="grid-corner" />

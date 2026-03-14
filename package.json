@@ -16,7 +16,7 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
-    "test:browser": "pnpm --filter @bilig/playground build && playwright test",
+    "test:browser": "playwright test",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "tsx scripts/perf-smoke.mjs",

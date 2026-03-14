@@ -19,7 +19,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "pnpm --filter @bilig/playground preview --host 127.0.0.1 --port 4173",
+    command: "pnpm --filter @bilig/playground preview:ci",
     port: 4173,
     reuseExistingServer: true,
     timeout: 120_000

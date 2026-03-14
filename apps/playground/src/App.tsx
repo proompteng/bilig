@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/crdt";
 import { createWorkbookRendererRoot } from "@bilig/renderer";
 import {
-  CellEditorOverlay,
   DependencyInspector,
   FormulaBar,
   MetricsPanel,
@@ -31,6 +30,22 @@ interface PersistedRelayState {
   queue: RelayEntry[];
 }
 
+function toEditorValue(cell: ReturnType<typeof useCell>) {
+  if (cell.formula) {
+    return `=${cell.formula}`;
+  }
+  if (cell.value.tag === 1) {
+    return String(cell.value.value);
+  }
+  if (cell.value.tag === 2) {
+    return cell.value.value ? "TRUE" : "FALSE";
+  }
+  if (cell.value.tag === 3) {
+    return cell.value.value;
+  }
+  return "";
+}
+
 export function App() {
   const engine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "playground" }), []);
   const mirrorEngine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "replica-beta" }), []);
@@ -42,6 +57,7 @@ export function App() {
   const metrics = useMetrics(engine);
   const mirrorMetrics = useMetrics(mirrorEngine);
   const [editorValue, setEditorValue] = useState("");
+  const [isEditingCell, setIsEditingCell] = useState(false);
   const [replicationReady, setReplicationReady] = useState(false);
   const [syncPaused, setSyncPaused] = useState(false);
   const [relayQueue, setRelayQueue] = useState<RelayEntry[]>([]);
@@ -222,26 +238,6 @@ export function App() {
   }, [engine, mirrorEngine, relayQueue, replicationReady, syncPaused]);
 
   useEffect(() => {
-    if (selectedCell.formula) {
-      setEditorValue(`=${selectedCell.formula}`);
-      return;
-    }
-    if (selectedCell.value.tag === 1) {
-      setEditorValue(String(selectedCell.value.value));
-      return;
-    }
-    if (selectedCell.value.tag === 2) {
-      setEditorValue(selectedCell.value.value ? "TRUE" : "FALSE");
-      return;
-    }
-    if (selectedCell.value.tag === 3) {
-      setEditorValue(selectedCell.value.value);
-      return;
-    }
-    setEditorValue("");
-  }, [selectedCell]);
-
-  useEffect(() => {
     if (sheetNames.length === 0) return;
     if (!sheetNames.includes(selection.sheetName)) {
       selection.select(sheetNames[0]!, "A1");
@@ -269,28 +265,58 @@ export function App() {
           : mirroredSelectedCell.value.tag === 4
             ? `#${mirroredSelectedCell.value.code}`
             : "";
+  const selectedNumberValue = selectedCell.value.tag === 1 ? selectedCell.value.value : null;
+  const selectedBooleanValue = selectedCell.value.tag === 2 ? selectedCell.value.value : null;
+  const selectedStringValue = selectedCell.value.tag === 3 ? selectedCell.value.value : null;
 
   const commitEditor = () => {
     const normalized = editorValue.trim();
     if (normalized.startsWith("=")) {
       engine.setCellFormula(selection.sheetName, selectedAddr, normalized.slice(1));
+      setIsEditingCell(false);
       return;
     }
     if (normalized === "") {
       engine.clearCell(selection.sheetName, selectedAddr);
+      setIsEditingCell(false);
       return;
     }
     if (normalized === "TRUE" || normalized === "FALSE") {
       engine.setCellValue(selection.sheetName, selectedAddr, normalized === "TRUE");
+      setIsEditingCell(false);
       return;
     }
     const numeric = Number(normalized);
     if (!Number.isNaN(numeric) && /^-?\d+(\.\d+)?$/.test(normalized)) {
       engine.setCellValue(selection.sheetName, selectedAddr, numeric);
+      setIsEditingCell(false);
       return;
     }
     engine.setCellValue(selection.sheetName, selectedAddr, normalized);
+    setIsEditingCell(false);
   };
+
+  const resetEditorValue = () => {
+    setEditorValue(toEditorValue(selectedCell));
+  };
+
+  const cancelEditor = () => {
+    resetEditorValue();
+    setIsEditingCell(false);
+  };
+
+  useLayoutEffect(() => {
+    setEditorValue(toEditorValue(selectedCell));
+    setIsEditingCell(false);
+  }, [
+    selectedAddr,
+    selection.sheetName,
+    selectedCell.formula,
+    selectedCell.value.tag,
+    selectedNumberValue,
+    selectedBooleanValue,
+    selectedStringValue
+  ]);
 
   const resetWorkspace = () => {
     window.localStorage.removeItem(PRIMARY_STORAGE_KEY);
@@ -328,26 +354,22 @@ export function App() {
 
       <main className="workspace">
         <WorkbookView
+          editorValue={editorValue}
           engine={engine}
+          isEditingCell={isEditingCell}
+          onBeginEdit={() => setIsEditingCell(true)}
+          onCancelEdit={cancelEditor}
+          onCommitEdit={commitEditor}
+          onEditorChange={setEditorValue}
           sheetNames={sheetNames}
           workbookName={engine.workbook.workbookName}
+          resolvedValue={resolvedValue}
           sheetName={selection.sheetName}
           selectedAddr={selectedAddr}
           onSelectSheet={(sheetName) => selection.select(sheetName, selectedAddr)}
           onSelect={(addr) => selection.select(selection.sheetName, addr)}
         />
         <aside className="sidebar">
-          <CellEditorOverlay
-            label={`${selection.sheetName}!${selectedAddr}`}
-            resolvedValue={resolvedValue}
-            value={editorValue}
-            onChange={setEditorValue}
-            onClear={() => {
-              engine.clearCell(selection.sheetName, selectedAddr);
-              setEditorValue("");
-            }}
-            onCommit={commitEditor}
-          />
           <MetricsPanel metrics={metrics} />
           <ReplicaPanel
             latencyMs={syncLatencyMs}

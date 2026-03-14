@@ -105,8 +105,7 @@ body {
   box-shadow: 0 12px 40px rgba(16, 36, 62, 0.06);
 }
 
-.formula-bar,
-.editor-panel {
+.formula-bar {
   display: grid;
   grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) auto;
   gap: 16px;
@@ -114,7 +113,7 @@ body {
 }
 
 .formula-bar input,
-.editor-panel input {
+.cell-editor-overlay input {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid rgba(16, 36, 62, 0.12);
@@ -125,13 +124,11 @@ body {
 }
 
 .formula-bar button,
-.editor-panel button,
 .grid-cell {
   font: inherit;
 }
 
-.formula-bar button,
-.editor-panel button {
+.formula-bar button {
   padding: 10px 14px;
   border: 0;
   border-radius: 999px;
@@ -144,8 +141,7 @@ body {
     box-shadow 150ms ease;
 }
 
-.formula-bar button:hover,
-.editor-panel button:hover {
+.formula-bar button:hover {
   transform: translateY(-1px);
   background: var(--accent-strong);
   box-shadow: 0 10px 24px rgba(15, 118, 110, 0.18);
@@ -158,7 +154,7 @@ body {
 }
 
 .formula-copy label,
-.editor-copy strong {
+.cell-editor-overlay-copy strong {
   display: block;
   font-size: 1rem;
 }
@@ -167,8 +163,7 @@ body {
   font-weight: 700;
 }
 
-.formula-actions,
-.editor-actions {
+.formula-actions {
   display: inline-flex;
   gap: 10px;
 }
@@ -385,6 +380,68 @@ body {
   text-overflow: ellipsis;
 }
 
+.cell-editor-overlay {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 248, 247, 0.94)),
+    rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 20px 48px rgba(16, 36, 62, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+.cell-editor-overlay-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cell-editor-overlay-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.cell-editor-overlay-value {
+  align-self: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(16, 36, 62, 0.06);
+  color: var(--ink-700);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.cell-editor-overlay input {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px transparent;
+}
+
+.cell-editor-overlay input:focus {
+  outline: none;
+  border-color: rgba(15, 118, 110, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 4px rgba(15, 118, 110, 0.12);
+}
+
+.cell-editor-overlay-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-500);
+  font-size: 0.76rem;
+}
+
 .metrics-panel dl {
   display: grid;
   gap: 8px;
@@ -452,14 +509,8 @@ body {
   padding-left: 18px;
 }
 
-.empty-state,
-.editor-value {
+.empty-state {
   color: var(--ink-500);
-}
-
-.editor-copy {
-  display: grid;
-  gap: 4px;
 }
 
 @media (max-width: 980px) {
@@ -471,13 +522,11 @@ body {
     flex-direction: column;
   }
 
-  .formula-bar,
-  .editor-panel {
+  .formula-bar {
     grid-template-columns: 1fr;
   }
 
-  .formula-actions,
-  .editor-actions {
+  .formula-actions {
     justify-content: flex-start;
   }
 

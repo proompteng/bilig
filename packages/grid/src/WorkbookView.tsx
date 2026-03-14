@@ -8,8 +8,15 @@ interface WorkbookViewProps {
   sheetNames: string[];
   sheetName: string;
   selectedAddr: string;
+  editorValue: string;
+  resolvedValue: string;
+  isEditingCell: boolean;
   onSelectSheet(sheetName: string): void;
   onSelect(addr: string): void;
+  onBeginEdit(): void;
+  onEditorChange(next: string): void;
+  onCommitEdit(): void;
+  onCancelEdit(): void;
 }
 
 export function WorkbookView({
@@ -18,8 +25,15 @@ export function WorkbookView({
   sheetNames,
   sheetName,
   selectedAddr,
+  editorValue,
+  resolvedValue,
+  isEditingCell,
   onSelectSheet,
-  onSelect
+  onSelect,
+  onBeginEdit,
+  onEditorChange,
+  onCommitEdit,
+  onCancelEdit
 }: WorkbookViewProps) {
   return (
     <div className="panel workbook-panel">
@@ -28,7 +42,12 @@ export function WorkbookView({
           <p className="panel-eyebrow">Workbook</p>
           <h2>{workbookName}</h2>
         </div>
-        <div aria-label="Selected cell" aria-live="polite" className="selection-chip" data-testid="selection-chip">
+        <div
+          aria-label="Selected cell"
+          aria-live="polite"
+          className="selection-chip"
+          data-testid="selection-chip"
+        >
           {sheetName}!{selectedAddr}
         </div>
       </div>
@@ -46,7 +65,19 @@ export function WorkbookView({
           </button>
         ))}
       </div>
-      <SheetGridView engine={engine} sheetName={sheetName} selectedAddr={selectedAddr} onSelect={onSelect} />
+      <SheetGridView
+        editorValue={editorValue}
+        engine={engine}
+        isEditingCell={isEditingCell}
+        onBeginEdit={onBeginEdit}
+        onCancelEdit={onCancelEdit}
+        onCommitEdit={onCommitEdit}
+        onEditorChange={onEditorChange}
+        onSelect={onSelect}
+        resolvedValue={resolvedValue}
+        selectedAddr={selectedAddr}
+        sheetName={sheetName}
+      />
     </div>
   );
 }
