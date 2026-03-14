@@ -201,20 +201,35 @@ function materializeDynamicMembers(
   kind: RangeAddress["kind"],
   materializer: RangeMaterializer
 ): Uint32Array {
-  const matches: number[] = [];
+  let matchCount = 0;
   materializer.forEachSheetCell(sheetId, (cellIndex, row, col) => {
     if (kind === "rows") {
       if (row >= range.start.row && row <= range.end.row) {
-        matches.push(cellIndex);
+        matchCount += 1;
       }
       return;
     }
     if (col >= range.start.col && col <= range.end.col) {
-      matches.push(cellIndex);
+      matchCount += 1;
     }
   });
-  matches.sort((left, right) => left - right);
-  return Uint32Array.from(matches);
+  const matches = new Uint32Array(matchCount);
+  let cursor = 0;
+  materializer.forEachSheetCell(sheetId, (cellIndex, row, col) => {
+    if (kind === "rows") {
+      if (row >= range.start.row && row <= range.end.row) {
+        matches[cursor] = cellIndex;
+        cursor += 1;
+      }
+      return;
+    }
+    if (col >= range.start.col && col <= range.end.col) {
+      matches[cursor] = cellIndex;
+      cursor += 1;
+    }
+  });
+  matches.sort();
+  return matches;
 }
 
 function matchesDynamicRange(descriptor: RangeDescriptor, row: number, col: number): boolean {
