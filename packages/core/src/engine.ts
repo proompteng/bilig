@@ -152,6 +152,11 @@ export class SpreadsheetEngine {
   private changedUnionEpoch = 1;
   private changedUnionSeen: U32 = new Uint32Array(128);
   private changedUnion: U32 = new Uint32Array(128);
+  private dependencyBuildEpoch = 1;
+  private dependencyBuildSeen: U32 = new Uint32Array(128);
+  private dependencyBuildCells: U32 = new Uint32Array(128);
+  private dependencyBuildEntities: U32 = new Uint32Array(128);
+  private dependencyBuildRanges: U32 = new Uint32Array(128);
   private impactedFormulaEpoch = 1;
   private impactedFormulaSeen: U32 = new Uint32Array(128);
   private impactedFormulaBuffer: U32 = new Uint32Array(128);
@@ -746,9 +751,16 @@ export class SpreadsheetEngine {
   }
 
   private materializeDependencies(currentSheet: string, deps: string[], materializedCells: MaterializedCell[]): MaterializedDependencies {
-    const indices = new Set<number>();
-    const dependencyEntities: number[] = [];
-    const rangeDependencies: number[] = [];
+    this.ensureDependencyBuildCapacity(this.workbook.cellStore.size + 1, deps.length + 1);
+    this.dependencyBuildEpoch += 1;
+    if (this.dependencyBuildEpoch === 0xffff_ffff) {
+      this.dependencyBuildEpoch = 1;
+      this.dependencyBuildSeen.fill(0);
+    }
+
+    let dependencyIndexCount = 0;
+    let dependencyEntityCount = 0;
+    let rangeDependencyCount = 0;
     const rangeIndexByRef = new Map<string, number>();
     const newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }> = [];
     for (const dep of deps) {
@@ -768,11 +780,19 @@ export class SpreadsheetEngine {
         });
         rangeIndexByRef.set(dep, registered.rangeIndex);
         const rangeEntity = makeRangeEntity(registered.rangeIndex);
-        dependencyEntities.push(rangeEntity);
-        rangeDependencies.push(registered.rangeIndex);
+        this.dependencyBuildEntities[dependencyEntityCount] = rangeEntity;
+        dependencyEntityCount += 1;
+        this.dependencyBuildRanges[rangeDependencyCount] = registered.rangeIndex;
+        rangeDependencyCount += 1;
         const memberIndices = this.ranges.expandToCells(registered.rangeIndex);
         for (let memberIndex = 0; memberIndex < memberIndices.length; memberIndex += 1) {
-          indices.add(memberIndices[memberIndex]!);
+          const cellIndex = memberIndices[memberIndex]!;
+          if (this.dependencyBuildSeen[cellIndex] === this.dependencyBuildEpoch) {
+            continue;
+          }
+          this.dependencyBuildSeen[cellIndex] = this.dependencyBuildEpoch;
+          this.dependencyBuildCells[dependencyIndexCount] = cellIndex;
+          dependencyIndexCount += 1;
         }
         if (registered.materialized) {
           newRangeLinks.push({ rangeIndex: registered.rangeIndex, memberIndices });
@@ -785,13 +805,18 @@ export class SpreadsheetEngine {
         continue;
       }
       const cellIndex = this.ensureCellTracked(sheetName, parsed.text, materializedCells);
-      indices.add(cellIndex);
-      dependencyEntities.push(makeCellEntity(cellIndex));
+      if (this.dependencyBuildSeen[cellIndex] !== this.dependencyBuildEpoch) {
+        this.dependencyBuildSeen[cellIndex] = this.dependencyBuildEpoch;
+        this.dependencyBuildCells[dependencyIndexCount] = cellIndex;
+        dependencyIndexCount += 1;
+      }
+      this.dependencyBuildEntities[dependencyEntityCount] = makeCellEntity(cellIndex);
+      dependencyEntityCount += 1;
     }
     return {
-      dependencyIndices: Uint32Array.from(indices),
-      dependencyEntities: Uint32Array.from(dependencyEntities),
-      rangeDependencies: Uint32Array.from(rangeDependencies),
+      dependencyIndices: this.dependencyBuildCells.slice(0, dependencyIndexCount),
+      dependencyEntities: this.dependencyBuildEntities.slice(0, dependencyEntityCount),
+      rangeDependencies: this.dependencyBuildRanges.slice(0, rangeDependencyCount),
       rangeIndexByRef,
       newRangeLinks
     };
@@ -1103,11 +1128,32 @@ export class SpreadsheetEngine {
     if (size > this.changedUnionSeen.length) {
       this.changedUnionSeen = growUint32(this.changedUnionSeen, size);
     }
+    if (size > this.dependencyBuildSeen.length) {
+      this.dependencyBuildSeen = growUint32(this.dependencyBuildSeen, size);
+    }
+    if (size > this.dependencyBuildCells.length) {
+      this.dependencyBuildCells = growUint32(this.dependencyBuildCells, size);
+    }
     if (size > this.impactedFormulaSeen.length) {
       this.impactedFormulaSeen = growUint32(this.impactedFormulaSeen, size);
     }
     if (size > this.impactedFormulaBuffer.length) {
       this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
+    }
+  }
+
+  private ensureDependencyBuildCapacity(cellCapacity: number, dependencyCapacity: number): void {
+    if (cellCapacity > this.dependencyBuildSeen.length) {
+      this.dependencyBuildSeen = growUint32(this.dependencyBuildSeen, cellCapacity);
+    }
+    if (cellCapacity > this.dependencyBuildCells.length) {
+      this.dependencyBuildCells = growUint32(this.dependencyBuildCells, cellCapacity);
+    }
+    if (dependencyCapacity > this.dependencyBuildEntities.length) {
+      this.dependencyBuildEntities = growUint32(this.dependencyBuildEntities, dependencyCapacity);
+    }
+    if (dependencyCapacity > this.dependencyBuildRanges.length) {
+      this.dependencyBuildRanges = growUint32(this.dependencyBuildRanges, dependencyCapacity);
     }
   }
 

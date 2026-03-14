@@ -54,6 +54,18 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
   });
 
+  it("deduplicates overlapped precedents when scalar refs and ranges touch the same cell", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 3);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)+A1");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getDependencies("Sheet1", "B1").directPrecedents).toEqual(["Sheet1!A1", "Sheet1!A2"]);
+  });
+
   it("uses the wasm fast path for branch formulas", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
