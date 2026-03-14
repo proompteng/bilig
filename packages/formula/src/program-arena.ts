@@ -20,7 +20,7 @@ export class Uint32Arena {
   }
 
   view(): Uint32Array {
-    return this.data.slice(0, this.used);
+    return this.data.subarray(0, this.used);
   }
 
   get size(): number {
@@ -60,7 +60,7 @@ export class Float64Arena {
   }
 
   view(): Float64Array {
-    return this.data.slice(0, this.used);
+    return this.data.subarray(0, this.used);
   }
 
   get size(): number {

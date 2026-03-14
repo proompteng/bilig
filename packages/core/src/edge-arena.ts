@@ -66,12 +66,19 @@ export class EdgeArena {
     return this.buffer.slice(slice.ptr, slice.ptr + slice.len);
   }
 
+  readView(slice: EdgeSlice): Uint32Array {
+    if (slice.ptr < 0 || slice.len <= 0) {
+      return new Uint32Array();
+    }
+    return this.buffer.subarray(slice.ptr, slice.ptr + slice.len);
+  }
+
   view(): Uint32Array {
-    return this.buffer.slice(0, this.nextPtr);
+    return this.buffer.subarray(0, this.nextPtr);
   }
 
   appendUnique(slice: EdgeSlice, value: number): EdgeSlice {
-    const values = this.read(slice);
+    const values = this.readView(slice);
     for (let index = 0; index < values.length; index += 1) {
       if (values[index] === value) {
         return slice;
@@ -84,7 +91,7 @@ export class EdgeArena {
   }
 
   removeValue(slice: EdgeSlice, value: number): EdgeSlice {
-    const values = this.read(slice);
+    const values = this.readView(slice);
     if (values.length === 0) {
       return slice;
     }

@@ -888,7 +888,7 @@ export class SpreadsheetEngine {
   private removeFormula(cellIndex: number): boolean {
     const existing = this.formulas.get(cellIndex);
     if (existing) {
-      const dependencyEntities = this.edgeArena.read(existing.dependencyEntities);
+      const dependencyEntities = this.edgeArena.readView(existing.dependencyEntities);
       const formulaEntity = makeCellEntity(cellIndex);
       for (let index = 0; index < dependencyEntities.length; index += 1) {
         this.removeReverseEdge(dependencyEntities[index]!, formulaEntity);
@@ -1291,7 +1291,7 @@ export class SpreadsheetEngine {
 
   private getEntityDependents(entityId: number): Uint32Array {
     const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
-    return this.edgeArena.read(slice);
+    return this.edgeArena.readView(slice);
   }
 
   private setReverseEdgeSlice(entityId: number, slice: EdgeSlice): void {

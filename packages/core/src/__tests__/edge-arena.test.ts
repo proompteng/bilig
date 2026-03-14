@@ -41,4 +41,18 @@ describe("EdgeArena", () => {
     expect(afterReset.ptr).toBe(0);
     expect(afterReset.len).toBe(0);
   });
+
+  it("exposes zero-copy read views for hot iteration paths", () => {
+    const arena = new EdgeArena();
+    const slice = arena.replace(arena.empty(), Uint32Array.from([4, 8, 15]));
+
+    const view = arena.readView(slice);
+    const poolView = arena.view();
+
+    expect([...view]).toEqual([4, 8, 15]);
+    expect([...poolView]).toEqual([4, 8, 15]);
+
+    view[1] = 16;
+    expect([...arena.read(slice)]).toEqual([4, 16, 15]);
+  });
 });

@@ -144,6 +144,10 @@ export class RangeRegistry {
     return this.members.read(this.memberSlices[rangeIndex] ?? this.members.empty());
   }
 
+  getMembersView(rangeIndex: RangeIndex): Uint32Array {
+    return this.members.readView(this.memberSlices[rangeIndex] ?? this.members.empty());
+  }
+
   getMemberPoolView(): Uint32Array {
     return this.members.view();
   }
@@ -173,7 +177,7 @@ export class RangeRegistry {
   }
 
   expandToCells(rangeIndex: RangeIndex): Uint32Array {
-    return this.getMembers(rangeIndex);
+    return this.getMembersView(rangeIndex);
   }
 }
 
