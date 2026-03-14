@@ -60,7 +60,7 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 - `RangeRegistry` for interned range entities, a shared range-member pool, descriptor `membersOffset`/`membersLength`, and dynamic row/column membership tracking
 - `EdgeArena` for forward and reverse graph slices
 - `RecalcScheduler` for epoch-based dirty propagation and rank-bucket ordering
-- `cycle-detection` for deterministic SCC grouping and `cycleGroupIds`
+- `cycle-detection` for deterministic SCC grouping and `cycleGroupIds`, now backed by reusable typed-array Tarjan scratch state instead of per-run `Map`/`Set` allocations
 - shared program/constant/range arenas in the engine so formula metadata matches the packed runtime/WASM contract instead of ad hoc per-formula blobs
 - vectorized topo rebuild scratch state in the engine so rank assignment no longer depends on `Map`/`Set` queue construction in the hot topology path
 

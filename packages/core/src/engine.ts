@@ -37,7 +37,7 @@ import {
   type ReplicaState
 } from "@bilig/crdt";
 import { CellFlags } from "./cell-store.js";
-import { detectFormulaCycles } from "./cycle-detection.js";
+import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from "./entity-ids.js";
 import { EngineEventBus } from "./events.js";
@@ -130,6 +130,7 @@ export class SpreadsheetEngine {
   readonly wasm = new WasmKernelFacade();
 
   private readonly formulas: FormulaTable<RuntimeFormula>;
+  private readonly cycleDetector = new CycleDetector();
   private readonly edgeArena = new EdgeArena();
   private readonly programArena = new Uint32Arena();
   private readonly constantArena = new Float64Arena();
@@ -932,9 +933,11 @@ export class SpreadsheetEngine {
   }
 
   private detectCycles(): void {
-    const result = detectFormulaCycles(
+    const result = this.cycleDetector.detect(
       this.formulas.keys(),
-      (cellIndex) => this.getFormulaDependencyCells(cellIndex).filter((dependency) => this.formulas.has(dependency))
+      this.workbook.cellStore.size + 1,
+      (cellIndex) => this.getFormulaDependencyCells(cellIndex),
+      (cellIndex) => this.formulas.has(cellIndex)
     );
 
     this.formulas.forEach((_formula, cellIndex) => {
@@ -942,11 +945,12 @@ export class SpreadsheetEngine {
       this.workbook.cellStore.cycleGroupIds[cellIndex] = -1;
     });
 
-    result.inCycle.forEach((cellIndex) => {
+    for (let index = 0; index < result.cycleMemberCount; index += 1) {
+      const cellIndex = result.cycleMembers[index]!;
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.InCycle;
-      this.workbook.cellStore.cycleGroupIds[cellIndex] = result.cycleGroups.get(cellIndex) ?? -1;
+      this.workbook.cellStore.cycleGroupIds[cellIndex] = result.cycleGroups[cellIndex] ?? -1;
       this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle));
-    });
+    }
   }
 
   private recalculate(changedRoots: number[], kernelSyncRoots: readonly number[] = changedRoots): Uint32Array {
