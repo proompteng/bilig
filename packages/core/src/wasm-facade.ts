@@ -1,4 +1,4 @@
-import { FormulaMode, ValueTag } from "@bilig/protocol";
+import { FormulaMode } from "@bilig/protocol";
 import { createKernel, type SpreadsheetKernel } from "@bilig/wasm-kernel";
 import type { CellStore } from "./cell-store.js";
 
@@ -7,6 +7,11 @@ export interface WasmFormulaBinding {
   program: Uint32Array;
   constants: number[];
   mode: FormulaMode;
+}
+
+export interface WasmRangeBinding {
+  rangeIndex: number;
+  members: Uint32Array;
 }
 
 export class WasmKernelFacade {
@@ -22,7 +27,7 @@ export class WasmKernelFacade {
     this.initPromise = createKernel()
       .then((kernel) => {
         this.kernel = kernel;
-        kernel.init(64, 64, 64);
+        kernel.init(64, 64, 64, 64, 64);
       })
       .catch(() => {
         this.kernel = null;
@@ -30,10 +35,18 @@ export class WasmKernelFacade {
     return this.initPromise;
   }
 
-  ensureCapacity(cellCapacity: number, formulaCapacity: number, constantCapacity: number): void {
+  ensureCapacity(
+    cellCapacity: number,
+    formulaCapacity: number,
+    constantCapacity: number,
+    rangeCapacity = this.kernel?.getRangeCapacity() ?? 64,
+    memberCapacity = this.kernel?.getMemberCapacity() ?? 64
+  ): void {
     this.kernel?.ensureCellCapacity(cellCapacity);
     this.kernel?.ensureFormulaCapacity(formulaCapacity);
     this.kernel?.ensureConstantCapacity(constantCapacity);
+    this.kernel?.ensureRangeCapacity(rangeCapacity);
+    this.kernel?.ensureMemberCapacity(memberCapacity);
   }
 
   uploadFormulas(formulas: WasmFormulaBinding[]): void {
@@ -61,15 +74,55 @@ export class WasmKernelFacade {
       constantCursor += formula.constants.length;
     });
 
-    this.ensureCapacity(this.kernel.getCellCapacity(), Math.max(wasmFormulas.length, 1), Math.max(constants.length, 1));
+    this.ensureCapacity(
+      this.kernel.getCellCapacity(),
+      Math.max(wasmFormulas.length, 1),
+      Math.max(constants.length, 1)
+    );
     this.kernel.uploadPrograms(Uint32Array.from(programs), programOffsets, programLengths, targets);
     this.kernel.uploadConstants(Float64Array.from(constants), constantOffsets, constantLengths);
   }
 
+  uploadRanges(ranges: WasmRangeBinding[]): void {
+    if (!this.kernel) return;
+    const rangeCapacity = Math.max(ranges.length, 1);
+    const memberOffsets = new Uint32Array(rangeCapacity);
+    const memberLengths = new Uint32Array(rangeCapacity);
+    const members: number[] = [];
+    let cursor = 0;
+
+    ranges.forEach((range) => {
+      memberOffsets[range.rangeIndex] = cursor;
+      memberLengths[range.rangeIndex] = range.members.length;
+      members.push(...range.members);
+      cursor += range.members.length;
+    });
+
+    this.ensureCapacity(
+      this.kernel.getCellCapacity(),
+      this.kernel.getFormulaCapacity(),
+      this.kernel.getConstantCapacity(),
+      rangeCapacity,
+      Math.max(members.length, 1)
+    );
+    this.kernel.uploadRangeMembers(Uint32Array.from(members), memberOffsets, memberLengths);
+  }
+
   syncFromStore(store: CellStore): void {
     if (!this.kernel) return;
-    this.ensureCapacity(store.size, this.kernel.getFormulaCapacity(), this.kernel.getConstantCapacity());
-    this.kernel.writeCells(store.tags.slice(0, store.size), store.numbers.slice(0, store.size), store.errors.slice(0, store.size));
+    this.ensureCapacity(
+      store.size,
+      this.kernel.getFormulaCapacity(),
+      this.kernel.getConstantCapacity(),
+      this.kernel.getRangeCapacity(),
+      this.kernel.getMemberCapacity()
+    );
+    this.kernel.writeCells(
+      store.tags.slice(0, store.size),
+      store.numbers.slice(0, store.size),
+      store.stringIds.slice(0, store.size),
+      store.errors.slice(0, store.size)
+    );
   }
 
   evalBatch(cellIndices: Uint32Array): void {
@@ -80,23 +133,22 @@ export class WasmKernelFacade {
     if (!this.kernel) return;
     const tags = this.kernel.readTags();
     const numbers = this.kernel.readNumbers();
+    const stringIds = this.kernel.readStringIds();
     const errors = this.kernel.readErrors();
     changedCellIndices.forEach((cellIndex) => {
       if (cellIndex >= store.size) return;
       const previousTag = store.tags[cellIndex]!;
       const previousNumber = store.numbers[cellIndex]!;
+      const previousStringId = store.stringIds[cellIndex]!;
       const previousError = store.errors[cellIndex]!;
       store.tags[cellIndex] = tags[cellIndex]!;
       store.numbers[cellIndex] = numbers[cellIndex]!;
+      store.stringIds[cellIndex] = stringIds[cellIndex]!;
       store.errors[cellIndex] = errors[cellIndex]!;
-      if (tags[cellIndex] === ValueTag.String) {
-        store.stringIds[cellIndex] = 0;
-      } else {
-        store.stringIds[cellIndex] = 0;
-      }
       if (
         previousTag !== store.tags[cellIndex] ||
         previousNumber !== store.numbers[cellIndex] ||
+        previousStringId !== store.stringIds[cellIndex] ||
         previousError !== store.errors[cellIndex]
       ) {
         store.versions[cellIndex] = (store.versions[cellIndex] ?? 0) + 1;

@@ -97,4 +97,6 @@ export interface FormulaRecord {
   program: Uint32Array;
   constants: number[];
   symbolicRefs: string[];
+  symbolicRanges: string[];
+  maxStackDepth: number;
 }

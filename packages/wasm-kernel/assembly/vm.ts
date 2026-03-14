@@ -1,8 +1,9 @@
-import { applyBuiltin } from "./builtins";
+import { applyBuiltin, STACK_KIND_RANGE, STACK_KIND_SCALAR } from "./builtins";
 import { ErrorCode, Opcode, ValueTag } from "./protocol";
 
 export let tags = new Uint8Array(64);
 export let numbers = new Float64Array(64);
+export let stringIds = new Uint32Array(64);
 export let errors = new Uint16Array(64);
 
 let programArena = new Uint32Array(64);
@@ -12,13 +13,19 @@ let programTargets = new Uint32Array(64);
 let constantArena = new Float64Array(64);
 let constantOffsets = new Uint32Array(64);
 let constantLengths = new Uint32Array(64);
+let rangeOffsets = new Uint32Array(64);
+let rangeLengths = new Uint32Array(64);
+let rangeMembers = new Uint32Array(64);
 let formulaForCell = new Uint32Array(64);
 let formulaCount = 0;
 
 const valueStack = new Float64Array(256);
 const tagStack = new Uint8Array(256);
+const kindStack = new Uint8Array(256);
+const rangeIndexStack = new Uint32Array(256);
 
-function toNumeric(tag: u8, value: f64): f64 {
+function toNumeric(kind: u8, tag: u8, value: f64): f64 {
+  if (kind == STACK_KIND_RANGE) return NaN;
   if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
   if (tag == ValueTag.Empty) return 0;
   return NaN;
@@ -60,15 +67,24 @@ function ensureF64(buffer: Float64Array, size: i32): Float64Array {
   return next;
 }
 
-export function init(cellCapacity: i32, formulaCapacity: i32, constantCapacity: i32): void {
+export function init(
+  cellCapacity: i32,
+  formulaCapacity: i32,
+  constantCapacity: i32,
+  rangeCapacity: i32,
+  memberCapacity: i32
+): void {
   ensureCellCapacity(cellCapacity);
   ensureFormulaCapacity(formulaCapacity);
   ensureConstantCapacity(constantCapacity);
+  ensureRangeCapacity(rangeCapacity);
+  ensureMemberCapacity(memberCapacity);
 }
 
 export function ensureCellCapacity(nextCapacity: i32): void {
   tags = ensureU8(tags, nextCapacity);
   numbers = ensureF64(numbers, nextCapacity);
+  stringIds = ensureU32(stringIds, nextCapacity);
   errors = ensureU16(errors, nextCapacity);
   formulaForCell = ensureU32(formulaForCell, nextCapacity);
 }
@@ -85,6 +101,15 @@ export function ensureConstantCapacity(nextCapacity: i32): void {
   constantArena = ensureF64(constantArena, nextCapacity);
 }
 
+export function ensureRangeCapacity(nextCapacity: i32): void {
+  rangeOffsets = ensureU32(rangeOffsets, nextCapacity);
+  rangeLengths = ensureU32(rangeLengths, nextCapacity);
+}
+
+export function ensureMemberCapacity(nextCapacity: i32): void {
+  rangeMembers = ensureU32(rangeMembers, nextCapacity);
+}
+
 export function uploadPrograms(
   programs: Uint32Array,
   offsets: Uint32Array,
@@ -95,6 +120,7 @@ export function uploadPrograms(
   programArena.set(programs);
   formulaCount = offsets.length;
   ensureFormulaCapacity(formulaCount);
+  formulaForCell.fill(0);
   for (let index = 0; index < formulaCount; index++) {
     programOffsets[index] = offsets[index];
     programLengths[index] = lengths[index];
@@ -116,10 +142,28 @@ export function uploadConstants(constants: Float64Array, offsets: Uint32Array, l
   }
 }
 
-export function writeCells(nextTags: Uint8Array, nextNumbers: Float64Array, nextErrors: Uint16Array): void {
+export function uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void {
+  ensureRangeCapacity(offsets.length);
+  ensureMemberCapacity(members.length);
+  rangeMembers.set(members);
+  rangeOffsets.fill(0);
+  rangeLengths.fill(0);
+  for (let index = 0; index < offsets.length; index++) {
+    rangeOffsets[index] = offsets[index];
+    rangeLengths[index] = lengths[index];
+  }
+}
+
+export function writeCells(
+  nextTags: Uint8Array,
+  nextNumbers: Float64Array,
+  nextStringIds: Uint32Array,
+  nextErrors: Uint16Array
+): void {
   ensureCellCapacity(nextTags.length);
   tags.set(nextTags);
   numbers.set(nextNumbers);
+  stringIds.set(nextStringIds);
   errors.set(nextErrors);
 }
 
@@ -138,6 +182,13 @@ function binaryNumeric(op: i32, left: f64, right: f64): f64 {
   return NaN;
 }
 
+function writeScalar(slot: i32, tag: u8, value: f64): void {
+  kindStack[slot] = STACK_KIND_SCALAR;
+  rangeIndexStack[slot] = 0;
+  tagStack[slot] = tag;
+  valueStack[slot] = value;
+}
+
 function evalProgram(cellIndex: i32, formulaIndex: i32): void {
   let sp = 0;
   const start = programOffsets[formulaIndex];
@@ -150,27 +201,32 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     const operand = instruction & 0x00ffffff;
 
     if (opcode == Opcode.PushNumber) {
-      valueStack[sp] = constantArena[constantBase + operand];
-      tagStack[sp] = ValueTag.Number;
+      writeScalar(sp, <u8>ValueTag.Number, constantArena[constantBase + operand]);
       sp++;
       continue;
     }
 
     if (opcode == Opcode.PushBoolean) {
-      valueStack[sp] = operand == 0 ? 0 : 1;
-      tagStack[sp] = ValueTag.Boolean;
+      writeScalar(sp, <u8>ValueTag.Boolean, operand == 0 ? 0 : 1);
       sp++;
       continue;
     }
 
     if (opcode == Opcode.PushCell) {
       if (tags[operand] == ValueTag.Error) {
-        valueStack[sp] = errors[operand];
-        tagStack[sp] = ValueTag.Error;
+        writeScalar(sp, <u8>ValueTag.Error, errors[operand]);
       } else {
-        valueStack[sp] = numbers[operand];
-        tagStack[sp] = tags[operand];
+        writeScalar(sp, tags[operand], numbers[operand]);
       }
+      sp++;
+      continue;
+    }
+
+    if (opcode == Opcode.PushRange) {
+      kindStack[sp] = STACK_KIND_RANGE;
+      rangeIndexStack[sp] = operand;
+      tagStack[sp] = ValueTag.Empty;
+      valueStack[sp] = 0;
       sp++;
       continue;
     }
@@ -182,44 +238,52 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     ) {
       const rightTag = tagStack[sp - 1];
       const leftTag = tagStack[sp - 2];
-      if (rightTag == ValueTag.Error || leftTag == ValueTag.Error) {
-        tagStack[sp - 2] = ValueTag.Error;
-        valueStack[sp - 2] = rightTag == ValueTag.Error ? valueStack[sp - 1] : valueStack[sp - 2];
+      const rightKind = kindStack[sp - 1];
+      const leftKind = kindStack[sp - 2];
+      if (rightKind == STACK_KIND_RANGE || leftKind == STACK_KIND_RANGE) {
+        writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
         sp--;
         continue;
       }
-      const left = toNumeric(leftTag, valueStack[sp - 2]);
-      const right = toNumeric(rightTag, valueStack[sp - 1]);
+      if (rightTag == ValueTag.Error || leftTag == ValueTag.Error) {
+        writeScalar(sp - 2, <u8>ValueTag.Error, rightTag == ValueTag.Error ? valueStack[sp - 1] : valueStack[sp - 2]);
+        sp--;
+        continue;
+      }
+      const left = toNumeric(leftKind, leftTag, valueStack[sp - 2]);
+      const right = toNumeric(rightKind, rightTag, valueStack[sp - 1]);
       if (isNaN(left) || isNaN(right)) {
-        tagStack[sp - 2] = ValueTag.Error;
-        valueStack[sp - 2] = ErrorCode.Value;
+        writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
         sp--;
         continue;
       }
       const next = binaryNumeric(opcode, left, right);
       if (opcode == Opcode.Div && right == 0) {
-        tagStack[sp - 2] = ValueTag.Error;
-        valueStack[sp - 2] = ErrorCode.Div0;
+        writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Div0);
       } else {
-        tagStack[sp - 2] =
-          <i32>opcode >= Opcode.Eq && <i32>opcode <= Opcode.Lte ? ValueTag.Boolean : ValueTag.Number;
-        valueStack[sp - 2] = next;
+        writeScalar(
+          sp - 2,
+          <u8>(<i32>opcode >= Opcode.Eq && <i32>opcode <= Opcode.Lte ? ValueTag.Boolean : ValueTag.Number),
+          next
+        );
       }
       sp--;
       continue;
     }
 
     if (opcode == Opcode.Neg) {
+      if (kindStack[sp - 1] == STACK_KIND_RANGE) {
+        writeScalar(sp - 1, <u8>ValueTag.Error, ErrorCode.Value);
+        continue;
+      }
       if (tagStack[sp - 1] == ValueTag.Error) {
         continue;
       }
-      const numeric = toNumeric(tagStack[sp - 1], valueStack[sp - 1]);
+      const numeric = toNumeric(kindStack[sp - 1], tagStack[sp - 1], valueStack[sp - 1]);
       if (isNaN(numeric)) {
-        valueStack[sp - 1] = ErrorCode.Value;
-        tagStack[sp - 1] = ValueTag.Error;
+        writeScalar(sp - 1, <u8>ValueTag.Error, ErrorCode.Value);
       } else {
-        valueStack[sp - 1] = -numeric;
-        tagStack[sp - 1] = ValueTag.Number;
+        writeScalar(sp - 1, <u8>ValueTag.Number, -numeric);
       }
       continue;
     }
@@ -230,7 +294,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     }
 
     if (opcode == Opcode.JumpIfFalse) {
-      const numeric = toNumeric(tagStack[sp - 1], valueStack[sp - 1]);
+      const numeric = toNumeric(kindStack[sp - 1], tagStack[sp - 1], valueStack[sp - 1]);
       sp--;
       if (isNaN(numeric) || numeric == 0) {
         pc = start + operand - 1;
@@ -241,13 +305,28 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     if (opcode == Opcode.CallBuiltin) {
       const builtinId = operand >>> 8;
       const argc = operand & 0xff;
-      sp = applyBuiltin(builtinId, argc, valueStack, tagStack, sp);
+      sp = applyBuiltin(
+        builtinId,
+        argc,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+        tags,
+        numbers,
+        errors,
+        rangeOffsets,
+        rangeLengths,
+        rangeMembers,
+        sp
+      );
       continue;
     }
 
     if (opcode == Opcode.Ret) {
       const resultTag = tagStack[sp - 1];
       tags[cellIndex] = resultTag;
+      stringIds[cellIndex] = 0;
       if (resultTag == ValueTag.Error) {
         errors[cellIndex] = <u16>valueStack[sp - 1];
         numbers[cellIndex] = 0;
@@ -277,8 +356,32 @@ export function getNumbersPtr(): usize {
   return changetype<usize>(numbers.dataStart);
 }
 
+export function getStringIdsPtr(): usize {
+  return changetype<usize>(stringIds.dataStart);
+}
+
 export function getErrorsPtr(): usize {
   return changetype<usize>(errors.dataStart);
+}
+
+export function getProgramOffsetsPtr(): usize {
+  return changetype<usize>(programOffsets.dataStart);
+}
+
+export function getProgramLengthsPtr(): usize {
+  return changetype<usize>(programLengths.dataStart);
+}
+
+export function getRangeOffsetsPtr(): usize {
+  return changetype<usize>(rangeOffsets.dataStart);
+}
+
+export function getRangeLengthsPtr(): usize {
+  return changetype<usize>(rangeLengths.dataStart);
+}
+
+export function getRangeMembersPtr(): usize {
+  return changetype<usize>(rangeMembers.dataStart);
 }
 
 export function getCellCapacity(): i32 {
@@ -291,4 +394,12 @@ export function getFormulaCapacity(): i32 {
 
 export function getConstantCapacity(): i32 {
   return constantArena.length;
+}
+
+export function getRangeCapacity(): i32 {
+  return rangeOffsets.length;
+}
+
+export function getMemberCapacity(): i32 {
+  return rangeMembers.length;
 }

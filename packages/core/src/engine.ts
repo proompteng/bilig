@@ -12,7 +12,7 @@ import {
   type RecalcMetrics,
   type WorkbookSnapshot
 } from "@bilig/protocol";
-import { compileFormula, evaluateAst, formatAddress, parseCellAddress, parseRangeAddress } from "@bilig/formula";
+import { compileFormula, evaluatePlan, formatAddress, parseCellAddress, parseRangeAddress } from "@bilig/formula";
 import {
   batchOpOrder,
   compareOpOrder,
@@ -85,6 +85,7 @@ interface MaterializedDependencies {
   dependencyIndices: number[];
   dependencyEntities: Uint32Array;
   rangeDependencies: Uint32Array;
+  rangeIndexByRef: Map<string, number>;
   newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }>;
 }
 
@@ -607,6 +608,7 @@ export class SpreadsheetEngine {
     const indices = new Set<number>();
     const dependencyEntities: number[] = [];
     const rangeDependencies: number[] = [];
+    const rangeIndexByRef = new Map<string, number>();
     const newRangeLinks: Array<{ rangeIndex: number; memberIndices: Uint32Array }> = [];
     for (const dep of deps) {
       if (dep.includes(":")) {
@@ -623,6 +625,7 @@ export class SpreadsheetEngine {
           ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col, materializedCells),
           listSheetCells: (sheetId) => this.listSheetCells(sheetId)
         });
+        rangeIndexByRef.set(dep, registered.rangeIndex);
         const rangeEntity = makeRangeEntity(registered.rangeIndex);
         dependencyEntities.push(rangeEntity);
         rangeDependencies.push(registered.rangeIndex);
@@ -648,6 +651,7 @@ export class SpreadsheetEngine {
       dependencyIndices: [...indices],
       dependencyEntities: Uint32Array.from(dependencyEntities),
       rangeDependencies: Uint32Array.from(rangeDependencies),
+      rangeIndexByRef,
       newRangeLinks
     };
   }
@@ -687,6 +691,12 @@ export class SpreadsheetEngine {
       if (opcode === 3) {
         const cellRef = compiled.symbolicRefs[operand];
         const targetIndex = cellRef ? symbolicRefToIndex.get(cellRef) ?? 0 : 0;
+        runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
+        return;
+      }
+      if (opcode === 4) {
+        const rangeRef = compiled.symbolicRanges[operand];
+        const targetIndex = rangeRef ? dependencies.rangeIndexByRef.get(rangeRef) ?? 0 : 0;
         runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
       }
     });
@@ -854,7 +864,7 @@ export class SpreadsheetEngine {
 
   private evaluateFormulaJs(cellIndex: number, formula: RuntimeFormula): void {
     const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-    const value = evaluateAst(formula.compiled.ast, {
+    const value = evaluatePlan(formula.compiled.jsPlan, {
       sheetName,
       resolveCell: (targetSheetName, address) => {
         const targetCell = this.workbook.getCellIndex(targetSheetName, address);
@@ -885,6 +895,15 @@ export class SpreadsheetEngine {
         constants: formula.constants,
         mode: formula.compiled.mode
       }))
+    );
+    this.wasm.uploadRanges(
+      Array.from({ length: this.ranges.size }, (_, rangeIndex) => {
+        const descriptor = this.ranges.getDescriptor(rangeIndex);
+        return {
+          rangeIndex,
+          members: descriptor.refCount > 0 ? this.ranges.getMembers(rangeIndex) : new Uint32Array()
+        };
+      })
     );
   }
 
@@ -1137,6 +1156,9 @@ export class SpreadsheetEngine {
       const row = this.workbook.cellStore.rows[materialized.cellIndex] ?? 0;
       const col = this.workbook.cellStore.cols[materialized.cellIndex] ?? 0;
       const rangeIndices = this.ranges.addDynamicMember(sheet.id, row, col, materialized.cellIndex);
+      if (rangeIndices.length > 0) {
+        this.scheduleWasmProgramSync();
+      }
       for (let rangeCursor = 0; rangeCursor < rangeIndices.length; rangeCursor += 1) {
         const rangeIndex = rangeIndices[rangeCursor]!;
         const rangeEntity = makeRangeEntity(rangeIndex);

@@ -1,7 +1,9 @@
 import { FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
-import { formatAddress, parseRangeAddress } from "./addressing.js";
+import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
 import { bindFormula, encodeBuiltin } from "./binder.js";
+import { lowerToPlan, type JsPlanInstruction } from "./js-evaluator.js";
+import { optimizeFormula } from "./optimizer.js";
 import { parseFormula } from "./parser.js";
 
 function encodeInstruction(opcode: Opcode, operand = 0): number {
@@ -12,6 +14,7 @@ interface CompilerState {
   program: number[];
   constants: number[];
   refs: string[];
+  ranges: string[];
 }
 
 function emitCellRef(ref: string, sheetName: string | undefined, state: CompilerState): void {
@@ -21,25 +24,25 @@ function emitCellRef(ref: string, sheetName: string | undefined, state: Compiler
   state.program.push(encodeInstruction(Opcode.PushCell, index));
 }
 
+function emitRangeRef(node: Extract<FormulaNode, { kind: "RangeRef" }>, state: CompilerState): void {
+  const qualifiedRange = formatRangeAddress(
+    parseRangeAddress(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`)
+  );
+  let index = state.ranges.indexOf(qualifiedRange);
+  if (index === -1) {
+    index = state.ranges.push(qualifiedRange) - 1;
+  }
+  state.program.push(encodeInstruction(Opcode.PushRange, index));
+}
+
 function emitArgument(node: FormulaNode, state: CompilerState): number {
-  if (node.kind !== "RangeRef") {
-    emitNode(node, state);
+  if (node.kind === "RangeRef") {
+    emitRangeRef(node, state);
     return 1;
   }
 
-  const prefix = node.sheetName ? `${node.sheetName}!` : "";
-  const range = parseRangeAddress(`${prefix}${node.start}:${node.end}`);
-  if (range.kind !== "cells") {
-    throw new Error("Only bounded cell ranges are eligible for the wasm fast path");
-  }
-  let argc = 0;
-  for (let row = range.start.row; row <= range.end.row; row += 1) {
-    for (let col = range.start.col; col <= range.end.col; col += 1) {
-      emitCellRef(formatAddress(row, col), range.sheetName, state);
-      argc += 1;
-    }
-  }
-  return argc;
+  emitNode(node, state);
+  return 1;
 }
 
 function emitNode(node: FormulaNode, state: CompilerState): void {
@@ -56,6 +59,9 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       emitCellRef(node.ref, node.sheetName, state);
       return;
     }
+    case "RangeRef":
+      emitRangeRef(node, state);
+      return;
     case "RowRef":
     case "ColumnRef":
       throw new Error("Row and column references must appear inside a range");
@@ -117,13 +123,54 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
   }
 }
 
-export function compileFormula(source: string): FormulaRecord & { ast: FormulaNode; deps: string[] } {
+export interface CompiledFormula extends FormulaRecord {
+  ast: FormulaNode;
+  optimizedAst: FormulaNode;
+  deps: string[];
+  jsPlan: JsPlanInstruction[];
+}
+
+function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
+  let current = 0;
+  let max = 0;
+  for (const instruction of plan) {
+    switch (instruction.opcode) {
+      case "push-number":
+      case "push-boolean":
+      case "push-string":
+      case "push-cell":
+      case "push-range":
+        current += 1;
+        break;
+      case "binary":
+        current -= 1;
+        break;
+      case "call":
+        current -= instruction.argc;
+        current += 1;
+        break;
+      case "jump-if-false":
+        current -= 1;
+        break;
+      case "unary":
+      case "jump":
+      case "return":
+        break;
+    }
+    max = Math.max(max, current);
+  }
+  return max;
+}
+
+export function compileFormula(source: string): CompiledFormula {
   const ast = parseFormula(source);
-  const bound = bindFormula(ast);
-  const state: CompilerState = { program: [], constants: [], refs: [] };
+  const optimizedAst = optimizeFormula(ast);
+  const bound = bindFormula(optimizedAst);
+  const state: CompilerState = { program: [], constants: [], refs: [], ranges: [] };
+  const jsPlan = lowerToPlan(optimizedAst);
 
   if (bound.mode === FormulaMode.WasmFastPath) {
-    emitNode(ast, state);
+    emitNode(optimizedAst, state);
   }
 
   state.program.push(encodeInstruction(Opcode.Ret));
@@ -134,7 +181,11 @@ export function compileFormula(source: string): FormulaRecord & { ast: FormulaNo
     program: Uint32Array.from(state.program),
     constants: state.constants,
     symbolicRefs: state.refs,
+    symbolicRanges: state.ranges,
     ast,
-    deps: bound.deps
+    optimizedAst,
+    deps: bound.deps,
+    jsPlan,
+    maxStackDepth: computeMaxStackDepth(jsPlan)
   };
 }

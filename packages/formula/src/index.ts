@@ -4,5 +4,6 @@ export * from "./lexer.js";
 export * from "./parser.js";
 export * from "./builtins.js";
 export * from "./binder.js";
+export * from "./optimizer.js";
 export * from "./compiler.js";
 export * from "./js-evaluator.js";

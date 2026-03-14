@@ -11,20 +11,31 @@ interface RawKernelExports {
   __new(size: number, id: number): number;
   __pin(pointer: number): number;
   __unpin(pointer: number): void;
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number): void;
+  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void;
   ensureCellCapacity(nextCapacity: number): void;
   ensureFormulaCapacity(nextCapacity: number): void;
   ensureConstantCapacity(nextCapacity: number): void;
+  ensureRangeCapacity(nextCapacity: number): void;
+  ensureMemberCapacity(nextCapacity: number): void;
   uploadPrograms(programs: number, offsets: number, lengths: number, targets: number): void;
   uploadConstants(constants: number, offsets: number, lengths: number): void;
-  writeCells(tags: number, numbers: number, errors: number): void;
+  uploadRangeMembers(members: number, offsets: number, lengths: number): void;
+  writeCells(tags: number, numbers: number, stringIds: number, errors: number): void;
   evalBatch(cellIndices: number): void;
   getTagsPtr(): number;
   getNumbersPtr(): number;
+  getStringIdsPtr(): number;
   getErrorsPtr(): number;
+  getProgramOffsetsPtr(): number;
+  getProgramLengthsPtr(): number;
+  getRangeOffsetsPtr(): number;
+  getRangeLengthsPtr(): number;
+  getRangeMembersPtr(): number;
   getCellCapacity(): number;
   getFormulaCapacity(): number;
   getConstantCapacity(): number;
+  getRangeCapacity(): number;
+  getMemberCapacity(): number;
 }
 
 interface LoweredArraySpec<T extends TypedArrayValue> {
@@ -36,10 +47,12 @@ interface LoweredArraySpec<T extends TypedArrayValue> {
 }
 
 export interface SpreadsheetKernel {
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number): void;
+  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void;
   ensureCellCapacity(nextCapacity: number): void;
   ensureFormulaCapacity(nextCapacity: number): void;
   ensureConstantCapacity(nextCapacity: number): void;
+  ensureRangeCapacity(nextCapacity: number): void;
+  ensureMemberCapacity(nextCapacity: number): void;
   uploadPrograms(
     programs: Uint32Array,
     offsets: Uint32Array,
@@ -47,14 +60,23 @@ export interface SpreadsheetKernel {
     targets: Uint32Array
   ): void;
   uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void;
-  writeCells(tags: Uint8Array, numbers: Float64Array, errors: Uint16Array): void;
+  uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void;
+  writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void;
   evalBatch(cellIndices: Uint32Array): void;
   readTags(): Uint8Array;
   readNumbers(): Float64Array;
+  readStringIds(): Uint32Array;
   readErrors(): Uint16Array;
+  readProgramOffsets(): Uint32Array;
+  readProgramLengths(): Uint32Array;
+  readRangeOffsets(): Uint32Array;
+  readRangeLengths(): Uint32Array;
+  readRangeMembers(): Uint32Array;
   getCellCapacity(): number;
   getFormulaCapacity(): number;
   getConstantCapacity(): number;
+  getRangeCapacity(): number;
+  getMemberCapacity(): number;
 }
 
 const uint8Spec: LoweredArraySpec<Uint8Array> = {
@@ -88,8 +110,8 @@ class RawKernelBridge {
     this.dataView = new DataView(raw.memory.buffer);
   }
 
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number): void {
-    this.raw.init(cellCapacity, formulaCapacity, constantCapacity);
+  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void {
+    this.raw.init(cellCapacity, formulaCapacity, constantCapacity, rangeCapacity, memberCapacity);
   }
 
   ensureCellCapacity(nextCapacity: number): void {
@@ -102,6 +124,14 @@ class RawKernelBridge {
 
   ensureConstantCapacity(nextCapacity: number): void {
     this.raw.ensureConstantCapacity(nextCapacity);
+  }
+
+  ensureRangeCapacity(nextCapacity: number): void {
+    this.raw.ensureRangeCapacity(nextCapacity);
+  }
+
+  ensureMemberCapacity(nextCapacity: number): void {
+    this.raw.ensureMemberCapacity(nextCapacity);
   }
 
   uploadPrograms(
@@ -137,15 +167,30 @@ class RawKernelBridge {
     }
   }
 
-  writeCells(tags: Uint8Array, numbers: Float64Array, errors: Uint16Array): void {
+  uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void {
+    const membersPtr = this.lowerTypedArray(members, uint32Spec);
+    const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec);
+    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec);
+    try {
+      this.raw.uploadRangeMembers(membersPtr, offsetsPtr, lengthsPtr);
+    } finally {
+      this.raw.__unpin(membersPtr);
+      this.raw.__unpin(offsetsPtr);
+      this.raw.__unpin(lengthsPtr);
+    }
+  }
+
+  writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
     const tagsPtr = this.lowerTypedArray(tags, uint8Spec);
     const numbersPtr = this.lowerTypedArray(numbers, float64Spec);
+    const stringIdsPtr = this.lowerTypedArray(stringIds, uint32Spec);
     const errorsPtr = this.lowerTypedArray(errors, uint16Spec);
     try {
-      this.raw.writeCells(tagsPtr, numbersPtr, errorsPtr);
+      this.raw.writeCells(tagsPtr, numbersPtr, stringIdsPtr, errorsPtr);
     } finally {
       this.raw.__unpin(tagsPtr);
       this.raw.__unpin(numbersPtr);
+      this.raw.__unpin(stringIdsPtr);
       this.raw.__unpin(errorsPtr);
     }
   }
@@ -188,15 +233,21 @@ class KernelHandle implements SpreadsheetKernel {
   private readonly bridge: RawKernelBridge;
   private tags = new Uint8Array();
   private numbers = new Float64Array();
+  private stringIds = new Uint32Array();
   private errors = new Uint16Array();
+  private programOffsets = new Uint32Array();
+  private programLengths = new Uint32Array();
+  private rangeOffsets = new Uint32Array();
+  private rangeLengths = new Uint32Array();
+  private rangeMembers = new Uint32Array();
 
   constructor(private readonly raw: RawKernelExports) {
     this.bridge = new RawKernelBridge(raw);
     this.refreshViews();
   }
 
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number): void {
-    this.bridge.init(cellCapacity, formulaCapacity, constantCapacity);
+  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void {
+    this.bridge.init(cellCapacity, formulaCapacity, constantCapacity, rangeCapacity, memberCapacity);
     this.refreshViews();
   }
 
@@ -215,6 +266,16 @@ class KernelHandle implements SpreadsheetKernel {
     this.refreshViews();
   }
 
+  ensureRangeCapacity(nextCapacity: number): void {
+    this.bridge.ensureRangeCapacity(nextCapacity);
+    this.refreshViews();
+  }
+
+  ensureMemberCapacity(nextCapacity: number): void {
+    this.bridge.ensureMemberCapacity(nextCapacity);
+    this.refreshViews();
+  }
+
   uploadPrograms(
     programs: Uint32Array,
     offsets: Uint32Array,
@@ -230,8 +291,13 @@ class KernelHandle implements SpreadsheetKernel {
     this.refreshViews();
   }
 
-  writeCells(tags: Uint8Array, numbers: Float64Array, errors: Uint16Array): void {
-    this.bridge.writeCells(tags, numbers, errors);
+  uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void {
+    this.bridge.uploadRangeMembers(members, offsets, lengths);
+    this.refreshViews();
+  }
+
+  writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
+    this.bridge.writeCells(tags, numbers, stringIds, errors);
     this.refreshViews();
   }
 
@@ -248,8 +314,32 @@ class KernelHandle implements SpreadsheetKernel {
     return this.numbers;
   }
 
+  readStringIds(): Uint32Array {
+    return this.stringIds;
+  }
+
   readErrors(): Uint16Array {
     return this.errors;
+  }
+
+  readProgramOffsets(): Uint32Array {
+    return this.programOffsets;
+  }
+
+  readProgramLengths(): Uint32Array {
+    return this.programLengths;
+  }
+
+  readRangeOffsets(): Uint32Array {
+    return this.rangeOffsets;
+  }
+
+  readRangeLengths(): Uint32Array {
+    return this.rangeLengths;
+  }
+
+  readRangeMembers(): Uint32Array {
+    return this.rangeMembers;
   }
 
   getCellCapacity(): number {
@@ -264,11 +354,25 @@ class KernelHandle implements SpreadsheetKernel {
     return this.raw.getConstantCapacity();
   }
 
+  getRangeCapacity(): number {
+    return this.raw.getRangeCapacity();
+  }
+
+  getMemberCapacity(): number {
+    return this.raw.getMemberCapacity();
+  }
+
   private refreshViews(): void {
     const memory = this.raw.memory.buffer;
     this.tags = new Uint8Array(memory, this.raw.getTagsPtr(), this.raw.getCellCapacity());
     this.numbers = new Float64Array(memory, this.raw.getNumbersPtr(), this.raw.getCellCapacity());
+    this.stringIds = new Uint32Array(memory, this.raw.getStringIdsPtr(), this.raw.getCellCapacity());
     this.errors = new Uint16Array(memory, this.raw.getErrorsPtr(), this.raw.getCellCapacity());
+    this.programOffsets = new Uint32Array(memory, this.raw.getProgramOffsetsPtr(), this.raw.getFormulaCapacity());
+    this.programLengths = new Uint32Array(memory, this.raw.getProgramLengthsPtr(), this.raw.getFormulaCapacity());
+    this.rangeOffsets = new Uint32Array(memory, this.raw.getRangeOffsetsPtr(), this.raw.getRangeCapacity());
+    this.rangeLengths = new Uint32Array(memory, this.raw.getRangeLengthsPtr(), this.raw.getRangeCapacity());
+    this.rangeMembers = new Uint32Array(memory, this.raw.getRangeMembersPtr(), this.raw.getMemberCapacity());
   }
 }
 

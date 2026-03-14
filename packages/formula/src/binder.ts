@@ -1,4 +1,4 @@
-import { BuiltinId, FormulaMode, type FormulaRecord } from "@bilig/protocol";
+import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
 import { getBuiltin } from "./builtins.js";
@@ -11,8 +11,6 @@ export interface BoundFormula {
 
 const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "ROUND", "FLOOR", "CEILING", "MOD", "IF", "AND", "OR", "NOT"]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
-const MAX_WASM_RANGE_CELLS = 255;
-
 export function bindFormula(ast: FormulaNode): BoundFormula {
   const deps = new Set<string>();
 
