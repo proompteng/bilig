@@ -41,6 +41,7 @@ import { detectFormulaCycles } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from "./entity-ids.js";
 import { EngineEventBus } from "./events.js";
+import { FormulaTable } from "./formula-table.js";
 import { RangeRegistry } from "./range-registry.js";
 import { RecalcScheduler } from "./scheduler.js";
 import { selectCellSnapshot, selectViewportCells } from "./selectors.js";
@@ -126,7 +127,7 @@ export class SpreadsheetEngine {
   readonly scheduler = new RecalcScheduler();
   readonly wasm = new WasmKernelFacade();
 
-  private readonly formulas = new Map<number, RuntimeFormula>();
+  private readonly formulas: FormulaTable<RuntimeFormula>;
   private readonly edgeArena = new EdgeArena();
   private readonly programArena = new Uint32Arena();
   private readonly constantArena = new Float64Arena();
@@ -151,6 +152,7 @@ export class SpreadsheetEngine {
 
   constructor(options: SpreadsheetEngineOptions = {}) {
     this.workbook = new WorkbookStore(options.workbookName ?? "Workbook");
+    this.formulas = new FormulaTable(this.workbook.cellStore);
     this.replica = createReplicaState(options.replicaId ?? "local");
     void this.wasm.init();
   }
@@ -815,7 +817,6 @@ export class SpreadsheetEngine {
       rangeListLength: dependencies.rangeDependencies.length
     });
     this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.HasFormula;
-    this.workbook.cellStore.formulaIds[cellIndex] = cellIndex + 1;
     if (effectiveCompiled.mode === FormulaMode.JsOnly) {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
     } else {
@@ -860,7 +861,6 @@ export class SpreadsheetEngine {
     this.formulas.delete(cellIndex);
     this.workbook.cellStore.flags[cellIndex] =
       (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
-    this.workbook.cellStore.formulaIds[cellIndex] = 0;
     this.scheduleWasmProgramSync();
     return existing !== undefined;
   }
