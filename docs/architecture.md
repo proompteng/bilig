@@ -69,5 +69,6 @@ Within `@bilig/core`, the runtime is no longer a single inline dependency map. T
 - reusable WASM upload scratch in the engine/facade so fast-path program and range sync no longer rebuild filtered formula lists on every upload
 - callback-based sheet scanning for dynamic ranges so the range registry no longer asks the engine to materialize throwaway `{ cellIndex, row, col }[]` snapshots just to discover members
 - typed-array dynamic range materialization so callback-based sheet scans now fill packed `Uint32Array` member lists directly instead of boxing matches into `number[]` first
+- callback-driven cycle walks so SCC detection no longer copies per-formula dependency arrays before traversing the formula graph
 
 The UI does not subscribe through a single global revision for visible cells. `@bilig/core` maintains keyed cell listener routing so `useCell(...)` and viewport watchers wake only when one of their watched addresses changes. That keeps the grid aligned with the production requirement for localized rerenders rather than whole-viewport invalidation on every batch.

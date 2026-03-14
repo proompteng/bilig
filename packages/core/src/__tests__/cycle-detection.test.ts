@@ -14,7 +14,12 @@ describe("CycleDetector", () => {
     const result = detector.detect(
       [1, 2, 3, 4],
       8,
-      (cellIndex) => graph.get(cellIndex) ?? [],
+      (cellIndex, fn) => {
+        const dependencies = graph.get(cellIndex) ?? [];
+        for (let index = 0; index < dependencies.length; index += 1) {
+          fn(dependencies[index]!);
+        }
+      },
       (cellIndex) => graph.has(cellIndex)
     );
 
@@ -30,10 +35,20 @@ describe("CycleDetector", () => {
     const first = detector.detect(
       [1, 2],
       4,
-      (cellIndex) => (cellIndex === 1 ? [2] : cellIndex === 2 ? [1] : []),
+      (cellIndex, fn) => {
+        if (cellIndex === 1) fn(2);
+        if (cellIndex === 2) fn(1);
+      },
       (cellIndex) => cellIndex === 1 || cellIndex === 2
     );
-    const second = detector.detect([3], 4, () => [3], (cellIndex) => cellIndex === 3);
+    const second = detector.detect(
+      [3],
+      4,
+      (cellIndex, fn) => {
+        if (cellIndex === 3) fn(3);
+      },
+      (cellIndex) => cellIndex === 3
+    );
 
     expect(second.cycleMembers).toBe(first.cycleMembers);
     expect(second.cycleMemberCount).toBe(1);
@@ -48,7 +63,10 @@ describe("detectFormulaCycles", () => {
     const result = detectFormulaCycles(
       [1, 2],
       4,
-      (cellIndex) => (cellIndex === 1 ? [2] : cellIndex === 2 ? [1] : []),
+      (cellIndex, fn) => {
+        if (cellIndex === 1) fn(2);
+        if (cellIndex === 2) fn(1);
+      },
       (cellIndex) => cellIndex === 1 || cellIndex === 2
     );
 

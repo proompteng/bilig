@@ -348,7 +348,10 @@ export class SpreadsheetEngine {
     const cellIndex = this.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) return { directDependents: [], directPrecedents: [] };
     const directDependents = new Set<number>();
-    const directPrecedents = this.getFormulaDependencyCells(cellIndex);
+    const directPrecedents: number[] = [];
+    this.forEachFormulaDependencyCell(cellIndex, (dependencyCellIndex) => {
+      directPrecedents.push(dependencyCellIndex);
+    });
     const dependents = this.getEntityDependents(makeCellEntity(cellIndex));
     for (let index = 0; index < dependents.length; index += 1) {
       const dependent = dependents[index]!;
@@ -365,11 +368,11 @@ export class SpreadsheetEngine {
       directDependents.add(entityPayload(dependent));
     }
     return {
-      directPrecedents: directPrecedents.map((index) =>
-        this.workbook.getQualifiedAddress(index)
+      directPrecedents: directPrecedents.map((dependencyCellIndex) =>
+        this.workbook.getQualifiedAddress(dependencyCellIndex)
       ),
-      directDependents: [...directDependents].map((index) =>
-        this.workbook.getQualifiedAddress(index)
+      directDependents: [...directDependents].map((dependentCellIndex) =>
+        this.workbook.getQualifiedAddress(dependentCellIndex)
       )
     };
   }
@@ -959,7 +962,7 @@ export class SpreadsheetEngine {
     const result = this.cycleDetector.detect(
       this.formulas.keys(),
       this.workbook.cellStore.size + 1,
-      (cellIndex) => this.getFormulaDependencyCells(cellIndex),
+      (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
       (cellIndex) => this.formulas.has(cellIndex)
     );
 
@@ -1348,12 +1351,14 @@ export class SpreadsheetEngine {
     return formulaCount;
   }
 
-  private getFormulaDependencyCells(cellIndex: number): number[] {
+  private forEachFormulaDependencyCell(cellIndex: number, fn: (dependencyCellIndex: number) => void): void {
     const formula = this.formulas.get(cellIndex);
     if (!formula) {
-      return [];
+      return;
     }
-    return [...formula.dependencyIndices];
+    for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
+      fn(formula.dependencyIndices[index]!);
+    }
   }
 
   private shouldApplyOp(op: EngineOp, order: OpOrder): boolean {

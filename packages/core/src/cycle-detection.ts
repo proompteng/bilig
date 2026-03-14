@@ -28,7 +28,7 @@ export class CycleDetector {
   detect(
     formulaCellIndices: Iterable<number>,
     maxCellIndexExclusive: number,
-    getFormulaDependencies: (cellIndex: number) => readonly number[],
+    forEachFormulaDependency: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void,
     isFormula: (cellIndex: number) => boolean
   ): PackedCycleDetectionResult {
     this.ensureCapacity(maxCellIndexExclusive);
@@ -60,21 +60,19 @@ export class CycleDetector {
       stackLength += 1;
       this.onStackMarks[cellIndex] = this.visitEpoch;
 
-      const dependencies = getFormulaDependencies(cellIndex);
-      for (let index = 0; index < dependencies.length; index += 1) {
-        const dependency = dependencies[index]!;
+      forEachFormulaDependency(cellIndex, (dependency) => {
         if (!isFormula(dependency)) {
-          continue;
+          return;
         }
         if (this.visitMarks[dependency] !== this.visitEpoch) {
           strongConnect(dependency);
           this.lowLinks[cellIndex] = Math.min(this.lowLinks[cellIndex]!, this.lowLinks[dependency]!);
-          continue;
+          return;
         }
         if (this.onStackMarks[dependency] === this.visitEpoch) {
           this.lowLinks[cellIndex] = Math.min(this.lowLinks[cellIndex]!, this.indices[dependency]!);
         }
-      }
+      });
 
       if (this.lowLinks[cellIndex] !== this.indices[cellIndex]) {
         return;
@@ -95,13 +93,11 @@ export class CycleDetector {
       let isSelfLoop = false;
       if (componentLength === 1) {
         const member = this.component[0]!;
-        const memberDependencies = getFormulaDependencies(member);
-        for (let index = 0; index < memberDependencies.length; index += 1) {
-          if (memberDependencies[index] === member) {
+        forEachFormulaDependency(member, (dependency) => {
+          if (dependency === member) {
             isSelfLoop = true;
-            break;
           }
-        }
+        });
       }
 
       if (componentLength > 1 || isSelfLoop) {
@@ -166,11 +162,11 @@ export class CycleDetector {
 export function detectFormulaCycles(
   formulaCellIndices: Iterable<number>,
   maxCellIndexExclusive: number,
-  getFormulaDependencies: (cellIndex: number) => readonly number[],
+  forEachFormulaDependency: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void,
   isFormula: (cellIndex: number) => boolean
 ): CycleDetectionResult {
   const detector = new CycleDetector();
-  const packed = detector.detect(formulaCellIndices, maxCellIndexExclusive, getFormulaDependencies, isFormula);
+  const packed = detector.detect(formulaCellIndices, maxCellIndexExclusive, forEachFormulaDependency, isFormula);
   const inCycle = new Set<number>();
   const cycleGroups = new Map<number, number>();
   for (let index = 0; index < packed.cycleMemberCount; index += 1) {
