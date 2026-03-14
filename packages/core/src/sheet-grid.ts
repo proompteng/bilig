@@ -52,6 +52,12 @@ export class SheetGrid {
   }
 
   forEachCell(fn: (cellIndex: number) => void): void {
+    this.forEachCellEntry((cellIndex) => {
+      fn(cellIndex);
+    });
+  }
+
+  forEachCellEntry(fn: (cellIndex: number, row: number, col: number) => void): void {
     this.blocks.forEach((block, key) => {
       const blockRow = Math.floor(key / 1_000_000);
       const blockCol = key % 1_000_000;
@@ -63,7 +69,7 @@ export class SheetGrid {
         const row = blockRow * BLOCK_ROWS + localRow;
         const col = blockCol * BLOCK_COLS + localCol;
         if (row >= 0 && col >= 0) {
-          fn(value - 1);
+          fn(value - 1, row, col);
         }
       }
     });

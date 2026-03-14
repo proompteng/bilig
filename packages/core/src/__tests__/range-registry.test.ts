@@ -15,7 +15,7 @@ describe("RangeRegistry", () => {
       },
       {
         ensureCell: () => nextCellIndex++,
-        listSheetCells: () => []
+        forEachSheetCell: () => {}
       }
     );
 
@@ -37,9 +37,11 @@ describe("RangeRegistry", () => {
       },
       {
         ensureCell: () => {
-          throw new Error("rows ranges should use listSheetCells");
+          throw new Error("rows ranges should use sheet iteration callbacks");
         },
-        listSheetCells: () => [{ cellIndex: 4, row: 1, col: 0 }]
+        forEachSheetCell: (_sheetId, fn) => {
+          fn(4, 1, 0);
+        }
       }
     );
 
@@ -69,7 +71,7 @@ describe("RangeRegistry", () => {
       },
       {
         ensureCell: ((_sheetId, _row, col) => col + 20) as (sheetId: number, row: number, col: number) => number,
-        listSheetCells: () => []
+        forEachSheetCell: () => {}
       }
     );
 

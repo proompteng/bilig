@@ -760,7 +760,7 @@ export class SpreadsheetEngine {
         }
         const registered = this.ranges.intern(sheet.id, range, {
           ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col, materializedCells),
-          listSheetCells: (sheetId) => this.listSheetCells(sheetId)
+          forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn)
         });
         rangeIndexByRef.set(dep, registered.rangeIndex);
         const rangeEntity = makeRangeEntity(registered.rangeIndex);
@@ -1568,20 +1568,14 @@ export class SpreadsheetEngine {
     return ensured.cellIndex;
   }
 
-  private listSheetCells(sheetId: number): Array<{ cellIndex: number; row: number; col: number }> {
+  private forEachSheetCell(sheetId: number, fn: (cellIndex: number, row: number, col: number) => void): void {
     const sheet = this.workbook.getSheetById(sheetId);
     if (!sheet) {
-      return [];
+      return;
     }
-    const indices: Array<{ cellIndex: number; row: number; col: number }> = [];
-    sheet.grid.forEachCell((cellIndex) => {
-      indices.push({
-        cellIndex,
-        row: this.workbook.cellStore.rows[cellIndex] ?? 0,
-        col: this.workbook.cellStore.cols[cellIndex] ?? 0
-      });
+    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+      fn(cellIndex, row, col);
     });
-    return indices;
   }
 
   private resolveRangeValues(sheetName: string, range: ReturnType<typeof parseRangeAddress>): CellValue[] {
@@ -1603,9 +1597,7 @@ export class SpreadsheetEngine {
     }
 
     const matches: Array<{ row: number; col: number; value: CellValue }> = [];
-    sheet.grid.forEachCell((cellIndex) => {
-      const row = this.workbook.cellStore.rows[cellIndex] ?? 0;
-      const col = this.workbook.cellStore.cols[cellIndex] ?? 0;
+    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
       const inRange =
         range.kind === "rows"
           ? row >= range.start.row && row <= range.end.row

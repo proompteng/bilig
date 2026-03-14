@@ -18,7 +18,7 @@ export interface RangeDescriptor {
 
 export interface RangeMaterializer {
   ensureCell(sheetId: number, row: number, col: number): number;
-  listSheetCells(sheetId: number): Array<{ cellIndex: number; row: number; col: number }>;
+  forEachSheetCell(sheetId: number, fn: (cellIndex: number, row: number, col: number) => void): void;
 }
 
 interface DynamicRangeIndex {
@@ -202,19 +202,17 @@ function materializeDynamicMembers(
   materializer: RangeMaterializer
 ): Uint32Array {
   const matches: number[] = [];
-  const cells = materializer.listSheetCells(sheetId);
-  for (let index = 0; index < cells.length; index += 1) {
-    const cell = cells[index]!;
+  materializer.forEachSheetCell(sheetId, (cellIndex, row, col) => {
     if (kind === "rows") {
-      if (cell.row >= range.start.row && cell.row <= range.end.row) {
-        matches.push(cell.cellIndex);
+      if (row >= range.start.row && row <= range.end.row) {
+        matches.push(cellIndex);
       }
-      continue;
+      return;
     }
-    if (cell.col >= range.start.col && cell.col <= range.end.col) {
-      matches.push(cell.cellIndex);
+    if (col >= range.start.col && col <= range.end.col) {
+      matches.push(cellIndex);
     }
-  }
+  });
   matches.sort((left, right) => left - right);
   return Uint32Array.from(matches);
 }
