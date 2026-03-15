@@ -36,7 +36,11 @@ export function buildWorkbookSnapshot(materializedCells = 1000): WorkbookSnapsho
 }
 
 export function seedDownstreamWorkbook(engine: SpreadsheetEngine, downstreamCount = 1000): void {
-  engine.importSnapshot({
+  engine.importSnapshot(buildDownstreamSnapshot(downstreamCount));
+}
+
+export function buildDownstreamSnapshot(downstreamCount = 1000): WorkbookSnapshot {
+  return {
     version: 1,
     workbook: { name: "benchmark-edit" },
     sheets: [
@@ -52,7 +56,7 @@ export function seedDownstreamWorkbook(engine: SpreadsheetEngine, downstreamCoun
         ]
       }
     ]
-  });
+  };
 }
 
 export function buildRenderCommitOps(cellCount = 1000): CommitOp[] {

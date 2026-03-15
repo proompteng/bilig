@@ -26,12 +26,14 @@ Build a shippable v1 with these properties:
 1. A declarative React API for workbooks, sheets, and cells.
 2. A high-performance calculation engine with incremental recalculation.
 3. A WASM fast path for numeric formulas and range aggregations.
-4. A React DOM playground app with a virtualized sheet UI and formula bar.
+4. A React DOM playground app with an Excel-like workbook shell, a Glide-backed virtualized grid, and a formula bar directly above the sheet.
 5. A stable imperative engine API that can be used without React.
 6. A robust test/benchmark/CI setup.
 7. A version-pinned adapter around `react-reconciler` so React internals are isolated to one package.
 
 This is not a full Excel clone. It is a production-grade architecture for a strong spreadsheet core and a shippable v1.
+
+The current playground interaction and layout contract is specified in [playground-excel-shell-rfc.md](/Users/gregkonush/github.com/bilig/docs/playground-excel-shell-rfc.md). That RFC is authoritative for the Excel-like shell layout, Glide integration, editing model, and large-preset UX.
 
 ---
 
@@ -111,10 +113,13 @@ React integration:
 - `useSyncExternalStore` based hooks for UI integration
 
 Playground UI:
-- virtualized grid
+- Excel-like workbook shell
+- Glide-backed virtualized grid
 - cell selection
-- formula bar
-- edit/commit flow
+- formula bar directly above the grid
+- name box directly above the grid
+- edit/commit flow through both the formula bar and the in-cell editor
+- large preset loaders for stress scenarios and Excel-scale surface demos
 - recalc metrics panel
 - dependency inspector for selected cell
 

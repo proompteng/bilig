@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, type CSSProperties } from "react";
+import type { EditMovement } from "./SheetGridView.js";
 
 interface CellEditorOverlayProps {
   label: string;
   value: string;
   resolvedValue: string;
   onChange(next: string): void;
-  onCommit(): void;
+  onCommit(movement?: EditMovement): void;
   onCancel(): void;
   style?: CSSProperties;
 }
@@ -36,12 +37,12 @@ export function CellEditorOverlay({
     };
   }, []);
 
-  const commit = () => {
+  const commit = (movement?: EditMovement) => {
     if (completionRef.current !== "idle") {
       return;
     }
     completionRef.current = "commit";
-    onCommit();
+    onCommit(movement);
   };
 
   const cancel = () => {
@@ -75,7 +76,12 @@ export function CellEditorOverlay({
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
-            commit();
+            commit([0, event.shiftKey ? -1 : 1]);
+            return;
+          }
+          if (event.key === "Tab") {
+            event.preventDefault();
+            commit([event.shiftKey ? -1 : 1, 0]);
             return;
           }
           if (event.key === "Escape") {

@@ -20,9 +20,9 @@
   - `Cell`
   - `createWorkbookRendererRoot(engine)`
 - `@bilig/grid`
-  - `WorkbookView`
+  - `WorkbookView` (Excel-like workbook shell built on Glide Data Grid)
   - `SheetGridView`
-  - `FormulaBar`
+  - `FormulaBar` (name box + formula input directly above the grid)
   - `CellEditorOverlay`
   - `MetricsPanel`
   - `DependencyInspector`
@@ -73,3 +73,12 @@ Replication is transport-agnostic. The engine emits deterministic local batches 
 
 - `render(element)`
 - `unmount()`
+
+## Playground interaction contract
+
+The playground keeps the core/renderer APIs unchanged, but the shell behavior is part of the shipped product contract:
+
+- the formula bar lives directly above the grid
+- the grid exposes the full spreadsheet surface, including Excel-scale row and column bounds
+- large workbook presets are loaded by the playground app layer, not by `@bilig/core`
+- editing works from both the formula bar and the in-cell overlay

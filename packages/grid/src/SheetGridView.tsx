@@ -1,9 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { SpreadsheetEngine } from "@bilig/core";
-import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
+import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
+import {
+  CompactSelection,
+  DataEditor,
+  GridCellKind,
+  type DataEditorRef,
+  type GridCell,
+  type GridColumn,
+  type GridKeyEventArgs,
+  type GridSelection,
+  type Item,
+  type Rectangle
+} from "@glideapps/glide-data-grid";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
-import { useCell } from "./useCell.js";
+
+export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
 
 interface SheetGridViewProps {
   engine: SpreadsheetEngine;
@@ -13,86 +26,120 @@ interface SheetGridViewProps {
   resolvedValue: string;
   isEditingCell: boolean;
   onSelect(addr: string): void;
-  onBeginEdit(): void;
+  onBeginEdit(seed?: string): void;
   onEditorChange(next: string): void;
-  onCommitEdit(): void;
+  onCommitEdit(movement?: EditMovement): void;
   onCancelEdit(): void;
+  onClearCell(): void;
+  onPaste(addr: string, values: readonly (readonly string[])[]): void;
 }
 
-const GRID_ROW_COUNT = Math.min(MAX_ROWS, 100_000);
-const GRID_COL_COUNT = Math.min(MAX_COLS, 256);
-const ROW_HEIGHT = 42;
-const COL_WIDTH = 120;
-const HEADER_HEIGHT = 46;
-const ROW_HEADER_WIDTH = 72;
-const OVERSCAN = 3;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
+interface VisibleRegionState {
+  range: Rectangle;
+  tx: number;
+  ty: number;
 }
 
-function cellContent(snapshot: ReturnType<typeof useCell>) {
+const DEFAULT_COLUMN_WIDTH = 120;
+const DEFAULT_ROW_HEIGHT = 28;
+
+function isPrintableKey(event: GridKeyEventArgs): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    return false;
+  }
+  return event.key.length === 1;
+}
+
+function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
+}
+
+function cellToGridCell(engine: SpreadsheetEngine, sheetName: string, addr: string): GridCell {
+  const snapshot = selectors.selectCellSnapshot(engine, sheetName, addr);
+  const rawValue = cellToEditorSeed(snapshot);
+
   switch (snapshot.value.tag) {
     case ValueTag.Number:
-      return String(snapshot.value.value);
+      return {
+        kind: GridCellKind.Number,
+        allowOverlay: false,
+        data: snapshot.value.value,
+        displayData: String(snapshot.value.value),
+        readonly: false,
+        copyData: snapshot.formula ? rawValue : String(snapshot.value.value),
+        contentAlign: "right"
+      };
     case ValueTag.Boolean:
-      return String(snapshot.value.value);
-    case ValueTag.String:
-      return snapshot.value.value;
+      return {
+        kind: GridCellKind.Boolean,
+        allowOverlay: false,
+        data: snapshot.value.value,
+        readonly: false,
+        copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE"
+      };
     case ValueTag.Error:
-      return `#${snapshot.value.code}`;
+      return {
+        kind: GridCellKind.Text,
+        allowOverlay: false,
+        data: `#${snapshot.value.code}`,
+        displayData: `#${snapshot.value.code}`,
+        readonly: false,
+        copyData: snapshot.formula ? rawValue : `#${snapshot.value.code}`,
+        themeOverride: {
+          textDark: "#991b1b",
+          bgCell: "#fff4f4"
+        }
+      };
+    case ValueTag.String:
+      return {
+        kind: GridCellKind.Text,
+        allowOverlay: false,
+        data: snapshot.value.value,
+        displayData: snapshot.value.value,
+        readonly: false,
+        copyData: snapshot.formula ? rawValue : snapshot.value.value
+      };
     default:
-      return "";
+      return {
+        kind: GridCellKind.Text,
+        allowOverlay: false,
+        data: "",
+        displayData: "",
+        readonly: false,
+        copyData: snapshot.formula ? rawValue : ""
+      };
   }
 }
 
-interface GridCellProps {
-  engine: SpreadsheetEngine;
-  sheetName: string;
-  addr: string;
-  row: number;
-  col: number;
-  isSelected: boolean;
-  onSelect(addr: string): void;
-  onBeginEdit(): void;
+function cellToEditorSeed(snapshot: ReturnType<typeof selectors.selectCellSnapshot>): string {
+  if (snapshot.formula) {
+    return `=${snapshot.formula}`;
+  }
+  if (snapshot.input === null || snapshot.input === undefined) {
+    switch (snapshot.value.tag) {
+      case ValueTag.Number:
+        return String(snapshot.value.value);
+      case ValueTag.Boolean:
+        return snapshot.value.value ? "TRUE" : "FALSE";
+      case ValueTag.String:
+        return snapshot.value.value;
+      case ValueTag.Error:
+        return `#${snapshot.value.code}`;
+      default:
+        return "";
+    }
+  }
+  if (typeof snapshot.input === "boolean") {
+    return snapshot.input ? "TRUE" : "FALSE";
+  }
+  return String(snapshot.input);
 }
-
-const GridCell = React.memo(function GridCell({
-  engine,
-  sheetName,
-  addr,
-  row,
-  col,
-  isSelected,
-  onSelect,
-  onBeginEdit
-}: GridCellProps) {
-  const snapshot = useCell(engine, sheetName, addr);
-
-  return (
-    <button
-      aria-label={`Cell ${addr}`}
-      aria-selected={isSelected}
-      className={isSelected ? "grid-cell selected" : "grid-cell"}
-      data-addr={addr}
-      data-selected={isSelected ? "true" : "false"}
-      onClick={() => onSelect(addr)}
-      onDoubleClick={() => {
-        onSelect(addr);
-        onBeginEdit();
-      }}
-      style={{
-        left: ROW_HEADER_WIDTH + col * COL_WIDTH,
-        top: HEADER_HEIGHT + row * ROW_HEIGHT,
-        width: COL_WIDTH,
-        height: ROW_HEIGHT
-      }}
-      type="button"
-    >
-      <span className="grid-cell-value">{cellContent(snapshot)}</span>
-    </button>
-  );
-});
 
 export function SheetGridView({
   engine,
@@ -105,242 +152,333 @@ export function SheetGridView({
   onBeginEdit,
   onEditorChange,
   onCommitEdit,
-  onCancelEdit
+  onCancelEdit,
+  onClearCell,
+  onPaste
 }: SheetGridViewProps) {
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [viewportSize, setViewportSize] = useState({ width: 960, height: 640 });
+  const editorRef = useRef<DataEditorRef | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
+    range: { x: 0, y: 0, width: 12, height: 24 },
+    tx: 0,
+    ty: 0
+  });
+  const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined);
+  const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName]);
+
+  const columns = useMemo<readonly GridColumn[]>(
+    () =>
+      Array.from({ length: MAX_COLS }, (_, index) => ({
+        id: indexToColumn(index),
+        title: indexToColumn(index),
+        width: DEFAULT_COLUMN_WIDTH
+      })),
+    []
+  );
+
+  const gridSelection = useMemo<GridSelection>(
+    () => ({
+      current: {
+        cell: [selectedCell.col, selectedCell.row],
+        range: { x: selectedCell.col, y: selectedCell.row, width: 1, height: 1 },
+        rangeStack: []
+      },
+      columns: CompactSelection.empty(),
+      rows: CompactSelection.empty()
+    }),
+    [selectedCell.col, selectedCell.row]
+  );
+
+  const getCellContent = useCallback(
+    ([col, row]: Item) => cellToGridCell(engine, sheetName, formatAddress(row, col)),
+    [engine, sheetName]
+  );
+
+  const visibleItems = useMemo<Item[]>(() => {
+    const items: Item[] = [];
+    const rowEnd = Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1);
+    const colEnd = Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1);
+    for (let row = visibleRegion.range.y; row <= rowEnd; row += 1) {
+      for (let col = visibleRegion.range.x; col <= colEnd; col += 1) {
+        items.push([col, row]);
+      }
+    }
+    return items;
+  }, [visibleRegion.range.height, visibleRegion.range.width, visibleRegion.range.x, visibleRegion.range.y]);
+
+  const visibleAddresses = useMemo(
+    () => visibleItems.map(([col, row]) => formatAddress(row, col)),
+    [visibleItems]
+  );
+  const visibleDamage = useMemo(() => visibleItems.map((cell) => ({ cell })), [visibleItems]);
 
   useEffect(() => {
-    const node = scrollerRef.current;
-    if (!node) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      const nextEntry = entries[0];
-      if (!nextEntry) return;
-      const { width, height } = nextEntry.contentRect;
-      setViewportSize((current) => {
-        if (current.width === width && current.height === height) {
-          return current;
-        }
-        return { width, height };
-      });
+    return engine.subscribeCells(sheetName, visibleAddresses, () => {
+      editorRef.current?.updateCells(visibleDamage);
     });
+  }, [engine, sheetName, visibleAddresses, visibleDamage]);
 
-    resizeObserver.observe(node);
-    setViewportSize({ width: node.clientWidth, height: node.clientHeight });
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
-
-  const visibleRowCount = Math.max(1, Math.ceil(Math.max(0, viewportSize.height - HEADER_HEIGHT) / ROW_HEIGHT));
-  const visibleColCount = Math.max(1, Math.ceil(Math.max(0, viewportSize.width - ROW_HEADER_WIDTH) / COL_WIDTH));
-
-  const viewport = useMemo(() => {
-    const rowStart = clamp(Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN, 0, GRID_ROW_COUNT - 1);
-    const colStart = clamp(Math.floor(scrollLeft / COL_WIDTH) - OVERSCAN, 0, GRID_COL_COUNT - 1);
-
-    return {
-      rowStart,
-      rowEnd: clamp(rowStart + visibleRowCount + OVERSCAN * 2, rowStart, GRID_ROW_COUNT - 1),
-      colStart,
-      colEnd: clamp(colStart + visibleColCount + OVERSCAN * 2, colStart, GRID_COL_COUNT - 1)
-    };
-  }, [scrollLeft, scrollTop, visibleColCount, visibleRowCount]);
-
-  const rows = useMemo(
-    () => Array.from({ length: viewport.rowEnd - viewport.rowStart + 1 }, (_, rowIndex) => viewport.rowStart + rowIndex),
-    [viewport]
-  );
-  const cols = useMemo(
-    () => Array.from({ length: viewport.colEnd - viewport.colStart + 1 }, (_, colIndex) => viewport.colStart + colIndex),
-    [viewport]
-  );
-  const selectedCell = parseCellAddress(selectedAddr, sheetName);
-
-  useEffect(() => {
-    const node = scrollerRef.current;
-    if (!node) return;
-
-    const cellTop = HEADER_HEIGHT + selectedCell.row * ROW_HEIGHT;
-    const cellBottom = cellTop + ROW_HEIGHT;
-    const cellLeft = ROW_HEADER_WIDTH + selectedCell.col * COL_WIDTH;
-    const cellRight = cellLeft + COL_WIDTH;
-
-    let nextScrollTop = node.scrollTop;
-    let nextScrollLeft = node.scrollLeft;
-
-    if (cellTop < node.scrollTop + HEADER_HEIGHT) {
-      nextScrollTop = Math.max(0, cellTop - HEADER_HEIGHT);
-    } else if (cellBottom > node.scrollTop + node.clientHeight) {
-      nextScrollTop = cellBottom - node.clientHeight;
-    }
-
-    if (cellLeft < node.scrollLeft + ROW_HEADER_WIDTH) {
-      nextScrollLeft = Math.max(0, cellLeft - ROW_HEADER_WIDTH);
-    } else if (cellRight > node.scrollLeft + node.clientWidth) {
-      nextScrollLeft = cellRight - node.clientWidth;
-    }
-
-    if (nextScrollTop !== node.scrollTop || nextScrollLeft !== node.scrollLeft) {
-      node.scrollTo({ top: nextScrollTop, left: nextScrollLeft });
-    }
+  useLayoutEffect(() => {
+    editorRef.current?.scrollTo(selectedCell.col, selectedCell.row);
   }, [selectedCell.col, selectedCell.row, sheetName]);
 
-  const totalCanvasWidth = ROW_HEADER_WIDTH + GRID_COL_COUNT * COL_WIDTH;
-  const totalCanvasHeight = HEADER_HEIGHT + GRID_ROW_COUNT * ROW_HEIGHT;
+  useEffect(() => {
+    if (!isEditingCell) {
+      setOverlayBounds(undefined);
+      return;
+    }
+
+    let frame = 0;
+    const tick = () => {
+      const next = editorRef.current?.getBounds(selectedCell.col, selectedCell.row);
+      setOverlayBounds((current) => (sameBounds(current, next) ? current : next));
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isEditingCell, selectedCell.col, selectedCell.row, visibleRegion.tx, visibleRegion.ty]);
+
+  const beginSelectedEdit = useCallback(
+    (seed?: string) => {
+      onBeginEdit(seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, selectedAddr)));
+    },
+    [engine, onBeginEdit, selectedAddr, sheetName]
+  );
+
+  const handleGridKey = useCallback(
+    (event: {
+      key: string;
+      ctrlKey: boolean;
+      metaKey: boolean;
+      altKey: boolean;
+      preventDefault(): void;
+      cancel?: () => void;
+    }) => {
+      if (isEditingCell) {
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === "F2") {
+        event.preventDefault();
+        event.cancel?.();
+        beginSelectedEdit();
+        return;
+      }
+
+      if (event.key === "Backspace" || event.key === "Delete") {
+        event.preventDefault();
+        event.cancel?.();
+        onClearCell();
+        return;
+      }
+
+      if (
+        event.key.length === 1
+        && !event.ctrlKey
+        && !event.metaKey
+        && !event.altKey
+      ) {
+        event.preventDefault();
+        event.cancel?.();
+        beginSelectedEdit(event.key);
+      }
+    },
+    [beginSelectedEdit, isEditingCell, onClearCell]
+  );
+
+  useEffect(() => {
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement
+        || activeElement instanceof HTMLTextAreaElement
+        || activeElement instanceof HTMLSelectElement
+        || Boolean(activeElement && (activeElement as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+
+      const withinGridHost = Boolean(activeElement && hostRef.current?.contains(activeElement));
+      const onDocumentBody =
+        activeElement === document.body || activeElement === document.documentElement || activeElement === null;
+      if (!withinGridHost && !onDocumentBody) {
+        return;
+      }
+
+      if (
+        !isPrintableKey({
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          key: event.key,
+          metaKey: event.metaKey
+        } as GridKeyEventArgs)
+        && event.key !== "Enter"
+        && event.key !== "F2"
+        && event.key !== "Backspace"
+        && event.key !== "Delete"
+      ) {
+        return;
+      }
+
+      handleGridKey({
+        altKey: event.altKey,
+        cancel: () => {
+          event.stopPropagation();
+        },
+        ctrlKey: event.ctrlKey,
+        key: event.key,
+        metaKey: event.metaKey,
+        preventDefault: () => event.preventDefault()
+      });
+    };
+
+    window.addEventListener("keydown", handleWindowKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown, true);
+    };
+  }, [handleGridKey]);
+
+  const overlayStyle = useMemo(() => {
+    if (!isEditingCell) {
+      return undefined;
+    }
+    if (overlayBounds) {
+      return {
+        left: overlayBounds.x,
+        position: "fixed" as const,
+        top: overlayBounds.y,
+        width: Math.max(overlayBounds.width + 120, 280)
+      };
+    }
+
+    const hostBounds = hostRef.current?.getBoundingClientRect();
+    if (!hostBounds) {
+      return {
+        left: 64,
+        position: "fixed" as const,
+        top: 160,
+        width: 320
+      };
+    }
+
+    return {
+      left: hostBounds.left + 88,
+      position: "fixed" as const,
+      top: hostBounds.top + 52,
+      width: Math.max(Math.min(hostBounds.width - 32, 480), 320)
+    };
+  }, [isEditingCell, overlayBounds]);
 
   return (
-    <div className="sheet-grid-panel">
-      <div className="sheet-grid-toolbar">
+    <div className="sheet-grid-shell" data-testid="sheet-grid-shell">
+      <div className="sheet-grid-banner">
         <div>
-          <p className="panel-eyebrow">Viewport</p>
-          <strong>{sheetName}</strong>
+          <p className="panel-eyebrow">Surface</p>
+          <strong>
+            {MAX_ROWS.toLocaleString()} rows x {MAX_COLS.toLocaleString()} columns
+          </strong>
         </div>
         <div className="viewport-meta">
-          <span>{GRID_ROW_COUNT.toLocaleString()} rows</span>
-          <span>{GRID_COL_COUNT} columns</span>
-          <span>engine {MAX_ROWS.toLocaleString()} x {MAX_COLS.toLocaleString()}</span>
+          <span data-testid="selection-chip">
+            {sheetName}!{selectedAddr}
+          </span>
+          <span>{resolvedValue || "∅"}</span>
         </div>
       </div>
-      <div className="sheet-grid-shell">
-        <div
-          aria-colcount={GRID_COL_COUNT}
-          aria-label={`${sheetName} grid`}
-          aria-rowcount={GRID_ROW_COUNT}
-          className="sheet-grid-scroller"
-          data-testid="sheet-grid"
-          onKeyDown={(event) => {
+      <div
+        className="sheet-grid-host"
+        data-testid="sheet-grid"
+        onDoubleClick={() => beginSelectedEdit()}
+        onKeyDown={(event) => handleGridKey(event)}
+        onMouseDownCapture={() => hostRef.current?.focus()}
+        ref={hostRef}
+        tabIndex={0}
+      >
+        <DataEditor
+          ref={editorRef}
+          cellActivationBehavior="double-click"
+          className="glide-sheet-grid"
+          columns={columns}
+          freezeColumns={0}
+          getCellContent={getCellContent}
+          getCellsForSelection={true}
+          gridSelection={gridSelection}
+          headerHeight={30}
+          height="100%"
+          onCellActivated={([col, row]) => {
+            const addr = formatAddress(row, col);
+            onSelect(addr);
+            onBeginEdit(cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)));
+          }}
+          onDelete={() => {
+            onClearCell();
+            return false;
+          }}
+          onGridSelectionChange={(nextSelection) => {
+            const nextCell = nextSelection.current?.cell;
+            if (!nextCell) {
+              return;
+            }
             if (isEditingCell) {
-              return;
+              onCancelEdit();
             }
-
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onBeginEdit();
-              return;
-            }
-
-            const rowDelta =
-              event.key === "ArrowDown"
-                ? 1
-                : event.key === "ArrowUp"
-                  ? -1
-                  : 0;
-            const colDelta =
-              event.key === "ArrowRight" || event.key === "Tab"
-                ? 1
-                : event.key === "ArrowLeft"
-                  ? -1
-                  : 0;
-
-            if (event.key === "Home") {
-              event.preventDefault();
-              onSelect(formatAddress(selectedCell.row, 0));
-              return;
-            }
-
-            if (event.key === "End") {
-              event.preventDefault();
-              onSelect(formatAddress(selectedCell.row, GRID_COL_COUNT - 1));
-              return;
-            }
-
-            if (rowDelta === 0 && colDelta === 0) {
-              return;
-            }
-
-            event.preventDefault();
-            const nextRow = clamp(
-              selectedCell.row + (event.shiftKey && event.key === "Enter" ? -1 : rowDelta),
-              0,
-              GRID_ROW_COUNT - 1
-            );
-            const nextCol = clamp(
-              selectedCell.col + (event.shiftKey && event.key === "Tab" ? -1 : colDelta),
-              0,
-              GRID_COL_COUNT - 1
-            );
-            onSelect(formatAddress(nextRow, nextCol));
+            onSelect(formatAddress(nextCell[1], nextCell[0]));
           }}
-          onScroll={(event) => {
-            const target = event.currentTarget;
-            setScrollTop(target.scrollTop);
-            setScrollLeft(target.scrollLeft);
+          onKeyDown={(event) => {
+            if (!isPrintableKey(event) && event.key !== "Enter" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
+              return;
+            }
+            handleGridKey(event);
           }}
-          ref={scrollerRef}
-          role="grid"
-          tabIndex={0}
-        >
-          <div className="sheet-grid-canvas" style={{ height: totalCanvasHeight, width: totalCanvasWidth }}>
-            {rows.flatMap((row) =>
-              cols.map((col) => {
-                const addr = formatAddress(row, col);
-                const isSelected = addr === selectedAddr;
-
-                return (
-                  <GridCell
-                    addr={addr}
-                    col={col}
-                    engine={engine}
-                    isSelected={isSelected}
-                    key={`${row}-${col}`}
-                    onBeginEdit={onBeginEdit}
-                    onSelect={onSelect}
-                    row={row}
-                    sheetName={sheetName}
-                  />
-                );
-              })
-            )}
-            {isEditingCell ? (
-              <CellEditorOverlay
-                label={`${sheetName}!${selectedAddr}`}
-                onCancel={onCancelEdit}
-                onChange={onEditorChange}
-                onCommit={onCommitEdit}
-                resolvedValue={resolvedValue}
-                style={{
-                  left: ROW_HEADER_WIDTH + selectedCell.col * COL_WIDTH - 1,
-                  top: HEADER_HEIGHT + selectedCell.row * ROW_HEIGHT - 1,
-                  width: Math.max(COL_WIDTH * 2, 240)
-                }}
-                value={editorValue}
-              />
-            ) : null}
-          </div>
-        </div>
-        <div className="grid-corner" />
-        <div className="column-headers" style={{ left: ROW_HEADER_WIDTH }}>
-          <div className="column-header-track" style={{ transform: `translateX(${-scrollLeft}px)` }}>
-            {cols.map((col) => (
-              <div
-                className="grid-header"
-                key={`header-${col}`}
-                style={{ left: col * COL_WIDTH, width: COL_WIDTH, height: HEADER_HEIGHT }}
-              >
-                {indexToColumn(col)}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="row-headers" style={{ top: HEADER_HEIGHT }}>
-          <div className="row-header-track" style={{ transform: `translateY(${-scrollTop}px)` }}>
-            {rows.map((row) => (
-              <div
-                className={row === selectedCell.row ? "grid-row-header active" : "grid-row-header"}
-                key={`row-header-${row}`}
-                style={{ top: row * ROW_HEIGHT, width: ROW_HEADER_WIDTH, height: ROW_HEIGHT }}
-              >
-                {row + 1}
-              </div>
-            ))}
-          </div>
-        </div>
+          onPaste={(target, values) => {
+            onPaste(formatAddress(target[1], target[0]), values);
+            return false;
+          }}
+          onVisibleRegionChanged={(range, tx, ty) => {
+            setVisibleRegion({ range, tx, ty });
+          }}
+          rowHeight={DEFAULT_ROW_HEIGHT}
+          rowMarkers={{ kind: "number", width: 60 }}
+          rows={MAX_ROWS}
+          smoothScrollX={true}
+          smoothScrollY={true}
+          theme={{
+            accentColor: "#1f7a43",
+            accentFg: "#ffffff",
+            bgCell: "#ffffff",
+            bgCellMedium: "#f3f5f7",
+            bgHeader: "#f6f7f8",
+            borderColor: "#d5d9de",
+            cellHorizontalPadding: 10,
+            cellVerticalPadding: 6,
+            drilldownBorder: "#d5d9de",
+            editorFontSize: "13px",
+            fontFamily: '"Aptos","Segoe UI","IBM Plex Sans",sans-serif',
+            headerFontStyle: "600 12px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
+            horizontalBorderColor: "#e5e7eb",
+            lineHeight: 1.3,
+            textDark: "#101828",
+            textHeader: "#344054",
+            textLight: "#667085"
+          }}
+          trapFocus={false}
+          verticalBorder={true}
+          width="100%"
+        />
       </div>
+      {isEditingCell ? (
+        <CellEditorOverlay
+          label={`${sheetName}!${selectedAddr}`}
+          onCancel={onCancelEdit}
+          onChange={onEditorChange}
+          onCommit={onCommitEdit}
+          resolvedValue={resolvedValue}
+          value={editorValue}
+          {...(overlayStyle ? { style: overlayStyle } : {})}
+        />
+      ) : null}
     </div>
   );
 }

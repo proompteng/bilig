@@ -11,10 +11,14 @@
     }
   },
   "dependencies": {
+    "@glideapps/glide-data-grid": "6.0.3",
     "@bilig/core": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
-    "react": "19.2.4"
+    "lodash": "4.17.21",
+    "marked": "4.3.0",
+    "react": "19.2.4",
+    "react-responsive-carousel": "3.2.23"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"

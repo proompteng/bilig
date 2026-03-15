@@ -16,7 +16,7 @@ flowchart TB
     CRDT["@bilig/crdt"]
     PROTOCOL["@bilig/protocol"]
     RENDERER["@bilig/renderer"]
-    UI["@bilig/grid"]
+    UI["@bilig/grid<br/>Glide-backed Excel-like workbook shell"]
     WASM["@bilig/wasm-kernel"]
   end
 
@@ -83,3 +83,22 @@ The UI does not subscribe through a single global revision for visible cells. `@
 Selection state now follows the same rule: the engine owns the current `{ sheetName, address }` selection snapshot and `@bilig/grid` consumes it through `useSyncExternalStore`, so the playground no longer keeps workbook selection in a parallel React-only state tree.
 
 The reusable hooks now read through `@bilig/core/selectors` for cell, metrics, selection, and viewport snapshots, so the UI package consumes a stable selector surface instead of reaching into ad hoc engine getters directly.
+
+`@bilig/grid` now owns the full workbook shell contract instead of a dashboard-like demo surface. The shell contains:
+
+- workbook/ribbon header
+- name box and formula bar directly above the grid
+- a Glide Data Grid-backed sheet surface
+- bottom sheet tabs and status bar
+- secondary side panels for metrics, dependencies, and replica state
+
+Editing is part of the product contract, not an incidental demo behavior. The supported flows are:
+
+- single-click selection
+- keyboard edit entry with `F2`, `Enter`, or type-to-replace on the selected cell
+- formula-bar editing as the primary edit surface
+- in-cell overlay editing for direct manipulation
+- commit on `Enter`, `Tab`, `Shift+Tab`, `Shift+Enter`, or blur
+- cancel on `Escape`
+
+The playground also exposes Excel-scale sheet bounds and ships built-in large presets from `apps/playground/src/playgroundPresets.ts` so the UI proves scale with real engine-backed workloads instead of only describing those workloads in benchmarks.

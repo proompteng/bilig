@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "preview:ci": "pnpm build && vite preview --host 127.0.0.1 --port 4173"
+    "preview:ci": "pnpm build && vite preview --host 127.0.0.1 --port 4179"
   },
   "dependencies": {
+    "@bilig/benchmarks": "workspace:*",
     "@bilig/core": "workspace:*",
     "@bilig/crdt": "workspace:*",
-    "@bilig/renderer": "workspace:*",
     "@bilig/grid": "workspace:*",
+    "@bilig/renderer": "workspace:*",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

@@ -5,8 +5,13 @@
   - `packages/core/src` line coverage must stay at or above `90%`
   - `packages/formula/src` line coverage must stay at or above `90%`
   - `packages/renderer/src` line coverage must stay at or above `90%`
-- Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`, exercising the extracted `@bilig/renderer` and `@bilig/grid` packages through the app shell.
-- Browser smoke covers both live recalculation and paused-relay resume behavior so local-first replication survives a full reload path in CI, not just in ad hoc manual testing.
+- Playwright drives a browser smoke test against the built Vite playground in `e2e/tests/`, exercising the extracted `@bilig/renderer` and Glide-backed `@bilig/grid` shell through the app layer.
+- Browser smoke covers the shipped workbook-shell contract:
+  - name box + formula bar directly above the grid
+  - keyboard/in-cell edit entry and commit flow
+  - live recalculation for dependent formulas
+  - Excel-scale preset loading and far-cell navigation
+  - paused-relay resume behavior so local-first replication survives a full reload path in CI, not just in ad hoc manual testing
 - CRDT unit tests now verify real compaction semantics, including stale cell writes behind sheet tombstones and recreate-after-delete flows.
 - Core and playground tests now also verify fine-grained cell subscription behavior so unrelated edits do not rerender watched cells or viewport listeners, format-only mutations still notify the right subscribers, and previously empty watched cells rerender on first materialization.
 - `packages/benchmarks` emits JSON benchmark payloads for:
@@ -56,4 +61,5 @@
 - GitHub Actions runs the same contract on Node 22 and Node 24.14.0; Forgejo remains the source of truth for the private origin.
 - Local pre-push verification should use `pnpm run ci:strict`, which mirrors the Forgejo cleanliness gate in one command.
 - Browser smoke runs only after the playground build and installs Chromium explicitly so Forgejo runners do not rely on ambient browser state.
+- Playwright now starts a fresh preview server on its own dedicated port so browser smoke always exercises the current build instead of reusing stale local preview processes.
 - The private origin keeps Forgejo-native workflow definitions only so Forgejo does not have to resolve duplicate workflow paths.

@@ -364,7 +364,8 @@ export class SpreadsheetEngine {
         sheetName,
         address,
         value: emptyValue(),
-        flags: 0
+        flags: 0,
+        version: 0
       };
     }
     return this.getCellByIndex(cellIndex);
@@ -377,7 +378,8 @@ export class SpreadsheetEngine {
       sheetName,
       address,
       value: this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id)),
-      flags: this.workbook.cellStore.flags[cellIndex]!
+      flags: this.workbook.cellStore.flags[cellIndex]!,
+      version: this.workbook.cellStore.versions[cellIndex] ?? 0
     };
     const format = this.workbook.getCellFormat(cellIndex);
     if (format !== undefined) {
@@ -1850,6 +1852,7 @@ export class SpreadsheetEngine {
   }
 
   private resetWorkbook(workbookName = "Workbook"): void {
+    const previousBatchId = this.lastMetrics.batchId;
     this.workbook.reset(workbookName);
     this.formulas.clear();
     this.reverseCellEdges = [];
@@ -1860,7 +1863,7 @@ export class SpreadsheetEngine {
     this.sheetDeleteVersions.clear();
     this.selection = { sheetName: "Sheet1", address: "A1" };
     this.lastMetrics = {
-      batchId: 0,
+      batchId: previousBatchId,
       changedInputCount: 0,
       dirtyFormulaCount: 0,
       wasmFormulaCount: 0,

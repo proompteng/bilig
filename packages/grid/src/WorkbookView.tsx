@@ -1,6 +1,7 @@
 import React from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
-import { SheetGridView } from "./SheetGridView.js";
+import { FormulaBar } from "./FormulaBar.js";
+import { SheetGridView, type EditMovement } from "./SheetGridView.js";
 
 interface WorkbookViewProps {
   engine: SpreadsheetEngine;
@@ -13,10 +14,16 @@ interface WorkbookViewProps {
   isEditingCell: boolean;
   onSelectSheet(sheetName: string): void;
   onSelect(addr: string): void;
-  onBeginEdit(): void;
+  onAddressCommit(addr: string): void;
+  onBeginEdit(seed?: string): void;
   onEditorChange(next: string): void;
-  onCommitEdit(): void;
+  onCommitEdit(movement?: EditMovement): void;
   onCancelEdit(): void;
+  onClearCell(): void;
+  onPaste(addr: string, values: readonly (readonly string[])[]): void;
+  ribbon?: React.ReactNode;
+  sidebar?: React.ReactNode;
+  statusBar?: React.ReactNode;
 }
 
 export function WorkbookView({
@@ -30,54 +37,80 @@ export function WorkbookView({
   isEditingCell,
   onSelectSheet,
   onSelect,
+  onAddressCommit,
   onBeginEdit,
   onEditorChange,
   onCommitEdit,
-  onCancelEdit
+  onCancelEdit,
+  onClearCell,
+  onPaste,
+  ribbon,
+  sidebar,
+  statusBar
 }: WorkbookViewProps) {
   return (
-    <div className="panel workbook-panel">
-      <div className="workbook-header">
-        <div>
-          <p className="panel-eyebrow">Workbook</p>
-          <h2>{workbookName}</h2>
+    <section className="workbook-shell">
+      {ribbon ? <div className="workbook-ribbon">{ribbon}</div> : null}
+      <div className="workbook-content">
+        <div className="workbook-main">
+          <div className="workbook-header">
+            <div>
+              <p className="panel-eyebrow">Workbook</p>
+              <h1>{workbookName}</h1>
+            </div>
+            <div className="workbook-header-meta">
+              <span className="selection-chip">
+                {sheetName}!{selectedAddr}
+              </span>
+              <span className="surface-chip">Excel-scale surface</span>
+            </div>
+          </div>
+          <FormulaBar
+            address={selectedAddr}
+            onAddressCommit={onAddressCommit}
+            onCancel={onCancelEdit}
+            onChange={onEditorChange}
+            onClear={onClearCell}
+            onCommit={() => onCommitEdit()}
+            resolvedValue={resolvedValue}
+            sheetName={sheetName}
+            value={editorValue}
+          />
+          <SheetGridView
+            editorValue={editorValue}
+            engine={engine}
+            isEditingCell={isEditingCell}
+            onBeginEdit={onBeginEdit}
+            onCancelEdit={onCancelEdit}
+            onClearCell={onClearCell}
+            onCommitEdit={onCommitEdit}
+            onEditorChange={onEditorChange}
+            onPaste={onPaste}
+            onSelect={onSelect}
+            resolvedValue={resolvedValue}
+            selectedAddr={selectedAddr}
+            sheetName={sheetName}
+          />
+          <div className="workbook-footer">
+            <div className="sheet-tabs" aria-label="Sheets" role="tablist">
+              {sheetNames.map((name) => (
+                <button
+                  aria-selected={name === sheetName}
+                  className={name === sheetName ? "sheet-tab active" : "sheet-tab"}
+                  key={name}
+                  onClick={() => onSelectSheet(name)}
+                  role="tab"
+                  type="button"
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            {statusBar ? <div className="workbook-status">{statusBar}</div> : null}
+          </div>
         </div>
-        <div
-          aria-label="Selected cell"
-          aria-live="polite"
-          className="selection-chip"
-          data-testid="selection-chip"
-        >
-          {sheetName}!{selectedAddr}
-        </div>
+        {sidebar ? <aside className="workbook-sidebar">{sidebar}</aside> : null}
       </div>
-      <div className="sheet-tabs" aria-label="Sheets" role="tablist">
-        {sheetNames.map((name) => (
-          <button
-            aria-selected={name === sheetName}
-            className={name === sheetName ? "sheet-tab active" : "sheet-tab"}
-            key={name}
-            onClick={() => onSelectSheet(name)}
-            role="tab"
-            type="button"
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      <SheetGridView
-        editorValue={editorValue}
-        engine={engine}
-        isEditingCell={isEditingCell}
-        onBeginEdit={onBeginEdit}
-        onCancelEdit={onCancelEdit}
-        onCommitEdit={onCommitEdit}
-        onEditorChange={onEditorChange}
-        onSelect={onSelect}
-        resolvedValue={resolvedValue}
-        selectedAddr={selectedAddr}
-        sheetName={sheetName}
-      />
-    </div>
+    </section>
   );
 }

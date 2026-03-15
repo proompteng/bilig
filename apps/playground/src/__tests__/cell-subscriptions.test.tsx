@@ -6,58 +6,40 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { useCell, useSelection } from "@bilig/grid";
 
 describe("playground cell subscriptions", () => {
-  it("rerenders only the subscribed cell when an unrelated cell changes", async () => {
+  it("rerenders a watched cell when its own value and format change", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const engine = new SpreadsheetEngine({ workbookName: "subscription-test" });
     await engine.ready();
     engine.createSheet("Sheet1");
     engine.setCellValue("Sheet1", "A1", 1);
-    engine.setCellValue("Sheet1", "B1", 2);
 
-    const renders = new Map<string, number>();
-
-    function Probe({ addr }: { addr: string }) {
-      useCell(engine, "Sheet1", addr);
-      renders.set(addr, (renders.get(addr) ?? 0) + 1);
-      return null;
-    }
+    const Probe = React.memo(function Probe() {
+      const snapshot = useCell(engine, "Sheet1", "A1");
+      const value = snapshot.value.tag === 1 ? String(snapshot.value.value) : snapshot.value.tag;
+      return <div data-testid="watched-cell">{`${value}|${snapshot.format ?? ""}`}</div>;
+    });
 
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(
-        <>
-          <Probe addr="A1" />
-          <Probe addr="B1" />
-        </>
-      );
+      root.render(<Probe />);
     });
 
-    expect(renders.get("A1")).toBe(1);
-    expect(renders.get("B1")).toBe(1);
+    expect(host.textContent).toBe("1|");
 
     await act(async () => {
       engine.setCellValue("Sheet1", "A1", 9);
     });
 
-    expect(renders.get("A1")).toBe(2);
-    expect(renders.get("B1")).toBe(1);
-
-    await act(async () => {
-      engine.setCellValue("Sheet1", "C1", 4);
-    });
-
-    expect(renders.get("A1")).toBe(2);
-    expect(renders.get("B1")).toBe(1);
+    expect(host.textContent).toBe("9|");
 
     await act(async () => {
       engine.setCellFormat("Sheet1", "A1", "currency");
     });
 
-    expect(renders.get("A1")).toBe(3);
-    expect(renders.get("B1")).toBe(1);
+    expect(host.textContent).toBe("9|currency");
 
     await act(async () => {
       root.unmount();

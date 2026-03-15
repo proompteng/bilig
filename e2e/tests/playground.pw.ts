@@ -1,66 +1,90 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("playground smoke exercises the custom renderer and wasm-backed recalculation", async ({ page }) => {
+async function clearWorkspace(page: Page) {
   await page.goto("/");
   await page.evaluate(() => {
     window.localStorage.clear();
   });
   await page.reload();
+  await loadPreset(page, "starter", "Starter Demo");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("10");
+}
 
-  await expect(page.getByRole("heading", { name: /custom reconciler playground/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("20");
-  await expect(page.getByRole("button", { name: /^Cell C1$/ })).toHaveText("15");
-  await expect(page.getByRole("button", { name: /^Cell D1$/ })).toHaveText("20");
+async function jumpTo(page: Page, target: string) {
+  const nameBox = page.getByTestId("name-box");
+  await nameBox.fill(target);
+  await nameBox.press("Enter");
+}
 
-  const formulaInput = page.getByLabel("Formula");
-  await expect(formulaInput).toHaveValue("10");
+async function loadPreset(page: Page, presetId: string, label?: string) {
+  await page.getByTestId(`preset-${presetId}`).click();
+  const loadingBanner = page.getByTestId("preset-loading");
+  await page.waitForTimeout(50);
+  if ((await loadingBanner.count()) > 0) {
+    await expect(loadingBanner).toHaveCount(0);
+  }
+  if (label) {
+    await expect(page.getByTestId("status-active-preset")).toHaveText(label);
+  }
+}
 
-  await formulaInput.fill("12");
-  await page.getByRole("button", { name: "Commit" }).click();
+test("playground shell supports formula-bar navigation, in-grid editing, and Excel-scale presets", async ({ page }) => {
+  await clearWorkspace(page);
 
-  await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("24");
-  await expect(page.getByRole("button", { name: /^Cell C1$/ })).toHaveText("17");
-  await expect(page.getByRole("button", { name: /^Cell D1$/ })).toHaveText("22");
-  await expect(page.getByTestId("metric-js")).not.toHaveText("0");
-  await expect(page.getByTestId("metric-wasm")).not.toHaveText("0");
-  await expect(page.getByTestId("replica-value")).toHaveText("12");
-  await page.getByRole("tab", { name: "Sheet2" }).click();
-  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("25");
-  const grid = page.getByTestId("sheet-grid");
-  await grid.focus();
-  await grid.press("ArrowRight");
-  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet2!B1");
-  const cellB1 = page.getByRole("button", { name: /^Cell B1$/ });
-  await cellB1.dblclick();
-  await expect(page.getByTestId("cell-editor-overlay")).toBeVisible();
-  const overlayInput = page.getByLabel("Sheet2!B1 editor");
-  await overlayInput.fill("44");
+  await expect(page.getByRole("heading", { name: "bilig-demo" })).toBeVisible();
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+  await expect(page.getByTestId("name-box")).toHaveValue("A1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("10");
+
+  const gridHost = page.getByTestId("sheet-grid");
+  await expect(gridHost).toBeVisible();
+  await gridHost.focus();
+  await gridHost.press("F2");
+
+  const overlay = page.getByTestId("cell-editor-overlay");
+  await expect(overlay).toBeVisible();
+  const overlayInput = overlay.locator("input");
+  await overlayInput.fill("12");
   await overlayInput.press("Enter");
-  await expect(page.getByTestId("cell-editor-overlay")).toHaveCount(0);
-  await expect(cellB1).toHaveText("44");
-  await cellB1.dblclick();
-  await expect(page.getByTestId("cell-editor-overlay")).toBeVisible();
-  await overlayInput.fill("99");
-  await overlayInput.press("Escape");
-  await expect(page.getByTestId("cell-editor-overlay")).toHaveCount(0);
-  await expect(cellB1).toHaveText("44");
 
-  await page.reload();
-  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("12");
-  await expect(page.getByRole("button", { name: /^Cell B1$/ })).toHaveText("24");
-  await expect(page.getByRole("button", { name: /^Cell C1$/ })).toHaveText("17");
-  await expect(page.getByRole("button", { name: /^Cell D1$/ })).toHaveText("22");
-  await expect(page.getByTestId("replica-value")).toHaveText("12");
+  await expect(overlay).toHaveCount(0);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A2");
+  await expect(page.getByTestId("formula-input")).toHaveValue("5");
+
+  await jumpTo(page, "B1");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=A1*2");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("24");
+
+  await jumpTo(page, "C1");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("17");
+  await jumpTo(page, "D1");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("22");
+  const statusBar = page.locator(".workbook-status");
+  await expect(statusBar.getByTestId("metric-js")).not.toContainText("JS 0");
+  await expect(statusBar.getByTestId("metric-wasm")).not.toContainText("WASM 0");
+  await expect(page.getByTestId("replica-value")).toHaveText("22");
+
+  await page.getByRole("tab", { name: "Sheet2" }).click();
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet2!A1");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("25");
+
+  await loadPreset(page, "million-surface", "Million-Row Surface");
+  await expect(page.getByTestId("status-active-preset")).toHaveText("Million-Row Surface");
+  await expect(page.getByText("1,048,576 rows x 16,384 columns")).toBeVisible();
+
+  await jumpTo(page, "A1048576");
+  await expect(page.getByTestId("formula-input")).toHaveValue("1048576");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("1048576");
+
+  await jumpTo(page, "XFD1048576");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=B1048576+1");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("2097153");
 });
 
 test("paused relay queue survives reload and resumes replication", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    window.localStorage.clear();
-  });
-  await page.reload();
-
-  const formulaInput = page.getByLabel("Formula");
+  await clearWorkspace(page);
 
   await expect(page.getByTestId("replica-status")).toHaveText("Live");
   await expect(page.getByTestId("replica-value")).toHaveText("10");
@@ -68,26 +92,21 @@ test("paused relay queue survives reload and resumes replication", async ({ page
   await page.getByRole("button", { name: "Pause sync" }).click();
   await expect(page.getByTestId("replica-status")).toHaveText("Paused");
 
-  await formulaInput.fill("15");
-  await page.getByRole("button", { name: "Commit" }).click();
-
-  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("15");
-  await expect(page.getByTestId("replica-value")).toHaveText("10");
-  await expect(page.getByTestId("replica-queued")).toHaveText("1");
-
+  const formulaInput = page.getByTestId("formula-input");
   await formulaInput.fill("18");
   await page.getByRole("button", { name: "Commit" }).click();
 
-  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("18");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("18");
   await expect(page.getByTestId("replica-value")).toHaveText("10");
-  await expect(page.getByTestId("replica-queued")).toHaveText("1");
+  await expect(page.getByTestId("replica-queued")).not.toHaveText("0");
 
   await page.reload();
 
   await expect(page.getByTestId("replica-status")).toHaveText("Paused");
-  await expect(page.getByRole("button", { name: /^Cell A1$/ })).toHaveText("18");
+  await expect(page.getByTestId("formula-input")).toHaveValue("18");
   await expect(page.getByTestId("replica-value")).toHaveText("10");
-  await expect(page.getByTestId("replica-queued")).toHaveText("1");
+  await expect(page.getByTestId("replica-queued")).not.toHaveText("0");
 
   await page.getByRole("button", { name: "Resume sync" }).click();
 

@@ -1,6 +1,7 @@
 import React, { type ReactNode } from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
 import type { WorkbookContainer } from "./host-config.js";
+import { collectDeleteOps } from "./commit-log.js";
 import { createFiberRoot, updateFiberRoot } from "./compat.js";
 
 export interface WorkbookRendererRoot {
@@ -130,6 +131,9 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
 
   return {
     render(element: ReactNode) {
+      if (element === null || element === undefined || element === false) {
+        return this.unmount();
+      }
       container.lastError = null;
       try {
         validateRootElement(element);
@@ -137,7 +141,12 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         return Promise.reject(error);
       }
       return new Promise<void>((resolve, reject) => {
+        let settled = false;
         const finish = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           const error = container.lastError;
           container.lastError = null;
           if (error) {
@@ -148,17 +157,30 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, element, () => {
-            setTimeout(finish, 0);
+            queueMicrotask(finish);
           });
         } catch (error) {
+          settled = true;
           reject(error);
         }
       });
     },
     unmount() {
       container.lastError = null;
+      if (container.root) {
+        const deleteOps = collectDeleteOps(container.root);
+        container.root = null;
+        if (deleteOps.length > 0) {
+          container.engine.renderCommit(deleteOps);
+        }
+      }
       return new Promise<void>((resolve, reject) => {
+        let settled = false;
         const finish = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           const error = container.lastError;
           container.lastError = null;
           if (error) {
@@ -169,9 +191,10 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, null, () => {
-            setTimeout(finish, 0);
+            queueMicrotask(finish);
           });
         } catch (error) {
+          settled = true;
           reject(error);
         }
       });

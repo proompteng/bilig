@@ -22,6 +22,7 @@ export interface CellSnapshot {
   input?: LiteralInput;
   value: CellValue;
   flags: number;
+  version: number;
 }
 
 export interface DependencySnapshot {
