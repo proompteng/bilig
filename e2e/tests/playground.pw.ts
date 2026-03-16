@@ -50,6 +50,27 @@ async function clickVisibleCell(page: Page, colIndex: number, rowIndex: number) 
   await page.mouse.click(x, y);
 }
 
+async function dragVisibleSelection(page: Page, startCol: number, startRow: number, endCol: number, endRow: number) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const rowMarkerWidth = 60;
+  const headerHeight = 30;
+  const columnWidth = 120;
+  const rowHeight = 28;
+  const startX = grid.x + rowMarkerWidth + (startCol * columnWidth) + 24;
+  const startY = grid.y + headerHeight + (startRow * rowHeight) + Math.floor(rowHeight / 2);
+  const endX = grid.x + rowMarkerWidth + (endCol * columnWidth) + 24;
+  const endY = grid.y + headerHeight + (endRow * rowHeight) + Math.floor(rowHeight / 2);
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(endX, endY, { steps: 8 });
+  await page.mouse.up();
+}
+
 test("playground shell supports formula-bar navigation, in-grid editing, and Excel-scale presets", async ({ page }) => {
   await clearWorkspace(page);
 
@@ -115,6 +136,16 @@ test("pointer clicks select the visible cell instead of an offset row", async ({
 
   await clickVisibleCell(page, 1, 1);
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B2");
+});
+
+test("dragging selects a rectangular range like a spreadsheet", async ({ page }) => {
+  await clearWorkspace(page);
+
+  await dragVisibleSelection(page, 0, 0, 2, 2);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1:C3");
+
+  await dragVisibleSelection(page, 1, 1, 3, 4);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B2:D5");
 });
 
 test("paused relay queue survives reload and resumes replication", async ({ page }) => {

@@ -45,6 +45,72 @@ const DEFAULT_ROW_HEIGHT = 28;
 const HEADER_HEIGHT = 30;
 const ROW_MARKER_WIDTH = 60;
 
+function createGridSelection(col: number, row: number): GridSelection {
+  return {
+    current: {
+      cell: [col, row],
+      range: { x: col, y: row, width: 1, height: 1 },
+      rangeStack: []
+    },
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty()
+  };
+}
+
+function clampCell([col, row]: Item): Item {
+  return [
+    Math.min(MAX_COLS - 1, Math.max(0, col)),
+    Math.min(MAX_ROWS - 1, Math.max(0, row))
+  ];
+}
+
+function clampSelectionRange(range: Rectangle): Rectangle {
+  const x = Math.min(MAX_COLS - 1, Math.max(0, range.x));
+  const y = Math.min(MAX_ROWS - 1, Math.max(0, range.y));
+  const maxWidth = MAX_COLS - x;
+  const maxHeight = MAX_ROWS - y;
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(maxWidth, range.width)),
+    height: Math.max(1, Math.min(maxHeight, range.height))
+  };
+}
+
+function createRangeSelection(base: GridSelection, anchor: Item, target: Item): GridSelection {
+  const startCol = Math.min(anchor[0], target[0]);
+  const endCol = Math.max(anchor[0], target[0]);
+  const startRow = Math.min(anchor[1], target[1]);
+  const endRow = Math.max(anchor[1], target[1]);
+
+  return {
+    ...base,
+    current: {
+      cell: anchor,
+      range: {
+        x: startCol,
+        y: startRow,
+        width: endCol - startCol + 1,
+        height: endRow - startRow + 1
+      },
+      rangeStack: []
+    }
+  };
+}
+
+function formatSelectionSummary(selection: GridSelection, fallbackAddress: string): string {
+  const range = selection.current?.range;
+  if (!range) {
+    return fallbackAddress;
+  }
+  const start = formatAddress(range.y, range.x);
+  if (range.width === 1 && range.height === 1) {
+    return start;
+  }
+  const end = formatAddress(range.y + range.height - 1, range.x + range.width - 1);
+  return `${start}:${end}`;
+}
+
 function isPrintableKey(event: GridKeyEventArgs): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey) {
     return false;
@@ -161,6 +227,10 @@ export function SheetGridView({
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const pendingPointerCellRef = useRef<Item | null>(null);
+  const dragAnchorCellRef = useRef<Item | null>(null);
+  const dragPointerCellRef = useRef<Item | null>(null);
+  const dragViewportRef = useRef<VisibleRegionState | null>(null);
+  const activeSheetRef = useRef(sheetName);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
@@ -168,6 +238,7 @@ export function SheetGridView({
   });
   const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined);
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName]);
+  const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row));
 
   const columns = useMemo<readonly GridColumn[]>(
     () =>
@@ -177,19 +248,6 @@ export function SheetGridView({
         width: DEFAULT_COLUMN_WIDTH
       })),
     []
-  );
-
-  const gridSelection = useMemo<GridSelection>(
-    () => ({
-      current: {
-        cell: [selectedCell.col, selectedCell.row],
-        range: { x: selectedCell.col, y: selectedCell.row, width: 1, height: 1 },
-        rangeStack: []
-      },
-      columns: CompactSelection.empty(),
-      rows: CompactSelection.empty()
-    }),
-    [selectedCell.col, selectedCell.row]
   );
 
   const getCellContent = useCallback(
@@ -226,6 +284,21 @@ export function SheetGridView({
   }, [selectedCell.col, selectedCell.row, sheetName]);
 
   useEffect(() => {
+    const sheetChanged = activeSheetRef.current !== sheetName;
+    activeSheetRef.current = sheetName;
+    setGridSelection((current) => {
+      const currentCell = current.current?.cell;
+      if (!sheetChanged && currentCell && currentCell[0] === selectedCell.col && currentCell[1] === selectedCell.row) {
+        return current;
+      }
+      pendingPointerCellRef.current = null;
+      dragAnchorCellRef.current = null;
+      dragPointerCellRef.current = null;
+      return createGridSelection(selectedCell.col, selectedCell.row);
+    });
+  }, [selectedCell.col, selectedCell.row, sheetName]);
+
+  useEffect(() => {
     if (!isEditingCell) {
       setOverlayBounds(undefined);
       return;
@@ -258,27 +331,32 @@ export function SheetGridView({
   );
 
   const resolvePointerCell = useCallback(
-    (clientX: number, clientY: number): Item | null => {
+    (clientX: number, clientY: number, region: VisibleRegionState = visibleRegion): Item | null => {
       const hostBounds = hostRef.current?.getBoundingClientRect();
       if (!hostBounds) {
         return null;
       }
 
       const dataLeft = hostBounds.left + ROW_MARKER_WIDTH;
-      const dataTop = hostBounds.top + HEADER_HEIGHT + visibleRegion.ty;
+      const dataTop = hostBounds.top + HEADER_HEIGHT + region.ty;
       if (clientX < dataLeft || clientY < dataTop) {
         return null;
       }
 
-      const col = visibleRegion.range.x + Math.floor((clientX - dataLeft) / DEFAULT_COLUMN_WIDTH);
-      const row = visibleRegion.range.y + Math.floor((clientY - dataTop) / DEFAULT_ROW_HEIGHT);
+      const col = region.range.x + Math.floor((clientX - dataLeft) / DEFAULT_COLUMN_WIDTH);
+      const row = region.range.y + Math.floor((clientY - dataTop) / DEFAULT_ROW_HEIGHT);
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return null;
       }
 
       return [col, row];
     },
-    [visibleRegion.range.x, visibleRegion.range.y, visibleRegion.ty]
+    [visibleRegion]
+  );
+
+  const selectionSummary = useMemo(
+    () => formatSelectionSummary(gridSelection, selectedAddr),
+    [gridSelection, selectedAddr]
   );
 
   const handleGridKey = useCallback(
@@ -398,7 +476,7 @@ export function SheetGridView({
         </div>
         <div className="viewport-meta">
           <span data-testid="selection-chip">
-            {sheetName}!{selectedAddr}
+            {sheetName}!{selectionSummary}
           </span>
           <span>{resolvedValue || "∅"}</span>
         </div>
@@ -406,10 +484,78 @@ export function SheetGridView({
       <div
         className="sheet-grid-host"
         data-testid="sheet-grid"
+        onKeyDownCapture={() => {
+          pendingPointerCellRef.current = null;
+          dragAnchorCellRef.current = null;
+          dragPointerCellRef.current = null;
+          dragViewportRef.current = null;
+        }}
         onKeyDown={(event) => handleGridKey(event)}
+        onMouseMoveCapture={(event) => {
+          if ((event.buttons & 1) !== 1 || dragAnchorCellRef.current === null) {
+            return;
+          }
+          const pointerCell = resolvePointerCell(event.clientX, event.clientY, dragViewportRef.current ?? visibleRegion);
+          if (!pointerCell) {
+            return;
+          }
+          const currentPointer = dragPointerCellRef.current;
+          if (currentPointer && currentPointer[0] === pointerCell[0] && currentPointer[1] === pointerCell[1]) {
+            return;
+          }
+          dragPointerCellRef.current = pointerCell;
+          setGridSelection(
+            createRangeSelection(
+              createGridSelection(dragAnchorCellRef.current[0], dragAnchorCellRef.current[1]),
+              dragAnchorCellRef.current,
+              pointerCell
+            )
+          );
+        }}
         onMouseDownCapture={(event) => {
-          pendingPointerCellRef.current = resolvePointerCell(event.clientX, event.clientY);
+          if (event.button !== 0) {
+            return;
+          }
+          const pointerCell = resolvePointerCell(event.clientX, event.clientY);
+          pendingPointerCellRef.current = pointerCell;
+          dragAnchorCellRef.current = pointerCell;
+          dragPointerCellRef.current = pointerCell;
+          dragViewportRef.current = visibleRegion;
+          if (pointerCell) {
+            setGridSelection(createGridSelection(pointerCell[0], pointerCell[1]));
+            if (isEditingCell) {
+              onCancelEdit();
+            }
+            onSelect(formatAddress(pointerCell[1], pointerCell[0]));
+          }
           hostRef.current?.focus();
+        }}
+        onMouseUpCapture={(event) => {
+          const anchorCell = dragAnchorCellRef.current;
+          if (!anchorCell) {
+            return;
+          }
+
+          const pointerCell = resolvePointerCell(event.clientX, event.clientY, dragViewportRef.current ?? visibleRegion)
+            ?? dragPointerCellRef.current
+            ?? anchorCell;
+
+          dragPointerCellRef.current = pointerCell;
+          setGridSelection(
+            createRangeSelection(
+              createGridSelection(anchorCell[0], anchorCell[1]),
+              anchorCell,
+              pointerCell
+            )
+          );
+          onSelect(formatAddress(anchorCell[1], anchorCell[0]));
+
+          window.requestAnimationFrame(() => {
+            pendingPointerCellRef.current = null;
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
+            dragViewportRef.current = null;
+          });
         }}
         ref={hostRef}
         tabIndex={0}
@@ -426,8 +572,11 @@ export function SheetGridView({
           headerHeight={HEADER_HEIGHT}
           height="100%"
           onCellActivated={([col, row]) => {
-            const cell = pendingPointerCellRef.current ?? [col, row];
+            const cell = dragAnchorCellRef.current ?? pendingPointerCellRef.current ?? clampCell([col, row]);
             pendingPointerCellRef.current = null;
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
+            setGridSelection(createGridSelection(cell[0], cell[1]));
             const addr = formatAddress(cell[1], cell[0]);
             onSelect(addr);
             beginEditAt(addr);
@@ -437,12 +586,29 @@ export function SheetGridView({
             return false;
           }}
           onGridSelectionChange={(nextSelection) => {
+            if (dragViewportRef.current) {
+              return;
+            }
             const nextCell = nextSelection.current?.cell;
             if (!nextCell) {
               return;
             }
-            const cell = pendingPointerCellRef.current ?? nextCell;
-            pendingPointerCellRef.current = null;
+            const anchorCell = dragAnchorCellRef.current ?? pendingPointerCellRef.current;
+            const pointerCell = dragPointerCellRef.current ?? pendingPointerCellRef.current;
+            const correctedSelection = anchorCell && pointerCell
+              ? createRangeSelection(nextSelection, anchorCell, pointerCell)
+              : {
+                  ...nextSelection,
+                  current: nextSelection.current
+                    ? {
+                        ...nextSelection.current,
+                        cell: clampCell(nextSelection.current.cell),
+                        range: clampSelectionRange(nextSelection.current.range)
+                      }
+                    : nextSelection.current
+                };
+            const cell = correctedSelection.current?.cell ?? nextCell;
+            setGridSelection(correctedSelection);
             if (isEditingCell) {
               onCancelEdit();
             }
