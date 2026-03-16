@@ -1,5 +1,12 @@
 # Production Acceptance Matrix
 
+## Core contract
+
+- documented `@bilig/core` APIs exist in code
+- range mutation helpers are tested
+- undo/redo is tested
+- selection state and sync state are tested
+
 ## Architecture
 
 - canonical docs are updated and consistent
@@ -34,4 +41,4 @@
 
 ## First tranche status
 
-This tranche closes the architecture-foundation rows. Product-parity rows remain open until the deeper browser, formula, and backend implementation tranches land.
+Architecture-foundation rows are closed, and the first core-contract tranche is now partially closed. Product-parity, worker-runtime, durable-backend, and full formula-parity rows remain open until the deeper implementation tranches land.

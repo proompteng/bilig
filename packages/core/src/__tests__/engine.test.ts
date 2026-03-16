@@ -526,9 +526,121 @@ describe("SpreadsheetEngine", () => {
     engine.setSelection("Sheet2", "B3");
     engine.setSelection("Sheet1", "A1");
 
-    expect(engine.getSelectionState()).toEqual({ sheetName: "Sheet1", address: "A1" });
+    expect(engine.getSelectionState()).toEqual({
+      sheetName: "Sheet1",
+      address: "A1",
+      anchorAddress: "A1",
+      range: { startAddress: "A1", endAddress: "A1" },
+      editMode: "idle"
+    });
     expect(seen).toEqual(["Sheet2!B3", "Sheet1!A1"]);
 
     unsubscribe();
+  });
+
+  it("supports range mutation helpers and undo/redo over the same local apply path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setRangeValues(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+      [
+        [1, 2],
+        [3, 4]
+      ]
+    );
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 4 });
+
+    engine.setRangeFormulas(
+      { sheetName: "Sheet1", startAddress: "C1", endAddress: "C2" },
+      [
+        ["SUM(A1:B1)"],
+        ["SUM(A2:B2)"]
+      ]
+    );
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 7 });
+
+    engine.clearRange({ sheetName: "Sheet1", startAddress: "A2", endAddress: "B2" });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 0 });
+
+    engine.undo();
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 7 });
+
+    engine.redo();
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 0 });
+  });
+
+  it("copies and fills rectangular ranges", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeValues(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+      [
+        [1, 2],
+        [3, 4]
+      ]
+    );
+
+    engine.copyRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+      { sheetName: "Sheet1", startAddress: "D1", endAddress: "E2" }
+    );
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "E2")).toEqual({ tag: ValueTag.Number, value: 4 });
+
+    engine.fillRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "A4", endAddress: "D5" }
+    );
+    expect(engine.getCellValue("Sheet1", "A4")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "C4")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "D5")).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
+  it("tracks sync client connection state and forwards local batches", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+
+    const forwarded: EngineOpBatch[] = [];
+    let connected = false;
+    let disconnected = false;
+
+    await engine.connectSyncClient({
+      async connect({ setState }) {
+        connected = true;
+        setState("behind");
+        return {
+          send(batch) {
+            forwarded.push(batch);
+          },
+          async disconnect() {
+            disconnected = true;
+          }
+        };
+      }
+    });
+
+    expect(connected).toBe(true);
+    expect(engine.getSyncState()).toBe("behind");
+
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 9);
+
+    expect(forwarded).toHaveLength(2);
+    expect(forwarded[1]?.ops).toEqual([
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 }
+    ]);
+
+    await engine.disconnectSyncClient();
+    expect(disconnected).toBe(true);
+    expect(engine.getSyncState()).toBe("local-only");
   });
 });

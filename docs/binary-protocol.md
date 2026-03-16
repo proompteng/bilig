@@ -1,5 +1,11 @@
 # Binary Protocol
 
+## Current state
+
+- the typed sync codec exists in code and has roundtrip coverage
+- sync traffic uses real binary frame encoding
+- the remote agent interface is still transitioning from JSON-in-binary-envelope to fully typed binary frames
+
 ## Purpose
 
 The binary protocol is the canonical hot-path transport for:
@@ -32,6 +38,13 @@ The binary protocol is the canonical hot-path transport for:
 - explicit string and byte lengths
 - explicit op tags for CRDT batches
 
-## Current tranche
+## Target state
 
-The repo now contains a real typed binary codec package and roundtrip tests. Websocket transport and server fanout are follow-up tranches on top of this wire contract.
+- browser sync, backend relay, snapshot transport, stdio agent traffic, and remote agent traffic all use typed binary frames
+- websocket fanout and remote agent control run on the same canonical protocol family
+
+## Exit gate
+
+- no canonical hot path still relies on JSON payload bodies
+- browser, backend, stdio, and remote agent transports interoperate on the same typed frame definitions
+- roundtrip and malformed-frame tests cover every public frame family

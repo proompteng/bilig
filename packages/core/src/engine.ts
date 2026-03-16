@@ -1,4 +1,5 @@
 import {
+  type CellRangeRef,
   ErrorCode,
   FormulaMode,
   ValueTag,
@@ -10,6 +11,7 @@ import {
   type ExplainCellSnapshot,
   type LiteralInput,
   type RecalcMetrics,
+  type SyncState,
   type SelectionState,
   type WorkbookSnapshot
 } from "@bilig/protocol";
@@ -67,10 +69,28 @@ export interface SpreadsheetEngineOptions {
   replicaId?: string;
 }
 
+export interface EngineSyncClientConnection {
+  send(batch: EngineOpBatch): void | Promise<void>;
+  disconnect(): void | Promise<void>;
+}
+
+export interface EngineSyncClient {
+  connect(handlers: {
+    applyRemoteBatch(batch: EngineOpBatch): void;
+    setState(state: SyncState): void;
+  }): EngineSyncClientConnection | Promise<EngineSyncClientConnection>;
+}
+
 export interface EngineReplicaSnapshot {
   replica: ReplicaSnapshot;
   entityVersions: ReplicaVersionSnapshot[];
   sheetDeleteVersions: Array<{ sheetName: string; order: OpOrder }>;
+}
+
+interface HistoryEntry {
+  forwardOps: EngineOp[];
+  inverseOps: EngineOp[];
+  potentialNewCells?: number;
 }
 
 interface RuntimeFormula {
@@ -138,7 +158,18 @@ export class SpreadsheetEngine {
   private readonly selectionListeners = new Set<() => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
-  private selection: SelectionState = { sheetName: "Sheet1", address: "A1" };
+  private selection: SelectionState = {
+    sheetName: "Sheet1",
+    address: "A1",
+    anchorAddress: "A1",
+    range: { startAddress: "A1", endAddress: "A1" },
+    editMode: "idle"
+  };
+  private syncState: SyncState = "local-only";
+  private syncClientConnection: EngineSyncClientConnection | null = null;
+  private readonly undoStack: HistoryEntry[] = [];
+  private readonly redoStack: HistoryEntry[] = [];
+  private historyReplayDepth = 0;
   private pendingKernelSync: U32 = new Uint32Array(128);
   private wasmBatch: U32 = new Uint32Array(128);
   private mutationRoots: U32 = new Uint32Array(128);
@@ -250,16 +281,74 @@ export class SpreadsheetEngine {
     return this.selection;
   }
 
-  setSelection(sheetName: string, address: string | null): void {
-    if (this.selection.sheetName === sheetName && this.selection.address === address) {
+  setSelection(
+    sheetName: string,
+    address: string | null,
+    options: {
+      anchorAddress?: string | null;
+      range?: { startAddress: string; endAddress: string } | null;
+      editMode?: SelectionState["editMode"];
+    } = {}
+  ): void {
+    const nextSelection: SelectionState = {
+      sheetName,
+      address,
+      anchorAddress: options.anchorAddress ?? address,
+      range: options.range ?? (address ? { startAddress: address, endAddress: address } : null),
+      editMode: options.editMode ?? this.selection.editMode
+    };
+
+    if (
+      this.selection.sheetName === nextSelection.sheetName
+      && this.selection.address === nextSelection.address
+      && this.selection.anchorAddress === nextSelection.anchorAddress
+      && this.selection.editMode === nextSelection.editMode
+      && this.selection.range?.startAddress === nextSelection.range?.startAddress
+      && this.selection.range?.endAddress === nextSelection.range?.endAddress
+    ) {
       return;
     }
-    this.selection = { sheetName, address };
+
+    this.selection = nextSelection;
     this.selectionListeners.forEach((listener) => listener());
   }
 
   getLastMetrics(): RecalcMetrics {
     return this.lastMetrics;
+  }
+
+  getSyncState(): SyncState {
+    return this.syncState;
+  }
+
+  async connectSyncClient(client: EngineSyncClient): Promise<void> {
+    await this.disconnectSyncClient();
+    this.setSyncState("syncing");
+    const connection = await client.connect({
+      applyRemoteBatch: (batch) => {
+        this.applyRemoteBatch(batch);
+      },
+      setState: (state) => {
+        this.setSyncState(state);
+      }
+    });
+    this.syncClientConnection = connection;
+    if (this.syncState === "syncing") {
+      this.setSyncState("live");
+    }
+  }
+
+  async disconnectSyncClient(): Promise<void> {
+    const connection = this.syncClientConnection;
+    this.syncClientConnection = null;
+    if (connection) {
+      await connection.disconnect();
+    }
+    this.setSyncState("local-only");
+  }
+
+  private setSyncState(state: SyncState): void {
+    this.syncState = state;
   }
 
   createSheet(name: string): void {
@@ -286,6 +375,135 @@ export class SpreadsheetEngine {
 
   clearCell(sheetName: string, address: string): void {
     this.applyLocalOps([{ kind: "clearCell", sheetName, address }]);
+  }
+
+  setRangeValues(range: CellRangeRef, values: readonly (readonly LiteralInput[])[]): void {
+    const bounds = normalizeRange(range);
+    const expectedHeight = bounds.endRow - bounds.startRow + 1;
+    const expectedWidth = bounds.endCol - bounds.startCol + 1;
+    if (values.length !== expectedHeight || values.some((row) => row.length !== expectedWidth)) {
+      throw new Error("setRangeValues requires a value matrix that exactly matches the target range");
+    }
+
+    const ops: EngineOp[] = [];
+    for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
+        ops.push({
+          kind: "setCellValue",
+          sheetName: range.sheetName,
+          address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
+          value: values[rowOffset]![colOffset] ?? null
+        });
+      }
+    }
+    this.applyLocalOps(ops, ops.length);
+  }
+
+  setRangeFormulas(range: CellRangeRef, formulas: readonly (readonly string[])[]): void {
+    const bounds = normalizeRange(range);
+    const expectedHeight = bounds.endRow - bounds.startRow + 1;
+    const expectedWidth = bounds.endCol - bounds.startCol + 1;
+    if (formulas.length !== expectedHeight || formulas.some((row) => row.length !== expectedWidth)) {
+      throw new Error("setRangeFormulas requires a formula matrix that exactly matches the target range");
+    }
+
+    const ops: EngineOp[] = [];
+    for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
+        ops.push({
+          kind: "setCellFormula",
+          sheetName: range.sheetName,
+          address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
+          formula: formulas[rowOffset]![colOffset] ?? ""
+        });
+      }
+    }
+    this.applyLocalOps(ops, ops.length);
+  }
+
+  clearRange(range: CellRangeRef): void {
+    const addresses = expandRangeAddresses(range);
+    const ops: EngineOp[] = addresses.map((address) => ({
+      kind: "clearCell",
+      sheetName: range.sheetName,
+      address
+    }));
+    this.applyLocalOps(ops);
+  }
+
+  fillRange(source: CellRangeRef, target: CellRangeRef): void {
+    const sourceMatrix = this.readRangeCells(source);
+    const targetBounds = normalizeRange(target);
+    const sourceHeight = sourceMatrix.length;
+    const sourceWidth = sourceMatrix[0]?.length ?? 0;
+    if (sourceHeight === 0 || sourceWidth === 0) {
+      return;
+    }
+
+    const ops: EngineOp[] = [];
+    for (let row = targetBounds.startRow; row <= targetBounds.endRow; row += 1) {
+      for (let col = targetBounds.startCol; col <= targetBounds.endCol; col += 1) {
+        const sourceCell = sourceMatrix[(row - targetBounds.startRow) % sourceHeight]![(col - targetBounds.startCol) % sourceWidth]!;
+        ops.push(...this.toCellStateOps(target.sheetName, formatAddress(row, col), sourceCell));
+      }
+    }
+    this.applyLocalOps(ops, ops.length);
+  }
+
+  copyRange(source: CellRangeRef, target: CellRangeRef): void {
+    const sourceMatrix = this.readRangeCells(source);
+    const targetBounds = normalizeRange(target);
+    const sourceBounds = normalizeRange(source);
+    const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1;
+    const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1;
+    const targetHeight = targetBounds.endRow - targetBounds.startRow + 1;
+    const targetWidth = targetBounds.endCol - targetBounds.startCol + 1;
+    if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
+      throw new Error("copyRange requires source and target dimensions to match exactly");
+    }
+
+    const ops: EngineOp[] = [];
+    for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
+        const nextAddress = formatAddress(targetBounds.startRow + rowOffset, targetBounds.startCol + colOffset);
+        ops.push(...this.toCellStateOps(target.sheetName, nextAddress, sourceMatrix[rowOffset]![colOffset]!));
+      }
+    }
+    this.applyLocalOps(ops, ops.length);
+  }
+
+  pasteRange(source: CellRangeRef, target: CellRangeRef): void {
+    this.copyRange(source, target);
+  }
+
+  undo(): boolean {
+    const entry = this.undoStack.pop();
+    if (!entry) {
+      return false;
+    }
+    this.historyReplayDepth += 1;
+    try {
+      this.applyLocalOps(entry.inverseOps, entry.inverseOps.length);
+    } finally {
+      this.historyReplayDepth -= 1;
+    }
+    this.redoStack.push(entry);
+    return true;
+  }
+
+  redo(): boolean {
+    const entry = this.redoStack.pop();
+    if (!entry) {
+      return false;
+    }
+    this.historyReplayDepth += 1;
+    try {
+      this.applyLocalOps(entry.forwardOps, entry.potentialNewCells ?? entry.forwardOps.length);
+    } finally {
+      this.historyReplayDepth -= 1;
+    }
+    this.undoStack.push(entry);
+    return true;
   }
 
   exportSheetCsv(sheetName: string): string {
@@ -643,8 +861,20 @@ export class SpreadsheetEngine {
 
   private applyLocalOps(ops: EngineOp[], potentialNewCells?: number): void {
     if (ops.length === 0) return;
+    const inverseOps = this.buildInverseOps(ops);
     const batch = createBatch(this.replica, ops);
     this.applyBatch(batch, "local", potentialNewCells);
+    if (this.historyReplayDepth === 0) {
+      const entry: HistoryEntry = {
+        forwardOps: ops,
+        inverseOps
+      };
+      if (potentialNewCells !== undefined) {
+        entry.potentialNewCells = potentialNewCells;
+      }
+      this.undoStack.push(entry);
+      this.redoStack.length = 0;
+    }
   }
 
   private applyBatch(batch: EngineOpBatch, source: "local" | "remote", potentialNewCells?: number): void {
@@ -787,8 +1017,123 @@ export class SpreadsheetEngine {
       this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
     }
     if (source === "local") {
+      this.syncClientConnection?.send(batch);
       this.emitBatch(batch);
+    } else if (this.redoStack.length > 0) {
+      this.redoStack.length = 0;
     }
+  }
+
+  private buildInverseOps(ops: readonly EngineOp[]): EngineOp[] {
+    const inverseOps: EngineOp[] = [];
+
+    for (let index = ops.length - 1; index >= 0; index -= 1) {
+      inverseOps.push(...this.inverseOpsFor(ops[index]!));
+    }
+
+    return inverseOps;
+  }
+
+  private inverseOpsFor(op: EngineOp): EngineOp[] {
+    switch (op.kind) {
+      case "upsertWorkbook":
+        return [{ kind: "upsertWorkbook", name: this.workbook.workbookName }];
+      case "upsertSheet": {
+        const existing = this.workbook.getSheet(op.name);
+        if (!existing) {
+          return [{ kind: "deleteSheet", name: op.name }];
+        }
+        return [{ kind: "upsertSheet", name: existing.name, order: existing.order }];
+      }
+      case "deleteSheet": {
+        const sheet = this.workbook.getSheet(op.name);
+        if (!sheet) {
+          return [];
+        }
+        const restoredOps: EngineOp[] = [{ kind: "upsertSheet", name: sheet.name, order: sheet.order }];
+        const cellIndices: number[] = [];
+        sheet.grid.forEachCell((cellIndex) => {
+          cellIndices.push(cellIndex);
+        });
+        cellIndices.sort((left, right) => {
+          const leftRow = this.workbook.cellStore.rows[left] ?? 0;
+          const rightRow = this.workbook.cellStore.rows[right] ?? 0;
+          const leftCol = this.workbook.cellStore.cols[left] ?? 0;
+          const rightCol = this.workbook.cellStore.cols[right] ?? 0;
+          return leftRow - rightRow || leftCol - rightCol;
+        });
+        for (const cellIndex of cellIndices) {
+          restoredOps.push(...this.toCellStateOps(sheet.name, this.workbook.getAddress(cellIndex), this.getCellByIndex(cellIndex)));
+        }
+        return restoredOps;
+      }
+      case "setCellValue":
+      case "setCellFormula":
+      case "clearCell":
+        return this.restoreCellOps(op.sheetName, op.address);
+      case "setCellFormat": {
+        const cellIndex = this.workbook.getCellIndex(op.sheetName, op.address);
+        return [{
+          kind: "setCellFormat",
+          sheetName: op.sheetName,
+          address: op.address,
+          format: cellIndex === undefined ? null : (this.workbook.getCellFormat(cellIndex) ?? null)
+        }];
+      }
+    }
+  }
+
+  private restoreCellOps(sheetName: string, address: string): EngineOp[] {
+    const cellIndex = this.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return [{ kind: "clearCell", sheetName, address }];
+    }
+    return this.toCellStateOps(sheetName, address, this.getCellByIndex(cellIndex)).filter((op) => op.kind !== "setCellFormat");
+  }
+
+  private readRangeCells(range: CellRangeRef): CellSnapshot[][] {
+    const bounds = normalizeRange(range);
+    const rows: CellSnapshot[][] = [];
+    for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+      const cells: CellSnapshot[] = [];
+      for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+        cells.push(this.getCell(range.sheetName, formatAddress(row, col)));
+      }
+      rows.push(cells);
+    }
+    return rows;
+  }
+
+  private toCellStateOps(sheetName: string, address: string, snapshot: CellSnapshot): EngineOp[] {
+    const ops: EngineOp[] = [];
+    if (snapshot.formula !== undefined) {
+      ops.push({ kind: "setCellFormula", sheetName, address, formula: snapshot.formula });
+    } else {
+      switch (snapshot.value.tag) {
+        case ValueTag.Empty:
+          ops.push({ kind: "clearCell", sheetName, address });
+          break;
+        case ValueTag.Number:
+          ops.push({ kind: "setCellValue", sheetName, address, value: snapshot.value.value });
+          break;
+        case ValueTag.Boolean:
+          ops.push({ kind: "setCellValue", sheetName, address, value: snapshot.value.value });
+          break;
+        case ValueTag.String:
+          ops.push({ kind: "setCellValue", sheetName, address, value: snapshot.value.value });
+          break;
+        case ValueTag.Error:
+          ops.push({ kind: "clearCell", sheetName, address });
+          break;
+      }
+    }
+    ops.push({
+      kind: "setCellFormat",
+      sheetName,
+      address,
+      format: snapshot.format ?? null
+    });
+    return ops;
   }
 
   private materializeDependencies(
@@ -1861,7 +2206,16 @@ export class SpreadsheetEngine {
     this.edgeArena.reset();
     this.entityVersions.clear();
     this.sheetDeleteVersions.clear();
-    this.selection = { sheetName: "Sheet1", address: "A1" };
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
+    this.selection = {
+      sheetName: "Sheet1",
+      address: "A1",
+      anchorAddress: "A1",
+      range: { startAddress: "A1", endAddress: "A1" },
+      editMode: "idle"
+    };
+    this.syncState = "local-only";
     this.lastMetrics = {
       batchId: previousBatchId,
       changedInputCount: 0,
@@ -1914,6 +2268,33 @@ function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32A
   next.set(indices);
   next[indices.length] = cellIndex;
   return next;
+}
+
+function normalizeRange(range: CellRangeRef): {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+} {
+  const start = parseCellAddress(range.startAddress, range.sheetName);
+  const end = parseCellAddress(range.endAddress, range.sheetName);
+  return {
+    startRow: Math.min(start.row, end.row),
+    endRow: Math.max(start.row, end.row),
+    startCol: Math.min(start.col, end.col),
+    endCol: Math.max(start.col, end.col)
+  };
+}
+
+function expandRangeAddresses(range: CellRangeRef): string[] {
+  const bounds = normalizeRange(range);
+  const addresses: string[] = [];
+  for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+    for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+      addresses.push(formatAddress(row, col));
+    }
+  }
+  return addresses;
 }
 
 export const selectors = {

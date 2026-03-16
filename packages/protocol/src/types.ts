@@ -62,9 +62,26 @@ export interface EngineEvent {
   metrics: RecalcMetrics;
 }
 
+export interface CellRangeRef {
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+}
+
+export interface SelectionRange {
+  startAddress: string;
+  endAddress: string;
+}
+
+export type SelectionEditMode = "idle" | "cell" | "formula";
+export type SyncState = "local-only" | "syncing" | "live" | "behind" | "reconnecting";
+
 export interface SelectionState {
   sheetName: string;
   address: string | null;
+  anchorAddress: string | null;
+  range: SelectionRange | null;
+  editMode: SelectionEditMode;
 }
 
 export interface Viewport {

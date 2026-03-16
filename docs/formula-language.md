@@ -1,5 +1,12 @@
 # Formula Language
 
+## Current state
+
+- the repo still ships a narrow formula surface compared with the canonical Excel target
+- JS evaluation is the oracle today
+- WASM fast paths cover only a profitable subset that is already implemented and tested
+- the checked-in parity corpus is seeded, not complete
+
 ## Canonical target
 
 The formula target is **Excel 365 built-in worksheet parity as of March 15, 2026**.
@@ -32,6 +39,9 @@ That includes:
 - parity suites are generated offline from real Excel outputs
 - CI validates against checked-in goldens, not live external services
 
-## Current tranche status
+## Exit gate
 
-The current repo still ships a narrower formula surface than the canonical target. The production docs now freeze the end state, and the first foundation tranche adds the fixture package that will carry the parity corpus as it lands.
+- checked-in Excel goldens exist for the full supported parity surface
+- JS matches the goldens across the full canonical target
+- every WASM-accelerated kernel proves exact JS parity
+- the grammar and semantic rules listed above are implemented, not just documented

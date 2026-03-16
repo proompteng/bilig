@@ -1,16 +1,10 @@
-import type { CellValue, LiteralInput, WorkbookSnapshot } from "@bilig/protocol";
+import type { CellRangeRef, CellValue, LiteralInput, SyncState, WorkbookSnapshot } from "@bilig/protocol";
 
 export const AGENT_PROTOCOL_VERSION = 1;
 export const AGENT_STDIN_MAGIC = 0x41474e54;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-
-export interface CellRangeRef {
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
-}
 
 export type AgentRequest =
   | { kind: "openWorkbookSession"; id: string; documentId: string; replicaId: string }
@@ -40,7 +34,7 @@ export type AgentResponse =
 
 export type AgentEvent =
   | { kind: "rangeChanged"; subscriptionId: string; range: CellRangeRef; changedAddresses: string[] }
-  | { kind: "syncState"; sessionId: string; state: "local-only" | "syncing" | "live" | "behind" | "reconnecting" };
+  | { kind: "syncState"; sessionId: string; state: SyncState };
 
 export type AgentFrame =
   | { kind: "request"; request: AgentRequest }

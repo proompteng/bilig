@@ -1,5 +1,11 @@
 # Agent API
 
+## Current state
+
+- `@bilig/agent-api` defines the shared request/response/event model and stdio framing helpers.
+- the remote sync server accepts agent ingress frames, but live worksheet execution is still incomplete.
+- agent frames are still serialized through JSON payload bodies inside a binary envelope; this is an explicit interim state, not the target wire format.
+
 ## Canonical goal
 
 Support both:
@@ -26,6 +32,14 @@ using the same typed request/response/event model.
 - stdio: length-prefixed binary frames
 - remote: binary request frames over HTTP and websocket
 
-## Current tranche
+## Target state
 
-`@bilig/agent-api` now defines the shared frame contracts and stdio framing helpers. The sync server exposes a remote ingress for those frames, with live worksheet execution still to be wired in a follow-up tranche.
+- stdio and remote transports use the same typed binary request/response/event frames
+- every documented agent operation executes against a live worksheet session
+- remote agent requests are authenticated, tenant-scoped, and idempotent where required
+
+## Exit gate
+
+- stdio and remote agent conformance tests return identical results for the same worksheet operations
+- remote ingress no longer returns placeholder `NOT_IMPLEMENTED` responses for canonical worksheet mutations
+- the wire format used by agents is binary end to end, not JSON-inside-binary

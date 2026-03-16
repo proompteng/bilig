@@ -13,7 +13,13 @@ describe("core selectors", () => {
 
     expect(selectCellSnapshot(engine, "Sheet1", "A1").value).toEqual({ tag: ValueTag.Number, value: 7 });
     expect(selectMetrics(engine).batchId).toBeGreaterThan(0);
-    expect(selectSelectionState(engine)).toEqual({ sheetName: "Sheet1", address: "A1" });
+    expect(selectSelectionState(engine)).toEqual({
+      sheetName: "Sheet1",
+      address: "A1",
+      anchorAddress: "A1",
+      range: { startAddress: "A1", endAddress: "A1" },
+      editMode: "idle"
+    });
     expect(
       selectViewportCells(engine, "Sheet1", {
         rowStart: 0,

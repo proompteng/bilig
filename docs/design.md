@@ -2,6 +2,14 @@
 
 `bilig` is a local-first spreadsheet system with a browser-native Excel-like shell, a deterministic TypeScript semantic core, an AssemblyScript/WASM compute kernel, CRDT-based realtime collaboration, and a standalone sync backend deployed through the `lab` ArgoCD repo.
 
+## Current state
+
+- the core engine contract is now materially closer to the documented surface: range mutation helpers, undo/redo, richer selection state, and sync-state plumbing exist in `@bilig/core`
+- the browser shell is still in-process, not worker-first
+- the sync backend is still a typed scaffold with in-memory durability
+- the formula surface is still far narrower than the canonical Excel target
+- `apps/playground` remains the main browser shell; the dedicated `apps/web` product app does not exist yet
+
 ## Canonical target
 
 The product target is fixed to these requirements:
@@ -58,10 +66,11 @@ The product target is fixed to these requirements:
 - [agent-api.md](/Users/gregkonush/github.com/bilig/docs/agent-api.md)
 - [performance-budgets.md](/Users/gregkonush/github.com/bilig/docs/performance-budgets.md)
 - [production-acceptance-matrix.md](/Users/gregkonush/github.com/bilig/docs/production-acceptance-matrix.md)
+- [implementation-ledger.md](/Users/gregkonush/github.com/bilig/docs/implementation-ledger.md)
 
 ## Current tranche status
 
-This repo now contains the first production-foundation tranche for the canonical design:
+This repo now contains the architecture foundation plus the first core-contract tranche for the canonical design:
 
 - canonical docs rewritten to the production target
 - binary frame codec package added
@@ -69,5 +78,6 @@ This repo now contains the first production-foundation tranche for the canonical
 - browser persistence extracted into a reusable package
 - server-side storage abstractions added
 - sync-server skeleton added with binary HTTP ingress for sync frames and remote agent frames
+- core range mutation, undo/redo, richer selection state, and sync-state APIs added
 
 The system is not yet at full Excel parity or full realtime production readiness. Those remain active implementation tranches, but the repo no longer describes them as out-of-scope future ideas.

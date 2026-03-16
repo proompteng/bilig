@@ -1,5 +1,11 @@
 # Public APIs
 
+## Current state
+
+- `@bilig/core` now implements the documented range-mutation, undo/redo, selection, and sync-state surface.
+- `SelectionState` is additive: existing callers can keep using `sheetName` and `address`, while newer callers can use `anchorAddress`, `range`, and `editMode`.
+- `connectSyncClient` is live, but it is still an engine-side integration surface. The browser app is not worker-first yet, and the remote sync service is not the final durable backend.
+
 ## Stable packages
 
 - `@bilig/core`
@@ -59,6 +65,13 @@ The canonical engine surface includes:
 - `disconnectSyncClient`
 - `getSyncState`
 
+### Core types added in the current tranche
+
+- `CellRangeRef`
+- `SelectionRange`
+- `SelectionEditMode`
+- `SyncState`
+
 ## Binary protocol
 
 `@bilig/binary-protocol` exposes:
@@ -89,6 +102,19 @@ The first tranche already supports:
 - method invocation
 - engine events
 - outbound batch subscriptions
+
+## Target state
+
+- the core API stays source-compatible while the worker-first runtime and durable backend land under it
+- the binary protocol becomes the canonical wire format for browser sync, backend relay, and agent APIs
+- the agent API moves from JSON payload bodies to typed binary request/response/event frames
+
+## Exit gate
+
+- every API documented here exists in code
+- typecheck passes across all packages that import these APIs
+- direct engine tests cover range mutation, history, selection state, and sync-state behavior
+- the docs no longer claim a stable interface that is missing in the repo
 
 ## Agent API
 
