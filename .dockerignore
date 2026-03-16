@@ -1,0 +1,17 @@
+.git
+.github
+.forgejo
+node_modules
+coverage
+dist
+output
+playwright-report
+test-results
+.pnpm-store
+.DS_Store
+apps/playground/dist
+apps/sync-server/dist
+packages/*/dist
+packages/*/*.tsbuildinfo
+apps/*/*.tsbuildinfo
+*.log
