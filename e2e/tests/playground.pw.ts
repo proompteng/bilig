@@ -35,6 +35,21 @@ async function loadPreset(page: Page, presetId: string, label?: string) {
   }
 }
 
+async function clickVisibleCell(page: Page, colIndex: number, rowIndex: number) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const rowMarkerWidth = 60;
+  const headerHeight = 30;
+  const columnWidth = 120;
+  const rowHeight = 28;
+  const x = grid.x + rowMarkerWidth + (colIndex * columnWidth) + 24;
+  const y = grid.y + headerHeight + (rowIndex * rowHeight) + Math.floor(rowHeight / 2);
+  await page.mouse.click(x, y);
+}
+
 test("playground shell supports formula-bar navigation, in-grid editing, and Excel-scale presets", async ({ page }) => {
   await clearWorkspace(page);
 
@@ -87,6 +102,19 @@ test("playground shell supports formula-bar navigation, in-grid editing, and Exc
   await jumpTo(page, "XFD1048576");
   await expect(page.getByTestId("formula-input")).toHaveValue("=B1048576+1");
   await expect(page.getByTestId("formula-resolved-value")).toContainText("2097153");
+});
+
+test("pointer clicks select the visible cell instead of an offset row", async ({ page }) => {
+  await clearWorkspace(page);
+
+  await clickVisibleCell(page, 0, 0);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+
+  await clickVisibleCell(page, 0, 4);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A5");
+
+  await clickVisibleCell(page, 1, 1);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B2");
 });
 
 test("paused relay queue survives reload and resumes replication", async ({ page }) => {

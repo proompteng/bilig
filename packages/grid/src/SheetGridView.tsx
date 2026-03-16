@@ -42,6 +42,8 @@ interface VisibleRegionState {
 
 const DEFAULT_COLUMN_WIDTH = 120;
 const DEFAULT_ROW_HEIGHT = 28;
+const HEADER_HEIGHT = 30;
+const ROW_MARKER_WIDTH = 60;
 
 function isPrintableKey(event: GridKeyEventArgs): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey) {
@@ -158,6 +160,7 @@ export function SheetGridView({
 }: SheetGridViewProps) {
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const pendingPointerCellRef = useRef<Item | null>(null);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
@@ -252,6 +255,30 @@ export function SheetGridView({
       onBeginEdit(seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)));
     },
     [engine, onBeginEdit, sheetName]
+  );
+
+  const resolvePointerCell = useCallback(
+    (clientX: number, clientY: number): Item | null => {
+      const hostBounds = hostRef.current?.getBoundingClientRect();
+      if (!hostBounds) {
+        return null;
+      }
+
+      const dataLeft = hostBounds.left + ROW_MARKER_WIDTH;
+      const dataTop = hostBounds.top + HEADER_HEIGHT + visibleRegion.ty;
+      if (clientX < dataLeft || clientY < dataTop) {
+        return null;
+      }
+
+      const col = visibleRegion.range.x + Math.floor((clientX - dataLeft) / DEFAULT_COLUMN_WIDTH);
+      const row = visibleRegion.range.y + Math.floor((clientY - dataTop) / DEFAULT_ROW_HEIGHT);
+      if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
+        return null;
+      }
+
+      return [col, row];
+    },
+    [visibleRegion.range.x, visibleRegion.range.y, visibleRegion.ty]
   );
 
   const handleGridKey = useCallback(
@@ -380,7 +407,10 @@ export function SheetGridView({
         className="sheet-grid-host"
         data-testid="sheet-grid"
         onKeyDown={(event) => handleGridKey(event)}
-        onMouseDownCapture={() => hostRef.current?.focus()}
+        onMouseDownCapture={(event) => {
+          pendingPointerCellRef.current = resolvePointerCell(event.clientX, event.clientY);
+          hostRef.current?.focus();
+        }}
         ref={hostRef}
         tabIndex={0}
       >
@@ -393,10 +423,12 @@ export function SheetGridView({
           getCellContent={getCellContent}
           getCellsForSelection={true}
           gridSelection={gridSelection}
-          headerHeight={30}
+          headerHeight={HEADER_HEIGHT}
           height="100%"
           onCellActivated={([col, row]) => {
-            const addr = formatAddress(row, col);
+            const cell = pendingPointerCellRef.current ?? [col, row];
+            pendingPointerCellRef.current = null;
+            const addr = formatAddress(cell[1], cell[0]);
             onSelect(addr);
             beginEditAt(addr);
           }}
@@ -409,10 +441,12 @@ export function SheetGridView({
             if (!nextCell) {
               return;
             }
+            const cell = pendingPointerCellRef.current ?? nextCell;
+            pendingPointerCellRef.current = null;
             if (isEditingCell) {
               onCancelEdit();
             }
-            onSelect(formatAddress(nextCell[1], nextCell[0]));
+            onSelect(formatAddress(cell[1], cell[0]));
           }}
           onKeyDown={(event) => {
             if (!isPrintableKey(event) && event.key !== "Enter" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
@@ -428,10 +462,10 @@ export function SheetGridView({
             setVisibleRegion({ range, tx, ty });
           }}
           rowHeight={DEFAULT_ROW_HEIGHT}
-          rowMarkers={{ kind: "number", width: 60 }}
+          rowMarkers={{ kind: "number", width: ROW_MARKER_WIDTH }}
           rows={MAX_ROWS}
           smoothScrollX={true}
-          smoothScrollY={true}
+          smoothScrollY={false}
           theme={{
             accentColor: "#1f7a43",
             accentFg: "#ffffff",
