@@ -11,11 +11,13 @@ interface WorkbookViewProps {
   selectedAddr: string;
   editorValue: string;
   resolvedValue: string;
+  isEditing: boolean;
   isEditingCell: boolean;
   onSelectSheet(sheetName: string): void;
   onSelect(addr: string): void;
   onAddressCommit(addr: string): void;
   onBeginEdit(seed?: string): void;
+  onBeginFormulaEdit(seed?: string): void;
   onEditorChange(next: string): void;
   onCommitEdit(movement?: EditMovement): void;
   onCancelEdit(): void;
@@ -34,11 +36,13 @@ export function WorkbookView({
   selectedAddr,
   editorValue,
   resolvedValue,
+  isEditing,
   isEditingCell,
   onSelectSheet,
   onSelect,
   onAddressCommit,
   onBeginEdit,
+  onBeginFormulaEdit,
   onEditorChange,
   onCommitEdit,
   onCancelEdit,
@@ -67,6 +71,8 @@ export function WorkbookView({
           </div>
           <FormulaBar
             address={selectedAddr}
+            isEditing={isEditing}
+            onBeginEdit={onBeginFormulaEdit}
             onAddressCommit={onAddressCommit}
             onCancel={onCancelEdit}
             onChange={onEditorChange}

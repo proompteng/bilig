@@ -38,6 +38,8 @@ interface PersistedRelayState {
   queue: RelayEntry[];
 }
 
+type EditingMode = "idle" | "cell" | "formula";
+
 type ParsedEditorInput =
   | { kind: "clear" }
   | { kind: "formula"; formula: string }
@@ -171,7 +173,7 @@ export function App() {
   const metrics = useMetrics(engine);
   const mirrorMetrics = useMetrics(mirrorEngine);
   const [editorValue, setEditorValue] = useState("");
-  const [isEditingCell, setIsEditingCell] = useState(false);
+  const [editingMode, setEditingMode] = useState<EditingMode>("idle");
   const [replicationReady, setReplicationReady] = useState(false);
   const [syncPaused, setSyncPaused] = useState(false);
   const [relayQueue, setRelayQueue] = useState<RelayEntry[]>([]);
@@ -192,7 +194,9 @@ export function App() {
 
   const resolvedValue = toResolvedValue(selectedCell);
   const mirroredValue = toResolvedValue(mirroredSelectedCell);
-  const visibleEditorValue = isEditingCell ? editorValue : toEditorValue(selectedCell);
+  const isEditing = editingMode !== "idle";
+  const isEditingCell = editingMode === "cell";
+  const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
 
   const loadPreset = useCallback(
     async (presetId: PlaygroundPresetId) => {
@@ -206,7 +210,7 @@ export function App() {
         const preset = await loadPlaygroundPreset(presetId);
         relayQueueRef.current = [];
         setRelayQueue([]);
-        setIsEditingCell(false);
+        setEditingMode("idle");
 
         if (preset.kind === "renderer") {
           await settleRendererBoundary(rendererRoot.render(preset.element));
@@ -428,41 +432,41 @@ export function App() {
   }, [selection, sheetNames]);
 
   useEffect(() => {
-    setIsEditingCell(false);
+    setEditingMode("idle");
     setEditorValue("");
   }, [selectedAddr, selection.sheetName]);
 
   const dependencySnapshot = engine.explainCell(selection.sheetName, selectedAddr);
 
   const beginEditing = useCallback(
-    (seed?: string) => {
+    (seed?: string, mode: Exclude<EditingMode, "idle"> = "cell") => {
       setEditorValue(seed ?? toEditorValue(engine.getCell(selection.sheetName, selectedAddr)));
-      setIsEditingCell(true);
+      setEditingMode(mode);
     },
     [engine, selectedAddr, selection.sheetName]
   );
 
   const commitEditor = useCallback(
     (movement?: EditMovement) => {
-      const nextValue = isEditingCell ? editorValue : toEditorValue(selectedCell);
+      const nextValue = isEditing ? editorValue : toEditorValue(selectedCell);
       applyParsedInput(engine, selection.sheetName, selectedAddr, parseEditorInput(nextValue));
-      setIsEditingCell(false);
+      setEditingMode("idle");
       if (movement) {
         selection.select(selection.sheetName, clampSelectionMovement(selectedAddr, selection.sheetName, movement));
       }
     },
-    [editorValue, engine, isEditingCell, selectedAddr, selectedCell, selection]
+    [editorValue, engine, isEditing, selectedAddr, selectedCell, selection]
   );
 
   const cancelEditor = useCallback(() => {
     setEditorValue(toEditorValue(selectedCell));
-    setIsEditingCell(false);
+    setEditingMode("idle");
   }, [selectedCell]);
 
   const clearSelectedCell = useCallback(() => {
     engine.clearCell(selection.sheetName, selectedAddr);
     setEditorValue("");
-    setIsEditingCell(false);
+    setEditingMode("idle");
   }, [engine, selectedAddr, selection.sheetName]);
 
   const pasteIntoSelection = useCallback(
@@ -478,9 +482,21 @@ export function App() {
       if (ops.length > 0) {
         engine.renderCommit(ops);
       }
-      setIsEditingCell(false);
+      setEditingMode("idle");
     },
     [engine, selection.sheetName]
+  );
+
+  const selectAddress = useCallback(
+    (nextSheetName: string, nextAddress: string) => {
+      if (editingMode === "formula") {
+        const nextValue = editorValue;
+        applyParsedInput(engine, selection.sheetName, selectedAddr, parseEditorInput(nextValue));
+        setEditingMode("idle");
+      }
+      selection.select(nextSheetName, nextAddress);
+    },
+    [editingMode, editorValue, engine, selectedAddr, selection]
   );
 
   const resetWorkspace = () => {
@@ -583,24 +599,26 @@ export function App() {
       <WorkbookView
         editorValue={visibleEditorValue}
         engine={engine}
+        isEditing={isEditing}
         isEditingCell={isEditingCell}
         onAddressCommit={(input) => {
           const nextTarget = parseSelectionTarget(input, selection.sheetName);
           if (nextTarget) {
-            selection.select(nextTarget.sheetName, nextTarget.address);
+            selectAddress(nextTarget.sheetName, nextTarget.address);
           }
         }}
         onBeginEdit={beginEditing}
+        onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "formula")}
         onCancelEdit={cancelEditor}
         onClearCell={clearSelectedCell}
         onCommitEdit={commitEditor}
         onEditorChange={(next) => {
           setEditorValue(next);
-          setIsEditingCell(true);
+          setEditingMode((current) => (current === "idle" ? "cell" : current));
         }}
         onPaste={pasteIntoSelection}
-        onSelect={(addr) => selection.select(selection.sheetName, addr)}
-        onSelectSheet={(sheetName) => selection.select(sheetName, "A1")}
+        onSelect={(addr) => selectAddress(selection.sheetName, addr)}
+        onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}
         resolvedValue={resolvedValue}
         ribbon={ribbon}
         selectedAddr={selectedAddr}

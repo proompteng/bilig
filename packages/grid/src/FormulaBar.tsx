@@ -5,6 +5,8 @@ interface FormulaBarProps {
   address: string;
   value: string;
   resolvedValue: string;
+  isEditing: boolean;
+  onBeginEdit(seed?: string): void;
   onAddressCommit(next: string): void;
   onChange(next: string): void;
   onCommit(): void;
@@ -17,6 +19,8 @@ export function FormulaBar({
   address,
   value,
   resolvedValue,
+  isEditing,
+  onBeginEdit,
   onAddressCommit,
   onChange,
   onCommit,
@@ -68,7 +72,27 @@ export function FormulaBar({
             id="formula-input"
             placeholder="Type a literal or =formula"
             value={value}
-            onChange={(event) => onChange(event.target.value)}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.closest(".formula-bar")?.contains(nextTarget)) {
+                return;
+              }
+              if (isEditing) {
+                onCommit();
+              }
+            }}
+            onChange={(event) => {
+              if (!isEditing) {
+                onBeginEdit(event.target.value);
+                return;
+              }
+              onChange(event.target.value);
+            }}
+            onFocus={() => {
+              if (!isEditing) {
+                onBeginEdit();
+              }
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();

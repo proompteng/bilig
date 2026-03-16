@@ -148,6 +148,53 @@ test("dragging selects a rectangular range like a spreadsheet", async ({ page })
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B2:D5");
 });
 
+test("keyboard shortcuts work for navigation, editing, cancel, delete, and formula bar commit", async ({ page }) => {
+  await clearWorkspace(page);
+
+  const gridHost = page.getByTestId("sheet-grid");
+  await gridHost.focus();
+
+  await gridHost.press("Tab");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B1");
+
+  await gridHost.press("Shift+Tab");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+
+  await gridHost.press("9");
+  const overlay = page.getByTestId("cell-editor-overlay");
+  await expect(overlay).toBeVisible();
+  await expect(page.getByTestId("cell-editor-input")).toHaveValue("9");
+  await page.getByTestId("cell-editor-input").press("Escape");
+  await expect(overlay).toHaveCount(0);
+  await expect(page.getByTestId("formula-input")).toHaveValue("10");
+
+  await gridHost.focus();
+  await gridHost.press("Delete");
+  await expect(page.getByTestId("formula-input")).toHaveValue("");
+
+  await gridHost.press("F2");
+  await expect(overlay).toBeVisible();
+  await page.getByTestId("cell-editor-input").fill("11");
+  await page.getByTestId("cell-editor-input").press("Tab");
+  await expect(overlay).toHaveCount(0);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B1");
+
+  await jumpTo(page, "A1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("11");
+
+  const formulaInput = page.getByTestId("formula-input");
+  await formulaInput.focus();
+  await formulaInput.press("Control+A");
+  await formulaInput.fill("=7*6");
+  await formulaInput.press("Enter");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=7*6");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("42");
+
+  await jumpTo(page, "B1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=A1*2");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("84");
+});
+
 test("paused relay queue survives reload and resumes replication", async ({ page }) => {
   await clearWorkspace(page);
 

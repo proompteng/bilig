@@ -226,6 +226,7 @@ export function SheetGridView({
 }: SheetGridViewProps) {
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const wasEditingOverlayRef = useRef(false);
   const pendingPointerCellRef = useRef<Item | null>(null);
   const dragAnchorCellRef = useRef<Item | null>(null);
   const dragPointerCellRef = useRef<Item | null>(null);
@@ -316,6 +317,15 @@ export function SheetGridView({
     };
   }, [isEditingCell, selectedCell.col, selectedCell.row, visibleRegion.tx, visibleRegion.ty]);
 
+  useEffect(() => {
+    if (wasEditingOverlayRef.current && !isEditingCell) {
+      window.requestAnimationFrame(() => {
+        hostRef.current?.focus();
+      });
+    }
+    wasEditingOverlayRef.current = isEditingCell;
+  }, [isEditingCell]);
+
   const beginSelectedEdit = useCallback(
     (seed?: string) => {
       onBeginEdit(seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, selectedAddr)));
@@ -365,6 +375,7 @@ export function SheetGridView({
       ctrlKey: boolean;
       metaKey: boolean;
       altKey: boolean;
+      shiftKey?: boolean;
       preventDefault(): void;
       cancel?: () => void;
     }) => {
@@ -376,6 +387,13 @@ export function SheetGridView({
         event.preventDefault();
         event.cancel?.();
         beginSelectedEdit();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        event.preventDefault();
+        event.cancel?.();
+        onSelect(formatAddress(selectedCell.row, Math.min(MAX_COLS - 1, Math.max(0, selectedCell.col + (event.shiftKey ? -1 : 1)))));
         return;
       }
 
@@ -397,7 +415,7 @@ export function SheetGridView({
         beginSelectedEdit(event.key);
       }
     },
-    [beginSelectedEdit, isEditingCell, onClearCell]
+    [beginSelectedEdit, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
   );
 
   useEffect(() => {
@@ -415,7 +433,10 @@ export function SheetGridView({
       const withinGridHost = Boolean(activeElement && hostRef.current?.contains(activeElement));
       const onDocumentBody =
         activeElement === document.body || activeElement === document.documentElement || activeElement === null;
-      if (!withinGridHost && !onDocumentBody) {
+      if (withinGridHost) {
+        return;
+      }
+      if (!onDocumentBody) {
         return;
       }
 
@@ -427,6 +448,7 @@ export function SheetGridView({
           metaKey: event.metaKey
         } as GridKeyEventArgs)
         && event.key !== "Enter"
+        && event.key !== "Tab"
         && event.key !== "F2"
         && event.key !== "Backspace"
         && event.key !== "Delete"
@@ -442,6 +464,7 @@ export function SheetGridView({
         ctrlKey: event.ctrlKey,
         key: event.key,
         metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
         preventDefault: () => event.preventDefault()
       });
     };
@@ -615,7 +638,7 @@ export function SheetGridView({
             onSelect(formatAddress(cell[1], cell[0]));
           }}
           onKeyDown={(event) => {
-            if (!isPrintableKey(event) && event.key !== "Enter" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
+            if (!isPrintableKey(event) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
               return;
             }
             handleGridKey(event);
