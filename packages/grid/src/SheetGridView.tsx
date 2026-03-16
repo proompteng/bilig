@@ -247,6 +247,13 @@ export function SheetGridView({
     [engine, onBeginEdit, selectedAddr, sheetName]
   );
 
+  const beginEditAt = useCallback(
+    (addr: string, seed?: string) => {
+      onBeginEdit(seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)));
+    },
+    [engine, onBeginEdit, sheetName]
+  );
+
   const handleGridKey = useCallback(
     (event: {
       key: string;
@@ -341,33 +348,15 @@ export function SheetGridView({
   }, [handleGridKey]);
 
   const overlayStyle = useMemo(() => {
-    if (!isEditingCell) {
+    if (!isEditingCell || !overlayBounds) {
       return undefined;
     }
-    if (overlayBounds) {
-      return {
-        left: overlayBounds.x,
-        position: "fixed" as const,
-        top: overlayBounds.y,
-        width: Math.max(overlayBounds.width + 120, 280)
-      };
-    }
-
-    const hostBounds = hostRef.current?.getBoundingClientRect();
-    if (!hostBounds) {
-      return {
-        left: 64,
-        position: "fixed" as const,
-        top: 160,
-        width: 320
-      };
-    }
-
     return {
-      left: hostBounds.left + 88,
+      height: overlayBounds.height + 2,
+      left: overlayBounds.x - 1,
       position: "fixed" as const,
-      top: hostBounds.top + 52,
-      width: Math.max(Math.min(hostBounds.width - 32, 480), 320)
+      top: overlayBounds.y - 1,
+      width: overlayBounds.width + 2
     };
   }, [isEditingCell, overlayBounds]);
 
@@ -390,7 +379,6 @@ export function SheetGridView({
       <div
         className="sheet-grid-host"
         data-testid="sheet-grid"
-        onDoubleClick={() => beginSelectedEdit()}
         onKeyDown={(event) => handleGridKey(event)}
         onMouseDownCapture={() => hostRef.current?.focus()}
         ref={hostRef}
@@ -410,7 +398,7 @@ export function SheetGridView({
           onCellActivated={([col, row]) => {
             const addr = formatAddress(row, col);
             onSelect(addr);
-            onBeginEdit(cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)));
+            beginEditAt(addr);
           }}
           onDelete={() => {
             onClearCell();
@@ -468,7 +456,7 @@ export function SheetGridView({
           width="100%"
         />
       </div>
-      {isEditingCell ? (
+      {isEditingCell && overlayStyle ? (
         <CellEditorOverlay
           label={`${sheetName}!${selectedAddr}`}
           onCancel={onCancelEdit}
@@ -476,7 +464,7 @@ export function SheetGridView({
           onCommit={onCommitEdit}
           resolvedValue={resolvedValue}
           value={editorValue}
-          {...(overlayStyle ? { style: overlayStyle } : {})}
+          style={overlayStyle}
         />
       ) : null}
     </div>

@@ -14,7 +14,7 @@ interface CellEditorOverlayProps {
 export function CellEditorOverlay({
   label,
   value,
-  resolvedValue,
+  resolvedValue: _resolvedValue,
   onChange,
   onCommit,
   onCancel,
@@ -55,15 +55,9 @@ export function CellEditorOverlay({
 
   return (
     <div className="cell-editor-overlay" data-testid="cell-editor-overlay" style={style}>
-      <div className="cell-editor-overlay-head">
-        <div className="cell-editor-overlay-copy">
-          <p className="panel-eyebrow">Editing</p>
-          <strong>{label}</strong>
-        </div>
-        <span className="cell-editor-overlay-value">Current: {resolvedValue || "∅"}</span>
-      </div>
       <input
         aria-label={`${label} editor`}
+        data-testid="cell-editor-input"
         ref={inputRef}
         value={value}
         onBlur={() => {
@@ -90,10 +84,6 @@ export function CellEditorOverlay({
           }
         }}
       />
-      <div className="cell-editor-overlay-hint">
-        <span>Enter or blur to commit</span>
-        <span>Esc to cancel</span>
-      </div>
     </div>
   );
 }

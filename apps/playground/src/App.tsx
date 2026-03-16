@@ -22,6 +22,7 @@ import {
   type PlaygroundPresetDefinition,
   type PlaygroundPresetId
 } from "./playgroundPresets.js";
+import { loadPersistedJson, removePersistedJson, savePersistedJson } from "./browserPersistence.js";
 
 const PRIMARY_STORAGE_KEY = "bilig:playground:primary";
 const MIRROR_STORAGE_KEY = "bilig:playground:mirror";
@@ -236,9 +237,11 @@ export function App() {
     void Promise.all([engine.ready(), mirrorEngine.ready()]).then(async () => {
       const resetWorkspace = new URLSearchParams(window.location.search).get("reset") === "1";
       if (resetWorkspace) {
-        window.localStorage.removeItem(PRIMARY_STORAGE_KEY);
-        window.localStorage.removeItem(MIRROR_STORAGE_KEY);
-        window.localStorage.removeItem(RELAY_STORAGE_KEY);
+        await Promise.all([
+          removePersistedJson(PRIMARY_STORAGE_KEY),
+          removePersistedJson(MIRROR_STORAGE_KEY),
+          removePersistedJson(RELAY_STORAGE_KEY)
+        ]);
         window.history.replaceState(null, "", window.location.pathname);
         relayQueueRef.current = [];
         if (!cancelled) {
@@ -253,34 +256,33 @@ export function App() {
         return;
       }
 
-      const primaryPersisted = window.localStorage.getItem(PRIMARY_STORAGE_KEY);
-      const mirrorPersisted = window.localStorage.getItem(MIRROR_STORAGE_KEY);
-      const relayPersisted = window.localStorage.getItem(RELAY_STORAGE_KEY);
+      const [primaryPersisted, mirrorPersisted, relayPersisted] = await Promise.all([
+        loadPersistedJson<PersistedReplicaState>(PRIMARY_STORAGE_KEY),
+        loadPersistedJson<PersistedReplicaState>(MIRROR_STORAGE_KEY),
+        loadPersistedJson<PersistedRelayState>(RELAY_STORAGE_KEY)
+      ]);
 
       if (primaryPersisted) {
-        const restored = JSON.parse(primaryPersisted) as PersistedReplicaState;
         await settleRendererBoundary(rendererRoot.unmount());
-        engine.importSnapshot(restored.snapshot);
-        engine.importReplicaSnapshot(restored.replica);
+        engine.importSnapshot(primaryPersisted.snapshot);
+        engine.importReplicaSnapshot(primaryPersisted.replica);
         setActivePresetId(null);
       } else {
         await loadPreset("starter");
       }
 
       if (mirrorPersisted) {
-        const restoredMirror = JSON.parse(mirrorPersisted) as PersistedReplicaState;
-        mirrorEngine.importSnapshot(restoredMirror.snapshot);
-        mirrorEngine.importReplicaSnapshot(restoredMirror.replica);
+        mirrorEngine.importSnapshot(mirrorPersisted.snapshot);
+        mirrorEngine.importReplicaSnapshot(mirrorPersisted.replica);
       } else {
         mirrorEngine.importSnapshot(engine.exportSnapshot());
       }
 
       if (relayPersisted) {
-        const restoredRelay = JSON.parse(relayPersisted) as PersistedRelayState;
-        relayQueueRef.current = restoredRelay.queue;
+        relayQueueRef.current = relayPersisted.queue;
         if (!cancelled) {
-          setRelayQueue(restoredRelay.queue);
-          setSyncPaused(restoredRelay.syncPaused);
+          setRelayQueue(relayPersisted.queue);
+          setSyncPaused(relayPersisted.syncPaused);
         }
       }
 
@@ -310,7 +312,7 @@ export function App() {
         snapshot: engine.exportSnapshot(),
         replica: engine.exportReplicaSnapshot()
       };
-      window.localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(persisted));
+      void savePersistedJson(PRIMARY_STORAGE_KEY, persisted);
     };
 
     const persistMirror = () => {
@@ -318,7 +320,7 @@ export function App() {
         snapshot: mirrorEngine.exportSnapshot(),
         replica: mirrorEngine.exportReplicaSnapshot()
       };
-      window.localStorage.setItem(MIRROR_STORAGE_KEY, JSON.stringify(persisted));
+      void savePersistedJson(MIRROR_STORAGE_KEY, persisted);
     };
 
     persistPrimary();
@@ -369,7 +371,7 @@ export function App() {
       syncPaused,
       queue: relayQueue
     };
-    window.localStorage.setItem(RELAY_STORAGE_KEY, JSON.stringify(persistedRelayState));
+    void savePersistedJson(RELAY_STORAGE_KEY, persistedRelayState);
   }, [relayQueue, replicationReady, syncPaused]);
 
   useEffect(() => {
@@ -482,10 +484,13 @@ export function App() {
   );
 
   const resetWorkspace = () => {
-    window.localStorage.removeItem(PRIMARY_STORAGE_KEY);
-    window.localStorage.removeItem(MIRROR_STORAGE_KEY);
-    window.localStorage.removeItem(RELAY_STORAGE_KEY);
-    window.location.reload();
+    void Promise.all([
+      removePersistedJson(PRIMARY_STORAGE_KEY),
+      removePersistedJson(MIRROR_STORAGE_KEY),
+      removePersistedJson(RELAY_STORAGE_KEY)
+    ]).finally(() => {
+      window.location.reload();
+    });
   };
 
   const toggleSync = useCallback(() => {

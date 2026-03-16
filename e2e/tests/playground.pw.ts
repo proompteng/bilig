@@ -2,8 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function clearWorkspace(page: Page) {
   await page.goto("/");
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     window.localStorage.clear();
+    await new Promise<void>((resolve) => {
+      const request = window.indexedDB.deleteDatabase("bilig-playground");
+      request.onsuccess = () => resolve();
+      request.onerror = () => resolve();
+      request.onblocked = () => resolve();
+    });
   });
   await page.reload();
   await loadPreset(page, "starter", "Starter Demo");
@@ -113,4 +119,26 @@ test("paused relay queue survives reload and resumes replication", async ({ page
   await expect(page.getByTestId("replica-status")).toHaveText("Live");
   await expect(page.getByTestId("replica-value")).toHaveText("18");
   await expect(page.getByTestId("replica-queued")).toHaveText("0");
+});
+
+test("large presets persist through reload without storage quota failures", async ({ page }) => {
+  await clearWorkspace(page);
+
+  await loadPreset(page, "load-250k", "250k Materialized");
+  await expect(page.getByTestId("preset-error")).toHaveCount(0);
+
+  await jumpTo(page, "A125000");
+  await expect(page.getByTestId("formula-input")).toHaveValue("125000");
+
+  await jumpTo(page, "B125000");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=A125000*2");
+
+  await page.reload();
+
+  await expect(page.getByTestId("preset-error")).toHaveCount(0);
+  await expect(page.getByTestId("status-active-preset")).toHaveText("Restored workspace");
+  await jumpTo(page, "A125000");
+  await expect(page.getByTestId("formula-input")).toHaveValue("125000");
+  await jumpTo(page, "B125000");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=A125000*2");
 });
