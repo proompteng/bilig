@@ -324,6 +324,9 @@ input {
   min-height: 72vh;
   height: calc(100vh - 260px);
   background: white;
+  box-sizing: border-box;
+  padding-right: 18px;
+  padding-bottom: 18px;
 }
 
 .glide-sheet-grid {

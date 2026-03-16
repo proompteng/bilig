@@ -71,6 +71,19 @@ async function dragVisibleSelection(page: Page, startCol: number, startRow: numb
   await page.mouse.up();
 }
 
+async function clickGridRightEdge(page: Page, rowIndex = 2) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const headerHeight = 30;
+  const rowHeight = 28;
+  const x = grid.x + grid.width - 3;
+  const y = grid.y + headerHeight + (rowIndex * rowHeight) + Math.floor(rowHeight / 2);
+  await page.mouse.click(x, y);
+}
+
 test("playground shell supports formula-bar navigation, in-grid editing, and Excel-scale presets", async ({ page }) => {
   await clearWorkspace(page);
 
@@ -154,6 +167,18 @@ test("keyboard shortcuts work for navigation, editing, cancel, delete, and formu
   const gridHost = page.getByTestId("sheet-grid");
   await gridHost.focus();
 
+  await gridHost.press("ArrowRight");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B1");
+
+  await gridHost.press("ArrowDown");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B2");
+
+  await gridHost.press("ArrowLeft");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A2");
+
+  await gridHost.press("ArrowUp");
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+
   await gridHost.press("Tab");
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B1");
 
@@ -193,6 +218,14 @@ test("keyboard shortcuts work for navigation, editing, cancel, delete, and formu
   await jumpTo(page, "B1");
   await expect(page.getByTestId("formula-input")).toHaveValue("=A1*2");
   await expect(page.getByTestId("formula-resolved-value")).toContainText("84");
+});
+
+test("clicking the right scrollbar gutter does not select the last visible column", async ({ page }) => {
+  await clearWorkspace(page);
+
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
+  await clickGridRightEdge(page, 3);
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");
 });
 
 test("paused relay queue survives reload and resumes replication", async ({ page }) => {

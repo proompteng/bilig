@@ -44,6 +44,7 @@ const DEFAULT_COLUMN_WIDTH = 120;
 const DEFAULT_ROW_HEIGHT = 28;
 const HEADER_HEIGHT = 30;
 const ROW_MARKER_WIDTH = 60;
+const SCROLLBAR_GUTTER = 18;
 
 function createGridSelection(col: number, row: number): GridSelection {
   return {
@@ -116,6 +117,10 @@ function isPrintableKey(event: GridKeyEventArgs): boolean {
     return false;
   }
   return event.key.length === 1;
+}
+
+function isNavigationKey(key: string): boolean {
+  return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
 }
 
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
@@ -227,6 +232,7 @@ export function SheetGridView({
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const wasEditingOverlayRef = useRef(false);
+  const ignoreNextPointerSelectionRef = useRef(false);
   const pendingPointerCellRef = useRef<Item | null>(null);
   const dragAnchorCellRef = useRef<Item | null>(null);
   const dragPointerCellRef = useRef<Item | null>(null);
@@ -343,13 +349,39 @@ export function SheetGridView({
   const resolvePointerCell = useCallback(
     (clientX: number, clientY: number, region: VisibleRegionState = visibleRegion): Item | null => {
       const hostBounds = hostRef.current?.getBoundingClientRect();
-      if (!hostBounds) {
-        return null;
+      if (hostBounds) {
+        if (clientX >= hostBounds.right - SCROLLBAR_GUTTER || clientY >= hostBounds.bottom - SCROLLBAR_GUTTER) {
+          return null;
+        }
       }
 
-      const dataLeft = hostBounds.left + ROW_MARKER_WIDTH;
-      const dataTop = hostBounds.top + HEADER_HEIGHT + region.ty;
-      if (clientX < dataLeft || clientY < dataTop) {
+      const colEnd = Math.min(MAX_COLS - 1, region.range.x + region.range.width - 1);
+      const rowEnd = Math.min(MAX_ROWS - 1, region.range.y + region.range.height - 1);
+      const topLeftBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
+      const bottomRightBounds = editorRef.current?.getBounds(colEnd, rowEnd);
+
+      let dataLeft: number;
+      let dataTop: number;
+      let dataRight: number;
+      let dataBottom: number;
+
+      if (topLeftBounds && bottomRightBounds) {
+        dataLeft = topLeftBounds.x;
+        dataTop = topLeftBounds.y;
+        dataRight = bottomRightBounds.x + bottomRightBounds.width;
+        dataBottom = bottomRightBounds.y + bottomRightBounds.height;
+      } else {
+        if (!hostBounds) {
+          return null;
+        }
+
+        dataLeft = hostBounds.left + ROW_MARKER_WIDTH;
+        dataTop = hostBounds.top + HEADER_HEIGHT + region.ty;
+        dataRight = Math.min(hostBounds.right, dataLeft + (region.range.width * DEFAULT_COLUMN_WIDTH));
+        dataBottom = Math.min(hostBounds.bottom, dataTop + (region.range.height * DEFAULT_ROW_HEIGHT));
+      }
+
+      if (clientX < dataLeft || clientX >= dataRight || clientY < dataTop || clientY >= dataBottom) {
         return null;
       }
 
@@ -394,6 +426,33 @@ export function SheetGridView({
         event.preventDefault();
         event.cancel?.();
         onSelect(formatAddress(selectedCell.row, Math.min(MAX_COLS - 1, Math.max(0, selectedCell.col + (event.shiftKey ? -1 : 1)))));
+        return;
+      }
+
+      if (isNavigationKey(event.key)) {
+        event.preventDefault();
+        event.cancel?.();
+
+        const delta: Item =
+          event.key === "ArrowUp"
+            ? [0, -1]
+            : event.key === "ArrowDown"
+              ? [0, 1]
+              : event.key === "ArrowLeft"
+                ? [-1, 0]
+                : [1, 0];
+        const nextCell = clampCell([selectedCell.col + delta[0], selectedCell.row + delta[1]]);
+
+        if (event.shiftKey) {
+          setGridSelection((current) => {
+            const anchor = current.current?.cell ?? [selectedCell.col, selectedCell.row];
+            return createRangeSelection(createGridSelection(anchor[0], anchor[1]), anchor, nextCell);
+          });
+          return;
+        }
+
+        setGridSelection(createGridSelection(nextCell[0], nextCell[1]));
+        onSelect(formatAddress(nextCell[1], nextCell[0]));
         return;
       }
 
@@ -447,6 +506,7 @@ export function SheetGridView({
           key: event.key,
           metaKey: event.metaKey
         } as GridKeyEventArgs)
+        && !isNavigationKey(event.key)
         && event.key !== "Enter"
         && event.key !== "Tab"
         && event.key !== "F2"
@@ -508,6 +568,7 @@ export function SheetGridView({
         className="sheet-grid-host"
         data-testid="sheet-grid"
         onKeyDownCapture={() => {
+          ignoreNextPointerSelectionRef.current = false;
           pendingPointerCellRef.current = null;
           dragAnchorCellRef.current = null;
           dragPointerCellRef.current = null;
@@ -540,6 +601,7 @@ export function SheetGridView({
             return;
           }
           const pointerCell = resolvePointerCell(event.clientX, event.clientY);
+          ignoreNextPointerSelectionRef.current = pointerCell === null;
           pendingPointerCellRef.current = pointerCell;
           dragAnchorCellRef.current = pointerCell;
           dragPointerCellRef.current = pointerCell;
@@ -609,6 +671,10 @@ export function SheetGridView({
             return false;
           }}
           onGridSelectionChange={(nextSelection) => {
+            if (ignoreNextPointerSelectionRef.current) {
+              ignoreNextPointerSelectionRef.current = false;
+              return;
+            }
             if (dragViewportRef.current) {
               return;
             }
@@ -635,14 +701,14 @@ export function SheetGridView({
             if (isEditingCell) {
               onCancelEdit();
             }
-            onSelect(formatAddress(cell[1], cell[0]));
-          }}
-          onKeyDown={(event) => {
-            if (!isPrintableKey(event) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
-              return;
-            }
-            handleGridKey(event);
-          }}
+          onSelect(formatAddress(cell[1], cell[0]));
+        }}
+        onKeyDown={(event) => {
+          if (!isPrintableKey(event) && !isNavigationKey(event.key) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
+            return;
+          }
+          handleGridKey(event);
+        }}
           onPaste={(target, values) => {
             onPaste(formatAddress(target[1], target[0]), values);
             return false;
