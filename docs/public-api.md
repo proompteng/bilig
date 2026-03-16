@@ -1,84 +1,105 @@
-# Public API
+# Public APIs
 
-## React workbook DSL
+## Stable packages
 
-```tsx
-<Workbook>
-  <Sheet name="Sheet1">
-    <Cell addr="A1" value={10} />
-    <Cell addr="B1" formula="A1*2" />
-    <Cell addr="C1" format="currency-usd" value={42} />
-  </Sheet>
-</Workbook>
-```
-
-## Package exports
-
+- `@bilig/core`
+- `@bilig/formula`
+- `@bilig/wasm-kernel`
+- `@bilig/crdt`
 - `@bilig/renderer`
-  - `Workbook`
-  - `Sheet`
-  - `Cell`
-  - `createWorkbookRendererRoot(engine)`
 - `@bilig/grid`
-  - `WorkbookView` (Excel-like workbook shell built on Glide Data Grid)
-  - `SheetGridView`
-  - `FormulaBar` (name box + formula input directly above the grid)
-  - `CellEditorOverlay`
-  - `MetricsPanel`
-  - `DependencyInspector`
-  - `ReplicaPanel`
-  - `useCell`
-  - `useMetrics`
-  - `useSelection`
-  - `useSheetViewport`
+- `@bilig/binary-protocol`
+- `@bilig/worker-transport`
+- `@bilig/agent-api`
+- `@bilig/storage-browser`
+- `@bilig/storage-server`
+- `@bilig/excel-fixtures`
 
-## Imperative engine
+## Workbook DSL
 
-- `createSheet(name)`
-- `deleteSheet(name)`
-- `setCellValue(sheet, address, value)`
-- `setCellFormula(sheet, address, formula)`
-- `setCellFormat(sheet, address, format)`
-- `clearCell(sheet, address)`
-- `getCell(sheet, address)`
-- `getDependencies(sheet, address)`
-- `getDependents(sheet, address)`
-- `explainCell(sheet, address)`
-- `exportSnapshot()`
-- `importSnapshot(snapshot)`
-- `exportSheetCsv(sheet)`
-- `importSheetCsv(sheet, csv)`
-- `subscribe(listener)`
-- `subscribeBatches(listener)`
-- `applyRemoteBatch(batch)`
-- `exportReplicaSnapshot()`
-- `importReplicaSnapshot(snapshot)`
+`@bilig/renderer` keeps the declarative workbook DSL unchanged:
 
-## Local-first replication
+- `<Workbook>`
+- `<Sheet name="...">`
+- `<Cell addr="..." value={...} />`
+- `<Cell addr="..." formula="..." />`
+- `<Cell addr="..." format="..." />`
 
-Replication is transport-agnostic. The engine emits deterministic local batches through `subscribeBatches(listener)` and accepts remote batches through `applyRemoteBatch(batch)`.
+## Core engine surface
 
-- local and remote mutations use the same apply path
-- conflict policy is deterministic last-writer-wins per entity
-- entity ordering is `clock.counter`, then `replicaId`, then `batchId`, then `opIndex`
-- replica snapshots persist:
-  - replica clock
-  - applied batch ids
-  - entity version map
-  - sheet delete tombstones
+The canonical engine surface includes:
 
-## Renderer root
+- `createSheet`
+- `deleteSheet`
+- `setCellValue`
+- `setCellFormula`
+- `setCellFormat`
+- `clearCell`
+- `setRangeValues`
+- `setRangeFormulas`
+- `clearRange`
+- `fillRange`
+- `copyRange`
+- `pasteRange`
+- `setSelection`
+- `undo`
+- `redo`
+- `getCell`
+- `getDependencies`
+- `getDependents`
+- `explainCell`
+- `exportSnapshot`
+- `importSnapshot`
+- `exportReplicaSnapshot`
+- `importReplicaSnapshot`
+- `applyRemoteBatch`
+- `subscribe`
+- `subscribeBatches`
+- `connectSyncClient`
+- `disconnectSyncClient`
+- `getSyncState`
 
-`@bilig/renderer` owns the custom workbook reconciler and exposes a minimal async root surface:
+## Binary protocol
 
-- `render(element)`
-- `unmount()`
+`@bilig/binary-protocol` exposes:
 
-## Playground interaction contract
+- `PROTOCOL_VERSION`
+- `encodeFrame(frame): Uint8Array`
+- `decodeFrame(bytes): ProtocolFrame`
 
-The playground keeps the core/renderer APIs unchanged, but the shell behavior is part of the shipped product contract:
+The current frame families are:
 
-- the formula bar lives directly above the grid
-- the grid exposes the full spreadsheet surface, including Excel-scale row and column bounds
-- large workbook presets are loaded by the playground app layer, not by `@bilig/core`
-- editing works from both the formula bar and the in-cell overlay
+- `hello`
+- `appendBatch`
+- `ack`
+- `snapshotChunk`
+- `cursorWatermark`
+- `heartbeat`
+- `error`
+
+## Worker transport
+
+`@bilig/worker-transport` exposes:
+
+- `createWorkerEngineHost(engine, port)`
+- `createWorkerEngineClient({ port })`
+
+The first tranche already supports:
+
+- method invocation
+- engine events
+- outbound batch subscriptions
+
+## Agent API
+
+`@bilig/agent-api` exposes:
+
+- `AgentRequest`
+- `AgentResponse`
+- `AgentEvent`
+- `encodeAgentFrame`
+- `decodeAgentFrame`
+- `encodeStdioMessage`
+- `decodeStdioMessages`
+
+The canonical transport surface covers both stdio and remote network usage with the same typed request/response/event model.

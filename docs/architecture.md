@@ -1,104 +1,48 @@
 # Architecture
 
-```mermaid
-flowchart TB
-  classDef react fill:#eaf2ff,stroke:#2563eb,color:#0f172a,stroke-width:1.5px
-  classDef core fill:#eefbf3,stroke:#15803d,color:#052e16,stroke-width:1.5px
-  classDef wasm fill:#fff7ed,stroke:#ea580c,color:#431407,stroke-width:1.5px
-
-  subgraph PG["apps/playground"]
-    APP["Thin React app shell"]
-  end
-
-  subgraph PKG["packages"]
-    CORE["@bilig/core<br/>engine + range registry + edge arena + scheduler"]
-    FORMULA["@bilig/formula"]
-    CRDT["@bilig/crdt"]
-    PROTOCOL["@bilig/protocol"]
-    RENDERER["@bilig/renderer"]
-    UI["@bilig/grid<br/>Glide-backed Excel-like workbook shell"]
-    WASM["@bilig/wasm-kernel"]
-  end
-
-  APP --> UI
-  APP --> RENDERER
-  UI --> CORE
-  RENDERER --> CORE
-  CORE --> FORMULA
-  CORE --> CRDT
-  CORE --> PROTOCOL
-  CORE --> WASM
-  FORMULA --> PROTOCOL
-  WASM --> PROTOCOL
-
-  class APP react
-  class CORE,FORMULA,CRDT,PROTOCOL,RENDERER,UI core
-  class WASM wasm
-```
+## Runtime layers
 
 ```mermaid
-sequenceDiagram
-  participant UI as React playground shell
-  participant REC as @bilig/renderer
-  participant CORE as @bilig/core
-  participant CRDT as @bilig/crdt
-  participant WASM as @bilig/wasm-kernel
-
-  UI->>REC: render Workbook / Sheet / Cell tree
-  REC->>CORE: renderCommit(commitOps)
-  CORE->>CRDT: create local EngineOpBatch
-  CORE->>WASM: evaluate eligible numeric runs
-  CORE-->>UI: emit batch event + targeted selector updates
-  CORE-->>CRDT: emit outbound batch stream
+flowchart LR
+  UI["React + Glide shell"] --> Worker["Worker transport"]
+  Worker --> Core["@bilig/core"]
+  Core --> Formula["@bilig/formula"]
+  Core --> CRDT["@bilig/crdt"]
+  Core --> WASM["@bilig/wasm-kernel"]
+  Core --> BrowserStore["@bilig/storage-browser"]
+  Worker --> Binary["@bilig/binary-protocol"]
+  Binary --> Sync["apps/sync-server"]
+  Sync --> ServerStore["@bilig/storage-server"]
 ```
 
-The TS protocol enums/opcodes and the AssemblyScript protocol mirror are generated together from `scripts/gen-protocol.mjs`. That keeps the JS/WASM contract deterministic and makes drift a CI failure instead of a runtime surprise.
+## Browser
 
-Within `@bilig/core`, the runtime is no longer a single inline dependency map. The current production shape is:
+- `@bilig/grid` renders the Excel-like shell.
+- `@bilig/renderer` owns the declarative workbook DSL only.
+- `@bilig/worker-transport` isolates the engine behind a worker boundary.
+- `@bilig/storage-browser` persists snapshot, replica state, outbound queue, and cursor state in IndexedDB.
+- `@bilig/binary-protocol` frames sync messages for the backend transport.
 
-- `WorkbookStore` for sheet metadata, sparse grids, and typed-array-backed cells
-- `RangeRegistry` for interned range entities, a shared range-member pool, descriptor `membersOffset`/`membersLength`, and dynamic row/column membership tracking
-- `EdgeArena` for forward and reverse graph slices
-- `RecalcScheduler` for epoch-based dirty propagation and rank-bucket ordering
-- `cycle-detection` for deterministic SCC grouping and `cycleGroupIds`, now backed by reusable typed-array Tarjan scratch state instead of per-run `Map`/`Set` allocations
-- shared program/constant/range arenas in the engine so formula metadata matches the packed runtime/WASM contract instead of ad hoc per-formula blobs
-- vectorized topo rebuild scratch state in the engine so rank assignment no longer depends on `Map`/`Set` queue construction in the hot topology path
-- typed-array impacted-formula scratch in the engine so sheet deletion and formula rebinding no longer build recursive `Set` unions over the entity graph
-- typed-array mutation-root buffers in the engine so snapshot import and op-batch application no longer allocate `Set` unions before recalculation
-- typed-array rebound tracking in the engine so sheet rebinds and dynamic-range growth mark affected formulas directly instead of returning intermediate `Set` collections
-- reusable WASM upload scratch in the engine/facade so fast-path program and range sync no longer rebuild filtered formula lists on every upload
-- callback-based sheet scanning for dynamic ranges so the range registry no longer asks the engine to materialize throwaway `{ cellIndex, row, col }[]` snapshots just to discover members
-- typed-array dynamic range materialization so callback-based sheet scans now fill packed `Uint32Array` member lists directly instead of boxing matches into `number[]` first
-- callback-driven cycle walks so SCC detection no longer copies per-formula dependency arrays before traversing the formula graph
-- dense reverse-edge slice arrays for cell and range entities so graph lookups no longer bounce through a `Map<number, EdgeSlice>` in the core dependency path
-- packed formula constants at compile time so runtime metadata and WASM uploads no longer carry boxed `number[]` constant pools
-- widened WASM constant-pool views so the kernel exposes constant offsets, lengths, and packed numeric constants alongside program and range metadata for ABI-level parity
-- `FormulaRecord` in `@bilig/protocol` is back to packed runtime metadata only; compiler-only artifacts such as symbolic refs, symbolic ranges, and raw program buffers now stay inside `@bilig/formula` instead of leaking into the shared ABI contract
-- packed symbolic binding scratch in the engine so formula materialization patches `PushCell`/`PushRange` operands from reusable typed buffers instead of rebuilding per-formula `Map<string, number>` lookup tables
-- packed materialized-cell scratch in the engine so snapshot import, formula binding, and dynamic range sync track newly created cells as `Uint32Array` indices instead of boxing `{ sheetName, address, cellIndex }` records per batch
-- packed newly-interned range scratch in the engine so reverse-edge linking reuses `RangeRegistry` member views directly instead of allocating `{ rangeIndex, memberIndices }` tuples while binding formulas
+## Semantic engine
 
-The UI does not subscribe through a single global revision for visible cells. `@bilig/core` now routes watched cells by `cellIndex` in the hot path and only falls back to qualified-address listeners for still-unmaterialized cells, so `useCell(...)` and viewport watchers wake only when one of their watched cells changes. That keeps the grid aligned with the production requirement for localized rerenders without pushing string-address routing into every batch emission.
+- `@bilig/core` is the only semantic authority for workbook state.
+- `@bilig/formula` defines parsing, binding, optimization, and JS oracle execution.
+- `@bilig/wasm-kernel` is a fast-path compute accelerator, never the semantic source of truth.
+- `@bilig/crdt` defines deterministic LWW batch ordering and replay rules.
 
-Selection state now follows the same rule: the engine owns the current `{ sheetName, address }` selection snapshot and `@bilig/grid` consumes it through `useSyncExternalStore`, so the playground no longer keeps workbook selection in a parallel React-only state tree.
+## Backend
 
-The reusable hooks now read through `@bilig/core/selectors` for cell, metrics, selection, and viewport snapshots, so the UI package consumes a stable selector surface instead of reaching into ad hoc engine getters directly.
+- `apps/sync-server` is the realtime ingress and remote-agent control plane.
+- `@bilig/storage-server` abstracts durable log, snapshot, presence, and ownership state.
+- The full production backend target is binary websocket ingress plus durable append-before-ack semantics.
+- The first repo tranche includes a typed service skeleton and binary HTTP ingress so the backend contract is executable in-repo.
 
-`@bilig/grid` now owns the full workbook shell contract instead of a dashboard-like demo surface. The shell contains:
+## Argo deployment target
 
-- workbook/ribbon header
-- name box and formula bar directly above the grid
-- a Glide Data Grid-backed sheet surface
-- bottom sheet tabs and status bar
-- secondary side panels for metrics, dependencies, and replica state
+- The standalone product app lives in `/Users/gregkonush/github.com/lab/argocd/applications/bilig`.
+- It is registered in `/Users/gregkonush/github.com/lab/argocd/applicationsets/product.yaml`.
+- Default hosts are `bilig.proompteng.ai` and `api.bilig.proompteng.ai`.
 
-Editing is part of the product contract, not an incidental demo behavior. The supported flows are:
+## Current tranche status
 
-- single-click selection
-- keyboard edit entry with `F2`, `Enter`, or type-to-replace on the selected cell
-- formula-bar editing as the primary edit surface
-- in-cell overlay editing for direct manipulation
-- commit on `Enter`, `Tab`, `Shift+Tab`, `Shift+Enter`, or blur
-- cancel on `Escape`
-
-The playground also exposes Excel-scale sheet bounds and ships built-in large presets from `apps/playground/src/playgroundPresets.ts` so the UI proves scale with real engine-backed workloads instead of only describing those workloads in benchmarks.
+The current repo shape now matches the package layout of the production design. The missing work is deeper implementation fidelity: worker-first browser wiring, full websocket sync, full Excel parity, remote agent execution against live worksheet sessions, and Argo promotion hardening.

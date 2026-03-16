@@ -1,0 +1,17 @@
+{
+  "name": "@bilig/sync-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@bilig/agent-api": "workspace:*",
+    "@bilig/binary-protocol": "workspace:*",
+    "@bilig/storage-server": "workspace:*",
+    "fastify": "5.6.0"
+  }
+}

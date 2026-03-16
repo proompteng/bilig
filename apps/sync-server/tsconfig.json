@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "references": [
+    { "path": "../../packages/binary-protocol" },
+    { "path": "../../packages/agent-api" },
+    { "path": "../../packages/storage-server" }
+  ],
+  "include": ["src/**/*"]
+}

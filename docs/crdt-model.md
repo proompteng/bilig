@@ -1,46 +1,39 @@
-# CRDT Model
+# CRDT and Local-First Model
 
-The engine uses deterministic op batches with replica clocks and last-writer-wins per entity. Transport is intentionally out of scope for v1; the engine only defines the local-first replication contract.
+`bilig` is local-first by default. Collaboration is built on deterministic CRDT batches with last-writer-wins conflict resolution per entity.
 
-- local mutations create `EngineOpBatch`
-- remote mutations are replayed through the same apply path
-- batches are ordered by clock, replica id, and batch id
-- duplicate batches are ignored
-- replica snapshots persist enough metadata to survive restart and ignore stale replays
+## Entity ordering
 
-## Entity model
+Batch and op ordering is:
 
-The replication layer resolves conflicts per entity:
+1. `clock.counter`
+2. `replicaId`
+3. `batchId`
+4. `opIndex`
 
-- workbook metadata: `workbook`
-- sheet metadata: `sheet:${name}`
-- cell source: `cell:${sheetName}!${addr}`
+## Entity keys
 
-Sheet deletion also records a tombstone barrier for the sheet name so stale cell ops cannot recreate deleted-sheet state out of order.
+- workbook metadata
+- sheet metadata keyed by sheet name
+- cell source keyed by `sheetName!address`
+- format metadata keyed by `sheetName!address`
 
-## Ordering
+## Durability contract
 
-Op ordering is deterministic:
+- local edits apply immediately
+- outbound sync batches are persisted locally before reconnect/replay
+- remote server acks happen only after durable append
+- replay after restart must remain deterministic
 
-1. Lamport clock counter
-2. replica id
-3. batch id
-4. op index within the batch
+## Backend contract
 
-This order is used for both merge sorting and entity-level last-writer-wins checks.
+The backend sync layer is now part of the canonical product:
 
-## Persistence
+- browsers push CRDT batches over the binary protocol
+- the server appends batches durably before ack
+- reconnect resumes from the last acknowledged cursor
+- compaction preserves dedupe and replay safety
 
-`exportReplicaSnapshot()` and `importReplicaSnapshot()` persist:
+## Current tranche status
 
-- replica id
-- Lamport counter
-- applied batch ids
-- entity version map
-- sheet delete tombstones
-
-That keeps restart, replay, and duplicate-delivery behavior deterministic without needing a transport-specific store.
-
-The playground layers a persisted relay queue on top of that engine contract. Paused replica traffic survives reloads and replays through `applyRemoteBatch()` after resume, which makes the local-first behavior visible without baking transport policy into shared packages.
-
-Queued relay batches are compacted with the same entity ordering rules. Repeated offline edits collapse to the latest op per entity, and stale cell ops behind later sheet tombstones are discarded before replay.
+The repo already had deterministic local-first replay semantics and persisted replica snapshots. The new production tranche adds binary transport framing and server-side durable-store abstractions so the CRDT model now has a concrete backend target instead of stopping at the engine boundary.

@@ -9,6 +9,7 @@
     { "path": "../../packages/crdt" },
     { "path": "../../packages/formula" },
     { "path": "../../packages/protocol" },
+    { "path": "../../packages/storage-browser" },
     { "path": "../../packages/wasm-kernel" },
     { "path": "../../packages/renderer" },
     { "path": "../../packages/grid" }

@@ -1,0 +1,201 @@
+const DEFAULT_DB_NAME = "bilig-browser-state";
+const DEFAULT_STORE_NAME = "state";
+const WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES = 128 * 1024;
+
+function getLocalStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+async function openDatabase(databaseName: string, storeName: string): Promise<IDBDatabase | null> {
+  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
+    return null;
+  }
+
+  return await new Promise<IDBDatabase | null>((resolve) => {
+    try {
+      const request = window.indexedDB.open(databaseName, 1);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains(storeName)) {
+          database.createObjectStore(storeName);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function readFromStore(databaseName: string, storeName: string, key: string): Promise<string | null> {
+  const database = await openDatabase(databaseName, storeName);
+  if (!database) {
+    return null;
+  }
+
+  return await new Promise<string | null>((resolve) => {
+    const transaction = database.transaction(storeName, "readonly");
+    const store = transaction.objectStore(storeName);
+    const request = store.get(key);
+
+    request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
+    request.onerror = () => resolve(null);
+    transaction.oncomplete = () => database.close();
+    transaction.onerror = () => database.close();
+    transaction.onabort = () => database.close();
+  });
+}
+
+async function writeToStore(databaseName: string, storeName: string, key: string, value: string): Promise<boolean> {
+  const database = await openDatabase(databaseName, storeName);
+  if (!database) {
+    return false;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (result: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    const transaction = database.transaction(storeName, "readwrite");
+    const request = transaction.objectStore(storeName).put(value, key);
+    request.onsuccess = () => finish(true);
+    request.onerror = () => finish(false);
+    transaction.oncomplete = () => {
+      database.close();
+      finish(true);
+    };
+    transaction.onerror = () => {
+      database.close();
+      finish(false);
+    };
+    transaction.onabort = () => {
+      database.close();
+      finish(false);
+    };
+  });
+}
+
+async function removeFromStore(databaseName: string, storeName: string, key: string): Promise<void> {
+  const database = await openDatabase(databaseName, storeName);
+  if (!database) {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    const transaction = database.transaction(storeName, "readwrite");
+    const request = transaction.objectStore(storeName).delete(key);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onabort = () => {
+      database.close();
+      resolve();
+    };
+  });
+}
+
+export interface BrowserPersistenceOptions {
+  databaseName?: string;
+  storeName?: string;
+}
+
+export interface BrowserPersistence {
+  loadJson<T>(key: string): Promise<T | null>;
+  saveJson(key: string, value: unknown): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
+export function createBrowserPersistence(options: BrowserPersistenceOptions = {}): BrowserPersistence {
+  const databaseName = options.databaseName ?? DEFAULT_DB_NAME;
+  const storeName = options.storeName ?? DEFAULT_STORE_NAME;
+
+  return {
+    async loadJson<T>(key: string): Promise<T | null> {
+      const storage = getLocalStorage();
+      const cachedValue = storage?.getItem(key) ?? null;
+      if (cachedValue) {
+        try {
+          const parsed = JSON.parse(cachedValue) as T;
+          void writeToStore(databaseName, storeName, key, cachedValue);
+          return parsed;
+        } catch {
+          storage?.removeItem(key);
+        }
+      }
+
+      const persisted = await readFromStore(databaseName, storeName, key);
+      if (persisted) {
+        try {
+          return JSON.parse(persisted) as T;
+        } catch {
+          return null;
+        }
+      }
+
+      return null;
+    },
+    async saveJson(key: string, value: unknown): Promise<void> {
+      const serialized = JSON.stringify(value);
+      const storage = getLocalStorage();
+      if (storage) {
+        try {
+          if (serialized.length <= WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES) {
+            storage.setItem(key, serialized);
+          } else {
+            storage.removeItem(key);
+          }
+        } catch {
+          storage.removeItem(key);
+        }
+      }
+
+      const persisted = await writeToStore(databaseName, storeName, key, serialized);
+      if (persisted) {
+        return;
+      }
+
+      try {
+        storage?.setItem(key, serialized);
+      } catch (error) {
+        console.warn(`Unable to persist ${key}`, error);
+      }
+    },
+    async remove(key: string): Promise<void> {
+      await removeFromStore(databaseName, storeName, key);
+      getLocalStorage()?.removeItem(key);
+    }
+  };
+}
+
+const defaultPersistence = createBrowserPersistence();
+
+export async function loadPersistedJson<T>(key: string): Promise<T | null> {
+  return defaultPersistence.loadJson<T>(key);
+}
+
+export async function savePersistedJson(key: string, value: unknown): Promise<void> {
+  return defaultPersistence.saveJson(key, value);
+}
+
+export async function removePersistedJson(key: string): Promise<void> {
+  return defaultPersistence.remove(key);
+}
