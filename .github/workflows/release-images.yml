@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      INTERNAL_REGISTRY_USERNAME: ${{ secrets.INTERNAL_REGISTRY_USERNAME }}
+      INTERNAL_REGISTRY_PASSWORD: ${{ secrets.INTERNAL_REGISTRY_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,21 +34,21 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Skip publish when registry secrets are not configured
-        if: ${{ secrets.INTERNAL_REGISTRY_USERNAME == '' || secrets.INTERNAL_REGISTRY_PASSWORD == '' }}
+        if: ${{ env.INTERNAL_REGISTRY_USERNAME == '' || env.INTERNAL_REGISTRY_PASSWORD == '' }}
         run: |
           echo "Internal registry credentials are not configured for this repository."
           echo "Skipping image publication; local/manual release remains available."
 
       - name: Log in to internal registry
-        if: ${{ secrets.INTERNAL_REGISTRY_USERNAME != '' && secrets.INTERNAL_REGISTRY_PASSWORD != '' }}
+        if: ${{ env.INTERNAL_REGISTRY_USERNAME != '' && env.INTERNAL_REGISTRY_PASSWORD != '' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.INTERNAL_REGISTRY_USERNAME }}
-          password: ${{ secrets.INTERNAL_REGISTRY_PASSWORD }}
+          username: ${{ env.INTERNAL_REGISTRY_USERNAME }}
+          password: ${{ env.INTERNAL_REGISTRY_PASSWORD }}
 
       - name: Build and push
-        if: ${{ secrets.INTERNAL_REGISTRY_USERNAME != '' && secrets.INTERNAL_REGISTRY_PASSWORD != '' }}
+        if: ${{ env.INTERNAL_REGISTRY_USERNAME != '' && env.INTERNAL_REGISTRY_PASSWORD != '' }}
         uses: docker/build-push-action@v6
         with:
           context: .
