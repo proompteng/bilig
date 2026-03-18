@@ -13,6 +13,8 @@ This ledger maps acceptance rows to concrete checks so the docs, code, and relea
 | worker transport package exists and is tested | `packages/worker-transport/src/__tests__/worker-transport.test.ts` |
 | binary protocol package exists and is tested | `packages/binary-protocol/src/__tests__/binary-protocol.test.ts` |
 | sync-server app exists and is tested | `apps/sync-server/src/__tests__/sync-server.test.ts` |
+| local-server app exists and is tested | `apps/local-server/src/__tests__/local-server.test.ts` |
+| shipping browser app wrapper exists | `apps/web`, `pnpm --filter @bilig/web build` |
 
 ## Open rows
 
@@ -20,6 +22,7 @@ These rows are still open and should not be treated as complete:
 
 - worker-first browser runtime is active
 - offline restore and reconnect are proven under the worker runtime
+- chat-driven local agent orchestration is wired to the local app server
 - checked-in Excel parity corpus exists beyond the seed suite
 - JS oracle matches the Excel parity corpus across the full target surface
 - WASM overlap matches JS on every claimed kernel

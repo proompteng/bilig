@@ -13,12 +13,15 @@
 - worker transport package exists and is tested
 - binary protocol package exists and is tested
 - sync-server app exists and is tested
+- local-server app exists and is tested
+- `apps/web` exists as the shipping app wrapper
 
 ## Spreadsheet product
 
 - Excel shell UX passes browser acceptance
 - worker-first browser runtime is active
 - offline restore and reconnect are proven
+- localhost app-server reconnect and cursor catch-up are proven
 
 ## Formula and WASM
 
@@ -29,6 +32,7 @@
 ## Collaboration
 
 - CRDT convergence passes under replay, reorder, duplicate delivery, and reconnect
+- local agent or browser mutations are emitted through one ordered workbook commit stream
 - backend append-before-ack is proven
 - cursor catch-up and snapshot restore are proven
 
@@ -41,4 +45,4 @@
 
 ## First tranche status
 
-Architecture-foundation rows are closed, and the first core-contract tranche is now partially closed. Product-parity, worker-runtime, durable-backend, and full formula-parity rows remain open until the deeper implementation tranches land.
+Architecture-foundation rows are closed, and the local app server plus product-app split tranche is now partially closed. Product-parity, worker-runtime, chat orchestration, durable-backend, and full formula-parity rows remain open until the deeper implementation tranches land.

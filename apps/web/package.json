@@ -1,13 +1,12 @@
 {
-  "name": "@bilig/playground",
+  "name": "@bilig/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
-    "preview": "vite preview",
-    "preview:ci": "pnpm -w build && vite preview --host 127.0.0.1 --port 4179"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@bilig/benchmarks": "workspace:*",

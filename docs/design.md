@@ -5,10 +5,12 @@
 ## Current state
 
 - the core engine contract is now materially closer to the documented surface: range mutation helpers, undo/redo, richer selection state, and sync-state plumbing exist in `@bilig/core`
-- the browser shell is still in-process, not worker-first
+- `apps/web` now exists as the dedicated product app wrapper, while `apps/playground` remains the harness shell
+- `apps/local-server` now exists and hosts live local workbook sessions with binary websocket sync ingress plus live agent worksheet mutation APIs
+- the browser shell is still in-process today, not worker-first yet
 - the sync backend is still a typed scaffold with in-memory durability
 - the formula surface is still far narrower than the canonical Excel target
-- `apps/playground` remains the main browser shell; the dedicated `apps/web` product app does not exist yet
+- local agent chat orchestration is still not wired; the local server currently exposes live worksheet session control, not full chat-to-action automation
 
 ## Canonical target
 
@@ -37,6 +39,8 @@ The product target is fixed to these requirements:
 - `@bilig/storage-server`: durable log/snapshot ownership abstractions
 - `@bilig/excel-fixtures`: checked-in Excel parity goldens
 - `apps/playground`: browser product shell and integration harness
+- `apps/web`: shipping browser shell wrapper
+- `apps/local-server`: localhost workbook session host and agent worksheet API
 - `apps/sync-server`: realtime sync and remote API service
 
 ## Runtime split
@@ -76,8 +80,10 @@ This repo now contains the architecture foundation plus the first core-contract 
 - binary frame codec package added
 - worker transport package added
 - browser persistence extracted into a reusable package
+- local app server added with live workbook session management and binary websocket ingress
 - server-side storage abstractions added
 - sync-server skeleton added with binary HTTP ingress for sync frames and remote agent frames
+- `apps/web` split added as the dedicated product app wrapper
 - core range mutation, undo/redo, richer selection state, and sync-state APIs added
 
 The system is not yet at full Excel parity or full realtime production readiness. Those remain active implementation tranches, but the repo no longer describes them as out-of-scope future ideas.

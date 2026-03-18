@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/crdt" },
+    { "path": "../../packages/protocol" },
+    { "path": "../../packages/binary-protocol" },
+    { "path": "../../packages/agent-api" }
+  ],
+  "include": ["src/**/*.ts"]
+}
