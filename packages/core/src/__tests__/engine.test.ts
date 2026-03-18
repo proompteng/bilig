@@ -17,6 +17,20 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 24 });
   });
 
+  it("evaluates string formulas and string comparisons on the JS path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "hello");
+    engine.setCellFormula("Sheet1", "B1", "A1&\" world\"");
+    engine.setCellFormula("Sheet1", "C1", "A1=\"HELLO\"");
+    engine.setCellFormula("Sheet1", "D1", "\"b\">\"A\"");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toMatchObject({ tag: ValueTag.String, value: "hello world" });
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Boolean, value: true });
+  });
+
   it("supports cross-sheet references", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

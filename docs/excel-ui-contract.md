@@ -2,9 +2,10 @@
 
 ## Current state
 
-- the grid shell exists and is already closer to an Excel-like surface than the earlier demo shell.
-- selection, editing, and keyboard behavior still have open correctness gaps and should not be treated as complete.
-- `apps/web` now exists as the shipping app wrapper; `apps/playground` remains the harness shell.
+- the product shell now renders through `apps/web` with workbook title, name box, formula bar, worksheet grid, sheet tabs, and status bar only.
+- the default `apps/web` surface no longer renders playground preset chrome, replica panels, or metrics panels.
+- browser smoke now exists for both `apps/playground` and `apps/web`.
+- selection, editing, clipboard, fill handle, frozen panes, and richer spreadsheet affordances still have open correctness or completeness gaps and should not be treated as finished.
 
 ## Target state
 
@@ -31,9 +32,18 @@ Required correctness:
 - undo and redo
 - function autocomplete and hints
 - no false hits in scrollbar gutters
+- no harness-only controls in the shipping product shell
+
+Reference layout:
+
+- a thin workbook title row above the formula surface
+- a single dense formula row with name box, `fx`, and current cell input
+- the worksheet grid immediately under the formula row, with no extra informational band
+- sheet tabs and compact status indicators along the bottom edge
 
 ## Exit gate
 
 - the Excel-essentials Playwright suite passes
 - default product chrome contains only essential spreadsheet controls
 - remaining diagnostics and agent panels are secondary, not default layout clutter
+- `apps/web` browser smoke proves the shell stays free of playground chrome

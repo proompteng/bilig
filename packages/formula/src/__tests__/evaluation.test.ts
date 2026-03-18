@@ -92,6 +92,8 @@ describe("formula builtins and JS evaluator", () => {
       value: "4!",
       stringId: 0
     });
+    expect(evaluateAst(parseFormula("A2=\"X\""), context)).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(evaluateAst(parseFormula("\"b\">\"A\""), context)).toEqual({ tag: ValueTag.Boolean, value: true });
     expect(evaluateAst(parseFormula("-A1"), context)).toEqual({ tag: ValueTag.Number, value: -4 });
     expect(evaluateAst(parseFormula("A1>=Sheet2!B1"), context)).toEqual({ tag: ValueTag.Boolean, value: false });
     expect(evaluateAst(parseFormula("SUM(A1:B2)"), context)).toEqual({ tag: ValueTag.Number, value: 6 });

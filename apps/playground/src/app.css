@@ -46,6 +46,12 @@ input {
     linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
 }
 
+.app-shell-product {
+  padding: 0;
+  background:
+    linear-gradient(180deg, #e8ece8 0%, #f3f4f6 72px, #f7f7f4 72px, #f7f7f4 100%);
+}
+
 .loading-banner,
 .error-banner {
   margin-bottom: 12px;
@@ -65,6 +71,11 @@ input {
 .workbook-shell {
   display: grid;
   gap: 10px;
+}
+
+.workbook-shell-product {
+  min-height: 100vh;
+  gap: 0;
 }
 
 .workbook-ribbon {
@@ -160,6 +171,13 @@ input {
   overflow: hidden;
 }
 
+.workbook-shell-product .workbook-main {
+  min-height: 100vh;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
 .workbook-header {
   display: flex;
   justify-content: space-between;
@@ -170,11 +188,26 @@ input {
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
+.workbook-shell-product .workbook-header {
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #cfd7cf;
+  background: linear-gradient(180deg, #f8faf8 0%, #eef2ee 100%);
+}
+
 .workbook-header h1,
 .metrics-panel h3,
 .dependency-panel h3,
 .replica-panel h3 {
   margin: 0;
+}
+
+.workbook-shell-product .workbook-header h1 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #1f2937;
 }
 
 .workbook-header-meta {
@@ -213,6 +246,24 @@ input {
   background: #f7f8fa;
 }
 
+.workbook-shell-product .formula-bar {
+  grid-template-columns: 84px minmax(0, 1fr) 112px;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #d8ded8;
+  background: #eef2ef;
+}
+
+.workbook-shell-product .formula-meta-label {
+  display: none;
+}
+
+.workbook-shell-product .name-box-shell,
+.workbook-shell-product .formula-input-shell,
+.workbook-shell-product .formula-result-shell {
+  gap: 0;
+}
+
 .name-box-shell,
 .formula-input-shell,
 .formula-result-shell {
@@ -246,6 +297,13 @@ input {
   font-size: 13px;
 }
 
+.workbook-shell-product .name-box-shell input,
+.workbook-shell-product .formula-input-frame input,
+.workbook-shell-product .cell-editor-overlay input {
+  min-height: 30px;
+  border-radius: 4px;
+}
+
 .formula-input-frame {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
@@ -253,6 +311,11 @@ input {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.workbook-shell-product .formula-input-frame {
+  grid-template-columns: 34px minmax(0, 1fr);
+  border-radius: 4px;
 }
 
 .formula-input-frame input {
@@ -269,6 +332,11 @@ input {
   color: var(--excel-green);
 }
 
+.workbook-shell-product .formula-fx {
+  font-size: 0.78rem;
+  background: #f5f7f5;
+}
+
 .formula-result-shell {
   min-width: 0;
 }
@@ -278,6 +346,12 @@ input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.workbook-shell-product .formula-result {
+  justify-content: flex-end;
+  background: #ffffff;
+  font-variant-numeric: tabular-nums;
 }
 
 .formula-actions {
@@ -314,6 +388,20 @@ input {
   background: #fbfcfd;
 }
 
+.workbook-shell-product .sheet-grid-banner {
+  padding: 6px 10px;
+  border-bottom: 1px solid #dde3dd;
+  background: #f7faf7;
+}
+
+.grid-shell-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #4b5b4b;
+  font-weight: 600;
+}
+
 .viewport-meta {
   display: inline-flex;
   gap: 8px;
@@ -327,6 +415,15 @@ input {
   box-sizing: border-box;
   padding-right: 18px;
   padding-bottom: 18px;
+}
+
+.workbook-shell-product .sheet-grid-host {
+  min-height: 0;
+  height: calc(100vh - 92px);
+  padding-right: 10px;
+  padding-bottom: 10px;
+  background:
+    linear-gradient(180deg, #f8faf8 0%, #ffffff 32px);
 }
 
 .glide-sheet-grid {
@@ -343,10 +440,21 @@ input {
   background: #f8fafc;
 }
 
+.workbook-shell-product .workbook-footer {
+  min-height: 38px;
+  padding: 4px 10px 0;
+  background: #eef2ef;
+}
+
 .sheet-tabs {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.workbook-shell-product .sheet-tabs {
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .workbook-status {
@@ -355,6 +463,23 @@ input {
   flex-wrap: wrap;
   color: var(--ink-700);
   font-size: 0.92rem;
+}
+
+.workbook-shell-product .workbook-status {
+  gap: 6px;
+  font-size: 0.76rem;
+  color: #526152;
+}
+
+.workbook-shell-product .workbook-status > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #d6ddd6;
+  border-radius: 999px;
+  background: #f8faf8;
+  font-variant-numeric: tabular-nums;
 }
 
 .workbook-sidebar {
@@ -427,6 +552,23 @@ input {
   background: #ffffff;
   box-shadow: none;
   overflow: hidden;
+}
+
+.workbook-shell-product .sheet-tab {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 8px 8px 0 0;
+  border-bottom-color: transparent;
+  background: linear-gradient(180deg, #f6f8f6 0%, #e8ece8 100%);
+  color: #3d4c3d;
+}
+
+.workbook-shell-product .sheet-tab.active {
+  border-color: #9bc2a4;
+  border-bottom-color: #ffffff;
+  background: #ffffff;
+  color: #166534;
+  box-shadow: inset 0 3px 0 #1f7a43;
 }
 
 @media (max-width: 1200px) {

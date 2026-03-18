@@ -1,19 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "composite": false,
     "noEmit": true,
     "types": ["vite/client"],
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/crdt" },
-    { "path": "../../packages/formula" },
-    { "path": "../../packages/protocol" },
-    { "path": "../../packages/storage-browser" },
-    { "path": "../../packages/wasm-kernel" },
-    { "path": "../../packages/renderer" },
-    { "path": "../../packages/grid" }
-  ],
-  "include": ["src/**/*", "vite.config.ts", "../playground/src/**/*"]
+  "include": ["src/**/*", "vite.config.ts", "../playground/src/**/*.ts", "../playground/src/**/*.tsx"],
+  "exclude": ["../playground/src/**/*.test.ts", "../playground/src/**/*.test.tsx"]
 }

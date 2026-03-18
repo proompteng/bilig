@@ -61,6 +61,35 @@ function toStringValue(value: CellValue): string {
   }
 }
 
+function isTextLike(value: CellValue): boolean {
+  return value.tag === ValueTag.String || value.tag === ValueTag.Empty;
+}
+
+function compareText(left: string, right: string): number {
+  const normalizedLeft = left.toUpperCase();
+  const normalizedRight = right.toUpperCase();
+  if (normalizedLeft === normalizedRight) {
+    return 0;
+  }
+  return normalizedLeft < normalizedRight ? -1 : 1;
+}
+
+function compareScalars(left: CellValue, right: CellValue): number | undefined {
+  if (isTextLike(left) && isTextLike(right)) {
+    return compareText(toStringValue(left), toStringValue(right));
+  }
+
+  const leftNum = toNumber(left);
+  const rightNum = toNumber(right);
+  if (leftNum === undefined || rightNum === undefined) {
+    return undefined;
+  }
+  if (leftNum === rightNum) {
+    return 0;
+  }
+  return leftNum < rightNum ? -1 : 1;
+}
+
 function truthy(value: CellValue): boolean {
   return (toNumber(value) ?? 0) !== 0;
 }
@@ -229,37 +258,58 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
           break;
         }
 
-        const leftNum = toNumber(left);
-        const rightNum = toNumber(right);
-        if (leftNum === undefined || rightNum === undefined) {
-          stack.push({ kind: "scalar", value: error(ErrorCode.Value) });
-          break;
-        }
-
         const binaryValue: CellValue = (() => {
           switch (instruction.operator) {
             case "+":
-              return { tag: ValueTag.Number, value: leftNum + rightNum };
             case "-":
-              return { tag: ValueTag.Number, value: leftNum - rightNum };
             case "*":
-              return { tag: ValueTag.Number, value: leftNum * rightNum };
             case "/":
-              return rightNum === 0 ? error(ErrorCode.Div0) : { tag: ValueTag.Number, value: leftNum / rightNum };
-            case "^":
-              return { tag: ValueTag.Number, value: leftNum ** rightNum };
+            case "^": {
+              const leftNum = toNumber(left);
+              const rightNum = toNumber(right);
+              if (leftNum === undefined || rightNum === undefined) {
+                return error(ErrorCode.Value);
+              }
+
+              switch (instruction.operator) {
+                case "+":
+                  return { tag: ValueTag.Number, value: leftNum + rightNum };
+                case "-":
+                  return { tag: ValueTag.Number, value: leftNum - rightNum };
+                case "*":
+                  return { tag: ValueTag.Number, value: leftNum * rightNum };
+                case "/":
+                  return rightNum === 0 ? error(ErrorCode.Div0) : { tag: ValueTag.Number, value: leftNum / rightNum };
+                case "^":
+                  return { tag: ValueTag.Number, value: leftNum ** rightNum };
+              }
+            }
             case "=":
-              return { tag: ValueTag.Boolean, value: leftNum === rightNum };
             case "<>":
-              return { tag: ValueTag.Boolean, value: leftNum !== rightNum };
             case ">":
-              return { tag: ValueTag.Boolean, value: leftNum > rightNum };
             case ">=":
-              return { tag: ValueTag.Boolean, value: leftNum >= rightNum };
             case "<":
-              return { tag: ValueTag.Boolean, value: leftNum < rightNum };
-            case "<=":
-              return { tag: ValueTag.Boolean, value: leftNum <= rightNum };
+            case "<=": {
+              const comparison = compareScalars(left, right);
+              if (comparison === undefined) {
+                return error(ErrorCode.Value);
+              }
+
+              switch (instruction.operator) {
+                case "=":
+                  return { tag: ValueTag.Boolean, value: comparison === 0 };
+                case "<>":
+                  return { tag: ValueTag.Boolean, value: comparison !== 0 };
+                case ">":
+                  return { tag: ValueTag.Boolean, value: comparison > 0 };
+                case ">=":
+                  return { tag: ValueTag.Boolean, value: comparison >= 0 };
+                case "<":
+                  return { tag: ValueTag.Boolean, value: comparison < 0 };
+                case "<=":
+                  return { tag: ValueTag.Boolean, value: comparison <= 0 };
+              }
+            }
           }
         })();
         stack.push({ kind: "scalar", value: binaryValue });

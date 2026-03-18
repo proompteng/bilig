@@ -6,6 +6,7 @@ import { SheetGridView, type EditMovement } from "./SheetGridView.js";
 interface WorkbookViewProps {
   engine: SpreadsheetEngine;
   workbookName: string;
+  variant?: "playground" | "product";
   sheetNames: string[];
   sheetName: string;
   selectedAddr: string;
@@ -31,6 +32,7 @@ interface WorkbookViewProps {
 export function WorkbookView({
   engine,
   workbookName,
+  variant = "playground",
   sheetNames,
   sheetName,
   selectedAddr,
@@ -53,21 +55,23 @@ export function WorkbookView({
   statusBar
 }: WorkbookViewProps) {
   return (
-    <section className="workbook-shell">
+    <section className={variant === "product" ? "workbook-shell workbook-shell-product" : "workbook-shell"}>
       {ribbon ? <div className="workbook-ribbon">{ribbon}</div> : null}
       <div className="workbook-content">
         <div className="workbook-main">
           <div className="workbook-header">
             <div>
-              <p className="panel-eyebrow">Workbook</p>
+              {variant === "playground" ? <p className="panel-eyebrow">Workbook</p> : null}
               <h1>{workbookName}</h1>
             </div>
-            <div className="workbook-header-meta">
-              <span className="selection-chip">
-                {sheetName}!{selectedAddr}
-              </span>
-              <span className="surface-chip">Excel-scale surface</span>
-            </div>
+            {variant === "playground" ? (
+              <div className="workbook-header-meta">
+                <span className="selection-chip">
+                  {sheetName}!{selectedAddr}
+                </span>
+                <span className="surface-chip">Excel-scale surface</span>
+              </div>
+            ) : null}
           </div>
           <FormulaBar
             address={selectedAddr}
@@ -81,6 +85,7 @@ export function WorkbookView({
             resolvedValue={resolvedValue}
             sheetName={sheetName}
             value={editorValue}
+            variant={variant}
           />
           <SheetGridView
             editorValue={editorValue}
@@ -96,6 +101,7 @@ export function WorkbookView({
             resolvedValue={resolvedValue}
             selectedAddr={selectedAddr}
             sheetName={sheetName}
+            variant={variant}
           />
           <div className="workbook-footer">
             <div className="sheet-tabs" aria-label="Sheets" role="tablist">

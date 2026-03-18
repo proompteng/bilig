@@ -21,6 +21,7 @@ export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
 interface SheetGridViewProps {
   engine: SpreadsheetEngine;
   sheetName: string;
+  variant?: "playground" | "product";
   selectedAddr: string;
   editorValue: string;
   resolvedValue: string;
@@ -217,6 +218,7 @@ function cellToEditorSeed(snapshot: ReturnType<typeof selectors.selectCellSnapsh
 export function SheetGridView({
   engine,
   sheetName,
+  variant = "playground",
   selectedAddr,
   editorValue,
   resolvedValue,
@@ -550,20 +552,22 @@ export function SheetGridView({
 
   return (
     <div className="sheet-grid-shell" data-testid="sheet-grid-shell">
-      <div className="sheet-grid-banner">
-        <div>
-          <p className="panel-eyebrow">Surface</p>
-          <strong>
-            {MAX_ROWS.toLocaleString()} rows x {MAX_COLS.toLocaleString()} columns
-          </strong>
+      {variant === "playground" ? (
+        <div className="sheet-grid-banner">
+          <div>
+            <p className="panel-eyebrow">Surface</p>
+            <strong>
+              {MAX_ROWS.toLocaleString()} rows x {MAX_COLS.toLocaleString()} columns
+            </strong>
+          </div>
+          <div className="viewport-meta">
+            <span data-testid="selection-chip">
+              {sheetName}!{selectionSummary}
+            </span>
+            <span>{resolvedValue || "∅"}</span>
+          </div>
         </div>
-        <div className="viewport-meta">
-          <span data-testid="selection-chip">
-            {sheetName}!{selectionSummary}
-          </span>
-          <span>{resolvedValue || "∅"}</span>
-        </div>
-      </div>
+      ) : null}
       <div
         className="sheet-grid-host"
         data-testid="sheet-grid"

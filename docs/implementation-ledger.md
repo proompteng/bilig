@@ -15,6 +15,8 @@ This ledger maps acceptance rows to concrete checks so the docs, code, and relea
 | sync-server app exists and is tested | `apps/sync-server/src/__tests__/sync-server.test.ts` |
 | local-server app exists and is tested | `apps/local-server/src/__tests__/local-server.test.ts` |
 | shipping browser app wrapper exists | `apps/web`, `pnpm --filter @bilig/web build` |
+| shipping browser app renders minimal spreadsheet chrome only | `apps/web/src/__tests__/web-shell.test.tsx`, `e2e/tests/web-shell.pw.ts`, `pnpm test`, `pnpm test:browser` |
+| product shell no longer depends on packaged stale workspace output during dev | `apps/web/vite.config.ts`, `apps/web/src/main.tsx` |
 
 ## Open rows
 

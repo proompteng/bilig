@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 interface FormulaBarProps {
+  variant?: "playground" | "product";
   sheetName: string;
   address: string;
   value: string;
@@ -15,6 +16,7 @@ interface FormulaBarProps {
 }
 
 export function FormulaBar({
+  variant = "playground",
   sheetName,
   address,
   value,
@@ -112,17 +114,19 @@ export function FormulaBar({
           {resolvedValue || "∅"}
         </div>
       </div>
-      <div className="formula-actions">
-        <button className="ghost-button" onClick={onCancel} type="button">
-          Cancel
-        </button>
-        <button className="ghost-button" onClick={onClear} type="button">
-          Clear
-        </button>
-        <button onClick={onCommit} type="button">
-          Commit
-        </button>
-      </div>
+      {variant === "playground" ? (
+        <div className="formula-actions">
+          <button className="ghost-button" onClick={onCancel} type="button">
+            Cancel
+          </button>
+          <button className="ghost-button" onClick={onClear} type="button">
+            Clear
+          </button>
+          <button onClick={onCommit} type="button">
+            Commit
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
