@@ -42,14 +42,9 @@ export function createLocalServer(options: LocalServerOptions = {}) {
     const subscriberId = `browser:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     let detach = () => {};
 
-    ws.on("message", async (raw: Buffer | ArrayBuffer | ArrayBufferView) => {
+    ws.on("message", async (raw: unknown) => {
       try {
-        const message =
-          raw instanceof Buffer
-            ? new Uint8Array(raw)
-            : raw instanceof ArrayBuffer
-              ? new Uint8Array(raw)
-              : new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+        const message = toMessageBytes(raw);
         const frame = decodeFrame(message);
         if (frame.kind === "hello" && documentId === null) {
           documentId = frame.documentId;
@@ -78,6 +73,19 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   });
 
   return { app, sessionManager };
+}
+
+function toMessageBytes(raw: unknown): Uint8Array {
+  if (raw instanceof Buffer) {
+    return new Uint8Array(raw);
+  }
+  if (raw instanceof ArrayBuffer) {
+    return new Uint8Array(raw);
+  }
+  if (ArrayBuffer.isView(raw)) {
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  }
+  throw new Error("Unsupported websocket payload");
 }
 
 function normalizeWebSocket(candidate: unknown): { on: (event: string, listener: (...args: unknown[]) => void) => void; send: (data: Uint8Array) => void } {

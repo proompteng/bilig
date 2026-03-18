@@ -9,5 +9,6 @@
     { "path": "../../packages/agent-api" },
     { "path": "../../packages/storage-server" }
   ],
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/__tests__/**"]
 }

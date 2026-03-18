@@ -8,7 +8,12 @@ const alias = {
   "@bilig/formula/program-arena": `${rootDir}packages/formula/src/program-arena.ts`,
   "@bilig/core": `${rootDir}packages/core/src/index.ts`,
   "@bilig/crdt": `${rootDir}packages/crdt/src/index.ts`,
+  "@bilig/binary-protocol": `${rootDir}packages/binary-protocol/src/index.ts`,
+  "@bilig/agent-api": `${rootDir}packages/agent-api/src/index.ts`,
+  "@bilig/storage-browser": `${rootDir}packages/storage-browser/src/index.ts`,
+  "@bilig/storage-server": `${rootDir}packages/storage-server/src/index.ts`,
   "@bilig/wasm-kernel": `${rootDir}packages/wasm-kernel/src/index.ts`,
+  "@bilig/worker-transport": `${rootDir}packages/worker-transport/src/index.ts`,
   "@bilig/renderer": `${rootDir}packages/renderer/src/index.ts`,
   "@bilig/grid": `${rootDir}packages/grid/src/index.ts`
 };
@@ -54,8 +59,29 @@ export default defineWorkspace([
       alias
     },
     test: {
-      name: "playground",
-      include: ["apps/playground/src/**/*.test.ts", "apps/playground/src/**/*.test.tsx"],
+      name: "apps-node",
+      include: [
+        "apps/local-server/src/**/*.test.ts",
+        "apps/local-server/src/**/*.test.tsx",
+        "apps/sync-server/src/**/*.test.ts",
+        "apps/sync-server/src/**/*.test.tsx"
+      ],
+      exclude: ["**/dist/**", "**/build/**"],
+      environment: "node"
+    }
+  },
+  {
+    resolve: {
+      alias
+    },
+    test: {
+      name: "apps-jsdom",
+      include: [
+        "apps/playground/src/**/*.test.ts",
+        "apps/playground/src/**/*.test.tsx",
+        "apps/web/src/**/*.test.ts",
+        "apps/web/src/**/*.test.tsx"
+      ],
       exclude: ["**/dist/**", "**/build/**"],
       environment: "jsdom"
     }
