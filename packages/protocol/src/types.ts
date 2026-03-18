@@ -1,4 +1,4 @@
-import type { ErrorCode, FormulaMode, ValueTag } from "./enums.js";
+import { ErrorCode, type FormulaMode, type ValueTag } from "./enums.js";
 
 export type CellIndex = number;
 export type FormulaId = number;
@@ -13,6 +13,25 @@ export type StringValue = { tag: ValueTag.String; value: string; stringId: numbe
 export type ErrorValue = { tag: ValueTag.Error; code: ErrorCode };
 
 export type CellValue = EmptyValue | NumberValue | BooleanValue | StringValue | ErrorValue;
+
+export function formatErrorCode(code: ErrorCode): string {
+  switch (code) {
+    case ErrorCode.Div0:
+      return "#DIV/0!";
+    case ErrorCode.Ref:
+      return "#REF!";
+    case ErrorCode.Value:
+      return "#VALUE!";
+    case ErrorCode.Name:
+      return "#NAME?";
+    case ErrorCode.NA:
+      return "#N/A";
+    case ErrorCode.Cycle:
+      return "#CYCLE!";
+    default:
+      return "#ERROR!";
+  }
+}
 
 export interface CellSnapshot {
   sheetName: string;

@@ -64,6 +64,7 @@ describe("web shell", () => {
     expect(host.querySelector("[data-testid='preset-strip']")).toBeNull();
     expect(host.querySelector("[data-testid='metrics-panel']")).toBeNull();
     expect(host.querySelector("[data-testid='replica-panel']")).toBeNull();
+    expect(host.querySelector("h1")).toBeNull();
     expect(host.textContent).not.toContain("Excel-scale shell on top of the local-first engine");
 
     await act(async () => {

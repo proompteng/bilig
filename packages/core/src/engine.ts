@@ -743,11 +743,17 @@ export class SpreadsheetEngine {
           const cellIndex = this.ensureCellTracked(sheet.name, cell.address);
           if (cell.formula !== undefined) {
             const compileStarted = performance.now();
-            const compiled = compileFormula(cell.formula);
-            compileMs += performance.now() - compileStarted;
-            const dependencies = this.materializeDependencies(sheet.name, compiled);
-            this.setFormula(cellIndex, cell.formula, compiled, dependencies);
-            formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+            try {
+              const compiled = compileFormula(cell.formula);
+              compileMs += performance.now() - compileStarted;
+              const dependencies = this.materializeDependencies(sheet.name, compiled);
+              this.setFormula(cellIndex, cell.formula, compiled, dependencies);
+              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+            } catch {
+              compileMs += performance.now() - compileStarted;
+              this.setInvalidFormulaValue(cellIndex);
+              changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
+            }
           } else {
             const value = literalToValue(cell.value ?? null, this.strings);
             this.workbook.cellStore.setValue(
@@ -944,14 +950,21 @@ export class SpreadsheetEngine {
           case "setCellFormula": {
             const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
             const compileStarted = performance.now();
-            const compiled = compileFormula(op.formula);
-            this.lastMetrics.compileMs = performance.now() - compileStarted;
-            const dependencies = this.materializeDependencies(op.sheetName, compiled);
-            this.setFormula(cellIndex, op.formula, compiled, dependencies);
-            formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+            try {
+              const compiled = compileFormula(op.formula);
+              this.lastMetrics.compileMs = performance.now() - compileStarted;
+              const dependencies = this.materializeDependencies(op.sheetName, compiled);
+              this.setFormula(cellIndex, op.formula, compiled, dependencies);
+              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+              topologyChanged = true;
+            } catch {
+              this.lastMetrics.compileMs = performance.now() - compileStarted;
+              topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
+              this.setInvalidFormulaValue(cellIndex);
+              changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
+            }
             explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
             this.entityVersions.set(this.entityKeyForOp(op), order);
-            topologyChanged = true;
             break;
           }
           case "setCellFormat": {
@@ -1315,6 +1328,13 @@ export class SpreadsheetEngine {
       this.appendReverseEdge(dependencies.dependencyEntities[index]!, formulaEntity);
     }
     this.scheduleWasmProgramSync();
+  }
+
+  private setInvalidFormulaValue(cellIndex: number): void {
+    this.removeFormula(cellIndex);
+    this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Value));
+    this.workbook.cellStore.flags[cellIndex] =
+      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
   }
 
   private removeFormula(cellIndex: number): boolean {

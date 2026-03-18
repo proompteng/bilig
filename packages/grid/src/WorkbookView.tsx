@@ -24,6 +24,7 @@ interface WorkbookViewProps {
   onCancelEdit(): void;
   onClearCell(): void;
   onPaste(addr: string, values: readonly (readonly string[])[]): void;
+  onSelectionLabelChange?: ((label: string) => void) | undefined;
   ribbon?: React.ReactNode;
   sidebar?: React.ReactNode;
   statusBar?: React.ReactNode;
@@ -50,29 +51,33 @@ export function WorkbookView({
   onCancelEdit,
   onClearCell,
   onPaste,
+  onSelectionLabelChange,
   ribbon,
   sidebar,
   statusBar
 }: WorkbookViewProps) {
+  const showWorkbookHeader = variant !== "product";
   return (
     <section className={variant === "product" ? "workbook-shell workbook-shell-product" : "workbook-shell"}>
       {ribbon ? <div className="workbook-ribbon">{ribbon}</div> : null}
       <div className="workbook-content">
         <div className="workbook-main">
-          <div className="workbook-header">
-            <div>
-              {variant === "playground" ? <p className="panel-eyebrow">Workbook</p> : null}
-              <h1>{workbookName}</h1>
-            </div>
-            {variant === "playground" ? (
-              <div className="workbook-header-meta">
-                <span className="selection-chip">
-                  {sheetName}!{selectedAddr}
-                </span>
-                <span className="surface-chip">Excel-scale surface</span>
+          {showWorkbookHeader ? (
+            <div className="workbook-header">
+              <div>
+                {variant === "playground" ? <p className="panel-eyebrow">Workbook</p> : null}
+                <h1>{workbookName}</h1>
               </div>
-            ) : null}
-          </div>
+              {variant === "playground" ? (
+                <div className="workbook-header-meta">
+                  <span className="selection-chip">
+                    {sheetName}!{selectedAddr}
+                  </span>
+                  <span className="surface-chip">Excel-scale surface</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <FormulaBar
             address={selectedAddr}
             isEditing={isEditing}
@@ -97,6 +102,7 @@ export function WorkbookView({
             onCommitEdit={onCommitEdit}
             onEditorChange={onEditorChange}
             onPaste={onPaste}
+            onSelectionLabelChange={onSelectionLabelChange}
             onSelect={onSelect}
             resolvedValue={resolvedValue}
             selectedAddr={selectedAddr}

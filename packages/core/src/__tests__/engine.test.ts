@@ -31,6 +31,15 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Boolean, value: true });
   });
 
+  it("stores invalid formulas as #VALUE errors instead of throwing", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    expect(() => engine.setCellFormula("Sheet1", "A1", "1+")).not.toThrow();
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("supports cross-sheet references", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

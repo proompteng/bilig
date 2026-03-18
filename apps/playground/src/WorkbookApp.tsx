@@ -14,7 +14,7 @@ import {
 } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { LiteralInput } from "@bilig/protocol";
-import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
+import { MAX_COLS, MAX_ROWS, formatErrorCode } from "@bilig/protocol";
 import { compactRelayEntries, type RelayEntry } from "./relay-queue.js";
 import {
   PLAYGROUND_PRESETS,
@@ -72,7 +72,7 @@ function toResolvedValue(cell: ReturnType<typeof useCell>) {
     case 3:
       return cell.value.value;
     case 4:
-      return `#${cell.value.code}`;
+      return formatErrorCode(cell.value.code);
     default:
       return "";
   }
@@ -180,6 +180,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const mirrorMetrics = useMetrics(mirrorEngine);
   const [editorValue, setEditorValue] = useState("");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
+  const [selectionLabel, setSelectionLabel] = useState(selectedAddr);
   const [replicationReady, setReplicationReady] = useState(false);
   const [syncPaused, setSyncPaused] = useState(false);
   const [relayQueue, setRelayQueue] = useState<RelayEntry[]>([]);
@@ -535,7 +536,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     <>
       <span data-testid="status-mode">{syncPaused ? "Local" : "Live"}</span>
       <span data-testid="status-selection">
-        {selection.sheetName}!{selectedAddr}
+        {selection.sheetName}!{selectionLabel}
       </span>
       <span data-testid="status-sync">{isEditing ? "Editing" : "Ready"}</span>
     </>
@@ -612,11 +613,11 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           {presetError}
         </div>
       ) : null}
-      <WorkbookView
-        editorValue={visibleEditorValue}
-        engine={engine}
-        isEditing={isEditing}
-        isEditingCell={isEditingCell}
+          <WorkbookView
+            editorValue={visibleEditorValue}
+            engine={engine}
+            isEditing={isEditing}
+            isEditingCell={isEditingCell}
         onAddressCommit={(input) => {
           const nextTarget = parseSelectionTarget(input, selection.sheetName);
           if (nextTarget) {
@@ -632,8 +633,9 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           setEditorValue(next);
           setEditingMode((current) => (current === "idle" ? "cell" : current));
         }}
-        onPaste={pasteIntoSelection}
-        onSelect={(addr) => selectAddress(selection.sheetName, addr)}
+            onPaste={pasteIntoSelection}
+            onSelectionLabelChange={setSelectionLabel}
+            onSelect={(addr) => selectAddress(selection.sheetName, addr)}
         onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}
         resolvedValue={resolvedValue}
         ribbon={ribbon}

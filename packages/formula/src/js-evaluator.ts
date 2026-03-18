@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import { ErrorCode, ValueTag, formatErrorCode, type CellValue } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { getBuiltin } from "./builtins.js";
 
@@ -57,7 +57,7 @@ function toStringValue(value: CellValue): string {
     case ValueTag.String:
       return value.value;
     case ValueTag.Error:
-      return `#${value.code}`;
+      return formatErrorCode(value.code);
   }
 }
 

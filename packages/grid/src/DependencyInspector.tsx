@@ -1,5 +1,5 @@
 import React from "react";
-import { FormulaMode, ValueTag, type ExplainCellSnapshot } from "@bilig/protocol";
+import { FormulaMode, ValueTag, formatErrorCode, type ExplainCellSnapshot } from "@bilig/protocol";
 
 function formatValue(snapshot: ExplainCellSnapshot): string {
   switch (snapshot.value.tag) {
@@ -12,7 +12,7 @@ function formatValue(snapshot: ExplainCellSnapshot): string {
     case ValueTag.String:
       return snapshot.value.value;
     case ValueTag.Error:
-      return `#${snapshot.value.code}`;
+      return formatErrorCode(snapshot.value.code);
   }
 }
 

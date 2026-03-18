@@ -48,8 +48,7 @@ input {
 
 .app-shell-product {
   padding: 0;
-  background:
-    linear-gradient(180deg, #e8ece8 0%, #f3f4f6 72px, #f7f7f4 72px, #f7f7f4 100%);
+  background: #f3f4f6;
 }
 
 .loading-banner,
@@ -419,11 +418,10 @@ input {
 
 .workbook-shell-product .sheet-grid-host {
   min-height: 0;
-  height: calc(100vh - 92px);
+  height: calc(100vh - 58px);
   padding-right: 10px;
   padding-bottom: 10px;
-  background:
-    linear-gradient(180deg, #f8faf8 0%, #ffffff 32px);
+  background: #ffffff;
 }
 
 .glide-sheet-grid {

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
-import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
+import { MAX_COLS, MAX_ROWS, ValueTag, formatErrorCode } from "@bilig/protocol";
 import {
   CompactSelection,
   DataEditor,
@@ -27,6 +27,7 @@ interface SheetGridViewProps {
   resolvedValue: string;
   isEditingCell: boolean;
   onSelect(addr: string): void;
+  onSelectionLabelChange?: ((label: string) => void) | undefined;
   onBeginEdit(seed?: string): void;
   onEditorChange(next: string): void;
   onCommitEdit(movement?: EditMovement): void;
@@ -40,6 +41,20 @@ interface VisibleRegionState {
   tx: number;
   ty: number;
 }
+
+interface PointerGeometry {
+  hostBounds: DOMRect;
+  cellWidth: number;
+  cellHeight: number;
+  dataLeft: number;
+  dataTop: number;
+  dataRight: number;
+  dataBottom: number;
+}
+
+type HeaderSelection =
+  | { kind: "column"; index: number }
+  | { kind: "row"; index: number };
 
 const DEFAULT_COLUMN_WIDTH = 120;
 const DEFAULT_ROW_HEIGHT = 28;
@@ -101,6 +116,22 @@ function createRangeSelection(base: GridSelection, anchor: Item, target: Item): 
 }
 
 function formatSelectionSummary(selection: GridSelection, fallbackAddress: string): string {
+  const selectedColumnStart = selection.columns.first();
+  const selectedColumnEnd = selection.columns.last();
+  if (selectedColumnStart !== undefined && selectedColumnEnd !== undefined) {
+    const start = indexToColumn(selectedColumnStart);
+    const end = indexToColumn(selectedColumnEnd);
+    return start === end ? `${start}:${start}` : `${start}:${end}`;
+  }
+
+  const selectedRowStart = selection.rows.first();
+  const selectedRowEnd = selection.rows.last();
+  if (selectedRowStart !== undefined && selectedRowEnd !== undefined) {
+    const start = String(selectedRowStart + 1);
+    const end = String(selectedRowEnd + 1);
+    return start === end ? `${start}:${start}` : `${start}:${end}`;
+  }
+
   const range = selection.current?.range;
   if (!range) {
     return fallbackAddress;
@@ -134,6 +165,30 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
   return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
 }
 
+function createColumnSelection(col: number, row: number): GridSelection {
+  return {
+    current: {
+      cell: [col, row],
+      range: { x: col, y: row, width: 1, height: 1 },
+      rangeStack: []
+    },
+    columns: CompactSelection.fromSingleSelection(col),
+    rows: CompactSelection.empty()
+  };
+}
+
+function createRowSelection(col: number, row: number): GridSelection {
+  return {
+    current: {
+      cell: [col, row],
+      range: { x: col, y: row, width: 1, height: 1 },
+      rangeStack: []
+    },
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.fromSingleSelection(row)
+  };
+}
+
 function cellToGridCell(engine: SpreadsheetEngine, sheetName: string, addr: string): GridCell {
   const snapshot = selectors.selectCellSnapshot(engine, sheetName, addr);
   const rawValue = cellToEditorSeed(snapshot);
@@ -161,14 +216,10 @@ function cellToGridCell(engine: SpreadsheetEngine, sheetName: string, addr: stri
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,
-        data: `#${snapshot.value.code}`,
-        displayData: `#${snapshot.value.code}`,
+        data: formatErrorCode(snapshot.value.code),
+        displayData: formatErrorCode(snapshot.value.code),
         readonly: false,
-        copyData: snapshot.formula ? rawValue : `#${snapshot.value.code}`,
-        themeOverride: {
-          textDark: "#991b1b",
-          bgCell: "#fff4f4"
-        }
+        copyData: snapshot.formula ? rawValue : formatErrorCode(snapshot.value.code)
       };
     case ValueTag.String:
       return {
@@ -204,7 +255,7 @@ function cellToEditorSeed(snapshot: ReturnType<typeof selectors.selectCellSnapsh
       case ValueTag.String:
         return snapshot.value.value;
       case ValueTag.Error:
-        return `#${snapshot.value.code}`;
+        return formatErrorCode(snapshot.value.code);
       default:
         return "";
     }
@@ -224,6 +275,7 @@ export function SheetGridView({
   resolvedValue,
   isEditingCell,
   onSelect,
+  onSelectionLabelChange,
   onBeginEdit,
   onEditorChange,
   onCommitEdit,
@@ -239,6 +291,9 @@ export function SheetGridView({
   const dragAnchorCellRef = useRef<Item | null>(null);
   const dragPointerCellRef = useRef<Item | null>(null);
   const dragViewportRef = useRef<VisibleRegionState | null>(null);
+  const dragGeometryRef = useRef<PointerGeometry | null>(null);
+  const dragDidMoveRef = useRef(false);
+  const postDragSelectionExpiryRef = useRef<number>(0);
   const activeSheetRef = useRef(sheetName);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
@@ -303,6 +358,7 @@ export function SheetGridView({
       pendingPointerCellRef.current = null;
       dragAnchorCellRef.current = null;
       dragPointerCellRef.current = null;
+      dragGeometryRef.current = null;
       return createGridSelection(selectedCell.col, selectedCell.row);
     });
   }, [selectedCell.col, selectedCell.row, sheetName]);
@@ -316,7 +372,12 @@ export function SheetGridView({
     let frame = 0;
     const tick = () => {
       const next = editorRef.current?.getBounds(selectedCell.col, selectedCell.row);
-      setOverlayBounds((current) => (sameBounds(current, next) ? current : next));
+      setOverlayBounds((current) => {
+        if (!next) {
+          return current;
+        }
+        return sameBounds(current, next) ? current : next;
+      });
       frame = window.requestAnimationFrame(tick);
     };
     frame = window.requestAnimationFrame(tick);
@@ -349,46 +410,51 @@ export function SheetGridView({
   );
 
   const resolvePointerCell = useCallback(
-    (clientX: number, clientY: number, region: VisibleRegionState = visibleRegion): Item | null => {
-      const hostBounds = hostRef.current?.getBoundingClientRect();
-      if (hostBounds) {
-        if (clientX >= hostBounds.right - SCROLLBAR_GUTTER || clientY >= hostBounds.bottom - SCROLLBAR_GUTTER) {
-          return null;
-        }
-      }
-
-      const colEnd = Math.min(MAX_COLS - 1, region.range.x + region.range.width - 1);
-      const rowEnd = Math.min(MAX_ROWS - 1, region.range.y + region.range.height - 1);
-      const topLeftBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
-      const bottomRightBounds = editorRef.current?.getBounds(colEnd, rowEnd);
-
-      let dataLeft: number;
-      let dataTop: number;
-      let dataRight: number;
-      let dataBottom: number;
-
-      if (topLeftBounds && bottomRightBounds) {
-        dataLeft = topLeftBounds.x;
-        dataTop = topLeftBounds.y;
-        dataRight = bottomRightBounds.x + bottomRightBounds.width;
-        dataBottom = bottomRightBounds.y + bottomRightBounds.height;
-      } else {
+    (
+      clientX: number,
+      clientY: number,
+      region: VisibleRegionState = visibleRegion,
+      geometry?: PointerGeometry | null
+    ): Item | null => {
+      const activeGeometry = geometry ?? (() => {
+        const hostBounds = hostRef.current?.getBoundingClientRect();
         if (!hostBounds) {
           return null;
         }
+        const firstCellBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
+        const cellWidth = firstCellBounds?.width ?? DEFAULT_COLUMN_WIDTH;
+        const cellHeight = firstCellBounds?.height ?? DEFAULT_ROW_HEIGHT;
+        const dataLeft = firstCellBounds?.x ?? (hostBounds.left + ROW_MARKER_WIDTH);
+        const dataTop = firstCellBounds?.y ?? (hostBounds.top + HEADER_HEIGHT);
+        return {
+          hostBounds,
+          cellWidth,
+          cellHeight,
+          dataLeft,
+          dataTop,
+          dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + (region.range.width * cellWidth)),
+          dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + (region.range.height * cellHeight))
+        };
+      })();
+      if (!activeGeometry) {
+        return null;
+      }
 
-        dataLeft = hostBounds.left + ROW_MARKER_WIDTH;
-        dataTop = hostBounds.top + HEADER_HEIGHT + region.ty;
-        dataRight = Math.min(hostBounds.right, dataLeft + (region.range.width * DEFAULT_COLUMN_WIDTH));
-        dataBottom = Math.min(hostBounds.bottom, dataTop + (region.range.height * DEFAULT_ROW_HEIGHT));
+      const { hostBounds, cellWidth, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
+      if (!hostBounds) {
+        return null;
+      }
+
+      if (clientX >= hostBounds.right - SCROLLBAR_GUTTER || clientY >= hostBounds.bottom - SCROLLBAR_GUTTER) {
+        return null;
       }
 
       if (clientX < dataLeft || clientX >= dataRight || clientY < dataTop || clientY >= dataBottom) {
         return null;
       }
 
-      const col = region.range.x + Math.floor((clientX - dataLeft) / DEFAULT_COLUMN_WIDTH);
-      const row = region.range.y + Math.floor((clientY - dataTop) / DEFAULT_ROW_HEIGHT);
+      const col = region.range.x + Math.floor((clientX - dataLeft) / cellWidth);
+      const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return null;
       }
@@ -398,10 +464,75 @@ export function SheetGridView({
     [visibleRegion]
   );
 
+  const resolvePointerGeometry = useCallback(
+    (region: VisibleRegionState = visibleRegion): PointerGeometry | null => {
+      const hostBounds = hostRef.current?.getBoundingClientRect();
+      if (!hostBounds) {
+        return null;
+      }
+
+      const firstCellBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
+      const cellWidth = firstCellBounds?.width ?? DEFAULT_COLUMN_WIDTH;
+      const cellHeight = firstCellBounds?.height ?? DEFAULT_ROW_HEIGHT;
+      const dataLeft = firstCellBounds?.x ?? (hostBounds.left + ROW_MARKER_WIDTH);
+      const dataTop = firstCellBounds?.y ?? (hostBounds.top + HEADER_HEIGHT);
+      return {
+        hostBounds,
+        cellWidth,
+        cellHeight,
+        dataLeft,
+        dataTop,
+        dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + (region.range.width * cellWidth)),
+        dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + (region.range.height * cellHeight))
+      };
+    },
+    [visibleRegion]
+  );
+
+  const resolveHeaderSelection = useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      region: VisibleRegionState = visibleRegion,
+      geometry?: PointerGeometry | null
+    ): HeaderSelection | null => {
+      const activeGeometry = geometry ?? resolvePointerGeometry(region);
+      if (!activeGeometry) {
+        return null;
+      }
+
+      const { hostBounds, cellWidth, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
+      const headerBottom = dataTop;
+      const rowAreaLeft = hostBounds.left;
+      const rowAreaRight = dataLeft;
+
+      if (clientY >= hostBounds.top && clientY < headerBottom && clientX >= dataLeft && clientX < dataRight) {
+        const col = region.range.x + Math.floor((clientX - dataLeft) / cellWidth);
+        if (col >= 0 && col < MAX_COLS) {
+          return { kind: "column", index: col };
+        }
+      }
+
+      if (clientX >= rowAreaLeft && clientX < rowAreaRight && clientY >= dataTop && clientY < dataBottom) {
+        const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
+        if (row >= 0 && row < MAX_ROWS) {
+          return { kind: "row", index: row };
+        }
+      }
+
+      return null;
+    },
+    [resolvePointerGeometry, visibleRegion]
+  );
+
   const selectionSummary = useMemo(
     () => formatSelectionSummary(gridSelection, selectedAddr),
     [gridSelection, selectedAddr]
   );
+
+  useEffect(() => {
+    onSelectionLabelChange?.(selectionSummary);
+  }, [onSelectionLabelChange, selectionSummary]);
 
   const handleGridKey = useCallback(
     (event: {
@@ -576,14 +707,22 @@ export function SheetGridView({
           pendingPointerCellRef.current = null;
           dragAnchorCellRef.current = null;
           dragPointerCellRef.current = null;
+          dragGeometryRef.current = null;
+          dragDidMoveRef.current = false;
           dragViewportRef.current = null;
+          postDragSelectionExpiryRef.current = 0;
         }}
         onKeyDown={(event) => handleGridKey(event)}
-        onMouseMoveCapture={(event) => {
+        onPointerMoveCapture={(event) => {
           if ((event.buttons & 1) !== 1 || dragAnchorCellRef.current === null) {
             return;
           }
-          const pointerCell = resolvePointerCell(event.clientX, event.clientY, dragViewportRef.current ?? visibleRegion);
+          const pointerCell = resolvePointerCell(
+            event.clientX,
+            event.clientY,
+            dragViewportRef.current ?? visibleRegion,
+            dragGeometryRef.current
+          );
           if (!pointerCell) {
             return;
           }
@@ -592,16 +731,43 @@ export function SheetGridView({
             return;
           }
           dragPointerCellRef.current = pointerCell;
-          setGridSelection(
-            createRangeSelection(
-              createGridSelection(dragAnchorCellRef.current[0], dragAnchorCellRef.current[1]),
-              dragAnchorCellRef.current,
-              pointerCell
-            )
-          );
+          if (pointerCell[0] !== dragAnchorCellRef.current[0] || pointerCell[1] !== dragAnchorCellRef.current[1]) {
+            dragDidMoveRef.current = true;
+            ignoreNextPointerSelectionRef.current = false;
+            setGridSelection(
+              createRangeSelection(
+                createGridSelection(dragAnchorCellRef.current[0], dragAnchorCellRef.current[1]),
+                dragAnchorCellRef.current,
+                pointerCell
+              )
+            );
+          }
         }}
-        onMouseDownCapture={(event) => {
+        onPointerDownCapture={(event) => {
           if (event.button !== 0) {
+            return;
+          }
+          const headerSelection = resolveHeaderSelection(event.clientX, event.clientY);
+          if (headerSelection) {
+            pendingPointerCellRef.current = null;
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
+            dragGeometryRef.current = null;
+            dragDidMoveRef.current = false;
+            dragViewportRef.current = null;
+            postDragSelectionExpiryRef.current = 0;
+            if (isEditingCell) {
+              onCommitEdit();
+            }
+            if (headerSelection.kind === "row") {
+              ignoreNextPointerSelectionRef.current = true;
+              setGridSelection(createRowSelection(selectedCell.col, headerSelection.index));
+              onSelect(formatAddress(headerSelection.index, selectedCell.col));
+              hostRef.current?.focus();
+              window.requestAnimationFrame(() => {
+                ignoreNextPointerSelectionRef.current = false;
+              });
+            }
             return;
           }
           const pointerCell = resolvePointerCell(event.clientX, event.clientY);
@@ -609,40 +775,51 @@ export function SheetGridView({
           pendingPointerCellRef.current = pointerCell;
           dragAnchorCellRef.current = pointerCell;
           dragPointerCellRef.current = pointerCell;
+          dragGeometryRef.current = resolvePointerGeometry(visibleRegion);
+          dragDidMoveRef.current = false;
           dragViewportRef.current = visibleRegion;
           if (pointerCell) {
+            ignoreNextPointerSelectionRef.current = true;
             setGridSelection(createGridSelection(pointerCell[0], pointerCell[1]));
             if (isEditingCell) {
-              onCancelEdit();
+              onCommitEdit();
             }
             onSelect(formatAddress(pointerCell[1], pointerCell[0]));
           }
           hostRef.current?.focus();
         }}
-        onMouseUpCapture={(event) => {
+        onPointerUpCapture={(event) => {
           const anchorCell = dragAnchorCellRef.current;
           if (!anchorCell) {
             return;
           }
 
-          const pointerCell = resolvePointerCell(event.clientX, event.clientY, dragViewportRef.current ?? visibleRegion)
-            ?? dragPointerCellRef.current
-            ?? anchorCell;
+          if (dragDidMoveRef.current) {
+            const pointerCell = resolvePointerCell(
+                event.clientX,
+                event.clientY,
+                dragViewportRef.current ?? visibleRegion,
+                dragGeometryRef.current
+              )
+              ?? dragPointerCellRef.current
+              ?? anchorCell;
 
-          dragPointerCellRef.current = pointerCell;
-          setGridSelection(
-            createRangeSelection(
-              createGridSelection(anchorCell[0], anchorCell[1]),
-              anchorCell,
-              pointerCell
-            )
-          );
-          onSelect(formatAddress(anchorCell[1], anchorCell[0]));
+            const finalSelection = createRangeSelection(
+                createGridSelection(anchorCell[0], anchorCell[1]),
+                anchorCell,
+                pointerCell
+              );
+            postDragSelectionExpiryRef.current = window.performance.now() + 200;
+            setGridSelection(finalSelection);
+            onSelect(formatAddress(anchorCell[1], anchorCell[0]));
+          }
 
           window.requestAnimationFrame(() => {
             pendingPointerCellRef.current = null;
             dragAnchorCellRef.current = null;
             dragPointerCellRef.current = null;
+            dragGeometryRef.current = null;
+            dragDidMoveRef.current = false;
             dragViewportRef.current = null;
           });
         }}
@@ -674,13 +851,51 @@ export function SheetGridView({
             onClearCell();
             return false;
           }}
+          onHeaderClicked={(col) => {
+            ignoreNextPointerSelectionRef.current = true;
+            pendingPointerCellRef.current = null;
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
+            dragGeometryRef.current = null;
+            dragViewportRef.current = null;
+            postDragSelectionExpiryRef.current = 0;
+            if (isEditingCell) {
+              onCommitEdit();
+            }
+            setGridSelection(createColumnSelection(col, selectedCell.row));
+            onSelect(formatAddress(selectedCell.row, col));
+            hostRef.current?.focus();
+            window.requestAnimationFrame(() => {
+              ignoreNextPointerSelectionRef.current = false;
+            });
+          }}
           onGridSelectionChange={(nextSelection) => {
+            if (postDragSelectionExpiryRef.current > 0) {
+              if (window.performance.now() <= postDragSelectionExpiryRef.current) {
+                postDragSelectionExpiryRef.current = 0;
+                return;
+              }
+              postDragSelectionExpiryRef.current = 0;
+            }
             if (ignoreNextPointerSelectionRef.current) {
               ignoreNextPointerSelectionRef.current = false;
               return;
             }
             if (dragViewportRef.current) {
               return;
+            }
+            if (nextSelection.columns.length > 0 || nextSelection.rows.length > 0) {
+              setGridSelection(nextSelection);
+              const nextColumn = nextSelection.columns.first();
+              if (nextColumn !== undefined) {
+                onSelect(formatAddress(selectedCell.row, nextColumn));
+                return;
+              }
+              const nextRow = nextSelection.rows.first();
+              if (nextRow !== undefined) {
+                onSelect(formatAddress(nextRow, selectedCell.col));
+                return;
+              }
             }
             const nextCell = nextSelection.current?.cell;
             if (!nextCell) {
@@ -703,16 +918,16 @@ export function SheetGridView({
             const cell = correctedSelection.current?.cell ?? nextCell;
             setGridSelection(correctedSelection);
             if (isEditingCell) {
-              onCancelEdit();
+              onCommitEdit();
             }
-          onSelect(formatAddress(cell[1], cell[0]));
-        }}
-        onKeyDown={(event) => {
-          if (!isPrintableKey(event) && !isNavigationKey(event.key) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
-            return;
-          }
-          handleGridKey(event);
-        }}
+            onSelect(formatAddress(cell[1], cell[0]));
+          }}
+          onKeyDown={(event) => {
+            if (!isPrintableKey(event) && !isNavigationKey(event.key) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
+              return;
+            }
+            handleGridKey(event);
+          }}
           onPaste={(target, values) => {
             onPaste(formatAddress(target[1], target[0]), values);
             return false;
@@ -721,7 +936,13 @@ export function SheetGridView({
             setVisibleRegion({ range, tx, ty });
           }}
           rowHeight={DEFAULT_ROW_HEIGHT}
-          rowMarkers={{ kind: "number", width: ROW_MARKER_WIDTH }}
+          columnSelect="multi"
+          columnSelectionBlending="additive"
+          columnSelectionMode="multi"
+          rowMarkers={{ kind: "clickable-number", width: ROW_MARKER_WIDTH }}
+          rowSelect="multi"
+          rowSelectionBlending="additive"
+          rowSelectionMode="multi"
           rows={MAX_ROWS}
           smoothScrollX={true}
           smoothScrollY={false}

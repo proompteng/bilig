@@ -1,4 +1,4 @@
-import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
+import { BuiltinId, ErrorCode, ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
 
 type Builtin = (...args: CellValue[]) => CellValue;
@@ -27,7 +27,7 @@ function toStringValue(value: CellValue): string {
     case ValueTag.String:
       return value.value;
     case ValueTag.Error:
-      return `#${ErrorCode[value.code]}`;
+      return formatErrorCode(value.code);
   }
 }
 
