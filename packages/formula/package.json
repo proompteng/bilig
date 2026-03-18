@@ -19,5 +19,35 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
-  }
+  },
+  "description": "Excel-style formula parsing, binding, compilation, and evaluation for bilig.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/formula"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/formula#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "formula",
+    "excel",
+    "parser",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

@@ -15,5 +15,35 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
-  }
+  },
+  "description": "Binary agent API frames and typed workbook session operations for bilig.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/agent-api"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/agent-api#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "agent",
+    "api",
+    "binary",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

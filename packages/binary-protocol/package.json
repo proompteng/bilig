@@ -16,5 +16,35 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
-  }
+  },
+  "description": "Binary frame encoder and decoder for bilig sync, agent, and local transport.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/binary-protocol"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/binary-protocol#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "binary",
+    "protocol",
+    "crdt",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

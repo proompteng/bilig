@@ -20,5 +20,34 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "bench": "tsx src/index.ts"
-  }
+  },
+  "description": "Benchmark scenarios, metrics helpers, and workbook generators for bilig.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/benchmarks"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/benchmarks#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "benchmark",
+    "performance",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

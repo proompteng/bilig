@@ -5,10 +5,23 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../protocol" },
-    { "path": "../formula" },
-    { "path": "../crdt" },
-    { "path": "../wasm-kernel" }
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../formula"
+    },
+    {
+      "path": "../crdt"
+    },
+    {
+      "path": "../wasm-kernel"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
 }

@@ -12,5 +12,35 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
-  }
+  },
+  "description": "Browser persistence primitives for bilig snapshots, queues, and local-first state.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/storage-browser"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/storage-browser#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "storage",
+    "browser",
+    "indexeddb",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

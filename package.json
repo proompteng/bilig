@@ -26,6 +26,7 @@
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "tsx scripts/perf-smoke.mjs",
     "bench:contracts": "tsx scripts/bench-contracts.mjs",
+    "publish:check": "node scripts/clean-package-builds.mjs && pnpm build && node scripts/check-package-publish.mjs",
     "release:check": "node scripts/release-check.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
     "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm coverage && node scripts/coverage-contracts.mjs && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",

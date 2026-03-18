@@ -13,10 +13,42 @@
   "dependencies": {
     "@bilig/core": "workspace:*",
     "@bilig/protocol": "workspace:*",
-    "react": "19.2.4",
     "react-reconciler": "0.33.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
+  },
+  "description": "Declarative React renderer root and workbook DSL for bilig.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/renderer"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/renderer#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "renderer",
+    "react",
+    "reconciler",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

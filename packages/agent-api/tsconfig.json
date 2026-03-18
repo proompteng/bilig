@@ -5,7 +5,14 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../binary-protocol" }
+    {
+      "path": "../binary-protocol"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
 }

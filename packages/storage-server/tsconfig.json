@@ -5,7 +5,14 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../crdt" }
+    {
+      "path": "../crdt"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
 }

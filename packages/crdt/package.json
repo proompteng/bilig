@@ -15,5 +15,35 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
-  }
+  },
+  "description": "Deterministic CRDT batch and replica primitives for bilig workbook synchronization.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/crdt"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/crdt#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "crdt",
+    "sync",
+    "replication",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

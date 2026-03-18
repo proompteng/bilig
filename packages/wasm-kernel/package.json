@@ -18,5 +18,36 @@
   },
   "scripts": {
     "build": "node ./scripts/build.mjs && tsc -p tsconfig.json"
-  }
+  },
+  "description": "AssemblyScript and WebAssembly acceleration kernel for bilig spreadsheet execution.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/wasm-kernel"
+  },
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/wasm-kernel#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "keywords": [
+    "bilig",
+    "wasm",
+    "assemblyscript",
+    "kernel",
+    "spreadsheet"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "build/release.wasm",
+    "README.md",
+    "LICENSE"
+  ]
 }

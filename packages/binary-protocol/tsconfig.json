@@ -5,8 +5,17 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../protocol" },
-    { "path": "../crdt" }
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../crdt"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
 }

@@ -5,7 +5,14 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../protocol" }
+    {
+      "path": "../protocol"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
 }

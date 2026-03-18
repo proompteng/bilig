@@ -4,12 +4,26 @@
     "rootDir": "src",
     "outDir": "dist",
     "allowSyntheticDefaultImports": true,
-    "types": ["node", "react"]
+    "types": [
+      "node",
+      "react"
+    ]
   },
   "references": [
-    { "path": "../protocol" },
-    { "path": "../formula" },
-    { "path": "../core" }
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../formula"
+    },
+    {
+      "path": "../core"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
 }
