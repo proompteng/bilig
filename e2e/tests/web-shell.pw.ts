@@ -55,7 +55,9 @@ test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
 
-  await formulaInput.fill("=1+");
+  await formulaInput.focus();
+  await formulaInput.selectText();
+  await page.keyboard.type("=1+");
   await formulaInput.press("Enter");
 
   await expect(formulaInput).toHaveValue("#VALUE!");
@@ -77,7 +79,9 @@ test("web app commits in-cell string edits when clicking away", async ({ page })
   await grid.click({ position: { x: 60 + 120 + 60, y: 30 + 14 } });
 
   await expect(nameBox).toHaveValue("B1");
-  await nameBox.fill("A1");
+  await nameBox.focus();
+  await nameBox.selectText();
+  await page.keyboard.type("A1");
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("hello");
   await expect(resolvedValue).toHaveText("hello");
