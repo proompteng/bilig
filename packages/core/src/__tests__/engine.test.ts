@@ -123,7 +123,7 @@ describe("SpreadsheetEngine", () => {
     engine.createSheet("Sheet1");
     engine.setCellValue("Sheet1", "A1", 2);
     engine.setCellValue("Sheet1", "A2", 3);
-    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)+ROUND(A1/2)");
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)+ABS(A1/2)");
 
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
@@ -141,7 +141,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getDependencies("Sheet1", "B1").directPrecedents).toEqual(["Sheet1!A1", "Sheet1!A2"]);
   });
 
-  it("uses the wasm fast path for branch formulas", async () => {
+  it("keeps branch formulas on the JS path until wasm semantics catch up", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -150,11 +150,11 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "B1", "IF(A1>0,A1*2,A2-1)");
 
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
-    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+    expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
 
     engine.setCellValue("Sheet1", "A1", 0);
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
-    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+    expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
   });
 
   it("preserves topo order across mixed wasm and js formula runs", async () => {

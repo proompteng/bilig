@@ -95,6 +95,42 @@ describe("js evaluator", () => {
     ).toEqual({ tag: ValueTag.Number, value: 9 });
   });
 
+  it("keeps range shape for lookup/reference builtins", () => {
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-number", value: 3 },
+          { opcode: "push-range", start: "A1", end: "A4", refKind: "cells" },
+          { opcode: "push-number", value: 0 },
+          { opcode: "call", callee: "MATCH", argc: 3 },
+          { opcode: "return" }
+        ],
+        {
+          ...context,
+          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+            if (start === "A1" && end === "A4") {
+              return [num(2), num(3), num(4), num(5)];
+            }
+            return [];
+          }
+        }
+      )
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
+
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-range", start: "A1", end: "B2", refKind: "cells" },
+          { opcode: "push-number", value: 2 },
+          { opcode: "push-number", value: 2 },
+          { opcode: "call", callee: "INDEX", argc: 3 },
+          { opcode: "return" }
+        ],
+        context
+      )
+    ).toEqual({ tag: ValueTag.Empty });
+  });
+
   it("lowers row and column refs into NaN sentinels for the JS path", () => {
     expect(lowerToPlan({ kind: "RowRef", ref: "3" } as FormulaNode)).toEqual([
       { opcode: "push-number", value: Number.NaN },
@@ -136,3 +172,7 @@ describe("js evaluator", () => {
     });
   });
 });
+
+function num(value: number): CellValue {
+  return { tag: ValueTag.Number, value };
+}

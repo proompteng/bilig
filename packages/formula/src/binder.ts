@@ -1,7 +1,7 @@
 import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
-import { getBuiltin } from "./builtins.js";
+import { getBuiltin, hasBuiltin } from "./builtins.js";
 
 export interface BoundFormula {
   ast: FormulaNode;
@@ -9,7 +9,7 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "ROUND", "FLOOR", "CEILING", "MOD", "IF", "AND", "OR", "NOT"]);
+const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "MOD"]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 export function bindFormula(ast: FormulaNode): BoundFormula {
   const deps = new Set<string>();
@@ -71,11 +71,8 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         return node.operator !== "&" && isWasmSafe(node.left) && isWasmSafe(node.right);
       case "CallExpr": {
         const callee = node.callee.toUpperCase();
-        if (!getBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
+        if (!hasBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
           return false;
-        }
-        if (callee === "IF") {
-          return node.args.length === 3 && node.args.every((arg) => isWasmSafe(arg));
         }
         const allowRangeArgs = RANGE_SAFE_BUILTINS.has(callee);
         return node.args.every((arg) => isWasmSafe(arg, allowRangeArgs));
@@ -95,7 +92,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
 }
 
 export function isBuiltinAvailable(name: string): boolean {
-  return getBuiltin(name) !== undefined;
+  return hasBuiltin(name);
 }
 
 export function encodeBuiltin(name: string): BuiltinId {

@@ -1,0 +1,81 @@
+import { describe, expect, it } from "vitest";
+import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import { getLookupBuiltin, type RangeBuiltinArgument } from "../builtins/lookup.js";
+
+const num = (value: number): CellValue => ({ tag: ValueTag.Number, value });
+const text = (value: string): CellValue => ({ tag: ValueTag.String, value, stringId: 0 });
+const bool = (value: boolean): CellValue => ({ tag: ValueTag.Boolean, value });
+const err = (code: ErrorCode): CellValue => ({ tag: ValueTag.Error, code });
+
+function cellRange(values: CellValue[], rows: number, cols: number): RangeBuiltinArgument {
+  return { kind: "range", refKind: "cells", values, rows, cols };
+}
+
+describe("lookup builtins", () => {
+  it("supports MATCH across one-dimensional cell ranges", () => {
+    const MATCH = getLookupBuiltin("MATCH")!;
+    expect(MATCH(text("b"), cellRange([text("a"), text("b"), text("c")], 3, 1), num(0))).toEqual(num(2));
+    expect(MATCH(num(4), cellRange([num(1), num(3), num(5)], 3, 1), num(1))).toEqual(num(2));
+    expect(MATCH(num(3), cellRange([num(5), num(3), num(1)], 3, 1), num(-1))).toEqual(num(2));
+    expect(MATCH(text("z"), cellRange([text("a"), text("b")], 2, 1), num(0))).toEqual(err(ErrorCode.NA));
+    expect(MATCH(text("x"), cellRange([text("a"), text("b"), text("c"), text("d")], 2, 2), num(0))).toEqual(
+      err(ErrorCode.NA)
+    );
+  });
+
+  it("supports INDEX over cell ranges", () => {
+    const INDEX = getLookupBuiltin("INDEX")!;
+    const matrix = cellRange([num(10), num(11), num(20), num(21)], 2, 2);
+    expect(INDEX(matrix, num(2), num(1))).toEqual(num(20));
+    expect(INDEX(cellRange([text("a"), text("b"), text("c")], 1, 3), num(2))).toEqual(text("b"));
+    expect(INDEX(matrix, num(3), num(1))).toEqual(err(ErrorCode.Ref));
+    expect(INDEX(matrix, text("oops"))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("supports exact and approximate VLOOKUP", () => {
+    const VLOOKUP = getLookupBuiltin("VLOOKUP")!;
+    const table = cellRange([text("a"), num(10), text("b"), num(20), text("c"), num(30)], 3, 2);
+
+    expect(VLOOKUP(text("b"), table, num(2), bool(false))).toEqual(num(20));
+    expect(VLOOKUP(text("bb"), table, num(2), bool(true))).toEqual(num(20));
+    expect(VLOOKUP(text("z"), table, num(2), bool(false))).toEqual(err(ErrorCode.NA));
+    expect(VLOOKUP(text("a"), table, num(3), bool(false))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("supports exact XLOOKUP and conditional aggregates", () => {
+    const XLOOKUP = getLookupBuiltin("XLOOKUP")!;
+    const COUNTIF = getLookupBuiltin("COUNTIF")!;
+    const AVERAGEIF = getLookupBuiltin("AVERAGEIF")!;
+
+    expect(
+      XLOOKUP(
+        text("pear"),
+        cellRange([text("apple"), text("pear"), text("plum")], 3, 1),
+        cellRange([num(10), num(20), num(30)], 3, 1)
+      )
+    ).toEqual(num(20));
+
+    expect(
+      XLOOKUP(
+        text("missing"),
+        cellRange([text("apple"), text("pear"), text("plum")], 3, 1),
+        cellRange([num(10), num(20), num(30)], 3, 1),
+        text("fallback")
+      )
+    ).toEqual(text("fallback"));
+
+    expect(
+      COUNTIF(
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0")
+      )
+    ).toEqual(num(3));
+
+    expect(
+      AVERAGEIF(
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0")
+      )
+    ).toEqual(num(4));
+  });
+});

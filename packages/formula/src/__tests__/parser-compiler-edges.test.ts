@@ -41,11 +41,15 @@ describe("formula parser/compiler edges", () => {
       { kind: "bang", value: "!" },
       { kind: "identifier", value: "A1" }
     ]);
+    expect(lexFormula("\"he said \"\"hi\"\"\"").slice(0, 1)).toEqual([
+      { kind: "string", value: "he said \"hi\"" }
+    ]);
     expect(() => lexFormula("@oops")).toThrow("Unexpected token '@'");
   });
 
   it("rejects standalone axis refs and malformed ranges", () => {
     expect(() => parseFormula("'Sheet 1'!1")).toThrow("Row and column references must appear inside a range");
+    expect(() => parseFormula("'Sheet 1'!$1")).toThrow("Row and column references must appear inside a range");
     expect(() => parseFormula("A1:B")).toThrow("Range endpoints must use the same reference type");
     expect(() => parseFormula("A1:2")).toThrow("Range endpoints must use the same reference type");
     expect(() => parseFormula("A1X")).toThrow("Unsupported reference 'A1X'");
@@ -56,6 +60,10 @@ describe("formula parser/compiler edges", () => {
     expect(quotedRange.deps).toEqual(["'My Sheet'!A1:A2"]);
     expect(quotedRange.mode).toBe(FormulaMode.WasmFastPath);
 
+    const anchoredRange = bindFormula(parseFormula("SUM('My Sheet'!$A:$B)"));
+    expect(anchoredRange.deps).toEqual(["'My Sheet'!A:B"]);
+    expect(anchoredRange.mode).toBe(FormulaMode.JsOnly);
+
     expect(bindFormula(parseFormula("\"hello\"")).mode).toBe(FormulaMode.JsOnly);
     expect(bindFormula(parseFormula("A1")).mode).toBe(FormulaMode.JsOnly);
     expect(bindFormula(parseFormula("LEN(A1)")).mode).toBe(FormulaMode.JsOnly);
@@ -63,6 +71,9 @@ describe("formula parser/compiler edges", () => {
 
   it("throws on unsupported wasm builtin encodings and invalid axis compilation", () => {
     expect(isBuiltinAvailable("SUM")).toBe(true);
+    expect(isBuiltinAvailable("MATCH")).toBe(true);
+    expect(isBuiltinAvailable("INDEX")).toBe(true);
+    expect(isBuiltinAvailable("VLOOKUP")).toBe(true);
     expect(isBuiltinAvailable("DOES_NOT_EXIST")).toBe(false);
     expect(() => encodeBuiltin("LEN")).toThrow("Unsupported builtin for wasm: LEN");
     expect(() => compileFormula("A")).toThrow("Row and column references must appear inside a range");

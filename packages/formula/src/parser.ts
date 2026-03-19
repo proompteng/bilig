@@ -44,8 +44,9 @@ export function parseFormula(source: string): FormulaNode {
     return token;
   }
 
-  function parseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode {
-    const upper = ref.toUpperCase();
+  function parseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode | RowRefNode {
+    const normalized = ref.startsWith("$") && isRowReferenceText(ref) ? ref : ref.toUpperCase();
+    const upper = normalized.toUpperCase();
     if (isCellReferenceText(upper)) {
       const result: CellRefNode = { kind: "CellRef", ref: upper };
       if (sheetName !== undefined) {
@@ -55,6 +56,13 @@ export function parseFormula(source: string): FormulaNode {
     }
     if (isColumnReferenceText(upper)) {
       const result: ColumnRefNode = { kind: "ColumnRef", ref: upper };
+      if (sheetName !== undefined) {
+        result.sheetName = sheetName;
+      }
+      return result;
+    }
+    if (isRowReferenceText(normalized)) {
+      const result: RowRefNode = { kind: "RowRef", ref: normalized };
       if (sheetName !== undefined) {
         result.sheetName = sheetName;
       }
@@ -202,7 +210,7 @@ export function parseFormula(source: string): FormulaNode {
         return { kind: "BooleanLiteral", value: upper === "TRUE" };
       }
 
-      return parseReferenceValue(upper);
+      return parseReferenceValue(first);
     }
 
     throw new Error(`Unexpected token ${token.kind}`);

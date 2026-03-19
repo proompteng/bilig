@@ -61,10 +61,11 @@ describe("formula", () => {
     expect(compileFormula("SUM(1:10)").mode).toBe(0);
   });
 
-  it("compiles numeric IF formulas into the wasm-safe path", () => {
+  it("keeps numeric IF formulas on the JS path until wasm semantics catch up", () => {
     const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
-    expect(compiled.mode).toBe(1);
-    expect([...compiled.symbolicRefs]).toEqual(["A1", "A2"]);
+    expect(compiled.mode).toBe(0);
+    expect([...compiled.symbolicRefs]).toEqual([]);
+    expect(compiled.deps).toEqual(["A1", "A2"]);
   });
 
   it("evaluates AST against a context", () => {
@@ -101,6 +102,21 @@ describe("formula", () => {
     expect(ast).toMatchObject({
       kind: "CallExpr",
       args: [{ kind: "RangeRef", refKind: "cols", sheetName: "My Sheet", start: "A", end: "A" }]
+    });
+  });
+
+  it("preserves absolute and mixed references in formulas", () => {
+    const ast = parseFormula("SUM($A1,B$2,$C$3,$4:5,$D:$F)");
+    expect(ast).toMatchObject({
+      kind: "CallExpr",
+      callee: "SUM",
+      args: [
+        { kind: "CellRef", ref: "$A1" },
+        { kind: "CellRef", ref: "B$2" },
+        { kind: "CellRef", ref: "$C$3" },
+        { kind: "RangeRef", refKind: "rows", start: "$4", end: "5" },
+        { kind: "RangeRef", refKind: "cols", start: "$D", end: "$F" }
+      ]
     });
   });
 

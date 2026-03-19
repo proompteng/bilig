@@ -58,6 +58,28 @@ describe("formula builtins", () => {
       { tag: ValueTag.Empty }
     )).toEqual({ tag: ValueTag.String, value: "alpha2", stringId: 0 });
 
+    expect(getBuiltin("LEFT")?.(
+      { tag: ValueTag.String, value: "alpha", stringId: 1 },
+      { tag: ValueTag.Number, value: 3 }
+    )).toEqual({ tag: ValueTag.String, value: "alp", stringId: 0 });
+
+    expect(getBuiltin("IFERROR")?.(
+      { tag: ValueTag.Error, code: ErrorCode.Div0 },
+      { tag: ValueTag.String, value: "fallback", stringId: 1 }
+    )).toEqual({ tag: ValueTag.String, value: "fallback", stringId: 1 });
+
+    expect(getBuiltin("DATE")?.(
+      { tag: ValueTag.Number, value: 2026 },
+      { tag: ValueTag.Number, value: 3 },
+      { tag: ValueTag.Number, value: 15 }
+    )).toEqual({ tag: ValueTag.Number, value: 46096 });
+
+    expect(getBuiltin("AVERAGE")?.(
+      { tag: ValueTag.Number, value: 2 },
+      { tag: ValueTag.Number, value: 4 },
+      { tag: ValueTag.Number, value: 6 }
+    )).toEqual({ tag: ValueTag.Number, value: 4 });
+
     expect(getBuiltinId("sum")).toBe(BuiltinId.Sum);
     expect(getBuiltinId("concat")).toBe(BuiltinId.Concat);
     expect(getBuiltinId("")).toBeUndefined();
@@ -97,14 +119,26 @@ describe("formula builtins", () => {
       tag: ValueTag.Number,
       value: 4
     });
+    expect(getBuiltin("ROUND")?.(
+      { tag: ValueTag.Number, value: 3.141 },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: 3.14 });
     expect(getBuiltin("FLOOR")?.({ tag: ValueTag.Number, value: 3.6 })).toEqual({
       tag: ValueTag.Number,
       value: 3
     });
+    expect(getBuiltin("FLOOR")?.(
+      { tag: ValueTag.Number, value: 7 },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: 6 });
     expect(getBuiltin("CEILING")?.({ tag: ValueTag.Number, value: 3.1 })).toEqual({
       tag: ValueTag.Number,
       value: 4
     });
+    expect(getBuiltin("CEILING")?.(
+      { tag: ValueTag.Number, value: 7 },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: 8 });
 
     expect(getBuiltin("IF")?.(
       { tag: ValueTag.Number, value: 1 },

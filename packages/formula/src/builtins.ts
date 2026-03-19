@@ -1,5 +1,9 @@
 import { BuiltinId, ErrorCode, ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
+import { datetimeBuiltins } from "./builtins/datetime.js";
+import { logicalBuiltins } from "./builtins/logical.js";
+import { lookupBuiltins } from "./builtins/lookup.js";
+import { textBuiltins } from "./builtins/text.js";
 
 type Builtin = (...args: CellValue[]) => CellValue;
 
@@ -47,11 +51,60 @@ function firstError(args: CellValue[]): CellValue | undefined {
   return args.find((arg) => arg.tag === ValueTag.Error);
 }
 
-const builtins: Record<string, Builtin> = {
+function roundToDigits(value: number, digits: number): number {
+  if (digits >= 0) {
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+  const factor = 10 ** -digits;
+  return Math.round(value / factor) * factor;
+}
+
+function roundWith(value: CellValue, digits: CellValue | undefined): CellValue {
+  const numberValue = toNumber(value);
+  const digitValue = digits === undefined ? 0 : toNumber(digits);
+  if (numberValue === undefined || digitValue === undefined) {
+    return { tag: ValueTag.Error, code: ErrorCode.Value };
+  }
+  return numberResult(roundToDigits(numberValue, Math.trunc(digitValue)));
+}
+
+function floorWith(value: CellValue, significance?: CellValue): CellValue {
+  const numberValue = toNumber(value);
+  const significanceValue = significance === undefined ? 1 : toNumber(significance);
+  if (numberValue === undefined || significanceValue === undefined) {
+    return { tag: ValueTag.Error, code: ErrorCode.Value };
+  }
+  if (significanceValue === 0) {
+    return { tag: ValueTag.Error, code: ErrorCode.Div0 };
+  }
+  return numberResult(Math.floor(numberValue / significanceValue) * significanceValue);
+}
+
+function ceilingWith(value: CellValue, significance?: CellValue): CellValue {
+  const numberValue = toNumber(value);
+  const significanceValue = significance === undefined ? 1 : toNumber(significance);
+  if (numberValue === undefined || significanceValue === undefined) {
+    return { tag: ValueTag.Error, code: ErrorCode.Value };
+  }
+  if (significanceValue === 0) {
+    return { tag: ValueTag.Error, code: ErrorCode.Div0 };
+  }
+  return numberResult(Math.ceil(numberValue / significanceValue) * significanceValue);
+}
+
+const scalarBuiltins: Record<string, Builtin> = {
   SUM: (...args) => {
     const error = firstError(args);
     if (error) return error;
     return numberResult(args.reduce((sum, arg) => sum + (toNumber(arg) ?? 0), 0));
+  },
+  AVERAGE: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = args.map(toNumber).filter((value): value is number => value !== undefined);
+    if (numbers.length === 0) return numberResult(0);
+    return numberResult(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
   },
   AVG: (...args) => {
     const error = firstError(args);
@@ -62,28 +115,33 @@ const builtins: Record<string, Builtin> = {
   },
   MIN: (...args) => numberResult(Math.min(...args.map((arg) => toNumber(arg) ?? Number.POSITIVE_INFINITY))),
   MAX: (...args) => numberResult(Math.max(...args.map((arg) => toNumber(arg) ?? Number.NEGATIVE_INFINITY))),
-  COUNT: (...args) => numberResult(args.filter((arg) => toNumber(arg) !== undefined).length),
+  COUNT: (...args) => numberResult(args.filter((arg) => arg.tag === ValueTag.Number || arg.tag === ValueTag.Boolean).length),
   COUNTA: (...args) => numberResult(args.filter((arg) => arg.tag !== ValueTag.Empty).length),
   ABS: (value) => numberResult(Math.abs(toNumber(value) ?? 0)),
-  ROUND: (value) => numberResult(Math.round(toNumber(value) ?? 0)),
-  FLOOR: (value) => numberResult(Math.floor(toNumber(value) ?? 0)),
-  CEILING: (value) => numberResult(Math.ceil(toNumber(value) ?? 0)),
+  ROUND: (value, digits) => roundWith(value, digits),
+  FLOOR: (value, significance) => floorWith(value, significance),
+  CEILING: (value, significance) => ceilingWith(value, significance),
   MOD: (left, right) => {
     const divisor = toNumber(right) ?? 0;
     if (divisor === 0) return { tag: ValueTag.Error, code: ErrorCode.Div0 };
     return numberResult((toNumber(left) ?? 0) % divisor);
   },
-  IF: (condition, truthy, falsy = { tag: ValueTag.Empty }) =>
-    (toNumber(condition) ?? 0) !== 0 ? truthy : falsy,
-  AND: (...args) => booleanResult(args.every((arg) => (toNumber(arg) ?? 0) !== 0)),
-  OR: (...args) => booleanResult(args.some((arg) => (toNumber(arg) ?? 0) !== 0)),
-  NOT: (value) => booleanResult((toNumber(value) ?? 0) === 0),
-  LEN: (value) => numberResult(toStringValue(value).length),
-  CONCAT: (...args) => stringResult(args.map(toStringValue).join(""))
+};
+
+const builtins: Record<string, Builtin> = {
+  ...scalarBuiltins,
+  ...logicalBuiltins,
+  ...textBuiltins,
+  ...datetimeBuiltins
 };
 
 export function getBuiltin(name: string): Builtin | undefined {
   return builtins[name.toUpperCase()];
+}
+
+export function hasBuiltin(name: string): boolean {
+  const upper = name.toUpperCase();
+  return builtins[upper] !== undefined || lookupBuiltins[upper] !== undefined;
 }
 
 export function getBuiltinId(name: string): BuiltinId | undefined {

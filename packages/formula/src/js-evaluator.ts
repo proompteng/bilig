@@ -1,6 +1,8 @@
 import { ErrorCode, ValueTag, formatErrorCode, type CellValue } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
+import { parseRangeAddress } from "./addressing.js";
 import { getBuiltin } from "./builtins.js";
+import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
 
 export interface EvaluationContext {
   sheetName: string;
@@ -23,7 +25,7 @@ export type JsPlanInstruction =
 
 type StackValue =
   | { kind: "scalar"; value: CellValue }
-  | { kind: "range"; values: CellValue[] };
+  | { kind: "range"; values: CellValue[]; refKind: "cells" | "rows" | "cols"; rows: number; cols: number };
 
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty };
@@ -114,6 +116,10 @@ function popArgumentValues(stack: StackValue[]): CellValue[] {
     return [value.value];
   }
   return value.values;
+}
+
+function popArgument(stack: StackValue[]): StackValue {
+  return stack.pop() ?? { kind: "scalar", value: error(ErrorCode.Value) };
 }
 
 function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
@@ -217,15 +223,36 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
         });
         break;
       case "push-range":
-        stack.push({
-          kind: "range",
-          values: context.resolveRange(
+        {
+          const values = context.resolveRange(
             instruction.sheetName ?? context.sheetName,
             instruction.start,
             instruction.end,
             instruction.refKind
-          )
-        });
+          );
+          let rows = values.length;
+          let cols = 1;
+          if (instruction.refKind === "cells") {
+            try {
+              const sheetPrefix = instruction.sheetName ? `${instruction.sheetName}!` : "";
+              const range = parseRangeAddress(`${sheetPrefix}${instruction.start}:${instruction.end}`);
+              if (range.kind === "cells") {
+                rows = range.end.row - range.start.row + 1;
+                cols = range.end.col - range.start.col + 1;
+              }
+            } catch {
+              rows = values.length;
+              cols = 1;
+            }
+          }
+          stack.push({
+            kind: "range",
+            values,
+            refKind: instruction.refKind,
+            rows,
+            cols
+          });
+        }
         break;
       case "unary": {
         const value = popScalar(stack);
@@ -316,6 +343,27 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
         break;
       }
       case "call": {
+        const lookupBuiltin = getLookupBuiltin(instruction.callee);
+        if (lookupBuiltin) {
+          const args: Array<CellValue | RangeBuiltinArgument> = [];
+          for (let index = 0; index < instruction.argc; index += 1) {
+            const rawArg = popArgument(stack);
+            args.unshift(
+              rawArg.kind === "scalar"
+                ? rawArg.value
+                : {
+                    kind: "range",
+                    values: rawArg.values,
+                    refKind: rawArg.refKind,
+                    rows: rawArg.rows,
+                    cols: rawArg.cols
+                  }
+            );
+          }
+          stack.push({ kind: "scalar", value: lookupBuiltin(...args) });
+          break;
+        }
+
         const builtin = getBuiltin(instruction.callee);
         if (!builtin) {
           stack.push({ kind: "scalar", value: error(ErrorCode.Name) });

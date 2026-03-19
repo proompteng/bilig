@@ -51,12 +51,16 @@ export function FormulaBar({
           onBlur={() => setAddressValue(address)}
           onChange={(event) => setAddressValue(event.target.value.toUpperCase())}
           onKeyDown={(event) => {
+            event.stopPropagation();
             if (event.key === "Enter") {
               event.preventDefault();
-              onAddressCommit(addressValue);
+              const nextValue = event.currentTarget.value.toUpperCase();
+              setAddressValue(nextValue);
+              onAddressCommit(nextValue);
             }
             if (event.key === "Escape") {
               event.preventDefault();
+              event.currentTarget.value = address;
               setAddressValue(address);
             }
           }}
@@ -98,6 +102,7 @@ export function FormulaBar({
               }
             }}
             onKeyDown={(event) => {
+              event.stopPropagation();
               if (event.key === "Enter") {
                 event.preventDefault();
                 onCommit();

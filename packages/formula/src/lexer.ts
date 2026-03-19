@@ -50,8 +50,22 @@ export function lexFormula(input: string): Token[] {
 
     if (char === "\"") {
       let end = index + 1;
-      while (end < source.length && source[end] !== "\"") end += 1;
-      tokens.push({ kind: "string", value: source.slice(index + 1, end) });
+      let value = "";
+      while (end < source.length) {
+        const current = source[end]!;
+        const next = source[end + 1];
+        if (current === "\"" && next === "\"") {
+          value += "\"";
+          end += 2;
+          continue;
+        }
+        if (current === "\"") {
+          break;
+        }
+        value += current;
+        end += 1;
+      }
+      tokens.push({ kind: "string", value });
       index = end + 1;
       continue;
     }
