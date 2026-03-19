@@ -5,6 +5,7 @@
 - the product shell now renders through `apps/web` with workbook title, name box, formula bar, worksheet grid, sheet tabs, and status bar only.
 - the default `apps/web` surface no longer renders playground preset chrome, replica panels, or metrics panels.
 - browser smoke now exists for both `apps/playground` and `apps/web`.
+- the product shell is now denser and closer to Excel for the web, including a single visible formula-input row and a flatter footer/status treatment.
 - selection, editing, clipboard, fill handle, frozen panes, and richer spreadsheet affordances still have open correctness or completeness gaps and should not be treated as finished.
 
 ## Target state
@@ -40,6 +41,7 @@ Reference layout:
 - a single dense formula row with name box, `fx`, and current cell input
 - the worksheet grid immediately under the formula row, with no extra informational band
 - sheet tabs and compact status indicators along the bottom edge
+- no visible resolved-value chip in the product formula row
 
 ## Exit gate
 

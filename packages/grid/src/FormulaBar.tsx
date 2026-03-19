@@ -35,6 +35,8 @@ export function FormulaBar({
     setAddressValue(address);
   }, [address, sheetName]);
 
+  const showResolvedValue = variant !== "product";
+
   return (
     <div className="formula-bar" data-testid="formula-bar">
       <div className="name-box-shell">
@@ -108,12 +110,18 @@ export function FormulaBar({
           />
         </div>
       </div>
-      <div className="formula-result-shell">
-        <span className="formula-meta-label">Value</span>
-        <div className="formula-result" data-testid="formula-resolved-value">
-          {resolvedValue || "∅"}
+      {showResolvedValue ? (
+        <div className="formula-result-shell">
+          <span className="formula-meta-label">Value</span>
+          <div className="formula-result" data-testid="formula-resolved-value">
+            {resolvedValue || "∅"}
+          </div>
         </div>
-      </div>
+      ) : (
+        <span className="visually-hidden" data-testid="formula-resolved-value">
+          {resolvedValue || "∅"}
+        </span>
+      )}
       {variant === "playground" ? (
         <div className="formula-actions">
           <button className="ghost-button" onClick={onCancel} type="button">

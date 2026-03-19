@@ -17,6 +17,9 @@ This ledger maps acceptance rows to concrete checks so the docs, code, and relea
 | shipping browser app wrapper exists | `apps/web`, `pnpm --filter @bilig/web build` |
 | shipping browser app renders minimal spreadsheet chrome only | `apps/web/src/__tests__/web-shell.test.tsx`, `e2e/tests/web-shell.pw.ts`, `pnpm test`, `pnpm test:browser` |
 | product shell no longer depends on packaged stale workspace output during dev | `apps/web/vite.config.ts`, `apps/web/src/main.tsx` |
+| Excel-for-web grid oracle is documented | `docs/excel-grid-oracle.md`, `docs/excel-grid-parity-matrix.md` |
+| product formula row no longer shows a visible resolved-value chip | `packages/grid/src/FormulaBar.tsx`, `apps/playground/src/app.css`, `e2e/tests/web-shell.pw.ts` |
+| product row and column header drag selection is bilig-controlled | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
 
 ## Open rows
 

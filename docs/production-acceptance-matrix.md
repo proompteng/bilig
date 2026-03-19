@@ -19,6 +19,7 @@
 ## Spreadsheet product
 
 - Excel shell UX passes browser acceptance
+- Excel-for-web parity oracle and matrix exist
 - worker-first browser runtime is active
 - offline restore and reconnect are proven
 - localhost app-server reconnect and cursor catch-up are proven

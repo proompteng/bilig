@@ -56,11 +56,31 @@ type HeaderSelection =
   | { kind: "column"; index: number }
   | { kind: "row"; index: number };
 
-const DEFAULT_COLUMN_WIDTH = 120;
-const DEFAULT_ROW_HEIGHT = 28;
-const HEADER_HEIGHT = 30;
-const ROW_MARKER_WIDTH = 60;
+const PLAYGROUND_COLUMN_WIDTH = 120;
+const PLAYGROUND_ROW_HEIGHT = 28;
+const PLAYGROUND_HEADER_HEIGHT = 30;
+const PLAYGROUND_ROW_MARKER_WIDTH = 60;
+const PRODUCT_COLUMN_WIDTH = 104;
+const PRODUCT_ROW_HEIGHT = 22;
+const PRODUCT_HEADER_HEIGHT = 24;
+const PRODUCT_ROW_MARKER_WIDTH = 46;
 const SCROLLBAR_GUTTER = 18;
+
+function getGridMetrics(variant: "playground" | "product") {
+  return variant === "product"
+    ? {
+        columnWidth: PRODUCT_COLUMN_WIDTH,
+        rowHeight: PRODUCT_ROW_HEIGHT,
+        headerHeight: PRODUCT_HEADER_HEIGHT,
+        rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH
+      }
+    : {
+        columnWidth: PLAYGROUND_COLUMN_WIDTH,
+        rowHeight: PLAYGROUND_ROW_HEIGHT,
+        headerHeight: PLAYGROUND_HEADER_HEIGHT,
+        rowMarkerWidth: PLAYGROUND_ROW_MARKER_WIDTH
+      };
+}
 
 function createGridSelection(col: number, row: number): GridSelection {
   return {
@@ -177,6 +197,20 @@ function createColumnSelection(col: number, row: number): GridSelection {
   };
 }
 
+function createColumnSliceSelection(startCol: number, endCol: number, row: number): GridSelection {
+  const left = Math.min(startCol, endCol);
+  const right = Math.max(startCol, endCol);
+  return {
+    current: {
+      cell: [startCol, row],
+      range: { x: left, y: row, width: right - left + 1, height: 1 },
+      rangeStack: []
+    },
+    columns: CompactSelection.fromSingleSelection([left, right + 1]),
+    rows: CompactSelection.empty()
+  };
+}
+
 function createRowSelection(col: number, row: number): GridSelection {
   return {
     current: {
@@ -186,6 +220,20 @@ function createRowSelection(col: number, row: number): GridSelection {
     },
     columns: CompactSelection.empty(),
     rows: CompactSelection.fromSingleSelection(row)
+  };
+}
+
+function createRowSliceSelection(col: number, startRow: number, endRow: number): GridSelection {
+  const top = Math.min(startRow, endRow);
+  const bottom = Math.max(startRow, endRow);
+  return {
+    current: {
+      cell: [col, startRow],
+      range: { x: col, y: top, width: 1, height: bottom - top + 1 },
+      rangeStack: []
+    },
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.fromSingleSelection([top, bottom + 1])
   };
 }
 
@@ -290,6 +338,7 @@ export function SheetGridView({
   const pendingPointerCellRef = useRef<Item | null>(null);
   const dragAnchorCellRef = useRef<Item | null>(null);
   const dragPointerCellRef = useRef<Item | null>(null);
+  const dragHeaderSelectionRef = useRef<HeaderSelection | null>(null);
   const dragViewportRef = useRef<VisibleRegionState | null>(null);
   const dragGeometryRef = useRef<PointerGeometry | null>(null);
   const dragDidMoveRef = useRef(false);
@@ -303,15 +352,16 @@ export function SheetGridView({
   const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined);
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName]);
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row));
+  const gridMetrics = useMemo(() => getGridMetrics(variant), [variant]);
 
   const columns = useMemo<readonly GridColumn[]>(
     () =>
       Array.from({ length: MAX_COLS }, (_, index) => ({
         id: indexToColumn(index),
         title: indexToColumn(index),
-        width: DEFAULT_COLUMN_WIDTH
+        width: gridMetrics.columnWidth
       })),
-    []
+    [gridMetrics.columnWidth]
   );
 
   const getCellContent = useCallback(
@@ -422,10 +472,10 @@ export function SheetGridView({
           return null;
         }
         const firstCellBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
-        const cellWidth = firstCellBounds?.width ?? DEFAULT_COLUMN_WIDTH;
-        const cellHeight = firstCellBounds?.height ?? DEFAULT_ROW_HEIGHT;
-        const dataLeft = firstCellBounds?.x ?? (hostBounds.left + ROW_MARKER_WIDTH);
-        const dataTop = firstCellBounds?.y ?? (hostBounds.top + HEADER_HEIGHT);
+        const cellWidth = firstCellBounds?.width ?? gridMetrics.columnWidth;
+        const cellHeight = firstCellBounds?.height ?? gridMetrics.rowHeight;
+        const dataLeft = firstCellBounds?.x ?? (hostBounds.left + gridMetrics.rowMarkerWidth);
+        const dataTop = firstCellBounds?.y ?? (hostBounds.top + gridMetrics.headerHeight);
         return {
           hostBounds,
           cellWidth,
@@ -461,7 +511,7 @@ export function SheetGridView({
 
       return [col, row];
     },
-    [visibleRegion]
+    [gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
   );
 
   const resolvePointerGeometry = useCallback(
@@ -472,10 +522,10 @@ export function SheetGridView({
       }
 
       const firstCellBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
-      const cellWidth = firstCellBounds?.width ?? DEFAULT_COLUMN_WIDTH;
-      const cellHeight = firstCellBounds?.height ?? DEFAULT_ROW_HEIGHT;
-      const dataLeft = firstCellBounds?.x ?? (hostBounds.left + ROW_MARKER_WIDTH);
-      const dataTop = firstCellBounds?.y ?? (hostBounds.top + HEADER_HEIGHT);
+      const cellWidth = firstCellBounds?.width ?? gridMetrics.columnWidth;
+      const cellHeight = firstCellBounds?.height ?? gridMetrics.rowHeight;
+      const dataLeft = firstCellBounds?.x ?? (hostBounds.left + gridMetrics.rowMarkerWidth);
+      const dataTop = firstCellBounds?.y ?? (hostBounds.top + gridMetrics.headerHeight);
       return {
         hostBounds,
         cellWidth,
@@ -486,7 +536,7 @@ export function SheetGridView({
         dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + (region.range.height * cellHeight))
       };
     },
-    [visibleRegion]
+    [gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
   );
 
   const resolveHeaderSelection = useCallback(
@@ -521,6 +571,44 @@ export function SheetGridView({
       }
 
       return null;
+    },
+    [resolvePointerGeometry, visibleRegion]
+  );
+
+  const resolveHeaderSelectionForDrag = useCallback(
+    (
+      kind: HeaderSelection["kind"],
+      clientX: number,
+      clientY: number,
+      region: VisibleRegionState = visibleRegion,
+      geometry?: PointerGeometry | null
+    ): HeaderSelection | null => {
+      const activeGeometry = geometry ?? resolvePointerGeometry(region);
+      if (!activeGeometry) {
+        return null;
+      }
+
+      const { hostBounds, cellWidth, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
+
+      if (kind === "column") {
+        if (clientX < dataLeft || clientX >= dataRight || clientY < hostBounds.top || clientY >= dataBottom) {
+          return null;
+        }
+        const col = region.range.x + Math.floor((clientX - dataLeft) / cellWidth);
+        if (col < 0 || col >= MAX_COLS) {
+          return null;
+        }
+        return { kind: "column", index: col };
+      }
+
+      if (clientY < dataTop || clientY >= dataBottom || clientX < hostBounds.left || clientX >= dataRight) {
+        return null;
+      }
+      const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
+      if (row < 0 || row >= MAX_ROWS) {
+        return null;
+      }
+      return { kind: "row", index: row };
     },
     [resolvePointerGeometry, visibleRegion]
   );
@@ -681,6 +769,31 @@ export function SheetGridView({
     };
   }, [isEditingCell, overlayBounds]);
 
+  const gridTheme = useMemo(
+    () => ({
+      accentColor: "#1f7a43",
+      accentFg: "#ffffff",
+      bgCell: "#ffffff",
+      bgCellMedium: "#f3f5f7",
+      bgHeader: "#f6f7f8",
+      borderColor: "#d5d9de",
+      cellHorizontalPadding: variant === "product" ? 8 : 10,
+      cellVerticalPadding: variant === "product" ? 4 : 6,
+      drilldownBorder: "#d5d9de",
+      editorFontSize: variant === "product" ? "12px" : "13px",
+      fontFamily: '"Aptos","Segoe UI","IBM Plex Sans",sans-serif',
+      headerFontStyle: variant === "product"
+        ? "600 11px Aptos, Segoe UI, IBM Plex Sans, sans-serif"
+        : "600 12px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
+      horizontalBorderColor: "#e5e7eb",
+      lineHeight: variant === "product" ? 1.2 : 1.3,
+      textDark: "#101828",
+      textHeader: "#344054",
+      textLight: "#667085"
+    }),
+    [variant]
+  );
+
   return (
     <div className="sheet-grid-shell" data-testid="sheet-grid-shell">
       {variant === "playground" ? (
@@ -707,6 +820,7 @@ export function SheetGridView({
           pendingPointerCellRef.current = null;
           dragAnchorCellRef.current = null;
           dragPointerCellRef.current = null;
+          dragHeaderSelectionRef.current = null;
           dragGeometryRef.current = null;
           dragDidMoveRef.current = false;
           dragViewportRef.current = null;
@@ -714,7 +828,31 @@ export function SheetGridView({
         }}
         onKeyDown={(event) => handleGridKey(event)}
         onPointerMoveCapture={(event) => {
-          if ((event.buttons & 1) !== 1 || dragAnchorCellRef.current === null) {
+          if ((event.buttons & 1) !== 1) {
+            return;
+          }
+          const headerAnchor = dragHeaderSelectionRef.current;
+          if (headerAnchor) {
+            const nextHeader = resolveHeaderSelectionForDrag(
+              headerAnchor.kind,
+              event.clientX,
+              event.clientY,
+              dragViewportRef.current ?? visibleRegion,
+              dragGeometryRef.current
+            );
+            if (!nextHeader || nextHeader.index === headerAnchor.index) {
+              return;
+            }
+            dragPointerCellRef.current = null;
+            dragDidMoveRef.current = true;
+            setGridSelection(
+              headerAnchor.kind === "column"
+                ? createColumnSliceSelection(headerAnchor.index, nextHeader.index, selectedCell.row)
+                : createRowSliceSelection(selectedCell.col, headerAnchor.index, nextHeader.index)
+            );
+            return;
+          }
+          if (dragAnchorCellRef.current === null) {
             return;
           }
           const pointerCell = resolvePointerCell(
@@ -752,6 +890,7 @@ export function SheetGridView({
             pendingPointerCellRef.current = null;
             dragAnchorCellRef.current = null;
             dragPointerCellRef.current = null;
+            dragHeaderSelectionRef.current = headerSelection;
             dragGeometryRef.current = null;
             dragDidMoveRef.current = false;
             dragViewportRef.current = null;
@@ -759,15 +898,25 @@ export function SheetGridView({
             if (isEditingCell) {
               onCommitEdit();
             }
+            dragGeometryRef.current = resolvePointerGeometry(visibleRegion);
+            dragViewportRef.current = visibleRegion;
             if (headerSelection.kind === "row") {
               ignoreNextPointerSelectionRef.current = true;
-              setGridSelection(createRowSelection(selectedCell.col, headerSelection.index));
+              setGridSelection(createRowSliceSelection(selectedCell.col, headerSelection.index, headerSelection.index));
               onSelect(formatAddress(headerSelection.index, selectedCell.col));
               hostRef.current?.focus();
               window.requestAnimationFrame(() => {
                 ignoreNextPointerSelectionRef.current = false;
               });
+              return;
             }
+            ignoreNextPointerSelectionRef.current = true;
+            setGridSelection(createColumnSliceSelection(headerSelection.index, headerSelection.index, selectedCell.row));
+            onSelect(formatAddress(selectedCell.row, headerSelection.index));
+            hostRef.current?.focus();
+            window.requestAnimationFrame(() => {
+              ignoreNextPointerSelectionRef.current = false;
+            });
             return;
           }
           const pointerCell = resolvePointerCell(event.clientX, event.clientY);
@@ -789,6 +938,36 @@ export function SheetGridView({
           hostRef.current?.focus();
         }}
         onPointerUpCapture={(event) => {
+          const headerAnchor = dragHeaderSelectionRef.current;
+          if (headerAnchor) {
+            const finalHeader = resolveHeaderSelectionForDrag(
+              headerAnchor.kind,
+              event.clientX,
+              event.clientY,
+              dragViewportRef.current ?? visibleRegion,
+              dragGeometryRef.current
+            ) ?? headerAnchor;
+            setGridSelection(
+              headerAnchor.kind === "column"
+                ? createColumnSliceSelection(headerAnchor.index, finalHeader.index, selectedCell.row)
+                : createRowSliceSelection(selectedCell.col, headerAnchor.index, finalHeader.index)
+            );
+            onSelect(
+              headerAnchor.kind === "column"
+                ? formatAddress(selectedCell.row, headerAnchor.index)
+                : formatAddress(headerAnchor.index, selectedCell.col)
+            );
+            window.requestAnimationFrame(() => {
+              pendingPointerCellRef.current = null;
+              dragAnchorCellRef.current = null;
+              dragPointerCellRef.current = null;
+              dragHeaderSelectionRef.current = null;
+              dragGeometryRef.current = null;
+              dragDidMoveRef.current = false;
+              dragViewportRef.current = null;
+            });
+            return;
+          }
           const anchorCell = dragAnchorCellRef.current;
           if (!anchorCell) {
             return;
@@ -818,6 +997,7 @@ export function SheetGridView({
             pendingPointerCellRef.current = null;
             dragAnchorCellRef.current = null;
             dragPointerCellRef.current = null;
+            dragHeaderSelectionRef.current = null;
             dragGeometryRef.current = null;
             dragDidMoveRef.current = false;
             dragViewportRef.current = null;
@@ -835,7 +1015,7 @@ export function SheetGridView({
           getCellContent={getCellContent}
           getCellsForSelection={true}
           gridSelection={gridSelection}
-          headerHeight={HEADER_HEIGHT}
+          headerHeight={gridMetrics.headerHeight}
           height="100%"
           onCellActivated={([col, row]) => {
             const cell = dragAnchorCellRef.current ?? pendingPointerCellRef.current ?? clampCell([col, row]);
@@ -856,6 +1036,7 @@ export function SheetGridView({
             pendingPointerCellRef.current = null;
             dragAnchorCellRef.current = null;
             dragPointerCellRef.current = null;
+            dragHeaderSelectionRef.current = null;
             dragGeometryRef.current = null;
             dragViewportRef.current = null;
             postDragSelectionExpiryRef.current = 0;
@@ -935,36 +1116,18 @@ export function SheetGridView({
           onVisibleRegionChanged={(range, tx, ty) => {
             setVisibleRegion({ range, tx, ty });
           }}
-          rowHeight={DEFAULT_ROW_HEIGHT}
+          rowHeight={gridMetrics.rowHeight}
           columnSelect="multi"
           columnSelectionBlending="additive"
           columnSelectionMode="multi"
-          rowMarkers={{ kind: "clickable-number", width: ROW_MARKER_WIDTH }}
+          rowMarkers={{ kind: "clickable-number", width: gridMetrics.rowMarkerWidth }}
           rowSelect="multi"
           rowSelectionBlending="additive"
           rowSelectionMode="multi"
           rows={MAX_ROWS}
           smoothScrollX={true}
           smoothScrollY={false}
-          theme={{
-            accentColor: "#1f7a43",
-            accentFg: "#ffffff",
-            bgCell: "#ffffff",
-            bgCellMedium: "#f3f5f7",
-            bgHeader: "#f6f7f8",
-            borderColor: "#d5d9de",
-            cellHorizontalPadding: 10,
-            cellVerticalPadding: 6,
-            drilldownBorder: "#d5d9de",
-            editorFontSize: "13px",
-            fontFamily: '"Aptos","Segoe UI","IBM Plex Sans",sans-serif',
-            headerFontStyle: "600 12px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
-            horizontalBorderColor: "#e5e7eb",
-            lineHeight: 1.3,
-            textDark: "#101828",
-            textHeader: "#344054",
-            textLight: "#667085"
-          }}
+          theme={gridTheme}
           trapFocus={false}
           verticalBorder={true}
           width="100%"
