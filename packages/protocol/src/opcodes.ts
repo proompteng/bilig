@@ -45,10 +45,19 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Floor, name: "FLOOR", supportsWasm: true },
   { id: BuiltinId.Ceiling, name: "CEILING", supportsWasm: true },
   { id: BuiltinId.Mod, name: "MOD", supportsWasm: true },
-  { id: BuiltinId.If, name: "IF", supportsWasm: true },
+  { id: BuiltinId.If, name: "IF", supportsWasm: false },
   { id: BuiltinId.And, name: "AND", supportsWasm: true },
   { id: BuiltinId.Or, name: "OR", supportsWasm: true },
   { id: BuiltinId.Not, name: "NOT", supportsWasm: true },
   { id: BuiltinId.Len, name: "LEN", supportsWasm: false },
-  { id: BuiltinId.Concat, name: "CONCAT", supportsWasm: false }
+  { id: BuiltinId.Concat, name: "CONCAT", supportsWasm: false },
+  { id: BuiltinId.IsBlank, name: "ISBLANK", supportsWasm: true },
+  { id: BuiltinId.IsNumber, name: "ISNUMBER", supportsWasm: true },
+  { id: BuiltinId.IsText, name: "ISTEXT", supportsWasm: true },
+  { id: BuiltinId.Date, name: "DATE", supportsWasm: true },
+  { id: BuiltinId.Year, name: "YEAR", supportsWasm: true },
+  { id: BuiltinId.Month, name: "MONTH", supportsWasm: true },
+  { id: BuiltinId.Day, name: "DAY", supportsWasm: true },
+  { id: BuiltinId.Edate, name: "EDATE", supportsWasm: true },
+  { id: BuiltinId.Eomonth, name: "EOMONTH", supportsWasm: true }
 ];

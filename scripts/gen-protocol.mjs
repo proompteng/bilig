@@ -66,7 +66,16 @@ const enumManifest = {
     ["Or", 14],
     ["Not", 15],
     ["Len", 16],
-    ["Concat", 17]
+    ["Concat", 17],
+    ["IsBlank", 18],
+    ["IsNumber", 19],
+    ["IsText", 20],
+    ["Date", 21],
+    ["Year", 22],
+    ["Month", 23],
+    ["Day", 24],
+    ["Edate", 25],
+    ["Eomonth", 26]
   ]
 };
 
@@ -82,12 +91,21 @@ const builtinManifest = [
   { id: "Floor", name: "FLOOR", supportsWasm: true },
   { id: "Ceiling", name: "CEILING", supportsWasm: true },
   { id: "Mod", name: "MOD", supportsWasm: true },
-  { id: "If", name: "IF", supportsWasm: true },
+  { id: "If", name: "IF", supportsWasm: false },
   { id: "And", name: "AND", supportsWasm: true },
   { id: "Or", name: "OR", supportsWasm: true },
   { id: "Not", name: "NOT", supportsWasm: true },
   { id: "Len", name: "LEN", supportsWasm: false },
-  { id: "Concat", name: "CONCAT", supportsWasm: false }
+  { id: "Concat", name: "CONCAT", supportsWasm: false },
+  { id: "IsBlank", name: "ISBLANK", supportsWasm: true },
+  { id: "IsNumber", name: "ISNUMBER", supportsWasm: true },
+  { id: "IsText", name: "ISTEXT", supportsWasm: true },
+  { id: "Date", name: "DATE", supportsWasm: true },
+  { id: "Year", name: "YEAR", supportsWasm: true },
+  { id: "Month", name: "MONTH", supportsWasm: true },
+  { id: "Day", name: "DAY", supportsWasm: true },
+  { id: "Edate", name: "EDATE", supportsWasm: true },
+  { id: "Eomonth", name: "EOMONTH", supportsWasm: true }
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.mjs\n\n`;

@@ -20,6 +20,180 @@ function toNumberExact(tag: u8, value: f64): f64 {
   return NaN;
 }
 
+function truncToInt(tag: u8, value: f64): i32 {
+  const numeric = toNumberExact(tag, value);
+  return isNaN(numeric) ? i32.MIN_VALUE : <i32>numeric;
+}
+
+function floorDiv(a: i32, b: i32): i32 {
+  let quotient = a / b;
+  const remainder = a % b;
+  if (remainder != 0 && ((remainder > 0) != (b > 0))) {
+    quotient -= 1;
+  }
+  return quotient;
+}
+
+function daysFromCivil(year: i32, month: i32, day: i32): i32 {
+  let adjustedYear = year;
+  if (month <= 2) {
+    adjustedYear -= 1;
+  }
+  const era = adjustedYear >= 0 ? adjustedYear / 400 : (adjustedYear - 399) / 400;
+  const yearOfEra = adjustedYear - era * 400;
+  const shiftedMonth = month + (month > 2 ? -3 : 9);
+  const dayOfYear = (153 * shiftedMonth + 2) / 5 + day - 1;
+  const dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
+  return era * 146097 + dayOfEra - 719468;
+}
+
+function civilYear(days: i32): i32 {
+  const shifted = days + 719468;
+  const era = shifted >= 0 ? shifted / 146097 : (shifted - 146096) / 146097;
+  const dayOfEra = shifted - era * 146097;
+  const yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+  const dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+  const monthPrime = (5 * dayOfYear + 2) / 153;
+  const month = monthPrime + (monthPrime < 10 ? 3 : -9);
+  return yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
+}
+
+function civilMonth(days: i32): i32 {
+  const shifted = days + 719468;
+  const era = shifted >= 0 ? shifted / 146097 : (shifted - 146096) / 146097;
+  const dayOfEra = shifted - era * 146097;
+  const yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+  const dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+  const monthPrime = (5 * dayOfYear + 2) / 153;
+  return monthPrime + (monthPrime < 10 ? 3 : -9);
+}
+
+function civilDay(days: i32): i32 {
+  const shifted = days + 719468;
+  const era = shifted >= 0 ? shifted / 146097 : (shifted - 146096) / 146097;
+  const dayOfEra = shifted - era * 146097;
+  const yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+  const dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+  const monthPrime = (5 * dayOfYear + 2) / 153;
+  return dayOfYear - (153 * monthPrime + 2) / 5 + 1;
+}
+
+const EXCEL_EPOCH_DAYS: i32 = -25568;
+
+function excelSerialWhole(tag: u8, value: f64): i32 {
+  const numeric = toNumberExact(tag, value);
+  return isNaN(numeric) ? i32.MIN_VALUE : <i32>Math.floor(numeric);
+}
+
+function daysInExcelMonth(year: i32, month: i32): i32 {
+  if (year == 1900 && month == 2) {
+    return 29;
+  }
+  const start = daysFromCivil(year, month, 1);
+  const nextMonth = month == 12 ? 1 : month + 1;
+  const nextYear = month == 12 ? year + 1 : year;
+  const end = daysFromCivil(nextYear, nextMonth, 1);
+  return end - start;
+}
+
+function excelYearPartFromSerial(tag: u8, value: f64): i32 {
+  const whole = excelSerialWhole(tag, value);
+  if (whole == i32.MIN_VALUE) {
+    return i32.MIN_VALUE;
+  }
+  if (whole == 60) {
+    return 1900;
+  }
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  return civilYear(EXCEL_EPOCH_DAYS + adjustedWhole);
+}
+
+function excelMonthPartFromSerial(tag: u8, value: f64): i32 {
+  const whole = excelSerialWhole(tag, value);
+  if (whole == i32.MIN_VALUE) {
+    return i32.MIN_VALUE;
+  }
+  if (whole == 60) {
+    return 2;
+  }
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  return civilMonth(EXCEL_EPOCH_DAYS + adjustedWhole);
+}
+
+function excelDayPartFromSerial(tag: u8, value: f64): i32 {
+  const whole = excelSerialWhole(tag, value);
+  if (whole == i32.MIN_VALUE) {
+    return i32.MIN_VALUE;
+  }
+  if (whole == 60) {
+    return 29;
+  }
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  return civilDay(EXCEL_EPOCH_DAYS + adjustedWhole);
+}
+
+function excelDateSerial(yearTag: u8, yearValue: f64, monthTag: u8, monthValue: f64, dayTag: u8, dayValue: f64): f64 {
+  let year = truncToInt(yearTag, yearValue);
+  const month = truncToInt(monthTag, monthValue);
+  const day = truncToInt(dayTag, dayValue);
+  if (year == i32.MIN_VALUE || month == i32.MIN_VALUE || day == i32.MIN_VALUE) {
+    return NaN;
+  }
+  if (year >= 0 && year <= 1899) {
+    year += 1900;
+  }
+  if (year < 0 || year > 9999) {
+    return NaN;
+  }
+  if (year == 1900 && month == 2 && day == 29) {
+    return 60;
+  }
+
+  const zeroBasedMonth = month - 1;
+  const monthQuotient = floorDiv(zeroBasedMonth, 12);
+  const normalizedYear = year + monthQuotient;
+  const normalizedMonthZero = zeroBasedMonth - monthQuotient * 12;
+  if (normalizedYear < 0 || normalizedYear > 9999) {
+    return NaN;
+  }
+  const days = daysFromCivil(normalizedYear, normalizedMonthZero + 1, 1) + (day - 1);
+  let serial = days - EXCEL_EPOCH_DAYS;
+  if (days >= daysFromCivil(1900, 3, 1)) {
+    serial += 1;
+  }
+  return <f64>serial;
+}
+
+function addMonthsExcelSerial(tag: u8, value: f64, offsetTag: u8, offsetValue: f64, endOfMonth: bool): f64 {
+  const startYear = excelYearPartFromSerial(tag, value);
+  const startMonth = excelMonthPartFromSerial(tag, value);
+  const startDay = excelDayPartFromSerial(tag, value);
+  const offset = truncToInt(offsetTag, offsetValue);
+  if (startYear == i32.MIN_VALUE || startMonth == i32.MIN_VALUE || startDay == i32.MIN_VALUE || offset == i32.MIN_VALUE) {
+    return NaN;
+  }
+
+  const totalMonths = startYear * 12 + (startMonth - 1) + offset;
+  const shiftedYear = floorDiv(totalMonths, 12);
+  const shiftedMonth = totalMonths - shiftedYear * 12 + 1;
+  if (shiftedYear < 0 || shiftedYear > 9999) {
+    return NaN;
+  }
+
+  const targetDay = endOfMonth ? daysInExcelMonth(shiftedYear, shiftedMonth) : min<i32>(startDay, daysInExcelMonth(shiftedYear, shiftedMonth));
+  if (shiftedYear == 1900 && shiftedMonth == 2 && targetDay == 29) {
+    return 60;
+  }
+  return excelDateSerial(
+    <u8>ValueTag.Number,
+    <f64>shiftedYear,
+    <u8>ValueTag.Number,
+    <f64>shiftedMonth,
+    <u8>ValueTag.Number,
+    <f64>targetDay
+  );
+}
+
 function roundToDigits(value: f64, digits: i32): f64 {
   if (digits >= 0) {
     const factor = Math.pow(10.0, <f64>digits);
@@ -304,6 +478,11 @@ export function applyBuiltin(
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
+  const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+  if (scalarError >= 0) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
   if (builtinId == BuiltinId.Abs && argc == 1) {
     return writeResult(
       base,
@@ -519,6 +698,112 @@ export function applyBuiltin(
       tagStack,
       kindStack
     );
+  }
+
+  if (builtinId == BuiltinId.IsBlank && argc == 0) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 1, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.IsBlank && argc == 1) {
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Boolean,
+      tagStack[base] == ValueTag.Empty ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
+  if (builtinId == BuiltinId.IsNumber && argc == 0) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 0, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.IsNumber && argc == 1) {
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Boolean,
+      tagStack[base] == ValueTag.Number ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
+  if (builtinId == BuiltinId.IsText && argc == 0) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 0, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.IsText && argc == 1) {
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Boolean,
+      tagStack[base] == ValueTag.String ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
+  if (builtinId == BuiltinId.Date && argc == 3) {
+    const serial = excelDateSerial(
+      tagStack[base],
+      valueStack[base],
+      tagStack[base + 1],
+      valueStack[base + 1],
+      tagStack[base + 2],
+      valueStack[base + 2]
+    );
+    if (isNaN(serial)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, serial, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Year && argc == 1) {
+    const year = excelYearPartFromSerial(tagStack[base], valueStack[base]);
+    if (year == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>year, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Month && argc == 1) {
+    const month = excelMonthPartFromSerial(tagStack[base], valueStack[base]);
+    if (month == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>month, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Day && argc == 1) {
+    const day = excelDayPartFromSerial(tagStack[base], valueStack[base]);
+    if (day == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>day, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Edate && argc == 2) {
+    const serial = addMonthsExcelSerial(tagStack[base], valueStack[base], tagStack[base + 1], valueStack[base + 1], false);
+    if (isNaN(serial)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, serial, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Eomonth && argc == 2) {
+    const serial = addMonthsExcelSerial(tagStack[base], valueStack[base], tagStack[base + 1], valueStack[base + 1], true);
+    if (isNaN(serial)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, serial, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);

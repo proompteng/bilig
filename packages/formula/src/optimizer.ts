@@ -2,6 +2,8 @@ import { ValueTag, type CellValue } from "@bilig/protocol";
 import type { CallExprNode, FormulaNode } from "./ast.js";
 import { evaluateAst, type EvaluationContext } from "./js-evaluator.js";
 
+const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND"]);
+
 function cellValueToAst(value: CellValue): FormulaNode | undefined {
   switch (value.tag) {
     case ValueTag.Number:
@@ -94,6 +96,10 @@ function optimizeCall(node: CallExprNode): FormulaNode {
     callee,
     args
   };
+
+  if (VOLATILE_BUILTINS.has(callee)) {
+    return candidate;
+  }
 
   if (args.every(isStaticNode)) {
     const folded = tryEvaluateStatic(candidate);

@@ -71,6 +71,27 @@ describe("formula", () => {
     expect(compileFormula("CEILING(A1,2)").mode).toBe(1);
   });
 
+  it("compiles exact-parity info and date builtins onto the wasm-safe path", () => {
+    expect(compileFormula("ISBLANK()").mode).toBe(1);
+    expect(compileFormula("ISBLANK(A1)").mode).toBe(1);
+    expect(compileFormula("ISNUMBER()").mode).toBe(1);
+    expect(compileFormula("ISNUMBER(A1)").mode).toBe(1);
+    expect(compileFormula("ISTEXT()").mode).toBe(1);
+    expect(compileFormula("ISTEXT(A1)").mode).toBe(1);
+    expect(compileFormula("DATE(2024,2,29)").mode).toBe(1);
+    expect(compileFormula("YEAR(A1)").mode).toBe(1);
+    expect(compileFormula("MONTH(A1)").mode).toBe(1);
+    expect(compileFormula("DAY(A1)").mode).toBe(1);
+    expect(compileFormula("EDATE(A1,1)").mode).toBe(1);
+    expect(compileFormula("EOMONTH(A1,1)").mode).toBe(1);
+  });
+
+  it("keeps volatile date builtins on the JS path", () => {
+    expect(compileFormula("TODAY()").mode).toBe(0);
+    expect(compileFormula("NOW()").mode).toBe(0);
+    expect(compileFormula("RAND()").mode).toBe(0);
+  });
+
   it("keeps row and column aggregate formulas on the JS path", () => {
     expect(compileFormula("SUM(A:A)").mode).toBe(0);
     expect(compileFormula("SUM(1:10)").mode).toBe(0);

@@ -65,5 +65,14 @@ export enum BuiltinId {
   Or = 14,
   Not = 15,
   Len = 16,
-  Concat = 17
+  Concat = 17,
+  IsBlank = 18,
+  IsNumber = 19,
+  IsText = 20,
+  Date = 21,
+  Year = 22,
+  Month = 23,
+  Day = 24,
+  Edate = 25,
+  Eomonth = 26
 }

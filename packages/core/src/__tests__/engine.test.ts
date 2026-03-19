@@ -182,6 +182,81 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
   });
 
+  it("uses the wasm fast path for exact-parity info and date builtins", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+    engine.setCellValue("Sheet1", "A2", true);
+    engine.setCellValue("Sheet1", "A3", "hello");
+    engine.setCellValue("Sheet1", "A4", 45351);
+    engine.setCellValue("Sheet1", "A5", 45351.75);
+    engine.setCellValue("Sheet1", "A6", 60);
+    engine.setCellValue("Sheet1", "A7", 45322);
+    engine.setCellValue("Sheet1", "A8", 45337);
+    engine.setCellValue("Sheet1", "A9", "bad");
+
+    engine.setCellFormula("Sheet1", "B1", "ISBLANK()");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B2", "ISNUMBER()");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B3", "ISTEXT()");
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B4", "ISBLANK(A1)");
+    expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B5", "ISNUMBER(A1)");
+    expect(engine.getCellValue("Sheet1", "B5")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B6", "ISTEXT(A3)");
+    expect(engine.getCellValue("Sheet1", "B6")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B7", "DATE(2024,2,29)");
+    expect(engine.getCellValue("Sheet1", "B7")).toEqual({ tag: ValueTag.Number, value: 45351 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B8", "YEAR(B7)");
+    expect(engine.getCellValue("Sheet1", "B8")).toEqual({ tag: ValueTag.Number, value: 2024 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B9", "MONTH(A5)");
+    expect(engine.getCellValue("Sheet1", "B9")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B10", "DAY(A6)");
+    expect(engine.getCellValue("Sheet1", "B10")).toEqual({ tag: ValueTag.Number, value: 29 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B11", "EDATE(A7,1.9)");
+    expect(engine.getCellValue("Sheet1", "B11")).toEqual({ tag: ValueTag.Number, value: 45351 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B12", "EOMONTH(A8,A2)");
+    expect(engine.getCellValue("Sheet1", "B12")).toEqual({ tag: ValueTag.Number, value: 45382 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B13", "DATE(A9,2,29)");
+    expect(engine.getCellValue("Sheet1", "B13")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B14", "EDATE(A9,1)");
+    expect(engine.getCellValue("Sheet1", "B14")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B15", "EOMONTH(A9,1)");
+    expect(engine.getCellValue("Sheet1", "B15")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
   it("uses the wasm fast path for exact-parity rounding builtins", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
