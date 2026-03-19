@@ -144,54 +144,44 @@ export function parseFormula(source: string): FormulaNode {
 
   function parsePrimary(): FormulaNode {
     const token = current();
+    let result: FormulaNode;
 
     if (token.kind === "number") {
       eat("number");
       if (isRowReferenceText(token.value) && current().kind === "colon") {
-        return { kind: "RowRef", ref: token.value };
+        result = { kind: "RowRef", ref: token.value };
+      } else {
+        result = { kind: "NumberLiteral", value: Number(token.value) };
       }
-      return { kind: "NumberLiteral", value: Number(token.value) };
-    }
-
-    if (token.kind === "string") {
+    } else if (token.kind === "string") {
       eat("string");
-      return { kind: "StringLiteral", value: token.value };
-    }
-
-    if (token.kind === "quotedIdentifier") {
+      result = { kind: "StringLiteral", value: token.value };
+    } else if (token.kind === "quotedIdentifier") {
       const first = eat("quotedIdentifier").value;
       if (current().kind === "bang") {
         eat("bang");
-        return parseSheetQualifiedReference(first);
+        result = parseSheetQualifiedReference(first);
+      } else {
+        result = { kind: "StringLiteral", value: first };
       }
-      return { kind: "StringLiteral", value: first };
-    }
-
-    if (token.kind === "plus" || token.kind === "minus") {
+    } else if (token.kind === "plus" || token.kind === "minus") {
       eat(token.kind);
-      return {
+      result = {
         kind: "UnaryExpr",
         operator: token.kind === "plus" ? "+" : "-",
         argument: parseExpression(PRECEDENCE.caret)
       } satisfies UnaryExprNode;
-    }
-
-    if (token.kind === "lparen") {
+    } else if (token.kind === "lparen") {
       eat("lparen");
-      const inner = parseExpression();
+      result = parseExpression();
       eat("rparen");
-      return inner;
-    }
-
-    if (token.kind === "identifier") {
+    } else if (token.kind === "identifier") {
       const first = eat("identifier").value;
 
       if (current().kind === "bang") {
         eat("bang");
-        return parseSheetQualifiedReference(first);
-      }
-
-      if (current().kind === "lparen") {
+        result = parseSheetQualifiedReference(first);
+      } else if (current().kind === "lparen") {
         eat("lparen");
         const args: FormulaNode[] = [];
         if (current().kind !== "rparen") {
@@ -202,18 +192,30 @@ export function parseFormula(source: string): FormulaNode {
           } while (true);
         }
         eat("rparen");
-        return { kind: "CallExpr", callee: first.toUpperCase(), args } satisfies CallExprNode;
+        result = { kind: "CallExpr", callee: first.toUpperCase(), args } satisfies CallExprNode;
+      } else {
+        const upper = first.toUpperCase();
+        if (upper === "TRUE" || upper === "FALSE") {
+          result = { kind: "BooleanLiteral", value: upper === "TRUE" };
+        } else {
+          result = parseReferenceValue(first);
+        }
       }
-
-      const upper = first.toUpperCase();
-      if (upper === "TRUE" || upper === "FALSE") {
-        return { kind: "BooleanLiteral", value: upper === "TRUE" };
-      }
-
-      return parseReferenceValue(first);
+    } else {
+      throw new Error(`Unexpected token ${token.kind}`);
     }
 
-    throw new Error(`Unexpected token ${token.kind}`);
+    while (current().kind === "percent") {
+      eat("percent");
+      result = {
+        kind: "BinaryExpr",
+        operator: "*",
+        left: result,
+        right: { kind: "NumberLiteral", value: 0.01 }
+      };
+    }
+
+    return result;
   }
 
   function parseExpression(minPrecedence = 0): FormulaNode {

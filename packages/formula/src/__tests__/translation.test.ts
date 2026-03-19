@@ -17,4 +17,20 @@ describe("translateFormulaReferences", () => {
   it("shifts sheet-qualified references without dropping the sheet name", () => {
     expect(translateFormulaReferences("'My Sheet'!A1+Sheet2!B$3", 2, 1)).toBe("'My Sheet'!B3+Sheet2!C$3");
   });
+
+  it("preserves mixed anchors across mixed cell, column, and row ranges", () => {
+    expect(translateFormulaReferences("SUM($A1:B$2,$C:$D,$5:6)", 2, 3)).toBe("SUM($A3:E$2,$C:$D,$5:8)");
+  });
+
+  it("keeps quoted sheet prefixes and nested precedence intact for mixed references", () => {
+    expect(
+      translateFormulaReferences("('My Sheet'!$A1+Sheet2!B$2)*SUM('My Sheet'!$C:$D,Sheet2!3:$4)", 4, 2)
+    ).toBe("('My Sheet'!$A5+Sheet2!D$2)*SUM('My Sheet'!$C:$D,Sheet2!7:$4)");
+  });
+
+  it("throws when a relative axis would move outside worksheet bounds even if the other axis is absolute", () => {
+    expect(() => translateFormulaReferences("$A1+B$1", -1, -2)).toThrow(
+      "Translated reference moved outside worksheet bounds: $A1"
+    );
+  });
 });

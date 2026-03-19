@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
 import { excelTop50StarterFixtures, type ExcelExpectedValue } from "../../../excel-fixtures/src/index.js";
+import { excelDateTimeFixtureSuite } from "../../../excel-fixtures/src/datetime-fixtures.js";
 import { formatAddress, parseRangeAddress } from "../addressing.js";
 import { compileFormula, evaluatePlan } from "../index.js";
 import { getCompatibilityEntry } from "../compatibility.js";
@@ -16,41 +17,82 @@ const executableFixtures = excelTop50StarterFixtures.filter((fixture) => {
   );
 });
 
+const executableDateTimeFixtures = (excelDateTimeFixtureSuite.cases ?? []).filter((fixture) => {
+  const entry = getCompatibilityEntry(fixture.id);
+  const hasVolatileCall = /\b(TODAY|NOW|RAND)\s*\(/i.test(fixture.formula);
+  return (
+    entry !== undefined &&
+    (entry.status === "implemented-js" || entry.status === "implemented-js-and-wasm") &&
+    fixture.family !== "volatile" &&
+    !hasVolatileCall
+  );
+});
+
 describe("excel fixture harness", () => {
   it("executes implemented Top 50 starter fixtures through the JS evaluator", () => {
     for (const fixture of executableFixtures) {
-      expect(fixture.outputs).toHaveLength(1);
-      const compiled = compileFormula(fixture.formula);
-      const values = new Map<string, CellValue>();
-      for (const input of fixture.inputs) {
-        values.set(input.address.toUpperCase(), literalToCellValue(input.input));
-      }
-
-      const value = evaluatePlan(compiled.jsPlan, {
-        sheetName: fixture.sheetName ?? "Sheet1",
-        resolveCell: (_sheetName, address) => values.get(address.toUpperCase()) ?? { tag: ValueTag.Empty },
-        resolveRange: (_sheetName, start, end, refKind) => {
-          if (refKind !== "cells") {
-            return [];
-          }
-          const range = parseRangeAddress(`${start}:${end}`);
-          if (range.kind !== "cells") {
-            return [];
-          }
-          const output: CellValue[] = [];
-          for (let row = range.start.row; row <= range.end.row; row += 1) {
-            for (let col = range.start.col; col <= range.end.col; col += 1) {
-              output.push(values.get(formatAddress(row, col).toUpperCase()) ?? { tag: ValueTag.Empty });
-            }
-          }
-          return output;
-        }
-      });
-
-      expect(value, fixture.id).toEqual(expectedValueToCellValue(fixture.outputs[0]!.expected));
+      expect(evaluateFixture(fixture), fixture.id).toEqual(expectedValueToCellValue(fixture.outputs[0]!.expected));
     }
   });
+
+  it("executes implemented date-time edge fixtures through the JS evaluator", () => {
+    for (const fixture of executableDateTimeFixtures) {
+      expect(evaluateFixture(fixture), fixture.id).toEqual(expectedValueToCellValue(fixture.outputs[0]!.expected));
+    }
+  });
+
+  it("executes implemented volatile RAND fixtures deterministically through the JS evaluator", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.625);
+    const randFixture = excelTop50StarterFixtures.find((fixture) => fixture.id === "volatile:rand-basic");
+
+    expect(randFixture).toBeDefined();
+    expect(getCompatibilityEntry("volatile:rand-basic")?.status).toBe("implemented-js");
+
+    const compiled = compileFormula(randFixture!.formula);
+    const value = evaluatePlan(compiled.jsPlan, {
+      sheetName: randFixture!.sheetName ?? "Sheet1",
+      resolveCell: () => ({ tag: ValueTag.Empty }),
+      resolveRange: () => []
+    });
+
+    expect(randomSpy).toHaveBeenCalled();
+    expect(value).toEqual(expectedValueToCellValue(randFixture!.outputs[0]!.expected));
+  });
 });
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function evaluateFixture(fixture: { formula: string; inputs: { address: string; input: LiteralInput }[]; outputs: { expected: ExcelExpectedValue }[]; sheetName?: string }): CellValue {
+  expect(fixture.outputs).toHaveLength(1);
+  const compiled = compileFormula(fixture.formula);
+  const values = new Map<string, CellValue>();
+  for (const input of fixture.inputs) {
+    values.set(input.address.toUpperCase(), literalToCellValue(input.input));
+  }
+
+  return evaluatePlan(compiled.jsPlan, {
+    sheetName: fixture.sheetName ?? "Sheet1",
+    resolveCell: (_sheetName, address) => values.get(address.toUpperCase()) ?? { tag: ValueTag.Empty },
+    resolveRange: (_sheetName, start, end, refKind) => {
+      if (refKind !== "cells") {
+        return [];
+      }
+      const range = parseRangeAddress(`${start}:${end}`);
+      if (range.kind !== "cells") {
+        return [];
+      }
+      const output: CellValue[] = [];
+      for (let row = range.start.row; row <= range.end.row; row += 1) {
+        for (let col = range.start.col; col <= range.end.col; col += 1) {
+          output.push(values.get(formatAddress(row, col).toUpperCase()) ?? { tag: ValueTag.Empty });
+        }
+      }
+      return output;
+    }
+  });
+}
 
 function literalToCellValue(input: LiteralInput): CellValue {
   if (input === null) {

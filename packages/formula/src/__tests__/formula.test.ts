@@ -44,6 +44,12 @@ describe("formula", () => {
     expect(compiled.constNumberOffset).toBe(0);
   });
 
+  it("compiles postfix percent arithmetic through the existing numeric pipeline", () => {
+    const compiled = compileFormula("A1*10%");
+    expect(compiled.mode).toBe(1);
+    expect([...compiled.symbolicRefs]).toEqual(["A1"]);
+  });
+
   it("keeps pass-through cell refs on the JS path", () => {
     const compiled = compileFormula("A1");
     expect(compiled.mode).toBe(0);
@@ -56,16 +62,39 @@ describe("formula", () => {
     expect([...compiled.symbolicRanges]).toEqual(["A1:B2"]);
   });
 
+  it("compiles exact-parity logical and rounding builtins onto the wasm-safe path", () => {
+    expect(compileFormula("AND(A1,TRUE)").mode).toBe(1);
+    expect(compileFormula("OR(A1,FALSE)").mode).toBe(1);
+    expect(compileFormula("NOT(A1)").mode).toBe(1);
+    expect(compileFormula("ROUND(A1,1)").mode).toBe(1);
+    expect(compileFormula("FLOOR(A1,2)").mode).toBe(1);
+    expect(compileFormula("CEILING(A1,2)").mode).toBe(1);
+  });
+
   it("keeps row and column aggregate formulas on the JS path", () => {
     expect(compileFormula("SUM(A:A)").mode).toBe(0);
     expect(compileFormula("SUM(1:10)").mode).toBe(0);
   });
 
-  it("keeps numeric IF formulas on the JS path until wasm semantics catch up", () => {
+  it("keeps IF on the JS path while promoting exact-parity logical and rounding formulas", () => {
     const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
     expect(compiled.mode).toBe(0);
-    expect([...compiled.symbolicRefs]).toEqual([]);
-    expect(compiled.deps).toEqual(["A1", "A2"]);
+
+    expect(compileFormula("AND(A1,TRUE)").mode).toBe(1);
+    expect(compileFormula("OR(A1,FALSE)").mode).toBe(1);
+    expect(compileFormula("NOT(A1)").mode).toBe(1);
+    expect(compileFormula("ROUND(A1,-1)").mode).toBe(1);
+    expect(compileFormula("FLOOR(A1,2)").mode).toBe(1);
+    expect(compileFormula("CEILING(A1,2)").mode).toBe(1);
+  });
+
+  it("keeps unsupported candidate builtin arities on the JS path", () => {
+    expect(compileFormula("IF(A1,1)").mode).toBe(0);
+    expect(compileFormula("NOT(A1,A2)").mode).toBe(0);
+    expect(compileFormula("AND()").mode).toBe(0);
+    expect(compileFormula("ROUND(A1,A2,A3)").mode).toBe(0);
+    expect(compileFormula("FLOOR(A1,A2,A3)").mode).toBe(0);
+    expect(compileFormula("CEILING(A1,A2,A3)").mode).toBe(0);
   });
 
   it("evaluates AST against a context", () => {
@@ -81,6 +110,9 @@ describe("formula", () => {
     const value = evaluateAst(ast, context);
     expect(value).toEqual({ tag: ValueTag.Number, value: 5 });
     expect(evaluatePlan(compileFormula("A1+A2").jsPlan, context)).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(evaluateAst(parseFormula("10%"), context)).toEqual({ tag: ValueTag.Number, value: 0.1 });
+    expect(evaluateAst(parseFormula("(A1+A2)%"), context)).toEqual({ tag: ValueTag.Number, value: 0.05 });
+    expect(evaluatePlan(compileFormula("A1*10%").jsPlan, context)).toEqual({ tag: ValueTag.Number, value: 0.2 });
   });
 
   it("parses quoted sheet references inside formulas", () => {

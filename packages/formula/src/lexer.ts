@@ -13,6 +13,7 @@ export type TokenKind =
   | "star"
   | "slash"
   | "caret"
+  | "percent"
   | "ampersand"
   | "eq"
   | "neq"
@@ -128,6 +129,7 @@ export function lexFormula(input: string): Token[] {
       "*": "star",
       "/": "slash",
       "^": "caret",
+      "%": "percent",
       "&": "ampersand",
       "=": "eq",
       ">": "gt",

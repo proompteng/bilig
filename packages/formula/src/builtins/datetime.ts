@@ -3,6 +3,7 @@ import type { CellValue } from "@bilig/protocol";
 
 export type Builtin = (...args: CellValue[]) => CellValue;
 export type DateTimeProvider = () => Date;
+export type RandomProvider = () => number;
 
 export interface ExcelDateParts {
   year: number;
@@ -246,6 +247,26 @@ export function createNowBuiltin(now: DateTimeProvider = () => new Date()): Buil
   };
 }
 
+export function createRandBuiltin(random: RandomProvider = () => Math.random()): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length > 0) {
+      return valueError();
+    }
+
+    const next = random();
+    if (!Number.isFinite(next)) {
+      return valueError();
+    }
+
+    const bounded = Math.min(Math.max(next, 0), 1 - Number.EPSILON);
+    return numberResult(bounded);
+  };
+}
+
 export function createEdateBuiltin(): Builtin {
   return (startDate, months) => {
     const error = firstError([startDate, months]);
@@ -295,6 +316,7 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   DAY: createDatePartBuiltin("day"),
   TODAY: createTodayBuiltin(),
   NOW: createNowBuiltin(),
+  RAND: createRandBuiltin(),
   EDATE: createEdateBuiltin(),
   EOMONTH: createEomonthBuiltin()
 };

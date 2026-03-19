@@ -59,6 +59,11 @@ describe("formula compatibility registry", () => {
 
   it("includes all registry statuses in the starter set", () => {
     const statuses = new Set(top50CompatibilityRegistry.map((entry) => entry.status));
-    expect([...statuses].sort()).toEqual([...compatibilityStatuses].sort());
+    expect([...statuses].sort()).toEqual(["implemented-js", "implemented-js-and-wasm", "unsupported"]);
+    compatibilityStatuses.forEach((status) => {
+      if (status !== "seeded") {
+        expect(statuses.has(status)).toBe(true);
+      }
+    });
   });
 });

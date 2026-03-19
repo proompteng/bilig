@@ -41,6 +41,10 @@ describe("formula parser/compiler edges", () => {
       { kind: "bang", value: "!" },
       { kind: "identifier", value: "A1" }
     ]);
+    expect(lexFormula("10%").slice(0, 2)).toEqual([
+      { kind: "number", value: "10" },
+      { kind: "percent", value: "%" }
+    ]);
     expect(lexFormula("\"he said \"\"hi\"\"\"").slice(0, 1)).toEqual([
       { kind: "string", value: "he said \"hi\"" }
     ]);
@@ -90,6 +94,27 @@ describe("formula parser/compiler edges", () => {
       { opcode: "push-string", value: "hello" },
       { opcode: "return" }
     ]);
+  });
+
+  it("parses postfix percent as arithmetic scaling", () => {
+    expect(parseFormula("10%")).toEqual({
+      kind: "BinaryExpr",
+      operator: "*",
+      left: { kind: "NumberLiteral", value: 10 },
+      right: { kind: "NumberLiteral", value: 0.01 }
+    });
+
+    expect(parseFormula("(A1+A2)%")).toEqual({
+      kind: "BinaryExpr",
+      operator: "*",
+      left: {
+        kind: "BinaryExpr",
+        operator: "+",
+        left: { kind: "CellRef", ref: "A1" },
+        right: { kind: "CellRef", ref: "A2" }
+      },
+      right: { kind: "NumberLiteral", value: 0.01 }
+    });
   });
 
   it("evaluates lowered plans across comparison, unary, jump, and builtin error paths", () => {

@@ -3,6 +3,7 @@ import { ErrorCode, ValueTag } from "@bilig/protocol";
 import {
   addMonthsToExcelDate,
   createNowBuiltin,
+  createRandBuiltin,
   createTodayBuiltin,
   datetimeBuiltins,
   endOfMonthExcelDate,
@@ -83,6 +84,22 @@ describe("datetime builtins", () => {
     expect(NOW({ tag: ValueTag.Error, code: ErrorCode.NA })).toEqual({ tag: ValueTag.Error, code: ErrorCode.NA });
   });
 
+  it("supports RAND with Excel-style numeric bounds and injectable randomness", () => {
+    const RAND = createRandBuiltin(() => 0.625);
+    const highRAND = createRandBuiltin(() => 2);
+    const lowRAND = createRandBuiltin(() => -0.5);
+    const invalidRAND = createRandBuiltin(() => Number.NaN);
+
+    expect(RAND()).toEqual({ tag: ValueTag.Number, value: 0.625 });
+    expect(highRAND()).toEqual({ tag: ValueTag.Number, value: 1 - Number.EPSILON });
+    expect(lowRAND()).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(invalidRAND()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(datetimeBuiltins.RAND({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value
+    });
+  });
+
   it("supports EDATE month shifting with end-of-month clamping", () => {
     expect(addMonthsToExcelDate(45322, 1)).toBe(45351);
     expect(addMonthsToExcelDate(45351, -1)).toBe(45320);
@@ -119,16 +136,60 @@ describe("datetime builtins", () => {
     expect(excelDateTimeFixtureSuite.cases).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          id: "date-time:serial-addition",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 45299 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:date-empty-year-coercion",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 1 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:date-text-error",
+          outputs: [{ address: "A2", expected: { kind: "error", code: ErrorCode.Value, display: "#VALUE!" } }]
+        }),
+        expect.objectContaining({
           id: "date-time:date-constructor-leap-day",
           formula: "=DATE(2024,2,29)"
+        }),
+        expect.objectContaining({
+          id: "date-time:year-boolean-coercion",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 1900 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:month-text-error",
+          outputs: [{ address: "A2", expected: { kind: "error", code: ErrorCode.Value, display: "#VALUE!" } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:day-leap-bug-serial",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 29 } }]
         }),
         expect.objectContaining({
           id: "date-time:edate-month-shift",
           outputs: [{ address: "A2", expected: { kind: "number", value: 45351 } }]
         }),
         expect.objectContaining({
+          id: "date-time:edate-boolean-coercion",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 32 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:edate-text-error",
+          outputs: [{ address: "A2", expected: { kind: "error", code: ErrorCode.Value, display: "#VALUE!" } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:eomonth-boolean-coercion",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 60 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:eomonth-text-error",
+          outputs: [{ address: "A3", expected: { kind: "error", code: ErrorCode.Value, display: "#VALUE!" } }]
+        }),
+        expect.objectContaining({
           id: "volatile:today-captured-utc",
           outputs: [{ address: "A1", expected: { kind: "number", value: 46100 } }]
+        }),
+        expect.objectContaining({
+          id: "volatile:rand-captured",
+          outputs: [{ address: "A1", expected: { kind: "number", value: 0.625 } }]
         })
       ])
     );

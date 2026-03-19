@@ -9,8 +9,40 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const WASM_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA", "ABS", "MOD"]);
+const WASM_SAFE_BUILTINS = new Set([
+  "SUM",
+  "AVG",
+  "MIN",
+  "MAX",
+  "COUNT",
+  "COUNTA",
+  "ABS",
+  "MOD",
+  "AND",
+  "OR",
+  "NOT",
+  "ROUND",
+  "FLOOR",
+  "CEILING"
+]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
+
+function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
+  switch (callee) {
+    case "NOT":
+      return argc === 1;
+    case "ROUND":
+    case "FLOOR":
+    case "CEILING":
+      return argc === 1 || argc === 2;
+    case "AND":
+    case "OR":
+      return argc >= 1;
+    default:
+      return true;
+  }
+}
+
 export function bindFormula(ast: FormulaNode): BoundFormula {
   const deps = new Set<string>();
 
@@ -72,6 +104,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "CallExpr": {
         const callee = node.callee.toUpperCase();
         if (!hasBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
+          return false;
+        }
+        if (!isWasmSafeBuiltinArity(callee, node.args.length)) {
           return false;
         }
         const allowRangeArgs = RANGE_SAFE_BUILTINS.has(callee);

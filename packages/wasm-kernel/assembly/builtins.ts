@@ -14,6 +14,21 @@ function toNumberOrZero(tag: u8, value: f64): f64 {
   return isNaN(numeric) ? 0 : numeric;
 }
 
+function toNumberExact(tag: u8, value: f64): f64 {
+  if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
+  if (tag == ValueTag.Empty) return 0;
+  return NaN;
+}
+
+function roundToDigits(value: f64, digits: i32): f64 {
+  if (digits >= 0) {
+    const factor = Math.pow(10.0, <f64>digits);
+    return Math.round(value * factor) / factor;
+  }
+  const factor = Math.pow(10.0, <f64>-digits);
+  return Math.round(value / factor) * factor;
+}
+
 function writeResult(
   base: i32,
   kind: u8,
@@ -77,6 +92,19 @@ function rangeSupportedScalarOnly(base: i32, argc: i32, kindStack: Uint8Array): 
     }
   }
   return true;
+}
+
+function coerceLogical(tag: u8, value: f64): i32 {
+  if (tag == ValueTag.Boolean || tag == ValueTag.Number) {
+    return value != 0 ? 1 : 0;
+  }
+  if (tag == ValueTag.Empty) {
+    return 0;
+  }
+  if (tag == ValueTag.Error) {
+    return -(<i32>value) - 1;
+  }
+  return -(<i32>ErrorCode.Value) - 1;
 }
 
 export function applyBuiltin(
@@ -290,11 +318,33 @@ export function applyBuiltin(
   }
 
   if (builtinId == BuiltinId.Round && argc == 1) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    if (isNaN(numeric)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
     return writeResult(
       base,
       STACK_KIND_SCALAR,
       <u8>ValueTag.Number,
-      Math.round(toNumberOrZero(tagStack[base], valueStack[base])),
+      roundToDigits(numeric, 0),
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
+  if (builtinId == BuiltinId.Round && argc == 2) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    const digits = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    if (isNaN(numeric) || isNaN(digits)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      roundToDigits(numeric, <i32>digits),
       rangeIndexStack,
       valueStack,
       tagStack,
@@ -303,11 +353,36 @@ export function applyBuiltin(
   }
 
   if (builtinId == BuiltinId.Floor && argc == 1) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    if (isNaN(numeric)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
     return writeResult(
       base,
       STACK_KIND_SCALAR,
       <u8>ValueTag.Number,
-      Math.floor(toNumberOrZero(tagStack[base], valueStack[base])),
+      Math.floor(numeric),
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
+  if (builtinId == BuiltinId.Floor && argc == 2) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    const significance = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    if (isNaN(numeric) || isNaN(significance)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    if (significance == 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      Math.floor(numeric / significance) * significance,
       rangeIndexStack,
       valueStack,
       tagStack,
@@ -316,11 +391,36 @@ export function applyBuiltin(
   }
 
   if (builtinId == BuiltinId.Ceiling && argc == 1) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    if (isNaN(numeric)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
     return writeResult(
       base,
       STACK_KIND_SCALAR,
       <u8>ValueTag.Number,
-      Math.ceil(toNumberOrZero(tagStack[base], valueStack[base])),
+      Math.ceil(numeric),
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
+  if (builtinId == BuiltinId.Ceiling && argc == 2) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    const significance = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    if (isNaN(numeric) || isNaN(significance)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    if (significance == 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      Math.ceil(numeric / significance) * significance,
       rangeIndexStack,
       valueStack,
       tagStack,
@@ -346,33 +446,74 @@ export function applyBuiltin(
   }
 
   if (builtinId == BuiltinId.And) {
-    let result = 1.0;
+    if (argc == 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
     for (let index = 0; index < argc; index++) {
-      if (toNumberOrZero(tagStack[base + index], valueStack[base + index]) == 0) {
-        result = 0;
-        break;
+      const coerced = coerceLogical(tagStack[base + index], valueStack[base + index]);
+      if (coerced < 0) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          -coerced - 1,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack
+        );
+      }
+      if (coerced == 0) {
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 0, rangeIndexStack, valueStack, tagStack, kindStack);
       }
     }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, result, rangeIndexStack, valueStack, tagStack, kindStack);
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 1, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   if (builtinId == BuiltinId.Or) {
-    let result = 0.0;
+    if (argc == 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
     for (let index = 0; index < argc; index++) {
-      if (toNumberOrZero(tagStack[base + index], valueStack[base + index]) != 0) {
-        result = 1;
-        break;
+      const coerced = coerceLogical(tagStack[base + index], valueStack[base + index]);
+      if (coerced < 0) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          -coerced - 1,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack
+        );
+      }
+      if (coerced != 0) {
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 1, rangeIndexStack, valueStack, tagStack, kindStack);
       }
     }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, result, rangeIndexStack, valueStack, tagStack, kindStack);
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 0, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   if (builtinId == BuiltinId.Not && argc == 1) {
+    const coerced = coerceLogical(tagStack[base], valueStack[base]);
+    if (coerced < 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        -coerced - 1,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack
+      );
+    }
     return writeResult(
       base,
       STACK_KIND_SCALAR,
       <u8>ValueTag.Boolean,
-      toNumberOrZero(tagStack[base], valueStack[base]) == 0 ? 1 : 0,
+      coerced == 0 ? 1 : 0,
       rangeIndexStack,
       valueStack,
       tagStack,

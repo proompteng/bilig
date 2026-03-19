@@ -157,6 +157,59 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
   });
 
+  it("uses the wasm fast path for exact-parity logical builtins", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 0);
+    engine.setCellFormula("Sheet1", "B1", "AND(A1,TRUE)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B2", "OR(A2,FALSE)");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B3", "NOT(A2)");
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellValue("Sheet1", "A3", "hello");
+    engine.setCellFormula("Sheet1", "B4", "AND(A3,TRUE)");
+    expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+  });
+
+  it("uses the wasm fast path for exact-parity rounding builtins", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 123.4);
+    engine.setCellFormula("Sheet1", "B1", "ROUND(A1,-1)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 120 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B2", "FLOOR(TRUE,0.5)");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B3", "CEILING(7,2)");
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 8 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B4", "FLOOR(A1,0)");
+    expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellValue("Sheet1", "A2", "oops");
+    engine.setCellFormula("Sheet1", "B5", "ROUND(A2,1)");
+    expect(engine.getCellValue("Sheet1", "B5")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+  });
+
   it("preserves topo order across mixed wasm and js formula runs", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
