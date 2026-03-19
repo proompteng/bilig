@@ -1474,7 +1474,7 @@ export function SheetGridView({
           cellActivationBehavior="double-click"
           className="glide-sheet-grid"
           columns={columns}
-          drawFocusRing={false}
+          drawFocusRing={variant === "product"}
           editOnType={false}
           fillHandle={variant === "product"}
           freezeColumns={0}
