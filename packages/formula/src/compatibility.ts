@@ -196,12 +196,12 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "blocked"),
   entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "blocked"),
   entry("logical:if-true-branch", "logical", "=IF(A1,A2,A3)", "implemented-js"),
-  entry("logical:if-condition-error", "logical", "=IF(1/0,1,2)", "seeded", {
-    notes: "Canonical oracle captured, but current JS IF semantics do not yet propagate condition errors exactly."
+  entry("logical:if-condition-error", "logical", "=IF(1/0,1,2)", "implemented-js", {
+    notes: "The JS evaluator now propagates IF condition errors before either branch executes."
   }),
   entry("logical:iferror-catches-any-error", "logical", "=IFERROR(1/0,\"fallback\")", "implemented-js"),
-  entry("logical:ifna-catches-na-only", "logical", "=IFNA(NA(),\"missing\")", "seeded", {
-    notes: "Canonical fixture captured; NA() normalization and IFNA parity stay on the logical/error lane backlog."
+  entry("logical:ifna-catches-na-only", "logical", "=IFNA(NA(),\"missing\")", "implemented-js", {
+    notes: "NA() now normalizes to #N/A on the JS oracle path, allowing IFNA parity to execute."
   }),
   entry("logical:and-false-on-empty", "logical", "=AND(TRUE,A1)", "implemented-js"),
   entry("logical:or-true-branch", "logical", "=OR(A1,TRUE)", "implemented-js"),

@@ -379,6 +379,9 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
       }
       case "jump-if-false": {
         const value = popScalar(stack);
+        if (value.tag === ValueTag.Error) {
+          return value;
+        }
         if (!truthy(value)) {
           pc = instruction.target;
           continue;

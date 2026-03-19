@@ -23,12 +23,15 @@ describe("logical/info builtins", () => {
   it("supports IFERROR and IFNA with selective error handling", () => {
     const IFERROR = getLogicalBuiltin("IFERROR")!;
     const IFNA = getLogicalBuiltin("IFNA")!;
+    const NA = getLogicalBuiltin("NA")!;
 
     expect(IFERROR(num(7), text("fallback"))).toEqual(num(7));
     expect(IFERROR(err(ErrorCode.Div0), text("fallback"))).toEqual(text("fallback"));
     expect(IFERROR(err(ErrorCode.Value), empty())).toEqual(empty());
     expect(IFERROR()).toEqual(err(ErrorCode.Value));
 
+    expect(NA()).toEqual(err(ErrorCode.NA));
+    expect(NA(num(1))).toEqual(err(ErrorCode.Value));
     expect(IFNA(err(ErrorCode.NA), text("missing"))).toEqual(text("missing"));
     expect(IFNA(err(ErrorCode.Ref), text("missing"))).toEqual(err(ErrorCode.Ref));
     expect(IFNA(num(3), text("missing"))).toEqual(num(3));

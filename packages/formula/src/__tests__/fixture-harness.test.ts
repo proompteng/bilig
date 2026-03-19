@@ -74,6 +74,19 @@ describe("excel fixture harness", () => {
     expect(evaluatePlan(todayCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(todayFixture!.outputs[0]!.expected));
     expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(nowFixture!.outputs[0]!.expected));
   });
+
+  it("executes the seeded logical backlog fixtures through the JS evaluator once they are promoted", () => {
+    const ifFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "logical:if-condition-error");
+    const ifnaFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "logical:ifna-catches-na-only");
+
+    expect(ifFixture).toBeDefined();
+    expect(ifnaFixture).toBeDefined();
+    expect(getCompatibilityEntry("logical:if-condition-error")?.status).toBe("implemented-js");
+    expect(getCompatibilityEntry("logical:ifna-catches-na-only")?.status).toBe("implemented-js");
+
+    expect(evaluateFixture(ifFixture!)).toEqual(expectedValueToCellValue(ifFixture!.outputs[0]!.expected));
+    expect(evaluateFixture(ifnaFixture!)).toEqual(expectedValueToCellValue(ifnaFixture!.outputs[0]!.expected));
+  });
 });
 
 afterEach(() => {

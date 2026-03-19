@@ -39,6 +39,12 @@ function coerceLogical(value: CellValue): LogicalCoercion {
 }
 
 export const logicalBuiltins: Record<string, LogicalBuiltin> = {
+  NA: (...args) => {
+    if (args.length > 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    return errorValue(ErrorCode.NA);
+  },
   IF: (condition, truthy, falsy = emptyValue()) => {
     if (condition === undefined || truthy === undefined) {
       return errorValue(ErrorCode.Value);

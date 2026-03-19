@@ -117,6 +117,7 @@ describe("formula", () => {
   it("keeps IF on the JS path while promoting exact-parity logical and rounding formulas", () => {
     const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
     expect(compiled.mode).toBe(0);
+    expect(compileFormula("IFNA(NA(),\"missing\")").mode).toBe(0);
 
     expect(compileFormula("AND(A1,TRUE)").mode).toBe(1);
     expect(compileFormula("OR(A1,FALSE)").mode).toBe(1);

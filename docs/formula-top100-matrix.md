@@ -15,7 +15,7 @@
 | --- | --- | --- | --- |
 | `arithmetic` | `implemented-wasm-production` | `production` | remaining operator edge parity outside the current tracked slice |
 | `comparison` | mixed | mixed | string and lookup collation parity across the broader post-Top-100 surface |
-| `logical` | mixed | mixed | exact `IF` branch laziness and error suppression |
+| `logical` | mixed | mixed | native control-flow promotion for `IF`, `IFERROR`, and `IFNA` |
 | `aggregation` | `implemented-wasm-production` | `production` | broader family coverage outside the current tracked slice |
 | `math` | mixed | mixed | remaining promoted functions plus criteria-aware math families |
 | `text` | mixed | mixed | `VALUE` plus full string-runtime promotion into WASM |
