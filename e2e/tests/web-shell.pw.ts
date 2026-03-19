@@ -315,6 +315,24 @@ test("web app supports rectangular drag selection", async ({ page }) => {
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:D4");
 });
 
+test("web app keeps the active focus inside the Glide grid when clicking a cell", async ({ page }) => {
+  await page.goto("/");
+
+  await clickProductCell(page, 2, 2);
+  await expect(page.getByTestId("name-box")).toHaveValue("C3");
+
+  const activeElementState = await page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      testId: active?.getAttribute("data-testid") ?? null,
+      insideSheetGrid: Boolean(active?.closest('[data-testid="sheet-grid"]'))
+    };
+  });
+
+  expect(activeElementState.insideSheetGrid).toBe(true);
+  expect(activeElementState.testId).not.toBe("sheet-grid");
+});
+
 test("web app supports column resize without breaking hit testing", async ({ page }) => {
   await page.goto("/");
 

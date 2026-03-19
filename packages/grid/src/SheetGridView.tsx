@@ -564,14 +564,18 @@ export function SheetGridView({
     };
   }, [isEditingCell, selectedCell.col, selectedCell.row, visibleRegion.tx, visibleRegion.ty]);
 
+  const focusGrid = useCallback(() => {
+    editorRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     if (wasEditingOverlayRef.current && !isEditingCell) {
       window.requestAnimationFrame(() => {
-        hostRef.current?.focus();
+        focusGrid();
       });
     }
     wasEditingOverlayRef.current = isEditingCell;
-  }, [isEditingCell]);
+  }, [focusGrid, isEditingCell]);
 
   const beginSelectedEdit = useCallback(
     (seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
@@ -1357,7 +1361,7 @@ export function SheetGridView({
               ignoreNextPointerSelectionRef.current = true;
               setGridSelection(createRowSliceSelection(selectedCell.col, headerSelection.index, headerSelection.index));
               onSelect(formatAddress(headerSelection.index, selectedCell.col));
-              hostRef.current?.focus();
+              focusGrid();
               window.requestAnimationFrame(() => {
                 ignoreNextPointerSelectionRef.current = false;
               });
@@ -1366,7 +1370,7 @@ export function SheetGridView({
             ignoreNextPointerSelectionRef.current = true;
             setGridSelection(createColumnSliceSelection(headerSelection.index, headerSelection.index, selectedCell.row));
             onSelect(formatAddress(selectedCell.row, headerSelection.index));
-            hostRef.current?.focus();
+            focusGrid();
             window.requestAnimationFrame(() => {
               ignoreNextPointerSelectionRef.current = false;
             });
@@ -1388,7 +1392,7 @@ export function SheetGridView({
             }
             onSelect(formatAddress(pointerCell[1], pointerCell[0]));
           }
-          hostRef.current?.focus();
+          focusGrid();
         }}
         onPointerUpCapture={(event) => {
           if (columnResizeActiveRef.current) {
@@ -1541,7 +1545,7 @@ export function SheetGridView({
             }
             setGridSelection(createColumnSelection(col, selectedCell.row));
             onSelect(formatAddress(selectedCell.row, col));
-            hostRef.current?.focus();
+            focusGrid();
             window.requestAnimationFrame(() => {
               ignoreNextPointerSelectionRef.current = false;
             });
