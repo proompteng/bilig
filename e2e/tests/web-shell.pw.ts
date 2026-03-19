@@ -354,15 +354,21 @@ test("web app accepts string values and string comparison formulas", async ({ pa
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
 
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await formulaInput.fill("hello");
   await formulaInput.press("Enter");
   await expect(nameBox).toHaveValue("A1");
+  await expect(formulaInput).toHaveValue("hello");
+  await clickProductCell(page, 0, 0);
   await expect(resolvedValue).toHaveText("hello");
 
   await nameBox.fill("A2");
   await nameBox.press("Enter");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A2");
   await formulaInput.fill("=A1=\"HELLO\"");
   await formulaInput.press("Enter");
+  await clickProductCell(page, 0, 1);
   await expect(resolvedValue).toHaveText("TRUE");
 });
 
@@ -425,9 +431,10 @@ test("web app supports F2 edit in the product shell", async ({ page }) => {
   await cellEditor.press("!");
   await expect(cellEditor).toHaveValue("seed!");
   await clickProductCell(page, 3, 2);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!D3");
 
-  await nameBox.fill("C3");
-  await nameBox.press("Enter");
+  await clickProductCell(page, 2, 2);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C3");
   await expect(formulaInput).toHaveValue("seed!");
 });
 
