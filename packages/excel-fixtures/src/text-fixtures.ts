@@ -9,7 +9,7 @@ export interface TextFixtureCase {
 }
 
 export interface TextFixtureGroup {
-  builtin: "LEN" | "CONCAT" | "LEFT" | "RIGHT" | "MID" | "TRIM" | "UPPER" | "LOWER" | "FIND" | "SEARCH";
+  builtin: "LEN" | "CONCAT" | "LEFT" | "RIGHT" | "MID" | "TRIM" | "UPPER" | "LOWER" | "FIND" | "SEARCH" | "VALUE";
   cases: readonly TextFixtureCase[];
 }
 
@@ -63,7 +63,7 @@ function fixture(
 export const TEXT_FIXTURE_METADATA = {
   source: "excel-web-like text builtin tranche",
   version: 1,
-  builtins: ["LEN", "CONCAT", "LEFT", "RIGHT", "MID", "TRIM", "UPPER", "LOWER", "FIND", "SEARCH"] as const
+  builtins: ["LEN", "CONCAT", "LEFT", "RIGHT", "MID", "TRIM", "UPPER", "LOWER", "FIND", "SEARCH", "VALUE"] as const
 } as const;
 
 export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
@@ -136,6 +136,14 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
       { name: "supports wildcard question mark", args: [text("b?d"), text("ABCD")], expected: number(2) },
       { name: "supports escaped wildcard", args: [text("~*"), text("a*b")], expected: number(2) }
     ]
+  },
+  {
+    builtin: "VALUE",
+    cases: [
+      { name: "parses trimmed numeric text", args: [text(" 42 ")], expected: number(42) },
+      { name: "coerces booleans to numbers", args: [bool(true)], expected: number(1) },
+      { name: "treats empty as zero", args: [empty()], expected: number(0) }
+    ]
   }
 ];
 
@@ -163,7 +171,10 @@ export const excelTop100TextFixtures: readonly ExcelFixtureCase[] = [
   fixture("find-empty-needle-returns-start-position", "FIND empty needle returns start position", "=FIND(\"\",\"alpha\",3)", [], [output("A1", numberExpected(3))]),
   fixture("search-searches-case-insensitively", "SEARCH searches case-insensitively", "=SEARCH(\"PH\",\"alphabet\")", [], [output("A1", numberExpected(3))]),
   fixture("search-supports-wildcard-question-mark", "SEARCH supports wildcard question mark", "=SEARCH(\"b?d\",\"ABCD\")", [], [output("A1", numberExpected(2))]),
-  fixture("search-supports-escaped-wildcard", "SEARCH supports escaped wildcard", "=SEARCH(\"~*\",\"a*b\")", [], [output("A1", numberExpected(2))])
+  fixture("search-supports-escaped-wildcard", "SEARCH supports escaped wildcard", "=SEARCH(\"~*\",\"a*b\")", [], [output("A1", numberExpected(2))]),
+  fixture("value-parses-trimmed-numeric-text", "VALUE parses trimmed numeric text", "=VALUE(\" 42 \")", [], [output("A1", numberExpected(42))]),
+  fixture("value-coerces-booleans-to-numbers", "VALUE coerces booleans to numbers", "=VALUE(A1)", [input("A1", true)], [output("A2", numberExpected(1))]),
+  fixture("value-treats-empty-as-zero", "VALUE treats empty as zero", "=VALUE(A1)", [input("A1", null)], [output("A2", numberExpected(0))])
 ];
 
 function empty(): CellValue {

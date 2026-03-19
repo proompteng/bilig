@@ -30,6 +30,7 @@ describe("text builtins", () => {
     expect(getTextBuiltin("MID")?.(text("abc"), number(0), number(1))).toEqual(valueError());
     expect(getTextBuiltin("FIND")?.(text("z"), text("abc"))).toEqual(valueError());
     expect(getTextBuiltin("SEARCH")?.(text("a"), text("abc"), number(0))).toEqual(valueError());
+    expect(getTextBuiltin("VALUE")?.(text("not-a-number"))).toEqual(valueError());
   });
 
   it("supports Excel-like SEARCH wildcards and FIND case sensitivity", () => {
@@ -49,6 +50,12 @@ describe("text builtins", () => {
     expect(getTextBuiltin("EXACT")?.(text("Alpha"), text("Alpha"))).toEqual({ tag: ValueTag.Boolean, value: true });
     expect(getTextBuiltin("EXACT")?.(text("Alpha"), text("alpha"))).toEqual({ tag: ValueTag.Boolean, value: false });
     expect(getTextBuiltin("EXACT")?.(number(42), text("42"))).toEqual({ tag: ValueTag.Boolean, value: true });
+  });
+
+  it("supports VALUE numeric coercion for trimmed text, booleans, and empties", () => {
+    expect(getTextBuiltin("VALUE")?.(text(" 42 "))).toEqual(number(42));
+    expect(getTextBuiltin("VALUE")?.({ tag: ValueTag.Boolean, value: true })).toEqual(number(1));
+    expect(getTextBuiltin("VALUE")?.({ tag: ValueTag.Empty })).toEqual(number(0));
   });
 });
 

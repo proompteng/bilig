@@ -32,6 +32,11 @@ const WASM_SAFE_BUILTINS = new Set([
   "YEAR",
   "MONTH",
   "DAY",
+  "TIME",
+  "HOUR",
+  "MINUTE",
+  "SECOND",
+  "WEEKDAY",
   "EDATE",
   "EOMONTH",
   "EXACT",
@@ -48,8 +53,13 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "YEAR":
     case "MONTH":
     case "DAY":
+    case "HOUR":
+    case "MINUTE":
+    case "SECOND":
     case "INT":
       return argc === 1;
+    case "WEEKDAY":
+      return argc === 1 || argc === 2;
     case "EXACT":
       return argc === 2;
     case "ISBLANK":
@@ -63,6 +73,7 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "CEILING":
       return argc === 1 || argc === 2;
     case "DATE":
+    case "TIME":
       return argc === 3;
     case "EDATE":
     case "EOMONTH":
@@ -187,6 +198,11 @@ export function encodeBuiltin(name: string): BuiltinId {
     YEAR: BuiltinId.Year,
     MONTH: BuiltinId.Month,
     DAY: BuiltinId.Day,
+    TIME: BuiltinId.Time,
+    HOUR: BuiltinId.Hour,
+    MINUTE: BuiltinId.Minute,
+    SECOND: BuiltinId.Second,
+    WEEKDAY: BuiltinId.Weekday,
     EDATE: BuiltinId.Edate,
     EOMONTH: BuiltinId.Eomonth,
     EXACT: BuiltinId.Exact,

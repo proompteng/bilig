@@ -22,7 +22,7 @@ function errorExpected(code: ErrorCode, display: string): ExcelExpectedValue {
 
 export const excelDateTimeFixtureSuite: ExcelFixtureSuite = {
   id: "datetime-serial-1900",
-  description: "Focused Excel 1900-system serial date coverage for DATE, parts, EDATE, and EOMONTH. TODAY/NOW are documented separately because they are volatile.",
+  description: "Focused Excel 1900-system serial date coverage for DATE, parts, TIME, weekday/time extraction, EDATE, and EOMONTH. TODAY/NOW are documented separately because they are volatile.",
   excelBuild: "Microsoft 365 / 2026-03-19",
   capturedAt: "2026-03-19T15:45:30.000Z",
   sheets: [{ name: "Sheet1" }],
@@ -99,6 +99,51 @@ export const excelDateTimeFixtureSuite: ExcelFixtureSuite = {
       sheetName: "Sheet1",
       inputs: [{ address: "A1", input: 60 }],
       outputs: [{ address: "A2", expected: numberExpected(29) }]
+    },
+    {
+      id: createExcelFixtureId("date-time", "time-basic"),
+      family: "date-time",
+      title: "TIME constructs a fractional day serial",
+      formula: "=TIME(12,30,0)",
+      sheetName: "Sheet1",
+      inputs: [],
+      outputs: [{ address: "A1", expected: numberExpected(0.5208333333333334) }]
+    },
+    {
+      id: createExcelFixtureId("date-time", "hour-basic"),
+      family: "date-time",
+      title: "HOUR extracts the hour component",
+      formula: "=HOUR(A1)",
+      sheetName: "Sheet1",
+      inputs: [{ address: "A1", input: 0.5208333333333334 }],
+      outputs: [{ address: "A2", expected: numberExpected(12) }]
+    },
+    {
+      id: createExcelFixtureId("date-time", "minute-basic"),
+      family: "date-time",
+      title: "MINUTE extracts the minute component",
+      formula: "=MINUTE(A1)",
+      sheetName: "Sheet1",
+      inputs: [{ address: "A1", input: 0.5208333333333334 }],
+      outputs: [{ address: "A2", expected: numberExpected(30) }]
+    },
+    {
+      id: createExcelFixtureId("date-time", "second-basic"),
+      family: "date-time",
+      title: "SECOND extracts the second component",
+      formula: "=SECOND(A1)",
+      sheetName: "Sheet1",
+      inputs: [{ address: "A1", input: 0.5208449074074074 }],
+      outputs: [{ address: "A2", expected: numberExpected(1) }]
+    },
+    {
+      id: createExcelFixtureId("date-time", "weekday-basic"),
+      family: "date-time",
+      title: "WEEKDAY returns default Sunday-first numbering",
+      formula: "=WEEKDAY(DATE(2026,3,15))",
+      sheetName: "Sheet1",
+      inputs: [],
+      outputs: [{ address: "A1", expected: numberExpected(1) }]
     },
     {
       id: createExcelFixtureId("date-time", "edate-month-shift"),

@@ -221,8 +221,8 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("text:lower-basic", "text", "=LOWER(\"Alpha BETA\")", "implemented-js"),
   entry("text:find-basic", "text", "=FIND(\"ph\",\"alphabet\")", "implemented-js"),
   entry("text:search-basic", "text", "=SEARCH(\"PH\",\"alphabet\")", "implemented-js"),
-  entry("text:value-basic", "text", "=VALUE(\"42\")", "unsupported", {
-    notes: "Top 100 contract case; text-to-number coercion builtin is not implemented yet."
+  entry("text:value-basic", "text", "=VALUE(\"42\")", "implemented-wasm-production", {
+    notes: "The canonical literal case constant-folds to a native-safe number; dynamic text inputs still execute through JS until string coercion is promoted."
   }),
   entry("lookup-reference:xmatch-basic", "lookup-reference", "=XMATCH(\"pear\",A1:A3,0)", "implemented-js"),
   entry("lookup-reference:hlookup-basic", "lookup-reference", "=HLOOKUP(\"pear\",A1:C2,2,FALSE)", "implemented-js"),
@@ -245,11 +245,11 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     prerequisites: ["core:value-model", "core:date-serial-model", "core:volatile-context"],
     notes: "Oracle capture exists, but precision and epoch normalization are still open."
   }),
-  entry("date-time:time-basic", "date-time", "=TIME(12,30,0)", "unsupported"),
-  entry("date-time:hour-basic", "date-time", "=HOUR(A1)", "unsupported"),
-  entry("date-time:minute-basic", "date-time", "=MINUTE(A1)", "unsupported"),
-  entry("date-time:second-basic", "date-time", "=SECOND(A1)", "unsupported"),
-  entry("date-time:weekday-basic", "date-time", "=WEEKDAY(DATE(2026,3,15))", "unsupported"),
+  entry("date-time:time-basic", "date-time", "=TIME(12,30,0)", "implemented-wasm-production"),
+  entry("date-time:hour-basic", "date-time", "=HOUR(A1)", "implemented-wasm-production"),
+  entry("date-time:minute-basic", "date-time", "=MINUTE(A1)", "implemented-wasm-production"),
+  entry("date-time:second-basic", "date-time", "=SECOND(A1)", "implemented-wasm-production"),
+  entry("date-time:weekday-basic", "date-time", "=WEEKDAY(DATE(2026,3,15))", "implemented-wasm-production"),
   entry("dynamic-array:sort-basic", "dynamic-array", "=SORT(A1:A4)", "blocked"),
   entry("dynamic-array:sortby-basic", "dynamic-array", "=SORTBY(A1:A3,B1:B3)", "blocked"),
   entry("dynamic-array:tocol-basic", "dynamic-array", "=TOCOL(A1:B2)", "blocked"),

@@ -63,5 +63,10 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Exact, name: "EXACT", supportsWasm: true },
   { id: BuiltinId.Int, name: "INT", supportsWasm: true },
   { id: BuiltinId.RoundUp, name: "ROUNDUP", supportsWasm: true },
-  { id: BuiltinId.RoundDown, name: "ROUNDDOWN", supportsWasm: true }
+  { id: BuiltinId.RoundDown, name: "ROUNDDOWN", supportsWasm: true },
+  { id: BuiltinId.Time, name: "TIME", supportsWasm: true },
+  { id: BuiltinId.Hour, name: "HOUR", supportsWasm: true },
+  { id: BuiltinId.Minute, name: "MINUTE", supportsWasm: true },
+  { id: BuiltinId.Second, name: "SECOND", supportsWasm: true },
+  { id: BuiltinId.Weekday, name: "WEEKDAY", supportsWasm: true }
 ];

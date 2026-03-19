@@ -80,12 +80,19 @@ describe("formula", () => {
     expect(compileFormula("ISTEXT(A1)").mode).toBe(1);
     expect(compileFormula("LEN(A1)").mode).toBe(1);
     expect(compileFormula("DATE(2024,2,29)").mode).toBe(1);
+    expect(compileFormula("TIME(12,30,0)").mode).toBe(1);
     expect(compileFormula("YEAR(A1)").mode).toBe(1);
     expect(compileFormula("MONTH(A1)").mode).toBe(1);
     expect(compileFormula("DAY(A1)").mode).toBe(1);
+    expect(compileFormula("HOUR(A1)").mode).toBe(1);
+    expect(compileFormula("MINUTE(A1)").mode).toBe(1);
+    expect(compileFormula("SECOND(A1)").mode).toBe(1);
+    expect(compileFormula("WEEKDAY(A1)").mode).toBe(1);
+    expect(compileFormula("WEEKDAY(A1,2)").mode).toBe(1);
     expect(compileFormula("EDATE(A1,1)").mode).toBe(1);
     expect(compileFormula("EOMONTH(A1,1)").mode).toBe(1);
     expect(compileFormula("EXACT(A1,A2)").mode).toBe(1);
+    expect(compileFormula("VALUE(\"42\")").mode).toBe(1);
     expect(compileFormula("INT(A1)").mode).toBe(1);
     expect(compileFormula("ROUNDUP(A1,2)").mode).toBe(1);
     expect(compileFormula("ROUNDDOWN(A1,2)").mode).toBe(1);
@@ -93,6 +100,7 @@ describe("formula", () => {
 
   it("keeps LEN on the JS path when it depends on a range until the range-string bridge lands", () => {
     expect(compileFormula("LEN(A1:B2)").mode).toBe(0);
+    expect(compileFormula("VALUE(A1)").mode).toBe(0);
   });
 
   it("keeps volatile date builtins on the JS path", () => {
@@ -125,6 +133,8 @@ describe("formula", () => {
     expect(compileFormula("ROUND(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("FLOOR(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("CEILING(A1,A2,A3)").mode).toBe(0);
+    expect(compileFormula("TIME(A1,A2)").mode).toBe(0);
+    expect(compileFormula("WEEKDAY(A1,A2,A3)").mode).toBe(0);
   });
 
   it("evaluates AST against a context", () => {

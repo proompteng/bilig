@@ -71,6 +71,57 @@ describe("datetime builtins", () => {
     });
   });
 
+  it("supports TIME plus HOUR, MINUTE, SECOND, and WEEKDAY extraction", () => {
+    const sundaySerial = excelDatePartsToSerial(2026, 3, 15)!;
+
+    expect(datetimeBuiltins.TIME(
+      { tag: ValueTag.Number, value: 12 },
+      { tag: ValueTag.Number, value: 30 },
+      { tag: ValueTag.Number, value: 0 }
+    )).toEqual({ tag: ValueTag.Number, value: 0.5208333333333334 });
+
+    expect(datetimeBuiltins.HOUR({ tag: ValueTag.Number, value: 0.5208333333333334 })).toEqual({
+      tag: ValueTag.Number,
+      value: 12
+    });
+    expect(datetimeBuiltins.MINUTE({ tag: ValueTag.Number, value: 0.5208333333333334 })).toEqual({
+      tag: ValueTag.Number,
+      value: 30
+    });
+    expect(datetimeBuiltins.SECOND({ tag: ValueTag.Number, value: 0.5208449074074074 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1
+    });
+    expect(datetimeBuiltins.WEEKDAY({ tag: ValueTag.Number, value: sundaySerial })).toEqual({
+      tag: ValueTag.Number,
+      value: 1
+    });
+    expect(datetimeBuiltins.WEEKDAY(
+      { tag: ValueTag.Number, value: sundaySerial },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(datetimeBuiltins.WEEKDAY(
+      { tag: ValueTag.Number, value: sundaySerial },
+      { tag: ValueTag.Number, value: 3 }
+    )).toEqual({ tag: ValueTag.Number, value: 6 });
+  });
+
+  it("returns #VALUE for unsupported time-part coercions and weekday return types", () => {
+    expect(datetimeBuiltins.TIME(
+      { tag: ValueTag.Number, value: -1 },
+      { tag: ValueTag.Number, value: 30 },
+      { tag: ValueTag.Number, value: 0 }
+    )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(datetimeBuiltins.HOUR({ tag: ValueTag.String, value: "12:30", stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value
+    });
+    expect(datetimeBuiltins.WEEKDAY(
+      { tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 15)! },
+      { tag: ValueTag.Number, value: 99 }
+    )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("creates deterministic TODAY and NOW builtins from injected UTC dates", () => {
     const fixedNow = new Date("2026-03-19T15:45:30.000Z");
     const TODAY = createTodayBuiltin(() => fixedNow);
@@ -162,6 +213,26 @@ describe("datetime builtins", () => {
         expect.objectContaining({
           id: "date-time:day-leap-bug-serial",
           outputs: [{ address: "A2", expected: { kind: "number", value: 29 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:time-basic",
+          outputs: [{ address: "A1", expected: { kind: "number", value: 0.5208333333333334 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:hour-basic",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 12 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:minute-basic",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 30 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:second-basic",
+          outputs: [{ address: "A2", expected: { kind: "number", value: 1 } }]
+        }),
+        expect.objectContaining({
+          id: "date-time:weekday-basic",
+          outputs: [{ address: "A1", expected: { kind: "number", value: 1 } }]
         }),
         expect.objectContaining({
           id: "date-time:edate-month-shift",

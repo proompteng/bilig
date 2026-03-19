@@ -195,6 +195,8 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "A7", 45322);
     engine.setCellValue("Sheet1", "A8", 45337);
     engine.setCellValue("Sheet1", "A9", "bad");
+    engine.setCellValue("Sheet1", "A10", 0.5208333333333334);
+    engine.setCellValue("Sheet1", "A11", 0.5208449074074074);
 
     engine.setCellFormula("Sheet1", "B1", "ISBLANK()");
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Boolean, value: true });
@@ -255,6 +257,41 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "B15", "EOMONTH(A9,1)");
     expect(engine.getCellValue("Sheet1", "B15")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B16", "TIME(12,30,0)");
+    expect(engine.getCellValue("Sheet1", "B16")).toEqual({ tag: ValueTag.Number, value: 0.5208333333333334 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B17", "HOUR(A10)");
+    expect(engine.getCellValue("Sheet1", "B17")).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B18", "MINUTE(A10)");
+    expect(engine.getCellValue("Sheet1", "B18")).toEqual({ tag: ValueTag.Number, value: 30 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B19", "SECOND(A11)");
+    expect(engine.getCellValue("Sheet1", "B19")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B20", "WEEKDAY(DATE(2026,3,15))");
+    expect(engine.getCellValue("Sheet1", "B20")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("constant-folds literal VALUE calls onto the native path while keeping cell-text VALUE on JS", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "B1", "VALUE(\"42\")");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 42 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "A1", "not-a-number");
+    engine.setCellFormula("Sheet1", "B2", "VALUE(A1)");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
   });
 
   it("uses the wasm fast path for exact-parity LEN builtin", async () => {

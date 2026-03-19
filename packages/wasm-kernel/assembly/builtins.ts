@@ -128,6 +128,7 @@ function civilDay(days: i32): i32 {
 }
 
 const EXCEL_EPOCH_DAYS: i32 = -25568;
+const EXCEL_SECONDS_PER_DAY: i32 = 86400;
 
 function excelSerialWhole(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value);
@@ -179,6 +180,80 @@ function excelDayPartFromSerial(tag: u8, value: f64): i32 {
   }
   const adjustedWhole = whole < 60 ? whole : whole - 1;
   return civilDay(EXCEL_EPOCH_DAYS + adjustedWhole);
+}
+
+function excelTimeSerial(hourTag: u8, hourValue: f64, minuteTag: u8, minuteValue: f64, secondTag: u8, secondValue: f64): f64 {
+  const hourNumeric = toNumberExact(hourTag, hourValue);
+  const minuteNumeric = toNumberExact(minuteTag, minuteValue);
+  const secondNumeric = toNumberExact(secondTag, secondValue);
+  if (isNaN(hourNumeric) || isNaN(minuteNumeric) || isNaN(secondNumeric)) {
+    return NaN;
+  }
+  const hour = <f64><i32>hourNumeric;
+  const minute = <f64><i32>minuteNumeric;
+  const second = <f64><i32>secondNumeric;
+  if (hour < 0 || minute < 0 || second < 0 || hour > 32767 || minute > 32767 || second > 32767) {
+    return NaN;
+  }
+  let totalSeconds = hour * 3600.0 + minute * 60.0 + second;
+  totalSeconds %= <f64>EXCEL_SECONDS_PER_DAY;
+  if (totalSeconds < 0) {
+    totalSeconds += <f64>EXCEL_SECONDS_PER_DAY;
+  }
+  return totalSeconds / <f64>EXCEL_SECONDS_PER_DAY;
+}
+
+function excelSecondOfDay(tag: u8, value: f64): i32 {
+  const numeric = toNumberExact(tag, value);
+  if (isNaN(numeric) || numeric < 0) {
+    return i32.MIN_VALUE;
+  }
+  const whole = Math.floor(numeric);
+  let fraction = numeric - whole;
+  if (fraction < 0) {
+    fraction += 1.0;
+  }
+  let seconds = <i32>Math.floor(fraction * <f64>EXCEL_SECONDS_PER_DAY + 1e-9);
+  if (seconds >= EXCEL_SECONDS_PER_DAY) {
+    seconds = 0;
+  }
+  return seconds;
+}
+
+function excelWeekdayFromSerial(tag: u8, value: f64, returnType: i32): i32 {
+  const whole = excelSerialWhole(tag, value);
+  if (whole == i32.MIN_VALUE || whole < 0) {
+    return i32.MIN_VALUE;
+  }
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  const sundayOne = ((adjustedWhole % 7) + 7) % 7 + 1;
+  if (returnType == 1) {
+    return sundayOne;
+  }
+  if (returnType == 3) {
+    return sundayOne == 1 ? 6 : sundayOne - 2;
+  }
+
+  let startDay = 0;
+  if (returnType == 2 || returnType == 11) {
+    startDay = 2;
+  } else if (returnType == 12) {
+    startDay = 3;
+  } else if (returnType == 13) {
+    startDay = 4;
+  } else if (returnType == 14) {
+    startDay = 5;
+  } else if (returnType == 15) {
+    startDay = 6;
+  } else if (returnType == 16) {
+    startDay = 7;
+  } else if (returnType == 17) {
+    startDay = 1;
+  } else {
+    return i32.MIN_VALUE;
+  }
+
+  return ((sundayOne - startDay + 7) % 7) + 1;
 }
 
 function excelDateSerial(yearTag: u8, yearValue: f64, monthTag: u8, monthValue: f64, dayTag: u8, dayValue: f64): f64 {
@@ -867,6 +942,54 @@ export function applyBuiltin(
       return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
     }
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>day, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Time && argc == 3) {
+    const serial = excelTimeSerial(
+      tagStack[base],
+      valueStack[base],
+      tagStack[base + 1],
+      valueStack[base + 1],
+      tagStack[base + 2],
+      valueStack[base + 2]
+    );
+    if (isNaN(serial)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, serial, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Hour && argc == 1) {
+    const second = excelSecondOfDay(tagStack[base], valueStack[base]);
+    if (second == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>(second / 3600), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Minute && argc == 1) {
+    const second = excelSecondOfDay(tagStack[base], valueStack[base]);
+    if (second == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>((second % 3600) / 60), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Second && argc == 1) {
+    const second = excelSecondOfDay(tagStack[base], valueStack[base]);
+    if (second == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>(second % 60), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Weekday && (argc == 1 || argc == 2)) {
+    const returnType = argc == 2 ? truncToInt(tagStack[base + 1], valueStack[base + 1]) : 1;
+    const weekday = returnType == i32.MIN_VALUE ? i32.MIN_VALUE : excelWeekdayFromSerial(tagStack[base], valueStack[base], returnType);
+    if (weekday == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>weekday, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   if (builtinId == BuiltinId.Edate && argc == 2) {

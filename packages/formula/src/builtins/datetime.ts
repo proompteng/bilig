@@ -12,6 +12,7 @@ export interface ExcelDateParts {
 }
 
 const MS_PER_DAY = 86_400_000;
+const SECONDS_PER_DAY = 86_400;
 const EXCEL_EPOCH_UTC_MS = Date.UTC(1899, 11, 31);
 const EXCEL_LEAP_BUG_CUTOFF_UTC_MS = Date.UTC(1900, 2, 1);
 
@@ -53,6 +54,15 @@ function truncArg(value: CellValue): number | CellValue {
 
 function floorDateSerial(serial: number): number {
   return Math.floor(serial);
+}
+
+function normalizeSecondOfDay(serial: number): number | undefined {
+  if (!Number.isFinite(serial) || serial < 0) {
+    return undefined;
+  }
+  const fraction = serial - floorDateSerial(serial);
+  const normalizedFraction = fraction < 0 ? fraction + 1 : fraction;
+  return Math.floor(normalizedFraction * SECONDS_PER_DAY + 1e-9) % SECONDS_PER_DAY;
 }
 
 function isExcelLeapBugDate(parts: ExcelDateParts): boolean {
@@ -182,6 +192,20 @@ export function endOfMonthExcelDate(serial: number, offsetMonths: number): numbe
   return excelDatePartsToSerial(shifted.year, shifted.month, day);
 }
 
+function normalizeTimeSerial(hours: number, minutes: number, seconds: number): number | undefined {
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return undefined;
+  }
+  if (hours < 0 || minutes < 0 || seconds < 0) {
+    return undefined;
+  }
+  if (hours > 32_767 || minutes > 32_767 || seconds > 32_767) {
+    return undefined;
+  }
+  const totalSeconds = Math.trunc(hours) * 3600 + Math.trunc(minutes) * 60 + Math.trunc(seconds);
+  return ((totalSeconds % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY / SECONDS_PER_DAY;
+}
+
 export function createDateBuiltin(): Builtin {
   return (...args) => {
     const error = firstError(args);
@@ -218,6 +242,107 @@ function createDatePartBuiltin(part: keyof ExcelDateParts): Builtin {
 
     const parts = excelSerialToDateParts(serial);
     return parts ? numberResult(parts[part]) : valueError();
+  };
+}
+
+function createTimeBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length !== 3) {
+      return valueError();
+    }
+
+    const hour = truncArg(args[0]!);
+    const minute = truncArg(args[1]!);
+    const second = truncArg(args[2]!);
+    if (typeof hour !== "number") return hour;
+    if (typeof minute !== "number") return minute;
+    if (typeof second !== "number") return second;
+
+    const serial = normalizeTimeSerial(hour, minute, second);
+    return serial === undefined ? valueError() : numberResult(serial);
+  };
+}
+
+function createTimePartBuiltin(part: "hour" | "minute" | "second"): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    const [value] = args;
+    if (value === undefined) {
+      return valueError();
+    }
+
+    const serial = coerceNumber(value);
+    if (serial === undefined) {
+      return valueError();
+    }
+    const seconds = normalizeSecondOfDay(serial);
+    if (seconds === undefined) {
+      return valueError();
+    }
+
+    switch (part) {
+      case "hour":
+        return numberResult(Math.floor(seconds / 3600));
+      case "minute":
+        return numberResult(Math.floor((seconds % 3600) / 60));
+      case "second":
+        return numberResult(seconds % 60);
+    }
+  };
+}
+
+function createWeekdayBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 1 || args.length > 2) {
+      return valueError();
+    }
+    const serial = coerceNumber(args[0]!);
+    if (serial === undefined || serial < 0) {
+      return valueError();
+    }
+
+    const whole = floorDateSerial(serial);
+    const adjustedWhole = whole < 60 ? whole : whole - 1;
+    const sundayOne = ((adjustedWhole % 7) + 7) % 7 + 1;
+    if (args.length === 1) {
+      return numberResult(sundayOne);
+    }
+
+    const returnType = truncArg(args[1]!);
+    if (typeof returnType !== "number") {
+      return returnType;
+    }
+    if (returnType === 3) {
+      return numberResult(sundayOne === 1 ? 6 : sundayOne - 2);
+    }
+
+    const startDayMap: Record<number, number> = {
+      1: 1,
+      2: 2,
+      11: 2,
+      12: 3,
+      13: 4,
+      14: 5,
+      15: 6,
+      16: 7,
+      17: 1
+    };
+    const startDay = startDayMap[returnType];
+    if (startDay === undefined) {
+      return valueError();
+    }
+    return numberResult(((sundayOne - startDay + 7) % 7) + 1);
   };
 }
 
@@ -314,6 +439,11 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   YEAR: createDatePartBuiltin("year"),
   MONTH: createDatePartBuiltin("month"),
   DAY: createDatePartBuiltin("day"),
+  TIME: createTimeBuiltin(),
+  HOUR: createTimePartBuiltin("hour"),
+  MINUTE: createTimePartBuiltin("minute"),
+  SECOND: createTimePartBuiltin("second"),
+  WEEKDAY: createWeekdayBuiltin(),
   TODAY: createTodayBuiltin(),
   NOW: createNowBuiltin(),
   RAND: createRandBuiltin(),

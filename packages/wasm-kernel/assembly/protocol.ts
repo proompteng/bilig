@@ -78,5 +78,10 @@ export enum BuiltinId {
   Exact = 27,
   Int = 28,
   RoundUp = 29,
-  RoundDown = 30
+  RoundDown = 30,
+  Time = 31,
+  Hour = 32,
+  Minute = 33,
+  Second = 34,
+  Weekday = 35
 }

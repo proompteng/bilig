@@ -16,7 +16,12 @@ const BUILTIN = {
   EXACT: 27,
   INT: 28,
   ROUNDUP: 29,
-  ROUNDDOWN: 30
+  ROUNDDOWN: 30,
+  TIME: 31,
+  HOUR: 32,
+  MINUTE: 33,
+  SECOND: 34,
+  WEEKDAY: 35
 } as const;
 
 function encodeCall(builtinId: number, argc: number): number {
@@ -429,6 +434,63 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[cellIndex(1, 8, width)]).toBe(45382);
     expect(kernel.readTags()[cellIndex(1, 9, width)]).toBe(ValueTag.Error);
     expect(kernel.readErrors()[cellIndex(1, 9, width)]).toBe(ErrorCode.Ref);
+  });
+
+  it("evaluates TIME, HOUR, MINUTE, SECOND, and WEEKDAY on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 10;
+    kernel.init(24, 8, 5, 1, 1);
+    kernel.writeCells(
+      new Uint8Array([1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([0.5208333333333334, 0.5208449074074074, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array(24),
+      new Uint16Array(24)
+    );
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.TIME, 3), encodeRet()],
+      [encodePushCell(0), encodeCall(BUILTIN.HOUR, 1), encodeRet()],
+      [encodePushCell(0), encodeCall(BUILTIN.MINUTE, 1), encodeRet()],
+      [encodePushCell(1), encodeCall(BUILTIN.SECOND, 1), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.DATE, 3), encodeCall(BUILTIN.WEEKDAY, 1), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.DATE, 3), encodePushNumber(3), encodeCall(BUILTIN.WEEKDAY, 2), encodeRet()]
+    ]);
+
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(1, 6, width)
+      ])
+    );
+    kernel.uploadConstants(
+      new Float64Array([12, 30, 0, 2026, 3, 15, 2]),
+      new Uint32Array([0, 0, 0, 0, 3, 3]),
+      new Uint32Array([3, 0, 0, 0, 3, 4])
+    );
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(1, 6, width)
+      ])
+    );
+
+    expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(0.5208333333333334);
+    expect(kernel.readNumbers()[cellIndex(1, 2, width)]).toBe(12);
+    expect(kernel.readNumbers()[cellIndex(1, 3, width)]).toBe(30);
+    expect(kernel.readNumbers()[cellIndex(1, 4, width)]).toBe(1);
+    expect(kernel.readNumbers()[cellIndex(1, 5, width)]).toBe(1);
+    expect(kernel.readNumbers()[cellIndex(1, 6, width)]).toBe(7);
   });
 
   it("evaluates logical and rounding builtins with parity-safe scalar semantics", async () => {

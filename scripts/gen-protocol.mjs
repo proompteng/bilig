@@ -79,7 +79,12 @@ const enumManifest = {
     ["Exact", 27],
     ["Int", 28],
     ["RoundUp", 29],
-    ["RoundDown", 30]
+    ["RoundDown", 30],
+    ["Time", 31],
+    ["Hour", 32],
+    ["Minute", 33],
+    ["Second", 34],
+    ["Weekday", 35]
   ]
 };
 
@@ -113,7 +118,12 @@ const builtinManifest = [
   { id: "Exact", name: "EXACT", supportsWasm: true },
   { id: "Int", name: "INT", supportsWasm: true },
   { id: "RoundUp", name: "ROUNDUP", supportsWasm: true },
-  { id: "RoundDown", name: "ROUNDDOWN", supportsWasm: true }
+  { id: "RoundDown", name: "ROUNDDOWN", supportsWasm: true },
+  { id: "Time", name: "TIME", supportsWasm: true },
+  { id: "Hour", name: "HOUR", supportsWasm: true },
+  { id: "Minute", name: "MINUTE", supportsWasm: true },
+  { id: "Second", name: "SECOND", supportsWasm: true },
+  { id: "Weekday", name: "WEEKDAY", supportsWasm: true }
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.mjs\n\n`;

@@ -313,6 +313,18 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     }
     const found = findPosition(coerceText(findTextValue), coerceText(withinTextValue), start, false, true);
     return isErrorValue(found) ? found : numberResult(found);
+  },
+  VALUE: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [value] = args;
+    if (value === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const coerced = coerceNumber(value);
+    return coerced === undefined ? error(ErrorCode.Value) : numberResult(coerced);
   }
 };
 
