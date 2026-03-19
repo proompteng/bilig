@@ -17,6 +17,7 @@
     "docker:build:sync": "docker buildx build --target sync-runtime -t registry.ide-newton.ts.net/lab/bilig-sync:${BILIG_IMAGE_TAG:-local} .",
     "protocol:generate": "node scripts/gen-protocol.mjs",
     "protocol:check": "node scripts/gen-protocol.mjs --check",
+    "naming:check": "node scripts/check-canonical-naming.mjs",
     "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
@@ -29,7 +30,7 @@
     "publish:check": "node scripts/clean-package-builds.mjs && pnpm build && node scripts/check-package-publish.mjs",
     "release:check": "node scripts/release-check.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm wasm:build && pnpm typecheck && pnpm coverage && node scripts/coverage-contracts.mjs && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
+    "ci": "pnpm protocol:check && pnpm naming:check && pnpm wasm:build && pnpm typecheck && pnpm coverage && node scripts/coverage-contracts.mjs && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
     "ci:strict": "pnpm run ci && git diff --exit-code && git diff --cached --exit-code"
   },
   "repository": {

@@ -1,9 +1,9 @@
 # Production Acceptance Matrix
 
-## Formula Top 100
+## Formula Corpus
 
 - canonical compatibility registry exists and is current
-- every Top 100 formula entry links to checked-in fixtures
+- every canonical formula entry links to checked-in fixtures
 - every closed family passes JS oracle checks
 - every closed family passes WASM differential checks
 - every closed family routes to WASM in production mode
@@ -28,6 +28,6 @@
 
 ## Open rows today
 
-- unsupported Top 100 entries remain
+- unsupported canonical formula entries remain
 - dynamic arrays, names, tables, and `LET`/`LAMBDA` are still open
 - full WASM-only production routing is not yet closed for the complete worksheet surface

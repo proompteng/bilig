@@ -1,20 +1,20 @@
-# Formula Top 100 Matrix
+# Formula Canonical Matrix
 
 ## Contract
 
 - the canonical registry contains exactly `100` rows
 - the canonical fixture export contains exactly `100` rows
 - registry ids and fixture ids must match exactly
-- the first `61` rows are the preserved pre-Top-100 set
+- the first `61` rows are the preserved pre-expansion set
 - the remaining `39` rows are the fixed expansion list
-- milestone key in code is `top100-canonical`
+- scope key in code is `canonical`
 
 ## Family View
 
 | family | status | wasmStatus | blocking gaps |
 | --- | --- | --- | --- |
 | `arithmetic` | `implemented-wasm-production` | `production` | remaining operator edge parity outside the current tracked slice |
-| `comparison` | mixed | mixed | string and lookup collation parity across the broader post-Top-100 surface |
+| `comparison` | mixed | mixed | string and lookup collation parity across the broader extended surface |
 | `logical` | mixed | mixed | native control-flow promotion for `IF`, `IFERROR`, and `IFNA` |
 | `aggregation` | `implemented-wasm-production` | `production` | broader family coverage outside the current tracked slice |
 | `math` | mixed | mixed | remaining promoted functions plus criteria-aware math families |
@@ -83,9 +83,9 @@ Names and lambda:
 - `names:defined-name-range`
 - `lambda:byrow-basic`
 
-`SEQUENCE` stays represented by the preserved legacy `dynamic-array:sequence-spill` row so the audited Top 100 stays fixed at `100`.
+`SEQUENCE` stays represented by the preserved legacy `dynamic-array:sequence-spill` row so the current canonical corpus stays fixed at `100`.
 
 ## Notes
 
-- `packages/excel-fixtures/src/index.ts` still imports the legacy seed file `top50.ts`; that is a filename legacy, not a milestone naming contract.
-- `post-top100` exists in the code registry for work that comes after the audited Top 100 milestone; it is intentionally outside this matrix.
+- the canonical corpus intentionally excludes legacy probe rows that still exist for ad hoc regression work
+- the `extended` scope exists in the code registry for work that comes after the audited canonical corpus; it is intentionally outside this matrix

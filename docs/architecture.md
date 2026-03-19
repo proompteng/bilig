@@ -23,7 +23,7 @@ flowchart LR
 - `@bilig/core` owns workbook context, dependency scheduling, metrics, and execution routing
 - `@bilig/excel-fixtures` owns checked-in oracle cases and capture metadata
 
-## Top 100 execution rule
+## Canonical Corpus Execution Rule
 
 - every formula family lands in JS first
 - fixtures prove Excel for the web parity
@@ -32,7 +32,7 @@ flowchart LR
 
 ## Metadata dependencies
 
-The Top 100 milestone depends on workbook-scoped metadata becoming first-class:
+The canonical formula corpus depends on workbook-scoped metadata becoming first-class:
 
 - defined names
 - tables and structured references
@@ -47,5 +47,5 @@ The Top 100 milestone depends on workbook-scoped metadata becoming first-class:
 See:
 
 - [bilig-lab-contract.md](/Users/gregkonush/github.com/bilig/docs/bilig-lab-contract.md)
-- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
+- [formula-canonical-program.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-program.md)
 - [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)

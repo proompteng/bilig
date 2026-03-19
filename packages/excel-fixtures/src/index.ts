@@ -1,9 +1,9 @@
 import { ErrorCode, type CellValue, type LiteralInput } from "@bilig/protocol";
 import { excelDateTimeFixtureSuite } from "./datetime-fixtures.js";
-import { excelTop100LogicalFixtures } from "./logical-fixtures.js";
-import { excelTop100ExpansionFixtures } from "./top100-expansion.js";
-import { excelTop100CanonicalSeedFixtures } from "./top50.js";
-import { excelTop100TextFixtures } from "./text-fixtures.js";
+import { canonicalLogicalFixtures } from "./logical-fixtures.js";
+import { canonicalExpansionFixtures } from "./canonical-expansion-fixtures.js";
+import { canonicalFoundationFixtures } from "./canonical-foundation-fixtures.js";
+import { canonicalTextFixtures } from "./text-fixtures.js";
 
 export const excelFixtureFamilies = [
   "arithmetic",
@@ -128,9 +128,9 @@ function dedupeFixtures(fixtures: readonly ExcelFixtureCase[]): ExcelFixtureCase
   return output;
 }
 
-const top100CanonicalExclusions = new Set<string>(["text:case-insensitive-compare", "information:value-error-display"]);
+const canonicalCorpusExclusions = new Set<string>(["text:case-insensitive-compare", "information:value-error-display"]);
 
-const excelTop100BaseFixtureIds = new Set<string>([
+const canonicalBaseFixtureIds = new Set<string>([
   "arithmetic:add-basic",
   "arithmetic:precedence-basic",
   "arithmetic:unary-negation",
@@ -194,25 +194,25 @@ const excelTop100BaseFixtureIds = new Set<string>([
   "text:len-counts-plain-string-length"
 ]);
 
-const excelTop100BaseFixtures = dedupeFixtures([
-  ...excelTop100CanonicalSeedFixtures,
-  ...excelTop100LogicalFixtures,
-  ...excelTop100TextFixtures,
+const canonicalBaseFixtures = dedupeFixtures([
+  ...canonicalFoundationFixtures,
+  ...canonicalLogicalFixtures,
+  ...canonicalTextFixtures,
   ...(excelDateTimeFixtureSuite.cases ?? [])
-]).filter((fixture) => excelTop100BaseFixtureIds.has(fixture.id) && !top100CanonicalExclusions.has(fixture.id));
+]).filter((fixture) => canonicalBaseFixtureIds.has(fixture.id) && !canonicalCorpusExclusions.has(fixture.id));
 
-export const excelTop100CanonicalFixtures: readonly ExcelFixtureCase[] = dedupeFixtures([
-  ...excelTop100BaseFixtures,
-  ...excelTop100ExpansionFixtures
+export const canonicalFormulaFixtures: readonly ExcelFixtureCase[] = dedupeFixtures([
+  ...canonicalBaseFixtures,
+  ...canonicalExpansionFixtures
 ]);
 
-export const excelTop100SmokeSuite: ExcelFixtureSuite = {
-  id: "top100-smoke",
-  description: "Representative smoke slice from the canonical Top 100 Excel compatibility corpus.",
+export const canonicalFormulaSmokeSuite: ExcelFixtureSuite = {
+  id: "canonical-smoke",
+  description: "Representative smoke slice from the canonical formula compatibility corpus.",
   sheets: [{ name: "Sheet1" }],
   excelBuild: "Microsoft 365 / 2026-03-19",
   capturedAt: "2026-03-19T00:00:00.000Z",
-  cases: excelTop100CanonicalFixtures.slice(0, 5)
+  cases: canonicalFormulaFixtures.slice(0, 5)
 };
 
 function buildFamilySuite(id: string, description: string, families: readonly ExcelFixtureFamily[]): ExcelFixtureSuite {
@@ -222,48 +222,48 @@ function buildFamilySuite(id: string, description: string, families: readonly Ex
     sheets: [{ name: "Sheet1" }],
     excelBuild: "Microsoft 365 / 2026-03-19",
     capturedAt: "2026-03-19T00:00:00.000Z",
-    cases: excelTop100CanonicalFixtures.filter((fixture) => families.includes(fixture.family))
+    cases: canonicalFormulaFixtures.filter((fixture) => families.includes(fixture.family))
   };
 }
 
-export const excelTop100TextFixtureSuite = buildFamilySuite(
-  "top100-text",
-  "Canonical Top 100 text-function fixture slice.",
+export const textFormulaFixtureSuite = buildFamilySuite(
+  "canonical-text",
+  "Canonical formula corpus text-function fixture slice.",
   ["text"]
 );
 
-export const excelTop100LookupReferenceFixtureSuite = buildFamilySuite(
-  "top100-lookup-reference",
-  "Canonical Top 100 lookup/reference fixture slice.",
+export const lookupReferenceFormulaFixtureSuite = buildFamilySuite(
+  "canonical-lookup-reference",
+  "Canonical formula corpus lookup/reference fixture slice.",
   ["lookup-reference", "statistical"]
 );
 
-export const excelTop100DateTimeFixtureSuite = buildFamilySuite(
-  "top100-date-time",
-  "Canonical Top 100 date/time and volatile fixture slice.",
+export const dateTimeFormulaFixtureSuite = buildFamilySuite(
+  "canonical-date-time",
+  "Canonical formula corpus date/time and volatile fixture slice.",
   ["date-time", "volatile"]
 );
 
-export const excelTop100DynamicArrayFixtureSuite = buildFamilySuite(
-  "top100-dynamic-array",
-  "Canonical Top 100 dynamic-array fixture slice.",
+export const dynamicArrayFormulaFixtureSuite = buildFamilySuite(
+  "canonical-dynamic-array",
+  "Canonical formula corpus dynamic-array fixture slice.",
   ["dynamic-array"]
 );
 
-export const excelTop100NamesTablesFixtureSuite = buildFamilySuite(
-  "top100-names-tables",
-  "Canonical Top 100 names, tables, and structured-reference fixture slice.",
+export const namesTablesFormulaFixtureSuite = buildFamilySuite(
+  "canonical-names-tables",
+  "Canonical formula corpus names, tables, and structured-reference fixture slice.",
   ["names", "tables", "structured-reference"]
 );
 
-export const excelTop100LambdaFixtureSuite = buildFamilySuite(
-  "top100-lambda",
-  "Canonical Top 100 lambda fixture slice.",
+export const lambdaFormulaFixtureSuite = buildFamilySuite(
+  "canonical-lambda",
+  "Canonical formula corpus lambda fixture slice.",
   ["lambda"]
 );
 
-export { excelTop100CanonicalSeedFixtures } from "./top50.js";
-export { excelTop100ExpansionFixtures } from "./top100-expansion.js";
+export { canonicalFoundationFixtures } from "./canonical-foundation-fixtures.js";
+export { canonicalExpansionFixtures } from "./canonical-expansion-fixtures.js";
 export * from "./logical-fixtures.js";
 export * from "./text-fixtures.js";
 export * from "./datetime-fixtures.js";

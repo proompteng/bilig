@@ -1,17 +1,17 @@
-# Formula Top 100 Program
+# Formula Canonical Program
 
 ## Goal
 
-Close the Top 100 Excel for the web worksheet formulas as the next hard product milestone.
+Close the canonical Excel for the web worksheet formula corpus as the next hard product milestone.
 
 ## Canonical Artifacts
 
 - `formulaCompatibilityRegistry` in `packages/formula/src/compatibility.ts`
-- `excelTop100CanonicalFixtures` in `packages/excel-fixtures/src/index.ts`
-- `excelTop100SmokeSuite` in `packages/excel-fixtures/src/index.ts`
-- milestone key `top100-canonical`
+- `canonicalFormulaFixtures` in `packages/excel-fixtures/src/index.ts`
+- `canonicalFormulaSmokeSuite` in `packages/excel-fixtures/src/index.ts`
+- scope key `canonical`
 
-The milestone is fixed at `100` canonical cases:
+The current canonical corpus is fixed at `100` audited cases:
 - keep the current `61` tracked cases unchanged
 - add the fixed `39` expansion cases from the product plan
 - do not substitute convenience variants for the fixed expansion list
@@ -65,11 +65,11 @@ Dynamic array:
 - `WRAPROWS`
 - `WRAPCOLS`
 
-`SEQUENCE` remains represented by the existing legacy `sequence-spill` row. The product plan text listed a separate 2D case, but the milestone stays fixed at `100`, so the canonical Top 100 uses the preserved legacy `SEQUENCE` slot instead of adding a second `SEQUENCE` row.
+`SEQUENCE` remains represented by the existing legacy `sequence-spill` row. The product plan text listed a separate 2D case, but the current canonical corpus stays fixed at `100` audited cases, so the preserved `SEQUENCE` slot remains singular instead of adding a second row.
 
 ## Canonical Exclusions
 
-The Top 100 canonical export intentionally excludes two legacy probe rows that remain useful for ad hoc regression work but are not part of the audited Top 100 milestone:
+The canonical formula export intentionally excludes two legacy probe rows that remain useful for ad hoc regression work but are not part of the audited canonical corpus:
 - `text:case-insensitive-compare`
 - `information:value-error-display`
 
@@ -85,7 +85,7 @@ Names/lambda:
 4. date/time with JS-level volatile coverage, but excluding native volatile promotion
 5. lookup/reference
 6. conditional statistical functions
-7. names, tables, structured refs, and dynamic arrays required by Top 100 entries
+7. names, tables, structured refs, and dynamic arrays required by canonical corpus entries
 
 ## Delivery Rule
 
@@ -105,6 +105,6 @@ Names/lambda:
 
 ## Exit Gate
 
-- Top 100 unsupported count is zero
-- every Top 100 family is `implemented-wasm-production`
+- canonical corpus unsupported count is zero
+- every canonical corpus family is `implemented-wasm-production`
 - JS remains non-production validation only for closed families

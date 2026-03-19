@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
-import { excelTop100CanonicalFixtures, type ExcelExpectedValue } from "../../../excel-fixtures/src/index.js";
+import { canonicalFormulaFixtures, type ExcelExpectedValue } from "../../../excel-fixtures/src/index.js";
 import { excelDateTimeFixtureSuite } from "../../../excel-fixtures/src/datetime-fixtures.js";
 import { formatAddress, parseRangeAddress } from "../addressing.js";
 import { compileFormula, evaluatePlan } from "../index.js";
@@ -8,7 +8,7 @@ import { getCompatibilityEntry } from "../compatibility.js";
 
 const executableStatuses = new Set(["implemented-js", "implemented-js-and-wasm-shadow", "implemented-wasm-production"]);
 
-const executableFixtures = excelTop100CanonicalFixtures.filter((fixture) => {
+const executableFixtures = canonicalFormulaFixtures.filter((fixture) => {
   const entry = getCompatibilityEntry(fixture.id);
   const hasVolatileCall = /\b(TODAY|NOW)\s*\(/i.test(fixture.formula);
   return entry !== undefined && executableStatuses.has(entry.status) && fixture.family !== "volatile" && !hasVolatileCall;
@@ -21,7 +21,7 @@ const executableDateTimeFixtures = (excelDateTimeFixtureSuite.cases ?? []).filte
 });
 
 describe("excel fixture harness", () => {
-  it("executes implemented canonical Top 100 fixtures through the JS evaluator", () => {
+  it("executes implemented canonical formula fixtures through the JS evaluator", () => {
     for (const fixture of executableFixtures) {
       expect(evaluateFixture(fixture), fixture.id).toEqual(expectedValueToCellValue(fixture.outputs[0]!.expected));
     }
@@ -35,7 +35,7 @@ describe("excel fixture harness", () => {
 
   it("executes implemented volatile RAND fixtures deterministically through the JS evaluator", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.625);
-    const randFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "volatile:rand-basic");
+    const randFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "volatile:rand-basic");
 
     expect(randFixture).toBeDefined();
     expect(getCompatibilityEntry("volatile:rand-basic")?.status).toBe("implemented-js");
@@ -55,8 +55,8 @@ describe("excel fixture harness", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-19T15:45:30.000Z"));
 
-    const todayFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "date-time:today-volatile");
-    const nowFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "date-time:now-volatile");
+    const todayFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "date-time:today-volatile");
+    const nowFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "date-time:now-volatile");
 
     expect(todayFixture).toBeDefined();
     expect(nowFixture).toBeDefined();
@@ -76,8 +76,8 @@ describe("excel fixture harness", () => {
   });
 
   it("executes the seeded logical backlog fixtures through the JS evaluator once they are promoted", () => {
-    const ifFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "logical:if-condition-error");
-    const ifnaFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "logical:ifna-catches-na-only");
+    const ifFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "logical:if-condition-error");
+    const ifnaFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "logical:ifna-catches-na-only");
 
     expect(ifFixture).toBeDefined();
     expect(ifnaFixture).toBeDefined();

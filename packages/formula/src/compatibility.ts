@@ -9,9 +9,9 @@ export const compatibilityStatuses = [
 
 export type CompatibilityStatus = typeof compatibilityStatuses[number];
 
-export const compatibilityMilestones = ["top100-canonical", "post-top100"] as const;
+export const compatibilityScopes = ["canonical", "extended"] as const;
 
-export type CompatibilityMilestone = typeof compatibilityMilestones[number];
+export type CompatibilityScope = typeof compatibilityScopes[number];
 
 export const wasmCompatibilityStatuses = ["not-started", "shadow", "production", "blocked"] as const;
 
@@ -43,7 +43,7 @@ export interface FormulaCompatibilityEntry {
   family: CompatibilityFamily;
   formula: string;
   status: CompatibilityStatus;
-  milestone: CompatibilityMilestone;
+  scope: CompatibilityScope;
   fixtureIds: readonly string[];
   owner: string;
   prerequisites: readonly string[];
@@ -108,7 +108,7 @@ function entry(
   formula: string,
   status: CompatibilityStatus,
   options: {
-    milestone?: CompatibilityMilestone;
+    scope?: CompatibilityScope;
     fixtureIds?: readonly string[];
     owner?: string;
     prerequisites?: readonly string[];
@@ -121,7 +121,7 @@ function entry(
     family,
     formula,
     status,
-    milestone: options.milestone ?? "top100-canonical",
+    scope: options.scope ?? "canonical",
     fixtureIds: options.fixtureIds ?? [id],
     owner: options.owner ?? familyOwners[family],
     prerequisites: options.prerequisites ?? familyPrerequisites[family],
@@ -137,7 +137,7 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("arithmetic:division-basic", "arithmetic", "=A1/A2", "implemented-wasm-production"),
   entry("arithmetic:power-basic", "arithmetic", "=A1^A2", "implemented-wasm-production"),
   entry("arithmetic:percent-operator", "arithmetic", "=A1*10%", "implemented-wasm-production", {
-    notes: "Postfix percent is in the canonical Top 100 pack and tracked as part of the arithmetic lane."
+    notes: "Postfix percent is in the canonical formula corpus and tracked as part of the arithmetic lane."
   }),
   entry("comparison:equality-number", "comparison", "=A1=A2", "implemented-wasm-production"),
   entry("comparison:equality-text", "comparison", "=\"hello\"=\"HELLO\"", "implemented-js", {

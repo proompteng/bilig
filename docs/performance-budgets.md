@@ -2,7 +2,7 @@
 
 ## Formula budgets
 
-- Top 100 closed families must execute in WASM in production mode
+- closed canonical-corpus families must execute in WASM in production mode
 - differential JS-vs-WASM runs are allowed only in test/debug paths
 - binary encode/decode p95 `< 1ms` for common formula-driven edit batches
 
@@ -17,7 +17,7 @@
 
 - WASM kernel startup must remain below the current frontend release ceiling
 - WASM binary gzip size remains a release gate
-- string/runtime extensions for Top 100 must not regress the release budget without an explicit budget update
+- string/runtime extensions for the canonical corpus must not regress the release budget without an explicit budget update
 
 ## Ownership split
 

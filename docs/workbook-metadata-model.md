@@ -14,9 +14,9 @@
 - `@bilig/formula` consumes metadata during binding and evaluation
 - `@bilig/wasm-kernel` consumes lowered metadata needed by production execution
 
-## Top 100 relevance
+## Canonical Corpus Relevance
 
-The Top 100 milestone cannot close without workbook metadata because:
+The canonical formula corpus cannot close without workbook metadata because:
 
 - names unlock named formulas
 - tables unlock structured references

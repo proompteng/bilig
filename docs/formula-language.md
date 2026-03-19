@@ -4,11 +4,11 @@
 
 - JS is still the semantic oracle
 - WASM executes only a subset of the implemented surface
-- the compatibility registry now tracks a broader starter corpus, but the Top 100 milestone is still open
+- the compatibility registry now tracks a broader starter corpus, but the canonical formula corpus milestone is still open
 
-## Top 100 milestone
+## Canonical Corpus Milestone
 
-The active milestone is **Top 100 Excel for the web worksheet formulas**. That milestone includes:
+The active milestone is the **canonical Excel for the web worksheet formula corpus**. That corpus currently includes `100` audited cases and:
 
 - arithmetic and aggregate operators
 - logical and information functions
@@ -41,8 +41,8 @@ The full formula target remains Excel 365 worksheet parity as of `2026-03-15`, i
 
 ## Canonical companions
 
-- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
-- [formula-top100-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-matrix.md)
+- [formula-canonical-program.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-program.md)
+- [formula-canonical-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-matrix.md)
 - [formula-oracle-capture.md](/Users/gregkonush/github.com/bilig/docs/formula-oracle-capture.md)
 - [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)
 - [dynamic-array-runtime.md](/Users/gregkonush/github.com/bilig/docs/dynamic-array-runtime.md)

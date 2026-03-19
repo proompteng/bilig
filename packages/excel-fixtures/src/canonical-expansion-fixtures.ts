@@ -59,7 +59,7 @@ function fixture(
   return notes === undefined ? base : { ...base, notes };
 }
 
-export const excelTop100ExpansionFixtures: readonly ExcelFixtureCase[] = [
+export const canonicalExpansionFixtures: readonly ExcelFixtureCase[] = [
   fixture("text", "exact-basic", "EXACT case-sensitive text comparison", "=EXACT(\"Alpha\",\"alpha\")", [], [
     output("A1", { kind: "boolean", value: false })
   ]),
@@ -74,7 +74,7 @@ export const excelTop100ExpansionFixtures: readonly ExcelFixtureCase[] = [
   fixture("text", "value-basic", "VALUE text-to-number coercion", "=VALUE(\"42\")", [], [output("A1", numberExpected(42))], "Canonical literal case now closes through constant folding; dynamic text-input VALUE semantics still route through the JS oracle."),
   fixture("lookup-reference", "xmatch-basic", "XMATCH exact match", "=XMATCH(\"pear\",A1:A3,0)", [input("A1", "apple"), input("A2", "pear"), input("A3", "plum")], [output("A4", numberExpected(2))]),
   fixture("lookup-reference", "hlookup-basic", "HLOOKUP exact match across header row", "=HLOOKUP(\"pear\",A1:C2,2,FALSE)", [input("A1", "apple"), input("B1", "pear"), input("C1", "plum"), input("A2", 10), input("B2", 20), input("C2", 30)], [output("D1", numberExpected(20))]),
-  fixture("lookup-reference", "offset-basic", "OFFSET relative reference", "=OFFSET(A1,1,1)", [input("A1", 10), input("B2", 20)], [output("A2", numberExpected(20))], "Top 100 contract case; reference-returning semantics are still open."),
+  fixture("lookup-reference", "offset-basic", "OFFSET relative reference", "=OFFSET(A1,1,1)", [input("A1", 10), input("B2", 20)], [output("A2", numberExpected(20))], "Canonical corpus case; reference-returning semantics are still open."),
   fixture("dynamic-array", "take-basic", "TAKE returns leading rows", "=TAKE(A1:A4,2)", [input("A1", 1), input("A2", 2), input("A3", 3), input("A4", 4)], [output("B1", numberExpected(1)), output("B2", numberExpected(2))]),
   fixture("dynamic-array", "drop-basic", "DROP removes leading rows", "=DROP(A1:A4,2)", [input("A1", 1), input("A2", 2), input("A3", 3), input("A4", 4)], [output("B1", numberExpected(3)), output("B2", numberExpected(4))]),
   fixture("dynamic-array", "choosecols-basic", "CHOOSECOLS selects explicit columns", "=CHOOSECOLS(A1:C2,1,3)", [input("A1", 1), input("B1", 2), input("C1", 3), input("A2", 4), input("B2", 5), input("C2", 6)], [output("D1", numberExpected(1)), output("E1", numberExpected(3)), output("D2", numberExpected(4)), output("E2", numberExpected(6))]),
@@ -87,7 +87,7 @@ export const excelTop100ExpansionFixtures: readonly ExcelFixtureCase[] = [
   fixture("math", "int-basic", "INT rounds toward negative infinity", "=INT(-3.1)", [], [output("A1", numberExpected(-4))]),
   fixture("math", "roundup-basic", "ROUNDUP rounds away from zero", "=ROUNDUP(12.341,2)", [], [output("A1", numberExpected(12.35))]),
   fixture("math", "rounddown-basic", "ROUNDDOWN rounds toward zero", "=ROUNDDOWN(12.349,2)", [], [output("A1", numberExpected(12.34))]),
-  fixture("date-time", "now-volatile", "NOW volatile timestamp capture", "=NOW()", [], [output("A1", numberExpected(46100.65659722222))], "Oracle output captured for the Top 100 plan; runtime normalization is still open."),
+  fixture("date-time", "now-volatile", "NOW volatile timestamp capture", "=NOW()", [], [output("A1", numberExpected(46100.65659722222))], "Oracle output captured for the canonical corpus plan; runtime normalization is still open."),
   fixture("date-time", "time-basic", "TIME constructs a fractional day serial", "=TIME(12,30,0)", [], [output("A1", numberExpected(0.5208333333333334))]),
   fixture("date-time", "hour-basic", "HOUR extracts the hour component", "=HOUR(A1)", [input("A1", 0.5208333333333334)], [output("A2", numberExpected(12))]),
   fixture("date-time", "minute-basic", "MINUTE extracts the minute component", "=MINUTE(A1)", [input("A1", 0.5208333333333334)], [output("A2", numberExpected(30))]),

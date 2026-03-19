@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-The immediate milestone is **Top 100 Excel for the web worksheet formulas**.
+The immediate milestone is the **canonical Excel for the web worksheet formula corpus**, which currently contains `100` audited cases.
 
 That milestone is the gate between the current starter surface and the full canonical target.
 
@@ -26,12 +26,12 @@ Match Excel 365 worksheet semantics as of `2026-03-15` across:
 
 ## Milestone docs
 
-- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
-- [formula-top100-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-matrix.md)
+- [formula-canonical-program.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-program.md)
+- [formula-canonical-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-matrix.md)
 - [formula-oracle-capture.md](/Users/gregkonush/github.com/bilig/docs/formula-oracle-capture.md)
 
 ## Exit gate
 
-- all Top 100 entries are fixture-backed
+- all canonical formula entries are fixture-backed
 - all closed entries run in WASM production mode
-- remaining open work is only outside the Top 100 milestone or outside the worksheet formula scope
+- remaining open work is only outside the current canonical corpus or outside the worksheet formula scope

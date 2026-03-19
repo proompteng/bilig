@@ -147,7 +147,7 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
   }
 ];
 
-export const excelTop100TextFixtures: readonly ExcelFixtureCase[] = [
+export const canonicalTextFixtures: readonly ExcelFixtureCase[] = [
   fixture("len-counts-plain-string-length", "LEN counts plain string length", "=LEN(\"hello\")", [], [output("A1", numberExpected(5))]),
   fixture("len-coerces-booleans-to-text", "LEN coerces booleans to text", "=LEN(A1)", [input("A1", true)], [output("A2", numberExpected(4))]),
   fixture("len-treats-empty-as-empty-string", "LEN treats empty as empty string", "=LEN(A1)", [input("A1", null)], [output("A2", numberExpected(0))]),

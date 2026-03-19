@@ -25,4 +25,4 @@ Every captured fixture must include:
 
 ## Exit gate
 
-- every Top 100 entry links to a checked-in oracle case or an explicit blocker
+- every canonical formula entry links to a checked-in oracle case or an explicit blocker

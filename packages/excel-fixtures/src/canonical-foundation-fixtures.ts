@@ -63,7 +63,7 @@ function fixture(
   return notes === undefined ? base : { ...base, notes };
 }
 
-export const excelTop100CanonicalSeedFixtures: ExcelFixtureCase[] = [
+export const canonicalFoundationFixtures: ExcelFixtureCase[] = [
   fixture("arithmetic", "add-basic", "Addition", "=A1+A2", [input("A1", 2), input("A2", 5)], [output("A3", numberExpected(7))]),
   fixture("arithmetic", "precedence-basic", "Operator precedence", "=A1+A2*A3", [input("A1", 2), input("A2", 3), input("A3", 4)], [output("A4", numberExpected(14))]),
   fixture("arithmetic", "unary-negation", "Unary negation", "=-A1", [input("A1", 9)], [output("A2", numberExpected(-9))]),

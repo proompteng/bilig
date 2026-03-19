@@ -165,7 +165,7 @@ export const logicalFixtureCases: readonly LogicalFixtureCase[] = [
   }
 ];
 
-export const excelTop100LogicalFixtures: readonly ExcelFixtureCase[] = [
+export const canonicalLogicalFixtures: readonly ExcelFixtureCase[] = [
   fixture("logical", "if-true-branch", "IF true branch from boolean input", "=IF(A1,A2,A3)", [input("A1", true), input("A2", "yes"), input("A3", "no")], [output("A4", stringExpected("yes"))]),
   fixture("logical", "if-condition-error", "IF propagates condition error", "=IF(1/0,1,2)", [], [output("A1", errorExpected(ErrorCode.Div0, "#DIV/0!"))]),
   fixture("logical", "iferror-catches-any-error", "IFERROR catches any error", "=IFERROR(1/0,\"fallback\")", [], [output("A1", stringExpected("fallback"))]),
