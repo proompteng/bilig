@@ -82,7 +82,7 @@ Names/lambda:
 1. arithmetic, aggregation, and core math
 2. logical and information
 3. text
-4. date/time excluding volatile promotion
+4. date/time with JS-level volatile coverage, but excluding native volatile promotion
 5. lookup/reference
 6. conditional statistical functions
 7. names, tables, structured refs, and dynamic arrays required by Top 100 entries

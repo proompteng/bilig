@@ -164,8 +164,8 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("math:mod-basic", "math", "=MOD(A1,A2)", "implemented-wasm-production"),
   entry("text:concat-operator", "text", "=\"bi\"&\"lig\"", "implemented-js"),
   entry("text:concat-function", "text", "=CONCAT(\"bi\",\"lig\")", "implemented-js"),
-  entry("text:len-basic", "text", "=LEN(\"bilig\")", "implemented-js-and-wasm-shadow", {
-    notes: "String-tag transport remains the gating runtime primitive for promotion to production WASM."
+  entry("text:len-basic", "text", "=LEN(\"bilig\")", "implemented-wasm-production", {
+    notes: "LEN now executes through the string-aware native runtime for scalar inputs."
   }),
   entry("date-time:serial-addition", "date-time", "=A1+7", "implemented-wasm-production"),
   entry("date-time:date-constructor", "date-time", "=DATE(2026,3,15)", "implemented-wasm-production"),
@@ -178,9 +178,9 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("lookup-reference:xlookup-exact", "lookup-reference", "=XLOOKUP(\"pear\",A1:A3,B1:B3)", "implemented-js"),
   entry("statistical:averageif-basic", "statistical", "=AVERAGEIF(A1:A4,\">0\")", "implemented-js"),
   entry("statistical:countif-basic", "statistical", "=COUNTIF(A1:A4,\">0\")", "implemented-js"),
-  entry("information:isblank-basic", "information", "=ISBLANK(A1)", "implemented-js-and-wasm-shadow"),
-  entry("information:isnumber-basic", "information", "=ISNUMBER(A1)", "implemented-js-and-wasm-shadow"),
-  entry("information:istext-basic", "information", "=ISTEXT(A1)", "implemented-js-and-wasm-shadow"),
+  entry("information:isblank-basic", "information", "=ISBLANK(A1)", "implemented-wasm-production"),
+  entry("information:isnumber-basic", "information", "=ISNUMBER(A1)", "implemented-wasm-production"),
+  entry("information:istext-basic", "information", "=ISTEXT(A1)", "implemented-wasm-production"),
   entry("dynamic-array:sequence-spill", "dynamic-array", "=SEQUENCE(3,1,1,1)", "blocked", {
     notes: "Spill allocation and shape semantics are required before this family can move past blocked."
   }),
@@ -206,9 +206,9 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("logical:and-false-on-empty", "logical", "=AND(TRUE,A1)", "implemented-js"),
   entry("logical:or-true-branch", "logical", "=OR(A1,TRUE)", "implemented-js"),
   entry("logical:not-number", "logical", "=NOT(2)", "implemented-js"),
-  entry("information:isblank-empty", "information", "=ISBLANK(A1)", "implemented-js-and-wasm-shadow"),
-  entry("information:isnumber-number", "information", "=ISNUMBER(42)", "implemented-js-and-wasm-shadow"),
-  entry("information:istext-string", "information", "=ISTEXT(\"hello\")", "implemented-js-and-wasm-shadow"),
+  entry("information:isblank-empty", "information", "=ISBLANK(A1)", "implemented-wasm-production"),
+  entry("information:isnumber-number", "information", "=ISNUMBER(42)", "implemented-wasm-production"),
+  entry("information:istext-string", "information", "=ISTEXT(\"hello\")", "implemented-wasm-production"),
   entry("text:len-counts-plain-string-length", "text", "=LEN(\"hello\")", "implemented-js"),
   entry("text:exact-basic", "text", "=EXACT(\"Alpha\",\"alpha\")", "implemented-wasm-production", {
     notes: "EXACT now routes through the string-aware WASM runtime."
@@ -241,9 +241,9 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("math:int-basic", "math", "=INT(-3.1)", "implemented-wasm-production"),
   entry("math:roundup-basic", "math", "=ROUNDUP(12.341,2)", "implemented-wasm-production"),
   entry("math:rounddown-basic", "math", "=ROUNDDOWN(12.349,2)", "implemented-wasm-production"),
-  entry("date-time:now-volatile", "date-time", "=NOW()", "unsupported", {
+  entry("date-time:now-volatile", "date-time", "=NOW()", "implemented-js", {
     prerequisites: ["core:value-model", "core:date-serial-model", "core:volatile-context"],
-    notes: "Oracle capture exists, but precision and epoch normalization are still open."
+    notes: "NOW executes on the JS oracle with deterministic capture tests; native promotion still depends on a recalc-epoch runtime contract."
   }),
   entry("date-time:time-basic", "date-time", "=TIME(12,30,0)", "implemented-wasm-production"),
   entry("date-time:hour-basic", "date-time", "=HOUR(A1)", "implemented-wasm-production"),

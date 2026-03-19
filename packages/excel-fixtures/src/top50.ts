@@ -95,7 +95,7 @@ export const excelTop100CanonicalSeedFixtures: ExcelFixtureCase[] = [
   fixture("text", "case-insensitive-compare", "Text compare semantics", "=\"a\"=\"A\"", [], [output("A1", booleanExpected(true))]),
   fixture("date-time", "serial-addition", "Date serial addition", "=A1+7", [input("A1", 45292)], [output("A2", numberExpected(45299))], "Uses raw serials so the oracle stays stable across locale formatting."),
   fixture("date-time", "date-constructor", "DATE constructor", "=DATE(2026,3,15)", [], [output("A1", numberExpected(46096))], "Committed oracle result captured from Excel for the web."),
-  fixture("date-time", "today-volatile", "TODAY volatile function", "=TODAY()", [], [output("A1", numberExpected(46097))], "Captured output should be regenerated from the oracle rather than treated as timeless."),
+  fixture("date-time", "today-volatile", "TODAY volatile function", "=TODAY()", [], [output("A1", numberExpected(46100))], "Captured output is pinned to the current Excel-for-web oracle timestamp rather than treated as timeless."),
   fixture("lookup-reference", "index-basic", "INDEX exact cell lookup", "=INDEX(A1:B2,2,1)", [input("A1", 10), input("B1", 20), input("A2", 30), input("B2", 40)], [output("C1", numberExpected(30))]),
   fixture("lookup-reference", "match-exact", "MATCH exact", "=MATCH(\"pear\",A1:A3,0)", [input("A1", "apple"), input("A2", "pear"), input("A3", "plum")], [output("A4", numberExpected(2))]),
   fixture("lookup-reference", "vlookup-exact", "VLOOKUP exact", "=VLOOKUP(\"pear\",A1:B3,2,FALSE)", [input("A1", "apple"), input("B1", 10), input("A2", "pear"), input("B2", 20), input("A3", "plum"), input("B3", 30)], [output("C1", numberExpected(20))]),

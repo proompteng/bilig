@@ -19,15 +19,15 @@
 | `aggregation` | `implemented-wasm-production` | `production` | broader family coverage outside the current tracked slice |
 | `math` | mixed | mixed | remaining promoted functions plus criteria-aware math families |
 | `text` | mixed | mixed | `VALUE` plus full string-runtime promotion into WASM |
-| `date-time` | mixed | mixed | `NOW`, `TIME`, `HOUR`, `MINUTE`, `SECOND`, `WEEKDAY`, volatile epoch normalization |
+| `date-time` | mixed | mixed | `NOW` native promotion and volatile epoch normalization |
 | `lookup-reference` | mixed | mixed | `OFFSET` and richer reference-returning semantics |
 | `statistical` | mixed | `not-started` | criteria/wildcard parity and WASM promotion |
-| `information` | `implemented-js-and-wasm-shadow` | `shadow` | production promotion once shadow parity is proven |
+| `information` | `implemented-wasm-production` | `production` | broader information-family coverage outside the current tracked slice |
 | `dynamic-array` | `blocked` | `blocked` | spill runtime, array value model, and blocking semantics |
 | `names` | `blocked` | `blocked` | workbook metadata model and name rebinding |
 | `tables` | `blocked` | `blocked` | table metadata model |
 | `structured-reference` | `blocked` | `blocked` | parser support and metadata binding |
-| `volatile` | mixed | `not-started` | epoch/provider contract and deterministic oracle normalization |
+| `volatile` | mixed | `not-started` | epoch/provider contract for native promotion |
 | `lambda` | `blocked` | `blocked` | callable scope/runtime model |
 
 ## Fixed Expansion Rows

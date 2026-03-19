@@ -24,7 +24,7 @@ This ledger maps the current Top 100 formula milestone to concrete proof points.
 
 ## Open rows
 
-- Top 100 registry still contains unsupported entries
+- Top 100 registry unsupported count is now zero, but blocked and seeded entries remain
 - not every closed JS family has a matching WASM production route
 - workbook metadata semantics are not fully closed
 - dynamic-array runtime is not closed

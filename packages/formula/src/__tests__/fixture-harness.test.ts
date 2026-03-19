@@ -50,6 +50,30 @@ describe("excel fixture harness", () => {
     expect(randomSpy).toHaveBeenCalled();
     expect(value).toEqual(expectedValueToCellValue(randFixture!.outputs[0]!.expected));
   });
+
+  it("executes implemented volatile TODAY and NOW fixtures against the captured UTC timestamp", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-19T15:45:30.000Z"));
+
+    const todayFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "date-time:today-volatile");
+    const nowFixture = excelTop100CanonicalFixtures.find((fixture) => fixture.id === "date-time:now-volatile");
+
+    expect(todayFixture).toBeDefined();
+    expect(nowFixture).toBeDefined();
+    expect(getCompatibilityEntry("date-time:today-volatile")?.status).toBe("implemented-js");
+    expect(getCompatibilityEntry("date-time:now-volatile")?.status).toBe("implemented-js");
+
+    const todayCompiled = compileFormula(todayFixture!.formula);
+    const nowCompiled = compileFormula(nowFixture!.formula);
+    const context = {
+      sheetName: "Sheet1",
+      resolveCell: () => ({ tag: ValueTag.Empty } as const),
+      resolveRange: () => []
+    };
+
+    expect(evaluatePlan(todayCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(todayFixture!.outputs[0]!.expected));
+    expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(nowFixture!.outputs[0]!.expected));
+  });
 });
 
 afterEach(() => {

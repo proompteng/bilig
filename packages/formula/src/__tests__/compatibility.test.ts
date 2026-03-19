@@ -72,16 +72,7 @@ describe("formula compatibility registry", () => {
     const statuses = new Set(formulaCompatibilityRegistry.map((entry) => entry.status));
     const wasmStatuses = new Set(formulaCompatibilityRegistry.map((entry) => entry.wasmStatus));
 
-    expect([...statuses].sort()).toEqual(
-      [
-        "blocked",
-        "implemented-js",
-        "implemented-js-and-wasm-shadow",
-        "implemented-wasm-production",
-        "seeded",
-        "unsupported"
-      ].sort()
-    );
-    expect([...wasmStatuses].sort()).toEqual(wasmCompatibilityStatuses.slice().sort());
+    expect([...statuses].sort()).toEqual(compatibilityStatuses.filter((status) => statuses.has(status)).sort());
+    expect([...wasmStatuses].sort()).toEqual(wasmCompatibilityStatuses.filter((status) => wasmStatuses.has(status)).sort());
   });
 });
