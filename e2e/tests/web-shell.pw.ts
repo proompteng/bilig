@@ -4,6 +4,63 @@ const PRODUCT_ROW_MARKER_WIDTH = 46;
 const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_HEIGHT = 22;
+
+async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
+  const grid = page.getByTestId("sheet-grid");
+  const [defaultWidthRaw, overridesRaw] = await Promise.all([
+    grid.getAttribute("data-default-column-width"),
+    grid.getAttribute("data-column-width-overrides")
+  ]);
+  const defaultWidth = Number(defaultWidthRaw ?? String(PRODUCT_COLUMN_WIDTH));
+  const overrides = overridesRaw ? JSON.parse(overridesRaw) as Record<string, number> : {};
+  return overrides[String(columnIndex)] ?? defaultWidth;
+}
+
+async function getProductColumnLeft(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
+  let offset = PRODUCT_ROW_MARKER_WIDTH;
+  for (let index = 0; index < columnIndex; index += 1) {
+    offset += await getProductColumnWidth(page, index);
+  }
+  return offset;
+}
+
+async function dragProductColumnResize(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number,
+  deltaX: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  const edgeX = grid.x + columnLeft + columnWidth - 1;
+  const edgeY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
+
+  await page.mouse.move(edgeX, edgeY);
+  await page.mouse.down();
+  await page.mouse.move(edgeX + deltaX, edgeY, { steps: 10 });
+  await page.mouse.up();
+}
+
+async function doubleClickProductColumnResizeHandle(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  const edgeX = grid.x + columnLeft + columnWidth - 1;
+  const headerY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
+  await page.mouse.click(edgeX, headerY, { clickCount: 2 });
+}
+
 async function dragProductHeaderSelection(
   page: Parameters<typeof test>[0]["page"],
   axis: "column" | "row",
@@ -15,14 +72,18 @@ async function dragProductHeaderSelection(
     throw new Error("sheet grid is not visible");
   }
 
+  const startColumnLeft = axis === "column" ? await getProductColumnLeft(page, startIndex) : 0;
+  const endColumnLeft = axis === "column" ? await getProductColumnLeft(page, endIndex) : 0;
+  const startColumnWidth = axis === "column" ? await getProductColumnWidth(page, startIndex) : 0;
+  const endColumnWidth = axis === "column" ? await getProductColumnWidth(page, endIndex) : 0;
   const startX = axis === "column"
-    ? grid.x + PRODUCT_ROW_MARKER_WIDTH + (startIndex * PRODUCT_COLUMN_WIDTH) + Math.floor(PRODUCT_COLUMN_WIDTH / 2)
+    ? grid.x + startColumnLeft + Math.floor(startColumnWidth / 2)
     : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
   const startY = axis === "column"
     ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
     : grid.y + PRODUCT_HEADER_HEIGHT + (startIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
   const endX = axis === "column"
-    ? grid.x + PRODUCT_ROW_MARKER_WIDTH + (endIndex * PRODUCT_COLUMN_WIDTH) + Math.floor(PRODUCT_COLUMN_WIDTH / 2)
+    ? grid.x + endColumnLeft + Math.floor(endColumnWidth / 2)
     : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
   const endY = axis === "column"
     ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
@@ -57,15 +118,66 @@ async function dragProductFillHandle(
     throw new Error("sheet grid is not visible");
   }
 
-  const sourceLeft = grid.x + PRODUCT_ROW_MARKER_WIDTH + (sourceCol * PRODUCT_COLUMN_WIDTH);
+  const sourceLeft = grid.x + await getProductColumnLeft(page, sourceCol);
   const sourceTop = grid.y + PRODUCT_HEADER_HEIGHT + (sourceRow * PRODUCT_ROW_HEIGHT);
-  const targetLeft = grid.x + PRODUCT_ROW_MARKER_WIDTH + (targetCol * PRODUCT_COLUMN_WIDTH);
+  const targetLeft = grid.x + await getProductColumnLeft(page, targetCol);
   const targetTop = grid.y + PRODUCT_HEADER_HEIGHT + (targetRow * PRODUCT_ROW_HEIGHT);
+  const sourceWidth = await getProductColumnWidth(page, sourceCol);
+  const targetWidth = await getProductColumnWidth(page, targetCol);
 
-  await page.mouse.move(sourceLeft + PRODUCT_COLUMN_WIDTH - 3, sourceTop + PRODUCT_ROW_HEIGHT - 3);
+  await page.mouse.move(sourceLeft + sourceWidth - 3, sourceTop + PRODUCT_ROW_HEIGHT - 3);
   await page.mouse.down();
-  await page.mouse.move(targetLeft + PRODUCT_COLUMN_WIDTH - 3, targetTop + PRODUCT_ROW_HEIGHT - 3, { steps: 10 });
+  await page.mouse.move(targetLeft + targetWidth - 3, targetTop + PRODUCT_ROW_HEIGHT - 3, { steps: 10 });
   await page.mouse.up();
+}
+
+async function dragProductColumnDivider(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number,
+  deltaX: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const dividerX = grid.x + await getProductColumnLeft(page, columnIndex) + await getProductColumnWidth(page, columnIndex);
+  const y = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
+
+  await page.mouse.move(dividerX - 1, y);
+  await page.mouse.down();
+  await page.mouse.move(dividerX - 1 + deltaX, y, { steps: 8 });
+  await page.mouse.up();
+}
+
+async function doubleClickProductColumnDivider(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const dividerX = grid.x + await getProductColumnLeft(page, columnIndex) + await getProductColumnWidth(page, columnIndex);
+  const y = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
+  await page.mouse.dblclick(dividerX - 1, y);
+}
+
+async function clickProductBodyOffset(
+  page: Parameters<typeof test>[0]["page"],
+  offsetX: number,
+  rowIndex = 0
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  await page.mouse.click(
+    grid.x + PRODUCT_ROW_MARKER_WIDTH + offsetX,
+    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2)
+  );
 }
 
 test("web app renders the minimal product shell without playground chrome", async ({ page }) => {
@@ -129,6 +241,38 @@ test("web app supports row and column header drag selection", async ({ page }) =
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!2:4");
 });
 
+test("web app supports column resize without breaking hit testing", async ({ page }) => {
+  await page.goto("/");
+
+  await clickProductBodyOffset(page, 82, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+  await dragProductColumnResize(page, 0, -36);
+
+  await clickProductBodyOffset(page, 82, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B1");
+});
+
+test("web app supports column edge double-click autofit", async ({ page }) => {
+  await page.goto("/");
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+
+  await nameBox.fill("A1");
+  await nameBox.press("Enter");
+  await formulaInput.fill("supercalifragilisticexpialidocious");
+  await formulaInput.press("Enter");
+
+  await clickProductBodyOffset(page, 126, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B1");
+
+  await doubleClickProductColumnResizeHandle(page, 0);
+
+  await clickProductBodyOffset(page, 126, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+});
+
 test("web app accepts string values and string comparison formulas", async ({ page }) => {
   await page.goto("/");
 
@@ -166,6 +310,14 @@ test("web app supports fill-handle propagation", async ({ page }) => {
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("7");
   await expect(resolvedValue).toHaveText("7");
+});
+
+test("web app supports product-shell column resize", async ({ page }) => {
+  await page.goto("/");
+
+  const baselineWidth = await getProductColumnWidth(page, 0);
+  await dragProductColumnResize(page, 0, 48);
+  await expect.poll(() => getProductColumnWidth(page, 0)).toBeGreaterThan(baselineWidth + 30);
 });
 
 test("web app relocates relative formulas when using the fill handle", async ({ page }) => {

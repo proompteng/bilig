@@ -76,6 +76,10 @@ const PRODUCT_ROW_HEIGHT = 22;
 const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_MARKER_WIDTH = 46;
 const SCROLLBAR_GUTTER = 18;
+const COLUMN_RESIZE_HANDLE_THRESHOLD = 6;
+const MIN_COLUMN_WIDTH = 44;
+const MAX_COLUMN_WIDTH = 480;
+const EMPTY_COLUMN_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 
 function getGridMetrics(variant: "playground" | "product") {
   return variant === "product"
@@ -131,6 +135,68 @@ function rectangleToAddresses(range: Rectangle): { startAddress: string; endAddr
     startAddress: formatAddress(clamped.y, clamped.x),
     endAddress: formatAddress(clamped.y + clamped.height - 1, clamped.x + clamped.width - 1)
   };
+}
+
+function getResolvedColumnWidth(
+  columnWidths: Readonly<Record<number, number>>,
+  col: number,
+  defaultWidth: number
+): number {
+  return columnWidths[col] ?? defaultWidth;
+}
+
+function getVisibleColumnBounds(
+  region: VisibleRegionState,
+  dataLeft: number,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number
+): Array<{ index: number; left: number; right: number; width: number }> {
+  const bounds: Array<{ index: number; left: number; right: number; width: number }> = [];
+  const colEnd = Math.min(MAX_COLS - 1, region.range.x + region.range.width - 1);
+  let cursor = dataLeft;
+  for (let col = region.range.x; col <= colEnd; col += 1) {
+    const width = getResolvedColumnWidth(columnWidths, col, defaultWidth);
+    bounds.push({ index: col, left: cursor, right: cursor + width, width });
+    cursor += width;
+  }
+  return bounds;
+}
+
+function resolveColumnAtClientX(
+  clientX: number,
+  region: VisibleRegionState,
+  dataLeft: number,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number
+): number | null {
+  for (const column of getVisibleColumnBounds(region, dataLeft, columnWidths, defaultWidth)) {
+    if (clientX >= column.left && clientX < column.right) {
+      return column.index;
+    }
+  }
+  return null;
+}
+
+function resolveColumnResizeTarget(
+  clientX: number,
+  clientY: number,
+  region: VisibleRegionState,
+  geometry: PointerGeometry,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number
+): number | null {
+  if (clientY < geometry.hostBounds.top || clientY >= geometry.dataTop) {
+    return null;
+  }
+  for (const column of getVisibleColumnBounds(region, geometry.dataLeft, columnWidths, defaultWidth)) {
+    if (column.index >= MAX_COLS - 1) {
+      continue;
+    }
+    if (clientX >= column.right - COLUMN_RESIZE_HANDLE_THRESHOLD && clientX <= column.right + COLUMN_RESIZE_HANDLE_THRESHOLD) {
+      return column.index;
+    }
+  }
+  return null;
 }
 
 function createRangeSelection(base: GridSelection, anchor: Item, target: Item): GridSelection {
@@ -370,24 +436,28 @@ export function SheetGridView({
   const postDragSelectionExpiryRef = useRef<number>(0);
   const internalClipboardRef = useRef<InternalClipboardRange | null>(null);
   const activeSheetRef = useRef(sheetName);
+  const columnResizeActiveRef = useRef(false);
+  const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
     ty: 0
   });
   const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined);
+  const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<Record<string, Record<number, number>>>({});
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName]);
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row));
   const gridMetrics = useMemo(() => getGridMetrics(variant), [variant]);
+  const columnWidths = columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
 
   const columns = useMemo<readonly GridColumn[]>(
     () =>
       Array.from({ length: MAX_COLS }, (_, index) => ({
         id: indexToColumn(index),
         title: indexToColumn(index),
-        width: gridMetrics.columnWidth
+        width: getResolvedColumnWidth(columnWidths, index, gridMetrics.columnWidth)
       })),
-    [gridMetrics.columnWidth]
+    [columnWidths, gridMetrics.columnWidth]
   );
 
   const getCellContent = useCallback(
@@ -502,13 +572,17 @@ export function SheetGridView({
         const cellHeight = firstCellBounds?.height ?? gridMetrics.rowHeight;
         const dataLeft = firstCellBounds?.x ?? (hostBounds.left + gridMetrics.rowMarkerWidth);
         const dataTop = firstCellBounds?.y ?? (hostBounds.top + gridMetrics.headerHeight);
+        const visibleColumnBounds = getVisibleColumnBounds(region, dataLeft, columnWidths, gridMetrics.columnWidth);
+        const dataWidth = visibleColumnBounds.length === 0
+          ? region.range.width * cellWidth
+          : visibleColumnBounds.at(-1)!.right - dataLeft;
         return {
           hostBounds,
           cellWidth,
           cellHeight,
           dataLeft,
           dataTop,
-          dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + (region.range.width * cellWidth)),
+          dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + dataWidth),
           dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + (region.range.height * cellHeight))
         };
       })();
@@ -516,7 +590,7 @@ export function SheetGridView({
         return null;
       }
 
-      const { hostBounds, cellWidth, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
+      const { hostBounds, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
       if (!hostBounds) {
         return null;
       }
@@ -529,15 +603,15 @@ export function SheetGridView({
         return null;
       }
 
-      const col = region.range.x + Math.floor((clientX - dataLeft) / cellWidth);
+      const col = resolveColumnAtClientX(clientX, region, dataLeft, columnWidths, gridMetrics.columnWidth);
       const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
-      if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
+      if (col === null || col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
         return null;
       }
 
       return [col, row];
     },
-    [gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
+    [columnWidths, gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
   );
 
   const resolvePointerGeometry = useCallback(
@@ -552,17 +626,21 @@ export function SheetGridView({
       const cellHeight = firstCellBounds?.height ?? gridMetrics.rowHeight;
       const dataLeft = firstCellBounds?.x ?? (hostBounds.left + gridMetrics.rowMarkerWidth);
       const dataTop = firstCellBounds?.y ?? (hostBounds.top + gridMetrics.headerHeight);
+      const visibleColumnBounds = getVisibleColumnBounds(region, dataLeft, columnWidths, gridMetrics.columnWidth);
+      const dataWidth = visibleColumnBounds.length === 0
+        ? region.range.width * cellWidth
+        : visibleColumnBounds.at(-1)!.right - dataLeft;
       return {
         hostBounds,
         cellWidth,
         cellHeight,
         dataLeft,
         dataTop,
-        dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + (region.range.width * cellWidth)),
+        dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + dataWidth),
         dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + (region.range.height * cellHeight))
       };
     },
-    [gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
+    [columnWidths, gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
   );
 
   const resolveHeaderSelection = useCallback(
@@ -577,14 +655,14 @@ export function SheetGridView({
         return null;
       }
 
-      const { hostBounds, cellWidth, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
+      const { hostBounds, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
       const headerBottom = dataTop;
       const rowAreaLeft = hostBounds.left;
       const rowAreaRight = dataLeft;
 
       if (clientY >= hostBounds.top && clientY < headerBottom && clientX >= dataLeft && clientX < dataRight) {
-        const col = region.range.x + Math.floor((clientX - dataLeft) / cellWidth);
-        if (col >= 0 && col < MAX_COLS) {
+        const col = resolveColumnAtClientX(clientX, region, dataLeft, columnWidths, gridMetrics.columnWidth);
+        if (col !== null && col >= 0 && col < MAX_COLS) {
           return { kind: "column", index: col };
         }
       }
@@ -598,7 +676,7 @@ export function SheetGridView({
 
       return null;
     },
-    [resolvePointerGeometry, visibleRegion]
+    [columnWidths, gridMetrics.columnWidth, resolvePointerGeometry, visibleRegion]
   );
 
   const resolveHeaderSelectionForDrag = useCallback(
@@ -614,14 +692,14 @@ export function SheetGridView({
         return null;
       }
 
-      const { hostBounds, cellWidth, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
+      const { hostBounds, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = activeGeometry;
 
       if (kind === "column") {
         if (clientX < dataLeft || clientX >= dataRight || clientY < hostBounds.top || clientY >= dataBottom) {
           return null;
         }
-        const col = region.range.x + Math.floor((clientX - dataLeft) / cellWidth);
-        if (col < 0 || col >= MAX_COLS) {
+        const col = resolveColumnAtClientX(clientX, region, dataLeft, columnWidths, gridMetrics.columnWidth);
+        if (col === null || col < 0 || col >= MAX_COLS) {
           return null;
         }
         return { kind: "column", index: col };
@@ -636,7 +714,7 @@ export function SheetGridView({
       }
       return { kind: "row", index: row };
     },
-    [resolvePointerGeometry, visibleRegion]
+    [columnWidths, gridMetrics.columnWidth, resolvePointerGeometry, visibleRegion]
   );
 
   const selectionSummary = useMemo(
@@ -866,6 +944,61 @@ export function SheetGridView({
     [onFillRange]
   );
 
+  const applyColumnWidth = useCallback(
+    (columnIndex: number, newSize: number) => {
+      const clampedSize = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)));
+      setColumnWidthsBySheet((current) => {
+        const nextSheetWidths = current[sheetName] ?? EMPTY_COLUMN_WIDTHS;
+        if (nextSheetWidths[columnIndex] === clampedSize) {
+          return current;
+        }
+        return {
+          ...current,
+          [sheetName]: {
+            ...nextSheetWidths,
+            [columnIndex]: clampedSize
+          }
+        };
+      });
+    },
+    [sheetName]
+  );
+
+  const computeAutofitColumnWidth = useCallback(
+    (columnIndex: number): number => {
+      const canvas = textMeasureCanvasRef.current ?? document.createElement("canvas");
+      textMeasureCanvasRef.current = canvas;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return gridMetrics.columnWidth;
+      }
+
+      const cellFont = `400 ${gridTheme.editorFontSize} ${gridTheme.fontFamily}`;
+      const headerFont = gridTheme.headerFontStyle;
+      let measuredWidth = 0;
+
+      context.font = headerFont;
+      measuredWidth = Math.max(measuredWidth, context.measureText(indexToColumn(columnIndex)).width);
+
+      const sheet = engine.workbook.getSheet(sheetName);
+      sheet?.grid.forEachCellEntry((_cellIndex, row, col) => {
+        if (col !== columnIndex) {
+          return;
+        }
+        const cell = cellToGridCell(engine, sheetName, formatAddress(row, col));
+        const displayText = "displayData" in cell ? String(cell.displayData ?? "") : "copyData" in cell ? String(cell.copyData ?? "") : "";
+        context.font = cellFont;
+        measuredWidth = Math.max(measuredWidth, context.measureText(displayText).width);
+      });
+
+      return Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + (variant === "product" ? 28 : 32)))
+      );
+    },
+    [engine, gridMetrics.columnWidth, gridTheme.editorFontSize, gridTheme.fontFamily, gridTheme.headerFontStyle, sheetName, variant]
+  );
+
   return (
     <div className="sheet-grid-shell" data-testid="sheet-grid-shell">
       {variant === "playground" ? (
@@ -886,6 +1019,8 @@ export function SheetGridView({
       ) : null}
       <div
         className="sheet-grid-host"
+        data-column-width-overrides={JSON.stringify(columnWidths)}
+        data-default-column-width={String(gridMetrics.columnWidth)}
         data-testid="sheet-grid"
         onKeyDownCapture={() => {
           ignoreNextPointerSelectionRef.current = false;
@@ -902,7 +1037,43 @@ export function SheetGridView({
           captureInternalClipboardSelection();
         }}
         onKeyDown={(event) => handleGridKey(event)}
+        onDoubleClickCapture={(event) => {
+          if (variant !== "product") {
+            return;
+          }
+          const activeGeometry = resolvePointerGeometry(visibleRegion);
+          if (!activeGeometry) {
+            return;
+          }
+          const resizeTarget = resolveColumnResizeTarget(
+            event.clientX,
+            event.clientY,
+            visibleRegion,
+            activeGeometry,
+            columnWidths,
+            gridMetrics.columnWidth
+          );
+          if (resizeTarget === null) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          columnResizeActiveRef.current = false;
+          pendingPointerCellRef.current = null;
+          dragAnchorCellRef.current = null;
+          dragPointerCellRef.current = null;
+          dragHeaderSelectionRef.current = null;
+          dragGeometryRef.current = null;
+          dragDidMoveRef.current = false;
+          dragViewportRef.current = null;
+          postDragSelectionExpiryRef.current = 0;
+          applyColumnWidth(resizeTarget, computeAutofitColumnWidth(resizeTarget));
+        }}
         onPointerMoveCapture={(event) => {
+          if (columnResizeActiveRef.current) {
+            return;
+          }
           if ((event.buttons & 1) !== 1) {
             return;
           }
@@ -960,6 +1131,29 @@ export function SheetGridView({
           if (event.button !== 0) {
             return;
           }
+          const activeGeometry = resolvePointerGeometry(visibleRegion);
+          if (
+            variant === "product"
+            && activeGeometry
+            && resolveColumnResizeTarget(
+              event.clientX,
+              event.clientY,
+              visibleRegion,
+              activeGeometry,
+              columnWidths,
+              gridMetrics.columnWidth
+            ) !== null
+          ) {
+            pendingPointerCellRef.current = null;
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
+            dragHeaderSelectionRef.current = null;
+            dragGeometryRef.current = null;
+            dragDidMoveRef.current = false;
+            dragViewportRef.current = null;
+            postDragSelectionExpiryRef.current = 0;
+            return;
+          }
           const headerSelection = resolveHeaderSelection(event.clientX, event.clientY);
           if (headerSelection) {
             pendingPointerCellRef.current = null;
@@ -973,7 +1167,7 @@ export function SheetGridView({
             if (isEditingCell) {
               onCommitEdit();
             }
-            dragGeometryRef.current = resolvePointerGeometry(visibleRegion);
+            dragGeometryRef.current = activeGeometry;
             dragViewportRef.current = visibleRegion;
             if (headerSelection.kind === "row") {
               ignoreNextPointerSelectionRef.current = true;
@@ -999,7 +1193,7 @@ export function SheetGridView({
           pendingPointerCellRef.current = pointerCell;
           dragAnchorCellRef.current = pointerCell;
           dragPointerCellRef.current = pointerCell;
-          dragGeometryRef.current = resolvePointerGeometry(visibleRegion);
+          dragGeometryRef.current = activeGeometry;
           dragDidMoveRef.current = false;
           dragViewportRef.current = visibleRegion;
           if (pointerCell) {
@@ -1013,6 +1207,9 @@ export function SheetGridView({
           hostRef.current?.focus();
         }}
         onPointerUpCapture={(event) => {
+          if (columnResizeActiveRef.current) {
+            return;
+          }
           const headerAnchor = dragHeaderSelectionRef.current;
           if (headerAnchor) {
             const finalHeader = resolveHeaderSelectionForDrag(
@@ -1086,6 +1283,7 @@ export function SheetGridView({
           cellActivationBehavior="double-click"
           className="glide-sheet-grid"
           columns={columns}
+          drawFocusRing={false}
           fillHandle={variant === "product"}
           freezeColumns={0}
           getCellContent={getCellContent}
@@ -1093,6 +1291,32 @@ export function SheetGridView({
           gridSelection={gridSelection}
           headerHeight={gridMetrics.headerHeight}
           height="100%"
+          {...(variant === "product"
+            ? {
+                onColumnResizeStart: () => {
+                  columnResizeActiveRef.current = true;
+                  pendingPointerCellRef.current = null;
+                  dragAnchorCellRef.current = null;
+                  dragPointerCellRef.current = null;
+                  dragHeaderSelectionRef.current = null;
+                  dragGeometryRef.current = null;
+                  dragDidMoveRef.current = false;
+                  dragViewportRef.current = null;
+                  postDragSelectionExpiryRef.current = 0;
+                },
+                onColumnResize: (_column: GridColumn, newSize: number, columnIndex: number) => {
+                  applyColumnWidth(columnIndex, newSize);
+                },
+                onColumnResizeEnd: (_column: GridColumn, newSize: number, columnIndex: number) => {
+                  applyColumnWidth(columnIndex, newSize);
+                  window.requestAnimationFrame(() => {
+                    columnResizeActiveRef.current = false;
+                  });
+                },
+                maxColumnWidth: MAX_COLUMN_WIDTH,
+                minColumnWidth: MIN_COLUMN_WIDTH
+              }
+            : {})}
           onCellActivated={([col, row]) => {
             const cell = dragAnchorCellRef.current ?? pendingPointerCellRef.current ?? clampCell([col, row]);
             pendingPointerCellRef.current = null;
@@ -1108,7 +1332,15 @@ export function SheetGridView({
             return false;
           }}
           onFillPattern={handleFillPattern}
-          onHeaderClicked={(col) => {
+          onHeaderClicked={(col, event) => {
+            if (variant === "product" && event.isEdge && event.isDoubleClick) {
+              applyColumnWidth(col, computeAutofitColumnWidth(col));
+              columnResizeActiveRef.current = false;
+              return;
+            }
+            if (columnResizeActiveRef.current) {
+              return;
+            }
             ignoreNextPointerSelectionRef.current = true;
             pendingPointerCellRef.current = null;
             dragAnchorCellRef.current = null;
@@ -1128,6 +1360,9 @@ export function SheetGridView({
             });
           }}
           onGridSelectionChange={(nextSelection) => {
+            if (columnResizeActiveRef.current) {
+              return;
+            }
             if (postDragSelectionExpiryRef.current > 0) {
               if (window.performance.now() <= postDragSelectionExpiryRef.current) {
                 postDragSelectionExpiryRef.current = 0;

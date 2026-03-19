@@ -39,8 +39,9 @@ This matrix tracks visible Excel-for-web grid behaviors for `apps/web`.
 
 | Behavior | Current state | Proof |
 | --- | --- | --- |
-| row and column resize | open | no acceptance coverage yet |
-| double-click autofit | open | no acceptance coverage yet |
+| column resize | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
+| row resize | open | no implementation or acceptance coverage yet |
+| column double-click autofit | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
 | hide and unhide rows and columns | open | no implementation yet |
 | context menus for structural actions | open | no implementation yet |
 | frozen panes | open | no product-shell acceptance coverage yet |

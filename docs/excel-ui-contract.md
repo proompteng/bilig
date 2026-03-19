@@ -6,7 +6,7 @@
 - the default `apps/web` surface no longer renders playground preset chrome, replica panels, or metrics panels.
 - browser smoke now exists for both `apps/playground` and `apps/web`.
 - the product shell is now denser and closer to Excel for the web, including a single visible formula-input row and a flatter footer/status treatment.
-- selection, editing, clipboard, frozen panes, and richer spreadsheet affordances still have open correctness or completeness gaps and should not be treated as finished. Fill handle propagation is now shipped in the product shell, but the broader clipboard/fill parity family is not complete yet.
+- selection, editing, clipboard, frozen panes, and richer spreadsheet affordances still have open correctness or completeness gaps and should not be treated as finished. Fill handle propagation plus column resize and double-click autofit are now shipped in the product shell, but the broader clipboard/fill and structural parity families are not complete yet.
 
 ## Target state
 
