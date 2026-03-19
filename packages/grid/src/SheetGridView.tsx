@@ -59,6 +59,7 @@ interface InternalClipboardRange {
   sourceStartAddress: string;
   sourceEndAddress: string;
   signature: string;
+  plainText: string;
   rowCount: number;
   colCount: number;
 }
@@ -260,6 +261,14 @@ function isNavigationKey(key: string): boolean {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
 }
 
+function isClipboardShortcut(event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">): boolean {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+    return false;
+  }
+  const normalizedKey = event.key.toLowerCase();
+  return normalizedKey === "c" || normalizedKey === "x" || normalizedKey === "v";
+}
+
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
   if (left === right) {
     return true;
@@ -401,6 +410,21 @@ function cellToEditorSeed(snapshot: ReturnType<typeof selectors.selectCellSnapsh
 
 function serializeClipboardMatrix(values: readonly (readonly string[])[]): string {
   return values.map((row) => row.join("\u001f")).join("\u001e");
+}
+
+function serializeClipboardPlainText(values: readonly (readonly string[])[]): string {
+  return values.map((row) => row.join("\t")).join("\n");
+}
+
+function parseClipboardPlainText(rawText: string): readonly (readonly string[])[] {
+  if (rawText.length === 0) {
+    return [];
+  }
+  return rawText
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((row) => row.split("\t"));
 }
 
 export function SheetGridView({
@@ -722,6 +746,37 @@ export function SheetGridView({
     [gridSelection, selectedAddr]
   );
 
+  const applyClipboardValues = useCallback(
+    (target: Item, values: readonly (readonly string[])[]) => {
+      if (values.length === 0 || values[0]?.length === 0) {
+        return;
+      }
+
+      const internalClipboard = internalClipboardRef.current;
+      const signature = serializeClipboardMatrix(values);
+      if (
+        internalClipboard
+        && internalClipboard.signature === signature
+        && internalClipboard.rowCount === values.length
+        && internalClipboard.colCount === (values[0]?.length ?? 0)
+      ) {
+        onCopyRange(
+          internalClipboard.sourceStartAddress,
+          internalClipboard.sourceEndAddress,
+          formatAddress(target[1], target[0]),
+          formatAddress(
+            target[1] + internalClipboard.rowCount - 1,
+            target[0] + internalClipboard.colCount - 1
+          )
+        );
+        return;
+      }
+
+      onPaste(formatAddress(target[1], target[0]), values);
+    },
+    [onCopyRange, onPaste]
+  );
+
   const captureInternalClipboardSelection = useCallback(() => {
     const range = gridSelection.current?.range;
     if (!range || gridSelection.columns.length > 0 || gridSelection.rows.length > 0) {
@@ -739,6 +794,7 @@ export function SheetGridView({
       sourceStartAddress: formatAddress(range.y, range.x),
       sourceEndAddress: formatAddress(range.y + range.height - 1, range.x + range.width - 1),
       signature: serializeClipboardMatrix(values),
+      plainText: serializeClipboardPlainText(values),
       rowCount: range.height,
       colCount: range.width
     };
@@ -812,8 +868,32 @@ export function SheetGridView({
 
       if ((event.ctrlKey || event.metaKey) && !event.altKey) {
         const normalizedKey = event.key.toLowerCase();
-        if (normalizedKey === "c" || normalizedKey === "x") {
+        if (normalizedKey === "c") {
           captureInternalClipboardSelection();
+          const clipboard = internalClipboardRef.current;
+          if (clipboard && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+            event.preventDefault();
+            event.cancel?.();
+            void navigator.clipboard.writeText(clipboard.plainText).catch(() => {});
+          }
+          return;
+        }
+
+        if (normalizedKey === "x") {
+          captureInternalClipboardSelection();
+          return;
+        }
+
+        if (normalizedKey === "v" && typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+          event.preventDefault();
+          event.cancel?.();
+          const target: Item = gridSelection.current?.cell
+            ? [...gridSelection.current.cell] as Item
+            : [selectedCell.col, selectedCell.row];
+          void navigator.clipboard.readText().then((rawText) => {
+            const values = parseClipboardPlainText(rawText);
+            applyClipboardValues(target, values);
+          }).catch(() => {});
           return;
         }
       }
@@ -829,7 +909,7 @@ export function SheetGridView({
         beginSelectedEdit(event.key);
       }
     },
-    [beginSelectedEdit, captureInternalClipboardSelection, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
+    [applyClipboardValues, beginSelectedEdit, captureInternalClipboardSelection, gridSelection.current?.cell, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
   );
 
   useEffect(() => {
@@ -861,6 +941,12 @@ export function SheetGridView({
           key: event.key,
           metaKey: event.metaKey
         } as GridKeyEventArgs)
+        && !isClipboardShortcut({
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          key: event.key,
+          metaKey: event.metaKey
+        })
         && !isNavigationKey(event.key)
         && event.key !== "Enter"
         && event.key !== "Tab"
@@ -1033,8 +1119,29 @@ export function SheetGridView({
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
         }}
-        onCopyCapture={() => {
+        onCopyCapture={(event) => {
           captureInternalClipboardSelection();
+          if (!event.clipboardData) {
+            return;
+          }
+          const clipboard = internalClipboardRef.current;
+          if (!clipboard) {
+            return;
+          }
+          event.clipboardData.setData("text/plain", clipboard.plainText);
+          event.preventDefault();
+        }}
+        onPasteCapture={(event) => {
+          const rawText = event.clipboardData?.getData("text/plain") ?? "";
+          const values = parseClipboardPlainText(rawText);
+          if (values.length === 0 || values[0]?.length === 0) {
+            return;
+          }
+
+          const target = gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row];
+          applyClipboardValues(target, values);
+          event.preventDefault();
+          event.stopPropagation();
         }}
         onKeyDown={(event) => handleGridKey(event)}
         onDoubleClickCapture={(event) => {
@@ -1416,32 +1523,13 @@ export function SheetGridView({
             onSelect(formatAddress(cell[1], cell[0]));
           }}
           onKeyDown={(event) => {
-            if (!isPrintableKey(event) && !isNavigationKey(event.key) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
+            if (!isPrintableKey(event) && !isClipboardShortcut(event) && !isNavigationKey(event.key) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
               return;
             }
             handleGridKey(event);
           }}
           onPaste={(target, values) => {
-            const internalClipboard = internalClipboardRef.current;
-            const signature = serializeClipboardMatrix(values);
-            if (
-              internalClipboard
-              && internalClipboard.signature === signature
-              && internalClipboard.rowCount === values.length
-              && internalClipboard.colCount === (values[0]?.length ?? 0)
-            ) {
-              onCopyRange(
-                internalClipboard.sourceStartAddress,
-                internalClipboard.sourceEndAddress,
-                formatAddress(target[1], target[0]),
-                formatAddress(
-                  target[1] + internalClipboard.rowCount - 1,
-                  target[0] + internalClipboard.colCount - 1
-                )
-              );
-              return false;
-            }
-            onPaste(formatAddress(target[1], target[0]), values);
+            applyClipboardValues(target, values);
             return false;
           }}
           onVisibleRegionChanged={(range, tx, ty) => {

@@ -17,7 +17,7 @@ This matrix tracks visible Excel-for-web grid behaviors for `apps/web`.
 | Behavior | Current state | Proof |
 | --- | --- | --- |
 | single-cell selection | shipped | `e2e/tests/web-shell.pw.ts` |
-| rectangular drag selection | open | browser parity suite still needs a dedicated `apps/web` range test |
+| rectangular drag selection | shipped in this tranche | `e2e/tests/web-shell.pw.ts` |
 | row-header click selects full row | shipped | `e2e/tests/web-shell.pw.ts` |
 | column-header click selects full column | shipped | `e2e/tests/web-shell.pw.ts` |
 | row-header drag selects contiguous rows | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
@@ -46,7 +46,7 @@ This matrix tracks visible Excel-for-web grid behaviors for `apps/web`.
 | context menus for structural actions | open | no implementation yet |
 | frozen panes | open | no product-shell acceptance coverage yet |
 | fill handle | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `apps/playground/src/WorkbookApp.tsx`, `e2e/tests/web-shell.pw.ts` |
-| clipboard rectangular copy and paste | open | no product-shell acceptance coverage yet |
+| clipboard rectangular copy and paste | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
 
 ## Release rule
 

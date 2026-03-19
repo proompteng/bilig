@@ -4,6 +4,7 @@ const PRODUCT_ROW_MARKER_WIDTH = 46;
 const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_HEIGHT = 22;
+const PRIMARY_MODIFIER = process.platform === "darwin" ? "Meta" : "Control";
 
 async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
   const grid = page.getByTestId("sheet-grid");
@@ -180,6 +181,52 @@ async function clickProductBodyOffset(
   );
 }
 
+async function clickProductCell(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number,
+  rowIndex: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  await page.mouse.click(
+    grid.x + columnLeft + Math.floor(columnWidth / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2)
+  );
+}
+
+async function dragProductBodySelection(
+  page: Parameters<typeof test>[0]["page"],
+  startColumn: number,
+  startRow: number,
+  endColumn: number,
+  endRow: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const startLeft = await getProductColumnLeft(page, startColumn);
+  const startWidth = await getProductColumnWidth(page, startColumn);
+  const endLeft = await getProductColumnLeft(page, endColumn);
+  const endWidth = await getProductColumnWidth(page, endColumn);
+
+  const startX = grid.x + startLeft + Math.floor(startWidth / 2);
+  const startY = grid.y + PRODUCT_HEADER_HEIGHT + (startRow * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const endX = grid.x + endLeft + Math.floor(endWidth / 2);
+  const endY = grid.y + PRODUCT_HEADER_HEIGHT + (endRow * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(endX, endY, { steps: 12 });
+  await page.mouse.up();
+}
+
 test("web app renders the minimal product shell without playground chrome", async ({ page }) => {
   await page.goto("/");
 
@@ -239,6 +286,13 @@ test("web app supports row and column header drag selection", async ({ page }) =
 
   await dragProductHeaderSelection(page, "row", 1, 3);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!2:4");
+});
+
+test("web app supports rectangular drag selection", async ({ page }) => {
+  await page.goto("/");
+
+  await dragProductBodySelection(page, 1, 1, 3, 3);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:D4");
 });
 
 test("web app supports column resize without breaking hit testing", async ({ page }) => {
@@ -310,6 +364,113 @@ test("web app supports fill-handle propagation", async ({ page }) => {
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("7");
   await expect(resolvedValue).toHaveText("7");
+});
+
+test("web app supports rectangular clipboard copy and external paste", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+
+  const grid = page.getByTestId("sheet-grid");
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await nameBox.fill("B2");
+  await nameBox.press("Enter");
+  await formulaInput.fill("11");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("C2");
+  await nameBox.press("Enter");
+  await formulaInput.fill("12");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("B3");
+  await nameBox.press("Enter");
+  await formulaInput.fill("13");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("C3");
+  await nameBox.press("Enter");
+  await formulaInput.fill("14");
+  await formulaInput.press("Enter");
+
+  await dragProductBodySelection(page, 1, 1, 2, 2);
+  await grid.press(`${PRIMARY_MODIFIER}+C`);
+
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("11\t12\n13\t14");
+
+  await page.evaluate(() => navigator.clipboard.writeText("21\t22\n23\t24"));
+  await clickProductCell(page, 4, 4);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!E5");
+  await grid.press(`${PRIMARY_MODIFIER}+V`);
+
+  await nameBox.fill("E5");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("21");
+  await expect(resolvedValue).toHaveText("21");
+
+  await nameBox.fill("F5");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("22");
+  await expect(resolvedValue).toHaveText("22");
+
+  await nameBox.fill("E6");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("23");
+  await expect(resolvedValue).toHaveText("23");
+
+  await nameBox.fill("F6");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("24");
+  await expect(resolvedValue).toHaveText("24");
+});
+
+test("web app relocates formulas when using rectangular clipboard paste", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+
+  const grid = page.getByTestId("sheet-grid");
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await nameBox.fill("B2");
+  await nameBox.press("Enter");
+  await formulaInput.fill("3");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("B3");
+  await nameBox.press("Enter");
+  await formulaInput.fill("4");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("C2");
+  await nameBox.press("Enter");
+  await formulaInput.fill("=B2*2");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("C3");
+  await nameBox.press("Enter");
+  await formulaInput.fill("=B3*2");
+  await formulaInput.press("Enter");
+
+  await dragProductBodySelection(page, 1, 1, 2, 2);
+  await grid.press(`${PRIMARY_MODIFIER}+C`);
+
+  await clickProductCell(page, 3, 1);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!D2");
+  await grid.press(`${PRIMARY_MODIFIER}+V`);
+
+  await nameBox.fill("E2");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("=D2*2");
+  await expect(resolvedValue).toHaveText("6");
+
+  await nameBox.fill("E3");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("=D3*2");
+  await expect(resolvedValue).toHaveText("8");
 });
 
 test("web app supports product-shell column resize", async ({ page }) => {
