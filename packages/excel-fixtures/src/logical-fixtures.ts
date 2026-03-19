@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import type { ExcelExpectedValue, ExcelFixtureCase, ExcelFixtureExpectedOutput, ExcelFixtureFamily, ExcelFixtureInputCell } from "./index.js";
 
 export interface LogicalFixtureCase {
   id: string;
@@ -7,6 +8,62 @@ export interface LogicalFixtureCase {
   expected: CellValue;
   notes: string;
   source: "excel-support-docs" | "bilig-contract";
+}
+
+const excelFixtureIdPattern = /^[a-z][a-z0-9-]*:[a-z0-9-]+$/;
+
+function createExcelFixtureId(family: ExcelFixtureFamily, slug: string): string {
+  const normalizedSlug = slug.trim().toLowerCase();
+  const id = `${family}:${normalizedSlug}`;
+  if (!excelFixtureIdPattern.test(id)) {
+    throw new Error(`Invalid Excel fixture id: ${id}`);
+  }
+  return id;
+}
+
+function booleanExpected(value: boolean): ExcelExpectedValue {
+  return { kind: "boolean", value };
+}
+
+function numberExpected(value: number): ExcelExpectedValue {
+  return { kind: "number", value };
+}
+
+function stringExpected(value: string): ExcelExpectedValue {
+  return { kind: "string", value };
+}
+
+function errorExpected(code: ErrorCode, display: string): ExcelExpectedValue {
+  return { kind: "error", code, display };
+}
+
+function input(address: string, value: ExcelFixtureInputCell["input"], note?: string): ExcelFixtureInputCell {
+  return note === undefined ? { address, input: value } : { address, input: value, note };
+}
+
+function output(address: string, expected: ExcelFixtureExpectedOutput["expected"], note?: string): ExcelFixtureExpectedOutput {
+  return note === undefined ? { address, expected } : { address, expected, note };
+}
+
+function fixture(
+  family: ExcelFixtureFamily,
+  slug: string,
+  title: string,
+  formula: string,
+  inputs: ExcelFixtureInputCell[],
+  outputs: ExcelFixtureExpectedOutput[],
+  notes?: string
+): ExcelFixtureCase {
+  const base = {
+    id: createExcelFixtureId(family, slug),
+    family,
+    title,
+    formula,
+    inputs,
+    outputs,
+    sheetName: "Sheet1"
+  };
+  return notes === undefined ? base : { ...base, notes };
 }
 
 const empty = (): CellValue => ({ tag: ValueTag.Empty });
@@ -106,4 +163,17 @@ export const logicalFixtureCases: readonly LogicalFixtureCase[] = [
     notes: "Text detection is based on the string tag.",
     source: "excel-support-docs"
   }
+];
+
+export const excelTop100LogicalFixtures: readonly ExcelFixtureCase[] = [
+  fixture("logical", "if-true-branch", "IF true branch from boolean input", "=IF(A1,A2,A3)", [input("A1", true), input("A2", "yes"), input("A3", "no")], [output("A4", stringExpected("yes"))]),
+  fixture("logical", "if-condition-error", "IF propagates condition error", "=IF(1/0,1,2)", [], [output("A1", errorExpected(ErrorCode.Div0, "#DIV/0!"))]),
+  fixture("logical", "iferror-catches-any-error", "IFERROR catches any error", "=IFERROR(1/0,\"fallback\")", [], [output("A1", stringExpected("fallback"))]),
+  fixture("logical", "ifna-catches-na-only", "IFNA catches #N/A only", "=IFNA(NA(),\"missing\")", [], [output("A1", stringExpected("missing"))]),
+  fixture("logical", "and-false-on-empty", "AND treats empty as FALSE", "=AND(TRUE,A1)", [input("A1", null)], [output("A2", booleanExpected(false))]),
+  fixture("logical", "or-true-branch", "OR returns TRUE when any operand is TRUE", "=OR(A1,TRUE)", [input("A1", null)], [output("A2", booleanExpected(true))]),
+  fixture("logical", "not-number", "NOT coerces non-zero numbers to TRUE before inversion", "=NOT(2)", [], [output("A1", booleanExpected(false))]),
+  fixture("information", "isblank-empty", "ISBLANK empty input", "=ISBLANK(A1)", [input("A1", null)], [output("A2", booleanExpected(true))]),
+  fixture("information", "isnumber-number", "ISNUMBER numeric literal", "=ISNUMBER(42)", [], [output("A1", booleanExpected(true))]),
+  fixture("information", "istext-string", "ISTEXT string literal", "=ISTEXT(\"hello\")", [], [output("A1", booleanExpected(true))])
 ];

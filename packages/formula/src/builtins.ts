@@ -60,6 +60,24 @@ function roundToDigits(value: number, digits: number): number {
   return Math.round(value / factor) * factor;
 }
 
+function roundUpToDigits(value: number, digits: number): number {
+  if (digits >= 0) {
+    const factor = 10 ** digits;
+    return (value >= 0 ? Math.ceil(value * factor) : Math.floor(value * factor)) / factor;
+  }
+  const factor = 10 ** -digits;
+  return (value >= 0 ? Math.ceil(value / factor) : Math.floor(value / factor)) * factor;
+}
+
+function roundDownToDigits(value: number, digits: number): number {
+  if (digits >= 0) {
+    const factor = 10 ** digits;
+    return (value >= 0 ? Math.floor(value * factor) : Math.ceil(value * factor)) / factor;
+  }
+  const factor = 10 ** -digits;
+  return (value >= 0 ? Math.floor(value / factor) : Math.ceil(value / factor)) * factor;
+}
+
 function roundWith(value: CellValue, digits: CellValue | undefined): CellValue {
   const numberValue = toNumber(value);
   const digitValue = digits === undefined ? 0 : toNumber(digits);
@@ -126,6 +144,29 @@ const scalarBuiltins: Record<string, Builtin> = {
     if (divisor === 0) return { tag: ValueTag.Error, code: ErrorCode.Div0 };
     return numberResult((toNumber(left) ?? 0) % divisor);
   },
+  INT: (value) => {
+    const numberValue = toNumber(value);
+    if (numberValue === undefined) {
+      return { tag: ValueTag.Error, code: ErrorCode.Value };
+    }
+    return numberResult(Math.floor(numberValue));
+  },
+  ROUNDUP: (value, digits) => {
+    const numberValue = toNumber(value);
+    const digitValue = digits === undefined ? 0 : toNumber(digits);
+    if (numberValue === undefined || digitValue === undefined) {
+      return { tag: ValueTag.Error, code: ErrorCode.Value };
+    }
+    return numberResult(roundUpToDigits(numberValue, Math.trunc(digitValue)));
+  },
+  ROUNDDOWN: (value, digits) => {
+    const numberValue = toNumber(value);
+    const digitValue = digits === undefined ? 0 : toNumber(digits);
+    if (numberValue === undefined || digitValue === undefined) {
+      return { tag: ValueTag.Error, code: ErrorCode.Value };
+    }
+    return numberResult(roundDownToDigits(numberValue, Math.trunc(digitValue)));
+  }
 };
 
 const builtins: Record<string, Builtin> = {

@@ -1,27 +1,30 @@
 # Performance Budgets
 
+## Formula budgets
+
+- Top 100 closed families must execute in WASM in production mode
+- differential JS-vs-WASM runs are allowed only in test/debug paths
+- binary encode/decode p95 `< 1ms` for common formula-driven edit batches
+
 ## Browser budgets
 
 - local visible edit response p95 `< 16ms`
 - `10k` downstream recalc p95 `< 25ms`
 - `100k` workbook restore p95 `< 500ms`
 - `250k` preset restore p95 `< 1500ms`
-- million-row navigation must keep main-thread work bounded
 
-## Transport budgets
+## WASM budgets
 
-- binary encode/decode p95 `< 1ms` for common edit batches
-- remote visibility p95 `< 250ms` intra-region
+- WASM kernel startup must remain below the current frontend release ceiling
+- WASM binary gzip size remains a release gate
+- string/runtime extensions for Top 100 must not regress the release budget without an explicit budget update
 
-## Resource ceilings
+## Ownership split
 
-- browser working set for `100k` materialized workbook stays under the configured release ceiling
-- server RSS per active hot document stays under the configured release ceiling
-- WASM binary size and frontend bundle size are release gates
+- `bilig` owns formula/runtime budgets and release checks
+- `lab` owns runtime telemetry, alerts, and rollout enforcement
 
-## Enforcement
+See:
 
-- benchmark contracts
-- browser perf smoke
-- backend latency tests
-- release checks
+- [bilig-lab-contract.md](/Users/gregkonush/github.com/bilig/docs/bilig-lab-contract.md)
+- [/Users/gregkonush/github.com/lab/docs/bilig-observability-contract.md](/Users/gregkonush/github.com/lab/docs/bilig-observability-contract.md)

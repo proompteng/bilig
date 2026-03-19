@@ -81,13 +81,13 @@ export class WasmKernelFacade {
     this.kernel.uploadRangeMembers(layout.members, layout.offsets, layout.lengths);
   }
 
-  syncStringPool(lengths: Uint32Array): void {
+  syncStringPool(layout: { offsets: Uint32Array; lengths: Uint32Array; data: Uint16Array }): void {
     if (!this.kernel) return;
-    if (lengths.length === this.uploadedStringPoolSize) {
+    if (layout.lengths.length === this.uploadedStringPoolSize) {
       return;
     }
-    this.kernel.uploadStringLengths(lengths);
-    this.uploadedStringPoolSize = lengths.length;
+    this.kernel.uploadStrings(layout.offsets, layout.lengths, layout.data);
+    this.uploadedStringPoolSize = layout.lengths.length;
   }
 
   syncFromStore(store: CellStore, changedCellIndices?: readonly number[] | Uint32Array): void {

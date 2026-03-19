@@ -636,10 +636,8 @@ test("web app commits in-cell string edits when clicking away", async ({ page })
   await clickProductCell(page, 2, 0);
 
   await expect(nameBox).toHaveValue("C1");
-  await nameBox.focus();
-  await nameBox.selectText();
-  await page.keyboard.type("B1");
-  await nameBox.press("Enter");
+  await clickProductCell(page, 1, 0);
+  await expect(nameBox).toHaveValue("B1");
   await expect(formulaInput).toHaveValue("h");
   await expect(resolvedValue).toHaveText("h");
 });

@@ -277,6 +277,56 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
     return getRangeValue(tableArray, matchedRow, colIndex - 1);
   },
+  HLOOKUP: (lookupValue, tableArray, rowIndexValue, rangeLookupValue = { tag: ValueTag.Boolean, value: true }) => {
+    if (isRangeArg(lookupValue)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (!isRangeArg(tableArray) || tableArray.refKind !== "cells") {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isRangeArg(rowIndexValue) || isRangeArg(rangeLookupValue)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(lookupValue)) {
+      return lookupValue;
+    }
+    if (isError(rowIndexValue)) {
+      return rowIndexValue;
+    }
+    if (isError(rangeLookupValue)) {
+      return rangeLookupValue;
+    }
+
+    const rowIndex = toInteger(rowIndexValue);
+    const rangeLookup = toBoolean(rangeLookupValue);
+    if (rowIndex === undefined || rowIndex < 1 || rowIndex > tableArray.rows || rangeLookup === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    let matchedCol = -1;
+    for (let col = 0; col < tableArray.cols; col += 1) {
+      const comparison = compareScalars(getRangeValue(tableArray, 0, col), lookupValue);
+      if (comparison === undefined) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (comparison === 0) {
+        matchedCol = col;
+        break;
+      }
+      if (rangeLookup && comparison < 0) {
+        matchedCol = col;
+        continue;
+      }
+      if (rangeLookup && comparison > 0) {
+        break;
+      }
+    }
+
+    if (matchedCol === -1) {
+      return errorValue(ErrorCode.NA);
+    }
+    return getRangeValue(tableArray, rowIndex - 1, matchedCol);
+  },
   XLOOKUP: (
     lookupValue,
     lookupArray,
@@ -331,6 +381,54 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
     return ifNotFound;
   },
+  XMATCH: (
+    lookupValue,
+    lookupArray,
+    matchModeValue = { tag: ValueTag.Number, value: 0 },
+    searchModeValue = { tag: ValueTag.Number, value: 1 }
+  ) => {
+    if (isRangeArg(lookupValue) || isRangeArg(matchModeValue) || isRangeArg(searchModeValue)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(lookupValue)) {
+      return lookupValue;
+    }
+    if (isError(matchModeValue)) {
+      return matchModeValue;
+    }
+    if (isError(searchModeValue)) {
+      return searchModeValue;
+    }
+    const rangeOrError = requireCellVector(lookupArray);
+    if (!isRangeArg(rangeOrError)) {
+      return rangeOrError;
+    }
+    const matchMode = toInteger(matchModeValue);
+    const searchMode = toInteger(searchModeValue);
+    if (matchMode === undefined || searchMode === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (![0, -1, 1].includes(matchMode) || ![1, -1].includes(searchMode)) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const values = searchMode === -1 ? [...rangeOrError.values].reverse() : rangeOrError.values;
+    const probe =
+      searchMode === -1
+        ? { ...rangeOrError, values }
+        : rangeOrError;
+    const position =
+      matchMode === 0
+        ? exactMatch(lookupValue, probe)
+        : matchMode === 1
+          ? approximateMatchAscending(lookupValue, probe)
+          : approximateMatchDescending(lookupValue, probe);
+    if (position === -1) {
+      return errorValue(ErrorCode.NA);
+    }
+    const normalizedPosition = searchMode === -1 ? rangeOrError.values.length - position + 1 : position;
+    return { tag: ValueTag.Number, value: normalizedPosition };
+  },
   COUNTIF: (rangeArg, criteriaArg) => {
     const range = requireCellRange(rangeArg);
     if (!isRangeArg(range)) {
@@ -349,6 +447,104 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       }
     }
     return { tag: ValueTag.Number, value: count };
+  },
+  COUNTIFS: (...args) => {
+    if (args.length === 0 || args.length % 2 !== 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
+    for (let index = 0; index < args.length; index += 2) {
+      const range = requireCellRange(args[index]!);
+      if (!isRangeArg(range)) {
+        return range;
+      }
+      const criteria = args[index + 1]!;
+      if (isRangeArg(criteria)) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (isError(criteria)) {
+        return criteria;
+      }
+      rangeCriteriaPairs.push({ range, criteria });
+    }
+    const expectedLength = rangeCriteriaPairs[0]!.range.values.length;
+    if (rangeCriteriaPairs.some((pair) => pair.range.values.length !== expectedLength)) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    let count = 0;
+    for (let row = 0; row < expectedLength; row += 1) {
+      if (rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))) {
+        count += 1;
+      }
+    }
+    return { tag: ValueTag.Number, value: count };
+  },
+  SUMIF: (rangeArg, criteriaArg, sumRangeArg = rangeArg) => {
+    const range = requireCellRange(rangeArg);
+    const sumRange = requireCellRange(sumRangeArg);
+    if (!isRangeArg(range)) {
+      return range;
+    }
+    if (!isRangeArg(sumRange)) {
+      return sumRange;
+    }
+    if (range.values.length !== sumRange.values.length) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isRangeArg(criteriaArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(criteriaArg)) {
+      return criteriaArg;
+    }
+
+    let sum = 0;
+    for (let index = 0; index < range.values.length; index += 1) {
+      if (!matchesCriteria(range.values[index]!, criteriaArg)) {
+        continue;
+      }
+      sum += toNumber(sumRange.values[index]!) ?? 0;
+    }
+    return { tag: ValueTag.Number, value: sum };
+  },
+  SUMIFS: (sumRangeArg, ...criteriaArgs) => {
+    const sumRange = requireCellRange(sumRangeArg);
+    if (!isRangeArg(sumRange)) {
+      return sumRange;
+    }
+    if (criteriaArgs.length === 0 || criteriaArgs.length % 2 !== 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
+    for (let index = 0; index < criteriaArgs.length; index += 2) {
+      const range = requireCellRange(criteriaArgs[index]!);
+      if (!isRangeArg(range)) {
+        return range;
+      }
+      const criteria = criteriaArgs[index + 1]!;
+      if (isRangeArg(criteria)) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (isError(criteria)) {
+        return criteria;
+      }
+      rangeCriteriaPairs.push({ range, criteria });
+    }
+    if (
+      rangeCriteriaPairs.some((pair) => pair.range.values.length !== sumRange.values.length)
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    let sum = 0;
+    for (let row = 0; row < sumRange.values.length; row += 1) {
+      if (!rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))) {
+        continue;
+      }
+      sum += toNumber(sumRange.values[row]!) ?? 0;
+    }
+    return { tag: ValueTag.Number, value: sum };
   },
   AVERAGEIF: (rangeArg, criteriaArg, averageRangeArg = rangeArg) => {
     const range = requireCellRange(rangeArg);
@@ -387,6 +583,76 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       return errorValue(ErrorCode.Div0);
     }
     return { tag: ValueTag.Number, value: sum / count };
+  },
+  AVERAGEIFS: (averageRangeArg, ...criteriaArgs) => {
+    const averageRange = requireCellRange(averageRangeArg);
+    if (!isRangeArg(averageRange)) {
+      return averageRange;
+    }
+    if (criteriaArgs.length === 0 || criteriaArgs.length % 2 !== 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
+    for (let index = 0; index < criteriaArgs.length; index += 2) {
+      const range = requireCellRange(criteriaArgs[index]!);
+      if (!isRangeArg(range)) {
+        return range;
+      }
+      const criteria = criteriaArgs[index + 1]!;
+      if (isRangeArg(criteria)) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (isError(criteria)) {
+        return criteria;
+      }
+      rangeCriteriaPairs.push({ range, criteria });
+    }
+    if (
+      rangeCriteriaPairs.some((pair) => pair.range.values.length !== averageRange.values.length)
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    let count = 0;
+    let sum = 0;
+    for (let row = 0; row < averageRange.values.length; row += 1) {
+      if (!rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))) {
+        continue;
+      }
+      const numeric = toNumber(averageRange.values[row]!);
+      if (numeric === undefined) {
+        continue;
+      }
+      count += 1;
+      sum += numeric;
+    }
+    if (count === 0) {
+      return errorValue(ErrorCode.Div0);
+    }
+    return { tag: ValueTag.Number, value: sum / count };
+  },
+  SUMPRODUCT: (...args) => {
+    if (args.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const ranges = args.map((arg) => requireCellRange(arg));
+    if (ranges.some((range) => !isRangeArg(range))) {
+      return ranges.find((range) => !isRangeArg(range)) as CellValue;
+    }
+    const typedRanges = ranges as RangeBuiltinArgument[];
+    const expectedLength = typedRanges[0]!.values.length;
+    if (typedRanges.some((range) => range.values.length !== expectedLength)) {
+      return errorValue(ErrorCode.Value);
+    }
+    let sum = 0;
+    for (let index = 0; index < expectedLength; index += 1) {
+      let product = 1;
+      for (const range of typedRanges) {
+        product *= toNumber(range.values[index]!) ?? 0;
+      }
+      sum += product;
+    }
+    return { tag: ValueTag.Number, value: sum };
   }
 };
 

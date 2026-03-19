@@ -2,46 +2,48 @@
 
 ## Current state
 
-- the repo still ships a narrow formula surface compared with the canonical Excel target
-- JS evaluation is the oracle today
-- WASM fast paths cover only a profitable subset that is already implemented and tested
-- the checked-in parity corpus is seeded, not complete
+- JS is still the semantic oracle
+- WASM executes only a subset of the implemented surface
+- the compatibility registry now tracks a broader starter corpus, but the Top 100 milestone is still open
 
-## Canonical target
+## Top 100 milestone
 
-The formula target is **Excel 365 built-in worksheet parity as of March 15, 2026**.
+The active milestone is **Top 100 Excel for the web worksheet formulas**. That milestone includes:
 
-That includes:
+- arithmetic and aggregate operators
+- logical and information functions
+- high-usage text functions
+- high-usage date/time functions
+- high-usage lookup/reference functions
+- high-usage conditional statistical functions
 
-- absolute refs
+## Full target
+
+The full formula target remains Excel 365 worksheet parity as of `2026-03-15`, including:
+
+- absolute and mixed refs
 - quoted sheet refs
 - unions and intersections
-- postfix `%`
-- implicit intersection `@`
-- spill operator `#`
+- `%`, `@`, `#`
 - array literals
 - defined names
 - tables and structured references
 - dynamic arrays
 - `LET`
 - `LAMBDA`
-- built-in worksheet function families across logical, math, text, date/time, lookup/reference, statistical, financial, engineering, information, and dynamic array categories
 
 ## Semantic rules
 
-- JS remains the semantic oracle.
-- WASM only accelerates subsets that preserve exact JS parity.
-- Excel coercion rules, blank handling, error precedence, spill behavior, and volatile invalidation are part of the parity contract, not optional implementation details.
+- Excel for the web is the behavior oracle
+- visible error strings follow Excel codes
+- JS and WASM must not diverge on coercion, blanks, error precedence, spill blocking, or lookup comparison rules
+- a formula family is not complete until production execution can route it through WASM
 
-## Fixture model
+## Canonical companions
 
-- checked-in goldens live under `@bilig/excel-fixtures`
-- parity suites are generated offline from real Excel outputs
-- CI validates against checked-in goldens, not live external services
-
-## Exit gate
-
-- checked-in Excel goldens exist for the full supported parity surface
-- JS matches the goldens across the full canonical target
-- every WASM-accelerated kernel proves exact JS parity
-- the grammar and semantic rules listed above are implemented, not just documented
+- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
+- [formula-top100-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-matrix.md)
+- [formula-oracle-capture.md](/Users/gregkonush/github.com/bilig/docs/formula-oracle-capture.md)
+- [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)
+- [dynamic-array-runtime.md](/Users/gregkonush/github.com/bilig/docs/dynamic-array-runtime.md)
+- [workbook-metadata-model.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-model.md)

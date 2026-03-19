@@ -44,8 +44,15 @@ describe("lookup builtins", () => {
 
   it("supports exact XLOOKUP and conditional aggregates", () => {
     const XLOOKUP = getLookupBuiltin("XLOOKUP")!;
+    const XMATCH = getLookupBuiltin("XMATCH")!;
+    const HLOOKUP = getLookupBuiltin("HLOOKUP")!;
     const COUNTIF = getLookupBuiltin("COUNTIF")!;
+    const COUNTIFS = getLookupBuiltin("COUNTIFS")!;
+    const SUMIF = getLookupBuiltin("SUMIF")!;
+    const SUMIFS = getLookupBuiltin("SUMIFS")!;
     const AVERAGEIF = getLookupBuiltin("AVERAGEIF")!;
+    const AVERAGEIFS = getLookupBuiltin("AVERAGEIFS")!;
+    const SUMPRODUCT = getLookupBuiltin("SUMPRODUCT")!;
 
     expect(
       XLOOKUP(
@@ -72,10 +79,69 @@ describe("lookup builtins", () => {
     ).toEqual(num(3));
 
     expect(
+      COUNTIFS(
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0"),
+        cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
+        text("a")
+      )
+    ).toEqual(num(3));
+
+    expect(
+      SUMIF(
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0")
+      )
+    ).toEqual(num(12));
+
+    expect(
+      SUMIFS(
+        cellRange([num(10), num(20), num(30), num(40)], 4, 1),
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0"),
+        cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
+        text("a")
+      )
+    ).toEqual(num(70));
+
+    expect(
       AVERAGEIF(
         cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
         text(">0")
       )
     ).toEqual(num(4));
+
+    expect(
+      AVERAGEIFS(
+        cellRange([num(10), num(20), num(30), num(40)], 4, 1),
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0"),
+        cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
+        text("a")
+      )
+    ).toEqual(num((10 + 20 + 40) / 3));
+
+    expect(
+      SUMPRODUCT(
+        cellRange([num(1), num(2), num(3)], 3, 1),
+        cellRange([num(4), num(5), num(6)], 3, 1)
+      )
+    ).toEqual(num(32));
+
+    expect(
+      XMATCH(
+        text("pear"),
+        cellRange([text("apple"), text("pear"), text("plum")], 3, 1)
+      )
+    ).toEqual(num(2));
+
+    expect(
+      HLOOKUP(
+        text("pear"),
+        cellRange([text("apple"), text("pear"), text("plum"), num(10), num(20), num(30)], 2, 3),
+        num(2),
+        bool(false)
+      )
+    ).toEqual(num(20));
   });
 });

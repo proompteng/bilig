@@ -6,6 +6,8 @@ export let numbers = new Float64Array(64);
 export let stringIds = new Uint32Array(64);
 export let errors = new Uint16Array(64);
 let stringLengths = new Uint32Array(64);
+let stringOffsets = new Uint32Array(64);
+let stringData = new Uint16Array(64);
 
 let programArena = new Uint32Array(64);
 let programOffsets = new Uint32Array(64);
@@ -113,6 +115,11 @@ export function ensureMemberCapacity(nextCapacity: i32): void {
 
 function ensureStringCapacity(nextCapacity: i32): void {
   stringLengths = ensureU32(stringLengths, nextCapacity);
+  stringOffsets = ensureU32(stringOffsets, nextCapacity);
+}
+
+function ensureStringDataCapacity(nextCapacity: i32): void {
+  stringData = ensureU16(stringData, nextCapacity);
 }
 
 export function uploadPrograms(
@@ -162,6 +169,14 @@ export function uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, l
 export function uploadStringLengths(lengths: Uint32Array): void {
   ensureStringCapacity(lengths.length);
   stringLengths.set(lengths);
+}
+
+export function uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void {
+  ensureStringCapacity(lengths.length);
+  ensureStringDataCapacity(data.length);
+  stringOffsets.set(offsets);
+  stringLengths.set(lengths);
+  stringData.set(data);
 }
 
 export function writeCells(
@@ -328,7 +343,9 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         numbers,
         stringIds,
         errors,
+        stringOffsets,
         stringLengths,
+        stringData,
         rangeOffsets,
         rangeLengths,
         rangeMembers,

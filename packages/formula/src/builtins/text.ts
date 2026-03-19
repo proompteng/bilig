@@ -187,6 +187,17 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     }
     return stringResult(args.map(coerceText).join(""));
   },
+  EXACT: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [leftValue, rightValue] = args;
+    if (leftValue === undefined || rightValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    return { tag: ValueTag.Boolean, value: coerceText(leftValue) === coerceText(rightValue) };
+  },
   LEFT: (...args) => {
     const existingError = firstError(args);
     if (existingError) {

@@ -40,6 +40,35 @@ function textLength(tag: u8, value: f64, stringLengths: Uint32Array): i32 {
   return -1;
 }
 
+function poolString(stringId: i32, stringOffsets: Uint32Array, stringLengths: Uint32Array, stringData: Uint16Array): string | null {
+  if (stringId < 0 || stringId >= stringLengths.length) {
+    return null;
+  }
+  const offset = <i32>stringOffsets[stringId];
+  const length = <i32>stringLengths[stringId];
+  let text = "";
+  for (let index = 0; index < length; index++) {
+    text += String.fromCharCode(stringData[offset + index]);
+  }
+  return text;
+}
+
+function scalarText(tag: u8, value: f64, stringOffsets: Uint32Array, stringLengths: Uint32Array, stringData: Uint16Array): string | null {
+  if (tag == ValueTag.Empty) {
+    return "";
+  }
+  if (tag == ValueTag.Boolean) {
+    return value != 0 ? "TRUE" : "FALSE";
+  }
+  if (tag == ValueTag.Number) {
+    return value.toString();
+  }
+  if (tag == ValueTag.String) {
+    return poolString(<i32>value, stringOffsets, stringLengths, stringData);
+  }
+  return null;
+}
+
 function truncToInt(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value);
   return isNaN(numeric) ? i32.MIN_VALUE : <i32>numeric;
@@ -312,7 +341,9 @@ export function applyBuiltin(
   cellNumbers: Float64Array,
   cellStringIds: Uint32Array,
   cellErrors: Uint16Array,
+  stringOffsets: Uint32Array,
   stringLengths: Uint32Array,
+  stringData: Uint16Array,
   rangeOffsets: Uint32Array,
   rangeLengths: Uint32Array,
   rangeMembers: Uint32Array,
@@ -730,6 +761,24 @@ export function applyBuiltin(
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>length, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
+  if (builtinId == BuiltinId.Exact && argc == 2) {
+    const left = scalarText(tagStack[base], valueStack[base], stringOffsets, stringLengths, stringData);
+    const right = scalarText(tagStack[base + 1], valueStack[base + 1], stringOffsets, stringLengths, stringData);
+    if (left === null || right === null) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Boolean,
+      left == right ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack
+    );
+  }
+
   if (builtinId == BuiltinId.IsBlank && argc == 0) {
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Boolean, 1, rangeIndexStack, valueStack, tagStack, kindStack);
   }
@@ -834,6 +883,39 @@ export function applyBuiltin(
       return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
     }
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, serial, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Int && argc == 1) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    if (isNaN(numeric)) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.floor(numeric), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if ((builtinId == BuiltinId.RoundUp || builtinId == BuiltinId.RoundDown) && (argc == 1 || argc == 2)) {
+    const numeric = toNumberExact(tagStack[base], valueStack[base]);
+    const digits = argc == 2 ? truncToInt(tagStack[base + 1], valueStack[base + 1]) : 0;
+    if (isNaN(numeric) || digits == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    let result = 0.0;
+    if (digits >= 0) {
+      const factor = Math.pow(10.0, <f64>digits);
+      const scaled = numeric * factor;
+      result =
+        (builtinId == BuiltinId.RoundUp
+          ? (numeric >= 0 ? Math.ceil(scaled) : Math.floor(scaled))
+          : (numeric >= 0 ? Math.floor(scaled) : Math.ceil(scaled))) / factor;
+    } else {
+      const factor = Math.pow(10.0, <f64>-digits);
+      const scaled = numeric / factor;
+      result =
+        (builtinId == BuiltinId.RoundUp
+          ? (numeric >= 0 ? Math.ceil(scaled) : Math.floor(scaled))
+          : (numeric >= 0 ? Math.floor(scaled) : Math.ceil(scaled))) * factor;
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, result, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);

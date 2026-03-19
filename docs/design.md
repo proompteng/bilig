@@ -1,89 +1,56 @@
 # `bilig` Canonical Product Design
 
-`bilig` is a local-first spreadsheet system with a browser-native Excel-like shell, a deterministic TypeScript semantic core, an AssemblyScript/WASM compute kernel, CRDT-based realtime collaboration, and a standalone sync backend deployed through the `lab` ArgoCD repo.
+`bilig` is a local-first spreadsheet system with a browser-native Excel shell, a deterministic semantic core, and a WASM execution engine. The current product milestone is **Top 100 Excel worksheet formula compatibility** with a hard repo boundary: `bilig` owns product code and product docs; `lab` owns deployment, rollout, and observability.
 
 ## Current state
 
-- the core engine contract is now materially closer to the documented surface: range mutation helpers, undo/redo, richer selection state, and sync-state plumbing exist in `@bilig/core`
-- `apps/web` now exists as the dedicated product app wrapper, while `apps/playground` remains the harness shell
-- `apps/local-server` now exists and hosts live local workbook sessions with binary websocket sync ingress plus live agent worksheet mutation APIs
-- the browser shell is still in-process today, not worker-first yet
-- the sync backend is still a typed scaffold with in-memory durability
-- the formula surface is still far narrower than the canonical Excel target
-- local agent chat orchestration is still not wired; the local server currently exposes live worksheet session control, not full chat-to-action automation
+- `@bilig/core`, `@bilig/formula`, `@bilig/wasm-kernel`, `apps/web`, `apps/local-server`, and `apps/sync-server` exist and are executable
+- formula compatibility has moved beyond the original starter set, but full Top 100 parity is still open
+- JS remains the semantic oracle today
+- WASM covers only a proven subset of arithmetic, aggregation, logical, and selected date behavior
+- names, tables, structured references, dynamic arrays, and `LET`/`LAMBDA` remain open
+
+## Current milestone
+
+The next product-closing milestone is:
+
+- **Top 100 Excel for the web worksheet formulas**
+- parity proved by checked-in oracle fixtures
+- production routing flipped to WASM for every formula family that closes
+- JS retained only for oracle, differential, and debug paths
 
 ## Canonical target
 
-The product target is fixed to these requirements:
-
-- local-first CRDT collaboration is the canonical state model
-- the browser loads a WASM binary and runs the engine in a worker-first runtime
 - formula semantics target Excel 365 built-in worksheet parity as of `2026-03-15`
-- the browser shell must feel native and spreadsheet-first, not dashboard-like
-- realtime sync uses a binary transport, not JSON, on the hot path
-- both local stdio and remote network agent APIs are first-class products
-- deployment is a standalone `bilig` Argo product app in `/Users/gregkonush/github.com/lab`
+- browser and local-server execution remain local-first
+- all supported production formulas execute in WASM
+- workbook metadata needed by formulas travels with the workbook model:
+  - defined names
+  - tables
+  - structured references
+  - spill metadata
+  - volatile recalc context
 
-## Package and app map
+## Repo boundary
 
-- `@bilig/core`: semantic spreadsheet authority, calc graph, selections, snapshots, sync hooks
-- `@bilig/formula`: Excel grammar, binding, optimization, lowered plans, coercion/error semantics
-- `@bilig/wasm-kernel`: AssemblyScript hot-path evaluator
-- `@bilig/crdt`: deterministic LWW batch convergence
-- `@bilig/grid`: Excel-like browser shell on Glide
-- `@bilig/renderer`: declarative workbook DSL
-- `@bilig/binary-protocol`: canonical binary sync framing
-- `@bilig/worker-transport`: UI thread <-> worker engine bridge
-- `@bilig/agent-api`: stdio and remote agent frame contracts
-- `@bilig/storage-browser`: IndexedDB-backed local durability
-- `@bilig/storage-server`: durable log/snapshot ownership abstractions
-- `@bilig/excel-fixtures`: checked-in Excel parity goldens
-- `apps/playground`: browser product shell and integration harness
-- `apps/web`: shipping browser shell wrapper
-- `apps/local-server`: localhost workbook session host and agent worksheet API
-- `apps/sync-server`: realtime sync and remote API service
+- `bilig` owns:
+  - parser, binder, optimizer, oracle harness, WASM kernel, workbook metadata model, dynamic-array runtime, compatibility matrix, acceptance docs
+- `lab` owns:
+  - deployment manifests, rollout gates, observability wiring, alerts, dashboards, SLO plumbing
 
-## Runtime split
+See:
 
-- UI thread owns painting, input, formula bar, editor overlays, clipboard, and shell chrome.
-- Browser worker owns the engine, CRDT state, WASM kernel, persistence, and sync connection.
-- The backend owns binary websocket ingress, session ownership, durable append log, snapshots, and replay/catch-up.
+- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
+- [formula-top100-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-matrix.md)
+- [formula-oracle-capture.md](/Users/gregkonush/github.com/bilig/docs/formula-oracle-capture.md)
+- [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)
+- [workbook-metadata-model.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-model.md)
+- [dynamic-array-runtime.md](/Users/gregkonush/github.com/bilig/docs/dynamic-array-runtime.md)
+- [bilig-lab-contract.md](/Users/gregkonush/github.com/bilig/docs/bilig-lab-contract.md)
 
-## Production constraints
+## Exit gate
 
-- JS evaluation remains the semantic oracle.
-- WASM only accelerates profitable overlap sets and must preserve exact JS parity.
-- Local and remote mutations use the same deterministic apply path.
-- Browser state must recover from refresh, offline work, and reconnect without losing local edits.
-- Server acks happen only after durable append.
-- Every architecture promise must be enforced by tests, benchmarks, or an explicit acceptance matrix gate.
-
-## Canonical docs
-
-- [architecture.md](/Users/gregkonush/github.com/bilig/docs/architecture.md)
-- [public-api.md](/Users/gregkonush/github.com/bilig/docs/public-api.md)
-- [formula-language.md](/Users/gregkonush/github.com/bilig/docs/formula-language.md)
-- [crdt-model.md](/Users/gregkonush/github.com/bilig/docs/crdt-model.md)
-- [browser-runtime.md](/Users/gregkonush/github.com/bilig/docs/browser-runtime.md)
-- [binary-protocol.md](/Users/gregkonush/github.com/bilig/docs/binary-protocol.md)
-- [backend-sync-service.md](/Users/gregkonush/github.com/bilig/docs/backend-sync-service.md)
-- [agent-api.md](/Users/gregkonush/github.com/bilig/docs/agent-api.md)
-- [performance-budgets.md](/Users/gregkonush/github.com/bilig/docs/performance-budgets.md)
-- [production-acceptance-matrix.md](/Users/gregkonush/github.com/bilig/docs/production-acceptance-matrix.md)
-- [implementation-ledger.md](/Users/gregkonush/github.com/bilig/docs/implementation-ledger.md)
-
-## Current tranche status
-
-This repo now contains the architecture foundation plus the first core-contract tranche for the canonical design:
-
-- canonical docs rewritten to the production target
-- binary frame codec package added
-- worker transport package added
-- browser persistence extracted into a reusable package
-- local app server added with live workbook session management and binary websocket ingress
-- server-side storage abstractions added
-- sync-server skeleton added with binary HTTP ingress for sync frames and remote agent frames
-- `apps/web` split added as the dedicated product app wrapper
-- core range mutation, undo/redo, richer selection state, and sync-state APIs added
-
-The system is not yet at full Excel parity or full realtime production readiness. Those remain active implementation tranches, but the repo no longer describes them as out-of-scope future ideas.
+- Top 100 formula registry is fully decision-complete
+- every Top 100 entry has a fixture-backed status
+- every closed family has a WASM production route
+- `lab` contracts exist and match the bilig-side assumptions

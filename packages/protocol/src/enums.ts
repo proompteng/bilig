@@ -74,5 +74,9 @@ export enum BuiltinId {
   Month = 23,
   Day = 24,
   Edate = 25,
-  Eomonth = 26
+  Eomonth = 26,
+  Exact = 27,
+  Int = 28,
+  RoundUp = 29,
+  RoundDown = 30
 }

@@ -288,6 +288,22 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
+  it("uses the wasm fast path for EXACT text equality", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "Alpha");
+    engine.setCellValue("Sheet1", "A2", "alpha");
+
+    engine.setCellFormula("Sheet1", "B1", "EXACT(A1,A1)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B2", "EXACT(A1,A2)");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
   it("uses the wasm fast path for exact-parity rounding builtins", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -313,6 +329,18 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "A2", "oops");
     engine.setCellFormula("Sheet1", "B5", "ROUND(A2,1)");
     expect(engine.getCellValue("Sheet1", "B5")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B6", "INT(-3.1)");
+    expect(engine.getCellValue("Sheet1", "B6")).toEqual({ tag: ValueTag.Number, value: -4 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B7", "ROUNDUP(-3.141,2)");
+    expect(engine.getCellValue("Sheet1", "B7")).toEqual({ tag: ValueTag.Number, value: -3.15 });
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B8", "ROUNDDOWN(-3.141,2)");
+    expect(engine.getCellValue("Sheet1", "B8")).toEqual({ tag: ValueTag.Number, value: -3.14 });
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
   });
 

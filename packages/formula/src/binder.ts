@@ -33,7 +33,11 @@ const WASM_SAFE_BUILTINS = new Set([
   "MONTH",
   "DAY",
   "EDATE",
-  "EOMONTH"
+  "EOMONTH",
+  "EXACT",
+  "INT",
+  "ROUNDUP",
+  "ROUNDDOWN"
 ]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
@@ -44,12 +48,17 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "YEAR":
     case "MONTH":
     case "DAY":
+    case "INT":
       return argc === 1;
+    case "EXACT":
+      return argc === 2;
     case "ISBLANK":
     case "ISNUMBER":
     case "ISTEXT":
       return argc === 0 || argc === 1;
     case "ROUND":
+    case "ROUNDUP":
+    case "ROUNDDOWN":
     case "FLOOR":
     case "CEILING":
       return argc === 1 || argc === 2;
@@ -179,7 +188,11 @@ export function encodeBuiltin(name: string): BuiltinId {
     MONTH: BuiltinId.Month,
     DAY: BuiltinId.Day,
     EDATE: BuiltinId.Edate,
-    EOMONTH: BuiltinId.Eomonth
+    EOMONTH: BuiltinId.Eomonth,
+    EXACT: BuiltinId.Exact,
+    INT: BuiltinId.Int,
+    ROUNDUP: BuiltinId.RoundUp,
+    ROUNDDOWN: BuiltinId.RoundDown
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

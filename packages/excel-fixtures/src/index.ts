@@ -1,5 +1,9 @@
 import { ErrorCode, type CellValue, type LiteralInput } from "@bilig/protocol";
-import { excelTop50StarterFixtures } from "./top50.js";
+import { excelDateTimeFixtureSuite } from "./datetime-fixtures.js";
+import { excelTop100LogicalFixtures } from "./logical-fixtures.js";
+import { excelTop100ExpansionFixtures } from "./top100-expansion.js";
+import { excelTop100CanonicalSeedFixtures } from "./top50.js";
+import { excelTop100TextFixtures } from "./text-fixtures.js";
 
 export const excelFixtureFamilies = [
   "arithmetic",
@@ -111,16 +115,155 @@ export function errorExpected(code: ErrorCode, display: string): ExcelExpectedVa
   return { kind: "error", code, display };
 }
 
-export const excelFixtureSmokeSuite: ExcelFixtureSuite = {
-  id: "top50-smoke",
-  description: "Representative starter slice from the Top 50 Excel compatibility registry.",
+function dedupeFixtures(fixtures: readonly ExcelFixtureCase[]): ExcelFixtureCase[] {
+  const seen = new Set<string>();
+  const output: ExcelFixtureCase[] = [];
+  for (const fixture of fixtures) {
+    if (seen.has(fixture.id)) {
+      continue;
+    }
+    seen.add(fixture.id);
+    output.push(fixture);
+  }
+  return output;
+}
+
+const top100CanonicalExclusions = new Set<string>(["text:case-insensitive-compare", "information:value-error-display"]);
+
+const excelTop100BaseFixtureIds = new Set<string>([
+  "arithmetic:add-basic",
+  "arithmetic:precedence-basic",
+  "arithmetic:unary-negation",
+  "arithmetic:division-basic",
+  "arithmetic:power-basic",
+  "arithmetic:percent-operator",
+  "comparison:equality-number",
+  "comparison:equality-text",
+  "comparison:greater-than",
+  "comparison:less-than-or-equal",
+  "logical:if-basic",
+  "logical:and-basic",
+  "logical:or-basic",
+  "logical:not-basic",
+  "aggregation:sum-range",
+  "aggregation:avg-range",
+  "aggregation:min-range",
+  "aggregation:max-range",
+  "aggregation:count-range",
+  "aggregation:counta-range",
+  "math:abs-basic",
+  "math:round-basic",
+  "math:floor-basic",
+  "math:ceiling-basic",
+  "math:mod-basic",
+  "text:concat-operator",
+  "text:concat-function",
+  "text:len-basic",
+  "date-time:serial-addition",
+  "date-time:date-constructor",
+  "date-time:today-volatile",
+  "lookup-reference:index-basic",
+  "lookup-reference:match-exact",
+  "lookup-reference:vlookup-exact",
+  "lookup-reference:xlookup-exact",
+  "statistical:averageif-basic",
+  "statistical:countif-basic",
+  "information:isblank-basic",
+  "information:isnumber-basic",
+  "information:istext-basic",
+  "dynamic-array:sequence-spill",
+  "dynamic-array:filter-basic",
+  "dynamic-array:unique-basic",
+  "names:defined-name-scalar",
+  "tables:table-total-row-sum",
+  "structured-reference:table-column-ref",
+  "volatile:rand-basic",
+  "lambda:let-basic",
+  "lambda:lambda-invoke",
+  "lambda:map-basic",
+  "logical:if-true-branch",
+  "logical:if-condition-error",
+  "logical:iferror-catches-any-error",
+  "logical:ifna-catches-na-only",
+  "logical:and-false-on-empty",
+  "logical:or-true-branch",
+  "logical:not-number",
+  "information:isblank-empty",
+  "information:isnumber-number",
+  "information:istext-string",
+  "text:len-counts-plain-string-length"
+]);
+
+const excelTop100BaseFixtures = dedupeFixtures([
+  ...excelTop100CanonicalSeedFixtures,
+  ...excelTop100LogicalFixtures,
+  ...excelTop100TextFixtures,
+  ...(excelDateTimeFixtureSuite.cases ?? [])
+]).filter((fixture) => excelTop100BaseFixtureIds.has(fixture.id) && !top100CanonicalExclusions.has(fixture.id));
+
+export const excelTop100CanonicalFixtures: readonly ExcelFixtureCase[] = dedupeFixtures([
+  ...excelTop100BaseFixtures,
+  ...excelTop100ExpansionFixtures
+]);
+
+export const excelTop100SmokeSuite: ExcelFixtureSuite = {
+  id: "top100-smoke",
+  description: "Representative smoke slice from the canonical Top 100 Excel compatibility corpus.",
   sheets: [{ name: "Sheet1" }],
-  excelBuild: "Microsoft 365 / 2026-03-15",
-  capturedAt: "2026-03-15T00:00:00.000Z",
-  cases: excelTop50StarterFixtures.slice(0, 5)
+  excelBuild: "Microsoft 365 / 2026-03-19",
+  capturedAt: "2026-03-19T00:00:00.000Z",
+  cases: excelTop100CanonicalFixtures.slice(0, 5)
 };
 
-export { excelTop50StarterFixtures } from "./top50.js";
+function buildFamilySuite(id: string, description: string, families: readonly ExcelFixtureFamily[]): ExcelFixtureSuite {
+  return {
+    id,
+    description,
+    sheets: [{ name: "Sheet1" }],
+    excelBuild: "Microsoft 365 / 2026-03-19",
+    capturedAt: "2026-03-19T00:00:00.000Z",
+    cases: excelTop100CanonicalFixtures.filter((fixture) => families.includes(fixture.family))
+  };
+}
+
+export const excelTop100TextFixtureSuite = buildFamilySuite(
+  "top100-text",
+  "Canonical Top 100 text-function fixture slice.",
+  ["text"]
+);
+
+export const excelTop100LookupReferenceFixtureSuite = buildFamilySuite(
+  "top100-lookup-reference",
+  "Canonical Top 100 lookup/reference fixture slice.",
+  ["lookup-reference", "statistical"]
+);
+
+export const excelTop100DateTimeFixtureSuite = buildFamilySuite(
+  "top100-date-time",
+  "Canonical Top 100 date/time and volatile fixture slice.",
+  ["date-time", "volatile"]
+);
+
+export const excelTop100DynamicArrayFixtureSuite = buildFamilySuite(
+  "top100-dynamic-array",
+  "Canonical Top 100 dynamic-array fixture slice.",
+  ["dynamic-array"]
+);
+
+export const excelTop100NamesTablesFixtureSuite = buildFamilySuite(
+  "top100-names-tables",
+  "Canonical Top 100 names, tables, and structured-reference fixture slice.",
+  ["names", "tables", "structured-reference"]
+);
+
+export const excelTop100LambdaFixtureSuite = buildFamilySuite(
+  "top100-lambda",
+  "Canonical Top 100 lambda fixture slice.",
+  ["lambda"]
+);
+
+export { excelTop100CanonicalSeedFixtures } from "./top50.js";
+export { excelTop100ExpansionFixtures } from "./top100-expansion.js";
 export * from "./logical-fixtures.js";
 export * from "./text-fixtures.js";
 export * from "./datetime-fixtures.js";

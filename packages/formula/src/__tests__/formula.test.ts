@@ -85,6 +85,10 @@ describe("formula", () => {
     expect(compileFormula("DAY(A1)").mode).toBe(1);
     expect(compileFormula("EDATE(A1,1)").mode).toBe(1);
     expect(compileFormula("EOMONTH(A1,1)").mode).toBe(1);
+    expect(compileFormula("EXACT(A1,A2)").mode).toBe(1);
+    expect(compileFormula("INT(A1)").mode).toBe(1);
+    expect(compileFormula("ROUNDUP(A1,2)").mode).toBe(1);
+    expect(compileFormula("ROUNDDOWN(A1,2)").mode).toBe(1);
   });
 
   it("keeps LEN on the JS path when it depends on a range until the range-string bridge lands", () => {

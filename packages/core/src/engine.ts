@@ -1479,7 +1479,7 @@ export class SpreadsheetEngine {
 
     this.ensureRecalcScratchCapacity(Math.max(this.workbook.cellStore.size + 1, changedRoots.length + orderedCount + 1));
     if (this.wasm.ready) {
-      this.wasm.syncStringPool(this.strings.exportLengths());
+      this.wasm.syncStringPool(this.strings.exportLayout());
     }
 
     let pendingKernelSyncCount = 0;

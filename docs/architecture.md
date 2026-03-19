@@ -4,50 +4,48 @@
 
 ```mermaid
 flowchart LR
-  UI["React + Glide shell"] --> Worker["Worker transport"]
+  UI["apps/web"] --> Worker["worker transport"]
   UI --> Local["apps/local-server"]
   Worker --> Core["@bilig/core"]
   Core --> Formula["@bilig/formula"]
-  Core --> CRDT["@bilig/crdt"]
   Core --> WASM["@bilig/wasm-kernel"]
-  Core --> BrowserStore["@bilig/storage-browser"]
-  Worker --> Binary["@bilig/binary-protocol"]
-  Local --> Binary
+  Core --> Meta["workbook metadata"]
+  Formula --> Fixtures["@bilig/excel-fixtures"]
   Local --> Core
-  Binary --> Sync["apps/sync-server"]
-  Sync --> ServerStore["@bilig/storage-server"]
+  Local --> Sync["apps/sync-server"]
+  Sync --> Lab["lab deployment + rollout + obs"]
 ```
 
-## Browser
+## Formula architecture
 
-- `@bilig/grid` renders the Excel-like shell.
-- `@bilig/renderer` owns the declarative workbook DSL only.
-- `@bilig/worker-transport` isolates the engine behind a worker boundary.
-- `@bilig/storage-browser` persists snapshot, replica state, outbound queue, and cursor state in IndexedDB.
-- `@bilig/binary-protocol` frames sync messages for the backend transport.
-- `apps/web` is now the dedicated product app wrapper around the shipping browser shell.
+- `@bilig/formula` owns grammar, binding, optimization, translation, compatibility registry, and JS oracle evaluation
+- `@bilig/wasm-kernel` owns production formula execution for closed families
+- `@bilig/core` owns workbook context, dependency scheduling, metrics, and execution routing
+- `@bilig/excel-fixtures` owns checked-in oracle cases and capture metadata
 
-## Semantic engine
+## Top 100 execution rule
 
-- `@bilig/core` is the only semantic authority for workbook state.
-- `@bilig/formula` defines parsing, binding, optimization, and JS oracle execution.
-- `@bilig/wasm-kernel` is a fast-path compute accelerator, never the semantic source of truth.
-- `@bilig/crdt` defines deterministic LWW batch ordering and replay rules.
+- every formula family lands in JS first
+- fixtures prove Excel for the web parity
+- WASM mirrors the same semantics in shadow mode
+- production routing flips only after differential parity is green
 
-## Backend
+## Metadata dependencies
 
-- `apps/local-server` is the authoritative localhost workbook-session host for the local-first agent loop.
-- `apps/sync-server` is the realtime ingress and remote-agent control plane.
-- `@bilig/storage-server` abstracts durable log, snapshot, presence, and ownership state.
-- The full production backend target is binary websocket ingress plus durable append-before-ack semantics.
-- The current repo tranche includes a typed local session host plus a typed remote service skeleton so both runtime layers are executable in-repo.
+The Top 100 milestone depends on workbook-scoped metadata becoming first-class:
 
-## Argo deployment target
+- defined names
+- tables and structured references
+- spill ownership and blocking
+- volatile epoch context
 
-- The standalone product app lives in `/Users/gregkonush/github.com/lab/argocd/applications/bilig`.
-- It is registered in `/Users/gregkonush/github.com/lab/argocd/applicationsets/product.yaml`.
-- Default hosts are `bilig.proompteng.ai` and `api.bilig.proompteng.ai`.
+## Repo boundary
 
-## Current tranche status
+- `bilig` docs define product/runtime contracts
+- `lab` docs define deployment/runtime operation contracts
 
-The current repo shape now matches the package and app layout of the production design. The missing work is deeper implementation fidelity: worker-first browser wiring, chat-driven local agent orchestration, durable remote websocket sync, full Excel parity, and Argo promotion hardening.
+See:
+
+- [bilig-lab-contract.md](/Users/gregkonush/github.com/bilig/docs/bilig-lab-contract.md)
+- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
+- [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)

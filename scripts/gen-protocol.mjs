@@ -75,7 +75,11 @@ const enumManifest = {
     ["Month", 23],
     ["Day", 24],
     ["Edate", 25],
-    ["Eomonth", 26]
+    ["Eomonth", 26],
+    ["Exact", 27],
+    ["Int", 28],
+    ["RoundUp", 29],
+    ["RoundDown", 30]
   ]
 };
 
@@ -105,7 +109,11 @@ const builtinManifest = [
   { id: "Month", name: "MONTH", supportsWasm: true },
   { id: "Day", name: "DAY", supportsWasm: true },
   { id: "Edate", name: "EDATE", supportsWasm: true },
-  { id: "Eomonth", name: "EOMONTH", supportsWasm: true }
+  { id: "Eomonth", name: "EOMONTH", supportsWasm: true },
+  { id: "Exact", name: "EXACT", supportsWasm: true },
+  { id: "Int", name: "INT", supportsWasm: true },
+  { id: "RoundUp", name: "ROUNDUP", supportsWasm: true },
+  { id: "RoundDown", name: "ROUNDDOWN", supportsWasm: true }
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.mjs\n\n`;

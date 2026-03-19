@@ -21,6 +21,7 @@ interface RawKernelExports {
   uploadConstants(constants: number, offsets: number, lengths: number): void;
   uploadRangeMembers(members: number, offsets: number, lengths: number): void;
   uploadStringLengths(lengths: number): void;
+  uploadStrings(offsets: number, lengths: number, data: number): void;
   writeCells(tags: number, numbers: number, stringIds: number, errors: number): void;
   evalBatch(cellIndices: number): void;
   getTagsPtr(): number;
@@ -66,6 +67,7 @@ export interface SpreadsheetKernel {
   uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void;
   uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void;
   uploadStringLengths(lengths: Uint32Array): void;
+  uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void;
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void;
   evalBatch(cellIndices: Uint32Array): void;
   readTags(): Uint8Array;
@@ -197,6 +199,19 @@ class RawKernelBridge {
     }
   }
 
+  uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void {
+    const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec);
+    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec);
+    const dataPtr = this.lowerTypedArray(data, uint16Spec);
+    try {
+      this.raw.uploadStrings(offsetsPtr, lengthsPtr, dataPtr);
+    } finally {
+      this.raw.__unpin(offsetsPtr);
+      this.raw.__unpin(lengthsPtr);
+      this.raw.__unpin(dataPtr);
+    }
+  }
+
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
     const tagsPtr = this.lowerTypedArray(tags, uint8Spec);
     const numbersPtr = this.lowerTypedArray(numbers, float64Spec);
@@ -318,6 +333,11 @@ class KernelHandle implements SpreadsheetKernel {
 
   uploadStringLengths(lengths: Uint32Array): void {
     this.bridge.uploadStringLengths(lengths);
+    this.refreshViews();
+  }
+
+  uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void {
+    this.bridge.uploadStrings(offsets, lengths, data);
     this.refreshViews();
   }
 

@@ -58,6 +58,16 @@ describe("formula builtins", () => {
       { tag: ValueTag.Empty }
     )).toEqual({ tag: ValueTag.String, value: "alpha2", stringId: 0 });
 
+    expect(getBuiltin("EXACT")?.(
+      { tag: ValueTag.String, value: "Alpha", stringId: 1 },
+      { tag: ValueTag.String, value: "Alpha", stringId: 2 }
+    )).toEqual({ tag: ValueTag.Boolean, value: true });
+
+    expect(getBuiltin("EXACT")?.(
+      { tag: ValueTag.String, value: "Alpha", stringId: 1 },
+      { tag: ValueTag.String, value: "alpha", stringId: 2 }
+    )).toEqual({ tag: ValueTag.Boolean, value: false });
+
     expect(getBuiltin("LEFT")?.(
       { tag: ValueTag.String, value: "alpha", stringId: 1 },
       { tag: ValueTag.Number, value: 3 }
@@ -115,10 +125,22 @@ describe("formula builtins", () => {
       tag: ValueTag.Number,
       value: 3.4
     });
+    expect(getBuiltin("INT")?.({ tag: ValueTag.Number, value: -3.1 })).toEqual({
+      tag: ValueTag.Number,
+      value: -4
+    });
     expect(getBuiltin("ROUND")?.({ tag: ValueTag.Number, value: 3.6 })).toEqual({
       tag: ValueTag.Number,
       value: 4
     });
+    expect(getBuiltin("ROUNDUP")?.(
+      { tag: ValueTag.Number, value: 3.141 },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: 3.15 });
+    expect(getBuiltin("ROUNDDOWN")?.(
+      { tag: ValueTag.Number, value: -3.141 },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: -3.14 });
     expect(getBuiltin("ROUND")?.(
       { tag: ValueTag.Number, value: 3.141 },
       { tag: ValueTag.Number, value: 2 }

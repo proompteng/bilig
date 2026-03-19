@@ -59,5 +59,9 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Month, name: "MONTH", supportsWasm: true },
   { id: BuiltinId.Day, name: "DAY", supportsWasm: true },
   { id: BuiltinId.Edate, name: "EDATE", supportsWasm: true },
-  { id: BuiltinId.Eomonth, name: "EOMONTH", supportsWasm: true }
+  { id: BuiltinId.Eomonth, name: "EOMONTH", supportsWasm: true },
+  { id: BuiltinId.Exact, name: "EXACT", supportsWasm: true },
+  { id: BuiltinId.Int, name: "INT", supportsWasm: true },
+  { id: BuiltinId.RoundUp, name: "ROUNDUP", supportsWasm: true },
+  { id: BuiltinId.RoundDown, name: "ROUNDDOWN", supportsWasm: true }
 ];

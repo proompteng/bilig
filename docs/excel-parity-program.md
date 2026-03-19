@@ -1,31 +1,37 @@
 # Excel Parity Program
 
-## Target
+## Current milestone
 
-Match Excel 365 built-in worksheet formula semantics as of `2026-03-15`.
+The immediate milestone is **Top 100 Excel for the web worksheet formulas**.
 
-## Scope
+That milestone is the gate between the current starter surface and the full canonical target.
 
-- formula grammar parity
-- evaluation semantics parity
-- function-family parity
-- spill and dynamic array behavior
-- lookup/reference edge cases
-- date serial and coercion parity
+## Canonical target
 
-## Exclusions
+Match Excel 365 worksheet semantics as of `2026-03-15` across:
 
-- VBA macros
-- external add-in UDFs
-- Power Query, Pivot, and non-cell formula systems
+- grammar
+- evaluation semantics
+- workbook metadata semantics
+- spill/dynamic array semantics
+- lookup/reference semantics
+- volatile semantics
 
 ## Delivery model
 
-- JS evaluator is the oracle
-- WASM accelerates safe overlap sets only
-- parity is verified against checked-in Excel golden fixtures
-- every new function family lands with fixtures before being considered complete
+- fixtures are captured from Excel for the web and checked into `@bilig/excel-fixtures`
+- JS lands first as oracle behavior
+- WASM lands second in differential mode
+- production routing flips to WASM only after parity closes
 
-## First tranche
+## Milestone docs
 
-`@bilig/excel-fixtures` now exists and carries the seed parity suite. The full corpus lands incrementally from there.
+- [formula-top100-program.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-program.md)
+- [formula-top100-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-top100-matrix.md)
+- [formula-oracle-capture.md](/Users/gregkonush/github.com/bilig/docs/formula-oracle-capture.md)
+
+## Exit gate
+
+- all Top 100 entries are fixture-backed
+- all closed entries run in WASM production mode
+- remaining open work is only outside the Top 100 milestone or outside the worksheet formula scope

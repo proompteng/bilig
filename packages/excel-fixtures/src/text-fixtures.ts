@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import type { ExcelExpectedValue, ExcelFixtureCase, ExcelFixtureExpectedOutput, ExcelFixtureFamily, ExcelFixtureInputCell } from "./index.js";
 
 export interface TextFixtureCase {
   name: string;
@@ -10,6 +11,53 @@ export interface TextFixtureCase {
 export interface TextFixtureGroup {
   builtin: "LEN" | "CONCAT" | "LEFT" | "RIGHT" | "MID" | "TRIM" | "UPPER" | "LOWER" | "FIND" | "SEARCH";
   cases: readonly TextFixtureCase[];
+}
+
+const excelFixtureIdPattern = /^[a-z][a-z0-9-]*:[a-z0-9-]+$/;
+
+function createExcelFixtureId(family: ExcelFixtureFamily, slug: string): string {
+  const normalizedSlug = slug.trim().toLowerCase();
+  const id = `${family}:${normalizedSlug}`;
+  if (!excelFixtureIdPattern.test(id)) {
+    throw new Error(`Invalid Excel fixture id: ${id}`);
+  }
+  return id;
+}
+
+function numberExpected(value: number): ExcelExpectedValue {
+  return { kind: "number", value };
+}
+
+function stringExpected(value: string): ExcelExpectedValue {
+  return { kind: "string", value };
+}
+
+function input(address: string, value: ExcelFixtureInputCell["input"], note?: string): ExcelFixtureInputCell {
+  return note === undefined ? { address, input: value } : { address, input: value, note };
+}
+
+function output(address: string, expected: ExcelFixtureExpectedOutput["expected"], note?: string): ExcelFixtureExpectedOutput {
+  return note === undefined ? { address, expected } : { address, expected, note };
+}
+
+function fixture(
+  slug: string,
+  title: string,
+  formula: string,
+  inputs: ExcelFixtureInputCell[],
+  outputs: ExcelFixtureExpectedOutput[],
+  notes?: string
+): ExcelFixtureCase {
+  const base = {
+    id: createExcelFixtureId("text", slug),
+    family: "text" as const,
+    title,
+    formula,
+    inputs,
+    outputs,
+    sheetName: "Sheet1"
+  };
+  return notes === undefined ? base : { ...base, notes };
 }
 
 export const TEXT_FIXTURE_METADATA = {
@@ -67,15 +115,11 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
   },
   {
     builtin: "UPPER",
-    cases: [
-      { name: "uppercases text", args: [text("Alpha beta")], expected: text("ALPHA BETA") }
-    ]
+    cases: [{ name: "uppercases text", args: [text("Alpha beta")], expected: text("ALPHA BETA") }]
   },
   {
     builtin: "LOWER",
-    cases: [
-      { name: "lowercases text", args: [text("Alpha BETA")], expected: text("alpha beta") }
-    ]
+    cases: [{ name: "lowercases text", args: [text("Alpha BETA")], expected: text("alpha beta") }]
   },
   {
     builtin: "FIND",
@@ -93,6 +137,33 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
       { name: "supports escaped wildcard", args: [text("~*"), text("a*b")], expected: number(2) }
     ]
   }
+];
+
+export const excelTop100TextFixtures: readonly ExcelFixtureCase[] = [
+  fixture("len-counts-plain-string-length", "LEN counts plain string length", "=LEN(\"hello\")", [], [output("A1", numberExpected(5))]),
+  fixture("len-coerces-booleans-to-text", "LEN coerces booleans to text", "=LEN(A1)", [input("A1", true)], [output("A2", numberExpected(4))]),
+  fixture("len-treats-empty-as-empty-string", "LEN treats empty as empty string", "=LEN(A1)", [input("A1", null)], [output("A2", numberExpected(0))]),
+  fixture("concat-joins-mixed-scalar-values", "CONCAT joins mixed scalar values", "=CONCAT(\"alpha\",2,A1)", [input("A1", null)], [output("A2", stringExpected("alpha2"))]),
+  fixture("concat-coerces-booleans-to-uppercase-logical-text", "CONCAT coerces booleans to uppercase logical text", "=CONCAT(A1,\"-ok\")", [input("A1", false)], [output("A2", stringExpected("FALSE-ok"))]),
+  fixture("left-defaults-to-one-character", "LEFT defaults to one character", "=LEFT(\"alpha\")", [], [output("A1", stringExpected("a"))]),
+  fixture("left-takes-requested-prefix-length", "LEFT takes requested prefix length", "=LEFT(\"alpha\",3)", [], [output("A1", stringExpected("alp"))]),
+  fixture("left-zero-length-returns-empty-string", "LEFT zero length returns empty string", "=LEFT(\"alpha\",A1)", [input("A1", null)], [output("A2", stringExpected(""))]),
+  fixture("right-defaults-to-one-character", "RIGHT defaults to one character", "=RIGHT(\"alpha\")", [], [output("A1", stringExpected("a"))]),
+  fixture("right-takes-requested-suffix-length", "RIGHT takes requested suffix length", "=RIGHT(\"alpha\",2)", [], [output("A1", stringExpected("ha"))]),
+  fixture("right-large-suffix-returns-whole-string", "RIGHT large suffix returns whole string", "=RIGHT(\"alpha\",99)", [], [output("A1", stringExpected("alpha"))]),
+  fixture("mid-extracts-substring-from-one-based-start", "MID extracts substring from one-based start", "=MID(\"alphabet\",2,3)", [], [output("A1", stringExpected("lph"))]),
+  fixture("mid-start-beyond-end-returns-empty-string", "MID start beyond end returns empty string", "=MID(\"alpha\",9,2)", [], [output("A1", stringExpected(""))]),
+  fixture("mid-zero-count-returns-empty-string", "MID zero count returns empty string", "=MID(\"alpha\",2,A1)", [input("A1", null)], [output("A2", stringExpected(""))]),
+  fixture("trim-collapses-internal-spaces", "TRIM collapses internal spaces", "=TRIM(\"  alpha   beta  \")", [], [output("A1", stringExpected("alpha beta"))]),
+  fixture("trim-leaves-clean-strings-alone", "TRIM leaves clean strings alone", "=TRIM(\"alpha beta\")", [], [output("A1", stringExpected("alpha beta"))]),
+  fixture("upper-uppercases-text", "UPPER uppercases text", "=UPPER(\"Alpha beta\")", [], [output("A1", stringExpected("ALPHA BETA"))]),
+  fixture("lower-lowercases-text", "LOWER lowercases text", "=LOWER(\"Alpha BETA\")", [], [output("A1", stringExpected("alpha beta"))]),
+  fixture("find-finds-first-case-sensitive-position", "FIND finds first case-sensitive position", "=FIND(\"ph\",\"alphabet\")", [], [output("A1", numberExpected(3))]),
+  fixture("find-respects-one-based-start", "FIND respects one-based start", "=FIND(\"a\",\"bananas\",3)", [], [output("A1", numberExpected(4))]),
+  fixture("find-empty-needle-returns-start-position", "FIND empty needle returns start position", "=FIND(\"\",\"alpha\",3)", [], [output("A1", numberExpected(3))]),
+  fixture("search-searches-case-insensitively", "SEARCH searches case-insensitively", "=SEARCH(\"PH\",\"alphabet\")", [], [output("A1", numberExpected(3))]),
+  fixture("search-supports-wildcard-question-mark", "SEARCH supports wildcard question mark", "=SEARCH(\"b?d\",\"ABCD\")", [], [output("A1", numberExpected(2))]),
+  fixture("search-supports-escaped-wildcard", "SEARCH supports escaped wildcard", "=SEARCH(\"~*\",\"a*b\")", [], [output("A1", numberExpected(2))])
 ];
 
 function empty(): CellValue {

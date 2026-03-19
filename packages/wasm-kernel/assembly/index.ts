@@ -9,6 +9,7 @@ export {
   uploadConstants,
   uploadRangeMembers,
   uploadStringLengths,
+  uploadStrings,
   writeCells,
   evalBatch,
   getTagsPtr,

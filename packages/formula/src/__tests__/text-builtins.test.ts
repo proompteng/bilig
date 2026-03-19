@@ -44,6 +44,12 @@ describe("text builtins", () => {
     expect(getTextBuiltin("TRIM")?.(text("  alpha   beta  "))).toEqual(text("alpha beta"));
     expect(getTextBuiltin("TRIM")?.(text("\t alpha  beta \t"))).toEqual(text("\t alpha beta \t"));
   });
+
+  it("supports EXACT as case-sensitive text equality", () => {
+    expect(getTextBuiltin("EXACT")?.(text("Alpha"), text("Alpha"))).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(getTextBuiltin("EXACT")?.(text("Alpha"), text("alpha"))).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(getTextBuiltin("EXACT")?.(number(42), text("42"))).toEqual({ tag: ValueTag.Boolean, value: true });
+  });
 });
 
 function number(value: number): CellValue {
