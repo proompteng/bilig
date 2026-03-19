@@ -35,6 +35,7 @@ interface SheetGridViewProps {
   onCancelEdit(): void;
   onClearCell(): void;
   onFillRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
+  onCopyRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onPaste(addr: string, values: readonly (readonly string[])[]): void;
 }
 
@@ -52,6 +53,14 @@ interface PointerGeometry {
   dataTop: number;
   dataRight: number;
   dataBottom: number;
+}
+
+interface InternalClipboardRange {
+  sourceStartAddress: string;
+  sourceEndAddress: string;
+  signature: string;
+  rowCount: number;
+  colCount: number;
 }
 
 type HeaderSelection =
@@ -324,6 +333,10 @@ function cellToEditorSeed(snapshot: ReturnType<typeof selectors.selectCellSnapsh
   return String(snapshot.input);
 }
 
+function serializeClipboardMatrix(values: readonly (readonly string[])[]): string {
+  return values.map((row) => row.join("\u001f")).join("\u001e");
+}
+
 export function SheetGridView({
   engine,
   sheetName,
@@ -340,6 +353,7 @@ export function SheetGridView({
   onCancelEdit,
   onClearCell,
   onFillRange,
+  onCopyRange,
   onPaste
 }: SheetGridViewProps) {
   const editorRef = useRef<DataEditorRef | null>(null);
@@ -354,6 +368,7 @@ export function SheetGridView({
   const dragGeometryRef = useRef<PointerGeometry | null>(null);
   const dragDidMoveRef = useRef(false);
   const postDragSelectionExpiryRef = useRef<number>(0);
+  const internalClipboardRef = useRef<InternalClipboardRange | null>(null);
   const activeSheetRef = useRef(sheetName);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
@@ -629,6 +644,28 @@ export function SheetGridView({
     [gridSelection, selectedAddr]
   );
 
+  const captureInternalClipboardSelection = useCallback(() => {
+    const range = gridSelection.current?.range;
+    if (!range || gridSelection.columns.length > 0 || gridSelection.rows.length > 0) {
+      internalClipboardRef.current = null;
+      return;
+    }
+
+    const values = Array.from({ length: range.height }, (_, rowOffset) =>
+      Array.from({ length: range.width }, (_, colOffset) =>
+        cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)))
+      )
+    );
+
+    internalClipboardRef.current = {
+      sourceStartAddress: formatAddress(range.y, range.x),
+      sourceEndAddress: formatAddress(range.y + range.height - 1, range.x + range.width - 1),
+      signature: serializeClipboardMatrix(values),
+      rowCount: range.height,
+      colCount: range.width
+    };
+  }, [engine, gridSelection, sheetName]);
+
   useEffect(() => {
     onSelectionLabelChange?.(selectionSummary);
   }, [onSelectionLabelChange, selectionSummary]);
@@ -695,6 +732,14 @@ export function SheetGridView({
         return;
       }
 
+      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+        const normalizedKey = event.key.toLowerCase();
+        if (normalizedKey === "c" || normalizedKey === "x") {
+          captureInternalClipboardSelection();
+          return;
+        }
+      }
+
       if (
         event.key.length === 1
         && !event.ctrlKey
@@ -706,7 +751,7 @@ export function SheetGridView({
         beginSelectedEdit(event.key);
       }
     },
-    [beginSelectedEdit, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
+    [beginSelectedEdit, captureInternalClipboardSelection, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
   );
 
   useEffect(() => {
@@ -852,6 +897,9 @@ export function SheetGridView({
           dragDidMoveRef.current = false;
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
+        }}
+        onCopyCapture={() => {
+          captureInternalClipboardSelection();
         }}
         onKeyDown={(event) => handleGridKey(event)}
         onPointerMoveCapture={(event) => {
@@ -1139,6 +1187,25 @@ export function SheetGridView({
             handleGridKey(event);
           }}
           onPaste={(target, values) => {
+            const internalClipboard = internalClipboardRef.current;
+            const signature = serializeClipboardMatrix(values);
+            if (
+              internalClipboard
+              && internalClipboard.signature === signature
+              && internalClipboard.rowCount === values.length
+              && internalClipboard.colCount === (values[0]?.length ?? 0)
+            ) {
+              onCopyRange(
+                internalClipboard.sourceStartAddress,
+                internalClipboard.sourceEndAddress,
+                formatAddress(target[1], target[0]),
+                formatAddress(
+                  target[1] + internalClipboard.rowCount - 1,
+                  target[0] + internalClipboard.colCount - 1
+                )
+              );
+              return false;
+            }
             onPaste(formatAddress(target[1], target[0]), values);
             return false;
           }}

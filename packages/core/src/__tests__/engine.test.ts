@@ -31,6 +31,58 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Boolean, value: true });
   });
 
+  it("relocates relative formulas when copying a range", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 5);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+
+    engine.copyRange(
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "B2" }
+    );
+
+    expect(engine.getCell("Sheet1", "B2").formula).toBe("A2*2");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 10 });
+  });
+
+  it("preserves absolute references when copying formulas", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 3);
+    engine.setCellValue("Sheet1", "A2", 4);
+    engine.setCellFormula("Sheet1", "B1", "$A1+A$1+$A$1");
+
+    engine.copyRange(
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "C2", endAddress: "C2" }
+    );
+
+    expect(engine.getCell("Sheet1", "C2").formula).toBe("$A2+B$1+$A$1");
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 16 });
+  });
+
+  it("relocates formulas when filling down", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 4);
+    engine.setCellFormula("Sheet1", "B1", "A1*3");
+
+    engine.fillRange(
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "B3" }
+    );
+
+    expect(engine.getCell("Sheet1", "B2").formula).toBe("A2*3");
+    expect(engine.getCell("Sheet1", "B3").formula).toBe("A3*3");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 12 });
+  });
+
   it("stores invalid formulas as #VALUE errors instead of throwing", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

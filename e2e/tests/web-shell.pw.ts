@@ -4,7 +4,6 @@ const PRODUCT_ROW_MARKER_WIDTH = 46;
 const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_HEIGHT = 22;
-
 async function dragProductHeaderSelection(
   page: Parameters<typeof test>[0]["page"],
   axis: "column" | "row",
@@ -167,6 +166,37 @@ test("web app supports fill-handle propagation", async ({ page }) => {
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("7");
   await expect(resolvedValue).toHaveText("7");
+});
+
+test("web app relocates relative formulas when using the fill handle", async ({ page }) => {
+  await page.goto("/");
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await nameBox.fill("F6");
+  await nameBox.press("Enter");
+  await formulaInput.fill("3");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("F7");
+  await nameBox.press("Enter");
+  await formulaInput.fill("4");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("G6");
+  await nameBox.press("Enter");
+  await formulaInput.fill("=F6*2");
+  await formulaInput.press("Enter");
+
+  await dragProductFillHandle(page, 6, 5, 6, 6);
+
+  await nameBox.fill("G7");
+  await nameBox.press("Enter");
+  await expect(nameBox).toHaveValue("G7");
+  await expect(formulaInput).toHaveValue("=F7*2");
+  await expect(resolvedValue).toHaveText("8");
 });
 
 test("web app shows #VALUE! for invalid formulas", async ({ page }) => {

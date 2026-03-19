@@ -20,7 +20,8 @@ import {
   evaluatePlan,
   formatAddress,
   parseCellAddress,
-  parseRangeAddress
+  parseRangeAddress,
+  translateFormulaReferences
 } from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import {
@@ -434,6 +435,7 @@ export class SpreadsheetEngine {
   fillRange(source: CellRangeRef, target: CellRangeRef): void {
     const sourceMatrix = this.readRangeCells(source);
     const targetBounds = normalizeRange(target);
+    const sourceBounds = normalizeRange(source);
     const sourceHeight = sourceMatrix.length;
     const sourceWidth = sourceMatrix[0]?.length ?? 0;
     if (sourceHeight === 0 || sourceWidth === 0) {
@@ -443,8 +445,11 @@ export class SpreadsheetEngine {
     const ops: EngineOp[] = [];
     for (let row = targetBounds.startRow; row <= targetBounds.endRow; row += 1) {
       for (let col = targetBounds.startCol; col <= targetBounds.endCol; col += 1) {
-        const sourceCell = sourceMatrix[(row - targetBounds.startRow) % sourceHeight]![(col - targetBounds.startCol) % sourceWidth]!;
-        ops.push(...this.toCellStateOps(target.sheetName, formatAddress(row, col), sourceCell));
+        const sourceRowOffset = (row - targetBounds.startRow) % sourceHeight;
+        const sourceColOffset = (col - targetBounds.startCol) % sourceWidth;
+        const sourceCell = sourceMatrix[sourceRowOffset]![sourceColOffset]!;
+        const sourceAddress = formatAddress(sourceBounds.startRow + sourceRowOffset, sourceBounds.startCol + sourceColOffset);
+        ops.push(...this.toCellStateOps(target.sheetName, formatAddress(row, col), sourceCell, source.sheetName, sourceAddress));
       }
     }
     this.applyLocalOps(ops, ops.length);
@@ -466,7 +471,10 @@ export class SpreadsheetEngine {
     for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
       for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
         const nextAddress = formatAddress(targetBounds.startRow + rowOffset, targetBounds.startCol + colOffset);
-        ops.push(...this.toCellStateOps(target.sheetName, nextAddress, sourceMatrix[rowOffset]![colOffset]!));
+        const sourceAddress = formatAddress(sourceBounds.startRow + rowOffset, sourceBounds.startCol + colOffset);
+        ops.push(
+          ...this.toCellStateOps(target.sheetName, nextAddress, sourceMatrix[rowOffset]![colOffset]!, source.sheetName, sourceAddress)
+        );
       }
     }
     this.applyLocalOps(ops, ops.length);
@@ -1117,10 +1125,20 @@ export class SpreadsheetEngine {
     return rows;
   }
 
-  private toCellStateOps(sheetName: string, address: string, snapshot: CellSnapshot): EngineOp[] {
+  private toCellStateOps(
+    sheetName: string,
+    address: string,
+    snapshot: CellSnapshot,
+    sourceSheetName?: string,
+    sourceAddress?: string
+  ): EngineOp[] {
     const ops: EngineOp[] = [];
     if (snapshot.formula !== undefined) {
-      ops.push({ kind: "setCellFormula", sheetName, address, formula: snapshot.formula });
+      const translatedFormula =
+        sourceSheetName && sourceAddress
+          ? this.translateFormulaForTarget(snapshot.formula, sourceSheetName, sourceAddress, sheetName, address)
+          : snapshot.formula;
+      ops.push({ kind: "setCellFormula", sheetName, address, formula: translatedFormula });
     } else {
       switch (snapshot.value.tag) {
         case ValueTag.Empty:
@@ -1147,6 +1165,18 @@ export class SpreadsheetEngine {
       format: snapshot.format ?? null
     });
     return ops;
+  }
+
+  private translateFormulaForTarget(
+    formula: string,
+    sourceSheetName: string,
+    sourceAddress: string,
+    targetSheetName: string,
+    targetAddress: string
+  ): string {
+    const source = parseCellAddress(sourceAddress, sourceSheetName);
+    const target = parseCellAddress(targetAddress, targetSheetName);
+    return translateFormulaReferences(formula, target.row - source.row, target.col - source.col);
   }
 
   private materializeDependencies(

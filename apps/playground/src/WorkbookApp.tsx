@@ -513,6 +513,25 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     [engine, selection.sheetName]
   );
 
+  const copySelectionRange = useCallback(
+    (sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => {
+      engine.copyRange(
+        {
+          sheetName: selection.sheetName,
+          startAddress: sourceStartAddr,
+          endAddress: sourceEndAddr
+        },
+        {
+          sheetName: selection.sheetName,
+          startAddress: targetStartAddr,
+          endAddress: targetEndAddr
+        }
+      );
+      setEditingMode("idle");
+    },
+    [engine, selection.sheetName]
+  );
+
   const selectAddress = useCallback(
     (nextSheetName: string, nextAddress: string) => {
       if (editingMode === "formula") {
@@ -648,6 +667,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
         onCancelEdit={cancelEditor}
         onClearCell={clearSelectedCell}
         onCommitEdit={commitEditor}
+        onCopyRange={copySelectionRange}
         onEditorChange={(next) => {
           setEditorValue(next);
           setEditingMode((current) => (current === "idle" ? "cell" : current));

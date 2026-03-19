@@ -7,3 +7,4 @@ export * from "./binder.js";
 export * from "./optimizer.js";
 export * from "./compiler.js";
 export * from "./js-evaluator.js";
+export * from "./translation.js";
