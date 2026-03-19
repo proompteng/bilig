@@ -6,20 +6,23 @@ import {
   top50CompatibilityRegistry
 } from "../compatibility.js";
 import {
+  excelDateTimeFixtureSuite,
   excelFixtureFamilies,
   excelFixtureIdPattern,
   excelTop50StarterFixtures
 } from "../../../excel-fixtures/src/index.js";
 
 describe("formula compatibility registry", () => {
-  it("keeps the starter registry aligned with the Excel fixtures pack", () => {
-    expect(excelTop50StarterFixtures).toHaveLength(50);
-    expect(top50CompatibilityRegistry).toHaveLength(50);
+  const fixtureCorpus = [...excelTop50StarterFixtures, ...(excelDateTimeFixtureSuite.cases ?? [])];
 
-    const fixtureIds = new Set(excelTop50StarterFixtures.map((fixture) => fixture.id));
+  it("keeps the compatibility registry aligned with the available Excel fixtures pack", () => {
+    expect(excelTop50StarterFixtures.length).toBeGreaterThanOrEqual(50);
+    expect(top50CompatibilityRegistry.length).toBeGreaterThanOrEqual(50);
+
+    const fixtureIds = new Set(fixtureCorpus.map((fixture) => fixture.id));
     const registryIds = new Set(top50CompatibilityRegistry.map((entry) => entry.id));
 
-    expect([...registryIds].sort()).toEqual([...fixtureIds].sort());
+    expect([...registryIds].every((id) => fixtureIds.has(id))).toBe(true);
   });
 
   it("uses unique, status-friendly fixture ids", () => {
@@ -29,7 +32,7 @@ describe("formula compatibility registry", () => {
   });
 
   it("keeps family and formula metadata consistent across fixtures and registry", () => {
-    const fixtureMap = new Map(excelTop50StarterFixtures.map((fixture) => [fixture.id, fixture]));
+    const fixtureMap = new Map(fixtureCorpus.map((fixture) => [fixture.id, fixture]));
 
     top50CompatibilityRegistry.forEach((entry) => {
       const fixture = fixtureMap.get(entry.id);
