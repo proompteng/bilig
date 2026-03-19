@@ -20,6 +20,26 @@ function toNumberExact(tag: u8, value: f64): f64 {
   return NaN;
 }
 
+function textLength(tag: u8, value: f64, stringLengths: Uint32Array): i32 {
+  if (tag == ValueTag.Empty) {
+    return 0;
+  }
+  if (tag == ValueTag.Boolean) {
+    return value != 0 ? 4 : 5;
+  }
+  if (tag == ValueTag.Number) {
+    return value.toString().length;
+  }
+  if (tag == ValueTag.String) {
+    const stringId = <i32>value;
+    if (stringId < 0 || stringId >= stringLengths.length) {
+      return -1;
+    }
+    return <i32>stringLengths[stringId];
+  }
+  return -1;
+}
+
 function truncToInt(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value);
   return isNaN(numeric) ? i32.MIN_VALUE : <i32>numeric;
@@ -290,7 +310,9 @@ export function applyBuiltin(
   kindStack: Uint8Array,
   cellTags: Uint8Array,
   cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
   cellErrors: Uint16Array,
+  stringLengths: Uint32Array,
   rangeOffsets: Uint32Array,
   rangeLengths: Uint32Array,
   rangeMembers: Uint32Array,
@@ -698,6 +720,14 @@ export function applyBuiltin(
       tagStack,
       kindStack
     );
+  }
+
+  if (builtinId == BuiltinId.Len && argc == 1) {
+    const length = textLength(tagStack[base], valueStack[base], stringLengths);
+    if (length < 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>length, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   if (builtinId == BuiltinId.IsBlank && argc == 0) {

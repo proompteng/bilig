@@ -20,6 +20,7 @@ export interface WasmRangeUploadLayout {
 export class WasmKernelFacade {
   private kernel: SpreadsheetKernel | null = null;
   private initPromise: Promise<void> | null = null;
+  private uploadedStringPoolSize = 0;
 
   get ready(): boolean {
     return this.kernel !== null;
@@ -78,6 +79,15 @@ export class WasmKernelFacade {
       memberCapacity
     );
     this.kernel.uploadRangeMembers(layout.members, layout.offsets, layout.lengths);
+  }
+
+  syncStringPool(lengths: Uint32Array): void {
+    if (!this.kernel) return;
+    if (lengths.length === this.uploadedStringPoolSize) {
+      return;
+    }
+    this.kernel.uploadStringLengths(lengths);
+    this.uploadedStringPoolSize = lengths.length;
   }
 
   syncFromStore(store: CellStore, changedCellIndices?: readonly number[] | Uint32Array): void {

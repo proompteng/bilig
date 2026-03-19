@@ -257,6 +257,37 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
+  it("uses the wasm fast path for exact-parity LEN builtin", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", null);
+    engine.setCellValue("Sheet1", "A2", true);
+    engine.setCellValue("Sheet1", "A3", 123.4);
+    engine.setCellValue("Sheet1", "A4", "hello");
+    engine.setCellFormula("Sheet1", "A5", "A3/0");
+
+    engine.setCellFormula("Sheet1", "B1", "LEN(A1)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B2", "LEN(A2)");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B3", "LEN(A3)");
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B4", "LEN(A4)");
+    expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B5", "LEN(A5)");
+    expect(engine.getCellValue("Sheet1", "B5")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
   it("uses the wasm fast path for exact-parity rounding builtins", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

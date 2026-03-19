@@ -70,7 +70,8 @@ describe("formula parser/compiler edges", () => {
 
     expect(bindFormula(parseFormula("\"hello\"")).mode).toBe(FormulaMode.JsOnly);
     expect(bindFormula(parseFormula("A1")).mode).toBe(FormulaMode.JsOnly);
-    expect(bindFormula(parseFormula("LEN(A1)")).mode).toBe(FormulaMode.JsOnly);
+    expect(bindFormula(parseFormula("LEN(A1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("LEN(A1:A2)")).mode).toBe(FormulaMode.JsOnly);
   });
 
   it("throws on unsupported wasm builtin encodings and invalid axis compilation", () => {
@@ -79,7 +80,7 @@ describe("formula parser/compiler edges", () => {
     expect(isBuiltinAvailable("INDEX")).toBe(true);
     expect(isBuiltinAvailable("VLOOKUP")).toBe(true);
     expect(isBuiltinAvailable("DOES_NOT_EXIST")).toBe(false);
-    expect(() => encodeBuiltin("LEN")).toThrow("Unsupported builtin for wasm: LEN");
+    expect(encodeBuiltin("LEN")).toBeDefined();
     expect(() => compileFormula("A")).toThrow("Row and column references must appear inside a range");
   });
 

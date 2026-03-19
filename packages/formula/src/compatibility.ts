@@ -75,7 +75,7 @@ export const top50CompatibilityRegistry: readonly FormulaCompatibilityEntry[] = 
   entry("math:mod-basic", "math", "=MOD(A1,A2)", "implemented-js-and-wasm"),
   entry("text:concat-operator", "text", "=\"bi\"&\"lig\"", "implemented-js"),
   entry("text:concat-function", "text", "=CONCAT(\"bi\",\"lig\")", "implemented-js"),
-  entry("text:len-basic", "text", "=LEN(\"bilig\")", "implemented-js"),
+  entry("text:len-basic", "text", "=LEN(\"bilig\")", "implemented-js-and-wasm"),
   entry("text:case-insensitive-compare", "text", "=\"a\"=\"A\"", "implemented-js"),
   entry("date-time:serial-addition", "date-time", "=A1+7", "implemented-js-and-wasm"),
   entry("date-time:date-constructor", "date-time", "=DATE(2026,3,15)", "implemented-js-and-wasm"),

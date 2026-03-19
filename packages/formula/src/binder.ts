@@ -24,6 +24,7 @@ const WASM_SAFE_BUILTINS = new Set([
   "ROUND",
   "FLOOR",
   "CEILING",
+  "LEN",
   "ISBLANK",
   "ISNUMBER",
   "ISTEXT",
@@ -39,6 +40,7 @@ const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNT
 function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
   switch (callee) {
     case "NOT":
+    case "LEN":
     case "YEAR":
     case "MONTH":
     case "DAY":
@@ -168,6 +170,7 @@ export function encodeBuiltin(name: string): BuiltinId {
     AND: BuiltinId.And,
     OR: BuiltinId.Or,
     NOT: BuiltinId.Not,
+    LEN: BuiltinId.Len,
     ISBLANK: BuiltinId.IsBlank,
     ISNUMBER: BuiltinId.IsNumber,
     ISTEXT: BuiltinId.IsText,

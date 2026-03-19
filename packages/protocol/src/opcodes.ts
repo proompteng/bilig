@@ -49,7 +49,7 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.And, name: "AND", supportsWasm: true },
   { id: BuiltinId.Or, name: "OR", supportsWasm: true },
   { id: BuiltinId.Not, name: "NOT", supportsWasm: true },
-  { id: BuiltinId.Len, name: "LEN", supportsWasm: false },
+  { id: BuiltinId.Len, name: "LEN", supportsWasm: true },
   { id: BuiltinId.Concat, name: "CONCAT", supportsWasm: false },
   { id: BuiltinId.IsBlank, name: "ISBLANK", supportsWasm: true },
   { id: BuiltinId.IsNumber, name: "ISNUMBER", supportsWasm: true },

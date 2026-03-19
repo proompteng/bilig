@@ -1478,6 +1478,9 @@ export class SpreadsheetEngine {
     const orderedCount = scheduled.orderedFormulaCount;
 
     this.ensureRecalcScratchCapacity(Math.max(this.workbook.cellStore.size + 1, changedRoots.length + orderedCount + 1));
+    if (this.wasm.ready) {
+      this.wasm.syncStringPool(this.strings.exportLengths());
+    }
 
     let pendingKernelSyncCount = 0;
     for (let index = 0; index < kernelSyncRoots.length; index += 1) {

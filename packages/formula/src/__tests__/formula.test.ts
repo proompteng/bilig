@@ -78,12 +78,17 @@ describe("formula", () => {
     expect(compileFormula("ISNUMBER(A1)").mode).toBe(1);
     expect(compileFormula("ISTEXT()").mode).toBe(1);
     expect(compileFormula("ISTEXT(A1)").mode).toBe(1);
+    expect(compileFormula("LEN(A1)").mode).toBe(1);
     expect(compileFormula("DATE(2024,2,29)").mode).toBe(1);
     expect(compileFormula("YEAR(A1)").mode).toBe(1);
     expect(compileFormula("MONTH(A1)").mode).toBe(1);
     expect(compileFormula("DAY(A1)").mode).toBe(1);
     expect(compileFormula("EDATE(A1,1)").mode).toBe(1);
     expect(compileFormula("EOMONTH(A1,1)").mode).toBe(1);
+  });
+
+  it("keeps LEN on the JS path when it depends on a range until the range-string bridge lands", () => {
+    expect(compileFormula("LEN(A1:B2)").mode).toBe(0);
   });
 
   it("keeps volatile date builtins on the JS path", () => {

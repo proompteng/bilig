@@ -20,6 +20,7 @@ interface RawKernelExports {
   uploadPrograms(programs: number, offsets: number, lengths: number, targets: number): void;
   uploadConstants(constants: number, offsets: number, lengths: number): void;
   uploadRangeMembers(members: number, offsets: number, lengths: number): void;
+  uploadStringLengths(lengths: number): void;
   writeCells(tags: number, numbers: number, stringIds: number, errors: number): void;
   evalBatch(cellIndices: number): void;
   getTagsPtr(): number;
@@ -64,6 +65,7 @@ export interface SpreadsheetKernel {
   ): void;
   uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void;
   uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void;
+  uploadStringLengths(lengths: Uint32Array): void;
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void;
   evalBatch(cellIndices: Uint32Array): void;
   readTags(): Uint8Array;
@@ -186,6 +188,15 @@ class RawKernelBridge {
     }
   }
 
+  uploadStringLengths(lengths: Uint32Array): void {
+    const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec);
+    try {
+      this.raw.uploadStringLengths(lengthsPtr);
+    } finally {
+      this.raw.__unpin(lengthsPtr);
+    }
+  }
+
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
     const tagsPtr = this.lowerTypedArray(tags, uint8Spec);
     const numbersPtr = this.lowerTypedArray(numbers, float64Spec);
@@ -302,6 +313,11 @@ class KernelHandle implements SpreadsheetKernel {
 
   uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void {
     this.bridge.uploadRangeMembers(members, offsets, lengths);
+    this.refreshViews();
+  }
+
+  uploadStringLengths(lengths: Uint32Array): void {
+    this.bridge.uploadStringLengths(lengths);
     this.refreshViews();
   }
 

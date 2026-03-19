@@ -8,6 +8,7 @@ export {
   uploadPrograms,
   uploadConstants,
   uploadRangeMembers,
+  uploadStringLengths,
   writeCells,
   evalBatch,
   getTagsPtr,

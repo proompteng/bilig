@@ -95,7 +95,7 @@ const builtinManifest = [
   { id: "And", name: "AND", supportsWasm: true },
   { id: "Or", name: "OR", supportsWasm: true },
   { id: "Not", name: "NOT", supportsWasm: true },
-  { id: "Len", name: "LEN", supportsWasm: false },
+  { id: "Len", name: "LEN", supportsWasm: true },
   { id: "Concat", name: "CONCAT", supportsWasm: false },
   { id: "IsBlank", name: "ISBLANK", supportsWasm: true },
   { id: "IsNumber", name: "ISNUMBER", supportsWasm: true },

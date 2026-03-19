@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "preview:ci": "pnpm -w build && vite preview --host 127.0.0.1 --port 4180"
+    "preview:ci": "pnpm -w build && vite preview --host 127.0.0.1 --port 4180 --strictPort"
   },
   "dependencies": {
     "@bilig/benchmarks": "workspace:*",

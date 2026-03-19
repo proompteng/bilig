@@ -5,6 +5,7 @@ export let tags = new Uint8Array(64);
 export let numbers = new Float64Array(64);
 export let stringIds = new Uint32Array(64);
 export let errors = new Uint16Array(64);
+let stringLengths = new Uint32Array(64);
 
 let programArena = new Uint32Array(64);
 let programOffsets = new Uint32Array(64);
@@ -110,6 +111,10 @@ export function ensureMemberCapacity(nextCapacity: i32): void {
   rangeMembers = ensureU32(rangeMembers, nextCapacity);
 }
 
+function ensureStringCapacity(nextCapacity: i32): void {
+  stringLengths = ensureU32(stringLengths, nextCapacity);
+}
+
 export function uploadPrograms(
   programs: Uint32Array,
   offsets: Uint32Array,
@@ -152,6 +157,11 @@ export function uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, l
     rangeOffsets[index] = offsets[index];
     rangeLengths[index] = lengths[index];
   }
+}
+
+export function uploadStringLengths(lengths: Uint32Array): void {
+  ensureStringCapacity(lengths.length);
+  stringLengths.set(lengths);
 }
 
 export function writeCells(
@@ -215,6 +225,8 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     if (opcode == Opcode.PushCell) {
       if (tags[operand] == ValueTag.Error) {
         writeScalar(sp, <u8>ValueTag.Error, errors[operand]);
+      } else if (tags[operand] == ValueTag.String) {
+        writeScalar(sp, <u8>ValueTag.String, stringIds[operand]);
       } else {
         writeScalar(sp, tags[operand], numbers[operand]);
       }
@@ -314,7 +326,9 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         kindStack,
         tags,
         numbers,
+        stringIds,
         errors,
+        stringLengths,
         rangeOffsets,
         rangeLengths,
         rangeMembers,
@@ -326,10 +340,13 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     if (opcode == Opcode.Ret) {
       const resultTag = tagStack[sp - 1];
       tags[cellIndex] = resultTag;
-      stringIds[cellIndex] = 0;
+      stringIds[cellIndex] = resultTag == ValueTag.String ? <u32>valueStack[sp - 1] : 0;
       if (resultTag == ValueTag.Error) {
         errors[cellIndex] = <u16>valueStack[sp - 1];
         numbers[cellIndex] = 0;
+      } else if (resultTag == ValueTag.String) {
+        numbers[cellIndex] = 0;
+        errors[cellIndex] = ErrorCode.None;
       } else {
         numbers[cellIndex] = valueStack[sp - 1];
         errors[cellIndex] = ErrorCode.None;
