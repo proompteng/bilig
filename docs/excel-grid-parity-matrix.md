@@ -22,7 +22,7 @@ This matrix tracks visible Excel-for-web grid behaviors for `apps/web`.
 | column-header click selects full column | shipped | `e2e/tests/web-shell.pw.ts` |
 | row-header drag selects contiguous rows | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
 | column-header drag selects contiguous columns | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
-| scrollbar gutter clicks do nothing | open in `apps/web`, already covered in playground harness | needs `apps/web` browser coverage |
+| scrollbar gutter clicks do nothing | shipped | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
 
 ## Editing and formula entry
 
@@ -44,7 +44,7 @@ This matrix tracks visible Excel-for-web grid behaviors for `apps/web`.
 | hide and unhide rows and columns | open | no implementation yet |
 | context menus for structural actions | open | no implementation yet |
 | frozen panes | open | no product-shell acceptance coverage yet |
-| fill handle | open | no product-shell acceptance coverage yet |
+| fill handle | shipped in this tranche | `packages/grid/src/SheetGridView.tsx`, `apps/playground/src/WorkbookApp.tsx`, `e2e/tests/web-shell.pw.ts` |
 | clipboard rectangular copy and paste | open | no product-shell acceptance coverage yet |
 
 ## Release rule

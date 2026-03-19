@@ -20,6 +20,7 @@ This ledger maps acceptance rows to concrete checks so the docs, code, and relea
 | Excel-for-web grid oracle is documented | `docs/excel-grid-oracle.md`, `docs/excel-grid-parity-matrix.md` |
 | product formula row no longer shows a visible resolved-value chip | `packages/grid/src/FormulaBar.tsx`, `apps/playground/src/app.css`, `e2e/tests/web-shell.pw.ts` |
 | product row and column header drag selection is bilig-controlled | `packages/grid/src/SheetGridView.tsx`, `e2e/tests/web-shell.pw.ts` |
+| product fill handle drives bilig-owned range fill through the core engine | `packages/grid/src/SheetGridView.tsx`, `apps/playground/src/WorkbookApp.tsx`, `e2e/tests/web-shell.pw.ts` |
 
 ## Open rows
 

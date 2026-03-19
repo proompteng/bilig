@@ -23,6 +23,7 @@ interface WorkbookViewProps {
   onCommitEdit(movement?: EditMovement): void;
   onCancelEdit(): void;
   onClearCell(): void;
+  onFillRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onPaste(addr: string, values: readonly (readonly string[])[]): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
   ribbon?: React.ReactNode;
@@ -50,6 +51,7 @@ export function WorkbookView({
   onCommitEdit,
   onCancelEdit,
   onClearCell,
+  onFillRange,
   onPaste,
   onSelectionLabelChange,
   ribbon,
@@ -101,6 +103,7 @@ export function WorkbookView({
             onClearCell={onClearCell}
             onCommitEdit={onCommitEdit}
             onEditorChange={onEditorChange}
+            onFillRange={onFillRange}
             onPaste={onPaste}
             onSelectionLabelChange={onSelectionLabelChange}
             onSelect={onSelect}

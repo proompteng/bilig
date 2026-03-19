@@ -46,6 +46,29 @@ async function clickGridRightEdge(page: Parameters<typeof test>[0]["page"], rowI
   await page.mouse.click(x, y);
 }
 
+async function dragProductFillHandle(
+  page: Parameters<typeof test>[0]["page"],
+  sourceCol: number,
+  sourceRow: number,
+  targetCol: number,
+  targetRow: number
+) {
+  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const sourceLeft = grid.x + PRODUCT_ROW_MARKER_WIDTH + (sourceCol * PRODUCT_COLUMN_WIDTH);
+  const sourceTop = grid.y + PRODUCT_HEADER_HEIGHT + (sourceRow * PRODUCT_ROW_HEIGHT);
+  const targetLeft = grid.x + PRODUCT_ROW_MARKER_WIDTH + (targetCol * PRODUCT_COLUMN_WIDTH);
+  const targetTop = grid.y + PRODUCT_HEADER_HEIGHT + (targetRow * PRODUCT_ROW_HEIGHT);
+
+  await page.mouse.move(sourceLeft + PRODUCT_COLUMN_WIDTH - 3, sourceTop + PRODUCT_ROW_HEIGHT - 3);
+  await page.mouse.down();
+  await page.mouse.move(targetLeft + PRODUCT_COLUMN_WIDTH - 3, targetTop + PRODUCT_ROW_HEIGHT - 3, { steps: 10 });
+  await page.mouse.up();
+}
+
 test("web app renders the minimal product shell without playground chrome", async ({ page }) => {
   await page.goto("/");
 
@@ -124,6 +147,24 @@ test("web app accepts string values and string comparison formulas", async ({ pa
   await formulaInput.fill("=A1=\"HELLO\"");
   await formulaInput.press("Enter");
   await expect(resolvedValue).toHaveText("TRUE");
+});
+
+test("web app supports fill-handle propagation", async ({ page }) => {
+  await page.goto("/");
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await formulaInput.fill("7");
+  await formulaInput.press("Enter");
+
+  await dragProductFillHandle(page, 0, 0, 0, 2);
+
+  await nameBox.fill("A3");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("7");
+  await expect(resolvedValue).toHaveText("7");
 });
 
 test("web app shows #VALUE! for invalid formulas", async ({ page }) => {

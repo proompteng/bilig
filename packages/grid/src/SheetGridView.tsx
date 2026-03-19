@@ -5,6 +5,7 @@ import { MAX_COLS, MAX_ROWS, ValueTag, formatErrorCode } from "@bilig/protocol";
 import {
   CompactSelection,
   DataEditor,
+  type FillPatternEventArgs,
   GridCellKind,
   type DataEditorRef,
   type GridCell,
@@ -33,6 +34,7 @@ interface SheetGridViewProps {
   onCommitEdit(movement?: EditMovement): void;
   onCancelEdit(): void;
   onClearCell(): void;
+  onFillRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onPaste(addr: string, values: readonly (readonly string[])[]): void;
 }
 
@@ -111,6 +113,14 @@ function clampSelectionRange(range: Rectangle): Rectangle {
     y,
     width: Math.max(1, Math.min(maxWidth, range.width)),
     height: Math.max(1, Math.min(maxHeight, range.height))
+  };
+}
+
+function rectangleToAddresses(range: Rectangle): { startAddress: string; endAddress: string } {
+  const clamped = clampSelectionRange(range);
+  return {
+    startAddress: formatAddress(clamped.y, clamped.x),
+    endAddress: formatAddress(clamped.y + clamped.height - 1, clamped.x + clamped.width - 1)
   };
 }
 
@@ -329,6 +339,7 @@ export function SheetGridView({
   onCommitEdit,
   onCancelEdit,
   onClearCell,
+  onFillRange,
   onPaste
 }: SheetGridViewProps) {
   const editorRef = useRef<DataEditorRef | null>(null);
@@ -794,6 +805,22 @@ export function SheetGridView({
     [variant]
   );
 
+  const handleFillPattern = useCallback(
+    (event: FillPatternEventArgs) => {
+      const source = rectangleToAddresses(event.patternSource);
+      const target = rectangleToAddresses(event.fillDestination);
+      if (
+        source.startAddress === target.startAddress
+        && source.endAddress === target.endAddress
+      ) {
+        return;
+      }
+      event.preventDefault();
+      onFillRange(source.startAddress, source.endAddress, target.startAddress, target.endAddress);
+    },
+    [onFillRange]
+  );
+
   return (
     <div className="sheet-grid-shell" data-testid="sheet-grid-shell">
       {variant === "playground" ? (
@@ -1011,6 +1038,7 @@ export function SheetGridView({
           cellActivationBehavior="double-click"
           className="glide-sheet-grid"
           columns={columns}
+          fillHandle={variant === "product"}
           freezeColumns={0}
           getCellContent={getCellContent}
           getCellsForSelection={true}
@@ -1031,6 +1059,7 @@ export function SheetGridView({
             onClearCell();
             return false;
           }}
+          onFillPattern={handleFillPattern}
           onHeaderClicked={(col) => {
             ignoreNextPointerSelectionRef.current = true;
             pendingPointerCellRef.current = null;

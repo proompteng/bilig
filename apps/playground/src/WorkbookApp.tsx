@@ -494,6 +494,25 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     [engine, selection.sheetName]
   );
 
+  const fillSelectionRange = useCallback(
+    (sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => {
+      engine.fillRange(
+        {
+          sheetName: selection.sheetName,
+          startAddress: sourceStartAddr,
+          endAddress: sourceEndAddr
+        },
+        {
+          sheetName: selection.sheetName,
+          startAddress: targetStartAddr,
+          endAddress: targetEndAddr
+        }
+      );
+      setEditingMode("idle");
+    },
+    [engine, selection.sheetName]
+  );
+
   const selectAddress = useCallback(
     (nextSheetName: string, nextAddress: string) => {
       if (editingMode === "formula") {
@@ -613,11 +632,11 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           {presetError}
         </div>
       ) : null}
-          <WorkbookView
-            editorValue={visibleEditorValue}
-            engine={engine}
-            isEditing={isEditing}
-            isEditingCell={isEditingCell}
+      <WorkbookView
+        editorValue={visibleEditorValue}
+        engine={engine}
+        isEditing={isEditing}
+        isEditingCell={isEditingCell}
         onAddressCommit={(input) => {
           const nextTarget = parseSelectionTarget(input, selection.sheetName);
           if (nextTarget) {
@@ -633,9 +652,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           setEditorValue(next);
           setEditingMode((current) => (current === "idle" ? "cell" : current));
         }}
-            onPaste={pasteIntoSelection}
-            onSelectionLabelChange={setSelectionLabel}
-            onSelect={(addr) => selectAddress(selection.sheetName, addr)}
+        onFillRange={fillSelectionRange}
+        onPaste={pasteIntoSelection}
+        onSelectionLabelChange={setSelectionLabel}
+        onSelect={(addr) => selectAddress(selection.sheetName, addr)}
         onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}
         resolvedValue={resolvedValue}
         ribbon={ribbon}
