@@ -156,12 +156,14 @@ test("web app supports fill-handle propagation", async ({ page }) => {
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
 
+  await nameBox.fill("F6");
+  await nameBox.press("Enter");
   await formulaInput.fill("7");
   await formulaInput.press("Enter");
 
-  await dragProductFillHandle(page, 0, 0, 0, 2);
+  await dragProductFillHandle(page, 5, 5, 5, 7);
 
-  await nameBox.fill("A3");
+  await nameBox.fill("F8");
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("7");
   await expect(resolvedValue).toHaveText("7");
