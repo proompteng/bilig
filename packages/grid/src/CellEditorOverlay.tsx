@@ -5,6 +5,7 @@ interface CellEditorOverlayProps {
   label: string;
   value: string;
   resolvedValue: string;
+  selectionBehavior?: "select-all" | "caret-end";
   onChange(next: string): void;
   onCommit(movement?: EditMovement): void;
   onCancel(): void;
@@ -15,6 +16,7 @@ export function CellEditorOverlay({
   label,
   value,
   resolvedValue: _resolvedValue,
+  selectionBehavior = "select-all",
   onChange,
   onCommit,
   onCancel,
@@ -27,7 +29,12 @@ export function CellEditorOverlay({
   useEffect(() => {
     blurArmedRef.current = false;
     inputRef.current?.focus();
-    inputRef.current?.select();
+    if (selectionBehavior === "select-all") {
+      inputRef.current?.select();
+    } else {
+      const caretPosition = value.length;
+      inputRef.current?.setSelectionRange(caretPosition, caretPosition);
+    }
     const blurArm = window.requestAnimationFrame(() => {
       blurArmedRef.current = true;
     });
@@ -35,7 +42,7 @@ export function CellEditorOverlay({
     return () => {
       window.cancelAnimationFrame(blurArm);
     };
-  }, []);
+  }, [selectionBehavior]);
 
   const commit = (movement?: EditMovement) => {
     if (completionRef.current !== "idle") {

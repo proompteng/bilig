@@ -30,7 +30,9 @@ async function dragProductColumnResize(
   columnIndex: number,
   deltaX: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -50,7 +52,9 @@ async function doubleClickProductColumnResizeHandle(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -68,7 +72,9 @@ async function dragProductHeaderSelection(
   startIndex: number,
   endIndex: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -97,7 +103,9 @@ async function dragProductHeaderSelection(
 }
 
 async function clickGridRightEdge(page: Parameters<typeof test>[0]["page"], rowIndex = 2) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -114,7 +122,9 @@ async function dragProductFillHandle(
   targetCol: number,
   targetRow: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -137,7 +147,9 @@ async function dragProductColumnDivider(
   columnIndex: number,
   deltaX: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -155,7 +167,9 @@ async function doubleClickProductColumnDivider(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -170,7 +184,9 @@ async function clickProductBodyOffset(
   offsetX: number,
   rowIndex = 0
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -186,7 +202,9 @@ async function clickProductCell(
   columnIndex: number,
   rowIndex: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -206,7 +224,9 @@ async function dragProductBodySelection(
   endColumn: number,
   endRow: number
 ) {
-  const grid = await page.getByTestId("sheet-grid").boundingBox();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
   }
@@ -344,6 +364,71 @@ test("web app accepts string values and string comparison formulas", async ({ pa
   await formulaInput.fill("=A1=\"HELLO\"");
   await formulaInput.press("Enter");
   await expect(resolvedValue).toHaveText("TRUE");
+});
+
+test("web app supports type-to-replace and Enter or Tab commit movement", async ({ page }) => {
+  await page.goto("/");
+
+  const grid = page.getByTestId("sheet-grid");
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const cellEditor = page.getByTestId("cell-editor-input");
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+  await grid.press("h");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("h");
+  await page.keyboard.press("Enter");
+
+  await expect(nameBox).toHaveValue("A2");
+  await nameBox.fill("A1");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("h");
+
+  await clickProductCell(page, 0, 1);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A2");
+  await grid.press("w");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("w");
+  await page.keyboard.press("Tab");
+
+  await expect(nameBox).toHaveValue("B2");
+  await nameBox.fill("A2");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("w");
+
+  await grid.press("Enter");
+  await expect(nameBox).toHaveValue("A3");
+  await grid.press("Shift+Enter");
+  await expect(nameBox).toHaveValue("A2");
+});
+
+test("web app supports F2 edit in the product shell", async ({ page }) => {
+  await page.goto("/");
+
+  const grid = page.getByTestId("sheet-grid");
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const cellEditor = page.getByTestId("cell-editor-input");
+
+  await nameBox.fill("C3");
+  await nameBox.press("Enter");
+  await formulaInput.fill("seed");
+  await formulaInput.press("Enter");
+
+  await clickProductCell(page, 2, 2);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C3");
+  await grid.press("F2");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("seed");
+  await cellEditor.press("!");
+  await expect(cellEditor).toHaveValue("seed!");
+  await clickProductCell(page, 3, 2);
+
+  await nameBox.fill("C3");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("seed!");
 });
 
 test("web app supports fill-handle propagation", async ({ page }) => {
@@ -534,25 +619,22 @@ test("web app commits in-cell string edits when clicking away", async ({ page })
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
+  const cellEditor = page.getByTestId("cell-editor-input");
 
-  await grid.focus();
-  await grid.press("F2");
-  await expect(page.getByTestId("cell-editor-input")).toBeVisible();
-  await page.keyboard.type("hello");
-  await grid.click({
-    position: {
-      x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
-      y: PRODUCT_HEADER_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2)
-    }
-  });
-
+  await clickProductCell(page, 1, 0);
   await expect(nameBox).toHaveValue("B1");
+  await grid.press("h");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("h");
+  await clickProductCell(page, 2, 0);
+
+  await expect(nameBox).toHaveValue("C1");
   await nameBox.focus();
   await nameBox.selectText();
-  await page.keyboard.type("A1");
+  await page.keyboard.type("B1");
   await nameBox.press("Enter");
-  await expect(formulaInput).toHaveValue("hello");
-  await expect(resolvedValue).toHaveText("hello");
+  await expect(formulaInput).toHaveValue("h");
+  await expect(resolvedValue).toHaveText("h");
 });
 
 test("web app ignores right gutter clicks", async ({ page }) => {

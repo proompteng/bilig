@@ -18,6 +18,7 @@ import {
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
+export type EditSelectionBehavior = "select-all" | "caret-end";
 
 interface SheetGridViewProps {
   engine: SpreadsheetEngine;
@@ -25,11 +26,12 @@ interface SheetGridViewProps {
   variant?: "playground" | "product";
   selectedAddr: string;
   editorValue: string;
+  editorSelectionBehavior: EditSelectionBehavior;
   resolvedValue: string;
   isEditingCell: boolean;
   onSelect(addr: string): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
-  onBeginEdit(seed?: string): void;
+  onBeginEdit(seed?: string, selectionBehavior?: EditSelectionBehavior): void;
   onEditorChange(next: string): void;
   onCommitEdit(movement?: EditMovement): void;
   onCancelEdit(): void;
@@ -331,6 +333,10 @@ function createRowSliceSelection(col: number, startRow: number, endRow: number):
   };
 }
 
+function sameItem(left: Item | null, right: Item | null): boolean {
+  return left !== null && right !== null && left[0] === right[0] && left[1] === right[1];
+}
+
 function cellToGridCell(engine: SpreadsheetEngine, sheetName: string, addr: string): GridCell {
   const snapshot = selectors.selectCellSnapshot(engine, sheetName, addr);
   const rawValue = cellToEditorSeed(snapshot);
@@ -433,6 +439,7 @@ export function SheetGridView({
   variant = "playground",
   selectedAddr,
   editorValue,
+  editorSelectionBehavior,
   resolvedValue,
   isEditingCell,
   onSelect,
@@ -458,6 +465,7 @@ export function SheetGridView({
   const dragGeometryRef = useRef<PointerGeometry | null>(null);
   const dragDidMoveRef = useRef(false);
   const postDragSelectionExpiryRef = useRef<number>(0);
+  const lastBodyClickCellRef = useRef<Item | null>(null);
   const internalClipboardRef = useRef<InternalClipboardRange | null>(null);
   const activeSheetRef = useRef(sheetName);
   const columnResizeActiveRef = useRef(false);
@@ -566,15 +574,21 @@ export function SheetGridView({
   }, [isEditingCell]);
 
   const beginSelectedEdit = useCallback(
-    (seed?: string) => {
-      onBeginEdit(seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, selectedAddr)));
+    (seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
+      onBeginEdit(
+        seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, selectedAddr)),
+        selectionBehavior
+      );
     },
     [engine, onBeginEdit, selectedAddr, sheetName]
   );
 
   const beginEditAt = useCallback(
-    (addr: string, seed?: string) => {
-      onBeginEdit(seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)));
+    (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
+      onBeginEdit(
+        seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)),
+        selectionBehavior
+      );
     },
     [engine, onBeginEdit, sheetName]
   );
@@ -818,10 +832,22 @@ export function SheetGridView({
         return;
       }
 
-      if (event.key === "Enter" || event.key === "F2") {
+      if (event.key === "F2") {
         event.preventDefault();
         event.cancel?.();
-        beginSelectedEdit();
+        beginSelectedEdit(undefined, "caret-end");
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.cancel?.();
+        onSelect(
+          formatAddress(
+            Math.min(MAX_ROWS - 1, Math.max(0, selectedCell.row + (event.shiftKey ? -1 : 1))),
+            selectedCell.col
+          )
+        );
         return;
       }
 
@@ -906,7 +932,7 @@ export function SheetGridView({
       ) {
         event.preventDefault();
         event.cancel?.();
-        beginSelectedEdit(event.key);
+        beginSelectedEdit(event.key, "caret-end");
       }
     },
     [applyClipboardValues, beginSelectedEdit, captureInternalClipboardSelection, gridSelection.current?.cell, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
@@ -1108,7 +1134,7 @@ export function SheetGridView({
         data-column-width-overrides={JSON.stringify(columnWidths)}
         data-default-column-width={String(gridMetrics.columnWidth)}
         data-testid="sheet-grid"
-        onKeyDownCapture={() => {
+        onKeyDownCapture={(event) => {
           ignoreNextPointerSelectionRef.current = false;
           pendingPointerCellRef.current = null;
           dragAnchorCellRef.current = null;
@@ -1118,6 +1144,42 @@ export function SheetGridView({
           dragDidMoveRef.current = false;
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
+
+          if (
+            !isPrintableKey({
+              altKey: event.altKey,
+              ctrlKey: event.ctrlKey,
+              key: event.key,
+              metaKey: event.metaKey
+            } as GridKeyEventArgs)
+            && !isClipboardShortcut({
+              altKey: event.altKey,
+              ctrlKey: event.ctrlKey,
+              key: event.key,
+              metaKey: event.metaKey
+            })
+            && !isNavigationKey(event.key)
+            && event.key !== "Enter"
+            && event.key !== "Tab"
+            && event.key !== "F2"
+            && event.key !== "Backspace"
+            && event.key !== "Delete"
+          ) {
+            return;
+          }
+
+          handleGridKey({
+            altKey: event.altKey,
+            cancel: () => event.stopPropagation(),
+            ctrlKey: event.ctrlKey,
+            key: event.key,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+            preventDefault: () => event.preventDefault()
+          });
+          if (event.defaultPrevented) {
+            event.stopPropagation();
+          }
         }}
         onCopyCapture={(event) => {
           captureInternalClipboardSelection();
@@ -1161,6 +1223,21 @@ export function SheetGridView({
             gridMetrics.columnWidth
           );
           if (resizeTarget === null) {
+            const bodyCell = resolvePointerCell(
+              event.clientX,
+              event.clientY,
+              visibleRegion,
+              activeGeometry
+            );
+            if (!sameItem(bodyCell, lastBodyClickCellRef.current)) {
+              return;
+            }
+            if (bodyCell === null) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            beginEditAt(formatAddress(bodyCell[1], bodyCell[0]));
             return;
           }
 
@@ -1370,6 +1447,9 @@ export function SheetGridView({
             postDragSelectionExpiryRef.current = window.performance.now() + 200;
             setGridSelection(finalSelection);
             onSelect(formatAddress(anchorCell[1], anchorCell[0]));
+            lastBodyClickCellRef.current = null;
+          } else {
+            lastBodyClickCellRef.current = anchorCell;
           }
 
           window.requestAnimationFrame(() => {
@@ -1391,6 +1471,7 @@ export function SheetGridView({
           className="glide-sheet-grid"
           columns={columns}
           drawFocusRing={false}
+          editOnType={false}
           fillHandle={variant === "product"}
           freezeColumns={0}
           getCellContent={getCellContent}
@@ -1432,7 +1513,6 @@ export function SheetGridView({
             setGridSelection(createGridSelection(cell[0], cell[1]));
             const addr = formatAddress(cell[1], cell[0]);
             onSelect(addr);
-            beginEditAt(addr);
           }}
           onDelete={() => {
             onClearCell();
@@ -1559,6 +1639,7 @@ export function SheetGridView({
           onChange={onEditorChange}
           onCommit={onCommitEdit}
           resolvedValue={resolvedValue}
+          selectionBehavior={editorSelectionBehavior}
           value={editorValue}
           style={overlayStyle}
         />

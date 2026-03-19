@@ -1,7 +1,7 @@
 import React from "react";
 import type { SpreadsheetEngine } from "@bilig/core";
 import { FormulaBar } from "./FormulaBar.js";
-import { SheetGridView, type EditMovement } from "./SheetGridView.js";
+import { SheetGridView, type EditMovement, type EditSelectionBehavior } from "./SheetGridView.js";
 
 interface WorkbookViewProps {
   engine: SpreadsheetEngine;
@@ -11,13 +11,14 @@ interface WorkbookViewProps {
   sheetName: string;
   selectedAddr: string;
   editorValue: string;
+  editorSelectionBehavior: EditSelectionBehavior;
   resolvedValue: string;
   isEditing: boolean;
   isEditingCell: boolean;
   onSelectSheet(sheetName: string): void;
   onSelect(addr: string): void;
   onAddressCommit(addr: string): void;
-  onBeginEdit(seed?: string): void;
+  onBeginEdit(seed?: string, selectionBehavior?: EditSelectionBehavior): void;
   onBeginFormulaEdit(seed?: string): void;
   onEditorChange(next: string): void;
   onCommitEdit(movement?: EditMovement): void;
@@ -40,6 +41,7 @@ export function WorkbookView({
   sheetName,
   selectedAddr,
   editorValue,
+  editorSelectionBehavior,
   resolvedValue,
   isEditing,
   isEditingCell,
@@ -98,6 +100,7 @@ export function WorkbookView({
           />
           <SheetGridView
             editorValue={editorValue}
+            editorSelectionBehavior={editorSelectionBehavior}
             engine={engine}
             isEditingCell={isEditingCell}
             onBeginEdit={onBeginEdit}

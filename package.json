@@ -21,7 +21,7 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
-    "test:browser": "playwright test && playwright test -c playwright.web.config.ts",
+    "test:browser": "node scripts/run-browser-tests.mjs",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "tsx scripts/perf-smoke.mjs",

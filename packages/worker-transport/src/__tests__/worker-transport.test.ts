@@ -6,6 +6,16 @@ import type { EngineEvent } from "@bilig/protocol";
 
 import { createWorkerEngineClient, createWorkerEngineHost } from "../index.js";
 
+async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Timed out waiting for worker transport condition");
+}
+
 describe("worker transport", () => {
   it("invokes engine methods across a message channel", async () => {
     const channel = new MessageChannel();
@@ -43,7 +53,7 @@ describe("worker transport", () => {
       received.push(event);
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => eventListeners.size === 1);
 
     eventListeners.forEach((listener) => {
       listener({
@@ -62,7 +72,7 @@ describe("worker transport", () => {
       });
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => received.length === 1);
 
     expect(received).toHaveLength(1);
     unsubscribe();

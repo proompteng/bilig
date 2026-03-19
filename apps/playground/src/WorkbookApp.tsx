@@ -8,6 +8,7 @@ import {
   ReplicaPanel,
   WorkbookView,
   type EditMovement,
+  type EditSelectionBehavior,
   useCell,
   useMetrics,
   useSelection
@@ -179,6 +180,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const metrics = useMetrics(engine);
   const mirrorMetrics = useMetrics(mirrorEngine);
   const [editorValue, setEditorValue] = useState("");
+  const [editorSelectionBehavior, setEditorSelectionBehavior] = useState<EditSelectionBehavior>("select-all");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
   const [selectionLabel, setSelectionLabel] = useState(selectedAddr);
   const [replicationReady, setReplicationReady] = useState(false);
@@ -439,15 +441,23 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   }, [selection, sheetNames]);
 
   useEffect(() => {
-    setEditingMode("idle");
+    if (isEditing) {
+      return;
+    }
     setEditorValue("");
-  }, [selectedAddr, selection.sheetName]);
+    setEditorSelectionBehavior("select-all");
+  }, [isEditing, selectedAddr, selection.sheetName]);
 
   const dependencySnapshot = engine.explainCell(selection.sheetName, selectedAddr);
 
   const beginEditing = useCallback(
-    (seed?: string, mode: Exclude<EditingMode, "idle"> = "cell") => {
+    (
+      seed?: string,
+      selectionBehavior: EditSelectionBehavior = "select-all",
+      mode: Exclude<EditingMode, "idle"> = "cell"
+    ) => {
       setEditorValue(seed ?? toEditorValue(engine.getCell(selection.sheetName, selectedAddr)));
+      setEditorSelectionBehavior(selectionBehavior);
       setEditingMode(mode);
     },
     [engine, selectedAddr, selection.sheetName]
@@ -458,6 +468,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       const nextValue = isEditing ? editorValue : toEditorValue(selectedCell);
       applyParsedInput(engine, selection.sheetName, selectedAddr, parseEditorInput(nextValue));
       setEditingMode("idle");
+      setEditorSelectionBehavior("select-all");
       if (movement) {
         selection.select(selection.sheetName, clampSelectionMovement(selectedAddr, selection.sheetName, movement));
       }
@@ -467,6 +478,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
 
   const cancelEditor = useCallback(() => {
     setEditorValue(toEditorValue(selectedCell));
+    setEditorSelectionBehavior("select-all");
     setEditingMode("idle");
   }, [selectedCell]);
 
@@ -489,6 +501,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       if (ops.length > 0) {
         engine.renderCommit(ops);
       }
+      setEditorSelectionBehavior("select-all");
       setEditingMode("idle");
     },
     [engine, selection.sheetName]
@@ -653,6 +666,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       ) : null}
       <WorkbookView
         editorValue={visibleEditorValue}
+        editorSelectionBehavior={editorSelectionBehavior}
         engine={engine}
         isEditing={isEditing}
         isEditingCell={isEditingCell}
@@ -663,7 +677,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           }
         }}
         onBeginEdit={beginEditing}
-        onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "formula")}
+        onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "select-all", "formula")}
         onCancelEdit={cancelEditor}
         onClearCell={clearSelectedCell}
         onCommitEdit={commitEditor}
