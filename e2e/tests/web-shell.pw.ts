@@ -528,6 +528,43 @@ test("web app supports F2 edit in the product shell", async ({ page }) => {
   await expect(formulaInput).toHaveValue("seed!");
 });
 
+test("web app double-click edits the exact clicked cell", async ({ page }) => {
+  await page.goto("/");
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const cellEditor = page.getByTestId("cell-editor-input");
+  const gridLocator = page.getByTestId("sheet-grid");
+
+  await nameBox.fill("C4");
+  await nameBox.press("Enter");
+  await formulaInput.fill("above");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("C5");
+  await nameBox.press("Enter");
+  await formulaInput.fill("target");
+  await formulaInput.press("Enter");
+
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, 2);
+  const columnWidth = await getProductColumnWidth(page, 2);
+  const targetX = grid.x + columnLeft + Math.floor(columnWidth / 2);
+  const targetY = grid.y + PRODUCT_HEADER_HEIGHT + (4 * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  await page.mouse.dblclick(targetX, targetY);
+
+  await expect(nameBox).toHaveValue("C5");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("target");
+  await expect(cellEditor).toHaveAttribute("aria-label", "Sheet1!C5 editor");
+});
+
 test("web app supports fill-handle propagation", async ({ page }) => {
   await page.goto("/");
 

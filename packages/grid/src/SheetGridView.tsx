@@ -1309,7 +1309,10 @@ export function SheetGridView({
             }
             event.preventDefault();
             event.stopPropagation();
-            beginEditAt(formatAddress(bodyCell[1], bodyCell[0]));
+            const editAddress = formatAddress(bodyCell[1], bodyCell[0]);
+            setGridSelection(createGridSelection(bodyCell[0], bodyCell[1]));
+            onSelect(editAddress);
+            beginEditAt(editAddress);
             return;
           }
 
