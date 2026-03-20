@@ -217,6 +217,26 @@ async function clickProductCell(
   );
 }
 
+async function clickProductCellUpperHalf(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number,
+  rowIndex: number
+) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  await page.mouse.click(
+    grid.x + columnLeft + Math.floor(columnWidth / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + 4
+  );
+}
+
 async function clickProductSelectedCellTopBorder(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
@@ -351,6 +371,18 @@ test("web app keeps the active focus inside the Glide grid when clicking a cell"
 
   expect(activeElementState.insideSheetGrid).toBe(true);
   expect(activeElementState.testId).not.toBe("sheet-grid");
+});
+
+test("web app maps clicks in the upper half of a cell to that same visible cell", async ({ page }) => {
+  await page.goto("/");
+
+  await clickProductCellUpperHalf(page, 4, 11);
+  await expect(page.getByTestId("name-box")).toHaveValue("E12");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!E12");
+
+  await clickProductCellUpperHalf(page, 2, 4);
+  await expect(page.getByTestId("name-box")).toHaveValue("C5");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
 });
 
 test("web app supports column resize without breaking hit testing", async ({ page }) => {

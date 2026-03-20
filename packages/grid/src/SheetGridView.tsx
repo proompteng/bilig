@@ -654,11 +654,10 @@ export function SheetGridView({
         if (!hostBounds) {
           return null;
         }
-        const firstCellBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
-        const cellWidth = firstCellBounds?.width ?? gridMetrics.columnWidth;
-        const cellHeight = firstCellBounds?.height ?? gridMetrics.rowHeight;
-        const dataLeft = firstCellBounds?.x ?? (hostBounds.left + gridMetrics.rowMarkerWidth);
-        const dataTop = firstCellBounds?.y ?? (hostBounds.top + gridMetrics.headerHeight);
+        const cellWidth = gridMetrics.columnWidth;
+        const cellHeight = gridMetrics.rowHeight;
+        const dataLeft = hostBounds.left + gridMetrics.rowMarkerWidth;
+        const dataTop = hostBounds.top + gridMetrics.headerHeight;
         const visibleColumnBounds = getVisibleColumnBounds(region, dataLeft, columnWidths, gridMetrics.columnWidth);
         const dataWidth = visibleColumnBounds.length === 0
           ? region.range.width * cellWidth
@@ -723,11 +722,10 @@ export function SheetGridView({
         return null;
       }
 
-      const firstCellBounds = editorRef.current?.getBounds(region.range.x, region.range.y);
-      const cellWidth = firstCellBounds?.width ?? gridMetrics.columnWidth;
-      const cellHeight = firstCellBounds?.height ?? gridMetrics.rowHeight;
-      const dataLeft = firstCellBounds?.x ?? (hostBounds.left + gridMetrics.rowMarkerWidth);
-      const dataTop = firstCellBounds?.y ?? (hostBounds.top + gridMetrics.headerHeight);
+      const cellWidth = gridMetrics.columnWidth;
+      const cellHeight = gridMetrics.rowHeight;
+      const dataLeft = hostBounds.left + gridMetrics.rowMarkerWidth;
+      const dataTop = hostBounds.top + gridMetrics.headerHeight;
       const visibleColumnBounds = getVisibleColumnBounds(region, dataLeft, columnWidths, gridMetrics.columnWidth);
       const dataWidth = visibleColumnBounds.length === 0
         ? region.range.width * cellWidth
