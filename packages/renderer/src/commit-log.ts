@@ -53,7 +53,7 @@ export function collectMountOps(descriptor: Descriptor): CommitOp[] {
   }
 
   if (descriptor.kind === "Sheet") {
-    const workbook = descriptor.parent as WorkbookDescriptor | null;
+    const workbook: WorkbookDescriptor | null = descriptor.parent?.kind === "Workbook" ? descriptor.parent : null;
     const order = workbook ? workbook.children.indexOf(descriptor) : 0;
     collectSheetMountOps(ops, descriptor, Math.max(order, 0));
     return ops;

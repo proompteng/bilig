@@ -1,7 +1,71 @@
 import { describe, expect, it } from "vitest";
-import { SpreadsheetEngine } from "../index.js";
+import { SpreadsheetEngine, type EngineSyncClient } from "../index.js";
 import { ErrorCode, Opcode, ValueTag } from "@bilig/protocol";
 import type { EngineOpBatch } from "@bilig/crdt";
+
+type RuntimeFormulaWithDependencies = {
+  dependencyIndices: Uint32Array;
+};
+
+type RuntimeFormulaWithCompiled = {
+  compiled: {
+    id: number;
+    depsPtr: number;
+    depsLen: number;
+    programOffset: number;
+    programLength: number;
+  };
+  dependencyEntities: { ptr: number; len: number };
+  runtimeProgram: Uint32Array;
+};
+
+type RuntimeFormulaWithRanges = {
+  rangeDependencies: Uint32Array;
+  runtimeProgram: Uint32Array;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function hasFormulaStore(value: unknown): value is { formulas: { get(cellIndex: number): unknown } } {
+  return isRecord(value)
+    && "formulas" in value
+    && isRecord(value.formulas)
+    && "get" in value.formulas
+    && typeof value.formulas.get === "function";
+}
+
+function readRuntimeFormula(engine: SpreadsheetEngine, cellIndex: number): unknown {
+  if (!hasFormulaStore(engine)) {
+    throw new Error("SpreadsheetEngine test expected an internal formulas store");
+  }
+  return engine.formulas.get(cellIndex);
+}
+
+function isRuntimeFormulaWithDependencies(value: unknown): value is RuntimeFormulaWithDependencies {
+  return isRecord(value) && value.dependencyIndices instanceof Uint32Array;
+}
+
+function isRuntimeFormulaWithCompiled(value: unknown): value is RuntimeFormulaWithCompiled {
+  return isRecord(value)
+    && isRecord(value.compiled)
+    && typeof value.compiled.id === "number"
+    && typeof value.compiled.depsPtr === "number"
+    && typeof value.compiled.depsLen === "number"
+    && typeof value.compiled.programOffset === "number"
+    && typeof value.compiled.programLength === "number"
+    && isRecord(value.dependencyEntities)
+    && typeof value.dependencyEntities.ptr === "number"
+    && typeof value.dependencyEntities.len === "number"
+    && value.runtimeProgram instanceof Uint32Array;
+}
+
+function isRuntimeFormulaWithRanges(value: unknown): value is RuntimeFormulaWithRanges {
+  return isRecord(value)
+    && value.rangeDependencies instanceof Uint32Array
+    && value.runtimeProgram instanceof Uint32Array;
+}
 
 describe("SpreadsheetEngine", () => {
   it("recalculates simple formulas", async () => {
@@ -462,7 +526,8 @@ describe("SpreadsheetEngine", () => {
 
     const b1Index = engine.workbook.getCellIndex("Sheet1", "B1");
     expect(b1Index).toBeDefined();
-    const runtimeFormula = b1Index === undefined ? undefined : (engine as any).formulas.get(b1Index);
+    const runtimeFormula = b1Index === undefined ? undefined : readRuntimeFormula(engine, b1Index);
+    expect(isRuntimeFormulaWithDependencies(runtimeFormula)).toBe(true);
     expect(runtimeFormula?.dependencyIndices).toBeInstanceOf(Uint32Array);
   });
 
@@ -652,25 +717,10 @@ describe("SpreadsheetEngine", () => {
     expect(cellIndex).toBeDefined();
 
     const formulaId = engine.workbook.cellStore.formulaIds[cellIndex!];
-    const runtimeFormula = (
-      engine as unknown as {
-        formulas: {
-          get(cellIndex: number): {
-            compiled: {
-              id: number;
-              depsPtr: number;
-              depsLen: number;
-              programOffset: number;
-              programLength: number;
-            };
-            dependencyEntities: { ptr: number; len: number };
-            runtimeProgram: Uint32Array;
-          } | undefined;
-        };
-      }
-    ).formulas.get(cellIndex!);
+    const runtimeFormula = readRuntimeFormula(engine, cellIndex!);
 
     expect(formulaId).toBeGreaterThan(0);
+    expect(isRuntimeFormulaWithCompiled(runtimeFormula)).toBe(true);
     expect(runtimeFormula).toBeDefined();
     expect(runtimeFormula?.compiled.id).toBe(formulaId);
     expect(runtimeFormula?.compiled.depsPtr).toBe(runtimeFormula?.dependencyEntities.ptr);
@@ -693,17 +743,9 @@ describe("SpreadsheetEngine", () => {
     expect(cellIndex).toBeDefined();
     expect(c1Index).toBeDefined();
 
-    const runtimeFormula = (
-      engine as unknown as {
-        formulas: {
-          get(cellIndex: number): {
-            rangeDependencies: Uint32Array;
-            runtimeProgram: Uint32Array;
-          } | undefined;
-        };
-      }
-    ).formulas.get(cellIndex!);
+    const runtimeFormula = readRuntimeFormula(engine, cellIndex!);
 
+    expect(isRuntimeFormulaWithRanges(runtimeFormula)).toBe(true);
     expect(runtimeFormula).toBeDefined();
     const pushCellOpcode = Number(Opcode.PushCell);
     const pushRangeOpcode = Number(Opcode.PushRange);
@@ -920,9 +962,9 @@ describe("SpreadsheetEngine", () => {
     let disconnected = false;
 
     await engine.connectSyncClient({
-      async connect({ setState }) {
+      async connect(this: void, handlers: Parameters<EngineSyncClient["connect"]>[0]) {
         connected = true;
-        setState("behind");
+        handlers.setState("behind");
         return {
           send(batch) {
             forwarded.push(batch);

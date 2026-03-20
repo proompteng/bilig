@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
-import type { CellProps, SheetProps, WorkbookProps } from "../descriptors.js";
-import { workbookHostConfig, type WorkbookContainer } from "../host-config.js";
+import type { CellProps, SheetProps, WorkbookDescriptor, WorkbookProps } from "../descriptors.js";
+import {
+  workbookHostConfig,
+  type WorkbookContainer
+} from "../host-config.js";
 
 function createContainer(engine: SpreadsheetEngine): WorkbookContainer {
   return {
@@ -11,6 +14,18 @@ function createContainer(engine: SpreadsheetEngine): WorkbookContainer {
     shouldSyncSheetOrders: false,
     lastError: null
   };
+}
+
+function isWorkbookDescriptor(descriptor: unknown): descriptor is WorkbookDescriptor {
+  return typeof descriptor === "object" && descriptor !== null && "kind" in descriptor && descriptor.kind === "Workbook";
+}
+
+function expectWorkbookDescriptor(descriptor: unknown): WorkbookDescriptor {
+  expect(isWorkbookDescriptor(descriptor)).toBe(true);
+  if (!isWorkbookDescriptor(descriptor)) {
+    throw new Error("Expected a workbook descriptor");
+  }
+  return descriptor;
 }
 
 describe("workbook host config", () => {
@@ -83,7 +98,7 @@ describe("workbook host config", () => {
     workbookHostConfig.finalizeInitialChildren();
 
     workbookHostConfig.prepareForCommit(container);
-    workbookHostConfig.appendChildToContainer(container, workbook as never);
+    workbookHostConfig.appendChildToContainer(container, expectWorkbookDescriptor(workbook));
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: 1, value: 10 });
 
@@ -117,7 +132,7 @@ describe("workbook host config", () => {
     expect(engine.getCellValue("Renamed", "A1")).toEqual({ tag: 0 });
 
     workbookHostConfig.prepareForCommit(container);
-    workbookHostConfig.removeChildFromContainer(container, workbook as never);
+    workbookHostConfig.removeChildFromContainer(container, expectWorkbookDescriptor(workbook));
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.exportSnapshot().sheets).toEqual([]);
 
@@ -140,7 +155,7 @@ describe("workbook host config", () => {
     workbookHostConfig.appendInitialChild(badSheet, badCell);
 
     workbookHostConfig.prepareForCommit(container);
-    workbookHostConfig.appendChildToContainer(container, workbook as never);
+    workbookHostConfig.appendChildToContainer(container, expectWorkbookDescriptor(workbook));
     expect(container.lastError).toBeInstanceOf(Error);
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});

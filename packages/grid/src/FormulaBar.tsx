@@ -7,12 +7,12 @@ interface FormulaBarProps {
   value: string;
   resolvedValue: string;
   isEditing: boolean;
-  onBeginEdit(seed?: string): void;
-  onAddressCommit(next: string): void;
-  onChange(next: string): void;
-  onCommit(): void;
-  onCancel(): void;
-  onClear(): void;
+  onBeginEdit(this: void, seed?: string): void;
+  onAddressCommit(this: void, next: string): void;
+  onChange(this: void, next: string): void;
+  onCommit(this: void): void;
+  onCancel(this: void): void;
+  onClear(this: void): void;
 }
 
 export function FormulaBar({

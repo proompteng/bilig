@@ -11,7 +11,7 @@ interface ReplicaPanelProps {
   queuedSyncCount: number;
   latencyMs: number;
   remoteMetrics: RecalcMetrics;
-  onToggleSync(): void;
+  onToggleSync(this: void): void;
 }
 
 export function ReplicaPanel({

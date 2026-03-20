@@ -1,7 +1,7 @@
 import { createSyncServer } from "./server.js";
 
-const host = process.env.HOST ?? "0.0.0.0";
-const port = Number.parseInt(process.env.PORT ?? "4321", 10);
+const host = process.env["HOST"] ?? "0.0.0.0";
+const port = Number.parseInt(process.env["PORT"] ?? "4321", 10);
 
 const { app } = createSyncServer();
 

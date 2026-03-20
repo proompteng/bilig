@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateDescriptorTree } from "../validation.js";
 import type { CellDescriptor, SheetDescriptor, WorkbookDescriptor } from "../descriptors.js";
 
-function cell(props: CellDescriptor["props"]): CellDescriptor {
+function cell(props: any): CellDescriptor {
   return {
     kind: "Cell",
     props,
@@ -51,7 +51,7 @@ describe("validateDescriptorTree", () => {
     ).toThrow("Duplicate sheet name 'Sheet1'.");
 
     expect(() =>
-      validateDescriptorTree(workbook([sheet("Sheet1", [cell({ value: 1 } as any)])]))
+      validateDescriptorTree(workbook([sheet("Sheet1", [cell({ value: 1 })])]))
     ).toThrow("<Cell> requires an addr prop.");
 
     expect(() =>

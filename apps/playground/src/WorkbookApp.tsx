@@ -51,6 +51,35 @@ type ParsedEditorInput =
   | { kind: "formula"; formula: string }
   | { kind: "value"; value: LiteralInput };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isPersistedReplicaState(value: unknown): value is PersistedReplicaState {
+  return isRecord(value)
+    && isRecord(value["snapshot"])
+    && Array.isArray(value["snapshot"]["sheets"])
+    && isRecord(value["replica"])
+    && isRecord(value["replica"]["replica"])
+    && typeof value["replica"]["replica"]["replicaId"] === "string"
+    && Array.isArray(value["replica"]["entityVersions"])
+    && Array.isArray(value["replica"]["sheetDeleteVersions"]);
+}
+
+function isPersistedRelayState(value: unknown): value is PersistedRelayState {
+  return isRecord(value)
+    && typeof value["syncPaused"] === "boolean"
+    && Array.isArray(value["queue"]);
+}
+
+function parsePersistedReplicaState(value: unknown): PersistedReplicaState | null {
+  return isPersistedReplicaState(value) ? value : null;
+}
+
+function parsePersistedRelayState(value: unknown): PersistedRelayState | null {
+  return isPersistedRelayState(value) ? value : null;
+}
+
 function toEditorValue(cell: ReturnType<typeof useCell>) {
   if (cell.formula) {
     return `=${cell.formula}`;
@@ -272,9 +301,9 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       }
 
       const [primaryPersisted, mirrorPersisted, relayPersisted] = await Promise.all([
-        loadPersistedJson<PersistedReplicaState>(PRIMARY_STORAGE_KEY),
-        loadPersistedJson<PersistedReplicaState>(MIRROR_STORAGE_KEY),
-        loadPersistedJson<PersistedRelayState>(RELAY_STORAGE_KEY)
+        loadPersistedJson(PRIMARY_STORAGE_KEY, parsePersistedReplicaState),
+        loadPersistedJson(MIRROR_STORAGE_KEY, parsePersistedReplicaState),
+        loadPersistedJson(RELAY_STORAGE_KEY, parsePersistedRelayState)
       ]);
 
       if (primaryPersisted) {

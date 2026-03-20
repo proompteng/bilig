@@ -69,16 +69,16 @@ interface SheetGridViewProps {
   editorSelectionBehavior: EditSelectionBehavior;
   resolvedValue: string;
   isEditingCell: boolean;
-  onSelect(addr: string): void;
+  onSelect(this: void, addr: string): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
-  onBeginEdit(seed?: string, selectionBehavior?: EditSelectionBehavior): void;
-  onEditorChange(next: string): void;
-  onCommitEdit(movement?: EditMovement): void;
-  onCancelEdit(): void;
-  onClearCell(): void;
-  onFillRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
-  onCopyRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
-  onPaste(addr: string, values: readonly (readonly string[])[]): void;
+  onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void;
+  onEditorChange(this: void, next: string): void;
+  onCommitEdit(this: void, movement?: EditMovement): void;
+  onCancelEdit(this: void): void;
+  onClearCell(this: void): void;
+  onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
+  onCopyRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
+  onPaste(this: void, addr: string, values: readonly (readonly string[])[]): void;
 }
 
 function isCellEditorInputFocused(): boolean {
@@ -86,7 +86,11 @@ function isCellEditorInputFocused(): boolean {
     return false;
   }
   const activeElement = document.activeElement;
-  return activeElement instanceof HTMLInputElement && activeElement.dataset.testid === "cell-editor-input";
+  return activeElement instanceof HTMLInputElement && activeElement.dataset["testid"] === "cell-editor-input";
+}
+
+function isEditableElement(element: Element | null): element is HTMLElement {
+  return element instanceof HTMLElement && element.isContentEditable;
 }
 
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
@@ -479,7 +483,7 @@ export function SheetGridView({
         activeElement instanceof HTMLInputElement
         || activeElement instanceof HTMLTextAreaElement
         || activeElement instanceof HTMLSelectElement
-        || Boolean(activeElement && (activeElement as HTMLElement).isContentEditable)
+        || isEditableElement(activeElement)
       ) {
         return;
       }

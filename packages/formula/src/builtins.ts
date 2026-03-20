@@ -156,6 +156,10 @@ const builtins: Record<string, Builtin> = {
   ...datetimeBuiltins
 };
 
+function isBuiltinIdKey(value: string): value is keyof typeof BuiltinId {
+  return value in BuiltinId;
+}
+
 export function getBuiltin(name: string): Builtin | undefined {
   return builtins[name.toUpperCase()];
 }
@@ -168,5 +172,10 @@ export function hasBuiltin(name: string): boolean {
 export function getBuiltinId(name: string): BuiltinId | undefined {
   const first = name.charAt(0);
   if (!first) return undefined;
-  return BuiltinId[`${first.toUpperCase()}${name.slice(1).toLowerCase()}` as keyof typeof BuiltinId];
+  const key = `${first.toUpperCase()}${name.slice(1).toLowerCase()}`;
+  if (!isBuiltinIdKey(key)) {
+    return undefined;
+  }
+  const builtinId = BuiltinId[key];
+  return typeof builtinId === "number" ? builtinId : undefined;
 }

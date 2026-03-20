@@ -119,7 +119,7 @@ export interface BrowserPersistenceOptions {
 }
 
 export interface BrowserPersistence {
-  loadJson<T>(key: string): Promise<T | null>;
+  loadJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null>;
   saveJson(key: string, value: unknown): Promise<void>;
   remove(key: string): Promise<void>;
 }
@@ -129,14 +129,17 @@ export function createBrowserPersistence(options: BrowserPersistenceOptions = {}
   const storeName = options.storeName ?? DEFAULT_STORE_NAME;
 
   return {
-    async loadJson<T>(key: string): Promise<T | null> {
+    async loadJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
       const storage = getLocalStorage();
       const cachedValue = storage?.getItem(key) ?? null;
       if (cachedValue) {
         try {
-          const parsed = JSON.parse(cachedValue) as T;
-          void writeToStore(databaseName, storeName, key, cachedValue);
-          return parsed;
+          const parsed = parser(JSON.parse(cachedValue) as unknown);
+          if (parsed !== null) {
+            void writeToStore(databaseName, storeName, key, cachedValue);
+            return parsed;
+          }
+          storage?.removeItem(key);
         } catch {
           storage?.removeItem(key);
         }
@@ -145,7 +148,7 @@ export function createBrowserPersistence(options: BrowserPersistenceOptions = {}
       const persisted = await readFromStore(databaseName, storeName, key);
       if (persisted) {
         try {
-          return JSON.parse(persisted) as T;
+          return parser(JSON.parse(persisted) as unknown);
         } catch {
           return null;
         }
@@ -188,8 +191,8 @@ export function createBrowserPersistence(options: BrowserPersistenceOptions = {}
 
 const defaultPersistence = createBrowserPersistence();
 
-export async function loadPersistedJson<T>(key: string): Promise<T | null> {
-  return defaultPersistence.loadJson<T>(key);
+export async function loadPersistedJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
+  return defaultPersistence.loadJson<T>(key, parser);
 }
 
 export async function savePersistedJson(key: string, value: unknown): Promise<void> {

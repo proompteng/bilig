@@ -26,12 +26,11 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   }));
 
   app.get("/v1/documents/:documentId/state", async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-    const params = request.params as { documentId: string };
-    return sessionManager.getDocumentState(params.documentId);
+    return sessionManager.getDocumentState(request.params.documentId);
   });
 
-  app.post("/v1/agent/frames", async (request: FastifyRequest, reply: FastifyReply) => {
-    const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body as Buffer));
+  app.post("/v1/agent/frames", async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
+    const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body));
     reply.header("content-type", "application/octet-stream");
     return Buffer.from(encodeAgentFrame(response));
   });
@@ -88,15 +87,30 @@ function toMessageBytes(raw: unknown): Uint8Array {
   throw new Error("Unsupported websocket payload");
 }
 
-function normalizeWebSocket(candidate: unknown): { on: (event: string, listener: (...args: unknown[]) => void) => void; send: (data: Uint8Array) => void } {
-  if (typeof candidate === "object" && candidate !== null && "on" in candidate && "send" in candidate) {
-    return candidate as { on: (event: string, listener: (...args: unknown[]) => void) => void; send: (data: Uint8Array) => void };
+type NormalizedWebSocket = {
+  on(event: string, listener: (...args: unknown[]) => void): void;
+  send(data: Uint8Array): void;
+};
+
+function isNormalizedWebSocket(value: unknown): value is NormalizedWebSocket {
+  return typeof value === "object"
+    && value !== null
+    && "on" in value
+    && typeof value.on === "function"
+    && "send" in value
+    && typeof value.send === "function";
+}
+
+function hasSocket(value: unknown): value is { socket: unknown } {
+  return typeof value === "object" && value !== null && "socket" in value;
+}
+
+function normalizeWebSocket(candidate: unknown): NormalizedWebSocket {
+  if (isNormalizedWebSocket(candidate)) {
+    return candidate;
   }
-  if (typeof candidate === "object" && candidate !== null && "socket" in candidate) {
-    const socket = (candidate as { socket: unknown }).socket;
-    if (typeof socket === "object" && socket !== null && "on" in socket && "send" in socket) {
-      return socket as { on: (event: string, listener: (...args: unknown[]) => void) => void; send: (data: Uint8Array) => void };
-    }
+  if (hasSocket(candidate) && isNormalizedWebSocket(candidate.socket)) {
+    return candidate.socket;
   }
   throw new Error("Unsupported websocket connection shape");
 }

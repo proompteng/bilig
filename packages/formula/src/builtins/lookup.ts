@@ -23,6 +23,28 @@ function isRangeArg(value: LookupBuiltinArgument): value is RangeBuiltinArgument
   return typeof value === "object" && value !== null && "kind" in value && value.kind === "range";
 }
 
+function isCriteriaOperator(value: string): value is CriteriaOperator {
+  return value === "="
+    || value === "<>"
+    || value === ">"
+    || value === ">="
+    || value === "<"
+    || value === "<=";
+}
+
+function findFirstNonRange(values: readonly (RangeBuiltinArgument | CellValue)[]): CellValue | undefined {
+  for (const value of values) {
+    if (!isRangeArg(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function areRangeArgs(values: readonly (RangeBuiltinArgument | CellValue)[]): values is RangeBuiltinArgument[] {
+  return values.every((value) => isRangeArg(value));
+}
+
 function toNumber(value: CellValue): number | undefined {
   switch (value.tag) {
     case ValueTag.Number:
@@ -642,10 +664,14 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       return errorValue(ErrorCode.Value);
     }
     const ranges = args.map((arg) => requireCellRange(arg));
-    if (ranges.some((range) => !isRangeArg(range))) {
-      return ranges.find((range) => !isRangeArg(range)) as CellValue;
+    const rangeError = findFirstNonRange(ranges);
+    if (rangeError) {
+      return rangeError;
     }
-    const typedRanges = ranges as RangeBuiltinArgument[];
+    if (!areRangeArgs(ranges)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const typedRanges = ranges;
     const expectedLength = typedRanges[0]!.values.length;
     if (typedRanges.some((range) => range.values.length !== expectedLength)) {
       return errorValue(ErrorCode.Value);
@@ -699,8 +725,9 @@ function parseCriteria(criteria: CellValue): { operator: CriteriaOperator; opera
     return { operator: "=", operand: criteria };
   }
 
+  const operator = match[1] ?? "=";
   return {
-    operator: match[1] as CriteriaOperator,
+    operator: isCriteriaOperator(operator) ? operator : "=",
     operand: parseCriteriaOperand(match[2] ?? "")
   };
 }

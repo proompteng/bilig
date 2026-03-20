@@ -1,29 +1,6 @@
 import type { ReactNode } from "react";
 import { WorkbookReconciler, type WorkbookContainer } from "./host-config.js";
 
-interface ReconcilerCompat {
-  createContainer(
-    containerInfo: WorkbookContainer,
-    tag: number,
-    hydrationCallbacks: unknown,
-    isStrictMode: boolean,
-    concurrentUpdatesByDefaultOverride: unknown,
-    identifierPrefix: string,
-    onUncaughtError: (error: unknown) => void,
-    onCaughtError: (error: unknown) => void,
-    onRecoverableError: (error: unknown) => void,
-    transitionCallbacks: unknown
-  ): unknown;
-  updateContainer(
-    element: ReactNode,
-    container: unknown,
-    parentComponent: unknown,
-    callback: () => void
-  ): void;
-}
-
-const reconcilerCompat = WorkbookReconciler as unknown as ReconcilerCompat;
-
 function bindRendererError(container: WorkbookContainer) {
   return (error: unknown) => {
     container.lastError = error instanceof Error ? error : new Error(String(error));
@@ -32,7 +9,7 @@ function bindRendererError(container: WorkbookContainer) {
 
 export function createFiberRoot(container: WorkbookContainer): unknown {
   const onError = bindRendererError(container);
-  return reconcilerCompat.createContainer(
+  return WorkbookReconciler.createContainer(
     container,
     1,
     null,
@@ -47,5 +24,8 @@ export function createFiberRoot(container: WorkbookContainer): unknown {
 }
 
 export function updateFiberRoot(root: unknown, element: ReactNode, callback: () => void): void {
-  reconcilerCompat.updateContainer(element, root, null, callback);
+  if (typeof root !== "object" || root === null) {
+    throw new Error("Invalid fiber root");
+  }
+  WorkbookReconciler.updateContainer(element, root, null, callback);
 }

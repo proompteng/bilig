@@ -1,13 +1,14 @@
+import type { ReactNode } from "react";
 import type { LiteralInput } from "@bilig/protocol";
 
 export interface WorkbookProps {
   name?: string;
-  children?: unknown;
+  children?: ReactNode;
 }
 
 export interface SheetProps {
   name: string;
-  children?: unknown;
+  children?: ReactNode;
 }
 
 export interface CellProps {

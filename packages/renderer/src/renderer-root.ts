@@ -9,6 +9,10 @@ export interface WorkbookRendererRoot {
   unmount(): Promise<void>;
 }
 
+function isNamedComponentType(value: unknown): value is { displayName?: string; name?: string } {
+  return typeof value === "function";
+}
+
 function kindOfNode(node: React.ReactElement): "Workbook" | "Sheet" | "Cell" | "wrapper" | null {
   if (typeof node.type === "string") {
     if (node.type === "Workbook" || node.type === "Sheet" || node.type === "Cell") {
@@ -21,9 +25,8 @@ function kindOfNode(node: React.ReactElement): "Workbook" | "Sheet" | "Cell" | "
     return "wrapper";
   }
 
-  if (typeof node.type === "function") {
-    const name = (node.type as { displayName?: string; name?: string }).displayName
-      ?? (node.type as { name?: string }).name;
+  if (isNamedComponentType(node.type)) {
+    const name = node.type.displayName ?? node.type.name;
     if (name === "Workbook" || name === "Sheet" || name === "Cell") {
       return name;
     }

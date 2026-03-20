@@ -19,23 +19,18 @@ interface ResponseMessage {
   error?: string;
 }
 
-interface SubscribeMessage {
-  kind: "subscribe";
-  id: number;
-  channel: WorkerTransportChannel;
-}
+type SubscribeMessage =
+  | { kind: "subscribe"; id: number; channel: "events" }
+  | { kind: "subscribe"; id: number; channel: "batches" };
 
 interface UnsubscribeMessage {
   kind: "unsubscribe";
   subscriptionId: number;
 }
 
-interface EventMessage {
-  kind: "event";
-  subscriptionId: number;
-  channel: WorkerTransportChannel;
-  payload: unknown;
-}
+type EventMessage =
+  | { kind: "event"; subscriptionId: number; channel: "events"; payload: EngineEvent }
+  | { kind: "event"; subscriptionId: number; channel: "batches"; payload: EngineOpBatch };
 
 type TransportMessage = RequestMessage | ResponseMessage | SubscribeMessage | UnsubscribeMessage | EventMessage;
 
@@ -56,11 +51,15 @@ export interface WorkerTransportEngine {
 }
 
 export interface WorkerEngineClient {
-  invoke<T = unknown>(method: string, ...args: unknown[]): Promise<T>;
+  invoke(method: string, ...args: unknown[]): Promise<unknown>;
   ready(): Promise<void>;
   subscribe(listener: (event: EngineEvent) => void): () => void;
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void;
   dispose(): void;
+}
+
+function isCallableMethod(value: unknown): value is (...args: unknown[]) => unknown {
+  return typeof value === "function";
 }
 
 export function createWorkerEngineHost(engine: WorkerTransportEngine, port: MessagePortLike): { dispose(): void } {
@@ -74,14 +73,23 @@ export function createWorkerEngineHost(engine: WorkerTransportEngine, port: Mess
     }
 
     if (message.kind === "subscribe") {
-      const unsubscribe = subscribeChannel(engine, message.channel, (payload) => {
-        port.postMessage({
-          kind: "event",
-          subscriptionId: message.id,
-          channel: message.channel,
-          payload
+      const unsubscribe = message.channel === "events"
+        ? subscribeEventChannel(engine, (payload: EngineEvent) => {
+          port.postMessage({
+            kind: "event",
+            subscriptionId: message.id,
+            channel: message.channel,
+            payload
+          });
+        })
+        : subscribeBatchChannel(engine, (payload: EngineOpBatch) => {
+          port.postMessage({
+            kind: "event",
+            subscriptionId: message.id,
+            channel: message.channel,
+            payload
+          });
         });
-      });
       subscriptions.set(message.id, unsubscribe);
       port.postMessage({
         kind: "response",
@@ -116,10 +124,10 @@ async function handleRequest(
 ): Promise<void> {
   try {
     const method = engine[message.method];
-    if (typeof method !== "function") {
+    if (!isCallableMethod(method)) {
       throw new Error(`Unknown worker engine method: ${message.method}`);
     }
-    const value = await (method as (...args: unknown[]) => unknown)(...message.args);
+    const value = await method(...message.args);
     port.postMessage({
       kind: "response",
       id: message.id,
@@ -136,29 +144,29 @@ async function handleRequest(
   }
 }
 
-function subscribeChannel(
-  engine: WorkerTransportEngine,
-  channel: WorkerTransportChannel,
-  listener: (payload: unknown) => void
-): () => void {
-  if (channel === "events") {
-    if (!engine.subscribe) {
-      throw new Error("Engine does not expose subscribe()");
-    }
-    return engine.subscribe(listener as (event: EngineEvent) => void);
+function subscribeEventChannel(engine: WorkerTransportEngine, listener: (payload: EngineEvent) => void): () => void {
+  if (!engine.subscribe) {
+    throw new Error("Engine does not expose subscribe()");
   }
+  return engine.subscribe(listener);
+}
 
+function subscribeBatchChannel(engine: WorkerTransportEngine, listener: (payload: EngineOpBatch) => void): () => void {
   if (!engine.subscribeBatches) {
     throw new Error("Engine does not expose subscribeBatches()");
   }
-  return engine.subscribeBatches(listener as (batch: EngineOpBatch) => void);
+  return engine.subscribeBatches(listener);
 }
 
 export function createWorkerEngineClient(options: { port: MessagePortLike }): WorkerEngineClient {
   const { port } = options;
   let nextId = 1;
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-  const listeners = new Map<number, { channel: WorkerTransportChannel; callback: (payload: unknown) => void }>();
+  const listeners = new Map<
+    number,
+    | { channel: "events"; callback: (payload: EngineEvent) => void }
+    | { channel: "batches"; callback: (payload: EngineOpBatch) => void }
+  >();
 
   const onMessage = (message: TransportMessage) => {
     if (message.kind === "response") {
@@ -176,18 +184,28 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     }
 
     if (message.kind === "event") {
-      listeners.get(message.subscriptionId)?.callback(message.payload);
+      const listener = listeners.get(message.subscriptionId);
+      if (!listener || listener.channel !== message.channel) {
+        return;
+      }
+      if (message.channel === "events" && listener.channel === "events") {
+        listener.callback(message.payload);
+        return;
+      }
+      if (message.channel === "batches" && listener.channel === "batches") {
+        listener.callback(message.payload);
+      }
     }
   };
 
   const detach = attachMessageListener(port, onMessage);
   port.start?.();
 
-  function invoke<T>(method: string, ...args: unknown[]): Promise<T> {
+  function invoke(method: string, ...args: unknown[]): Promise<unknown> {
     const id = nextId++;
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<unknown>((resolve, reject) => {
       pending.set(id, {
-        resolve: (value) => resolve(value as T),
+        resolve,
         reject
       });
       port.postMessage({
@@ -199,10 +217,20 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     });
   }
 
-  function subscribe(channel: WorkerTransportChannel, callback: (payload: unknown) => void): () => void {
+  function subscribeEvents(callback: (payload: EngineEvent) => void): () => void {
     const id = nextId++;
-    listeners.set(id, { channel, callback });
-    port.postMessage({ kind: "subscribe", id, channel });
+    listeners.set(id, { channel: "events", callback });
+    port.postMessage({ kind: "subscribe", id, channel: "events" });
+    return () => {
+      listeners.delete(id);
+      port.postMessage({ kind: "unsubscribe", subscriptionId: id });
+    };
+  }
+
+  function subscribeBatches(callback: (payload: EngineOpBatch) => void): () => void {
+    const id = nextId++;
+    listeners.set(id, { channel: "batches", callback });
+    port.postMessage({ kind: "subscribe", id, channel: "batches" });
     return () => {
       listeners.delete(id);
       port.postMessage({ kind: "unsubscribe", subscriptionId: id });
@@ -212,14 +240,10 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
   return {
     invoke,
     ready() {
-      return invoke<void>("ready");
+      return invoke("ready").then(() => undefined);
     },
-    subscribe(listener) {
-      return subscribe("events", listener as (payload: unknown) => void);
-    },
-    subscribeBatches(listener) {
-      return subscribe("batches", listener as (payload: unknown) => void);
-    },
+    subscribe: subscribeEvents,
+    subscribeBatches,
     dispose() {
       pending.forEach((entry) => entry.reject(new Error("Worker engine client disposed")));
       pending.clear();

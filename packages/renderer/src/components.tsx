@@ -2,7 +2,7 @@ import React from "react";
 import type { CellProps, SheetProps, WorkbookProps } from "./descriptors.js";
 
 export function Workbook(props: WorkbookProps): React.ReactElement {
-  const children = React.Children.toArray(props.children as React.ReactNode).map((child) => {
+  const children = React.Children.toArray(props.children).map((child) => {
     if (!React.isValidElement<{ name?: string }>(child)) {
       return child;
     }
@@ -14,7 +14,7 @@ export function Workbook(props: WorkbookProps): React.ReactElement {
 }
 
 export function Sheet(props: SheetProps): React.ReactElement {
-  const children = React.Children.toArray(props.children as React.ReactNode).map((child) => {
+  const children = React.Children.toArray(props.children).map((child) => {
     if (!React.isValidElement<{ addr?: string }>(child)) {
       return child;
     }

@@ -33,9 +33,9 @@ interface CellEditorOverlayProps {
   resolvedValue: string;
   selectionBehavior?: "select-all" | "caret-end";
   textAlign?: "left" | "right";
-  onChange(next: string): void;
-  onCommit(movement?: EditMovement): void;
-  onCancel(): void;
+  onChange(this: void, next: string): void;
+  onCommit(this: void, movement?: EditMovement): void;
+  onCancel(this: void): void;
   style?: CSSProperties;
 }
 

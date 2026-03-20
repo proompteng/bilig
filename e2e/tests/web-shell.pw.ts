@@ -6,6 +6,18 @@ const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_HEIGHT = 22;
 const PRIMARY_MODIFIER = process.platform === "darwin" ? "Meta" : "Control";
 
+function parseColumnWidthOverrides(raw: string | null): Record<string, number> {
+  if (!raw) {
+    return {};
+  }
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== "object" || parsed === null) {
+    return {};
+  }
+  const entries = Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === "number");
+  return Object.fromEntries(entries);
+}
+
 async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
   const grid = page.getByTestId("sheet-grid");
   const [defaultWidthRaw, overridesRaw] = await Promise.all([
@@ -13,7 +25,7 @@ async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], c
     grid.getAttribute("data-column-width-overrides")
   ]);
   const defaultWidth = Number(defaultWidthRaw ?? String(PRODUCT_COLUMN_WIDTH));
-  const overrides = overridesRaw ? JSON.parse(overridesRaw) as Record<string, number> : {};
+  const overrides = parseColumnWidthOverrides(overridesRaw);
   return overrides[String(columnIndex)] ?? defaultWidth;
 }
 

@@ -141,7 +141,10 @@ export function parseRangeAddress(raw: string, defaultSheetName?: string): Range
 
   switch (start.kind) {
     case "cell": {
-      const endCell = end as CellReference;
+      if (end.kind !== "cell") {
+        throw new Error(`Range endpoints must use the same reference type: ${raw}`);
+      }
+      const endCell = end;
       const row1 = Math.min(start.row, endCell.row);
       const row2 = Math.max(start.row, endCell.row);
       const col1 = Math.min(start.col, endCell.col);
@@ -157,7 +160,10 @@ export function parseRangeAddress(raw: string, defaultSheetName?: string): Range
       return result;
     }
     case "row": {
-      const endRow = end as RowReference;
+      if (end.kind !== "row") {
+        throw new Error(`Range endpoints must use the same reference type: ${raw}`);
+      }
+      const endRow = end;
       const row1 = Math.min(start.row, endRow.row);
       const row2 = Math.max(start.row, endRow.row);
       const result: RowRangeAddress = {
@@ -171,7 +177,10 @@ export function parseRangeAddress(raw: string, defaultSheetName?: string): Range
       return result;
     }
     case "col": {
-      const endColumn = end as ColumnReference;
+      if (end.kind !== "col") {
+        throw new Error(`Range endpoints must use the same reference type: ${raw}`);
+      }
+      const endColumn = end;
       const col1 = Math.min(start.col, endColumn.col);
       const col2 = Math.max(start.col, endColumn.col);
       const result: ColumnRangeAddress = {

@@ -26,12 +26,12 @@ describe("worker transport", () => {
       add(left: number, right: number) {
         return left + right;
       }
-    }, channel.port1 as never);
+    }, channel.port1);
 
-    const client = createWorkerEngineClient({ port: channel.port2 as never });
+    const client = createWorkerEngineClient({ port: channel.port2 });
 
     await expect(client.ready()).resolves.toBeUndefined();
-    await expect(client.invoke<number>("add", 2, 5)).resolves.toBe(7);
+    await expect(client.invoke("add", 2, 5)).resolves.toBe(7);
 
     client.dispose();
     host.dispose();
@@ -45,9 +45,9 @@ describe("worker transport", () => {
         eventListeners.add(listener);
         return () => eventListeners.delete(listener);
       }
-    }, channel.port1 as never);
+    }, channel.port1);
 
-    const client = createWorkerEngineClient({ port: channel.port2 as never });
+    const client = createWorkerEngineClient({ port: channel.port2 });
     const received: EngineEvent[] = [];
     const unsubscribe = client.subscribe((event) => {
       received.push(event);

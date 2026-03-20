@@ -47,18 +47,18 @@ export class CellStore {
     if (nextSize <= this.capacity) return;
     let nextCapacity = this.capacity;
     while (nextCapacity < nextSize) nextCapacity *= 2;
-    this.tags = grow(this.tags, nextCapacity) as Uint8Array;
-    this.numbers = grow(this.numbers, nextCapacity) as Float64Array;
-    this.stringIds = grow(this.stringIds, nextCapacity) as Uint32Array;
-    this.errors = grow(this.errors, nextCapacity) as Uint16Array;
-    this.formulaIds = grow(this.formulaIds, nextCapacity) as Uint32Array;
-    this.versions = grow(this.versions, nextCapacity) as Uint32Array;
-    this.flags = grow(this.flags, nextCapacity) as Uint32Array;
-    this.sheetIds = grow(this.sheetIds, nextCapacity) as Uint16Array;
-    this.rows = grow(this.rows, nextCapacity) as Uint32Array;
-    this.cols = grow(this.cols, nextCapacity) as Uint16Array;
-    this.topoRanks = grow(this.topoRanks, nextCapacity) as Uint32Array;
-    const nextCycle = grow(this.cycleGroupIds, nextCapacity) as Int32Array;
+    this.tags = grow(this.tags, nextCapacity);
+    this.numbers = grow(this.numbers, nextCapacity);
+    this.stringIds = grow(this.stringIds, nextCapacity);
+    this.errors = grow(this.errors, nextCapacity);
+    this.formulaIds = grow(this.formulaIds, nextCapacity);
+    this.versions = grow(this.versions, nextCapacity);
+    this.flags = grow(this.flags, nextCapacity);
+    this.sheetIds = grow(this.sheetIds, nextCapacity);
+    this.rows = grow(this.rows, nextCapacity);
+    this.cols = grow(this.cols, nextCapacity);
+    this.topoRanks = grow(this.topoRanks, nextCapacity);
+    const nextCycle = grow(this.cycleGroupIds, nextCapacity);
     nextCycle.fill(-1, this.capacity);
     this.cycleGroupIds = nextCycle;
     this.capacity = nextCapacity;
@@ -130,6 +130,11 @@ valueReaders[ValueTag.String] = (store, index, stringLookup) => ({
 });
 valueReaders[ValueTag.Error] = (store, index) => ({ tag: ValueTag.Error, code: store.errors[index]! });
 
+function grow(buffer: Uint8Array, capacity: number): Uint8Array;
+function grow(buffer: Uint16Array, capacity: number): Uint16Array;
+function grow(buffer: Uint32Array, capacity: number): Uint32Array;
+function grow(buffer: Int32Array, capacity: number): Int32Array;
+function grow(buffer: Float64Array, capacity: number): Float64Array;
 function grow(
   buffer: Uint8Array | Uint16Array | Uint32Array | Int32Array | Float64Array,
   capacity: number

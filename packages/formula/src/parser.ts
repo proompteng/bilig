@@ -180,7 +180,7 @@ export function parseFormula(source: string): FormulaNode {
       result = {
         kind: "UnaryExpr",
         operator: token.kind === "plus" ? "+" : "-",
-        argument: parseExpression(PRECEDENCE.caret)
+        argument: parseExpression(PRECEDENCE["caret"])
       } satisfies UnaryExprNode;
     } else if (token.kind === "lparen") {
       eat("lparen");

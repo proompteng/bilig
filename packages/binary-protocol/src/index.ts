@@ -100,8 +100,18 @@ const FRAME_TAGS: Record<FrameKind, number> = {
   error: 7
 };
 
+const FRAME_ENTRIES: ReadonlyArray<readonly [FrameKind, number]> = [
+  ["hello", 1],
+  ["appendBatch", 2],
+  ["ack", 3],
+  ["snapshotChunk", 4],
+  ["cursorWatermark", 5],
+  ["heartbeat", 6],
+  ["error", 7]
+];
+
 const FRAME_BY_TAG = new Map<number, FrameKind>(
-  Object.entries(FRAME_TAGS).map(([kind, tag]) => [tag, kind as FrameKind])
+  FRAME_ENTRIES.map(([kind, tag]) => [tag, kind])
 );
 
 const OP_TAGS: Record<EngineOp["kind"], number> = {
@@ -118,6 +128,18 @@ type LiteralTag = 0 | 1 | 2 | 3;
 
 function assertNever(value: never): never {
   throw new BinaryProtocolError(`Unsupported value: ${String(value)}`);
+}
+
+function decodeLiteralTag(tag: number): LiteralTag {
+  switch (tag) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+      return tag;
+    default:
+      throw new BinaryProtocolError(`Unknown literal tag ${tag}`);
+  }
 }
 
 export class BinaryWriter {
@@ -247,7 +269,7 @@ function encodeLiteral(writer: BinaryWriter, literal: LiteralInput): void {
 }
 
 function decodeLiteral(reader: BinaryReader): LiteralInput {
-  switch (reader.u8() as LiteralTag) {
+  switch (decodeLiteralTag(reader.u8())) {
     case 0:
       return null;
     case 1:

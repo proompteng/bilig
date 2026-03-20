@@ -3,18 +3,19 @@ import { ErrorCode, ValueTag, type CellSnapshot } from "@bilig/protocol";
 import { GridCellKind } from "@glideapps/glide-data-grid";
 import { cellToEditorSeed, snapshotToGridCell } from "../gridCells.js";
 
-function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
-  return {
-    address: "A1",
-    input: null,
-    formula: null,
-    value: { tag: ValueTag.Empty },
-    dependents: [],
-    precedents: [],
-    stale: false,
-    ...overrides
-  } as CellSnapshot;
-}
+    function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
+      const snapshot: CellSnapshot = {
+        address: "A1",
+        input: null,
+        formula: null,
+        value: { tag: ValueTag.Empty },
+        dependents: [],
+        precedents: [],
+        stale: false,
+        ...overrides
+      };
+      return snapshot;
+    }
 
 describe("gridCells", () => {
   test("derives editor seeds from formulas, values, and inputs", () => {

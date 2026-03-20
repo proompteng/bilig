@@ -21,31 +21,84 @@ export interface WorkbookContainer {
 
 let currentUpdatePriority = DefaultEventPriority;
 const rootHostContext = Object.freeze({ kind: "workbook-root" });
+type WorkbookHostProps = WorkbookProps | SheetProps | CellProps;
+
+function isWorkbookProps(props: WorkbookHostProps): props is WorkbookProps {
+  return !("addr" in props);
+}
+
+function isSheetProps(props: WorkbookHostProps): props is SheetProps {
+  return !("addr" in props) && typeof props.name === "string";
+}
+
+function isCellProps(props: WorkbookHostProps): props is CellProps {
+  return "addr" in props && typeof props.addr === "string";
+}
+
+function isWorkbookContainer(value: unknown): value is WorkbookContainer {
+  return typeof value === "object"
+    && value !== null
+    && "engine" in value
+    && "pendingOps" in value
+    && "shouldSyncSheetOrders" in value
+    && "lastError" in value;
+}
 
 function insertChild(parent: Descriptor, child: Descriptor, before?: Descriptor): void {
-  child.parent = parent;
-  const list = "children" in parent ? parent.children : [];
-  if (!before) {
-    (list as Descriptor[]).push(child);
+  if (parent.kind === "Cell") {
     return;
   }
-  const index = list.indexOf(before as never);
+  child.parent = parent;
+  if (parent.kind === "Workbook") {
+    if (child.kind !== "Sheet") {
+      throw new Error(`Cannot append ${child.kind} to ${parent.kind}.`);
+    }
+    if (!before) {
+      parent.children.push(child);
+      return;
+    }
+    const index = parent.children.findIndex((candidate) => candidate === before);
+    if (index === -1) {
+      parent.children.push(child);
+    } else {
+      parent.children.splice(index, 0, child);
+    }
+    return;
+  }
+
+  if (child.kind !== "Cell") {
+    throw new Error(`Cannot append ${child.kind} to ${parent.kind}.`);
+  }
+  if (!before) {
+    parent.children.push(child);
+    return;
+  }
+  const index = parent.children.findIndex((candidate) => candidate === before);
   if (index === -1) {
-    (list as Descriptor[]).push(child);
+    parent.children.push(child);
   } else {
-    (list as Descriptor[]).splice(index, 0, child);
+    parent.children.splice(index, 0, child);
   }
 }
 
 function removeChild(parent: Descriptor, child: Descriptor): void {
-  if (!("children" in parent)) return;
-  const index = parent.children.indexOf(child as never);
+  if (parent.kind === "Cell") return;
+  if (parent.kind === "Workbook" && child.kind !== "Sheet") {
+    return;
+  }
+  if (parent.kind === "Sheet" && child.kind !== "Cell") {
+    return;
+  }
+  const index = parent.children.findIndex((candidate) => candidate === child);
   if (index >= 0) parent.children.splice(index, 1);
   child.parent = null;
 }
 
 function containerFor(descriptor: Descriptor): WorkbookContainer {
-  return descriptor.container as WorkbookContainer;
+  if (!isWorkbookContainer(descriptor.container)) {
+    throw new Error("Descriptor is not attached to a workbook container.");
+  }
+  return descriptor.container;
 }
 
 function pushCollectedOps(container: WorkbookContainer, collector: () => CommitOp[]): void {
@@ -118,16 +171,25 @@ export const workbookHostConfig = {
     }
   },
   preparePortalMount() {},
-  createInstance(type: string, props: WorkbookProps | SheetProps | CellProps, container: WorkbookContainer): Descriptor {
+  createInstance(type: Descriptor["kind"], props: WorkbookHostProps, container: WorkbookContainer): Descriptor {
     switch (type) {
       case "Workbook":
-        return { kind: "Workbook", props: props as WorkbookProps, children: [], parent: null, container };
+        if (!isWorkbookProps(props)) {
+          throw new Error("Workbook props must not include cell fields.");
+        }
+        return { kind: "Workbook", props, children: [], parent: null, container };
       case "Sheet":
-        return { kind: "Sheet", props: props as SheetProps, children: [], parent: null, container };
+        if (!isSheetProps(props)) {
+          throw new Error("Sheet props require a sheet name.");
+        }
+        return { kind: "Sheet", props, children: [], parent: null, container };
       case "Cell":
-        return { kind: "Cell", props: props as CellProps, parent: null, container };
+        if (!isCellProps(props)) {
+          throw new Error("Cell props require an address.");
+        }
+        return { kind: "Cell", props, parent: null, container };
       default:
-        throw new Error(`Unknown workbook host type: ${type}`);
+        throw new Error("Unknown workbook host type.");
     }
   },
   appendInitialChild(parent: Descriptor, child: Descriptor) {
@@ -199,7 +261,10 @@ export const workbookHostConfig = {
       container.shouldSyncSheetOrders = true;
     }
   },
-  appendChildToContainer(container: WorkbookContainer, child: WorkbookDescriptor) {
+  appendChildToContainer(container: WorkbookContainer, child: Descriptor) {
+    if (child.kind !== "Workbook") {
+      throw new Error("Only workbook descriptors can be attached to the root container.");
+    }
     container.root = child;
     pushCollectedOps(container, () => collectMountOps(child));
     if (container.lastError === null) {
@@ -215,7 +280,10 @@ export const workbookHostConfig = {
       container.shouldSyncSheetOrders = true;
     }
   },
-  insertInContainerBefore(container: WorkbookContainer, child: WorkbookDescriptor) {
+  insertInContainerBefore(container: WorkbookContainer, child: Descriptor) {
+    if (child.kind !== "Workbook") {
+      throw new Error("Only workbook descriptors can be attached to the root container.");
+    }
     container.root = child;
     pushCollectedOps(container, () => collectMountOps(child));
     if (container.lastError === null) {
@@ -230,7 +298,10 @@ export const workbookHostConfig = {
       container.shouldSyncSheetOrders = true;
     }
   },
-  removeChildFromContainer(container: WorkbookContainer, child: WorkbookDescriptor) {
+  removeChildFromContainer(container: WorkbookContainer, child: Descriptor) {
+    if (child.kind !== "Workbook") {
+      throw new Error("Only workbook descriptors can be removed from the root container.");
+    }
     pushCollectedOps(container, () => collectDeleteOps(child));
     if (container.root === child) {
       container.root = null;
@@ -248,8 +319,11 @@ export const workbookHostConfig = {
     const container = containerFor(instance);
 
     if (instance.kind === "Workbook") {
-      instance.props = newProps as WorkbookProps;
-      if ((previousProps as WorkbookProps).name !== instance.props.name) {
+      if (!isWorkbookProps(previousProps) || !isWorkbookProps(newProps)) {
+        throw new Error("Workbook updates require workbook props.");
+      }
+      instance.props = newProps;
+      if (previousProps.name !== instance.props.name) {
         container.pendingOps.push({
           kind: "upsertWorkbook",
           name: instance.props.name ?? "Workbook"
@@ -259,11 +333,14 @@ export const workbookHostConfig = {
     }
 
     if (instance.kind === "Sheet") {
-      instance.props = newProps as SheetProps;
+      if (!isSheetProps(previousProps) || !isSheetProps(newProps)) {
+        throw new Error("Sheet updates require sheet props.");
+      }
+      instance.props = newProps;
       const workbook = instance.parent;
       const order = workbook?.kind === "Workbook" ? workbook.children.indexOf(instance) : 0;
-      const previousName = (previousProps as SheetProps).name;
-      if ((previousProps as SheetProps).name !== instance.props.name) {
+      const previousName = previousProps.name;
+      if (previousProps.name !== instance.props.name) {
         container.pendingOps.push({ kind: "deleteSheet", name: previousName });
         container.pendingOps.push({
           kind: "upsertSheet",
@@ -278,23 +355,26 @@ export const workbookHostConfig = {
       return;
     }
 
-    instance.props = newProps as CellProps;
+    if (!isCellProps(previousProps) || !isCellProps(newProps)) {
+      throw new Error("Cell updates require cell props.");
+    }
+    instance.props = newProps;
     const sheet = instance.parent;
     if (sheet?.kind !== "Sheet") {
       return;
     }
-    if ((previousProps as CellProps).addr !== instance.props.addr) {
+    if (previousProps.addr !== instance.props.addr) {
       container.pendingOps.push({
         kind: "deleteCell",
         sheetName: sheet.props.name,
-        addr: (previousProps as CellProps).addr
+        addr: previousProps.addr
       });
     }
     if (
-      (previousProps as CellProps).addr !== instance.props.addr ||
-      (previousProps as CellProps).value !== instance.props.value ||
-      (previousProps as CellProps).formula !== instance.props.formula ||
-      (previousProps as CellProps).format !== instance.props.format
+      previousProps.addr !== instance.props.addr ||
+      previousProps.value !== instance.props.value ||
+      previousProps.formula !== instance.props.formula ||
+      previousProps.format !== instance.props.format
     ) {
       pushCellUpsert(container.pendingOps, sheet.props.name, instance.props);
     }
@@ -314,4 +394,4 @@ export const workbookHostConfig = {
   }
 };
 
-export const WorkbookReconciler = Reconciler(workbookHostConfig as never);
+export const WorkbookReconciler = Reconciler(workbookHostConfig);

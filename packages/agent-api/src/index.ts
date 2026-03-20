@@ -41,6 +41,27 @@ export type AgentFrame =
   | { kind: "response"; response: AgentResponse }
   | { kind: "event"; event: AgentEvent };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAgentFrame(value: unknown): value is AgentFrame {
+  const kind = isRecord(value) ? value["kind"] : undefined;
+  if (typeof kind !== "string") {
+    return false;
+  }
+  switch (kind) {
+    case "request":
+      return isRecord(value) && "request" in value;
+    case "response":
+      return isRecord(value) && "response" in value;
+    case "event":
+      return isRecord(value) && "event" in value;
+    default:
+      return false;
+  }
+}
+
 export function encodeAgentFrame(frame: AgentFrame): Uint8Array {
   const payload = textEncoder.encode(JSON.stringify(frame));
   const output = new Uint8Array(10 + payload.byteLength);
@@ -69,7 +90,11 @@ export function decodeAgentFrame(bytes: Uint8Array | ArrayBuffer): AgentFrame {
   if (payloadLength !== data.byteLength - 10) {
     throw new Error("Agent frame length mismatch");
   }
-  return JSON.parse(textDecoder.decode(data.subarray(10))) as AgentFrame;
+  const parsed: unknown = JSON.parse(textDecoder.decode(data.subarray(10)));
+  if (!isAgentFrame(parsed)) {
+    throw new Error("Invalid agent frame payload");
+  }
+  return parsed;
 }
 
 export function encodeStdioMessage(frame: AgentFrame): Uint8Array {

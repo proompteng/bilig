@@ -43,6 +43,49 @@ interface RawKernelExports {
   getMemberCapacity(): number;
 }
 
+function isRawKernelExports(value: unknown): value is RawKernelExports {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const requiredKeys = [
+    "memory",
+    "__new",
+    "__pin",
+    "__unpin",
+    "init",
+    "ensureCellCapacity",
+    "ensureFormulaCapacity",
+    "ensureConstantCapacity",
+    "ensureRangeCapacity",
+    "ensureMemberCapacity",
+    "uploadPrograms",
+    "uploadConstants",
+    "uploadRangeMembers",
+    "uploadStringLengths",
+    "uploadStrings",
+    "writeCells",
+    "evalBatch",
+    "getTagsPtr",
+    "getNumbersPtr",
+    "getStringIdsPtr",
+    "getErrorsPtr",
+    "getProgramOffsetsPtr",
+    "getProgramLengthsPtr",
+    "getConstantOffsetsPtr",
+    "getConstantLengthsPtr",
+    "getConstantArenaPtr",
+    "getRangeOffsetsPtr",
+    "getRangeLengthsPtr",
+    "getRangeMembersPtr",
+    "getCellCapacity",
+    "getFormulaCapacity",
+    "getConstantCapacity",
+    "getRangeCapacity",
+    "getMemberCapacity"
+  ] as const;
+  return requiredKeys.every((key) => key in value);
+}
+
 interface LoweredArraySpec<T extends TypedArrayValue> {
   align: number;
   classId: number;
@@ -470,5 +513,8 @@ async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSour
 
 export async function createKernel(): Promise<SpreadsheetKernel> {
   const { instance } = await loadWasmModule();
-  return new KernelHandle(instance.exports as unknown as RawKernelExports);
+  if (!isRawKernelExports(instance.exports)) {
+    throw new Error("WASM exports did not match the kernel contract");
+  }
+  return new KernelHandle(instance.exports);
 }
