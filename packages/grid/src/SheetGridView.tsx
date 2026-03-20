@@ -259,6 +259,14 @@ function isPrintableKey(event: GridKeyEventArgs): boolean {
   return event.key.length === 1;
 }
 
+function isNumericEditorSeed(value: string): boolean {
+  const normalized = value.trim();
+  if (normalized.length === 0 || normalized.startsWith("=")) {
+    return false;
+  }
+  return /^-?\d+(\.\d+)?$/.test(normalized);
+}
+
 function isCellEditorInputFocused(): boolean {
   if (typeof document === "undefined") {
     return false;
@@ -1047,6 +1055,11 @@ export function SheetGridView({
     };
   }, [isEditingCell, overlayBounds]);
 
+  const editorTextAlign = useMemo<"left" | "right">(
+    () => (isNumericEditorSeed(editorValue) ? "right" : "left"),
+    [editorValue]
+  );
+
   const gridTheme = useMemo(
     () => ({
       accentColor: "#1f7a43",
@@ -1672,6 +1685,7 @@ export function SheetGridView({
           onCommit={onCommitEdit}
           resolvedValue={resolvedValue}
           selectionBehavior={editorSelectionBehavior}
+          textAlign={editorTextAlign}
           value={editorValue}
           style={overlayStyle}
         />

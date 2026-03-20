@@ -305,7 +305,8 @@ input {
   border: 0;
   border-radius: 0;
   padding: 0 8px;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .workbook-shell-product .name-box-shell input,

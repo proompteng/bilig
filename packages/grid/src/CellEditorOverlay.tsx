@@ -6,6 +6,7 @@ interface CellEditorOverlayProps {
   value: string;
   resolvedValue: string;
   selectionBehavior?: "select-all" | "caret-end";
+  textAlign?: "left" | "right";
   onChange(next: string): void;
   onCommit(movement?: EditMovement): void;
   onCancel(): void;
@@ -17,6 +18,7 @@ export function CellEditorOverlay({
   value,
   resolvedValue: _resolvedValue,
   selectionBehavior = "select-all",
+  textAlign = "left",
   onChange,
   onCommit,
   onCancel,
@@ -66,6 +68,7 @@ export function CellEditorOverlay({
         aria-label={`${label} editor`}
         data-testid="cell-editor-input"
         ref={inputRef}
+        style={{ textAlign }}
         value={value}
         onBlur={() => {
           if (!blurArmedRef.current) {

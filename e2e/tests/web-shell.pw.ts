@@ -456,6 +456,27 @@ test("web app preserves multi-digit numeric type-to-replace input", async ({ pag
   await expect(cellEditor).toHaveValue("4");
 });
 
+test("web app right-aligns numeric in-cell editing like numeric view state", async ({ page }) => {
+  await page.goto("/");
+
+  const grid = page.getByTestId("sheet-grid");
+  const cellEditor = page.getByTestId("cell-editor-input");
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+  await page.keyboard.type("123");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("123");
+  await expect(cellEditor).toHaveCSS("text-align", "right");
+
+  await page.keyboard.press("Escape");
+  await clickProductCell(page, 1, 0);
+  await grid.press("h");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("h");
+  await expect(cellEditor).toHaveCSS("text-align", "left");
+});
+
 test("web app supports F2 edit in the product shell", async ({ page }) => {
   await page.goto("/");
 
