@@ -63,6 +63,8 @@ import {
 } from "./gridKeyboard.js";
 import { resolveGridKeyAction } from "./gridKeyActions.js";
 import { getEditorTextAlign, getGridTheme, getOverlayStyle } from "./gridPresentation.js";
+import { resolveBodyDoubleClickIntent, resolveHeaderClickIntent, shouldSkipGridSelectionChange } from "./gridEventPolicy.js";
+import { buildInternalClipboardRange, matchesInternalClipboardPaste, type InternalClipboardRange } from "./gridInternalClipboard.js";
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
 export type EditSelectionBehavior = "select-all" | "caret-end";
@@ -86,15 +88,6 @@ interface SheetGridViewProps {
   onFillRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onCopyRange(sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onPaste(addr: string, values: readonly (readonly string[])[]): void;
-}
-
-interface InternalClipboardRange {
-  sourceStartAddress: string;
-  sourceEndAddress: string;
-  signature: string;
-  plainText: string;
-  rowCount: number;
-  colCount: number;
 }
 
 function isCellEditorInputFocused(): boolean {
@@ -374,13 +367,10 @@ export function SheetGridView({
       }
 
       const internalClipboard = internalClipboardRef.current;
-      const signature = serializeClipboardMatrix(values);
-      if (
-        internalClipboard
-        && internalClipboard.signature === signature
-        && internalClipboard.rowCount === values.length
-        && internalClipboard.colCount === (values[0]?.length ?? 0)
-      ) {
+      if (matchesInternalClipboardPaste(internalClipboard, values)) {
+        if (!internalClipboard) {
+          return;
+        }
         onCopyRange(
           internalClipboard.sourceStartAddress,
           internalClipboard.sourceEndAddress,
@@ -411,14 +401,7 @@ export function SheetGridView({
       )
     );
 
-    internalClipboardRef.current = {
-      sourceStartAddress: formatAddress(range.y, range.x),
-      sourceEndAddress: formatAddress(range.y + range.height - 1, range.x + range.width - 1),
-      signature: serializeClipboardMatrix(values),
-      plainText: serializeClipboardPlainText(values),
-      rowCount: range.height,
-      colCount: range.width
-    };
+    internalClipboardRef.current = buildInternalClipboardRange(range, values);
   }, [engine, gridSelection, sheetName]);
 
   useEffect(() => {
@@ -707,45 +690,40 @@ export function SheetGridView({
         }}
         onKeyDown={(event) => handleGridKey(event)}
         onDoubleClickCapture={(event) => {
-          if (variant !== "product") {
-            return;
-          }
           const activeGeometry = resolvePointerGeometry(visibleRegion);
           if (!activeGeometry) {
             return;
           }
-          const resizeTarget = resolveColumnResizeTarget(
-            event.clientX,
-            event.clientY,
-            visibleRegion,
-            activeGeometry,
-            columnWidths,
-            gridMetrics.columnWidth
-          );
-          if (resizeTarget === null) {
-            const bodyCell = resolvePointerCell(
+          const doubleClickIntent = resolveBodyDoubleClickIntent({
+            variant,
+            resizeTarget: resolveColumnResizeTarget(
+              event.clientX,
+              event.clientY,
+              visibleRegion,
+              activeGeometry,
+              columnWidths,
+              gridMetrics.columnWidth
+            ),
+            bodyCell: resolvePointerCell(
               event.clientX,
               event.clientY,
               visibleRegion,
               activeGeometry
-            );
-            if (!sameItem(bodyCell, lastBodyClickCellRef.current)) {
-              return;
-            }
-            if (bodyCell === null) {
-              return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            const editAddress = formatAddress(bodyCell[1], bodyCell[0]);
-            setGridSelection(createGridSelection(bodyCell[0], bodyCell[1]));
+            ),
+            lastBodyClickCell: lastBodyClickCellRef.current
+          });
+          if (doubleClickIntent.kind === "ignore") {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          if (doubleClickIntent.kind === "edit-cell") {
+            const editAddress = formatAddress(doubleClickIntent.cell[1], doubleClickIntent.cell[0]);
+            setGridSelection(createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1]));
             onSelect(editAddress);
             beginEditAt(editAddress);
             return;
           }
-
-          event.preventDefault();
-          event.stopPropagation();
           columnResizeActiveRef.current = false;
           pendingPointerCellRef.current = null;
           dragAnchorCellRef.current = null;
@@ -755,7 +733,7 @@ export function SheetGridView({
           dragDidMoveRef.current = false;
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
-          applyColumnWidth(resizeTarget, computeAutofitColumnWidth(resizeTarget));
+          applyColumnWidth(doubleClickIntent.columnIndex, computeAutofitColumnWidth(doubleClickIntent.columnIndex));
         }}
         onPointerMoveCapture={(event) => {
           if (columnResizeActiveRef.current) {
@@ -1006,12 +984,20 @@ export function SheetGridView({
           }}
           onFillPattern={handleFillPattern}
           onHeaderClicked={(col, event) => {
-            if (variant === "product" && event.isEdge && event.isDoubleClick) {
-              applyColumnWidth(col, computeAutofitColumnWidth(col));
-              columnResizeActiveRef.current = false;
+            const headerClickIntent = resolveHeaderClickIntent({
+              variant,
+              isEdge: event.isEdge,
+              isDoubleClick: Boolean(event.isDoubleClick),
+              columnResizeActive: columnResizeActiveRef.current,
+              columnIndex: col,
+              selectedRow: selectedCell.row
+            });
+            if (headerClickIntent.kind === "ignore") {
               return;
             }
-            if (columnResizeActiveRef.current) {
+            if (headerClickIntent.kind === "autofit-column") {
+              applyColumnWidth(headerClickIntent.columnIndex, computeAutofitColumnWidth(headerClickIntent.columnIndex));
+              columnResizeActiveRef.current = false;
               return;
             }
             ignoreNextPointerSelectionRef.current = true;
@@ -1025,29 +1011,28 @@ export function SheetGridView({
             if (isEditingCell) {
               onCommitEdit();
             }
-            setGridSelection(createColumnSelection(col, selectedCell.row));
-            onSelect(formatAddress(selectedCell.row, col));
+            setGridSelection(createColumnSelection(headerClickIntent.columnIndex, headerClickIntent.selectedRow));
+            onSelect(headerClickIntent.addr);
             focusGrid();
             window.requestAnimationFrame(() => {
               ignoreNextPointerSelectionRef.current = false;
             });
           }}
           onGridSelectionChange={(nextSelection) => {
-            if (columnResizeActiveRef.current) {
-              return;
-            }
-            if (postDragSelectionExpiryRef.current > 0) {
-              if (window.performance.now() <= postDragSelectionExpiryRef.current) {
-                postDragSelectionExpiryRef.current = 0;
-                return;
-              }
+            const selectionPolicy = shouldSkipGridSelectionChange({
+              columnResizeActive: columnResizeActiveRef.current,
+              postDragSelectionExpiry: postDragSelectionExpiryRef.current,
+              now: window.performance.now(),
+              ignoreNextPointerSelection: ignoreNextPointerSelectionRef.current,
+              hasDragViewport: dragViewportRef.current !== null
+            });
+            if (selectionPolicy.clearPostDragSelectionExpiry) {
               postDragSelectionExpiryRef.current = 0;
             }
-            if (ignoreNextPointerSelectionRef.current) {
+            if (selectionPolicy.consumeIgnoreNextPointerSelection) {
               ignoreNextPointerSelectionRef.current = false;
-              return;
             }
-            if (dragViewportRef.current) {
+            if (selectionPolicy.skip) {
               return;
             }
             const resolvedSelection = resolveSelectionChange({
