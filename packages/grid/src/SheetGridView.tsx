@@ -46,6 +46,19 @@ import {
   type PointerGeometry,
   type VisibleRegionState
 } from "./gridPointer.js";
+import {
+  parseClipboardPlainText,
+  serializeClipboardMatrix,
+  serializeClipboardPlainText
+} from "./gridClipboard.js";
+import {
+  isClipboardShortcut,
+  isHandledGridKey,
+  isNavigationKey,
+  isNumericEditorSeed,
+  isPrintableKey,
+  normalizeKeyboardKey
+} from "./gridKeyboard.js";
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
 export type EditSelectionBehavior = "select-all" | "caret-end";
@@ -80,64 +93,12 @@ interface InternalClipboardRange {
   colCount: number;
 }
 
-function isPrintableKey(event: GridKeyEventArgs): boolean {
-  if (event.ctrlKey || event.metaKey || event.altKey) {
-    return false;
-  }
-  return event.key.length === 1;
-}
-
-function normalizeKeyboardKey(key: string, code?: string): string {
-  if (code?.startsWith("Numpad")) {
-    const suffix = code.slice("Numpad".length);
-    if (/^\d$/.test(suffix)) {
-      return suffix;
-    }
-    if (suffix === "Decimal") {
-      return ".";
-    }
-    if (suffix === "Add") {
-      return "+";
-    }
-    if (suffix === "Subtract") {
-      return "-";
-    }
-    if (suffix === "Multiply") {
-      return "*";
-    }
-    if (suffix === "Divide") {
-      return "/";
-    }
-  }
-  return key;
-}
-
-function isNumericEditorSeed(value: string): boolean {
-  const normalized = value.trim();
-  if (normalized.length === 0 || normalized.startsWith("=")) {
-    return false;
-  }
-  return /^-?\d+(\.\d+)?$/.test(normalized);
-}
-
 function isCellEditorInputFocused(): boolean {
   if (typeof document === "undefined") {
     return false;
   }
   const activeElement = document.activeElement;
   return activeElement instanceof HTMLInputElement && activeElement.dataset.testid === "cell-editor-input";
-}
-
-function isNavigationKey(key: string): boolean {
-  return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
-}
-
-function isClipboardShortcut(event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">): boolean {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey) {
-    return false;
-  }
-  const normalizedKey = event.key.toLowerCase();
-  return normalizedKey === "c" || normalizedKey === "x" || normalizedKey === "v";
 }
 
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
@@ -225,25 +186,6 @@ function cellToEditorSeed(snapshot: ReturnType<typeof selectors.selectCellSnapsh
     return snapshot.input ? "TRUE" : "FALSE";
   }
   return String(snapshot.input);
-}
-
-function serializeClipboardMatrix(values: readonly (readonly string[])[]): string {
-  return values.map((row) => row.join("\u001f")).join("\u001e");
-}
-
-function serializeClipboardPlainText(values: readonly (readonly string[])[]): string {
-  return values.map((row) => row.join("\t")).join("\n");
-}
-
-function parseClipboardPlainText(rawText: string): readonly (readonly string[])[] {
-  if (rawText.length === 0) {
-    return [];
-  }
-  return rawText
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((row) => row.split("\t"));
 }
 
 export function SheetGridView({
@@ -715,26 +657,12 @@ export function SheetGridView({
         return;
       }
 
-      if (
-        !isPrintableKey({
-          altKey: event.altKey,
-          ctrlKey: event.ctrlKey,
-          key: normalizedKey,
-          metaKey: event.metaKey
-        } as GridKeyEventArgs)
-        && !isClipboardShortcut({
-          altKey: event.altKey,
-          ctrlKey: event.ctrlKey,
-          key: normalizedKey,
-          metaKey: event.metaKey
-        })
-        && !isNavigationKey(normalizedKey)
-        && normalizedKey !== "Enter"
-        && normalizedKey !== "Tab"
-        && normalizedKey !== "F2"
-        && normalizedKey !== "Backspace"
-        && normalizedKey !== "Delete"
-      ) {
+      if (!isHandledGridKey({
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        key: normalizedKey,
+        metaKey: event.metaKey
+      })) {
         return;
       }
 
@@ -906,26 +834,12 @@ export function SheetGridView({
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
 
-          if (
-            !isPrintableKey({
-              altKey: event.altKey,
-              ctrlKey: event.ctrlKey,
-              key: normalizedKey,
-              metaKey: event.metaKey
-            } as GridKeyEventArgs)
-            && !isClipboardShortcut({
-              altKey: event.altKey,
-              ctrlKey: event.ctrlKey,
-              key: normalizedKey,
-              metaKey: event.metaKey
-            })
-            && !isNavigationKey(normalizedKey)
-            && normalizedKey !== "Enter"
-            && normalizedKey !== "Tab"
-            && normalizedKey !== "F2"
-            && normalizedKey !== "Backspace"
-            && normalizedKey !== "Delete"
-          ) {
+          if (!isHandledGridKey({
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            key: normalizedKey,
+            metaKey: event.metaKey
+          })) {
             return;
           }
 
