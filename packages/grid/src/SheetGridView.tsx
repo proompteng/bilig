@@ -259,6 +259,14 @@ function isPrintableKey(event: GridKeyEventArgs): boolean {
   return event.key.length === 1;
 }
 
+function isCellEditorInputFocused(): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+  const activeElement = document.activeElement;
+  return activeElement instanceof HTMLInputElement && activeElement.dataset.testid === "cell-editor-input";
+}
+
 function isNavigationKey(key: string): boolean {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
 }
@@ -470,6 +478,7 @@ export function SheetGridView({
   const activeSheetRef = useRef(sheetName);
   const columnResizeActiveRef = useRef(false);
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pendingTypeSeedRef = useRef<string | null>(null);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
@@ -573,6 +582,9 @@ export function SheetGridView({
       window.requestAnimationFrame(() => {
         focusGrid();
       });
+    }
+    if (isEditingCell) {
+      pendingTypeSeedRef.current = null;
     }
     wasEditingOverlayRef.current = isEditingCell;
   }, [focusGrid, isEditingCell]);
@@ -833,10 +845,23 @@ export function SheetGridView({
       cancel?: () => void;
     }) => {
       if (isEditingCell) {
+        if (
+          event.key.length === 1
+          && !event.ctrlKey
+          && !event.metaKey
+          && !event.altKey
+          && !isCellEditorInputFocused()
+        ) {
+          const nextValue = `${editorValue}${event.key}`;
+          event.preventDefault();
+          event.cancel?.();
+          onEditorChange(nextValue);
+        }
         return;
       }
 
       if (event.key === "F2") {
+        pendingTypeSeedRef.current = null;
         event.preventDefault();
         event.cancel?.();
         beginSelectedEdit(undefined, "caret-end");
@@ -890,6 +915,7 @@ export function SheetGridView({
       }
 
       if (event.key === "Backspace" || event.key === "Delete") {
+        pendingTypeSeedRef.current = null;
         event.preventDefault();
         event.cancel?.();
         onClearCell();
@@ -934,12 +960,14 @@ export function SheetGridView({
         && !event.metaKey
         && !event.altKey
       ) {
+        const seededValue = `${pendingTypeSeedRef.current ?? ""}${event.key}`;
+        pendingTypeSeedRef.current = seededValue;
         event.preventDefault();
         event.cancel?.();
-        beginSelectedEdit(event.key, "caret-end");
+        beginSelectedEdit(seededValue, "caret-end");
       }
     },
-    [applyClipboardValues, beginSelectedEdit, captureInternalClipboardSelection, gridSelection.current?.cell, isEditingCell, onClearCell, onSelect, selectedCell.col, selectedCell.row]
+    [applyClipboardValues, beginSelectedEdit, captureInternalClipboardSelection, editorValue, gridSelection.current?.cell, isEditingCell, onClearCell, onEditorChange, onSelect, selectedCell.col, selectedCell.row]
   );
 
   useEffect(() => {

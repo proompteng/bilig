@@ -428,6 +428,34 @@ test("web app supports type-to-replace and Enter or Tab commit movement", async 
   await expect(nameBox).toHaveValue("A2");
 });
 
+test("web app preserves multi-digit numeric type-to-replace input", async ({ page }) => {
+  await page.goto("/");
+
+  const grid = page.getByTestId("sheet-grid");
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const cellEditor = page.getByTestId("cell-editor-input");
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+  await page.keyboard.type("123");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("123");
+  await page.keyboard.press("Enter");
+
+  await expect(nameBox).toHaveValue("A2");
+  await nameBox.fill("A1");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("123");
+
+  await clickProductCell(page, 1, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B1");
+  await grid.press("4");
+  await expect(cellEditor).toBeVisible();
+  await expect(cellEditor).toHaveValue("4");
+});
+
 test("web app supports F2 edit in the product shell", async ({ page }) => {
   await page.goto("/");
 
