@@ -1,6 +1,32 @@
 import React, { useEffect, useRef, type CSSProperties } from "react";
 import type { EditMovement } from "./SheetGridView.js";
 
+function normalizeNumpadKey(key: string, code: string): string | null {
+  if (!code.startsWith("Numpad")) {
+    return null;
+  }
+  const suffix = code.slice("Numpad".length);
+  if (/^\d$/.test(suffix)) {
+    return suffix;
+  }
+  if (suffix === "Decimal") {
+    return ".";
+  }
+  if (suffix === "Add") {
+    return "+";
+  }
+  if (suffix === "Subtract") {
+    return "-";
+  }
+  if (suffix === "Multiply") {
+    return "*";
+  }
+  if (suffix === "Divide") {
+    return "/";
+  }
+  return key.length === 1 ? key : null;
+}
+
 interface CellEditorOverlayProps {
   label: string;
   value: string;
@@ -78,6 +104,20 @@ export function CellEditorOverlay({
         }}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
+          const normalizedNumpadKey = normalizeNumpadKey(event.key, event.code);
+          if (normalizedNumpadKey !== null && event.key !== normalizedNumpadKey) {
+            event.preventDefault();
+            const input = event.currentTarget;
+            const selectionStart = input.selectionStart ?? value.length;
+            const selectionEnd = input.selectionEnd ?? value.length;
+            const nextValue = `${value.slice(0, selectionStart)}${normalizedNumpadKey}${value.slice(selectionEnd)}`;
+            onChange(nextValue);
+            window.requestAnimationFrame(() => {
+              const caretPosition = selectionStart + normalizedNumpadKey.length;
+              inputRef.current?.setSelectionRange(caretPosition, caretPosition);
+            });
+            return;
+          }
           if (event.key === "Enter") {
             event.preventDefault();
             commit([0, event.shiftKey ? -1 : 1]);

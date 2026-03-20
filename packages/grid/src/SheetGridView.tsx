@@ -259,6 +259,31 @@ function isPrintableKey(event: GridKeyEventArgs): boolean {
   return event.key.length === 1;
 }
 
+function normalizeKeyboardKey(key: string, code?: string): string {
+  if (code?.startsWith("Numpad")) {
+    const suffix = code.slice("Numpad".length);
+    if (/^\d$/.test(suffix)) {
+      return suffix;
+    }
+    if (suffix === "Decimal") {
+      return ".";
+    }
+    if (suffix === "Add") {
+      return "+";
+    }
+    if (suffix === "Subtract") {
+      return "-";
+    }
+    if (suffix === "Multiply") {
+      return "*";
+    }
+    if (suffix === "Divide") {
+      return "/";
+    }
+  }
+  return key;
+}
+
 function isNumericEditorSeed(value: string): boolean {
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.startsWith("=")) {
@@ -980,6 +1005,7 @@ export function SheetGridView({
 
   useEffect(() => {
     const handleWindowKeyDown = (event: KeyboardEvent) => {
+      const normalizedKey = normalizeKeyboardKey(event.key, event.code);
       const activeElement = document.activeElement;
       if (
         activeElement instanceof HTMLInputElement
@@ -1004,21 +1030,21 @@ export function SheetGridView({
         !isPrintableKey({
           altKey: event.altKey,
           ctrlKey: event.ctrlKey,
-          key: event.key,
+          key: normalizedKey,
           metaKey: event.metaKey
         } as GridKeyEventArgs)
         && !isClipboardShortcut({
           altKey: event.altKey,
           ctrlKey: event.ctrlKey,
-          key: event.key,
+          key: normalizedKey,
           metaKey: event.metaKey
         })
-        && !isNavigationKey(event.key)
-        && event.key !== "Enter"
-        && event.key !== "Tab"
-        && event.key !== "F2"
-        && event.key !== "Backspace"
-        && event.key !== "Delete"
+        && !isNavigationKey(normalizedKey)
+        && normalizedKey !== "Enter"
+        && normalizedKey !== "Tab"
+        && normalizedKey !== "F2"
+        && normalizedKey !== "Backspace"
+        && normalizedKey !== "Delete"
       ) {
         return;
       }
@@ -1029,7 +1055,7 @@ export function SheetGridView({
           event.stopPropagation();
         },
         ctrlKey: event.ctrlKey,
-        key: event.key,
+        key: normalizedKey,
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
         preventDefault: () => event.preventDefault()
@@ -1180,6 +1206,7 @@ export function SheetGridView({
         data-default-column-width={String(gridMetrics.columnWidth)}
         data-testid="sheet-grid"
         onKeyDownCapture={(event) => {
+          const normalizedKey = normalizeKeyboardKey(event.key, event.code);
           ignoreNextPointerSelectionRef.current = false;
           pendingPointerCellRef.current = null;
           dragAnchorCellRef.current = null;
@@ -1194,21 +1221,21 @@ export function SheetGridView({
             !isPrintableKey({
               altKey: event.altKey,
               ctrlKey: event.ctrlKey,
-              key: event.key,
+              key: normalizedKey,
               metaKey: event.metaKey
             } as GridKeyEventArgs)
             && !isClipboardShortcut({
               altKey: event.altKey,
               ctrlKey: event.ctrlKey,
-              key: event.key,
+              key: normalizedKey,
               metaKey: event.metaKey
             })
-            && !isNavigationKey(event.key)
-            && event.key !== "Enter"
-            && event.key !== "Tab"
-            && event.key !== "F2"
-            && event.key !== "Backspace"
-            && event.key !== "Delete"
+            && !isNavigationKey(normalizedKey)
+            && normalizedKey !== "Enter"
+            && normalizedKey !== "Tab"
+            && normalizedKey !== "F2"
+            && normalizedKey !== "Backspace"
+            && normalizedKey !== "Delete"
           ) {
             return;
           }
@@ -1217,7 +1244,7 @@ export function SheetGridView({
             altKey: event.altKey,
             cancel: () => event.stopPropagation(),
             ctrlKey: event.ctrlKey,
-            key: event.key,
+            key: normalizedKey,
             metaKey: event.metaKey,
             shiftKey: event.shiftKey,
             preventDefault: () => event.preventDefault()
