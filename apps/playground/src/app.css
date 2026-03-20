@@ -307,6 +307,10 @@ input {
   padding: 0 8px;
   font-size: 12px;
   line-height: 1.2;
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+  background: transparent;
 }
 
 .workbook-shell-product .name-box-shell input,
@@ -588,7 +592,7 @@ input {
   align-items: stretch;
   padding: 0;
   border-radius: 0;
-  border: 2px solid var(--excel-green);
+  border: 1px solid var(--excel-green);
   background: #ffffff;
   box-shadow: none;
   overflow: hidden;
