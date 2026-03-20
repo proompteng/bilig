@@ -1,5 +1,5 @@
-type U32 = Uint32Array<ArrayBufferLike>;
-type I32 = Int32Array<ArrayBufferLike>;
+type U32 = Uint32Array;
+type I32 = Int32Array;
 
 export interface PackedCycleDetectionResult {
   cycleMembers: U32;

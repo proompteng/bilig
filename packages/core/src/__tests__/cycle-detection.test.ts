@@ -17,7 +17,7 @@ describe("CycleDetector", () => {
       (cellIndex, fn) => {
         const dependencies = graph.get(cellIndex) ?? [];
         for (let index = 0; index < dependencies.length; index += 1) {
-          fn(dependencies[index]!);
+          fn(dependencies[index]);
         }
       },
       (cellIndex) => graph.has(cellIndex)

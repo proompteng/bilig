@@ -12,7 +12,8 @@ function cellValueToAst(value: CellValue): FormulaNode | undefined {
       return { kind: "BooleanLiteral", value: value.value };
     case ValueTag.String:
       return { kind: "StringLiteral", value: value.value };
-    default:
+    case ValueTag.Empty:
+    case ValueTag.Error:
       return undefined;
   }
 }

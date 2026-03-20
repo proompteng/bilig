@@ -84,8 +84,9 @@ export class RangeRegistry {
       range.kind === "cells"
         ? materializeBoundedMembers(sheetId, cellRange, materializer)
         : materializeDynamicMembers(sheetId, cellRange, range.kind, materializer);
-    this.memberSlices[descriptor.index] = this.members.replace(this.members.empty(), memberIndices);
-    syncDescriptorMembers(descriptor, this.memberSlices[descriptor.index]!);
+    const memberSlice = this.members.replace(this.members.empty(), memberIndices);
+    this.memberSlices[descriptor.index] = memberSlice;
+    syncDescriptorMembers(descriptor, memberSlice);
     this.descriptors.push(descriptor);
     this.byKey.set(descriptorKey, descriptor.index);
 
@@ -118,7 +119,7 @@ export class RangeRegistry {
     const members = this.members.read(memberSlice);
     this.members.free(memberSlice);
     this.memberSlices[rangeIndex] = this.members.empty();
-    syncDescriptorMembers(descriptor, this.memberSlices[rangeIndex]!);
+    syncDescriptorMembers(descriptor, this.memberSlices[rangeIndex]);
     if (descriptor.dynamic) {
       const dynamic = this.dynamicBySheet.get(descriptor.sheetId);
       if (dynamic) {

@@ -1,7 +1,11 @@
-import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS, type FormulaRecord } from "@bilig/protocol";
+import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
-import { getBuiltin, hasBuiltin } from "./builtins.js";
+import { hasBuiltin } from "./builtins.js";
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected formula node: ${JSON.stringify(value)}`);
+}
 
 export interface BoundFormula {
   ast: FormulaNode;
@@ -91,6 +95,10 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
 
   function collectDeps(node: FormulaNode): void {
     switch (node.kind) {
+      case "NumberLiteral":
+      case "BooleanLiteral":
+      case "StringLiteral":
+        break;
       case "CellRef":
         deps.add(node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref);
         break;
@@ -111,7 +119,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         node.args.forEach(collectDeps);
         break;
       default:
-        break;
+        assertNever(node);
     }
   }
 

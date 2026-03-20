@@ -136,7 +136,7 @@ export function lexFormula(input: string): Token[] {
       "<": "lt"
     };
 
-    const kind = singleMap[char as keyof typeof singleMap];
+    const kind = singleMap[char];
     if (!kind) {
       throw new Error(`Unexpected token '${char}' in formula '${input}'`);
     }

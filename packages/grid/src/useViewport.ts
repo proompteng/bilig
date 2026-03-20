@@ -15,16 +15,13 @@ export function useSheetViewport(engine: SpreadsheetEngine, sheetName: string, v
     return addresses;
   }, [viewport]);
 
-  const revision = useSyncExternalStore(
+  useSyncExternalStore(
     (listener) => engine.subscribeCells(sheetName, watchedAddresses, listener),
     () => engine.getLastMetrics().batchId,
     () => engine.getLastMetrics().batchId
   );
 
-  return useMemo(
-    () => selectors.selectViewportCells(engine, sheetName, viewport),
-    [engine, revision, sheetName, viewport]
-  );
+  return selectors.selectViewportCells(engine, sheetName, viewport);
 }
 
 export const useViewport = useSheetViewport;

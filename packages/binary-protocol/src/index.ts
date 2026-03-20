@@ -228,22 +228,22 @@ function encodeLiteral(writer: BinaryWriter, literal: LiteralInput): void {
     return;
   }
 
-  switch (typeof literal) {
-    case "number":
-      writer.u8(1 satisfies LiteralTag);
-      writer.f64(literal);
-      return;
-    case "string":
-      writer.u8(2 satisfies LiteralTag);
-      writer.string(literal);
-      return;
-    case "boolean":
-      writer.u8(3 satisfies LiteralTag);
-      writer.bool(literal);
-      return;
-    default:
-      assertNever(literal);
+  if (typeof literal === "number") {
+    writer.u8(1 satisfies LiteralTag);
+    writer.f64(literal);
+    return;
   }
+  if (typeof literal === "string") {
+    writer.u8(2 satisfies LiteralTag);
+    writer.string(literal);
+    return;
+  }
+  if (typeof literal === "boolean") {
+    writer.u8(3 satisfies LiteralTag);
+    writer.bool(literal);
+    return;
+  }
+  throw new BinaryProtocolError(`Unsupported literal type: ${typeof literal}`);
 }
 
 function decodeLiteral(reader: BinaryReader): LiteralInput {

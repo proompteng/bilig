@@ -142,43 +142,6 @@ async function dragProductFillHandle(
   await page.mouse.up();
 }
 
-async function dragProductColumnDivider(
-  page: Parameters<typeof test>[0]["page"],
-  columnIndex: number,
-  deltaX: number
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const dividerX = grid.x + await getProductColumnLeft(page, columnIndex) + await getProductColumnWidth(page, columnIndex);
-  const y = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
-
-  await page.mouse.move(dividerX - 1, y);
-  await page.mouse.down();
-  await page.mouse.move(dividerX - 1 + deltaX, y, { steps: 8 });
-  await page.mouse.up();
-}
-
-async function doubleClickProductColumnDivider(
-  page: Parameters<typeof test>[0]["page"],
-  columnIndex: number
-) {
-  const gridLocator = page.getByTestId("sheet-grid");
-  await expect(gridLocator).toBeVisible();
-  const grid = await gridLocator.boundingBox();
-  if (!grid) {
-    throw new Error("sheet grid is not visible");
-  }
-
-  const dividerX = grid.x + await getProductColumnLeft(page, columnIndex) + await getProductColumnWidth(page, columnIndex);
-  const y = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2);
-  await page.mouse.dblclick(dividerX - 1, y);
-}
-
 async function clickProductBodyOffset(
   page: Parameters<typeof test>[0]["page"],
   offsetX: number,

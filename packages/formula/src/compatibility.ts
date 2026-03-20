@@ -91,14 +91,16 @@ const familyPrerequisites: Record<CompatibilityFamily, readonly string[]> = {
 
 function deriveWasmStatus(status: CompatibilityStatus): WasmCompatibilityStatus {
   switch (status) {
+    case "unsupported":
+    case "seeded":
+    case "implemented-js":
+      return "not-started";
     case "implemented-js-and-wasm-shadow":
       return "shadow";
     case "implemented-wasm-production":
       return "production";
     case "blocked":
       return "blocked";
-    default:
-      return "not-started";
   }
 }
 
@@ -261,7 +263,7 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
 ];
 
 export function getCompatibilityEntry(id: string): FormulaCompatibilityEntry | undefined {
-  return formulaCompatibilityRegistry.find((entry) => entry.id === id);
+  return formulaCompatibilityRegistry.find((compatibilityEntry) => compatibilityEntry.id === id);
 }
 
 export function isCompatibilityStatus(value: string): value is CompatibilityStatus {

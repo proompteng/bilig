@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import { useCell, useSelection } from "@bilig/grid";
+import { ValueTag } from "@bilig/protocol";
 
 describe("playground cell subscriptions", () => {
   it("rerenders a watched cell when its own value and format change", async () => {
@@ -15,7 +16,7 @@ describe("playground cell subscriptions", () => {
 
     const Probe = React.memo(function Probe() {
       const snapshot = useCell(engine, "Sheet1", "A1");
-      const value = snapshot.value.tag === 1 ? String(snapshot.value.value) : snapshot.value.tag;
+      const value = snapshot.value.tag === ValueTag.Number ? String(snapshot.value.value) : snapshot.value.tag;
       return <div data-testid="watched-cell">{`${value}|${snapshot.format ?? ""}`}</div>;
     });
 

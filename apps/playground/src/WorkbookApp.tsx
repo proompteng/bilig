@@ -15,7 +15,7 @@ import {
 } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { LiteralInput } from "@bilig/protocol";
-import { MAX_COLS, MAX_ROWS, formatErrorCode } from "@bilig/protocol";
+import { MAX_COLS, MAX_ROWS, ValueTag, formatErrorCode } from "@bilig/protocol";
 import { compactRelayEntries, type RelayEntry } from "./relay-queue.js";
 import {
   PLAYGROUND_PRESETS,
@@ -66,15 +66,15 @@ function toEditorValue(cell: ReturnType<typeof useCell>) {
 
 function toResolvedValue(cell: ReturnType<typeof useCell>) {
   switch (cell.value.tag) {
-    case 1:
+    case ValueTag.Number:
       return String(cell.value.value);
-    case 2:
+    case ValueTag.Boolean:
       return cell.value.value ? "TRUE" : "FALSE";
-    case 3:
+    case ValueTag.String:
       return cell.value.value;
-    case 4:
+    case ValueTag.Error:
       return formatErrorCode(cell.value.code);
-    default:
+    case ValueTag.Empty:
       return "";
   }
 }
@@ -163,7 +163,9 @@ async function settleRendererBoundary(operation: Promise<void>): Promise<void> {
   });
   await waitForTaskCycles();
   if (capturedError) {
-    throw capturedError instanceof Error ? capturedError : new Error(String(capturedError));
+    throw capturedError instanceof Error
+      ? capturedError
+      : new Error(typeof capturedError === "string" ? capturedError : JSON.stringify(capturedError));
   }
 }
 
@@ -266,7 +268,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
         if (!cancelled) {
           setReplicationReady(true);
         }
-        return;
+        return undefined;
       }
 
       const [primaryPersisted, mirrorPersisted, relayPersisted] = await Promise.all([
@@ -302,6 +304,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       if (!cancelled) {
         setReplicationReady(true);
       }
+      return undefined;
     });
 
     return () => {

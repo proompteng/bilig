@@ -32,9 +32,11 @@ export class WasmKernelFacade {
       .then((kernel) => {
         this.kernel = kernel;
         kernel.init(64, 64, 64, 64, 64);
+        return undefined;
       })
       .catch(() => {
         this.kernel = null;
+        return undefined;
       });
     return this.initPromise;
   }

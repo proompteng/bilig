@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 
@@ -17,7 +17,7 @@ function snapshotSignature(snapshot: CellSnapshot): string {
     case ValueTag.Error:
       valueKey = `e:${snapshot.value.code}`;
       break;
-    default:
+    case ValueTag.Empty:
       valueKey = "empty";
       break;
   }
@@ -38,11 +38,11 @@ export function useCell(engine: SpreadsheetEngine, sheetName: string, addr: stri
     return snapshotSignature(snapshot);
   };
 
-  const revision = useSyncExternalStore(
+  useSyncExternalStore(
     (listener) => engine.subscribeCell(sheetName, addr, listener),
     getRevision,
     getRevision
   );
 
-  return useMemo(() => selectors.selectCellSnapshot(engine, sheetName, addr), [addr, engine, revision, sheetName]);
+  return selectors.selectCellSnapshot(engine, sheetName, addr);
 }

@@ -8,7 +8,7 @@ describe("renderer components", () => {
       name: "book",
       children: [
         <Sheet name="Sheet1" key="ignored-1" />,
-        <Sheet name="Sheet2" />
+        <Sheet key="ignored-2" name="Sheet2" />
       ]
     });
     const workbookProps = workbookElement.props as { children?: React.ReactNode };
@@ -22,7 +22,7 @@ describe("renderer components", () => {
       name: "Sheet1",
       children: [
         <Cell addr="A1" value={10} key="ignored-a1" />,
-        <Cell addr="B1" formula="A1*2" />
+        <Cell addr="B1" formula="A1*2" key="ignored-b1" />
       ]
     });
     const sheetProps = sheetElement.props as { children?: React.ReactNode };

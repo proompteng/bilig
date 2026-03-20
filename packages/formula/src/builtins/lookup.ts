@@ -31,6 +31,9 @@ function toNumber(value: CellValue): number | undefined {
       return value.value ? 1 : 0;
     case ValueTag.Empty:
       return 0;
+    case ValueTag.String:
+    case ValueTag.Error:
+      return undefined;
     default:
       return undefined;
   }
@@ -52,6 +55,9 @@ function toBoolean(value: CellValue): boolean | undefined {
       return value.value !== 0;
     case ValueTag.Empty:
       return false;
+    case ValueTag.String:
+    case ValueTag.Error:
+      return undefined;
     default:
       return undefined;
   }

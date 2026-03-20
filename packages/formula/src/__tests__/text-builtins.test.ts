@@ -7,10 +7,10 @@ describe("text builtins", () => {
   it("matches the shared text fixture corpus", () => {
     for (const group of TEXT_FIXTURES) {
       const builtin = getTextBuiltin(group.builtin);
-      expect(builtin, `${group.builtin} should exist`).toBeTypeOf("function");
+      expect(builtin).toBeTypeOf("function");
 
       for (const testCase of group.cases) {
-        expect(builtin?.(...testCase.args), `${group.builtin}: ${testCase.name}`).toEqual(testCase.expected);
+        expect(builtin?.(...testCase.args)).toEqual(testCase.expected);
       }
     }
   });

@@ -109,24 +109,26 @@ export class CellStore {
   }
 
   getValue(index: number, stringLookup: (id: number) => string): CellValue {
-    switch (this.tags[index]) {
-      case ValueTag.Number:
-        return { tag: ValueTag.Number, value: this.numbers[index]! };
-      case ValueTag.Boolean:
-        return { tag: ValueTag.Boolean, value: this.numbers[index]! !== 0 };
-      case ValueTag.String:
-        return {
-          tag: ValueTag.String,
-          value: stringLookup(this.stringIds[index]!),
-          stringId: this.stringIds[index]!
-        };
-      case ValueTag.Error:
-        return { tag: ValueTag.Error, code: this.errors[index]! };
-      default:
-        return { tag: ValueTag.Empty };
+    const rawTag = this.tags[index];
+    const readValue = rawTag === undefined ? undefined : valueReaders[rawTag];
+    if (!readValue) {
+      return { tag: ValueTag.Empty };
     }
+    return readValue(this, index, stringLookup);
   }
 }
+
+const valueReaders: Array<((store: CellStore, index: number, stringLookup: (id: number) => string) => CellValue) | undefined> = [];
+
+valueReaders[ValueTag.Empty] = () => ({ tag: ValueTag.Empty });
+valueReaders[ValueTag.Number] = (store, index) => ({ tag: ValueTag.Number, value: store.numbers[index]! });
+valueReaders[ValueTag.Boolean] = (store, index) => ({ tag: ValueTag.Boolean, value: store.numbers[index]! !== 0 });
+valueReaders[ValueTag.String] = (store, index, stringLookup) => ({
+  tag: ValueTag.String,
+  value: stringLookup(store.stringIds[index]!),
+  stringId: store.stringIds[index]!
+});
+valueReaders[ValueTag.Error] = (store, index) => ({ tag: ValueTag.Error, code: store.errors[index]! });
 
 function grow(
   buffer: Uint8Array | Uint16Array | Uint32Array | Int32Array | Float64Array,

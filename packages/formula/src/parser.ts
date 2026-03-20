@@ -117,6 +117,13 @@ export function parseFormula(source: string): FormulaNode {
           return { kind: "RowRef", ref: `${node.value}` };
         }
         return undefined;
+      case "BooleanLiteral":
+      case "StringLiteral":
+      case "UnaryExpr":
+      case "BinaryExpr":
+      case "CallExpr":
+      case "RangeRef":
+        return undefined;
       default:
         return undefined;
     }
@@ -124,6 +131,12 @@ export function parseFormula(source: string): FormulaNode {
 
   function assertNoStandaloneAxisRefs(node: FormulaNode): void {
     switch (node.kind) {
+      case "NumberLiteral":
+      case "BooleanLiteral":
+      case "StringLiteral":
+      case "CellRef":
+      case "RangeRef":
+        return;
       case "ColumnRef":
       case "RowRef":
         throw new Error("Row and column references must appear inside a range");
@@ -136,8 +149,6 @@ export function parseFormula(source: string): FormulaNode {
         return;
       case "CallExpr":
         node.args.forEach(assertNoStandaloneAxisRefs);
-        return;
-      default:
         return;
     }
   }
@@ -185,11 +196,13 @@ export function parseFormula(source: string): FormulaNode {
         eat("lparen");
         const args: FormulaNode[] = [];
         if (current().kind !== "rparen") {
-          do {
+          while (true) {
             args.push(parseExpression());
-            if (current().kind !== "comma") break;
+            if (current().kind !== "comma") {
+              break;
+            }
             eat("comma");
-          } while (true);
+          }
         }
         eat("rparen");
         result = { kind: "CallExpr", callee: first.toUpperCase(), args } satisfies CallExprNode;

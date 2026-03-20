@@ -8,7 +8,6 @@ import {
   type CursorWatermarkFrame,
   type ErrorFrame,
   type HeartbeatFrame,
-  PROTOCOL_VERSION,
   type ProtocolFrame
 } from "@bilig/binary-protocol";
 import type { AgentEvent, AgentFrame, AgentResponse } from "@bilig/agent-api";
@@ -398,7 +397,7 @@ export class LocalWorkbookSessionManager {
 
   private readRange(engine: SpreadsheetEngine, range: CellRangeRef): CellValue[][] {
     const addresses = iterateRange(range);
-    const [startColPart, startRowPart] = splitAddress(range.startAddress);
+    const [startColPart] = splitAddress(range.startAddress);
     const [endColPart] = splitAddress(range.endAddress);
     const width = decodeColumn(endColPart) - decodeColumn(startColPart) + 1;
     const rows: CellValue[][] = [];

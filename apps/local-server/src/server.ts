@@ -36,7 +36,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
     return Buffer.from(encodeAgentFrame(response));
   });
 
-  app.get("/v1/documents/:documentId/ws", { websocket: true }, (socket, request) => {
+  app.get("/v1/documents/:documentId/ws", { websocket: true }, (socket, _request) => {
     const ws = normalizeWebSocket(socket);
     let documentId: string | null = null;
     const subscriberId = `browser:${Date.now()}:${Math.random().toString(36).slice(2)}`;
@@ -53,7 +53,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
           });
         }
         const responses = await sessionManager.handleSyncFrame(frame);
-        responses.forEach((frame) => ws.send(encodeFrame(frame)));
+        responses.forEach((responseFrame) => ws.send(encodeFrame(responseFrame)));
       } catch (error) {
         ws.send(
           encodeFrame({

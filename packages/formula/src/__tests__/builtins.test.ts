@@ -134,17 +134,17 @@ describe("formula builtins", () => {
       value: 4
     });
     expect(getBuiltin("ROUNDUP")?.(
-      { tag: ValueTag.Number, value: 3.141 },
+      { tag: ValueTag.Number, value: 3.145 },
       { tag: ValueTag.Number, value: 2 }
     )).toEqual({ tag: ValueTag.Number, value: 3.15 });
     expect(getBuiltin("ROUNDDOWN")?.(
-      { tag: ValueTag.Number, value: -3.141 },
+      { tag: ValueTag.Number, value: -3.145 },
       { tag: ValueTag.Number, value: 2 }
     )).toEqual({ tag: ValueTag.Number, value: -3.14 });
     expect(getBuiltin("ROUND")?.(
-      { tag: ValueTag.Number, value: 3.141 },
+      { tag: ValueTag.Number, value: 3.145 },
       { tag: ValueTag.Number, value: 2 }
-    )).toEqual({ tag: ValueTag.Number, value: 3.14 });
+    )).toEqual({ tag: ValueTag.Number, value: 3.15 });
     expect(getBuiltin("FLOOR")?.({ tag: ValueTag.Number, value: 3.6 })).toEqual({
       tag: ValueTag.Number,
       value: 3

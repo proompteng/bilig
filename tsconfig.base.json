@@ -13,23 +13,6 @@
     "declaration": true,
     "sourceMap": true,
     "composite": true,
-    "baseUrl": ".",
-    "types": ["node"],
-    "paths": {
-      "@bilig/protocol": ["packages/protocol/src/index.ts"],
-      "@bilig/formula": ["packages/formula/src/index.ts"],
-      "@bilig/formula/program-arena": ["packages/formula/src/program-arena.ts"],
-      "@bilig/core": ["packages/core/src/index.ts"],
-      "@bilig/crdt": ["packages/crdt/src/index.ts"],
-      "@bilig/binary-protocol": ["packages/binary-protocol/src/index.ts"],
-      "@bilig/worker-transport": ["packages/worker-transport/src/index.ts"],
-      "@bilig/agent-api": ["packages/agent-api/src/index.ts"],
-      "@bilig/storage-browser": ["packages/storage-browser/src/index.ts"],
-      "@bilig/storage-server": ["packages/storage-server/src/index.ts"],
-      "@bilig/excel-fixtures": ["packages/excel-fixtures/src/index.ts"],
-      "@bilig/wasm-kernel": ["packages/wasm-kernel/src/index.ts"],
-      "@bilig/renderer": ["packages/renderer/src/index.ts"],
-      "@bilig/grid": ["packages/grid/src/index.ts"]
-    }
+    "types": ["node"]
   }
 }

@@ -61,28 +61,28 @@ console.log(
   )
 );
 
-function validateManifestShape(packageLabel, manifest, failures) {
+function validateManifestShape(packageLabel, manifest, failureMessages) {
   const requiredFields = ["name", "version", "description", "license", "repository", "homepage", "bugs", "main", "types", "exports", "files"];
   for (const field of requiredFields) {
     if (!(field in manifest)) {
-      failures.push(`${packageLabel}: missing required manifest field "${field}"`);
+      failureMessages.push(`${packageLabel}: missing required manifest field "${field}"`);
     }
   }
 
   if (manifest.publishConfig?.access !== "public") {
-    failures.push(`${packageLabel}: publishConfig.access must be "public"`);
+    failureMessages.push(`${packageLabel}: publishConfig.access must be "public"`);
   }
 
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
-    failures.push(`${packageLabel}: files list must be present and non-empty`);
+    failureMessages.push(`${packageLabel}: files list must be present and non-empty`);
   }
 
   if ((packageLabel === "@bilig/grid" || packageLabel === "@bilig/renderer") && !manifest.peerDependencies?.react) {
-    failures.push(`${packageLabel}: react must be declared as a peer dependency`);
+    failureMessages.push(`${packageLabel}: react must be declared as a peer dependency`);
   }
 }
 
-function validateTarballContents(packageLabel, manifest, tarEntries, failures) {
+function validateTarballContents(packageLabel, manifest, tarEntries, failureMessages) {
   const requiredEntries = new Set(["package/package.json", "package/README.md", "package/LICENSE"]);
 
   if (typeof manifest.main === "string") {
@@ -99,27 +99,27 @@ function validateTarballContents(packageLabel, manifest, tarEntries, failures) {
 
   for (const requiredEntry of requiredEntries) {
     if (!tarEntries.includes(requiredEntry)) {
-      failures.push(`${packageLabel}: tarball is missing ${requiredEntry}`);
+      failureMessages.push(`${packageLabel}: tarball is missing ${requiredEntry}`);
     }
   }
 
   for (const entry of tarEntries) {
     if (entry.includes("__tests__")) {
-      failures.push(`${packageLabel}: tarball must not contain test artifacts (${entry})`);
+      failureMessages.push(`${packageLabel}: tarball must not contain test artifacts (${entry})`);
     }
     if (entry.endsWith(".tsbuildinfo")) {
-      failures.push(`${packageLabel}: tarball must not contain tsbuildinfo (${entry})`);
+      failureMessages.push(`${packageLabel}: tarball must not contain tsbuildinfo (${entry})`);
     }
     if (entry.startsWith("package/src/")) {
-      failures.push(`${packageLabel}: tarball must not contain source files (${entry})`);
+      failureMessages.push(`${packageLabel}: tarball must not contain source files (${entry})`);
     }
   }
 }
 
-function validatePackedManifest(packageLabel, packedManifest, failures) {
+function validatePackedManifest(packageLabel, packedManifest, failureMessages) {
   const serialized = JSON.stringify(packedManifest);
   if (serialized.includes("workspace:*")) {
-    failures.push(`${packageLabel}: packed manifest still contains workspace:* dependency ranges`);
+    failureMessages.push(`${packageLabel}: packed manifest still contains workspace:* dependency ranges`);
   }
 }
 

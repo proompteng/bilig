@@ -148,6 +148,9 @@ function entityKeyForOp(op: EngineOp): string {
 
 function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, OpOrder>): OpOrder | undefined {
   switch (op.kind) {
+    case "upsertWorkbook":
+    case "deleteSheet":
+      return undefined;
     case "setCellValue":
     case "setCellFormula":
     case "setCellFormat":
@@ -155,8 +158,6 @@ function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, O
       return latestSheetDeletes.get(op.sheetName);
     case "upsertSheet":
       return latestSheetDeletes.get(op.name);
-    default:
-      return undefined;
   }
 }
 

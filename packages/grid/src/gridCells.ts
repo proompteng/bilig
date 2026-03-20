@@ -12,12 +12,12 @@ export function cellToEditorSeed(snapshot: Pick<CellSnapshot, "formula" | "input
         return String(snapshot.value.value);
       case ValueTag.Boolean:
         return snapshot.value.value ? "TRUE" : "FALSE";
+      case ValueTag.Empty:
+        return "";
       case ValueTag.String:
         return snapshot.value.value;
       case ValueTag.Error:
         return formatErrorCode(snapshot.value.code);
-      default:
-        return "";
     }
   }
   if (typeof snapshot.input === "boolean") {
@@ -66,7 +66,7 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
         readonly: false,
         copyData: snapshot.formula ? rawValue : snapshot.value.value
       };
-    default:
+    case ValueTag.Empty:
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,

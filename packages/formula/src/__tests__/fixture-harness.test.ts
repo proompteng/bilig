@@ -23,13 +23,13 @@ const executableDateTimeFixtures = (excelDateTimeFixtureSuite.cases ?? []).filte
 describe("excel fixture harness", () => {
   it("executes implemented canonical formula fixtures through the JS evaluator", () => {
     for (const fixture of executableFixtures) {
-      expect(evaluateFixture(fixture), fixture.id).toEqual(expectedValueToCellValue(fixture.outputs[0]!.expected));
+      expect(evaluateFixture(fixture)).toEqual(expectedValueToCellValue(firstOutput(fixture).expected));
     }
   });
 
   it("executes implemented date-time edge fixtures through the JS evaluator", () => {
     for (const fixture of executableDateTimeFixtures) {
-      expect(evaluateFixture(fixture), fixture.id).toEqual(expectedValueToCellValue(fixture.outputs[0]!.expected));
+      expect(evaluateFixture(fixture)).toEqual(expectedValueToCellValue(firstOutput(fixture).expected));
     }
   });
 
@@ -48,7 +48,7 @@ describe("excel fixture harness", () => {
     });
 
     expect(randomSpy).toHaveBeenCalled();
-    expect(value).toEqual(expectedValueToCellValue(randFixture!.outputs[0]!.expected));
+    expect(value).toEqual(expectedValueToCellValue(firstOutput(randFixture).expected));
   });
 
   it("executes implemented volatile TODAY and NOW fixtures against the captured UTC timestamp", () => {
@@ -71,8 +71,8 @@ describe("excel fixture harness", () => {
       resolveRange: () => []
     };
 
-    expect(evaluatePlan(todayCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(todayFixture!.outputs[0]!.expected));
-    expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(nowFixture!.outputs[0]!.expected));
+    expect(evaluatePlan(todayCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(firstOutput(todayFixture).expected));
+    expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(firstOutput(nowFixture).expected));
   });
 
   it("executes the seeded logical backlog fixtures through the JS evaluator once they are promoted", () => {
@@ -84,8 +84,8 @@ describe("excel fixture harness", () => {
     expect(getCompatibilityEntry("logical:if-condition-error")?.status).toBe("implemented-js");
     expect(getCompatibilityEntry("logical:ifna-catches-na-only")?.status).toBe("implemented-js");
 
-    expect(evaluateFixture(ifFixture!)).toEqual(expectedValueToCellValue(ifFixture!.outputs[0]!.expected));
-    expect(evaluateFixture(ifnaFixture!)).toEqual(expectedValueToCellValue(ifnaFixture!.outputs[0]!.expected));
+    expect(evaluateFixture(ifFixture)).toEqual(expectedValueToCellValue(firstOutput(ifFixture).expected));
+    expect(evaluateFixture(ifnaFixture)).toEqual(expectedValueToCellValue(firstOutput(ifnaFixture).expected));
   });
 });
 
@@ -123,17 +123,29 @@ function evaluateFixture(fixture: { formula: string; inputs: { address: string; 
   });
 }
 
+function firstOutput(fixture: { outputs: { expected: ExcelExpectedValue }[] }): { expected: ExcelExpectedValue } {
+  expect(fixture.outputs).toHaveLength(1);
+  return fixture.outputs[0];
+}
+
 function literalToCellValue(input: LiteralInput): CellValue {
   if (input === null) {
     return { tag: ValueTag.Empty };
   }
-  switch (typeof input) {
+  const inputType = typeof input;
+  switch (inputType) {
     case "number":
       return { tag: ValueTag.Number, value: input };
     case "boolean":
       return { tag: ValueTag.Boolean, value: input };
     case "string":
       return { tag: ValueTag.String, value: input, stringId: 0 };
+    case "bigint":
+    case "function":
+    case "object":
+    case "symbol":
+    case "undefined":
+      throw new Error(`Unsupported literal input type: ${inputType}`);
   }
 }
 

@@ -27,6 +27,10 @@ export function translateFormulaReferences(source: string, rowDelta: number, col
 
 function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): FormulaNode {
   switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+      return node;
     case "CellRef":
       return {
         ...node,
@@ -74,8 +78,6 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
         ...node,
         args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta))
       };
-    default:
-      return node;
   }
 }
 

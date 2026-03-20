@@ -25,10 +25,6 @@ function booleanExpected(value: boolean): ExcelExpectedValue {
   return { kind: "boolean", value };
 }
 
-function numberExpected(value: number): ExcelExpectedValue {
-  return { kind: "number", value };
-}
-
 function stringExpected(value: string): ExcelExpectedValue {
   return { kind: "string", value };
 }

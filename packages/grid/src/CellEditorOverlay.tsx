@@ -70,7 +70,7 @@ export function CellEditorOverlay({
     return () => {
       window.cancelAnimationFrame(blurArm);
     };
-  }, [selectionBehavior]);
+  }, [selectionBehavior, value]);
 
   const commit = (movement?: EditMovement) => {
     if (completionRef.current !== "idle") {

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import type { ProtocolFrame } from "@bilig/binary-protocol";
+import { ValueTag } from "@bilig/protocol";
 
 import { createLocalServer } from "../server.js";
 import { LocalWorkbookSessionManager } from "../local-workbook-session-manager.js";
@@ -93,7 +94,7 @@ describe("local-server", () => {
     if (readFrame.kind !== "response" || readFrame.response.kind !== "rangeValues") {
       throw new Error("Expected rangeValues response");
     }
-    expect(readFrame.response.values.map((row) => row.map((cell) => cell.tag === 1 ? cell.value : null))).toEqual([
+    expect(readFrame.response.values.map((row) => row.map((cell) => cell.tag === ValueTag.Number ? cell.value : null))).toEqual([
       [1, 2],
       [3, 4]
     ]);
@@ -136,13 +137,13 @@ describe("local-server", () => {
     });
 
     expect(broadcasts).toHaveLength(1);
-    const committed = broadcasts[0]!;
+    const committed = broadcasts[0];
     expect(committed.kind).toBe("appendBatch");
     if (committed.kind !== "appendBatch") throw new Error("Expected appendBatch broadcast");
     expect(committed.cursor).toBe(1);
 
     expect(responses).toHaveLength(1);
-    const ack = responses[0]!;
+    const ack = responses[0];
     expect(ack.kind).toBe("ack");
     if (ack.kind !== "ack") throw new Error("Expected ack frame");
     expect(ack.cursor).toBe(1);

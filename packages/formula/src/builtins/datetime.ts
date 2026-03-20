@@ -36,6 +36,9 @@ function coerceNumber(value: CellValue): number | undefined {
       return value.value ? 1 : 0;
     case ValueTag.Empty:
       return 0;
+    case ValueTag.String:
+    case ValueTag.Error:
+      return undefined;
     default:
       return undefined;
   }

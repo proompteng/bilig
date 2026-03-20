@@ -1,22 +1,18 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
-import { MAX_COLS, MAX_ROWS, ValueTag, formatErrorCode } from "@bilig/protocol";
+import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
 import {
   DataEditor,
   type FillPatternEventArgs,
-  GridCellKind,
   type DataEditorRef,
-  type GridCell,
   type GridColumn,
-  type GridKeyEventArgs,
   type GridSelection,
   type Item,
   type Rectangle
 } from "@glideapps/glide-data-grid";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
 import {
-  COLUMN_RESIZE_HANDLE_THRESHOLD,
   EMPTY_COLUMN_WIDTHS,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
@@ -30,11 +26,8 @@ import {
   createGridSelection,
   createRangeSelection,
   createRowSliceSelection,
-  clampCell,
-  clampSelectionRange,
   formatSelectionSummary,
-  rectangleToAddresses,
-  sameItem
+  rectangleToAddresses
 } from "./gridSelection.js";
 import { resolveActivatedCell, resolveSelectionChange } from "./gridSelectionSync.js";
 import {
@@ -49,9 +42,7 @@ import {
 } from "./gridPointer.js";
 import { resolveBodyDragSelection, resolveBodyPointerUpResult, resolveHeaderDragSelection } from "./gridDragSelection.js";
 import {
-  parseClipboardPlainText,
-  serializeClipboardMatrix,
-  serializeClipboardPlainText
+  parseClipboardPlainText
 } from "./gridClipboard.js";
 import { cellToEditorSeed, cellToGridCell } from "./gridCells.js";
 import {
@@ -395,8 +386,8 @@ export function SheetGridView({
       return;
     }
 
-    const values = Array.from({ length: range.height }, (_, rowOffset) =>
-      Array.from({ length: range.width }, (_, colOffset) =>
+    const values = Array.from({ length: range.height }, (_rowEntry, rowOffset) =>
+      Array.from({ length: range.width }, (_colEntry, colOffset) =>
         cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)))
       )
     );
@@ -471,7 +462,8 @@ export function SheetGridView({
             void navigator.clipboard.readText().then((rawText) => {
               const values = parseClipboardPlainText(rawText);
               applyClipboardValues(action.target, values);
-            }).catch(() => {});
+              return undefined;
+            }).catch(() => undefined);
           }
           return;
       }
@@ -630,6 +622,7 @@ export function SheetGridView({
         data-column-width-overrides={JSON.stringify(columnWidths)}
         data-default-column-width={String(gridMetrics.columnWidth)}
         data-testid="sheet-grid"
+        role="grid"
         onKeyDownCapture={(event) => {
           const normalizedKey = normalizeKeyboardKey(event.key, event.code);
           ignoreNextPointerSelectionRef.current = false;

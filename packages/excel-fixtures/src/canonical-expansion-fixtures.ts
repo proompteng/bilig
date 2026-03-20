@@ -1,4 +1,3 @@
-import { ErrorCode } from "@bilig/protocol";
 import type {
   ExcelExpectedValue,
   ExcelFixtureCase,
@@ -24,10 +23,6 @@ function numberExpected(value: number): ExcelExpectedValue {
 
 function stringExpected(value: string): ExcelExpectedValue {
   return { kind: "string", value };
-}
-
-function errorExpected(code: ErrorCode, display: string): ExcelExpectedValue {
-  return { kind: "error", code, display };
 }
 
 function input(address: string, value: ExcelFixtureInputCell["input"], note?: string): ExcelFixtureInputCell {

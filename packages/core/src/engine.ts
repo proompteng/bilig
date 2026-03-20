@@ -3,7 +3,6 @@ import {
   ErrorCode,
   FormulaMode,
   ValueTag,
-  type CellIndex,
   type CellSnapshot,
   type CellValue,
   type DependencySnapshot,
@@ -111,7 +110,7 @@ interface RuntimeFormula {
   rangeListLength: number;
 }
 
-type U32 = Uint32Array<ArrayBufferLike>;
+type U32 = Uint32Array;
 
 interface MaterializedDependencies {
   dependencyIndices: Uint32Array;
@@ -536,8 +535,8 @@ export class SpreadsheetEngine {
       return "";
     }
 
-    const rows = Array.from({ length: maxRow + 1 }, (_, row) =>
-      Array.from({ length: maxCol + 1 }, (_, col) => cells.get(`${row}:${col}`) ?? "")
+    const rows = Array.from({ length: maxRow + 1 }, (_rowEntry, row) =>
+      Array.from({ length: maxCol + 1 }, (_colEntry, col) => cells.get(`${row}:${col}`) ?? "")
     );
 
     return serializeCsv(rows);
@@ -1038,7 +1037,7 @@ export class SpreadsheetEngine {
       this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
     }
     if (source === "local") {
-      this.syncClientConnection?.send(batch);
+      void this.syncClientConnection?.send(batch);
       this.emitBatch(batch);
     } else if (this.redoStack.length > 0) {
       this.redoStack.length = 0;
@@ -1284,7 +1283,7 @@ export class SpreadsheetEngine {
     for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
       const ref = compiled.symbolicRefs[index]!;
       const [qualifiedSheetName, qualifiedAddress] = ref.includes("!") ? ref.split("!") : [undefined, ref];
-      const parsed = parseCellAddress(qualifiedAddress!, qualifiedSheetName);
+      const parsed = parseCellAddress(qualifiedAddress, qualifiedSheetName);
       const sheetName = qualifiedSheetName ?? this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
       if (qualifiedSheetName && !this.workbook.getSheet(sheetName)) {
         hasUnresolvedSymbolicRef = true;
@@ -1906,16 +1905,16 @@ export class SpreadsheetEngine {
 
   private sheetDeleteBarrierForOp(op: EngineOp): OpOrder | undefined {
     switch (op.kind) {
+      case "upsertWorkbook":
+      case "deleteSheet":
+        return undefined;
       case "setCellFormat":
-        return this.sheetDeleteVersions.get(op.sheetName);
       case "setCellValue":
       case "setCellFormula":
       case "clearCell":
         return this.sheetDeleteVersions.get(op.sheetName);
       case "upsertSheet":
         return this.sheetDeleteVersions.get(op.name);
-      default:
-        return undefined;
     }
   }
 

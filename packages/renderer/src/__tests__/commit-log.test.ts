@@ -67,8 +67,9 @@ describe("renderer commit log", () => {
       { kind: "deleteSheet", name: "Sheet2" },
       { kind: "deleteSheet", name: "Sheet1" }
     ]);
-    expect(collectDeleteOps(root.children[0]!)).toEqual([{ kind: "deleteSheet", name: "Sheet1" }]);
-    expect(collectDeleteOps(root.children[0]!.children[0]!)).toEqual([
+    const firstSheet = root.children[0];
+    expect(collectDeleteOps(firstSheet)).toEqual([{ kind: "deleteSheet", name: "Sheet1" }]);
+    expect(collectDeleteOps(firstSheet.children[0])).toEqual([
       { kind: "deleteCell", sheetName: "Sheet1", addr: "A1" }
     ]);
     expect(collectSheetOrderOps(root)).toEqual([

@@ -13,6 +13,7 @@
     "@bilig/binary-protocol": "workspace:*",
     "@bilig/core": "workspace:*",
     "@bilig/crdt": "workspace:*",
+    "@bilig/protocol": "workspace:*",
     "fastify": "5.6.0",
     "@fastify/websocket": "11.2.0"
   }

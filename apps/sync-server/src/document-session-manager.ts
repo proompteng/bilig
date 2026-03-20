@@ -137,7 +137,19 @@ export class DocumentSessionManager {
           }
         };
         break;
-      default:
+      case "readRange":
+      case "writeRange":
+      case "setRangeFormulas":
+      case "clearRange":
+      case "fillRange":
+      case "copyRange":
+      case "pasteRange":
+      case "getDependents":
+      case "getPrecedents":
+      case "subscribeRange":
+      case "unsubscribe":
+      case "exportSnapshot":
+      case "importSnapshot":
         response = {
           kind: "error",
           id: request.id,

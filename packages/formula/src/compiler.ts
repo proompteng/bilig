@@ -55,6 +55,8 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
     case "BooleanLiteral":
       state.program.push(encodeInstruction(Opcode.PushBoolean, node.value ? 1 : 0));
       return;
+    case "StringLiteral":
+      throw new Error("String literals are not supported on the wasm fast path");
     case "CellRef": {
       emitCellRef(node.ref, node.sheetName, state);
       return;
@@ -117,8 +119,6 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
         });
         state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(callee) << 8) | argc));
       }
-      return;
-    default:
       return;
   }
 }

@@ -28,8 +28,8 @@ function encodeCall(builtinId: number, argc: number): number {
   return (Opcode.CallBuiltin << 24) | ((builtinId << 8) | argc);
 }
 
-function encodePushCell(cellIndex: number): number {
-  return (Opcode.PushCell << 24) | cellIndex;
+function encodePushCell(cellOffset: number): number {
+  return (Opcode.PushCell << 24) | cellOffset;
 }
 
 function encodePushRange(rangeIndex: number): number {
@@ -151,11 +151,14 @@ describe("wasm kernel", () => {
     kernel.evalBatch(new Uint32Array([1]));
     expect(kernel.readNumbers()[1]).toBe(10);
 
+    const tags = kernel.readTags();
+    const numbers = kernel.readNumbers();
+    const errors = kernel.readErrors();
     kernel.writeCells(
-      new Uint8Array([2, kernel.readTags()[1]!, 0, 0]),
-      new Float64Array([0, kernel.readNumbers()[1]!, 0, 0]),
+      new Uint8Array([2, tags[1], 0, 0]),
+      new Float64Array([0, numbers[1], 0, 0]),
       new Uint32Array(4),
-      new Uint16Array([0, kernel.readErrors()[1]!, 0, 0])
+      new Uint16Array([0, errors[1], 0, 0])
     );
     kernel.evalBatch(new Uint32Array([1]));
     expect(kernel.readNumbers()[1]).toBe(20);
@@ -329,7 +332,7 @@ describe("wasm kernel", () => {
     );
     kernel.writeCells(
       new Uint8Array([3, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Float64Array([0, 0, -3.141, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([0, 0, -3.145, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Uint32Array([1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Uint16Array(24)
     );

@@ -492,7 +492,9 @@ describe("SpreadsheetEngine", () => {
     restored.importSnapshot(engineB.exportSnapshot());
     restored.importReplicaSnapshot(engineB.exportReplicaSnapshot());
 
-    restored.applyRemoteBatch(outboundA[outboundA.length - 1]!);
+    const latestOutboundA = outboundA.at(-1);
+    expect(latestOutboundA).toBeDefined();
+    restored.applyRemoteBatch(latestOutboundA);
     expect(restored.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 2 });
   });
 
@@ -505,10 +507,12 @@ describe("SpreadsheetEngine", () => {
     primary.subscribeBatches((batch) => outbound.push(batch));
 
     primary.createSheet("Sheet1");
-    const createBatch = outbound[outbound.length - 1]!;
+    const createBatch = outbound.at(-1);
+    expect(createBatch).toBeDefined();
 
     primary.setCellValue("Sheet1", "A1", 7);
-    const valueBatch = outbound[outbound.length - 1]!;
+    const valueBatch = outbound.at(-1);
+    expect(valueBatch).toBeDefined();
 
     replica.applyRemoteBatch(createBatch);
     replica.applyRemoteBatch(valueBatch);
@@ -519,7 +523,8 @@ describe("SpreadsheetEngine", () => {
     expect(replica.explainCell("Sheet1", "A1").version).toBe(versionBeforeDuplicate);
 
     primary.deleteSheet("Sheet1");
-    const deleteBatch = outbound[outbound.length - 1]!;
+    const deleteBatch = outbound.at(-1);
+    expect(deleteBatch).toBeDefined();
     replica.applyRemoteBatch(deleteBatch);
     expect(replica.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
 
@@ -646,7 +651,7 @@ describe("SpreadsheetEngine", () => {
     const cellIndex = engine.workbook.getCellIndex("Sheet1", "C3");
     expect(cellIndex).toBeDefined();
 
-    const formulaId = engine.workbook.cellStore.formulaIds[cellIndex!]!;
+    const formulaId = engine.workbook.cellStore.formulaIds[cellIndex!];
     const runtimeFormula = (
       engine as unknown as {
         formulas: {
@@ -700,8 +705,10 @@ describe("SpreadsheetEngine", () => {
     ).formulas.get(cellIndex!);
 
     expect(runtimeFormula).toBeDefined();
-    const pushCell = runtimeFormula?.runtimeProgram.find((instruction) => (instruction >>> 24) === Opcode.PushCell);
-    const pushRange = runtimeFormula?.runtimeProgram.find((instruction) => (instruction >>> 24) === Opcode.PushRange);
+    const pushCellOpcode = Number(Opcode.PushCell);
+    const pushRangeOpcode = Number(Opcode.PushRange);
+    const pushCell = runtimeFormula?.runtimeProgram.find((instruction) => (instruction >>> 24) === pushCellOpcode);
+    const pushRange = runtimeFormula?.runtimeProgram.find((instruction) => (instruction >>> 24) === pushRangeOpcode);
 
     expect(pushCell).toBeDefined();
     expect(pushRange).toBeDefined();
@@ -740,7 +747,7 @@ describe("SpreadsheetEngine", () => {
 
     expect(b1Index).toBeDefined();
     expect(d1Index).toBeDefined();
-    expect(engine.workbook.cellStore.topoRanks[b1Index!]!).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!]!);
+    expect(engine.workbook.cellStore.topoRanks[b1Index!]).toBeLessThan(engine.workbook.cellStore.topoRanks[d1Index!]);
   });
 
   it("notifies per-cell listeners only for the cells that changed", async () => {

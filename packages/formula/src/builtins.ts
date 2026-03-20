@@ -1,4 +1,4 @@
-import { BuiltinId, ErrorCode, ValueTag, formatErrorCode } from "@bilig/protocol";
+import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
 import { datetimeBuiltins } from "./builtins/datetime.js";
 import { logicalBuiltins } from "./builtins/logical.js";
@@ -15,36 +15,16 @@ function toNumber(value: CellValue): number | undefined {
       return value.value ? 1 : 0;
     case ValueTag.Empty:
       return 0;
+    case ValueTag.String:
+    case ValueTag.Error:
+      return undefined;
     default:
       return undefined;
   }
 }
 
-function toStringValue(value: CellValue): string {
-  switch (value.tag) {
-    case ValueTag.Empty:
-      return "";
-    case ValueTag.Number:
-      return String(value.value);
-    case ValueTag.Boolean:
-      return value.value ? "TRUE" : "FALSE";
-    case ValueTag.String:
-      return value.value;
-    case ValueTag.Error:
-      return formatErrorCode(value.code);
-  }
-}
-
 function numberResult(value: number): CellValue {
   return { tag: ValueTag.Number, value };
-}
-
-function booleanResult(value: boolean): CellValue {
-  return { tag: ValueTag.Boolean, value };
-}
-
-function stringResult(value: string): CellValue {
-  return { tag: ValueTag.String, value, stringId: 0 };
 }
 
 function firstError(args: CellValue[]): CellValue | undefined {

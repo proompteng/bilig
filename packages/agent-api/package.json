@@ -11,7 +11,8 @@
     }
   },
   "dependencies": {
-    "@bilig/binary-protocol": "workspace:*"
+    "@bilig/binary-protocol": "workspace:*",
+    "@bilig/protocol": "workspace:*"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"

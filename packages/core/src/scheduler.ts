@@ -1,7 +1,7 @@
 import type { CellStore } from "./cell-store.js";
 import { entityPayload, isRangeEntity, makeCellEntity } from "./entity-ids.js";
 
-type U32 = Uint32Array<ArrayBufferLike>;
+type U32 = Uint32Array;
 
 export interface SchedulerReverseGraph {
   getDependents(entityId: number): U32;
