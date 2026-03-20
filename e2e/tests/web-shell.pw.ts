@@ -217,6 +217,26 @@ async function clickProductCell(
   );
 }
 
+async function clickProductSelectedCellTopBorder(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number,
+  rowIndex: number
+) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  await page.mouse.click(
+    grid.x + columnLeft + Math.floor(columnWidth / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) - 1
+  );
+}
+
 async function dragProductBodySelection(
   page: Parameters<typeof test>[0]["page"],
   startColumn: number,
@@ -563,6 +583,20 @@ test("web app double-click edits the exact clicked cell", async ({ page }) => {
   await expect(cellEditor).toBeVisible();
   await expect(cellEditor).toHaveValue("target");
   await expect(cellEditor).toHaveAttribute("aria-label", "Sheet1!C5 editor");
+});
+
+test("web app keeps the selected cell when clicking its top border", async ({ page }) => {
+  await page.goto("/");
+
+  const nameBox = page.getByTestId("name-box");
+
+  await nameBox.fill("C5");
+  await nameBox.press("Enter");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
+
+  await clickProductSelectedCellTopBorder(page, 2, 4);
+  await expect(nameBox).toHaveValue("C5");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
 });
 
 test("web app supports fill-handle propagation", async ({ page }) => {

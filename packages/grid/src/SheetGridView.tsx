@@ -690,6 +690,21 @@ export function SheetGridView({
         return null;
       }
 
+      const selectedCellBounds = editorRef.current?.getBounds(selectedCell.col, selectedCell.row);
+      if (
+        selectedCellBounds
+        && gridSelection.columns.length === 0
+        && gridSelection.rows.length === 0
+        && gridSelection.current?.range.width === 1
+        && gridSelection.current?.range.height === 1
+        && clientX >= selectedCellBounds.x - 1
+        && clientX < selectedCellBounds.x + selectedCellBounds.width
+        && clientY >= selectedCellBounds.y - 1
+        && clientY < selectedCellBounds.y + selectedCellBounds.height
+      ) {
+        return [selectedCell.col, selectedCell.row];
+      }
+
       const col = resolveColumnAtClientX(clientX, region, dataLeft, columnWidths, gridMetrics.columnWidth);
       const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
       if (col === null || col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
@@ -698,7 +713,7 @@ export function SheetGridView({
 
       return [col, row];
     },
-    [columnWidths, gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, visibleRegion]
+    [columnWidths, gridMetrics.columnWidth, gridMetrics.headerHeight, gridMetrics.rowHeight, gridMetrics.rowMarkerWidth, gridSelection, selectedCell.col, selectedCell.row, visibleRegion]
   );
 
   const resolvePointerGeometry = useCallback(
