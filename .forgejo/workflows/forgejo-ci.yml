@@ -24,7 +24,7 @@ jobs:
           env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH)=' || true
 
           node --version
-          node -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); if (major < 24 || (major === 24 && (minor < 11 || (minor === 11 && patch < 1)))) { console.error(`Node ${process.versions.node} is below the required 24.11.1 baseline`); process.exit(1); }'
+          node -e 'const [major] = process.versions.node.split(".").map(Number); if (major < 24) { console.error(`Node ${process.versions.node} is below the required 24.x baseline`); process.exit(1); }'
 
           corepack enable
           pnpm --version

@@ -66,5 +66,5 @@ pnpm run ci:strict
 - GitHub Actions mirrors the verification contract in `.github/workflows/ci.yml`.
 - The workflow is strict: frozen lockfile install, full `pnpm run ci`, artifact budget checks, browser smoke, and a tracked-file cleanliness check.
 - `pnpm run ci:strict` mirrors the remote cleanliness gate locally before a direct push to `main`.
-- Forgejo runners must expose the `bilig-ci` label, provide Node `>=24.11.1`, and allow Corepack to activate `pnpm 10.32.1` during the job.
+- Forgejo runners must expose the `bilig-ci` label, provide Node `24.x`, and allow Corepack to activate `pnpm 10.32.1` during the job.
 - GitHub Actions runs the same repository contract on Node 22 and Node 24.11.1 so compatibility drift is visible before release.

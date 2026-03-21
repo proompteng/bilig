@@ -37,7 +37,7 @@
     "spreadsheet"
   ],
   "engines": {
-    "node": ">=24.11.1"
+    "node": ">=24.0.0"
   },
   "publishConfig": {
     "access": "public"
