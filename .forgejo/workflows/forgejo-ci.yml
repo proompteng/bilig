@@ -16,21 +16,42 @@ jobs:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4
 
-      - name: Run strict repository CI
+      - name: Log runner environment
         run: |
           set -eu
           uname -a
           pwd
           env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH)=' || true
 
+      - name: Verify Node baseline
+        run: |
+          set -eu
           node --version
           node -e 'const [major] = process.versions.node.split(".").map(Number); if (major < 24) { console.error(`Node ${process.versions.node} is below the required 24.x baseline`); process.exit(1); }'
 
+      - name: Enable pnpm via Corepack
+        run: |
+          set -eu
           corepack enable
           pnpm --version
           test "$(pnpm --version)" = "10.32.1"
 
+      - name: Install dependencies
+        run: |
+          set -eu
           pnpm install --frozen-lockfile
+
+      - name: Install Chromium for browser smoke
+        run: |
+          set -eu
           pnpm exec playwright install --with-deps chromium
+
+      - name: Run strict repository CI
+        run: |
+          set -eu
           pnpm run ci
+
+      - name: Ensure tracked files stay clean
+        run: |
+          set -eu
           git diff --exit-code
