@@ -2,11 +2,15 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"]
+    }
   },
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/crdt" },
+    { "path": "../../packages/binary-protocol" },
     { "path": "../../packages/formula" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/storage-browser" },

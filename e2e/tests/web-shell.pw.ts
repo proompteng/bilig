@@ -1,3 +1,5 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
 
 const PRODUCT_ROW_MARKER_WIDTH = 46;
@@ -5,6 +7,274 @@ const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_HEIGHT = 22;
 const PRIMARY_MODIFIER = process.platform === "darwin" ? "Meta" : "Control";
+const AGENT_STDIN_MAGIC = 0x41474e54;
+const AGENT_PROTOCOL_VERSION = 1;
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+interface LocalDocumentStateSummary {
+  documentId: string;
+  cursor: number;
+  browserSessions: string[];
+  agentSessions: string[];
+  lastBatchId: string | null;
+}
+
+type CellRangeRef = {
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+};
+
+type AgentRequest =
+  | { kind: "openWorkbookSession"; id: string; documentId: string; replicaId: string }
+  | { kind: "closeWorkbookSession"; id: string; sessionId: string }
+  | { kind: "writeRange"; id: string; sessionId: string; range: CellRangeRef; values: unknown[][] };
+
+type AgentResponse =
+  | { kind: "ok"; id: string; sessionId?: string; value?: unknown }
+  | { kind: "error"; id: string; code: string; message: string; retryable: boolean };
+
+type AgentFrame =
+  | { kind: "request"; request: AgentRequest }
+  | { kind: "response"; response: AgentResponse };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAgentFrame(value: unknown): value is AgentFrame {
+  return isRecord(value)
+    && (value.kind === "request" || value.kind === "response")
+    && (("request" in value && isRecord(value.request)) || ("response" in value && isRecord(value.response)));
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function reserveLocalPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.listen(0, "127.0.0.1", () => resolve());
+    server.once("error", reject);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Failed to reserve local-server port");
+  }
+  const port = address.port;
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+  return port;
+}
+
+async function waitForLocalServerHealthy(localServerUrl: string, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: string | null = null;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${localServerUrl}/healthz`);
+      if (response.ok) {
+        return;
+      }
+      lastError = `healthz returned ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await delay(250);
+  }
+  throw new Error(`Timed out waiting for local-server on ${localServerUrl}${lastError ? `: ${lastError}` : ""}`);
+}
+
+async function stopChildProcess(process: ChildProcess) {
+  if (process.exitCode !== null) {
+    return;
+  }
+
+  const exitPromise = new Promise<void>((resolve) => {
+    process.once("exit", () => {
+      resolve();
+    });
+  });
+
+  process.kill("SIGTERM");
+  const exited = await Promise.race([
+    exitPromise.then(() => true),
+    delay(5_000).then(() => false)
+  ]);
+  if (exited) {
+    return;
+  }
+
+  process.kill("SIGKILL");
+  await exitPromise;
+}
+
+async function startLocalServer(port: number) {
+  const child = spawn("node", ["apps/local-server/dist/src/index.js"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      HOST: "127.0.0.1",
+      PORT: String(port)
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const localServerUrl = `http://127.0.0.1:${port}`;
+
+  let logs = "";
+  const appendLogChunk = (chunk: Buffer | string) => {
+    logs += chunk.toString();
+    if (logs.length > 12_000) {
+      logs = logs.slice(-12_000);
+    }
+  };
+  child.stdout?.on("data", appendLogChunk);
+  child.stderr?.on("data", appendLogChunk);
+
+  const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    child.once("exit", (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
+
+  try {
+    await Promise.race([
+      waitForLocalServerHealthy(localServerUrl),
+      exitPromise.then(({ code, signal }) => {
+        throw new Error(
+          `local-server exited before becoming healthy (code=${code ?? "null"}, signal=${signal ?? "null"})\n${logs}`
+        );
+      })
+    ]);
+  } catch (error) {
+    await stopChildProcess(child);
+    throw error;
+  }
+
+  return {
+    localServerUrl,
+    stop: async () => {
+      await stopChildProcess(child);
+    },
+    getLogs: () => logs
+  };
+}
+
+function encodeAgentFrame(frame: AgentFrame): Uint8Array {
+  const payload = textEncoder.encode(JSON.stringify(frame));
+  const output = new Uint8Array(10 + payload.byteLength);
+  const view = new DataView(output.buffer);
+  view.setUint32(0, AGENT_STDIN_MAGIC, true);
+  view.setUint16(4, AGENT_PROTOCOL_VERSION, true);
+  view.setUint32(6, payload.byteLength, true);
+  output.set(payload, 10);
+  return output;
+}
+
+function decodeAgentFrame(bytes: Uint8Array | ArrayBuffer): AgentFrame {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (data.byteLength < 10) {
+    throw new Error("Agent frame too short");
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  if (view.getUint32(0, true) !== AGENT_STDIN_MAGIC) {
+    throw new Error("Agent frame magic mismatch");
+  }
+  if (view.getUint16(4, true) !== AGENT_PROTOCOL_VERSION) {
+    throw new Error("Unsupported agent protocol version");
+  }
+  const payloadLength = view.getUint32(6, true);
+  if (payloadLength !== data.byteLength - 10) {
+    throw new Error("Agent frame length mismatch");
+  }
+  const parsed: unknown = JSON.parse(textDecoder.decode(data.subarray(10)));
+  if (!isAgentFrame(parsed)) {
+    throw new Error("Invalid agent frame payload");
+  }
+  return parsed;
+}
+
+async function sendAgentRequest(localServerUrl: string, request: AgentRequest): Promise<AgentResponse> {
+  const response = await fetch(`${localServerUrl}/v1/agent/frames`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream"
+    },
+    body: Buffer.from(encodeAgentFrame({
+      kind: "request",
+      request
+    }))
+  });
+  if (!response.ok) {
+    throw new Error(`Agent request failed with status ${response.status}`);
+  }
+  const frame = decodeAgentFrame(new Uint8Array(await response.arrayBuffer()));
+  if (frame.kind !== "response") {
+    throw new Error(`Expected agent response frame, received ${frame.kind}`);
+  }
+  if (frame.response.kind === "error") {
+    throw new Error(`${frame.response.code}: ${frame.response.message}`);
+  }
+  return frame.response;
+}
+
+async function withAgentSession(
+  localServerUrl: string,
+  documentId: string,
+  replicaId: string,
+  callback: (sessionId: string) => Promise<void>
+) {
+  const openResponse = await sendAgentRequest(localServerUrl, {
+    kind: "openWorkbookSession",
+    id: `open:${Date.now()}`,
+    documentId,
+    replicaId
+  });
+  if (openResponse.kind !== "ok" || !openResponse.sessionId) {
+    throw new Error("Failed to open local-server workbook session");
+  }
+
+  try {
+    await callback(openResponse.sessionId);
+  } finally {
+    await sendAgentRequest(localServerUrl, {
+      kind: "closeWorkbookSession",
+      id: `close:${Date.now()}`,
+      sessionId: openResponse.sessionId
+    }).catch(() => undefined);
+  }
+}
+
+function isLocalDocumentStateSummary(value: unknown): value is LocalDocumentStateSummary {
+  return isRecord(value)
+    && typeof value.documentId === "string"
+    && typeof value.cursor === "number"
+    && Array.isArray(value.browserSessions)
+    && Array.isArray(value.agentSessions)
+    && (typeof value.lastBatchId === "string" || value.lastBatchId === null);
+}
+
+async function fetchDocumentState(localServerUrl: string, documentId: string): Promise<LocalDocumentStateSummary> {
+  const response = await fetch(`${localServerUrl}/v1/documents/${documentId}/state`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch local-server document state: ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  if (!isLocalDocumentStateSummary(payload)) {
+    throw new Error("Invalid local-server document state payload");
+  }
+  return payload;
+}
 
 function parseColumnWidthOverrides(raw: string | null): Record<string, number> {
   if (!raw) {
@@ -279,6 +549,53 @@ test("web app renders the minimal product shell without playground chrome", asyn
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await expect(page.getByTestId("status-sync")).toHaveText("Ready");
   await expect(page.locator(".formula-result-shell")).toHaveCount(0);
+});
+
+test("web app reflects a local-server agent write in the rendered spreadsheet", async ({ page }) => {
+  test.slow();
+  const port = await reserveLocalPort();
+  const documentId = `playwright-${Date.now()}`;
+  const localServer = await startLocalServer(port);
+
+  try {
+    await page.goto(`/?document=${encodeURIComponent(documentId)}&server=${encodeURIComponent(localServer.localServerUrl)}`);
+
+    const nameBox = page.getByTestId("name-box");
+    const formulaInput = page.getByTestId("formula-input");
+
+    await expect(nameBox).toHaveValue("A1");
+    await expect(formulaInput).toHaveValue("");
+
+    await expect.poll(async () => {
+      const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
+      return documentState.browserSessions.length > 0;
+    }, {
+      message: "browser should attach to the local-server document session"
+    }).toBe(true);
+
+    await withAgentSession(localServer.localServerUrl, documentId, `playwright-agent:${Date.now()}`, async (sessionId) => {
+      await sendAgentRequest(localServer.localServerUrl, {
+        kind: "writeRange",
+        id: `write:${Date.now()}`,
+        sessionId,
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1"
+        },
+        values: [[42]]
+      });
+    });
+
+    await expect(formulaInput).toHaveValue("42");
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nLocal-server logs:\n${localServer.getLogs()}`,
+      { cause: error }
+    );
+  } finally {
+    await localServer.stop();
+  }
 });
 
 test("web app keeps sheet tabs and status bar visible in a short viewport", async ({ page }) => {

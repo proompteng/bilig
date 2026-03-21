@@ -14,7 +14,7 @@ import {
   useSelection
 } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { LiteralInput } from "@bilig/protocol";
+import type { LiteralInput, SyncState } from "@bilig/protocol";
 import { MAX_COLS, MAX_ROWS, ValueTag, formatErrorCode } from "@bilig/protocol";
 import { compactRelayEntries, type RelayEntry } from "./relay-queue.js";
 import {
@@ -24,6 +24,7 @@ import {
   type PlaygroundPresetId
 } from "./playgroundPresets.js";
 import { loadPersistedJson, removePersistedJson, savePersistedJson } from "./browserPersistence.js";
+import { useRemoteSpreadsheetSync } from "./useRemoteSpreadsheetSync.js";
 
 const PRIMARY_STORAGE_KEY = "bilig:playground:primary";
 const MIRROR_STORAGE_KEY = "bilig:playground:mirror";
@@ -126,6 +127,23 @@ function parseEditorInput(rawValue: string): ParsedEditorInput {
   return { kind: "value", value: normalized };
 }
 
+function formatSyncStateLabel(state: SyncState): string {
+  switch (state) {
+    case "live":
+      return "Live";
+    case "syncing":
+      return "Syncing";
+    case "local-only":
+      return "Local";
+    case "behind":
+      return "Behind";
+    case "reconnecting":
+      return "Reconnecting";
+  }
+  const exhaustiveState: never = state;
+  throw new Error(`Unsupported sync state: ${String(exhaustiveState)}`);
+}
+
 function applyParsedInput(engine: SpreadsheetEngine, sheetName: string, address: string, parsed: ParsedEditorInput): void {
   if (parsed.kind === "formula") {
     engine.setCellFormula(sheetName, address, parsed.formula);
@@ -200,8 +218,29 @@ async function settleRendererBoundary(operation: Promise<void>): Promise<void> {
 
 export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const isProductShell = variant === "product";
-  const engine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "playground" }), []);
-  const mirrorEngine = useMemo(() => new SpreadsheetEngine({ workbookName: "bilig-demo", replicaId: "replica-beta" }), []);
+  const runtimeConfig = useMemo(() => {
+    const defaultDocumentId = import.meta.env["VITE_BILIG_DOCUMENT_ID"] ?? "bilig-demo";
+    const defaultLocalServerUrl = import.meta.env["VITE_BILIG_LOCAL_SERVER_URL"] ?? "http://127.0.0.1:4381";
+    if (!isProductShell) {
+      return {
+        documentId: defaultDocumentId,
+        localServerUrl: defaultLocalServerUrl
+      };
+    }
+    const searchParams = new URLSearchParams(window.location.search);
+    return {
+      documentId: searchParams.get("document") ?? defaultDocumentId,
+      localServerUrl: searchParams.get("server") ?? defaultLocalServerUrl
+    };
+  }, [isProductShell]);
+  const documentId = runtimeConfig.documentId;
+  const localServerUrl = runtimeConfig.localServerUrl;
+  const replicaId = useMemo(
+    () => (isProductShell ? `browser:${Math.random().toString(36).slice(2)}` : "playground"),
+    [isProductShell]
+  );
+  const engine = useMemo(() => new SpreadsheetEngine({ workbookName: documentId, replicaId }), [documentId, replicaId]);
+  const mirrorEngine = useMemo(() => new SpreadsheetEngine({ workbookName: documentId, replicaId: "replica-beta" }), [documentId]);
   const rendererRoot = useMemo(() => createWorkbookRendererRoot(engine), [engine]);
   const selection = useSelection(engine);
   const selectCell = selection.select;
@@ -237,6 +276,13 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const isEditing = editingMode !== "idle";
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
+  const remoteSyncState = useRemoteSpreadsheetSync({
+    enabled: isProductShell && replicationReady,
+    engine,
+    documentId,
+    replicaId,
+    baseUrl: isProductShell ? localServerUrl : null
+  });
 
   const loadPreset = useCallback(
     async (presetId: PlaygroundPresetId) => {
@@ -279,6 +325,13 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     let cancelled = false;
 
     void Promise.all([engine.ready(), mirrorEngine.ready()]).then(async () => {
+      if (isProductShell) {
+        if (!cancelled) {
+          setReplicationReady(true);
+        }
+        return undefined;
+      }
+
       const resetWorkspace = new URLSearchParams(window.location.search).get("reset") === "1";
       if (resetWorkspace) {
         await Promise.all([
@@ -345,10 +398,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       relayQueueRef.current = [];
       void rendererRoot.unmount();
     };
-  }, [engine, loadPreset, mirrorEngine, rendererRoot]);
+  }, [engine, isProductShell, loadPreset, mirrorEngine, rendererRoot]);
 
   useEffect(() => {
-    if (!replicationReady) {
+    if (!replicationReady || isProductShell) {
       return;
     }
 
@@ -378,10 +431,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       unsubscribePrimary();
       unsubscribeMirror();
     };
-  }, [engine, mirrorEngine, replicationReady]);
+  }, [engine, isProductShell, mirrorEngine, replicationReady]);
 
   useEffect(() => {
-    if (!replicationReady) {
+    if (!replicationReady || isProductShell) {
       return;
     }
 
@@ -405,10 +458,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       unsubscribeLocal();
       unsubscribeMirror();
     };
-  }, [engine, mirrorEngine, replicationReady]);
+  }, [engine, isProductShell, mirrorEngine, replicationReady]);
 
   useEffect(() => {
-    if (!replicationReady) {
+    if (!replicationReady || isProductShell) {
       return;
     }
 
@@ -417,10 +470,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       queue: relayQueue
     };
     void savePersistedJson(RELAY_STORAGE_KEY, persistedRelayState);
-  }, [relayQueue, replicationReady, syncPaused]);
+  }, [isProductShell, relayQueue, replicationReady, syncPaused]);
 
   useEffect(() => {
-    if (!replicationReady) {
+    if (!replicationReady || isProductShell) {
       return;
     }
 
@@ -461,7 +514,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
         relayTimerRef.current = null;
       }
     };
-  }, [engine, mirrorEngine, relayQueue, replicationReady, syncPaused]);
+  }, [engine, isProductShell, mirrorEngine, relayQueue, replicationReady, syncPaused]);
 
   useEffect(() => {
     if (sheetNames.length === 0) {
@@ -617,7 +670,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
 
   const statusBar = isProductShell ? (
     <>
-      <span data-testid="status-mode">{syncPaused ? "Local" : "Live"}</span>
+      <span data-testid="status-mode">{formatSyncStateLabel(remoteSyncState)}</span>
       <span data-testid="status-selection">
         {selection.sheetName}!{selectionLabel}
       </span>

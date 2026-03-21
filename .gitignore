@@ -3,6 +3,8 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.copilot/config.json
+.copilot/logs/
 .vite/
 *.tsbuildinfo
 .DS_Store

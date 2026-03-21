@@ -100,6 +100,64 @@ describe("local-server", () => {
     ]);
   });
 
+  it("rejects streaming subscriptions over the non-streaming HTTP agent endpoint", async () => {
+    const openResponse = await app.inject({
+      method: "POST",
+      url: "/v1/agent/frames",
+      headers: { "content-type": "application/octet-stream" },
+      payload: Buffer.from(encodeAgentFrame({
+        kind: "request",
+        request: {
+          kind: "openWorkbookSession",
+          id: "open-http-stream",
+          documentId: "http-stream-doc",
+          replicaId: "agent-http"
+        }
+      }))
+    });
+
+    const openFrame = decodeAgentFrame(openResponse.rawPayload);
+    expect(openFrame).toMatchObject({
+      kind: "response",
+      response: {
+        kind: "ok",
+        sessionId: "http-stream-doc:agent-http"
+      }
+    });
+
+    const subscribeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/agent/frames",
+      headers: { "content-type": "application/octet-stream" },
+      payload: Buffer.from(encodeAgentFrame({
+        kind: "request",
+        request: {
+          kind: "subscribeRange",
+          id: "subscribe-http-stream",
+          sessionId: "http-stream-doc:agent-http",
+          subscriptionId: "sub-http",
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "A1"
+          }
+        }
+      }))
+    });
+
+    const subscribeFrame = decodeAgentFrame(subscribeResponse.rawPayload);
+    expect(subscribeFrame).toEqual({
+      kind: "response",
+      response: {
+        kind: "error",
+        id: "subscribe-http-stream",
+        code: "AGENT_STREAM_REQUIRES_STREAMING_TRANSPORT",
+        message: "subscribeRange requires a streaming agent transport such as stdio",
+        retryable: false
+      }
+    });
+  });
+
   it("acknowledges committed browser batches and broadcasts them through the local session manager", async () => {
     const manager = new LocalWorkbookSessionManager();
     const broadcasts: ProtocolFrame[] = [];
@@ -148,5 +206,59 @@ describe("local-server", () => {
     if (ack.kind !== "ack") throw new Error("Expected ack frame");
     expect(ack.cursor).toBe(1);
     detach();
+  });
+
+  it("relays both agent and browser batches upstream when a sync relay is configured", async () => {
+    const relayedBatchIds: string[] = [];
+    const manager = new LocalWorkbookSessionManager({
+      createSyncRelay: () => ({
+        async send(batch) {
+          relayedBatchIds.push(batch.id);
+        },
+        async disconnect() {}
+      })
+    });
+
+    await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "openWorkbookSession",
+        id: "open-relay",
+        documentId: "relay-doc",
+        replicaId: "agent-relay"
+      }
+    });
+
+    await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "writeRange",
+        id: "write-relay",
+        sessionId: "relay-doc:agent-relay",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1"
+        },
+        values: [[7]]
+      }
+    });
+    await Promise.resolve();
+
+    await manager.handleSyncFrame({
+      kind: "appendBatch",
+      documentId: "relay-doc",
+      cursor: 0,
+      batch: {
+        id: "browser-relay:1",
+        replicaId: "browser-relay",
+        clock: { counter: 1 },
+        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "B1", value: 9 }]
+      }
+    });
+    await Promise.resolve();
+
+    expect(relayedBatchIds).toContain("local-server:relay-doc:1");
+    expect(relayedBatchIds).toContain("browser-relay:1");
   });
 });

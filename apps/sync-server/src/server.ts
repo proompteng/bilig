@@ -4,14 +4,17 @@ import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 
 import { DocumentSessionManager } from "./document-session-manager.js";
+import type { WorksheetExecutor } from "./worksheet-executor.js";
 
 export interface SyncServerOptions {
   sessionManager?: DocumentSessionManager;
+  worksheetExecutor?: WorksheetExecutor | null;
+  logger?: boolean;
 }
 
 export function createSyncServer(options: SyncServerOptions = {}) {
-  const sessionManager = options.sessionManager ?? new DocumentSessionManager();
-  const app = Fastify({ logger: true });
+  const sessionManager = options.sessionManager ?? new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
+  const app = Fastify({ logger: options.logger ?? true });
 
   app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_request, body, done) => {
     done(null, body);

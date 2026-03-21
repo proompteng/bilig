@@ -10,6 +10,7 @@ import {
   type InMemoryDocumentPersistence,
   createInMemoryDocumentPersistence
 } from "@bilig/storage-server";
+import type { WorksheetExecutor } from "./worksheet-executor.js";
 
 interface SnapshotAssembly {
   documentId: string;
@@ -33,7 +34,8 @@ export class DocumentSessionManager {
 
   constructor(
     readonly persistence: InMemoryDocumentPersistence = createInMemoryDocumentPersistence(),
-    private readonly ownerId = "bilig-sync-server"
+    private readonly ownerId = "bilig-sync-server",
+    private readonly worksheetExecutor: WorksheetExecutor | null = null
   ) {}
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
@@ -111,6 +113,32 @@ export class DocumentSessionManager {
 
     const request = frame.request;
     let response: AgentResponse;
+    if (this.worksheetExecutor) {
+      switch (request.kind) {
+        case "openWorkbookSession":
+          await this.persistence.presence.join(request.documentId, `${request.documentId}:${request.replicaId}`);
+          return this.worksheetExecutor.execute(frame);
+        case "closeWorkbookSession":
+          await this.persistence.presence.leave(request.sessionId.split(":")[0] ?? request.sessionId, request.sessionId);
+          return this.worksheetExecutor.execute(frame);
+        case "readRange":
+        case "writeRange":
+        case "setRangeFormulas":
+        case "clearRange":
+        case "fillRange":
+        case "copyRange":
+        case "pasteRange":
+        case "getDependents":
+        case "getPrecedents":
+        case "subscribeRange":
+        case "unsubscribe":
+        case "exportSnapshot":
+        case "importSnapshot":
+          return this.worksheetExecutor.execute(frame);
+        case "getMetrics":
+          break;
+      }
+    }
     switch (request.kind) {
       case "openWorkbookSession":
         await this.persistence.presence.join(request.documentId, request.id);

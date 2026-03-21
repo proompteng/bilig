@@ -12,6 +12,7 @@ import {
 } from "@bilig/binary-protocol";
 import type { AgentEvent, AgentFrame, AgentResponse } from "@bilig/agent-api";
 import { shouldApplyBatch } from "@bilig/crdt";
+import type { UpstreamSyncRelay } from "./sync-relay.js";
 
 interface BrowserSubscriber {
   id: string;
@@ -22,6 +23,15 @@ interface AgentSession {
   sessionId: string;
   documentId: string;
   replicaId: string;
+  subscriptionIds: Set<string>;
+}
+
+interface AgentRangeSubscription {
+  subscriptionId: string;
+  sessionId: string;
+  range: CellRangeRef;
+  changedAddresses: string[];
+  unsubscribe: () => void;
 }
 
 interface StoredBatch {
@@ -34,11 +44,18 @@ interface LocalWorkbookSession {
   engine: SpreadsheetEngine;
   browserSubscribers: Map<string, BrowserSubscriber>;
   agentSessions: Map<string, AgentSession>;
+  agentSubscriptions: Map<string, AgentRangeSubscription>;
   eventBacklog: AgentEvent[];
+  eventFlushScheduled: boolean;
   batches: StoredBatch[];
   cursor: number;
   replicaSnapshot: EngineReplicaSnapshot | null;
+  upstreamRelay: UpstreamSyncRelay | null;
   unsubscribeBatches: () => void;
+}
+
+export interface LocalWorkbookSessionManagerOptions {
+  createSyncRelay?: (documentId: string) => UpstreamSyncRelay | null;
 }
 
 export interface LocalDocumentStateSummary {
@@ -98,6 +115,10 @@ function encodeColumn(value: number): string {
 
 export class LocalWorkbookSessionManager {
   private readonly sessions = new Map<string, LocalWorkbookSession>();
+  private readonly agentEventListeners = new Set<(event: AgentEvent) => void>();
+  private readonly agentSubscriptionOwners = new Map<string, string>();
+
+  constructor(private readonly options: LocalWorkbookSessionManagerOptions = {}) {}
 
   private ensureSession(documentId: string): LocalWorkbookSession {
     const existing = this.sessions.get(documentId);
@@ -115,10 +136,13 @@ export class LocalWorkbookSessionManager {
       engine,
       browserSubscribers: new Map(),
       agentSessions: new Map(),
+      agentSubscriptions: new Map(),
       eventBacklog: [],
+      eventFlushScheduled: false,
       batches: [],
       cursor: 0,
       replicaSnapshot: null,
+      upstreamRelay: this.options.createSyncRelay?.(documentId) ?? null,
       unsubscribeBatches: () => {}
     };
 
@@ -133,6 +157,7 @@ export class LocalWorkbookSessionManager {
       session.batches.push({ cursor: session.cursor, frame });
       session.replicaSnapshot = engine.exportReplicaSnapshot();
       this.broadcast(documentId, frame);
+      void this.relayUpstream(session, batch);
     });
 
     this.sessions.set(documentId, session);
@@ -144,6 +169,16 @@ export class LocalWorkbookSessionManager {
     session.browserSubscribers.set(subscriberId, { id: subscriberId, send });
     return () => {
       session.browserSubscribers.delete(subscriberId);
+    };
+  }
+
+  subscribeAgentEvents(listener: (event: AgentEvent) => void): () => void {
+    this.agentEventListeners.add(listener);
+    if (this.agentEventListeners.size === 1) {
+      this.sessions.forEach((session) => this.flushQueuedAgentEvents(session.documentId));
+    }
+    return () => {
+      this.agentEventListeners.delete(listener);
     };
   }
 
@@ -181,6 +216,7 @@ export class LocalWorkbookSessionManager {
         session.batches.push({ cursor: session.cursor, frame: committedFrame });
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
         this.broadcast(frame.documentId, committedFrame);
+        void this.relayUpstream(session, frame.batch);
         return [this.ack(frame.documentId, frame.batch.id, session.cursor)];
       }
 
@@ -241,7 +277,8 @@ export class LocalWorkbookSessionManager {
           session.agentSessions.set(sessionId, {
             sessionId,
             documentId: request.documentId,
-            replicaId: request.replicaId
+            replicaId: request.replicaId,
+            subscriptionIds: new Set()
           });
           response = { kind: "ok", id: request.id, sessionId };
           break;
@@ -249,6 +286,12 @@ export class LocalWorkbookSessionManager {
 
         case "closeWorkbookSession": {
           const session = this.getSessionByAgentSessionId(request.sessionId);
+          const agentSession = session.agentSessions.get(request.sessionId);
+          if (agentSession) {
+            [...agentSession.subscriptionIds].forEach((subscriptionId) => {
+              this.removeAgentSubscription(session, request.sessionId, subscriptionId);
+            });
+          }
           session.agentSessions.delete(request.sessionId);
           response = { kind: "ok", id: request.id };
           break;
@@ -348,16 +391,50 @@ export class LocalWorkbookSessionManager {
           break;
         }
 
-        case "subscribeRange":
-        case "unsubscribe":
+        case "subscribeRange": {
+          const session = this.getSessionByAgentSessionId(request.sessionId);
+          const agentSession = session.agentSessions.get(request.sessionId);
+          if (!agentSession) {
+            throw new Error(`Unknown agent session: ${request.sessionId}`);
+          }
+          const existingOwner = this.agentSubscriptionOwners.get(request.subscriptionId);
+          if (existingOwner) {
+            throw new Error(`Subscription id already in use: ${request.subscriptionId}`);
+          }
+
+          const changedAddresses = iterateRange(request.range);
+          const unsubscribe = session.engine.subscribeCells(request.range.sheetName, changedAddresses, () => {
+            this.queueAgentEvent(session.documentId, {
+              kind: "rangeChanged",
+              subscriptionId: request.subscriptionId,
+              range: request.range,
+              changedAddresses: [...changedAddresses]
+            });
+          });
+
+          session.agentSubscriptions.set(request.subscriptionId, {
+            subscriptionId: request.subscriptionId,
+            sessionId: request.sessionId,
+            range: request.range,
+            changedAddresses,
+            unsubscribe
+          });
+          agentSession.subscriptionIds.add(request.subscriptionId);
+          this.agentSubscriptionOwners.set(request.subscriptionId, request.sessionId);
           response = {
-            kind: "error",
+            kind: "ok",
             id: request.id,
-            code: "AGENT_STREAM_NOT_WIRED",
-            message: `${request.kind} requires the agent event stream transport, which is not wired in this tranche`,
-            retryable: false
+            value: { subscriptionId: request.subscriptionId }
           };
           break;
+        }
+
+        case "unsubscribe": {
+          const session = this.getSessionByAgentSessionId(request.sessionId);
+          this.removeAgentSubscription(session, request.sessionId, request.subscriptionId);
+          response = { kind: "ok", id: request.id };
+          break;
+        }
 
         default: {
           const exhaustiveRequest: never = request;
@@ -421,12 +498,71 @@ export class LocalWorkbookSessionManager {
     return session;
   }
 
+  private removeAgentSubscription(
+    session: LocalWorkbookSession,
+    sessionId: string,
+    subscriptionId: string
+  ): void {
+    const subscription = session.agentSubscriptions.get(subscriptionId);
+    if (!subscription) {
+      return;
+    }
+    if (subscription.sessionId !== sessionId) {
+      throw new Error(`Subscription ${subscriptionId} does not belong to agent session ${sessionId}`);
+    }
+    subscription.unsubscribe();
+    session.agentSubscriptions.delete(subscriptionId);
+    this.agentSubscriptionOwners.delete(subscriptionId);
+    session.agentSessions.get(sessionId)?.subscriptionIds.delete(subscriptionId);
+    session.eventBacklog = session.eventBacklog.filter((event) => {
+      return event.kind !== "rangeChanged" || event.subscriptionId !== subscriptionId;
+    });
+  }
+
+  private queueAgentEvent(documentId: string, event: AgentEvent): void {
+    const session = this.sessions.get(documentId);
+    if (!session) {
+      return;
+    }
+    session.eventBacklog.push(event);
+    if (session.eventFlushScheduled) {
+      return;
+    }
+    session.eventFlushScheduled = true;
+    setImmediate(() => {
+      session.eventFlushScheduled = false;
+      this.flushQueuedAgentEvents(documentId);
+    });
+  }
+
+  private flushQueuedAgentEvents(documentId: string): void {
+    const session = this.sessions.get(documentId);
+    if (!session || session.eventBacklog.length === 0 || this.agentEventListeners.size === 0) {
+      return;
+    }
+    const pending = session.eventBacklog.splice(0);
+    pending.forEach((event) => {
+      this.agentEventListeners.forEach((listener) => listener(event));
+    });
+  }
+
   private broadcast(documentId: string, frame: ProtocolFrame): void {
     const session = this.sessions.get(documentId);
     if (!session) {
       return;
     }
     session.browserSubscribers.forEach((subscriber) => subscriber.send(frame));
+  }
+
+  private async relayUpstream(session: LocalWorkbookSession, batch: Extract<ProtocolFrame, { kind: "appendBatch" }>["batch"]): Promise<void> {
+    if (!session.upstreamRelay) {
+      return;
+    }
+    try {
+      await session.upstreamRelay.send(batch);
+    } catch (error) {
+      console.error(`Failed to relay batch ${batch.id} for document ${session.documentId}:`, error);
+    }
   }
 
   private ack(documentId: string, batchId: string, cursor: number): AckFrame {

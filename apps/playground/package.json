@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@bilig/benchmarks": "workspace:*",
+    "@bilig/binary-protocol": "workspace:*",
     "@bilig/core": "workspace:*",
     "@bilig/crdt": "workspace:*",
     "@bilig/formula": "workspace:*",
