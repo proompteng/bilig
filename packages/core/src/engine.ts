@@ -441,30 +441,15 @@ export class SpreadsheetEngine {
   }
 
   setPivotTable(sheetName: string, address: string, definition: PivotTableInput): void {
-    const existing = this.workbook.getPivot(sheetName, address);
-    const trimmedName = definition.name.trim();
-    if (trimmedName.length === 0) {
-      throw new Error("Pivot tables must be named");
-    }
-    const rows = existing?.rows ?? 1;
-    const cols = existing?.cols ?? Math.max(definition.groupBy.length + definition.values.length, 1);
-    const nextPivot: WorkbookPivotSnapshot = {
-      name: trimmedName,
+    this.applyLocalOps([{
+      kind: "upsertPivotTable",
+      name: definition.name.trim(),
       sheetName,
       address,
       source: { ...definition.source },
       groupBy: [...definition.groupBy],
-      values: definition.values.map((value) => ({ ...value })),
-      rows,
-      cols
-    };
-
-    if (existing && arePivotRecordsEqual(existing, nextPivot)) {
-      return;
-    }
-
-    this.workbook.setPivot(nextPivot);
-    this.applyPivotMutation(true);
+      values: definition.values.map((v) => ({ ...v }))
+    }]);
   }
 
   deletePivotTable(sheetName: string, address: string): boolean {
@@ -1120,6 +1105,69 @@ export class SpreadsheetEngine {
       return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Ref)], changedCellIndices);
     }
 
+    if (this.wasm.ready) {
+      const bounds = normalizeRange(pivot.source);
+      const rangeAddr = parseRangeAddress(`${pivot.source.sheetName}!${pivot.source.startAddress}:${pivot.source.endAddress}`);
+      const registered = this.ranges.intern(sourceSheet.id, rangeAddr, {
+        ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col),
+        forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn)
+      });
+      this.scheduleWasmProgramSync();
+      this.flushWasmProgramSync();
+
+      const sourceHeader = this.readPivotSourceRows({
+        sheetName: pivot.source.sheetName,
+        startAddress: pivot.source.startAddress,
+        endAddress: formatAddress(bounds.startRow, bounds.endCol)
+      })[0] ?? [];
+      const headerLookup = new Map<string, number>();
+      sourceHeader.forEach((cell, index) => {
+        if (cell.tag === ValueTag.String) {
+          headerLookup.set(cell.value.trim().toUpperCase(), index);
+        }
+      });
+
+      const groupByIndices = new Uint32Array(pivot.groupBy.map((g) => headerLookup.get(g.trim().toUpperCase()) ?? 0));
+      const valueIndices = new Uint32Array(pivot.values.map((v) => headerLookup.get(v.sourceColumn.trim().toUpperCase()) ?? 0));
+      const valueAggs = new Uint8Array(pivot.values.map((v) => (v.summarizeBy === "sum" ? 1 : 2)));
+
+      const materialized = this.wasm.materializePivotTable(
+        registered.rangeIndex,
+        groupByIndices,
+        valueIndices,
+        valueAggs
+      );
+
+      if (materialized) {
+        const values: CellValue[] = [];
+        const count = materialized.rows * materialized.cols;
+        const groupByCount = pivot.groupBy.length;
+        for (let i = 0; i < count; i += 1) {
+          if (i < materialized.cols && i >= groupByCount) {
+            const valueIndex = i - groupByCount;
+            const field = pivot.values[valueIndex]!;
+            const label = field.outputLabel?.trim() || `${field.summarizeBy.toUpperCase()} of ${field.sourceColumn}`;
+            values.push({ tag: ValueTag.String, value: label, stringId: this.strings.intern(label) });
+            continue;
+          }
+          const tag = materialized.tags[i]! as ValueTag;
+          if (tag === ValueTag.Empty) {
+            values.push(emptyValue());
+          } else if (tag === ValueTag.Number) {
+            values.push({ tag: ValueTag.Number, value: materialized.numbers[i]! });
+          } else if (tag === ValueTag.Boolean) {
+            values.push({ tag: ValueTag.Boolean, value: materialized.numbers[i]! !== 0 });
+          } else if (tag === ValueTag.String) {
+            const stringId = materialized.stringIds[i]!;
+            values.push({ tag: ValueTag.String, value: this.strings.get(stringId), stringId });
+          } else if (tag === ValueTag.Error) {
+            values.push({ tag: ValueTag.Error, code: materialized.errors[i]! });
+          }
+        }
+        return this.writePivotOutput(pivot, materialized.rows, materialized.cols, values, changedCellIndices);
+      }
+    }
+
     const materialized = materializePivotTable(this.toPivotDefinition(pivot), this.readPivotSourceRows(pivot.source));
     if (materialized.kind === "error") {
       return this.writePivotOutput(pivot, materialized.rows, materialized.cols, materialized.values, changedCellIndices);
@@ -1505,6 +1553,24 @@ export class SpreadsheetEngine {
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
+          case "upsertPivotTable": {
+            const existing = this.workbook.getPivot(op.sheetName, op.address);
+            const rows = existing?.rows ?? 1;
+            const cols = existing?.cols ?? Math.max(op.groupBy.length + op.values.length, 1);
+            this.workbook.setPivot({
+              name: op.name,
+              sheetName: op.sheetName,
+              address: op.address,
+              source: op.source,
+              groupBy: op.groupBy,
+              values: op.values,
+              rows,
+              cols
+            });
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            refreshAllPivots = true;
+            break;
+          }
         }
         appliedOps += 1;
       });
@@ -1610,6 +1676,21 @@ export class SpreadsheetEngine {
           sheetName: op.sheetName,
           address: op.address,
           format: cellIndex === undefined ? null : (this.workbook.getCellFormat(cellIndex) ?? null)
+        }];
+      }
+      case "upsertPivotTable": {
+        const existing = this.workbook.getPivot(op.sheetName, op.address);
+        if (!existing) {
+          return []; 
+        }
+        return [{
+          kind: "upsertPivotTable",
+          name: existing.name,
+          sheetName: existing.sheetName,
+          address: existing.address,
+          source: { ...existing.source },
+          groupBy: [...existing.groupBy],
+          values: existing.values.map((v) => Object.assign({}, v))
         }];
       }
     }
@@ -2500,6 +2581,8 @@ export class SpreadsheetEngine {
       case "setCellFormula":
       case "clearCell":
         return `cell:${op.sheetName}!${op.address}`;
+      case "upsertPivotTable":
+        return `pivot:${op.name}`;
     }
   }
 
@@ -2515,6 +2598,8 @@ export class SpreadsheetEngine {
         return this.sheetDeleteVersions.get(op.sheetName);
       case "upsertSheet":
         return this.sheetDeleteVersions.get(op.name);
+      case "upsertPivotTable":
+        return this.sheetDeleteVersions.get(op.sheetName) ?? this.sheetDeleteVersions.get(op.source.sheetName);
     }
   }
 
@@ -3071,40 +3156,6 @@ function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32A
   next.set(indices);
   next[indices.length] = cellIndex;
   return next;
-}
-
-function arePivotRecordsEqual(left: WorkbookPivotSnapshot, right: WorkbookPivotSnapshot): boolean {
-  if (
-    left.name !== right.name
-    || left.sheetName !== right.sheetName
-    || left.address !== right.address
-    || left.rows !== right.rows
-    || left.cols !== right.cols
-    || left.source.sheetName !== right.source.sheetName
-    || left.source.startAddress !== right.source.startAddress
-    || left.source.endAddress !== right.source.endAddress
-    || left.groupBy.length !== right.groupBy.length
-    || left.values.length !== right.values.length
-  ) {
-    return false;
-  }
-  for (let index = 0; index < left.groupBy.length; index += 1) {
-    if (left.groupBy[index] !== right.groupBy[index]) {
-      return false;
-    }
-  }
-  for (let index = 0; index < left.values.length; index += 1) {
-    const leftValue = left.values[index]!;
-    const rightValue = right.values[index]!;
-    if (
-      leftValue.sourceColumn !== rightValue.sourceColumn
-      || leftValue.summarizeBy !== rightValue.summarizeBy
-      || leftValue.outputLabel !== rightValue.outputLabel
-    ) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function normalizeRange(range: CellRangeRef): {

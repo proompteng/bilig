@@ -134,6 +134,27 @@ export class WasmKernelFacade {
     this.kernel?.evalBatch(cellIndices);
   }
 
+  materializePivotTable(
+    sourceRangeIndex: number,
+    groupByColumnIndices: Uint32Array,
+    valueColumnIndices: Uint32Array,
+    valueAggregations: Uint8Array
+  ): {
+    rows: number;
+    cols: number;
+    tags: Uint8Array;
+    numbers: Float64Array;
+    stringIds: Uint32Array;
+    errors: Uint16Array;
+  } | undefined {
+    return this.kernel?.materializePivotTable(
+      sourceRangeIndex,
+      groupByColumnIndices,
+      valueColumnIndices,
+      valueAggregations
+    );
+  }
+
   syncToStore(store: CellStore, changedCellIndices: Uint32Array): void {
     if (!this.kernel) return;
     const tags = this.kernel.readTags();

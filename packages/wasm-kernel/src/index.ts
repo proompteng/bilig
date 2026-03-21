@@ -24,6 +24,20 @@ interface RawKernelExports {
   uploadStrings(offsets: number, lengths: number, data: number): void;
   writeCells(tags: number, numbers: number, stringIds: number, errors: number): void;
   evalBatch(cellIndices: number): void;
+  materializePivotTable(
+    sourceRangeIndex: number,
+    groupByCount: number,
+    groupByColumnIndices: number,
+    valueCount: number,
+    valueColumnIndices: number,
+    valueAggregations: number
+  ): void;
+  getPivotResultTagsPtr(): number;
+  getPivotResultNumbersPtr(): number;
+  getPivotResultStringIdsPtr(): number;
+  getPivotResultErrorsPtr(): number;
+  pivotResultRows: { value: number };
+  pivotResultCols: { value: number };
   getTagsPtr(): number;
   getNumbersPtr(): number;
   getStringIdsPtr(): number;
@@ -65,6 +79,13 @@ function isRawKernelExports(value: unknown): value is RawKernelExports {
     "uploadStrings",
     "writeCells",
     "evalBatch",
+    "materializePivotTable",
+    "getPivotResultTagsPtr",
+    "getPivotResultNumbersPtr",
+    "getPivotResultStringIdsPtr",
+    "getPivotResultErrorsPtr",
+    "pivotResultRows",
+    "pivotResultCols",
     "getTagsPtr",
     "getNumbersPtr",
     "getStringIdsPtr",
@@ -113,6 +134,19 @@ export interface SpreadsheetKernel {
   uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void;
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void;
   evalBatch(cellIndices: Uint32Array): void;
+  materializePivotTable(
+    sourceRangeIndex: number,
+    groupByColumnIndices: Uint32Array,
+    valueColumnIndices: Uint32Array,
+    valueAggregations: Uint8Array
+  ): {
+    rows: number;
+    cols: number;
+    tags: Uint8Array;
+    numbers: Float64Array;
+    stringIds: Uint32Array;
+    errors: Uint16Array;
+  };
   readTags(): Uint8Array;
   readNumbers(): Float64Array;
   readStringIds(): Uint32Array;
@@ -279,6 +313,31 @@ class RawKernelBridge {
     }
   }
 
+  materializePivotTable(
+    sourceRangeIndex: number,
+    groupByColumnIndices: Uint32Array,
+    valueColumnIndices: Uint32Array,
+    valueAggregations: Uint8Array
+  ): void {
+    const groupByPtr = this.lowerTypedArray(groupByColumnIndices, uint32Spec);
+    const valueColsPtr = this.lowerTypedArray(valueColumnIndices, uint32Spec);
+    const valueAggsPtr = this.lowerTypedArray(valueAggregations, uint8Spec);
+    try {
+      this.raw.materializePivotTable(
+        sourceRangeIndex,
+        groupByColumnIndices.length,
+        groupByPtr,
+        valueColumnIndices.length,
+        valueColsPtr,
+        valueAggsPtr
+      );
+    } finally {
+      this.raw.__unpin(groupByPtr);
+      this.raw.__unpin(valueColsPtr);
+      this.raw.__unpin(valueAggsPtr);
+    }
+  }
+
   private lowerTypedArray<T extends TypedArrayValue>(values: T, spec: LoweredArraySpec<T>): number {
     const byteLength = values.length << spec.align;
     const bufferPtr = this.raw.__pin(this.raw.__new(byteLength, ARRAY_BUFFER_CLASS_ID));
@@ -392,6 +451,39 @@ class KernelHandle implements SpreadsheetKernel {
   evalBatch(cellIndices: Uint32Array): void {
     this.bridge.evalBatch(cellIndices);
     this.refreshViews();
+  }
+
+  materializePivotTable(
+    sourceRangeIndex: number,
+    groupByColumnIndices: Uint32Array,
+    valueColumnIndices: Uint32Array,
+    valueAggregations: Uint8Array
+  ): {
+    rows: number;
+    cols: number;
+    tags: Uint8Array;
+    numbers: Float64Array;
+    stringIds: Uint32Array;
+    errors: Uint16Array;
+  } {
+    this.bridge.materializePivotTable(
+      sourceRangeIndex,
+      groupByColumnIndices,
+      valueColumnIndices,
+      valueAggregations
+    );
+    const rows = this.raw.pivotResultRows.value;
+    const cols = this.raw.pivotResultCols.value;
+    const size = rows * cols;
+    const memory = this.raw.memory.buffer;
+    return {
+      rows,
+      cols,
+      tags: new Uint8Array(memory, this.raw.getPivotResultTagsPtr(), size),
+      numbers: new Float64Array(memory, this.raw.getPivotResultNumbersPtr(), size),
+      stringIds: new Uint32Array(memory, this.raw.getPivotResultStringIdsPtr(), size),
+      errors: new Uint16Array(memory, this.raw.getPivotResultErrorsPtr(), size)
+    };
   }
 
   readTags(): Uint8Array {

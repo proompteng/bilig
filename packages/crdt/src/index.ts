@@ -1,4 +1,8 @@
-import type { LiteralInput } from "@bilig/protocol";
+import type {
+  CellRangeRef,
+  LiteralInput,
+  WorkbookPivotValueSnapshot
+} from "@bilig/protocol";
 
 export type ReplicaId = string;
 export type OpId = string;
@@ -14,7 +18,16 @@ export type EngineOp =
   | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
   | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
-  | { kind: "clearCell"; sheetName: string; address: string };
+  | { kind: "clearCell"; sheetName: string; address: string }
+  | {
+      kind: "upsertPivotTable";
+      name: string;
+      sheetName: string;
+      address: string;
+      source: CellRangeRef;
+      groupBy: string[];
+      values: WorkbookPivotValueSnapshot[];
+    };
 
 export interface EngineOpBatch {
   id: OpId;
@@ -143,6 +156,8 @@ function entityKeyForOp(op: EngineOp): string {
       return `cell:${op.sheetName}!${op.address}`;
     case "setCellFormat":
       return `format:${op.sheetName}!${op.address}`;
+    case "upsertPivotTable":
+      return `pivot:${op.name}`;
   }
 }
 
@@ -158,6 +173,8 @@ function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, O
       return latestSheetDeletes.get(op.sheetName);
     case "upsertSheet":
       return latestSheetDeletes.get(op.name);
+    case "upsertPivotTable":
+      return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
   }
 }
 

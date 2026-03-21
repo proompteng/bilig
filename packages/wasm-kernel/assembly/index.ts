@@ -30,3 +30,13 @@ export {
   getRangeCapacity,
   getMemberCapacity
 } from "./vm";
+
+export {
+  materializePivotTable,
+  getPivotResultTagsPtr,
+  getPivotResultNumbersPtr,
+  getPivotResultStringIdsPtr,
+  getPivotResultErrorsPtr,
+  pivotResultRows,
+  pivotResultCols
+} from "./pivot";

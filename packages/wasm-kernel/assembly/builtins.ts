@@ -1041,5 +1041,78 @@ export function applyBuiltin(
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, result, rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
+  if (builtinId == BuiltinId.Sin && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.sin(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Cos && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.cos(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Tan && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.tan(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Asin && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.asin(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Acos && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.acos(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Atan && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.atan(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Atan2 && argc == 2) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.atan2(toNumberOrZero(tagStack[base], valueStack[base]), toNumberOrZero(tagStack[base + 1], valueStack[base + 1])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Degrees && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, toNumberOrZero(tagStack[base], valueStack[base]) * 180.0 / Math.PI, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Radians && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, toNumberOrZero(tagStack[base], valueStack[base]) * Math.PI / 180.0, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Exp && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.exp(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Ln && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.log(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Log10 && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.log10(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Log && (argc == 1 || argc == 2)) {
+    const num = toNumberOrZero(tagStack[base], valueStack[base]);
+    const baseVal = argc == 2 ? toNumberOrZero(tagStack[base + 1], valueStack[base + 1]) : 10.0;
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.log(num) / Math.log(baseVal), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Power && argc == 2) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.pow(toNumberOrZero(tagStack[base], valueStack[base]), toNumberOrZero(tagStack[base + 1], valueStack[base + 1])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Sqrt && argc == 1) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.sqrt(toNumberOrZero(tagStack[base], valueStack[base])), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+  if (builtinId == BuiltinId.Pi && argc == 0) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, Math.PI, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Ifna && argc == 2) {
+    const tag = tagStack[base];
+    const value = valueStack[base];
+    if (tag == ValueTag.Error && <i32>value == ErrorCode.NA) {
+      kindStack[base] = kindStack[base + 1];
+      tagStack[base] = tagStack[base + 1];
+      valueStack[base] = valueStack[base + 1];
+      rangeIndexStack[base] = rangeIndexStack[base + 1];
+      return base + 1;
+    }
+    return base + 1;
+  }
+
+  if (builtinId == BuiltinId.Days && argc == 2) {
+    const end = excelSerialWhole(tagStack[base], valueStack[base]);
+    const start = excelSerialWhole(tagStack[base + 1], valueStack[base + 1]);
+    if (end == i32.MIN_VALUE || start == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>(end - start), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
 }

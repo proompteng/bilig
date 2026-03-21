@@ -436,6 +436,18 @@ export class LocalWorkbookSessionManager {
           break;
         }
 
+        case "createPivotTable": {
+          const session = this.getSessionByAgentSessionId(request.sessionId);
+          session.engine.setPivotTable(request.sheetName, request.address, {
+            name: request.name,
+            source: request.source,
+            groupBy: request.groupBy,
+            values: request.values
+          });
+          response = { kind: "ok", id: request.id };
+          break;
+        }
+
         default: {
           const exhaustiveRequest: never = request;
           response = {

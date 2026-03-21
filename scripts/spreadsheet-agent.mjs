@@ -12,6 +12,7 @@ function printUsage() {
   pnpm sheet:agent set-formula --sheet Sheet1 --addr B1 --formula 'SUM(A1:A10)'
   pnpm sheet:agent set-formulas --range Sheet1!B1:B2 --formulas '[["A1*2"],["A2*2"]]'
   pnpm sheet:agent clear-range --range Sheet1!A1:B2
+  pnpm sheet:agent create-pivot --name MyPivot --sheet Sheet1 --addr D1 --source Sheet2!A1:C100 --group '["Category"]' --values '[{"sourceColumn":"Amount","summarizeBy":"sum"}]'
   pnpm sheet:agent get-metrics
   pnpm sheet:agent export-snapshot
 `);
@@ -213,6 +214,22 @@ async function main() {
             kind: "exportSnapshot",
             id: `export-snapshot:${Date.now()}`,
             sessionId
+          }
+        });
+        break;
+      case "create-pivot":
+        response = await sendFrame(server, {
+          kind: "request",
+          request: {
+            kind: "createPivotTable",
+            id: `create-pivot:${Date.now()}`,
+            sessionId,
+            name: options.name,
+            sheetName: options.sheet,
+            address: options.addr,
+            source: parseRange(options.source, options.sheet),
+            groupBy: parseJson(options.group, "--group"),
+            values: parseJson(options.values, "--values")
           }
         });
         break;

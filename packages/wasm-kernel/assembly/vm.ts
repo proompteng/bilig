@@ -16,9 +16,9 @@ let programTargets = new Uint32Array(64);
 let constantArena = new Float64Array(64);
 let constantOffsets = new Uint32Array(64);
 let constantLengths = new Uint32Array(64);
-let rangeOffsets = new Uint32Array(64);
-let rangeLengths = new Uint32Array(64);
-let rangeMembers = new Uint32Array(64);
+export let rangeOffsets = new Uint32Array(64);
+export let rangeLengths = new Uint32Array(64);
+export let rangeMembers = new Uint32Array(64);
 let formulaForCell = new Uint32Array(64);
 let formulaCount = 0;
 

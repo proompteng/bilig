@@ -1,3 +1,8 @@
+import type {
+  CellRangeRef,
+  PivotAggregation,
+  WorkbookPivotValueSnapshot
+} from "@bilig/protocol";
 import type { EngineOp, EngineOpBatch } from "@bilig/crdt";
 import type { LiteralInput } from "@bilig/protocol";
 
@@ -121,7 +126,8 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   setCellValue: 4,
   setCellFormula: 5,
   setCellFormat: 6,
-  clearCell: 7
+  clearCell: 7,
+  upsertPivotTable: 8
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -283,6 +289,65 @@ function decodeLiteral(reader: BinaryReader): LiteralInput {
   }
 }
 
+function encodeCellRangeRef(writer: BinaryWriter, ref: CellRangeRef): void {
+  writer.string(ref.sheetName);
+  writer.string(ref.startAddress);
+  writer.string(ref.endAddress);
+}
+
+function decodeCellRangeRef(reader: BinaryReader): CellRangeRef {
+  return {
+    sheetName: reader.string(),
+    startAddress: reader.string(),
+    endAddress: reader.string()
+  };
+}
+
+function encodePivotAggregation(writer: BinaryWriter, agg: PivotAggregation): void {
+  switch (agg) {
+    case "sum":
+      writer.u8(1);
+      return;
+    case "count":
+      writer.u8(2);
+      return;
+  }
+}
+
+function decodePivotAggregation(reader: BinaryReader): PivotAggregation {
+  switch (reader.u8()) {
+    case 1:
+      return "sum";
+    case 2:
+      return "count";
+    default:
+      throw new BinaryProtocolError("Unknown pivot aggregation tag");
+  }
+}
+
+function encodePivotValue(writer: BinaryWriter, value: WorkbookPivotValueSnapshot): void {
+  writer.string(value.sourceColumn);
+  encodePivotAggregation(writer, value.summarizeBy);
+  writer.bool(value.outputLabel !== undefined);
+  if (value.outputLabel !== undefined) {
+    writer.string(value.outputLabel);
+  }
+}
+
+function decodePivotValue(reader: BinaryReader): WorkbookPivotValueSnapshot {
+  const sourceColumn = reader.string();
+  const summarizeBy = decodePivotAggregation(reader);
+  const hasLabel = reader.bool();
+  const result: WorkbookPivotValueSnapshot = {
+    sourceColumn,
+    summarizeBy
+  };
+  if (hasLabel) {
+    result.outputLabel = reader.string();
+  }
+  return result;
+}
+
 function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
   writer.u8(OP_TAGS[op.kind]);
   switch (op.kind) {
@@ -317,6 +382,15 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case "clearCell":
       writer.string(op.sheetName);
       writer.string(op.address);
+      return;
+    case "upsertPivotTable":
+      writer.string(op.name);
+      writer.string(op.sheetName);
+      writer.string(op.address);
+      encodeCellRangeRef(writer, op.source);
+      writer.stringArray(op.groupBy);
+      writer.u32(op.values.length);
+      op.values.forEach((v) => encodePivotValue(writer, v));
       return;
     default:
       assertNever(op);
@@ -358,6 +432,21 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
     }
     case 7:
       return { kind: "clearCell", sheetName: reader.string(), address: reader.string() };
+    case 8:
+      return {
+        kind: "upsertPivotTable",
+        name: reader.string(),
+        sheetName: reader.string(),
+        address: reader.string(),
+        source: decodeCellRangeRef(reader),
+        groupBy: reader.stringArray(),
+        values: (() => {
+          const count = reader.u32();
+          const values: WorkbookPivotValueSnapshot[] = [];
+          for (let i = 0; i < count; i++) values.push(decodePivotValue(reader));
+          return values;
+        })()
+      };
     default:
       throw new BinaryProtocolError("Unknown engine op tag");
   }

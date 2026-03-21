@@ -1,4 +1,11 @@
-import type { CellRangeRef, CellValue, LiteralInput, SyncState, WorkbookSnapshot } from "@bilig/protocol";
+import type {
+  CellRangeRef,
+  CellValue,
+  LiteralInput,
+  SyncState,
+  WorkbookPivotValueSnapshot,
+  WorkbookSnapshot
+} from "@bilig/protocol";
 
 export const AGENT_PROTOCOL_VERSION = 1;
 export const AGENT_STDIN_MAGIC = 0x41474e54;
@@ -22,7 +29,18 @@ export type AgentRequest =
   | { kind: "unsubscribe"; id: string; sessionId: string; subscriptionId: string }
   | { kind: "exportSnapshot"; id: string; sessionId: string }
   | { kind: "importSnapshot"; id: string; sessionId: string; snapshot: WorkbookSnapshot }
-  | { kind: "getMetrics"; id: string; sessionId: string };
+  | { kind: "getMetrics"; id: string; sessionId: string }
+  | {
+      kind: "createPivotTable";
+      id: string;
+      sessionId: string;
+      name: string;
+      sheetName: string;
+      address: string;
+      source: CellRangeRef;
+      groupBy: string[];
+      values: WorkbookPivotValueSnapshot[];
+    };
 
 export type AgentResponse =
   | { kind: "ok"; id: string; sessionId?: string; value?: unknown }

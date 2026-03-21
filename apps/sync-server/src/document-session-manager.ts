@@ -134,6 +134,7 @@ export class DocumentSessionManager {
         case "unsubscribe":
         case "exportSnapshot":
         case "importSnapshot":
+        case "createPivotTable":
           return this.worksheetExecutor.execute(frame);
         case "getMetrics":
           break;
@@ -178,6 +179,7 @@ export class DocumentSessionManager {
       case "unsubscribe":
       case "exportSnapshot":
       case "importSnapshot":
+      case "createPivotTable":
         response = {
           kind: "error",
           id: request.id,
