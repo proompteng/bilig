@@ -80,6 +80,9 @@ importers:
       '@bilig/benchmarks':
         specifier: workspace:*
         version: link:../../packages/benchmarks
+      '@bilig/binary-protocol':
+        specifier: workspace:*
+        version: link:../../packages/binary-protocol
       '@bilig/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -138,6 +141,9 @@ importers:
       '@bilig/benchmarks':
         specifier: workspace:*
         version: link:../../packages/benchmarks
+      '@bilig/binary-protocol':
+        specifier: workspace:*
+        version: link:../../packages/binary-protocol
       '@bilig/core':
         specifier: workspace:*
         version: link:../../packages/core

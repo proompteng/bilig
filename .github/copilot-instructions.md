@@ -2,7 +2,8 @@
 
 ## Toolchain and commands
 
-- Use Node `>=24.14.0` and `pnpm 10.32.1` (`.nvmrc`, root `package.json`, and CI all enforce this).
+- Use Node `>=24.14.0` and `pnpm 10.32.1` (`.nvmrc`, `.node-version`, root `package.json`, and CI all enforce this).
+- Activate the pinned runtime before running `pnpm` commands (`nvm use` in a normal shell, or let your version manager honor `.node-version` automatically).
 - Install dependencies with `pnpm install`.
 - Start the default app shell with `pnpm dev` (`apps/playground`).
 - Other dev entrypoints:
@@ -22,6 +23,7 @@
 - Run the product web-shell Playwright suite with `pnpm exec playwright test e2e/tests/web-shell.pw.ts --config playwright.web.config.ts`.
 - Run the full repository gate with `pnpm run ci`.
 - Run the local pre-push equivalent plus cleanliness checks with `pnpm run ci:strict`.
+- Use `tea` for Forgejo workflow checks and logs (for example `tea login ls`, `tea actions ls`, and `tea actions jobs --run <id>`).
 
 ## High-level architecture
 
