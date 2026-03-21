@@ -16,6 +16,11 @@ jobs:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4
 
+      - name: Setup Node
+        uses: https://data.forgejo.org/actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+
       - name: Log runner environment
         run: |
           set -eu
