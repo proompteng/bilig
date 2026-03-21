@@ -124,7 +124,8 @@ async function stopChildProcess(process: ChildProcess) {
 }
 
 async function startLocalServer(port: number) {
-  const child = spawn("node", ["apps/local-server/dist/src/index.js"], {
+  const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const child = spawn(pnpmCommand, ["exec", "tsx", "apps/local-server/src/index.ts"], {
     cwd: process.cwd(),
     env: {
       ...process.env,
