@@ -28,7 +28,12 @@ function createFrameReader(stream: PassThrough) {
         }
         queued.push(...decoded.frames);
         stream.off("data", onData);
-        resolve(queued.shift()!);
+        const nextFrame = queued.shift();
+        if (!nextFrame) {
+          reject(new Error("Expected at least one decoded stdio frame"));
+          return;
+        }
+        resolve(nextFrame);
       };
       stream.on("data", onData);
       stream.once("error", reject);
