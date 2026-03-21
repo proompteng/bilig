@@ -71,16 +71,20 @@ export function attachStdioAgentLoop(options: StdioAgentLoopOptions): { dispose(
         return;
       }
       queue = queue
-        .then(async () => {
-          for (const frame of frames) {
-            const response = await options.handler.handleAgentFrame(frame);
-            if (disposed) {
-              return undefined;
-            }
-            output.write(Buffer.from(encodeStdioMessage(response)));
-          }
-          return undefined;
-        })
+        .then(() =>
+          frames.reduce<Promise<void | undefined>>(
+            (current, frame) =>
+              current.then(async () => {
+                const response = await options.handler.handleAgentFrame(frame);
+                if (disposed) {
+                  return undefined;
+                }
+                output.write(Buffer.from(encodeStdioMessage(response)));
+                return undefined;
+              }),
+            Promise.resolve(undefined)
+          )
+        )
         .catch((error: unknown) => {
           onError(error instanceof Error ? error : new Error(String(error)));
         });

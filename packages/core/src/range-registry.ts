@@ -207,7 +207,7 @@ function materializeDynamicMembers(
   materializer: RangeMaterializer
 ): Uint32Array {
   let matchCount = 0;
-  materializer.forEachSheetCell(sheetId, (cellIndex, row, col) => {
+  materializer.forEachSheetCell(sheetId, (_cellIndex, row, col) => {
     if (kind === "rows") {
       if (row >= range.start.row && row <= range.end.row) {
         matchCount += 1;

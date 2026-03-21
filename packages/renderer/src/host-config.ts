@@ -19,6 +19,11 @@ export interface WorkbookContainer {
   lastError: Error | null;
 }
 
+type WorkbookReconcilerInstance = {
+  createContainer(...args: unknown[]): unknown;
+  updateContainer(...args: unknown[]): void;
+};
+
 let currentUpdatePriority = DefaultEventPriority;
 const rootHostContext = Object.freeze({ kind: "workbook-root" });
 type WorkbookHostProps = WorkbookProps | SheetProps | CellProps;
@@ -394,4 +399,4 @@ export const workbookHostConfig = {
   }
 };
 
-export const WorkbookReconciler = Reconciler(workbookHostConfig);
+export const WorkbookReconciler: WorkbookReconcilerInstance = Reconciler(workbookHostConfig);

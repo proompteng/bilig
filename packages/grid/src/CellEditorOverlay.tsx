@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { EditMovement } from "./SheetGridView.js";
 
 function normalizeNumpadKey(key: string, code: string): string | null {

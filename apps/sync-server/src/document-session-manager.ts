@@ -1,9 +1,9 @@
-import {
-  type AckFrame,
-  type CursorWatermarkFrame,
-  type ErrorFrame,
-  type HeartbeatFrame,
-  type ProtocolFrame
+import type {
+  AckFrame,
+  CursorWatermarkFrame,
+  ErrorFrame,
+  HeartbeatFrame,
+  ProtocolFrame
 } from "@bilig/binary-protocol";
 import type { AgentFrame, AgentResponse } from "@bilig/agent-api";
 import {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";

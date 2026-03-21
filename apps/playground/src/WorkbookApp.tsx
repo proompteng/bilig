@@ -1,4 +1,4 @@
-import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SpreadsheetEngine, type CommitOp } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/crdt";
 import { createWorkbookRendererRoot } from "@bilig/renderer";
@@ -196,11 +196,17 @@ function parseSelectionTarget(input: string, fallbackSheet: string): { sheetName
 }
 
 async function waitForTaskCycles(count = 2): Promise<void> {
-  for (let remaining = count; remaining > 0; remaining -= 1) {
+  const advance = async (remaining: number): Promise<void> => {
+    if (remaining <= 0) {
+      return;
+    }
     await new Promise<void>((resolve) => {
       window.setTimeout(() => resolve(), 0);
     });
-  }
+    await advance(remaining - 1);
+  };
+
+  await advance(count);
 }
 
 async function settleRendererBoundary(operation: Promise<void>): Promise<void> {
@@ -326,6 +332,9 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
 
     void Promise.all([engine.ready(), mirrorEngine.ready()]).then(async () => {
       if (isProductShell) {
+        if (engine.workbook.sheetsByName.size === 0) {
+          engine.createSheet("Sheet1");
+        }
         if (!cancelled) {
           setReplicationReady(true);
         }

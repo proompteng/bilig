@@ -1,4 +1,3 @@
-import React from "react";
 import { FormulaMode, ValueTag, formatErrorCode, type ExplainCellSnapshot } from "@bilig/protocol";
 
 function formatValue(snapshot: ExplainCellSnapshot): string {

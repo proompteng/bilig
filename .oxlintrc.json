@@ -18,11 +18,14 @@
   ],
   "categories": {
     "correctness": "error",
+    "perf": "error",
     "suspicious": "error"
   },
   "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
     "@typescript-eslint/no-base-to-string": "error",
     "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/no-import-type-side-effects": "error",
     "@typescript-eslint/no-unnecessary-type-assertion": "error",
     "@typescript-eslint/no-unsafe-enum-comparison": "error",
     "@typescript-eslint/no-unsafe-type-assertion": "error",
@@ -34,6 +37,10 @@
         "checkLoops": false
       }
     ],
+    "promise/always-return": "error",
+    "promise/no-multiple-resolved": "error",
+    "promise/no-promise-in-callback": "error",
+    "react/react-in-jsx-scope": "off",
     "oxc/no-async-endpoint-handlers": "off"
   }
 }

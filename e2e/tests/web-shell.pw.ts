@@ -79,8 +79,10 @@ async function reserveLocalPort(): Promise<number> {
 
 async function waitForLocalServerHealthy(localServerUrl: string, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
-  let lastError: string | null = null;
-  while (Date.now() < deadline) {
+  const poll = async (lastError: string | null): Promise<void> => {
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for local-server on ${localServerUrl}${lastError ? `: ${lastError}` : ""}`);
+    }
     try {
       const response = await fetch(`${localServerUrl}/healthz`);
       if (response.ok) {
@@ -91,8 +93,10 @@ async function waitForLocalServerHealthy(localServerUrl: string, timeoutMs = 15_
       lastError = error instanceof Error ? error.message : String(error);
     }
     await delay(250);
-  }
-  throw new Error(`Timed out waiting for local-server on ${localServerUrl}${lastError ? `: ${lastError}` : ""}`);
+    await poll(lastError);
+  };
+
+  await poll(null);
 }
 
 async function stopChildProcess(process: ChildProcess) {
@@ -300,11 +304,10 @@ async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], c
 }
 
 async function getProductColumnLeft(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
-  let offset = PRODUCT_ROW_MARKER_WIDTH;
-  for (let index = 0; index < columnIndex; index += 1) {
-    offset += await getProductColumnWidth(page, index);
-  }
-  return offset;
+  const widths = await Promise.all(
+    Array.from({ length: columnIndex }, (_, index) => getProductColumnWidth(page, index))
+  );
+  return PRODUCT_ROW_MARKER_WIDTH + widths.reduce((total, width) => total + width, 0);
 }
 
 async function dragProductColumnResize(
@@ -545,7 +548,7 @@ test("web app renders the minimal product shell without playground chrome", asyn
   await expect(page.getByTestId("metrics-panel")).toHaveCount(0);
   await expect(page.getByTestId("replica-panel")).toHaveCount(0);
 
-  await expect(page.getByTestId("status-mode")).toHaveText("Live");
+  await expect(page.getByTestId("status-mode")).toHaveText("Local");
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await expect(page.getByTestId("status-sync")).toHaveText("Ready");
   await expect(page.locator(".formula-result-shell")).toHaveCount(0);

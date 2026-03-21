@@ -7,13 +7,18 @@ import type { EngineEvent } from "@bilig/protocol";
 import { createWorkerEngineClient, createWorkerEngineHost } from "../index.js";
 
 async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+  const poll = async (remainingAttempts: number): Promise<void> => {
     if (predicate()) {
       return;
     }
+    if (remainingAttempts <= 0) {
+      throw new Error("Timed out waiting for worker transport condition");
+    }
     await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error("Timed out waiting for worker transport condition");
+    await poll(remainingAttempts - 1);
+  };
+
+  await poll(attempts);
 }
 
 describe("worker transport", () => {

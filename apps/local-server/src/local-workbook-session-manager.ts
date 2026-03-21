@@ -3,12 +3,12 @@ import {
   type EngineReplicaSnapshot
 } from "@bilig/core";
 import type { CellRangeRef, CellValue } from "@bilig/protocol";
-import {
-  type AckFrame,
-  type CursorWatermarkFrame,
-  type ErrorFrame,
-  type HeartbeatFrame,
-  type ProtocolFrame
+import type {
+  AckFrame,
+  CursorWatermarkFrame,
+  ErrorFrame,
+  HeartbeatFrame,
+  ProtocolFrame
 } from "@bilig/binary-protocol";
 import type { AgentEvent, AgentFrame, AgentResponse } from "@bilig/agent-api";
 import { shouldApplyBatch } from "@bilig/crdt";

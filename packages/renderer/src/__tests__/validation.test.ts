@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateDescriptorTree } from "../validation.js";
-import type { CellDescriptor, SheetDescriptor, WorkbookDescriptor } from "../descriptors.js";
+import type { CellDescriptor, CellProps, SheetDescriptor, WorkbookDescriptor } from "../descriptors.js";
 
-function cell(props: any): CellDescriptor {
+function cell(props: CellProps): CellDescriptor {
   return {
     kind: "Cell",
     props,

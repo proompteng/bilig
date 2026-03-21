@@ -1,4 +1,3 @@
-import React from "react";
 import type { RecalcMetrics } from "@bilig/protocol";
 
 export function MetricsPanel({ metrics }: { metrics: RecalcMetrics }) {

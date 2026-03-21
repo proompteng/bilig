@@ -19,9 +19,7 @@ const bannedPatterns = [
 
 const violations = [];
 
-for (const relativeRoot of roots) {
-  await walk(path.join(root, relativeRoot));
-}
+await Promise.all(roots.map(async (relativeRoot) => walk(path.join(root, relativeRoot))));
 
 if (violations.length > 0) {
   console.error("Canonical naming check failed:");
@@ -38,9 +36,7 @@ async function walk(currentPath) {
       return;
     }
     const entries = await readdir(currentPath, { withFileTypes: true });
-    for (const entry of entries) {
-      await walk(path.join(currentPath, entry.name));
-    }
+    await Promise.all(entries.map(async (entry) => walk(path.join(currentPath, entry.name))));
     return;
   }
 

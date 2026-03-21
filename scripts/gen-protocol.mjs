@@ -193,9 +193,7 @@ const generatedFiles = [
 
 async function main() {
   const checkMode = process.argv.includes("--check");
-  const staleFiles = [];
-
-  for (const file of generatedFiles) {
+  const staleFiles = (await Promise.all(generatedFiles.map(async (file) => {
     let existing = "";
     try {
       existing = await readFile(file.path, "utf8");
@@ -203,13 +201,14 @@ async function main() {
       existing = "";
     }
 
-    if (existing !== file.contents) {
-      staleFiles.push(path.relative(repoRoot, file.path));
-      if (!checkMode) {
-        await writeFile(file.path, file.contents, "utf8");
-      }
+    if (existing === file.contents) {
+      return null;
     }
-  }
+    if (!checkMode) {
+      await writeFile(file.path, file.contents, "utf8");
+    }
+    return path.relative(repoRoot, file.path);
+  }))).filter((entry) => entry !== null);
 
   if (checkMode && staleFiles.length > 0) {
     console.error(`Protocol artifacts are stale:\n${staleFiles.map((entry) => `- ${entry}`).join("\n")}`);

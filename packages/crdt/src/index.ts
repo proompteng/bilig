@@ -181,9 +181,8 @@ export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
   });
 
   return ordered
-    .map((batch) => ({
-      ...batch,
-      ops: batch.ops.filter((op, opIndex) => {
+    .map((batch) => {
+      const ops = batch.ops.filter((op, opIndex) => {
         const order = batchOpOrder(batch, opIndex);
         const sheetDeleteBarrier = sheetDeleteBarrierForOp(op, latestSheetDeletes);
         if (sheetDeleteBarrier && compareOpOrder(order, sheetDeleteBarrier) <= 0) {
@@ -192,8 +191,14 @@ export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
 
         const latestOrder = latestByEntity.get(entityKeyForOp(op));
         return latestOrder !== undefined && compareOpOrder(order, latestOrder) === 0;
-      })
-    }))
+      });
+      return {
+        id: batch.id,
+        replicaId: batch.replicaId,
+        clock: batch.clock,
+        ops
+      };
+    })
     .filter((batch) => batch.ops.length > 0);
 }
 

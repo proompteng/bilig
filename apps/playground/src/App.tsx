@@ -1,4 +1,3 @@
-import React from "react";
 import { WorkbookApp } from "./WorkbookApp.js";
 
 export { type WorkbookAppProps, type WorkbookAppVariant } from "./WorkbookApp.js";

@@ -1,5 +1,10 @@
 declare module "react-reconciler" {
-  const Reconciler: (hostConfig: unknown) => any;
+  interface WorkbookReconcilerInstance {
+    createContainer(...args: unknown[]): unknown;
+    updateContainer(...args: unknown[]): void;
+  }
+
+  const Reconciler: (hostConfig: unknown) => WorkbookReconcilerInstance;
   export default Reconciler;
 }
 
