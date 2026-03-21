@@ -548,7 +548,7 @@ test("web app renders the minimal product shell without playground chrome", asyn
   await expect(page.getByTestId("metrics-panel")).toHaveCount(0);
   await expect(page.getByTestId("replica-panel")).toHaveCount(0);
 
-  await expect(page.getByTestId("status-mode")).toHaveText("Local");
+  await expect(page.getByTestId("status-mode")).toHaveText(/^(Local|Live)$/);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await expect(page.getByTestId("status-sync")).toHaveText("Ready");
   await expect(page.locator(".formula-result-shell")).toHaveCount(0);

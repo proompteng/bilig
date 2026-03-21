@@ -38,7 +38,7 @@
     "local-first"
   ],
   "engines": {
-    "node": ">=24.14.0"
+    "node": ">=24.11.1"
   },
   "publishConfig": {
     "access": "public"

@@ -18,7 +18,7 @@ jobs:
         include:
           - node: "22"
             bench_tolerance: "5"
-          - node: "24.14.0"
+          - node: "24.11.1"
             bench_tolerance: "1.5"
     env:
       BILIG_BENCH_TOLERANCE: ${{ matrix.bench_tolerance }}

@@ -12,8 +12,6 @@ jobs:
     name: strict-verify
     runs-on: bilig-ci
     timeout-minutes: 20
-    env:
-      NODE_VERSION: 24.14.0
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4
@@ -25,29 +23,8 @@ jobs:
           pwd
           env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH)=' || true
 
-          case "$(uname -m)" in
-            x86_64|amd64) node_arch=x64 ;;
-            arm64|aarch64) node_arch=arm64 ;;
-            *)
-              echo "Unsupported runner architecture: $(uname -m)" >&2
-              exit 1
-              ;;
-          esac
-
-          node_root="${RUNNER_TEMP:-$PWD/.runner-tmp}/node-v${NODE_VERSION}-linux-${node_arch}"
-          archive="${node_root}.tar.xz"
-
-          mkdir -p "$(dirname "$node_root")"
-          rm -rf "$node_root" "$archive"
-
-          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" -o "$archive"
-          tar -xJf "$archive" -C "$(dirname "$node_root")"
-
-          export PATH="${node_root}/bin:$PATH"
-          hash -r
-
           node --version
-          node -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); if (major < 24 || (major === 24 && (minor < 14 || (minor === 14 && patch < 0)))) { console.error(`Node ${process.versions.node} is below the required 24.14.0 baseline`); process.exit(1); }'
+          node -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); if (major < 24 || (major === 24 && (minor < 11 || (minor === 11 && patch < 1)))) { console.error(`Node ${process.versions.node} is below the required 24.11.1 baseline`); process.exit(1); }'
 
           corepack enable
           pnpm --version

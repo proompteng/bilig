@@ -2,7 +2,7 @@
 
 ## Toolchain and commands
 
-- Use Node `>=24.14.0` and `pnpm 10.32.1` (`.nvmrc`, `.node-version`, root `package.json`, and CI all enforce this).
+- Use Node `>=24.11.1` and `pnpm 10.32.1` (`.nvmrc`, `.node-version`, root `package.json`, and CI all enforce this).
 - Activate the pinned runtime before running `pnpm` commands (`nvm use` in a normal shell, or let your version manager honor `.node-version` automatically).
 - Install dependencies with `pnpm install`.
 - Start the default app shell with `pnpm dev` (`apps/playground`).
