@@ -8,17 +8,33 @@ import {
   isWasmCompatibilityStatus,
   wasmCompatibilityStatuses
 } from "../compatibility.js";
-import { canonicalFormulaFixtures, canonicalFormulaSmokeSuite, excelFixtureFamilies, excelFixtureIdPattern } from "../../../excel-fixtures/src/index.js";
+import {
+  canonicalFormulaFixtures,
+  canonicalFormulaSmokeSuite,
+  canonicalWorkbookSemanticsFixtures,
+  excelFixtureFamilies,
+  excelFixtureIdPattern
+} from "../../../excel-fixtures/src/index.js";
 
 describe("formula compatibility registry", () => {
   it("keeps the canonical formula fixture corpus and registry in exact lockstep", () => {
+    const canonicalRegistryEntries = formulaCompatibilityRegistry.filter((entry) => entry.scope === "canonical");
+
     expect(canonicalFormulaFixtures).toHaveLength(100);
-    expect(formulaCompatibilityRegistry).toHaveLength(100);
+    expect(canonicalRegistryEntries).toHaveLength(canonicalFormulaFixtures.length);
 
     const fixtureIds = new Set(canonicalFormulaFixtures.map((fixture) => fixture.id));
-    const registryIds = new Set(formulaCompatibilityRegistry.map((entry) => entry.id));
+    const registryIds = new Set(canonicalRegistryEntries.map((entry) => entry.id));
 
     expect([...fixtureIds].sort()).toEqual([...registryIds].sort());
+  });
+
+  it("tracks workbook semantics fixtures as extended coverage without redefining the canonical corpus", () => {
+    const workbookSemanticsIds = new Set(canonicalWorkbookSemanticsFixtures.map((fixture) => fixture.id));
+    const extendedRegistryEntries = formulaCompatibilityRegistry.filter((entry) => entry.scope === "extended");
+
+    expect(extendedRegistryEntries).toHaveLength(canonicalWorkbookSemanticsFixtures.length);
+    expect(new Set(extendedRegistryEntries.map((entry) => entry.id))).toEqual(workbookSemanticsIds);
   });
 
   it("uses unique, status-friendly fixture ids in the canonical formula corpus", () => {
@@ -28,7 +44,8 @@ describe("formula compatibility registry", () => {
   });
 
   it("keeps family, formula, and metadata aligned across fixtures and registry", () => {
-    const fixtureMap = new Map(canonicalFormulaFixtures.map((fixture) => [fixture.id, fixture]));
+    const trackedFixtures = [...canonicalFormulaFixtures, ...canonicalWorkbookSemanticsFixtures];
+    const fixtureMap = new Map(trackedFixtures.map((fixture) => [fixture.id, fixture]));
 
     formulaCompatibilityRegistry.forEach((entry) => {
       const fixture = fixtureMap.get(entry.id);

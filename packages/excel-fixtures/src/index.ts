@@ -4,6 +4,7 @@ import { canonicalLogicalFixtures } from "./logical-fixtures.js";
 import { canonicalExpansionFixtures } from "./canonical-expansion-fixtures.js";
 import { canonicalFoundationFixtures } from "./canonical-foundation-fixtures.js";
 import { canonicalTextFixtures } from "./text-fixtures.js";
+import { canonicalWorkbookSemanticsFixtures } from "./workbook-semantics-fixtures.js";
 
 export const excelFixtureFamilies = [
   "arithmetic",
@@ -37,7 +38,14 @@ export type ExcelExpectedValue =
 
 export interface ExcelFixtureInputCell {
   address: string;
+  sheetName?: string;
   input: LiteralInput;
+  note?: string;
+}
+
+export interface ExcelFixtureDefinedName {
+  name: string;
+  value: LiteralInput;
   note?: string;
 }
 
@@ -66,6 +74,7 @@ export interface ExcelFixtureCase {
   formula: string;
   notes?: string;
   sheetName?: string;
+  definedNames?: ExcelFixtureDefinedName[];
   inputs: ExcelFixtureInputCell[];
   outputs: ExcelFixtureExpectedOutput[];
 }
@@ -74,7 +83,7 @@ export interface ExcelFixtureSuite {
   id: string;
   description: string;
   sheets: ExcelFixtureSheet[];
-  cases?: ExcelFixtureCase[];
+  cases?: readonly ExcelFixtureCase[];
   excelBuild: string;
   capturedAt: string;
 }
@@ -206,6 +215,15 @@ export const canonicalFormulaFixtures: readonly ExcelFixtureCase[] = dedupeFixtu
   ...canonicalExpansionFixtures
 ]);
 
+export const workbookSemanticsFormulaFixtureSuite: ExcelFixtureSuite = {
+  id: "workbook-semantics",
+  description: "Extended workbook semantics fixture slice for names and cross-sheet reference behavior.",
+  sheets: [{ name: "Sheet1" }, { name: "Sheet2" }],
+  excelBuild: "Microsoft 365 / 2026-03-19",
+  capturedAt: "2026-03-19T00:00:00.000Z",
+  cases: canonicalWorkbookSemanticsFixtures
+};
+
 export const canonicalFormulaSmokeSuite: ExcelFixtureSuite = {
   id: "canonical-smoke",
   description: "Representative smoke slice from the canonical formula compatibility corpus.",
@@ -264,6 +282,7 @@ export const lambdaFormulaFixtureSuite = buildFamilySuite(
 
 export { canonicalFoundationFixtures } from "./canonical-foundation-fixtures.js";
 export { canonicalExpansionFixtures } from "./canonical-expansion-fixtures.js";
+export { canonicalWorkbookSemanticsFixtures } from "./workbook-semantics-fixtures.js";
 export * from "./logical-fixtures.js";
 export * from "./text-fixtures.js";
 export * from "./datetime-fixtures.js";

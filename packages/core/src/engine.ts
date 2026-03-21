@@ -2,6 +2,8 @@ import {
   type CellRangeRef,
   ErrorCode,
   FormulaMode,
+  MAX_COLS,
+  MAX_ROWS,
   ValueTag,
   type CellSnapshot,
   type CellValue,
@@ -12,12 +14,14 @@ import {
   type RecalcMetrics,
   type SyncState,
   type SelectionState,
+  type WorkbookPivotSnapshot,
   type WorkbookSnapshot
 } from "@bilig/protocol";
 import {
   compileFormula,
-  evaluatePlan,
+  evaluatePlanResult,
   formatAddress,
+  isArrayValue,
   parseCellAddress,
   parseRangeAddress,
   translateFormulaReferences
@@ -45,12 +49,19 @@ import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from "./entity-ids.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
+import { materializePivotTable, type PivotDefinitionInput } from "./pivot-engine.js";
 import { RangeRegistry } from "./range-registry.js";
 import { RecalcScheduler } from "./scheduler.js";
 import { selectCellSnapshot, selectMetrics, selectSelectionState, selectViewportCells } from "./selectors.js";
 import { StringPool } from "./string-pool.js";
 import { WasmKernelFacade } from "./wasm-facade.js";
-import { WorkbookStore } from "./workbook-store.js";
+import {
+  WorkbookStore,
+  normalizeDefinedName,
+  pivotKey,
+  type WorkbookDefinedNameRecord,
+  type WorkbookPivotRecord
+} from "./workbook-store.js";
 import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
 
 export interface CommitOp {
@@ -118,9 +129,17 @@ interface MaterializedDependencies {
   rangeDependencies: Uint32Array;
   symbolicRangeIndices: U32;
   symbolicRangeCount: number;
+  hasUnresolvedSymbolicRange: boolean;
   newRangeIndices: U32;
   newRangeCount: number;
 }
+
+interface SpillMaterialization {
+  changedCellIndices: number[];
+  ownerValue: CellValue;
+}
+
+export type PivotTableInput = Omit<WorkbookPivotSnapshot, "sheetName" | "address" | "rows" | "cols">;
 
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty };
@@ -135,6 +154,24 @@ function literalToValue(input: LiteralInput, stringPool: StringPool): CellValue 
   if (typeof input === "number") return { tag: ValueTag.Number, value: input };
   if (typeof input === "boolean") return { tag: ValueTag.Boolean, value: input };
   return { tag: ValueTag.String, value: input, stringId: stringPool.intern(input) };
+}
+
+function areCellValuesEqual(left: CellValue, right: CellValue): boolean {
+  if (left.tag !== right.tag) {
+    return false;
+  }
+  switch (left.tag) {
+    case ValueTag.Empty:
+      return true;
+    case ValueTag.Number:
+      return right.tag === ValueTag.Number && Object.is(left.value, right.value);
+    case ValueTag.Boolean:
+      return right.tag === ValueTag.Boolean && left.value === right.value;
+    case ValueTag.String:
+      return right.tag === ValueTag.String && left.value === right.value;
+    case ValueTag.Error:
+      return right.tag === ValueTag.Error && left.code === right.code;
+  }
 }
 
 export class SpreadsheetEngine {
@@ -154,6 +191,8 @@ export class SpreadsheetEngine {
   private readonly rangeListArena = new Uint32Arena();
   private reverseCellEdges: Array<EdgeSlice | undefined> = [];
   private reverseRangeEdges: Array<EdgeSlice | undefined> = [];
+  private readonly reverseDefinedNameEdges = new Map<string, Set<number>>();
+  private readonly pivotOutputOwners = new Map<number, string>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly selectionListeners = new Set<() => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
@@ -371,6 +410,80 @@ export class SpreadsheetEngine {
 
   setCellFormat(sheetName: string, address: string, format: string | null): void {
     this.applyLocalOps([{ kind: "setCellFormat", sheetName, address, format }]);
+  }
+
+  setDefinedName(name: string, value: LiteralInput): void {
+    const normalizedName = normalizeDefinedName(name);
+    const previous = this.workbook.getDefinedName(normalizedName);
+    const trimmedName = name.trim();
+    if (previous?.name === trimmedName && previous.value === value) {
+      return;
+    }
+    this.workbook.setDefinedName(trimmedName, value);
+    this.applyDefinedNameMutation([normalizedName]);
+  }
+
+  deleteDefinedName(name: string): boolean {
+    const normalizedName = normalizeDefinedName(name);
+    if (!this.workbook.deleteDefinedName(name)) {
+      return false;
+    }
+    this.applyDefinedNameMutation([normalizedName]);
+    return true;
+  }
+
+  getDefinedName(name: string): WorkbookDefinedNameRecord | undefined {
+    return this.workbook.getDefinedName(name);
+  }
+
+  getDefinedNames(): WorkbookDefinedNameRecord[] {
+    return this.workbook.listDefinedNames();
+  }
+
+  setPivotTable(sheetName: string, address: string, definition: PivotTableInput): void {
+    const existing = this.workbook.getPivot(sheetName, address);
+    const trimmedName = definition.name.trim();
+    if (trimmedName.length === 0) {
+      throw new Error("Pivot tables must be named");
+    }
+    const rows = existing?.rows ?? 1;
+    const cols = existing?.cols ?? Math.max(definition.groupBy.length + definition.values.length, 1);
+    const nextPivot: WorkbookPivotSnapshot = {
+      name: trimmedName,
+      sheetName,
+      address,
+      source: { ...definition.source },
+      groupBy: [...definition.groupBy],
+      values: definition.values.map((value) => ({ ...value })),
+      rows,
+      cols
+    };
+
+    if (existing && arePivotRecordsEqual(existing, nextPivot)) {
+      return;
+    }
+
+    this.workbook.setPivot(nextPivot);
+    this.applyPivotMutation(true);
+  }
+
+  deletePivotTable(sheetName: string, address: string): boolean {
+    const pivot = this.workbook.getPivot(sheetName, address);
+    if (!pivot) {
+      return false;
+    }
+    const changed = this.clearOwnedPivot(pivot);
+    this.workbook.deletePivot(sheetName, address);
+    this.applyPivotMutation(changed.length > 0, changed);
+    return true;
+  }
+
+  getPivotTable(sheetName: string, address: string): WorkbookPivotSnapshot | undefined {
+    return this.workbook.getPivot(sheetName, address);
+  }
+
+  getPivotTables(): WorkbookPivotSnapshot[] {
+    return this.workbook.listPivots();
   }
 
   clearCell(sheetName: string, address: string): void {
@@ -695,15 +808,46 @@ export class SpreadsheetEngine {
   }
 
   exportSnapshot(): WorkbookSnapshot {
+    const workbook: WorkbookSnapshot["workbook"] = {
+      name: this.workbook.workbookName
+    };
+    const definedNames = this.workbook.listDefinedNames().map(({ name, value }) => ({ name, value }));
+    const spills = this.workbook.listSpills().map(({ sheetName, address, rows, cols }) => ({ sheetName, address, rows, cols }));
+    const pivots = this.workbook.listPivots().map((pivot) => ({
+      name: pivot.name,
+      sheetName: pivot.sheetName,
+      address: pivot.address,
+      source: { ...pivot.source },
+      groupBy: [...pivot.groupBy],
+      values: pivot.values.map((value) => ({ ...value })),
+      rows: pivot.rows,
+      cols: pivot.cols
+    }));
+    if (definedNames.length > 0 || spills.length > 0 || pivots.length > 0) {
+      workbook.metadata = {};
+      if (definedNames.length > 0) {
+        workbook.metadata.definedNames = definedNames;
+      }
+      if (spills.length > 0) {
+        workbook.metadata.spills = spills;
+      }
+      if (pivots.length > 0) {
+        workbook.metadata.pivots = pivots;
+      }
+    }
+
     return {
       version: 1,
-      workbook: { name: this.workbook.workbookName },
+      workbook,
       sheets: [...this.workbook.sheetsByName.values()]
         .sort((left, right) => left.order - right.order)
         .map((sheet) => {
           const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
           sheet.grid.forEachCell((cellIndex) => {
             const snapshot = this.getCellByIndex(cellIndex);
+            if ((snapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
+              return;
+            }
             const cell: WorkbookSnapshot["sheets"][number]["cells"][number] = {
               address: snapshot.address
             };
@@ -730,6 +874,31 @@ export class SpreadsheetEngine {
 
   importSnapshot(snapshot: WorkbookSnapshot): void {
     this.resetWorkbook(snapshot.workbook.name);
+    snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
+      this.workbook.setDefinedName(name, value);
+    });
+    const spillChildAddresses = new Set<string>();
+    const pivotOutputAddresses = new Set<string>();
+    snapshot.workbook.metadata?.spills?.forEach(({ sheetName, address, rows, cols }) => {
+      const owner = parseCellAddress(address, sheetName);
+      for (let rowOffset = 0; rowOffset < rows; rowOffset += 1) {
+        for (let colOffset = 0; colOffset < cols; colOffset += 1) {
+          if (rowOffset === 0 && colOffset === 0) {
+            continue;
+          }
+          spillChildAddresses.add(`${sheetName}!${formatAddress(owner.row + rowOffset, owner.col + colOffset)}`);
+        }
+      }
+    });
+    snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
+      this.workbook.setPivot(pivot);
+      const owner = parseCellAddress(pivot.address, pivot.sheetName);
+      for (let rowOffset = 0; rowOffset < pivot.rows; rowOffset += 1) {
+        for (let colOffset = 0; colOffset < pivot.cols; colOffset += 1) {
+          pivotOutputAddresses.add(`${pivot.sheetName}!${formatAddress(owner.row + rowOffset, owner.col + colOffset)}`);
+        }
+      }
+    });
     const totalCells = snapshot.sheets.reduce((count, sheet) => count + sheet.cells.length, 0);
     this.workbook.cellStore.ensureCapacity(totalCells);
 
@@ -747,6 +916,10 @@ export class SpreadsheetEngine {
     try {
       snapshot.sheets.forEach((sheet) => {
         sheet.cells.forEach((cell) => {
+          const qualifiedAddress = `${sheet.name}!${cell.address}`;
+          if (spillChildAddresses.has(qualifiedAddress) || pivotOutputAddresses.has(qualifiedAddress)) {
+            return;
+          }
           const cellIndex = this.ensureCellTracked(sheet.name, cell.address);
           if (cell.formula !== undefined) {
             const compileStarted = performance.now();
@@ -791,10 +964,11 @@ export class SpreadsheetEngine {
     }
 
     const changedInputArray = this.changedInputBuffer.subarray(0, changedInputCount);
-    const changed = this.recalculate(
+    let changed = this.recalculate(
       this.composeMutationRoots(changedInputCount, formulaChangedCount),
       changedInputArray
     );
+    changed = this.reconcilePivotOutputs(changed, this.workbook.listPivots().length > 0);
     this.lastMetrics.batchId += 1;
     this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
 
@@ -808,6 +982,324 @@ export class SpreadsheetEngine {
       return;
     }
     this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
+  }
+
+  private applyDefinedNameMutation(names: readonly string[]): void {
+    if (names.length === 0) {
+      return;
+    }
+
+    this.beginMutationCollection();
+    let formulaChangedCount = 0;
+    names.forEach((name) => {
+      const dependents = this.reverseDefinedNameEdges.get(name);
+      if (!dependents) {
+        return;
+      }
+      dependents.forEach((cellIndex) => {
+        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+      });
+    });
+
+    if (formulaChangedCount === 0) {
+      return;
+    }
+
+    const changedInputArray = this.changedInputBuffer.subarray(0, 0);
+    let changed = this.recalculate(
+      this.composeMutationRoots(0, formulaChangedCount),
+      changedInputArray
+    );
+    changed = this.reconcilePivotOutputs(changed);
+    this.lastMetrics.batchId += 1;
+    this.lastMetrics.changedInputCount = formulaChangedCount;
+    const event: EngineEvent = {
+      kind: "batch",
+      changedCellIndices: changed,
+      metrics: this.lastMetrics
+    };
+    this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
+  }
+
+  private applyPivotMutation(forceAllPivots: boolean, initialChanged: readonly number[] = []): void {
+    this.beginMutationCollection();
+    let changed = this.changedUnion.subarray(0, 0);
+    if (initialChanged.length > 0) {
+      const roots = Uint32Array.from(initialChanged);
+      changed = this.recalculate(roots, roots);
+    }
+    changed = this.reconcilePivotOutputs(changed, forceAllPivots);
+    if (changed.length === 0) {
+      return;
+    }
+    this.lastMetrics.batchId += 1;
+    this.lastMetrics.changedInputCount = initialChanged.length;
+    const event: EngineEvent = {
+      kind: "batch",
+      changedCellIndices: changed,
+      metrics: this.lastMetrics
+    };
+    this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
+  }
+
+  private reconcilePivotOutputs(baseChanged: U32, forceAllPivots = false): U32 {
+    let aggregate = baseChanged;
+    let pending = baseChanged;
+    let forceAll = forceAllPivots;
+
+    for (let iteration = 0; iteration < 4; iteration += 1) {
+      const pivotChanged = this.refreshPivotOutputs(pending, forceAll);
+      if (pivotChanged.length === 0) {
+        break;
+      }
+      aggregate = aggregate.length === 0 ? pivotChanged : this.unionChangedSets(aggregate, pivotChanged);
+      pending = this.recalculate(pivotChanged, pivotChanged);
+      aggregate = pending.length === 0 ? aggregate : this.unionChangedSets(aggregate, pending);
+      forceAll = false;
+    }
+
+    return aggregate;
+  }
+
+  private refreshPivotOutputs(changed: readonly number[] | U32, forceAll: boolean): U32 {
+    const pivots = this.workbook.listPivots();
+    if (pivots.length === 0 || (!forceAll && changed.length === 0)) {
+      return this.changedUnion.subarray(0, 0);
+    }
+
+    const changedCellIndices: number[] = [];
+    const changedSeen = new Set<number>();
+    for (let index = 0; index < pivots.length; index += 1) {
+      const pivot = pivots[index]!;
+      if (!forceAll && !this.shouldRefreshPivot(pivot, changed)) {
+        continue;
+      }
+      const pivotChanges = this.materializePivot(pivot);
+      for (let changeIndex = 0; changeIndex < pivotChanges.length; changeIndex += 1) {
+        const cellIndex = pivotChanges[changeIndex]!;
+        if (changedSeen.has(cellIndex)) {
+          continue;
+        }
+        changedSeen.add(cellIndex);
+        changedCellIndices.push(cellIndex);
+      }
+    }
+
+    return changedCellIndices.length === 0 ? this.changedUnion.subarray(0, 0) : Uint32Array.from(changedCellIndices);
+  }
+
+  private shouldRefreshPivot(pivot: WorkbookPivotRecord, changed: readonly number[] | U32): boolean {
+    const bounds = normalizeRange(pivot.source);
+    for (let index = 0; index < changed.length; index += 1) {
+      const cellIndex = changed[index]!;
+      const sheetId = this.workbook.cellStore.sheetIds[cellIndex];
+      if (sheetId === undefined) {
+        continue;
+      }
+      if (this.workbook.getSheetNameById(sheetId) !== pivot.source.sheetName) {
+        continue;
+      }
+      const row = this.workbook.cellStore.rows[cellIndex] ?? 0;
+      const col = this.workbook.cellStore.cols[cellIndex] ?? 0;
+      if (
+        row >= bounds.startRow
+        && row <= bounds.endRow
+        && col >= bounds.startCol
+        && col <= bounds.endCol
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private materializePivot(pivot: WorkbookPivotRecord): number[] {
+    const changedCellIndices = this.clearOwnedPivot(pivot);
+    const sourceSheet = this.workbook.getSheet(pivot.source.sheetName);
+    if (!sourceSheet) {
+      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Ref)], changedCellIndices);
+    }
+
+    const materialized = materializePivotTable(this.toPivotDefinition(pivot), this.readPivotSourceRows(pivot.source));
+    if (materialized.kind === "error") {
+      return this.writePivotOutput(pivot, materialized.rows, materialized.cols, materialized.values, changedCellIndices);
+    }
+
+    const owner = parseCellAddress(pivot.address, pivot.sheetName);
+    if (owner.row + materialized.rows > MAX_ROWS || owner.col + materialized.cols > MAX_COLS) {
+      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Spill)], changedCellIndices);
+    }
+    if (this.isPivotOutputBlocked(pivot, owner.row, owner.col, materialized.rows, materialized.cols)) {
+      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Blocked)], changedCellIndices);
+    }
+
+    return this.writePivotOutput(pivot, materialized.rows, materialized.cols, materialized.values, changedCellIndices);
+  }
+
+  private toPivotDefinition(pivot: WorkbookPivotRecord): PivotDefinitionInput {
+    return {
+      groupBy: pivot.groupBy,
+      values: pivot.values
+    };
+  }
+
+  private readPivotSourceRows(range: CellRangeRef): CellValue[][] {
+    const bounds = normalizeRange(range);
+    const rows: CellValue[][] = [];
+    for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+      const values: CellValue[] = [];
+      for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+        const cellIndex = this.workbook.getCellIndex(range.sheetName, formatAddress(row, col));
+        values.push(
+          cellIndex === undefined
+            ? emptyValue()
+            : this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id))
+        );
+      }
+      rows.push(values);
+    }
+    return rows;
+  }
+
+  private isPivotOutputBlocked(
+    pivot: WorkbookPivotRecord,
+    startRow: number,
+    startCol: number,
+    rows: number,
+    cols: number
+  ): boolean {
+    const ownerKey = pivotKey(pivot.sheetName, pivot.address);
+    for (let rowOffset = 0; rowOffset < rows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < cols; colOffset += 1) {
+        const targetIndex = this.workbook.getCellIndex(
+          pivot.sheetName,
+          formatAddress(startRow + rowOffset, startCol + colOffset)
+        );
+        if (targetIndex === undefined) {
+          continue;
+        }
+        const pivotOwner = this.pivotOutputOwners.get(targetIndex);
+        if (pivotOwner && pivotOwner !== ownerKey) {
+          return true;
+        }
+        if (this.formulas.get(targetIndex)) {
+          return true;
+        }
+        const targetFlags = this.workbook.cellStore.flags[targetIndex] ?? 0;
+        if ((targetFlags & CellFlags.SpillChild) !== 0) {
+          return true;
+        }
+        const targetValue = this.workbook.cellStore.getValue(targetIndex, (id) => this.strings.get(id));
+        if (!pivotOwner && targetValue.tag !== ValueTag.Empty) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private writePivotOutput(
+    pivot: WorkbookPivotRecord,
+    rows: number,
+    cols: number,
+    values: readonly CellValue[],
+    changedCellIndices: number[]
+  ): number[] {
+    const sheet = this.workbook.getOrCreateSheet(pivot.sheetName);
+    const owner = parseCellAddress(pivot.address, pivot.sheetName);
+    const ownerKey = pivotKey(pivot.sheetName, pivot.address);
+    const changedSeen = new Set(changedCellIndices);
+
+    for (let rowOffset = 0; rowOffset < rows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < cols; colOffset += 1) {
+        const valueIndex = rowOffset * cols + colOffset;
+        const cellValue = values[valueIndex] ?? emptyValue();
+        const cellIndex = this.ensureCellTrackedByCoords(sheet.id, owner.row + rowOffset, owner.col + colOffset);
+        if (this.setPivotOutputCellValue(cellIndex, cellValue, ownerKey)) {
+          if (!changedSeen.has(cellIndex)) {
+            changedSeen.add(cellIndex);
+            changedCellIndices.push(cellIndex);
+          }
+        }
+      }
+    }
+
+    pivot.rows = rows;
+    pivot.cols = cols;
+    return changedCellIndices;
+  }
+
+  private clearOwnedPivot(pivot: WorkbookPivotRecord): number[] {
+    const changedCellIndices: number[] = [];
+    const ownerKey = pivotKey(pivot.sheetName, pivot.address);
+    const owner = parseCellAddress(pivot.address, pivot.sheetName);
+    for (let rowOffset = 0; rowOffset < pivot.rows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < pivot.cols; colOffset += 1) {
+        const cellIndex = this.workbook.getCellIndex(
+          pivot.sheetName,
+          formatAddress(owner.row + rowOffset, owner.col + colOffset)
+        );
+        if (cellIndex === undefined || this.pivotOutputOwners.get(cellIndex) !== ownerKey) {
+          continue;
+        }
+        if (this.clearPivotOutputCell(cellIndex)) {
+          changedCellIndices.push(cellIndex);
+        }
+      }
+    }
+    return changedCellIndices;
+  }
+
+  private clearPivotForCell(cellIndex: number): number[] {
+    const ownerKey = this.pivotOutputOwners.get(cellIndex);
+    if (!ownerKey) {
+      return [];
+    }
+    const pivot = this.workbook.getPivotByKey(ownerKey);
+    if (!pivot) {
+      this.pivotOutputOwners.delete(cellIndex);
+      return [];
+    }
+    const changedCellIndices = this.clearOwnedPivot(pivot);
+    this.workbook.deletePivot(pivot.sheetName, pivot.address);
+    return changedCellIndices;
+  }
+
+  private clearPivotOutputCell(cellIndex: number): boolean {
+    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
+    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+    if (currentValue.tag === ValueTag.Empty && (currentFlags & CellFlags.PivotOutput) === 0) {
+      this.pivotOutputOwners.delete(cellIndex);
+      return false;
+    }
+    this.pivotOutputOwners.delete(cellIndex);
+    this.workbook.cellStore.setValue(cellIndex, emptyValue());
+    this.workbook.cellStore.flags[cellIndex] =
+      currentFlags & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput);
+    return true;
+  }
+
+  private setPivotOutputCellValue(cellIndex: number, value: CellValue, ownerKey: string): boolean {
+    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
+    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+    const nextFlags =
+      (currentFlags & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild))
+      | CellFlags.PivotOutput;
+    if (
+      areCellValuesEqual(currentValue, value)
+      && currentFlags === nextFlags
+      && this.pivotOutputOwners.get(cellIndex) === ownerKey
+    ) {
+      return false;
+    }
+    this.workbook.cellStore.setValue(
+      cellIndex,
+      value,
+      value.tag === ValueTag.String ? this.strings.intern(value.value) : 0
+    );
+    this.workbook.cellStore.flags[cellIndex] = nextFlags;
+    this.pivotOutputOwners.set(cellIndex, ownerKey);
+    return true;
   }
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {
@@ -897,6 +1389,7 @@ export class SpreadsheetEngine {
     let explicitChangedCount = 0;
     let topologyChanged = false;
     let sheetDeleted = false;
+    let refreshAllPivots = false;
     let appliedOps = 0;
     const canSkipOrderChecks = source === "local";
 
@@ -927,6 +1420,7 @@ export class SpreadsheetEngine {
             const reboundCount = formulaChangedCount;
             formulaChangedCount = this.rebindFormulasForSheet(op.name, formulaChangedCount);
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
+            refreshAllPivots = true;
             break;
           case "deleteSheet":
             const removal = this.removeSheetRuntime(op.name, explicitChangedCount);
@@ -937,9 +1431,15 @@ export class SpreadsheetEngine {
             this.sheetDeleteVersions.set(op.name, order);
             topologyChanged = true;
             sheetDeleted = true;
+            refreshAllPivots = true;
             break;
           case "setCellValue": {
+            const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
+            if (existingIndex !== undefined) {
+              changedInputCount = this.markPivotRootsChanged(this.clearPivotForCell(existingIndex), changedInputCount);
+            }
             const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
+            changedInputCount = this.markSpillRootsChanged(this.clearOwnedSpill(cellIndex), changedInputCount);
             topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
             const value = literalToValue(op.value, this.strings);
             this.workbook.cellStore.setValue(
@@ -948,14 +1448,20 @@ export class SpreadsheetEngine {
               value.tag === ValueTag.String ? value.stringId : 0
             );
             this.workbook.cellStore.flags[cellIndex] =
-              (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.HasFormula;
+              (this.workbook.cellStore.flags[cellIndex] ?? 0)
+              & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput);
             changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
           case "setCellFormula": {
+            const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
+            if (existingIndex !== undefined) {
+              changedInputCount = this.markPivotRootsChanged(this.clearPivotForCell(existingIndex), changedInputCount);
+            }
             const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
+            changedInputCount = this.markSpillRootsChanged(this.clearOwnedSpill(cellIndex), changedInputCount);
             const compileStarted = performance.now();
             try {
               const compiled = compileFormula(op.formula);
@@ -987,8 +1493,13 @@ export class SpreadsheetEngine {
               this.entityVersions.set(this.entityKeyForOp(op), order);
               break;
             }
+            changedInputCount = this.markPivotRootsChanged(this.clearPivotForCell(cellIndex), changedInputCount);
+            changedInputCount = this.markSpillRootsChanged(this.clearOwnedSpill(cellIndex), changedInputCount);
             topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
             this.workbook.cellStore.setValue(cellIndex, emptyValue());
+            this.workbook.cellStore.flags[cellIndex] =
+              (this.workbook.cellStore.flags[cellIndex] ?? 0)
+              & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput);
             changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
             this.entityVersions.set(this.entityKeyForOp(op), order);
@@ -1019,10 +1530,11 @@ export class SpreadsheetEngine {
       this.detectCycles();
     }
     const changedInputArray = this.changedInputBuffer.subarray(0, changedInputCount);
-    const recalculated = this.recalculate(
+    let recalculated = this.recalculate(
       this.composeMutationRoots(changedInputCount, formulaChangedCount),
       changedInputArray
     );
+    recalculated = this.reconcilePivotOutputs(recalculated, refreshAllPivots);
     const changed = this.composeEventChanges(recalculated, explicitChangedCount);
     this.lastMetrics.batchId += 1;
     this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
@@ -1198,24 +1710,31 @@ export class SpreadsheetEngine {
     let dependencyIndexCount = 0;
     let dependencyEntityCount = 0;
     let rangeDependencyCount = 0;
+    let hasUnresolvedSymbolicRange = false;
     let newRangeCount = 0;
     this.symbolicRangeBindings.fill(0, 0, compiled.symbolicRanges.length);
     for (const dep of deps) {
       if (dep.includes(":")) {
         const range = parseRangeAddress(dep, currentSheet);
         const sheetName = range.sheetName ?? currentSheet;
+        const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
         if (range.sheetName && !this.workbook.getSheet(sheetName)) {
+          if (symbolicRangeIndex !== -1) {
+            hasUnresolvedSymbolicRange = true;
+          }
           continue;
         }
         const sheet = this.workbook.getSheet(sheetName);
         if (!sheet) {
+          if (symbolicRangeIndex !== -1) {
+            hasUnresolvedSymbolicRange = true;
+          }
           continue;
         }
         const registered = this.ranges.intern(sheet.id, range, {
           ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col),
           forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn)
         });
-        const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
         if (symbolicRangeIndex !== -1) {
           this.symbolicRangeBindings[symbolicRangeIndex] = registered.rangeIndex;
         }
@@ -1260,6 +1779,7 @@ export class SpreadsheetEngine {
       rangeDependencies: this.dependencyBuildRanges.slice(0, rangeDependencyCount),
       symbolicRangeIndices: this.symbolicRangeBindings,
       symbolicRangeCount: compiled.symbolicRanges.length,
+      hasUnresolvedSymbolicRange,
       newRangeIndices: this.dependencyBuildNewRanges,
       newRangeCount
     };
@@ -1294,7 +1814,7 @@ export class SpreadsheetEngine {
     }
 
     const effectiveCompiled =
-      hasUnresolvedSymbolicRef && compiled.mode === FormulaMode.WasmFastPath
+      (hasUnresolvedSymbolicRef || dependencies.hasUnresolvedSymbolicRange) && compiled.mode === FormulaMode.WasmFastPath
         ? { ...compiled, mode: FormulaMode.JsOnly }
         : compiled;
 
@@ -1337,7 +1857,8 @@ export class SpreadsheetEngine {
     };
     const formulaId = this.formulas.set(cellIndex, runtimeFormula);
     runtimeFormula.compiled.id = formulaId;
-    this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.HasFormula;
+    this.workbook.cellStore.flags[cellIndex] =
+      ((this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula;
     if (effectiveCompiled.mode === FormulaMode.JsOnly) {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
     } else {
@@ -1356,6 +1877,9 @@ export class SpreadsheetEngine {
     for (let index = 0; index < dependencies.dependencyEntities.length; index += 1) {
       this.appendReverseEdge(dependencies.dependencyEntities[index]!, formulaEntity);
     }
+    runtimeFormula.compiled.symbolicNames.forEach((name) => {
+      this.appendDefinedNameReverseEdge(name, cellIndex);
+    });
     this.scheduleWasmProgramSync();
   }
 
@@ -1363,7 +1887,8 @@ export class SpreadsheetEngine {
     this.removeFormula(cellIndex);
     this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Value));
     this.workbook.cellStore.flags[cellIndex] =
-      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
+      (this.workbook.cellStore.flags[cellIndex] ?? 0)
+      & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput);
   }
 
   private removeFormula(cellIndex: number): boolean {
@@ -1374,6 +1899,9 @@ export class SpreadsheetEngine {
       for (let index = 0; index < dependencyEntities.length; index += 1) {
         this.removeReverseEdge(dependencyEntities[index]!, formulaEntity);
       }
+      existing.compiled.symbolicNames.forEach((name) => {
+        this.removeDefinedNameReverseEdge(name, cellIndex);
+      });
       for (let index = 0; index < existing.rangeDependencies.length; index += 1) {
         const rangeIndex = existing.rangeDependencies[index]!;
         const released = this.ranges.release(rangeIndex);
@@ -1390,7 +1918,8 @@ export class SpreadsheetEngine {
     }
     this.formulas.delete(cellIndex);
     this.workbook.cellStore.flags[cellIndex] =
-      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle);
+      (this.workbook.cellStore.flags[cellIndex] ?? 0)
+      & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput);
     this.scheduleWasmProgramSync();
     return existing !== undefined;
   }
@@ -1466,26 +1995,20 @@ export class SpreadsheetEngine {
     kernelSyncRoots: readonly number[] | U32 = changedRoots
   ): Uint32Array {
     const started = performance.now();
-    const scheduled = this.scheduler.collectDirty(
-      changedRoots,
-      { getDependents: (entityId) => this.getEntityDependents(entityId) },
-      this.workbook.cellStore,
-      (cellIndex) => this.formulas.has(cellIndex),
-      this.ranges.size
-    );
-    const ordered = scheduled.orderedFormulaCellIndices;
-    const orderedCount = scheduled.orderedFormulaCount;
-
-    this.ensureRecalcScratchCapacity(Math.max(this.workbook.cellStore.size + 1, changedRoots.length + orderedCount + 1));
+    this.ensureRecalcScratchCapacity(this.workbook.cellStore.size + 1);
     if (this.wasm.ready) {
       this.wasm.syncStringPool(this.strings.exportLayout());
     }
 
+    const allChangedRoots = [...changedRoots];
+    const allOrdered: number[] = [];
+    let passRoots = [...changedRoots];
+    let passKernelRoots = [...kernelSyncRoots];
+    let totalOrderedCount = 0;
+    let totalRangeNodeVisits = 0;
+    let wasmCount = 0;
+    let jsCount = 0;
     let pendingKernelSyncCount = 0;
-    for (let index = 0; index < kernelSyncRoots.length; index += 1) {
-      this.pendingKernelSync[pendingKernelSyncCount] = kernelSyncRoots[index]!;
-      pendingKernelSyncCount += 1;
-    }
 
     const flushWasmBatch = (batchCount: number): number => {
       if (batchCount === 0) {
@@ -1499,44 +2022,82 @@ export class SpreadsheetEngine {
       return batchCount;
     };
 
-    let wasmCount = 0;
-    let jsCount = 0;
-    let wasmBatchCount = 0;
-    for (let index = 0; index < orderedCount; index += 1) {
-      const cellIndex = ordered[index]!;
-      const formula = this.formulas.get(cellIndex);
-      if (!formula) {
-        continue;
+    while (passRoots.length > 0) {
+      const scheduled = this.scheduler.collectDirty(
+        passRoots,
+        { getDependents: (entityId) => this.getEntityDependents(entityId) },
+        this.workbook.cellStore,
+        (cellIndex) => this.formulas.has(cellIndex),
+        this.ranges.size
+      );
+      const ordered = scheduled.orderedFormulaCellIndices;
+      const orderedCount = scheduled.orderedFormulaCount;
+      totalOrderedCount += orderedCount;
+      totalRangeNodeVisits += scheduled.rangeNodeVisits;
+      for (let index = 0; index < orderedCount; index += 1) {
+        allOrdered.push(ordered[index]!);
       }
-      if (((this.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
-        continue;
+
+      pendingKernelSyncCount = 0;
+      for (let index = 0; index < passKernelRoots.length; index += 1) {
+        this.pendingKernelSync[pendingKernelSyncCount] = passKernelRoots[index]!;
+        pendingKernelSyncCount += 1;
       }
-      if (formula.compiled.mode === FormulaMode.WasmFastPath && this.wasm.ready) {
-        this.wasmBatch[wasmBatchCount] = cellIndex;
-        wasmBatchCount += 1;
-        continue;
+
+      let wasmBatchCount = 0;
+      const spillChangedRoots: number[] = [];
+      const spillChangedSeen = new Set<number>();
+      for (let index = 0; index < orderedCount; index += 1) {
+        const cellIndex = ordered[index]!;
+        const formula = this.formulas.get(cellIndex);
+        if (!formula) {
+          continue;
+        }
+        if (((this.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+          continue;
+        }
+        if (formula.compiled.mode === FormulaMode.WasmFastPath && this.wasm.ready) {
+          this.wasmBatch[wasmBatchCount] = cellIndex;
+          wasmBatchCount += 1;
+          continue;
+        }
+        wasmCount += flushWasmBatch(wasmBatchCount);
+        wasmBatchCount = 0;
+        jsCount += 1;
+        const spillChanges = this.evaluateFormulaJs(cellIndex, formula);
+        for (let spillIndex = 0; spillIndex < spillChanges.length; spillIndex += 1) {
+          const changedCellIndex = spillChanges[spillIndex]!;
+          if (spillChangedSeen.has(changedCellIndex)) {
+            continue;
+          }
+          spillChangedSeen.add(changedCellIndex);
+          spillChangedRoots.push(changedCellIndex);
+        }
+        this.pendingKernelSync[pendingKernelSyncCount] = cellIndex;
+        pendingKernelSyncCount += 1;
       }
+
       wasmCount += flushWasmBatch(wasmBatchCount);
-      wasmBatchCount = 0;
-      jsCount += 1;
-      this.evaluateFormulaJs(cellIndex, formula);
-      this.pendingKernelSync[pendingKernelSyncCount] = cellIndex;
-      pendingKernelSyncCount += 1;
+      if (pendingKernelSyncCount > 0) {
+        this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
+      }
+
+      if (spillChangedRoots.length === 0) {
+        break;
+      }
+      allChangedRoots.push(...spillChangedRoots);
+      passRoots = spillChangedRoots;
+      passKernelRoots = spillChangedRoots;
     }
 
-    wasmCount += flushWasmBatch(wasmBatchCount);
-    if (pendingKernelSyncCount > 0) {
-      this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
-    }
-
-    this.lastMetrics.dirtyFormulaCount = orderedCount;
+    this.lastMetrics.dirtyFormulaCount = totalOrderedCount;
     this.lastMetrics.jsFormulaCount = jsCount;
     this.lastMetrics.wasmFormulaCount = wasmCount;
-    this.lastMetrics.rangeNodeVisits = scheduled.rangeNodeVisits;
+    this.lastMetrics.rangeNodeVisits = totalRangeNodeVisits;
     this.lastMetrics.recalcMs = performance.now() - started;
-    return orderedCount === 0 && changedRoots.length === 0
+    return totalOrderedCount === 0 && allChangedRoots.length === 0
       ? this.changedUnion.subarray(0, 0)
-      : this.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount);
+      : this.composeChangedRootsAndOrdered(allChangedRoots, Uint32Array.from(allOrdered), allOrdered.length);
   }
 
   private ensureRecalcScratchCapacity(size: number): void {
@@ -1661,9 +2222,9 @@ export class SpreadsheetEngine {
     }
   }
 
-  private evaluateFormulaJs(cellIndex: number, formula: RuntimeFormula): void {
+  private evaluateFormulaJs(cellIndex: number, formula: RuntimeFormula): number[] {
     const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-    const value = evaluatePlan(formula.compiled.jsPlan, {
+    const evaluation = evaluatePlanResult(formula.compiled.jsPlan, {
       sheetName,
       resolveCell: (targetSheetName, address) => {
         const targetCell = this.workbook.getCellIndex(targetSheetName, address);
@@ -1677,13 +2238,30 @@ export class SpreadsheetEngine {
           return [errorValue(ErrorCode.Ref)];
         }
         return this.resolveRangeValues(targetSheetName, parseRangeAddress(`${start}:${end}`, targetSheetName));
-      }
+      },
+      resolveName: (name) => this.resolveDefinedNameValue(name)
     });
+    const spillMaterialization = isArrayValue(evaluation)
+      ? this.materializeSpill(cellIndex, evaluation)
+      : {
+          changedCellIndices: this.clearOwnedSpill(cellIndex),
+          ownerValue: evaluation
+        };
+    this.workbook.cellStore.flags[cellIndex] =
+      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput);
     this.workbook.cellStore.setValue(
       cellIndex,
-      value,
-      value.tag === ValueTag.String ? this.strings.intern(value.value) : 0
+      spillMaterialization.ownerValue,
+      spillMaterialization.ownerValue.tag === ValueTag.String
+        ? this.strings.intern(spillMaterialization.ownerValue.value)
+        : 0
     );
+    return spillMaterialization.changedCellIndices;
+  }
+
+  private resolveDefinedNameValue(name: string): CellValue {
+    const definedName = this.workbook.getDefinedName(name);
+    return definedName ? literalToValue(definedName.value, this.strings) : errorValue(ErrorCode.Name);
   }
 
   private syncWasmPrograms(): void {
@@ -1797,6 +2375,28 @@ export class SpreadsheetEngine {
   private getEntityDependents(entityId: number): Uint32Array {
     const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
     return this.edgeArena.readView(slice);
+  }
+
+  private appendDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
+    const normalizedName = normalizeDefinedName(name);
+    const existing = this.reverseDefinedNameEdges.get(normalizedName);
+    if (existing) {
+      existing.add(dependentCellIndex);
+      return;
+    }
+    this.reverseDefinedNameEdges.set(normalizedName, new Set([dependentCellIndex]));
+  }
+
+  private removeDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
+    const normalizedName = normalizeDefinedName(name);
+    const existing = this.reverseDefinedNameEdges.get(normalizedName);
+    if (!existing) {
+      return;
+    }
+    existing.delete(dependentCellIndex);
+    if (existing.size === 0) {
+      this.reverseDefinedNameEdges.delete(normalizedName);
+    }
   }
 
   private setReverseEdgeSlice(entityId: number, slice: EdgeSlice): void {
@@ -1976,8 +2576,9 @@ export class SpreadsheetEngine {
           return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
         });
         if (!touchesSheet) continue;
-        const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled);
-        this.setFormula(cellIndex, formula.source, formula.compiled, dependencies);
+        const compiled = compileFormula(formula.source);
+        const dependencies = this.materializeDependencies(ownerSheetName, compiled);
+        this.setFormula(cellIndex, formula.source, compiled, dependencies);
         formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
       }
       return formulaChangedCount;
@@ -1993,8 +2594,9 @@ export class SpreadsheetEngine {
         return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
       });
       if (!touchesSheet) return;
-      const dependencies = this.materializeDependencies(ownerSheetName, formula.compiled);
-      this.setFormula(cellIndex, formula.source, formula.compiled, dependencies);
+      const compiled = compileFormula(formula.source);
+      const dependencies = this.materializeDependencies(ownerSheetName, compiled);
+      this.setFormula(cellIndex, formula.source, compiled, dependencies);
       formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
     });
 
@@ -2064,6 +2666,20 @@ export class SpreadsheetEngine {
     return count + 1;
   }
 
+  private markSpillRootsChanged(cellIndices: readonly number[], count: number): number {
+    for (let index = 0; index < cellIndices.length; index += 1) {
+      count = this.markInputChanged(cellIndices[index]!, count);
+    }
+    return count;
+  }
+
+  private markPivotRootsChanged(cellIndices: readonly number[], count: number): number {
+    for (let index = 0; index < cellIndices.length; index += 1) {
+      count = this.markInputChanged(cellIndices[index]!, count);
+    }
+    return count;
+  }
+
   private markExplicitChanged(cellIndex: number, count: number): number {
     if (this.explicitChangedSeen[cellIndex] === this.explicitChangedEpoch) {
       return count;
@@ -2116,6 +2732,28 @@ export class SpreadsheetEngine {
     return this.changedUnion.subarray(0, changedCount);
   }
 
+  private unionChangedSets(...sets: Array<readonly number[] | U32>): U32 {
+    this.changedUnionEpoch += 1;
+    if (this.changedUnionEpoch === 0xffff_ffff) {
+      this.changedUnionEpoch = 1;
+      this.changedUnionSeen.fill(0);
+    }
+    let changedCount = 0;
+    for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
+      const set = sets[setIndex]!;
+      for (let index = 0; index < set.length; index += 1) {
+        const cellIndex = set[index]!;
+        if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
+          continue;
+        }
+        this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
+        this.changedUnion[changedCount] = cellIndex;
+        changedCount += 1;
+      }
+    }
+    return this.changedUnion.subarray(0, changedCount);
+  }
+
   private composeChangedRootsAndOrdered(changedRoots: readonly number[] | U32, ordered: U32, orderedCount: number): U32 {
     this.changedUnionEpoch += 1;
     if (this.changedUnionEpoch === 0xffff_ffff) {
@@ -2160,6 +2798,117 @@ export class SpreadsheetEngine {
       this.pushMaterializedCell(ensured.cellIndex);
     }
     return ensured.cellIndex;
+  }
+
+  private clearOwnedSpill(cellIndex: number): number[] {
+    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+    const address = this.workbook.getAddress(cellIndex);
+    const spill = this.workbook.getSpill(sheetName, address);
+    if (!spill) {
+      return [];
+    }
+
+    const owner = parseCellAddress(address, sheetName);
+    const changedCellIndices: number[] = [];
+    for (let rowOffset = 0; rowOffset < spill.rows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < spill.cols; colOffset += 1) {
+        if (rowOffset === 0 && colOffset === 0) {
+          continue;
+        }
+        const childAddress = formatAddress(owner.row + rowOffset, owner.col + colOffset);
+        const childIndex = this.workbook.getCellIndex(sheetName, childAddress);
+        if (childIndex === undefined) {
+          continue;
+        }
+        if (this.clearSpillChildCell(childIndex)) {
+          changedCellIndices.push(childIndex);
+        }
+      }
+    }
+    this.workbook.deleteSpill(sheetName, address);
+    return changedCellIndices;
+  }
+
+  private materializeSpill(
+    cellIndex: number,
+    arrayValue: { values: CellValue[]; rows: number; cols: number }
+  ): SpillMaterialization {
+    const changedCellIndices = this.clearOwnedSpill(cellIndex);
+    const sheetId = this.workbook.cellStore.sheetIds[cellIndex]!;
+    const sheetName = this.workbook.getSheetNameById(sheetId);
+    const address = this.workbook.getAddress(cellIndex);
+    const owner = parseCellAddress(address, sheetName);
+
+    if (owner.row + arrayValue.rows > MAX_ROWS || owner.col + arrayValue.cols > MAX_COLS) {
+      return { changedCellIndices, ownerValue: errorValue(ErrorCode.Spill) };
+    }
+
+    for (let rowOffset = 0; rowOffset < arrayValue.rows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < arrayValue.cols; colOffset += 1) {
+        if (rowOffset === 0 && colOffset === 0) {
+          continue;
+        }
+        const targetAddress = formatAddress(owner.row + rowOffset, owner.col + colOffset);
+        const targetIndex = this.workbook.getCellIndex(sheetName, targetAddress);
+        if (targetIndex === undefined) {
+          continue;
+        }
+        const targetValue = this.workbook.cellStore.getValue(targetIndex, (id) => this.strings.get(id));
+        if (this.formulas.get(targetIndex) || targetValue.tag !== ValueTag.Empty) {
+          return { changedCellIndices, ownerValue: errorValue(ErrorCode.Blocked) };
+        }
+      }
+    }
+
+    for (let rowOffset = 0; rowOffset < arrayValue.rows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < arrayValue.cols; colOffset += 1) {
+        if (rowOffset === 0 && colOffset === 0) {
+          continue;
+        }
+        const targetIndex = this.ensureCellTrackedByCoords(sheetId, owner.row + rowOffset, owner.col + colOffset);
+        const valueIndex = rowOffset * arrayValue.cols + colOffset;
+        const value = arrayValue.values[valueIndex] ?? emptyValue();
+        if (this.setSpillChildValue(targetIndex, value)) {
+          changedCellIndices.push(targetIndex);
+        }
+      }
+    }
+
+    if (arrayValue.rows > 1 || arrayValue.cols > 1) {
+      this.workbook.setSpill(sheetName, address, arrayValue.rows, arrayValue.cols);
+    }
+
+    return {
+      changedCellIndices,
+      ownerValue: arrayValue.values[0] ?? emptyValue()
+    };
+  }
+
+  private clearSpillChildCell(cellIndex: number): boolean {
+    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
+    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+    if (currentValue.tag === ValueTag.Empty && (currentFlags & CellFlags.SpillChild) === 0) {
+      return false;
+    }
+    this.workbook.cellStore.setValue(cellIndex, emptyValue());
+    this.workbook.cellStore.flags[cellIndex] = currentFlags & ~CellFlags.SpillChild;
+    return true;
+  }
+
+  private setSpillChildValue(cellIndex: number, value: CellValue): boolean {
+    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
+    const nextFlags = (currentFlags & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle)) | CellFlags.SpillChild;
+    if (areCellValuesEqual(currentValue, value) && currentFlags === nextFlags) {
+      return false;
+    }
+    this.workbook.cellStore.setValue(
+      cellIndex,
+      value,
+      value.tag === ValueTag.String ? this.strings.intern(value.value) : 0
+    );
+    this.workbook.cellStore.flags[cellIndex] = nextFlags;
+    return true;
   }
 
   private forEachSheetCell(sheetId: number, fn: (cellIndex: number, row: number, col: number) => void): void {
@@ -2254,6 +3003,8 @@ export class SpreadsheetEngine {
     this.formulas.clear();
     this.reverseCellEdges = [];
     this.reverseRangeEdges = [];
+    this.reverseDefinedNameEdges.clear();
+    this.pivotOutputOwners.clear();
     this.ranges.reset();
     this.edgeArena.reset();
     this.entityVersions.clear();
@@ -2320,6 +3071,40 @@ function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32A
   next.set(indices);
   next[indices.length] = cellIndex;
   return next;
+}
+
+function arePivotRecordsEqual(left: WorkbookPivotSnapshot, right: WorkbookPivotSnapshot): boolean {
+  if (
+    left.name !== right.name
+    || left.sheetName !== right.sheetName
+    || left.address !== right.address
+    || left.rows !== right.rows
+    || left.cols !== right.cols
+    || left.source.sheetName !== right.source.sheetName
+    || left.source.startAddress !== right.source.startAddress
+    || left.source.endAddress !== right.source.endAddress
+    || left.groupBy.length !== right.groupBy.length
+    || left.values.length !== right.values.length
+  ) {
+    return false;
+  }
+  for (let index = 0; index < left.groupBy.length; index += 1) {
+    if (left.groupBy[index] !== right.groupBy[index]) {
+      return false;
+    }
+  }
+  for (let index = 0; index < left.values.length; index += 1) {
+    const leftValue = left.values[index]!;
+    const rightValue = right.values[index]!;
+    if (
+      leftValue.sourceColumn !== rightValue.sourceColumn
+      || leftValue.summarizeBy !== rightValue.summarizeBy
+      || leftValue.outputLabel !== rightValue.outputLabel
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function normalizeRange(range: CellRangeRef): {

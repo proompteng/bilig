@@ -142,6 +142,29 @@ describe("js evaluator", () => {
     ]);
   });
 
+  it("resolves scalar defined names and returns #NAME? when missing", () => {
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-name", name: "TaxRate" },
+          { opcode: "push-number", value: 1 },
+          { opcode: "binary", operator: "+" },
+          { opcode: "return" }
+        ],
+        {
+          ...context,
+          resolveName: (name: string): CellValue =>
+            name === "TaxRate" ? { tag: ValueTag.Number, value: 0.5 } : { tag: ValueTag.Error, code: ErrorCode.Name }
+        }
+      )
+    ).toEqual({ tag: ValueTag.Number, value: 1.5 });
+
+    expect(evaluatePlan([{ opcode: "push-name", name: "MissingName" }, { opcode: "return" }], context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name
+    });
+  });
+
   it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
     expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
     expect(optimizeFormula(parseFormula("-\"text\""))).toEqual({

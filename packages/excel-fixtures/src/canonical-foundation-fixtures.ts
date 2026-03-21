@@ -108,7 +108,10 @@ export const canonicalFoundationFixtures: ExcelFixtureCase[] = [
   fixture("dynamic-array", "sequence-spill", "SEQUENCE spill", "=SEQUENCE(3,1,1,1)", [], [output("A1", numberExpected(1)), output("A2", numberExpected(2)), output("A3", numberExpected(3))]),
   fixture("dynamic-array", "filter-basic", "FILTER", "=FILTER(A1:A4,A1:A4>2)", [input("A1", 1), input("A2", 3), input("A3", 2), input("A4", 4)], [output("B1", numberExpected(3)), output("B2", numberExpected(4))]),
   fixture("dynamic-array", "unique-basic", "UNIQUE", "=UNIQUE(A1:A4)", [input("A1", "A"), input("A2", "B"), input("A3", "A"), input("A4", "C")], [output("B1", stringExpected("A")), output("B2", stringExpected("B")), output("B3", stringExpected("C"))]),
-  fixture("names", "defined-name-scalar", "Defined name scalar reference", "=TaxRate*A1", [input("A1", 100)], [output("A2", numberExpected(8.5))], "Requires workbook-level defined names in the oracle workbook."),
+  {
+    ...fixture("names", "defined-name-scalar", "Defined name scalar reference", "=TaxRate*A1", [input("A1", 100)], [output("A2", numberExpected(8.5))], "Requires workbook-level defined names in the oracle workbook."),
+    definedNames: [{ name: "TaxRate", value: 0.085 }]
+  },
   fixture("tables", "table-total-row-sum", "Excel table total row SUM", "=SUM(Sales[Amount])", [input("A1", 10), input("A2", 12), input("A3", 15)], [output("A4", numberExpected(37))], "Table metadata must be part of the fixture workbook, not implied by plain cells."),
   fixture("structured-reference", "table-column-ref", "Structured table column reference", "=SUM(Sales[Amount])", [input("A1", 10), input("A2", 12), input("A3", 15)], [output("A4", numberExpected(37))], "Kept separate from table totals so the registry can track metadata-aware parsing independently."),
   fixture("volatile", "rand-basic", "RAND", "=RAND()", [], [output("A1", numberExpected(0.625))], "Volatile fixtures must record the exact captured output from the oracle workbook session."),

@@ -3,9 +3,11 @@ import type { CellValue } from "@bilig/protocol";
 import { datetimeBuiltins } from "./builtins/datetime.js";
 import { logicalBuiltins } from "./builtins/logical.js";
 import { lookupBuiltins } from "./builtins/lookup.js";
+import { getExternalScalarFunction, hasExternalFunction } from "./external-function-adapter.js";
+import type { ArrayValue, EvaluationResult } from "./runtime-values.js";
 import { textBuiltins } from "./builtins/text.js";
 
-type Builtin = (...args: CellValue[]) => CellValue;
+type Builtin = (...args: CellValue[]) => EvaluationResult;
 
 function toNumber(value: CellValue): number | undefined {
   switch (value.tag) {
@@ -27,8 +29,53 @@ function numberResult(value: number): CellValue {
   return { tag: ValueTag.Number, value };
 }
 
+function valueError(): CellValue {
+  return { tag: ValueTag.Error, code: ErrorCode.Value };
+}
+
 function firstError(args: CellValue[]): CellValue | undefined {
   return args.find((arg) => arg.tag === ValueTag.Error);
+}
+
+function coercePositiveInteger(value: CellValue | undefined, fallback: number): number | undefined {
+  if (value === undefined) {
+    return fallback;
+  }
+  const numeric = toNumber(value);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return undefined;
+  }
+  const truncated = Math.trunc(numeric);
+  return truncated >= 1 ? truncated : undefined;
+}
+
+function coerceNumber(value: CellValue | undefined, fallback: number): number | undefined {
+  if (value === undefined) {
+    return fallback;
+  }
+  const numeric = toNumber(value);
+  return numeric !== undefined && Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function sequenceResult(rowsArg: CellValue | undefined, colsArg: CellValue | undefined, startArg: CellValue | undefined, stepArg: CellValue | undefined): ArrayValue | CellValue {
+  const rows = coercePositiveInteger(rowsArg, 1);
+  const cols = coercePositiveInteger(colsArg, 1);
+  const start = coerceNumber(startArg, 1);
+  const step = coerceNumber(stepArg, 1);
+  if (rows === undefined || cols === undefined || start === undefined || step === undefined) {
+    return valueError();
+  }
+
+  const values: CellValue[] = [];
+  for (let index = 0; index < rows * cols; index += 1) {
+    values.push(numberResult(start + index * step));
+  }
+  return {
+    kind: "array",
+    rows,
+    cols,
+    values
+  };
 }
 
 function roundToDigits(value: number, digits: number): number {
@@ -146,7 +193,8 @@ const scalarBuiltins: Record<string, Builtin> = {
       return { tag: ValueTag.Error, code: ErrorCode.Value };
     }
     return numberResult(roundDownToDigits(numberValue, Math.trunc(digitValue)));
-  }
+  },
+  SEQUENCE: (...args) => sequenceResult(args[0], args[1], args[2], args[3])
 };
 
 const builtins: Record<string, Builtin> = {
@@ -161,12 +209,12 @@ function isBuiltinIdKey(value: string): value is keyof typeof BuiltinId {
 }
 
 export function getBuiltin(name: string): Builtin | undefined {
-  return builtins[name.toUpperCase()];
+  return builtins[name.toUpperCase()] ?? getExternalScalarFunction(name);
 }
 
 export function hasBuiltin(name: string): boolean {
   const upper = name.toUpperCase();
-  return builtins[upper] !== undefined || lookupBuiltins[upper] !== undefined;
+  return builtins[upper] !== undefined || lookupBuiltins[upper] !== undefined || hasExternalFunction(upper);
 }
 
 export function getBuiltinId(name: string): BuiltinId | undefined {

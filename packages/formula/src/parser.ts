@@ -4,6 +4,7 @@ import type {
   CellRefNode,
   ColumnRefNode,
   FormulaNode,
+  NameRefNode,
   RangeRefNode,
   RowRefNode,
   UnaryExprNode
@@ -44,7 +45,7 @@ export function parseFormula(source: string): FormulaNode {
     return token;
   }
 
-  function parseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode | RowRefNode {
+  function maybeParseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode | RowRefNode | undefined {
     const normalized = ref.startsWith("$") && isRowReferenceText(ref) ? ref : ref.toUpperCase();
     const upper = normalized.toUpperCase();
     if (isCellReferenceText(upper)) {
@@ -68,7 +69,22 @@ export function parseFormula(source: string): FormulaNode {
       }
       return result;
     }
+    return undefined;
+  }
+
+  function parseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode | RowRefNode {
+    const result = maybeParseReferenceValue(ref, sheetName);
+    if (result) {
+      return result;
+    }
     throw new Error(`Unsupported reference '${ref}'`);
+  }
+
+  function parseIdentifierValue(identifier: string): CellRefNode | ColumnRefNode | RowRefNode | NameRefNode {
+    const referenceValue = maybeParseReferenceValue(identifier);
+    return referenceValue?.kind === "CellRef"
+      ? referenceValue
+      : ({ kind: "NameRef", name: identifier } satisfies NameRefNode);
   }
 
   function parseSheetQualifiedReference(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode {
@@ -124,6 +140,8 @@ export function parseFormula(source: string): FormulaNode {
       case "CallExpr":
       case "RangeRef":
         return undefined;
+      case "NameRef":
+        return maybeParseReferenceValue(node.name);
       default:
         return undefined;
     }
@@ -134,6 +152,7 @@ export function parseFormula(source: string): FormulaNode {
       case "NumberLiteral":
       case "BooleanLiteral":
       case "StringLiteral":
+      case "NameRef":
       case "CellRef":
       case "RangeRef":
         return;
@@ -211,7 +230,7 @@ export function parseFormula(source: string): FormulaNode {
         if (upper === "TRUE" || upper === "FALSE") {
           result = { kind: "BooleanLiteral", value: upper === "TRUE" };
         } else {
-          result = parseReferenceValue(first);
+          result = parseIdentifierValue(first);
         }
       }
     } else {

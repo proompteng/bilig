@@ -56,7 +56,6 @@ describe("formula parser/compiler edges", () => {
     expect(() => parseFormula("'Sheet 1'!$1")).toThrow("Row and column references must appear inside a range");
     expect(() => parseFormula("A1:B")).toThrow("Range endpoints must use the same reference type");
     expect(() => parseFormula("A1:2")).toThrow("Range endpoints must use the same reference type");
-    expect(() => parseFormula("A1X")).toThrow("Unsupported reference 'A1X'");
   });
 
   it("binds quoted ranges and keeps unsupported/text formulas on the JS path", () => {
@@ -74,6 +73,30 @@ describe("formula parser/compiler edges", () => {
     expect(bindFormula(parseFormula("LEN(A1:A2)")).mode).toBe(FormulaMode.JsOnly);
   });
 
+  it("parses defined names, tracks them separately, and lowers them onto the JS plan", () => {
+    const ast = parseFormula("TaxRate*A1");
+    expect(ast).toEqual({
+      kind: "BinaryExpr",
+      operator: "*",
+      left: { kind: "NameRef", name: "TaxRate" },
+      right: { kind: "CellRef", ref: "A1" }
+    });
+
+    const bound = bindFormula(ast);
+    expect(bound.deps).toEqual(["A1"]);
+    expect(bound.symbolicNames).toEqual(["TaxRate"]);
+    expect(bound.mode).toBe(FormulaMode.JsOnly);
+
+    const compiled = compileFormula("TaxRate*A1");
+    expect(compiled.symbolicNames).toEqual(["TaxRate"]);
+    expect(compiled.jsPlan).toEqual([
+      { opcode: "push-name", name: "TaxRate" },
+      { opcode: "push-cell", address: "A1" },
+      { opcode: "binary", operator: "*" },
+      { opcode: "return" }
+    ]);
+  });
+
   it("throws on unsupported wasm builtin encodings and invalid axis compilation", () => {
     expect(isBuiltinAvailable("SUM")).toBe(true);
     expect(isBuiltinAvailable("MATCH")).toBe(true);
@@ -81,7 +104,7 @@ describe("formula parser/compiler edges", () => {
     expect(isBuiltinAvailable("VLOOKUP")).toBe(true);
     expect(isBuiltinAvailable("DOES_NOT_EXIST")).toBe(false);
     expect(encodeBuiltin("LEN")).toBeDefined();
-    expect(() => compileFormula("A")).toThrow("Row and column references must appear inside a range");
+    expect(() => compileFormula("Sheet1!A")).toThrow("Row and column references must appear inside a range");
   });
 
   it("compiles non-wasm IF and text formulas onto the JS plan only", () => {

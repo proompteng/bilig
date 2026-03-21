@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { getBuiltin, getBuiltinId } from "../builtins.js";
-import { evaluateAst } from "../js-evaluator.js";
+import { evaluateAst, evaluateAstResult } from "../js-evaluator.js";
 import { parseFormula } from "../parser.js";
 
 describe("formula builtins and JS evaluator", () => {
@@ -102,5 +102,38 @@ describe("formula builtins and JS evaluator", () => {
     expect(evaluateAst(parseFormula("A2+1"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
     expect(evaluateAst(parseFormula("MissingFn(A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
     expect(evaluateAst(parseFormula("A:A"), context)).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("resolves scalar defined names through the JS evaluator", () => {
+    const value = evaluateAst(parseFormula("TaxRate*A1"), {
+      sheetName: "Sheet1",
+      resolveCell: (_sheetName: string, address: string): CellValue =>
+        address === "A1" ? { tag: ValueTag.Number, value: 100 } : { tag: ValueTag.Empty },
+      resolveRange: (): CellValue[] => [],
+      resolveName: (name: string): CellValue =>
+        name.toUpperCase() === "TAXRATE" ? { tag: ValueTag.Number, value: 0.085 } : { tag: ValueTag.Error, code: ErrorCode.Name }
+    });
+
+    expect(value).toEqual({ tag: ValueTag.Number, value: 8.5 });
+  });
+
+  it("preserves sequence array results while flattening them for scalar consumers", () => {
+    const context = {
+      sheetName: "Sheet1",
+      resolveCell: (): CellValue => ({ tag: ValueTag.Empty }),
+      resolveRange: (): CellValue[] => []
+    };
+
+    expect(evaluateAstResult(parseFormula("SEQUENCE(3,1,1,1)"), context)).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 }
+      ]
+    });
+    expect(evaluateAst(parseFormula("SUM(SEQUENCE(3,1,1,1))"), context)).toEqual({ tag: ValueTag.Number, value: 6 });
   });
 });

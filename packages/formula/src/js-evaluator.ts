@@ -3,17 +3,25 @@ import type { FormulaNode } from "./ast.js";
 import { parseRangeAddress } from "./addressing.js";
 import { getBuiltin } from "./builtins.js";
 import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
+import {
+  isArrayValue,
+  scalarFromEvaluationResult,
+  type ArrayValue,
+  type EvaluationResult
+} from "./runtime-values.js";
 
 export interface EvaluationContext {
   sheetName: string;
   resolveCell: (sheetName: string, address: string) => CellValue;
   resolveRange: (sheetName: string, start: string, end: string, refKind: "cells" | "rows" | "cols") => CellValue[];
+  resolveName?: (name: string) => CellValue;
 }
 
 export type JsPlanInstruction =
   | { opcode: "push-number"; value: number }
   | { opcode: "push-boolean"; value: boolean }
   | { opcode: "push-string"; value: string }
+  | { opcode: "push-name"; name: string }
   | { opcode: "push-cell"; sheetName?: string; address: string }
   | { opcode: "push-range"; sheetName?: string; start: string; end: string; refKind: "cells" | "rows" | "cols" }
   | { opcode: "unary"; operator: "+" | "-" }
@@ -25,7 +33,8 @@ export type JsPlanInstruction =
 
 type StackValue =
   | { kind: "scalar"; value: CellValue }
-  | { kind: "range"; values: CellValue[]; refKind: "cells" | "rows" | "cols"; rows: number; cols: number };
+  | { kind: "range"; values: CellValue[]; refKind: "cells" | "rows" | "cols"; rows: number; cols: number }
+  | ArrayValue;
 
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty };
@@ -125,6 +134,19 @@ function popArgument(stack: StackValue[]): StackValue {
   return stack.pop() ?? { kind: "scalar", value: error(ErrorCode.Value) };
 }
 
+function toEvaluationResult(value: StackValue | undefined): EvaluationResult {
+  if (!value) {
+    return error(ErrorCode.Value);
+  }
+  if (value.kind === "scalar") {
+    return value.value;
+  }
+  if (value.kind === "range") {
+    return value.values[0] ?? emptyValue();
+  }
+  return value;
+}
+
 function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
   switch (node.kind) {
     case "NumberLiteral":
@@ -135,6 +157,9 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       return;
     case "StringLiteral":
       plan.push({ opcode: "push-string", value: node.value });
+      return;
+    case "NameRef":
+      plan.push({ opcode: "push-name", name: node.name });
       return;
     case "CellRef":
       plan.push(
@@ -203,7 +228,7 @@ export function lowerToPlan(node: FormulaNode): JsPlanInstruction[] {
   return plan;
 }
 
-export function evaluatePlan(plan: readonly JsPlanInstruction[], context: EvaluationContext): CellValue {
+export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: EvaluationContext): EvaluationResult {
   const stack: StackValue[] = [];
   let pc = 0;
 
@@ -218,6 +243,12 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
         break;
       case "push-string":
         stack.push({ kind: "scalar", value: { tag: ValueTag.String, value: instruction.value, stringId: 0 } });
+        break;
+      case "push-name":
+        stack.push({
+          kind: "scalar",
+          value: context.resolveName?.(instruction.name) ?? error(ErrorCode.Name)
+        });
         break;
       case "push-cell":
         stack.push({
@@ -357,7 +388,7 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
                 : {
                     kind: "range",
                     values: rawArg.values,
-                    refKind: rawArg.refKind,
+                    refKind: rawArg.kind === "range" ? rawArg.refKind : "cells",
                     rows: rawArg.rows,
                     cols: rawArg.cols
                   }
@@ -377,7 +408,12 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
           const values = popArgumentValues(stack);
           args.unshift(...values);
         }
-        stack.push({ kind: "scalar", value: builtin(...args) });
+        const result = builtin(...args);
+        stack.push(
+          isArrayValue(result)
+            ? result
+            : { kind: "scalar", value: result }
+        );
         break;
       }
       case "jump-if-false": {
@@ -395,14 +431,22 @@ export function evaluatePlan(plan: readonly JsPlanInstruction[], context: Evalua
         pc = instruction.target;
         continue;
       case "return":
-        return popScalar(stack);
+        return toEvaluationResult(stack.pop());
     }
     pc += 1;
   }
 
-  return popScalar(stack);
+  return toEvaluationResult(stack.pop());
+}
+
+export function evaluatePlan(plan: readonly JsPlanInstruction[], context: EvaluationContext): CellValue {
+  return scalarFromEvaluationResult(evaluatePlanResult(plan, context));
 }
 
 export function evaluateAst(node: FormulaNode, context: EvaluationContext): CellValue {
   return evaluatePlan(lowerToPlan(node), context);
+}
+
+export function evaluateAstResult(node: FormulaNode, context: EvaluationContext): EvaluationResult {
+  return evaluatePlanResult(lowerToPlan(node), context);
 }

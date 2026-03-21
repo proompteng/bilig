@@ -32,6 +32,16 @@ The full formula target remains Excel 365 worksheet parity as of `2026-03-15`, i
 - `LET`
 - `LAMBDA`
 
+## Host and service function boundary
+
+The worksheet engine keeps non-worksheet Excel surfaces behind the adapter contract in `packages/formula/src/external-function-adapter.ts`.
+
+- native builtins stay focused on the worksheet corpus tracked in this package
+- cube, web, host-backed, external-data, and add-in-like surfaces register through `installExternalFunctionAdapter()`
+- adapters can expose scalar or range-aware functions to the JS evaluator
+- adapted functions do **not** receive a `BuiltinId` and do **not** enter the WASM fast path
+- without an installed adapter, those function names continue to resolve as `#NAME?`
+
 ## Semantic rules
 
 - Excel for the web is the behavior oracle

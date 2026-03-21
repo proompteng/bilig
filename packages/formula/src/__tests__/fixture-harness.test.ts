@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
-import { canonicalFormulaFixtures, type ExcelExpectedValue } from "../../../excel-fixtures/src/index.js";
+import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
+import {
+  canonicalFormulaFixtures,
+  canonicalWorkbookSemanticsFixtures,
+  type ExcelExpectedValue,
+  type ExcelFixtureCase
+} from "../../../excel-fixtures/src/index.js";
 import { excelDateTimeFixtureSuite } from "../../../excel-fixtures/src/datetime-fixtures.js";
-import { formatAddress, parseRangeAddress } from "../addressing.js";
-import { compileFormula, evaluatePlan } from "../index.js";
+import { formatAddress, parseCellAddress, parseRangeAddress } from "../addressing.js";
+import { compileFormula, evaluatePlan, evaluatePlanResult, isArrayValue } from "../index.js";
 import { getCompatibilityEntry } from "../compatibility.js";
 
 const executableStatuses = new Set(["implemented-js", "implemented-js-and-wasm-shadow", "implemented-wasm-production"]);
@@ -12,6 +17,11 @@ const executableFixtures = canonicalFormulaFixtures.filter((fixture) => {
   const entry = getCompatibilityEntry(fixture.id);
   const hasVolatileCall = /\b(TODAY|NOW)\s*\(/i.test(fixture.formula);
   return entry !== undefined && executableStatuses.has(entry.status) && fixture.family !== "volatile" && !hasVolatileCall;
+});
+
+const executableWorkbookSemanticsFixtures = canonicalWorkbookSemanticsFixtures.filter((fixture) => {
+  const entry = getCompatibilityEntry(fixture.id);
+  return entry !== undefined && executableStatuses.has(entry.status);
 });
 
 const executableDateTimeFixtures = (excelDateTimeFixtureSuite.cases ?? []).filter((fixture) => {
@@ -23,13 +33,19 @@ const executableDateTimeFixtures = (excelDateTimeFixtureSuite.cases ?? []).filte
 describe("excel fixture harness", () => {
   it("executes implemented canonical formula fixtures through the JS evaluator", () => {
     for (const fixture of executableFixtures) {
-      expect(evaluateFixture(fixture)).toEqual(expectedValueToCellValue(firstOutput(fixture).expected));
+      expectFixtureResult(fixture);
+    }
+  });
+
+  it("executes workbook semantics fixtures through the JS evaluator", () => {
+    for (const fixture of executableWorkbookSemanticsFixtures) {
+      expectFixtureResult(fixture);
     }
   });
 
   it("executes implemented date-time edge fixtures through the JS evaluator", () => {
     for (const fixture of executableDateTimeFixtures) {
-      expect(evaluateFixture(fixture)).toEqual(expectedValueToCellValue(firstOutput(fixture).expected));
+      expectFixtureResult(fixture);
     }
   });
 
@@ -93,18 +109,88 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function evaluateFixture(fixture: { formula: string; inputs: { address: string; input: LiteralInput }[]; outputs: { expected: ExcelExpectedValue }[]; sheetName?: string }): CellValue {
+function expectFixtureResult(fixture: ExcelFixtureCase): void {
+  const result = evaluateFixture(fixture);
+  if (!isArrayValue(result)) {
+    assertScalarFixtureResult(fixture, result);
+    return;
+  }
+  assertArrayFixtureResult(fixture, result);
+}
+
+function assertArrayFixtureResult(
+  fixture: ExcelFixtureCase,
+  result: Extract<ReturnType<typeof evaluatePlanResult>, { kind: "array" }>
+): void {
+  const defaultSheetName = fixture.sheetName ?? "Sheet1";
+  const first = fixture.outputs[0];
+  if (!first) {
+    throw new Error(`Fixture ${fixture.id} is missing outputs`);
+  }
+  const firstSheetName = first.sheetName ?? defaultSheetName;
+  const firstAddress = parseCellAddress(first.address, firstSheetName);
+  let maxRow = firstAddress.row;
+  let maxCol = firstAddress.col;
+  const expectedByOffset = new Map<string, CellValue>();
+
+  fixture.outputs.forEach((output) => {
+    const sheetName = output.sheetName ?? defaultSheetName;
+    expect(sheetName).toBe(firstSheetName);
+    const address = parseCellAddress(output.address, sheetName);
+    maxRow = Math.max(maxRow, address.row);
+    maxCol = Math.max(maxCol, address.col);
+    expectedByOffset.set(
+      `${address.row - firstAddress.row}:${address.col - firstAddress.col}`,
+      expectedValueToCellValue(output.expected)
+    );
+  });
+
+  expect(result.rows).toBe(maxRow - firstAddress.row + 1);
+  expect(result.cols).toBe(maxCol - firstAddress.col + 1);
+  expect(result.values).toEqual(
+    Array.from({ length: result.rows * result.cols }, (_entry, index) => {
+      const rowOffset = Math.floor(index / result.cols);
+      const colOffset = index % result.cols;
+      return expectedByOffset.get(`${rowOffset}:${colOffset}`) ?? { tag: ValueTag.Empty };
+    })
+  );
+}
+
+function assertScalarFixtureResult(fixture: ExcelFixtureCase, result: CellValue): void {
   expect(fixture.outputs).toHaveLength(1);
+  expect(result).toEqual(expectedValueToCellValue(firstOutput(fixture).expected));
+}
+
+function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluatePlanResult> {
   const compiled = compileFormula(fixture.formula);
-  const values = new Map<string, CellValue>();
+  const defaultSheetName = fixture.sheetName ?? "Sheet1";
+  const sheetValues = new Map<string, Map<string, CellValue>>();
   for (const input of fixture.inputs) {
+    const sheetName = input.sheetName ?? defaultSheetName;
+    let values = sheetValues.get(sheetName);
+    if (!values) {
+      values = new Map<string, CellValue>();
+      sheetValues.set(sheetName, values);
+    }
     values.set(input.address.toUpperCase(), literalToCellValue(input.input));
   }
+  const definedNames = new Map<string, CellValue>(
+    (fixture.definedNames ?? []).map((definedName) => [definedName.name.toUpperCase(), literalToCellValue(definedName.value)])
+  );
+  const hasSheet = (sheetName: string) => sheetName === defaultSheetName || sheetValues.has(sheetName);
 
-  return evaluatePlan(compiled.jsPlan, {
-    sheetName: fixture.sheetName ?? "Sheet1",
-    resolveCell: (_sheetName, address) => values.get(address.toUpperCase()) ?? { tag: ValueTag.Empty },
-    resolveRange: (_sheetName, start, end, refKind) => {
+  return evaluatePlanResult(compiled.jsPlan, {
+    sheetName: defaultSheetName,
+    resolveCell: (sheetName, address) => {
+      if (!hasSheet(sheetName)) {
+        return { tag: ValueTag.Error, code: ErrorCode.Ref };
+      }
+      return sheetValues.get(sheetName)?.get(address.toUpperCase()) ?? { tag: ValueTag.Empty };
+    },
+    resolveRange: (sheetName, start, end, refKind) => {
+      if (!hasSheet(sheetName)) {
+        return [{ tag: ValueTag.Error, code: ErrorCode.Ref }];
+      }
       if (refKind !== "cells") {
         return [];
       }
@@ -113,13 +199,15 @@ function evaluateFixture(fixture: { formula: string; inputs: { address: string; 
         return [];
       }
       const output: CellValue[] = [];
+      const sheetCells = sheetValues.get(sheetName);
       for (let row = range.start.row; row <= range.end.row; row += 1) {
         for (let col = range.start.col; col <= range.end.col; col += 1) {
-          output.push(values.get(formatAddress(row, col).toUpperCase()) ?? { tag: ValueTag.Empty });
+          output.push(sheetCells?.get(formatAddress(row, col).toUpperCase()) ?? { tag: ValueTag.Empty });
         }
       }
       return output;
-    }
+    },
+    resolveName: (name) => definedNames.get(name.toUpperCase()) ?? { tag: ValueTag.Error, code: ErrorCode.Name }
   });
 }
 

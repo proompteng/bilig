@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import { getExternalLookupFunction } from "../external-function-adapter.js";
 
 export interface RangeBuiltinArgument {
   kind: "range";
@@ -749,5 +750,5 @@ function parseCriteriaOperand(raw: string): CellValue {
 }
 
 export function getLookupBuiltin(name: string): LookupBuiltin | undefined {
-  return lookupBuiltins[name.toUpperCase()];
+  return lookupBuiltins[name.toUpperCase()] ?? getExternalLookupFunction(name);
 }

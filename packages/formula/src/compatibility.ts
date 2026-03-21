@@ -183,12 +183,26 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("information:isblank-basic", "information", "=ISBLANK(A1)", "implemented-wasm-production"),
   entry("information:isnumber-basic", "information", "=ISNUMBER(A1)", "implemented-wasm-production"),
   entry("information:istext-basic", "information", "=ISTEXT(A1)", "implemented-wasm-production"),
-  entry("dynamic-array:sequence-spill", "dynamic-array", "=SEQUENCE(3,1,1,1)", "blocked", {
-    notes: "Spill allocation and shape semantics are required before this family can move past blocked."
+  entry("dynamic-array:sequence-spill", "dynamic-array", "=SEQUENCE(3,1,1,1)", "implemented-js", {
+    notes: "SEQUENCE spills through the JS runtime and workbook spill metadata; broader array families remain blocked."
   }),
   entry("dynamic-array:filter-basic", "dynamic-array", "=FILTER(A1:A4,A1:A4>2)", "blocked"),
   entry("dynamic-array:unique-basic", "dynamic-array", "=UNIQUE(A1:A4)", "blocked"),
-  entry("names:defined-name-scalar", "names", "=TaxRate*A1", "blocked"),
+  entry("names:defined-name-scalar", "names", "=TaxRate*A1", "implemented-js", {
+    notes: "Scalar defined names resolve through the JS evaluator's name hook; reference-valued names remain blocked."
+  }),
+  entry("names:defined-name-case-insensitive", "names", "=taxrate*A1", "implemented-js", {
+    scope: "extended",
+    notes: "Workbook defined names normalize case-insensitively through the JS evaluator's name hook."
+  }),
+  entry("names:defined-name-multi-scalar-pack", "names", "=TaxRate+FeeRate", "implemented-js", {
+    scope: "extended",
+    notes: "Multiple workbook names can participate in one scalar expression without widening onto reference-valued metadata."
+  }),
+  entry("names:defined-name-missing", "names", "=MissingRate*A1", "implemented-js", {
+    scope: "extended",
+    notes: "Missing workbook-level names still surface #NAME? instead of falling back to empty cells."
+  }),
   entry("tables:table-total-row-sum", "tables", "=SUM(Sales[Amount])", "blocked"),
   entry("structured-reference:table-column-ref", "structured-reference", "=SUM(Sales[Amount])", "blocked"),
   entry("volatile:rand-basic", "volatile", "=RAND()", "implemented-js", {
@@ -243,6 +257,21 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("math:int-basic", "math", "=INT(-3.1)", "implemented-wasm-production"),
   entry("math:roundup-basic", "math", "=ROUNDUP(12.341,2)", "implemented-wasm-production"),
   entry("math:rounddown-basic", "math", "=ROUNDDOWN(12.349,2)", "implemented-wasm-production"),
+  entry("arithmetic:cross-sheet-multiply", "arithmetic", "=Sheet2!B1*3", "implemented-wasm-production", {
+    scope: "extended",
+    prerequisites: ["core:value-model", "core:reference-model"],
+    notes: "Qualified scalar references stay on the native arithmetic path once the target sheet is present."
+  }),
+  entry("arithmetic:cross-sheet-empty-cell-zero", "arithmetic", "=Sheet2!B1*3", "implemented-wasm-production", {
+    scope: "extended",
+    prerequisites: ["core:value-model", "core:reference-model"],
+    notes: "Existing blank cells on another sheet coerce through the usual arithmetic empty-cell semantics."
+  }),
+  entry("arithmetic:missing-sheet-ref-error", "arithmetic", "=Sheet2!B1*3", "implemented-js", {
+    scope: "extended",
+    prerequisites: ["core:value-model", "core:reference-model"],
+    notes: "Unresolved qualified cells emit #REF! and temporarily fall back to the JS path until rebinding can occur."
+  }),
   entry("date-time:now-volatile", "date-time", "=NOW()", "implemented-js", {
     prerequisites: ["core:value-model", "core:date-serial-model", "core:volatile-context"],
     notes: "NOW executes on the JS oracle with deterministic capture tests; native promotion still depends on a recalc-epoch runtime contract."
@@ -252,6 +281,21 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("date-time:minute-basic", "date-time", "=MINUTE(A1)", "implemented-wasm-production"),
   entry("date-time:second-basic", "date-time", "=SECOND(A1)", "implemented-wasm-production"),
   entry("date-time:weekday-basic", "date-time", "=WEEKDAY(DATE(2026,3,15))", "implemented-wasm-production"),
+  entry("aggregation:cross-sheet-range-sum", "aggregation", "=SUM(Sheet2!A1:A2)", "implemented-wasm-production", {
+    scope: "extended",
+    prerequisites: ["core:value-model", "core:range-iterators", "core:reference-model"],
+    notes: "Resolved qualified ranges now stay on the native aggregation path."
+  }),
+  entry("aggregation:cross-sheet-empty-range-zero", "aggregation", "=SUM(Sheet2!A1:A2)", "implemented-wasm-production", {
+    scope: "extended",
+    prerequisites: ["core:value-model", "core:range-iterators", "core:reference-model"],
+    notes: "Existing blank ranges on another sheet aggregate as zero once the referenced sheet exists."
+  }),
+  entry("aggregation:missing-sheet-range-ref-error", "aggregation", "=SUM(Sheet2!A1:A2)", "implemented-js", {
+    scope: "extended",
+    prerequisites: ["core:value-model", "core:range-iterators", "core:reference-model"],
+    notes: "Missing qualified ranges emit #REF! until a later sheet creation can restore native evaluation."
+  }),
   entry("dynamic-array:sort-basic", "dynamic-array", "=SORT(A1:A4)", "blocked"),
   entry("dynamic-array:sortby-basic", "dynamic-array", "=SORTBY(A1:A3,B1:B3)", "blocked"),
   entry("dynamic-array:tocol-basic", "dynamic-array", "=TOCOL(A1:B2)", "blocked"),

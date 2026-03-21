@@ -57,6 +57,8 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       return;
     case "StringLiteral":
       throw new Error("String literals are not supported on the wasm fast path");
+    case "NameRef":
+      throw new Error("Defined names are not supported on the wasm fast path");
     case "CellRef": {
       emitCellRef(node.ref, node.sheetName, state);
       return;
@@ -127,6 +129,7 @@ export interface CompiledFormula extends FormulaRecord {
   ast: FormulaNode;
   optimizedAst: FormulaNode;
   deps: string[];
+  symbolicNames: string[];
   jsPlan: JsPlanInstruction[];
   program: Uint32Array;
   constants: Float64Array;
@@ -142,6 +145,7 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
       case "push-number":
       case "push-boolean":
       case "push-string":
+      case "push-name":
       case "push-cell":
       case "push-range":
         current += 1;
@@ -197,6 +201,7 @@ export function compileFormula(source: string): CompiledFormula {
     ast,
     optimizedAst,
     deps: bound.deps,
+    symbolicNames: bound.symbolicNames,
     jsPlan,
     maxStackDepth: computeMaxStackDepth(jsPlan)
   };

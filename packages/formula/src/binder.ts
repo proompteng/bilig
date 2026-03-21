@@ -10,6 +10,7 @@ function assertNever(value: never): never {
 export interface BoundFormula {
   ast: FormulaNode;
   deps: string[];
+  symbolicNames: string[];
   mode: FormulaMode;
 }
 
@@ -92,12 +93,16 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
 
 export function bindFormula(ast: FormulaNode): BoundFormula {
   const deps = new Set<string>();
+  const symbolicNames = new Set<string>();
 
   function collectDeps(node: FormulaNode): void {
     switch (node.kind) {
       case "NumberLiteral":
       case "BooleanLiteral":
       case "StringLiteral":
+        break;
+      case "NameRef":
+        symbolicNames.add(node.name);
         break;
       case "CellRef":
         deps.add(node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref);
@@ -129,6 +134,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "BooleanLiteral":
         return true;
       case "StringLiteral":
+      case "NameRef":
         return false;
       case "CellRef":
         return true;
@@ -170,6 +176,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
   return {
     ast,
     deps: [...deps],
+    symbolicNames: [...symbolicNames],
     mode:
       ast.kind === "CellRef" || ast.kind === "RangeRef" || ast.kind === "StringLiteral" || !isWasmSafe(ast)
         ? FormulaMode.JsOnly

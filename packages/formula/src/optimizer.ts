@@ -1,6 +1,7 @@
 import { ValueTag, type CellValue } from "@bilig/protocol";
 import type { CallExprNode, FormulaNode } from "./ast.js";
-import { evaluateAst, type EvaluationContext } from "./js-evaluator.js";
+import { evaluateAstResult, type EvaluationContext } from "./js-evaluator.js";
+import { isArrayValue } from "./runtime-values.js";
 
 const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND"]);
 
@@ -32,6 +33,7 @@ function isStaticNode(node: FormulaNode): boolean {
     case "BooleanLiteral":
     case "StringLiteral":
       return true;
+    case "NameRef":
     case "CellRef":
     case "RowRef":
     case "ColumnRef":
@@ -52,7 +54,8 @@ function tryEvaluateStatic(node: FormulaNode): CellValue | undefined {
   }
 
   try {
-    return evaluateAst(node, staticContext());
+    const result = evaluateAstResult(node, staticContext());
+    return isArrayValue(result) ? undefined : result;
   } catch {
     return undefined;
   }
@@ -118,6 +121,7 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
     case "NumberLiteral":
     case "BooleanLiteral":
     case "StringLiteral":
+    case "NameRef":
     case "CellRef":
     case "RowRef":
     case "ColumnRef":

@@ -156,6 +156,63 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
+  it("spills sequence formulas through the runtime and recalculates downstream refs", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "B1", "A3*2");
+    engine.setCellFormula("Sheet1", "A1", "SEQUENCE(3,1,1,1)");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "A3")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.exportSnapshot().workbook.metadata?.spills).toEqual([
+      { sheetName: "Sheet1", address: "A1", rows: 3, cols: 1 }
+    ]);
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(engine.exportSnapshot());
+
+    expect(restored.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(restored.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(restored.getCellValue("Sheet1", "A3")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(restored.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(restored.exportSnapshot().workbook.metadata?.spills).toEqual([
+      { sheetName: "Sheet1", address: "A1", rows: 3, cols: 1 }
+    ]);
+  });
+
+  it("clears prior sequence spills when the owner becomes a scalar", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "B1", "A3*2");
+    engine.setCellFormula("Sheet1", "A1", "SEQUENCE(3,1,1,1)");
+
+    engine.setCellValue("Sheet1", "A1", 7);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "A3")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.exportSnapshot().workbook.metadata?.spills).toBeUndefined();
+  });
+
+  it("blocks sequence spills when target cells are occupied", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A2", 99);
+    engine.setCellFormula("Sheet1", "A1", "SEQUENCE(3,1,1,1)");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 99 });
+    expect(engine.getCellValue("Sheet1", "A3")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.exportSnapshot().workbook.metadata?.spills).toBeUndefined();
+  });
+
   it("supports cross-sheet references", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -476,6 +533,26 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
   });
 
+  it("rebinds bounded cross-sheet ranges from #REF! back onto the wasm path when a sheet appears", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "SUM(Sheet2!A1:A2)");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+
+    engine.createSheet("Sheet2");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellValue("Sheet2", "A1", 2);
+    engine.setCellValue("Sheet2", "A2", 3);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
   it("rebinds formulas to #REF! when a referenced sheet is deleted", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -485,6 +562,22 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A1", "Sheet2!B1*2");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    engine.deleteSheet("Sheet2");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+  });
+
+  it("rebinds bounded cross-sheet ranges to #REF! when a referenced sheet is deleted", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Sheet2");
+    engine.setCellValue("Sheet2", "A1", 2);
+    engine.setCellValue("Sheet2", "A2", 3);
+    engine.setCellFormula("Sheet1", "A1", "SUM(Sheet2!A1:A2)");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
 
     engine.deleteSheet("Sheet2");
 
@@ -600,6 +693,173 @@ describe("SpreadsheetEngine", () => {
 
     restored.applyRemoteBatch(valueBatch);
     expect(restored.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("resolves workbook defined names through engine metadata and recalculates dependents", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 100);
+    engine.setCellFormula("Sheet1", "A2", "TaxRate*A1");
+
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+
+    const changed: number[][] = [];
+    const unsubscribe = engine.subscribe((event) => {
+      changed.push(Array.from(event.changedCellIndices));
+    });
+
+    const a2Index = engine.workbook.getCellIndex("Sheet1", "A2");
+    expect(a2Index).toBeDefined();
+
+    engine.setDefinedName("TaxRate", 0.085);
+
+    expect(engine.getDefinedName("taxrate")).toEqual({ name: "TaxRate", value: 0.085 });
+    expect(engine.getDefinedNames()).toEqual([{ name: "TaxRate", value: 0.085 }]);
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 8.5 });
+    expect(changed.at(-1)).toContain(a2Index!);
+
+    engine.setDefinedName("TAXRATE", 0.09);
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 9 });
+
+    expect(engine.deleteDefinedName("taxrate")).toBe(true);
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+
+    unsubscribe();
+  });
+
+  it("persists workbook defined names through snapshot roundtrip", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.setDefinedName("TaxRate", 0.085);
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 100);
+    engine.setCellFormula("Sheet1", "A2", "TaxRate*A1");
+
+    const snapshot = engine.exportSnapshot();
+
+    expect(snapshot.workbook.metadata?.definedNames).toEqual([{ name: "TaxRate", value: 0.085 }]);
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+
+    expect(restored.getDefinedNames()).toEqual([{ name: "TaxRate", value: 0.085 }]);
+    expect(restored.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 8.5 });
+    expect(restored.exportSnapshot().workbook.metadata?.definedNames).toEqual([{ name: "TaxRate", value: 0.085 }]);
+  });
+
+  it("materializes pivot tables, refreshes aggregates, and roundtrips snapshot metadata", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Pivot");
+    engine.setRangeValues(
+      { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+      [
+        ["Region", "Product", "Sales"],
+        ["East", "Widget", 10],
+        ["West", "Widget", 7],
+        ["East", "Gizmo", 5]
+      ]
+    );
+
+    engine.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+      groupBy: ["Region"],
+      values: [
+        { sourceColumn: "Sales", summarizeBy: "sum" },
+        { sourceColumn: "Product", summarizeBy: "count", outputLabel: "Rows" }
+      ]
+    });
+
+    expect(engine.getCellValue("Pivot", "B2")).toMatchObject({ tag: ValueTag.String, value: "Region" });
+    expect(engine.getCellValue("Pivot", "C2")).toMatchObject({ tag: ValueTag.String, value: "SUM of Sales" });
+    expect(engine.getCellValue("Pivot", "D2")).toMatchObject({ tag: ValueTag.String, value: "Rows" });
+    expect(engine.getCellValue("Pivot", "B3")).toMatchObject({ tag: ValueTag.String, value: "East" });
+    expect(engine.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 15 });
+    expect(engine.getCellValue("Pivot", "D3")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Pivot", "B4")).toMatchObject({ tag: ValueTag.String, value: "West" });
+    expect(engine.getCellValue("Pivot", "C4")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getCellValue("Pivot", "D4")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getPivotTables()).toEqual([
+      {
+        name: "SalesByRegion",
+        sheetName: "Pivot",
+        address: "B2",
+        source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+        groupBy: ["Region"],
+        values: [
+          { sourceColumn: "Sales", summarizeBy: "sum" },
+          { sourceColumn: "Product", summarizeBy: "count", outputLabel: "Rows" }
+        ],
+        rows: 3,
+        cols: 3
+      }
+    ]);
+
+    engine.setCellValue("Data", "C3", 9);
+
+    expect(engine.getCellValue("Pivot", "C4")).toEqual({ tag: ValueTag.Number, value: 9 });
+
+    const snapshot = engine.exportSnapshot();
+    expect(snapshot.workbook.metadata?.pivots).toEqual([
+      {
+        name: "SalesByRegion",
+        sheetName: "Pivot",
+        address: "B2",
+        source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+        groupBy: ["Region"],
+        values: [
+          { sourceColumn: "Sales", summarizeBy: "sum" },
+          { sourceColumn: "Product", summarizeBy: "count", outputLabel: "Rows" }
+        ],
+        rows: 3,
+        cols: 3
+      }
+    ]);
+    expect(snapshot.sheets.find((sheet) => sheet.name === "Pivot")?.cells).toEqual([]);
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+
+    expect(restored.getCellValue("Pivot", "B3")).toMatchObject({ tag: ValueTag.String, value: "East" });
+    expect(restored.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 15 });
+    expect(restored.getCellValue("Pivot", "C4")).toEqual({ tag: ValueTag.Number, value: 9 });
+    expect(restored.exportSnapshot().workbook.metadata?.pivots).toEqual(snapshot.workbook.metadata?.pivots);
+  });
+
+  it("returns #REF for missing pivot source sheets and rebinds once source cells appear", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Pivot");
+
+    engine.setPivotTable("Pivot", "A1", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }]
+    });
+
+    expect(engine.getCellValue("Pivot", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+
+    engine.setRangeValues(
+      { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      [
+        ["Region", "Sales"],
+        ["East", 10],
+        ["West", 5]
+      ]
+    );
+
+    expect(engine.getCellValue("Pivot", "A1")).toMatchObject({ tag: ValueTag.String, value: "Region" });
+    expect(engine.getCellValue("Pivot", "B1")).toMatchObject({ tag: ValueTag.String, value: "SUM of Sales" });
+    expect(engine.getCellValue("Pivot", "A2")).toMatchObject({ tag: ValueTag.String, value: "East" });
+    expect(engine.getCellValue("Pivot", "B2")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Pivot", "A3")).toMatchObject({ tag: ValueTag.String, value: "West" });
+    expect(engine.getCellValue("Pivot", "B3")).toEqual({ tag: ValueTag.Number, value: 5 });
   });
 
   it("exports sparse high-row cells without truncating the sheet", async () => {

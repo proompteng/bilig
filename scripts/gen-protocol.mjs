@@ -20,7 +20,9 @@ const enumManifest = {
     ["Value", 3],
     ["Name", 4],
     ["NA", 5],
-    ["Cycle", 6]
+    ["Cycle", 6],
+    ["Spill", 7],
+    ["Blocked", 8]
   ],
   FormulaMode: [
     ["JsOnly", 0],

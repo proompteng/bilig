@@ -30,6 +30,10 @@ export function formatErrorCode(code: ErrorCode): string {
       return "#N/A";
     case ErrorCode.Cycle:
       return "#CYCLE!";
+    case ErrorCode.Spill:
+      return "#SPILL!";
+    case ErrorCode.Blocked:
+      return "#BLOCKED!";
     default:
       return "#ERROR!";
   }
@@ -112,10 +116,48 @@ export interface Viewport {
   colEnd: number;
 }
 
+export interface WorkbookDefinedNameSnapshot {
+  name: string;
+  value: LiteralInput;
+}
+
+export interface WorkbookSpillSnapshot {
+  sheetName: string;
+  address: string;
+  rows: number;
+  cols: number;
+}
+
+export type PivotAggregation = "sum" | "count";
+
+export interface WorkbookPivotValueSnapshot {
+  sourceColumn: string;
+  summarizeBy: PivotAggregation;
+  outputLabel?: string;
+}
+
+export interface WorkbookPivotSnapshot {
+  name: string;
+  sheetName: string;
+  address: string;
+  source: CellRangeRef;
+  groupBy: string[];
+  values: WorkbookPivotValueSnapshot[];
+  rows: number;
+  cols: number;
+}
+
+export interface WorkbookMetadataSnapshot {
+  definedNames?: WorkbookDefinedNameSnapshot[];
+  spills?: WorkbookSpillSnapshot[];
+  pivots?: WorkbookPivotSnapshot[];
+}
+
 export interface WorkbookSnapshot {
   version: 1;
   workbook: {
     name: string;
+    metadata?: WorkbookMetadataSnapshot;
   };
   sheets: Array<{
     name: string;

@@ -18,7 +18,7 @@ flowchart LR
 
 ## Formula architecture
 
-- `@bilig/formula` owns grammar, binding, optimization, translation, compatibility registry, and JS oracle evaluation
+- `@bilig/formula` owns grammar, binding, optimization, translation, compatibility registry, JS oracle evaluation, and the external function adapter boundary for non-worksheet surfaces
 - `@bilig/wasm-kernel` owns production formula execution for closed families
 - `@bilig/core` owns workbook context, dependency scheduling, metrics, and execution routing
 - `@bilig/excel-fixtures` owns checked-in oracle cases and capture metadata

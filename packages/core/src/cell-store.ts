@@ -7,7 +7,9 @@ export const enum CellFlags {
   JsOnly = 1 << 2,
   InCycle = 1 << 3,
   Materialized = 1 << 4,
-  PendingDelete = 1 << 5
+  PendingDelete = 1 << 5,
+  SpillChild = 1 << 6,
+  PivotOutput = 1 << 7
 }
 
 export class CellStore {
