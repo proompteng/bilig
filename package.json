@@ -26,7 +26,7 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
-    "test:browser": "bun scripts/run-browser-tests.mjs",
+    "test:browser": "bun scripts/run-browser-tests.ts",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "bun scripts/perf-smoke.mjs",
