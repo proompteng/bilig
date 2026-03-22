@@ -1,5 +1,5 @@
 // GENERATED FILE. DO NOT EDIT DIRECTLY.
-// Source: scripts/gen-protocol.mjs
+// Source: scripts/gen-protocol.ts
 
 export enum ValueTag {
   Empty = 0,

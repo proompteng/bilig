@@ -1,5 +1,5 @@
 // GENERATED FILE. DO NOT EDIT DIRECTLY.
-// Source: scripts/gen-protocol.mjs
+// Source: scripts/gen-protocol.ts
 
 import { BuiltinId, Opcode } from "./enums.js";
 

@@ -43,7 +43,7 @@
 - Keep spreadsheet semantics in `@bilig/core`. React is an authoring/operator surface only.
 - The custom reconciler is package-based and does not own spreadsheet state. From `docs/reconciler-layering.md`: do not mutate the engine in `createInstance`, descriptors stay inert until commit, and each React commit should flush as one engine batch.
 - Formula work follows the canonical execution rule from `docs/architecture.md`: land semantics in the JS path first, prove parity with fixtures/tests, mirror in WASM, and only then route production execution to the fast path.
-- If you change protocol enums, opcodes, or builtin metadata, edit `scripts/gen-protocol.mjs` and regenerate the checked-in outputs in `packages/protocol/src/*` and `packages/wasm-kernel/assembly/protocol.ts`. CI runs `pnpm protocol:check` and fails on drift.
+- If you change protocol enums, opcodes, or builtin metadata, edit `scripts/gen-protocol.ts` and regenerate the checked-in outputs in `packages/protocol/src/*` and `packages/wasm-kernel/assembly/protocol.ts`. CI runs `pnpm protocol:check` and fails on drift.
 - Import workspace code through `@bilig/*` package names. Vitest aliases those imports directly to `src/` entrypoints, so tests exercise source modules rather than built `dist/` output.
 - The public cell model includes `format` alongside `addr`, `value`, and `formula`. Preserve format-only changes in APIs, events, snapshots, and tests.
 - `apps/playground` is the demo/operator shell and `apps/web` is the product-style shell; both reuse the same underlying workbook app surface. Avoid duplicating behavior between them unless the product/playground split is intentional.

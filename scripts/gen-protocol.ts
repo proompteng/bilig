@@ -239,7 +239,7 @@ const builtinManifest = [
   { id: "Sequence", name: "SEQUENCE", supportsWasm: true }
 ];
 
-const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.mjs\n\n`;
+const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.ts\n\n`;
 
 function renderEnum(name, entries) {
   const lines = entries.map(([key, value]) => `  ${key} = ${value}`);
