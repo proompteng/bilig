@@ -1112,6 +1112,241 @@ describe("SpreadsheetEngine", () => {
     expect(restored.exportSnapshot().workbook.metadata?.definedNames).toEqual([{ name: "TaxRate", value: 0.085 }]);
   });
 
+  it("replicates structural workbook metadata through authoritative op batches", async () => {
+    const primary = new SpreadsheetEngine({ workbookName: "spec", replicaId: "a" });
+    const replica = new SpreadsheetEngine({ workbookName: "spec", replicaId: "b" });
+    await Promise.all([primary.ready(), replica.ready()]);
+
+    const outbound: EngineOpBatch[] = [];
+    primary.subscribeBatches((batch) => outbound.push(batch));
+
+    primary.createSheet("Sheet1");
+    outbound.splice(0).forEach((batch) => replica.applyRemoteBatch(batch));
+
+    primary.setWorkbookMetadata("locale", "en-US");
+    primary.updateRowMetadata("Sheet1", 2, 3, 24, false);
+    primary.updateColumnMetadata("Sheet1", 1, 2, 120, true);
+    primary.setFreezePane("Sheet1", 1, 2);
+    primary.setFilter("Sheet1", { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" });
+    primary.setSort(
+      "Sheet1",
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+      [{ keyAddress: "B1", direction: "desc" }]
+    );
+    primary.setTable({
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C10",
+      columnNames: ["Region", "Product", "Sales"],
+      headerRow: true,
+      totalsRow: false
+    });
+    primary.setSpillRange("Sheet1", "E1", 2, 3);
+
+    expect(outbound.at(0)?.ops).toEqual([{ kind: "setWorkbookMetadata", key: "locale", value: "en-US" }]);
+    expect(outbound.at(1)?.ops).toEqual([{
+      kind: "updateRowMetadata",
+      sheetName: "Sheet1",
+      start: 2,
+      count: 3,
+      size: 24,
+      hidden: false
+    }]);
+    expect(outbound.at(2)?.ops).toEqual([{
+      kind: "updateColumnMetadata",
+      sheetName: "Sheet1",
+      start: 1,
+      count: 2,
+      size: 120,
+      hidden: true
+    }]);
+    expect(outbound.at(3)?.ops).toEqual([{ kind: "setFreezePane", sheetName: "Sheet1", rows: 1, cols: 2 }]);
+    expect(outbound.at(4)?.ops).toEqual([{
+      kind: "setFilter",
+      sheetName: "Sheet1",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" }
+    }]);
+    expect(outbound.at(5)?.ops).toEqual([{
+      kind: "setSort",
+      sheetName: "Sheet1",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+      keys: [{ keyAddress: "B1", direction: "desc" }]
+    }]);
+    expect(outbound.at(6)?.ops).toEqual([{
+      kind: "upsertTable",
+      table: {
+        name: "Sales",
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "C10",
+        columnNames: ["Region", "Product", "Sales"],
+        headerRow: true,
+        totalsRow: false
+      }
+    }]);
+    expect(outbound.at(7)?.ops).toEqual([{
+      kind: "upsertSpillRange",
+      sheetName: "Sheet1",
+      address: "E1",
+      rows: 2,
+      cols: 3
+    }]);
+
+    outbound.forEach((batch) => replica.applyRemoteBatch(batch));
+
+    expect(replica.getWorkbookMetadataEntries()).toEqual([{ key: "locale", value: "en-US" }]);
+    expect(replica.getRowMetadata("Sheet1")).toEqual([{ sheetName: "Sheet1", start: 2, count: 3, size: 24, hidden: false }]);
+    expect(replica.getColumnMetadata("Sheet1")).toEqual([{ sheetName: "Sheet1", start: 1, count: 2, size: 120, hidden: true }]);
+    expect(replica.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 2 });
+    expect(replica.getFilters("Sheet1")).toEqual([{
+      sheetName: "Sheet1",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" }
+    }]);
+    expect(replica.getSorts("Sheet1")).toEqual([{
+      sheetName: "Sheet1",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+      keys: [{ keyAddress: "B1", direction: "desc" }]
+    }]);
+    expect(replica.getTables()).toEqual([{
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C10",
+      columnNames: ["Region", "Product", "Sales"],
+      headerRow: true,
+      totalsRow: false
+    }]);
+    expect(replica.getSpillRanges()).toEqual([{ sheetName: "Sheet1", address: "E1", rows: 2, cols: 3 }]);
+  });
+
+  it("undoes and redoes structural metadata through the transaction log", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setWorkbookMetadata("locale", "en-US");
+    engine.setFreezePane("Sheet1", 1, 1);
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B5",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: false
+    });
+
+    expect(engine.getWorkbookMetadataEntries()).toEqual([{ key: "locale", value: "en-US" }]);
+    expect(engine.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 1 });
+    expect(engine.getTables()).toHaveLength(1);
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getTables()).toEqual([]);
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getFreezePane("Sheet1")).toBeUndefined();
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getWorkbookMetadataEntries()).toEqual([]);
+
+    expect(engine.redo()).toBe(true);
+    expect(engine.getWorkbookMetadataEntries()).toEqual([{ key: "locale", value: "en-US" }]);
+
+    expect(engine.redo()).toBe(true);
+    expect(engine.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 1 });
+
+    expect(engine.redo()).toBe(true);
+    expect(engine.getTables()).toEqual([{
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B5",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: false
+    }]);
+  });
+
+  it("persists expanded workbook metadata through snapshot roundtrip", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setWorkbookMetadata("locale", "en-US");
+    engine.updateRowMetadata("Sheet1", 2, 2, 24, false);
+    engine.updateColumnMetadata("Sheet1", 1, 1, 140, null);
+    engine.setFreezePane("Sheet1", 1, 2);
+    engine.setFilter("Sheet1", { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" });
+    engine.setSort(
+      "Sheet1",
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+      [{ keyAddress: "B1", direction: "asc" }]
+    );
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C10",
+      columnNames: ["Region", "Product", "Sales"],
+      headerRow: true,
+      totalsRow: true
+    });
+    engine.setSpillRange("Sheet1", "E1", 2, 2);
+
+    const snapshot = engine.exportSnapshot();
+
+    expect(snapshot.workbook.metadata?.properties).toEqual([{ key: "locale", value: "en-US" }]);
+    expect(snapshot.workbook.metadata?.tables).toEqual([{
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C10",
+      columnNames: ["Region", "Product", "Sales"],
+      headerRow: true,
+      totalsRow: true
+    }]);
+    expect(snapshot.workbook.metadata?.spills).toEqual([{ sheetName: "Sheet1", address: "E1", rows: 2, cols: 2 }]);
+    expect(snapshot.sheets.find((sheet) => sheet.name === "Sheet1")?.metadata).toEqual({
+      rowMetadata: [{ start: 2, count: 2, size: 24, hidden: false }],
+      columnMetadata: [{ start: 1, count: 1, size: 140 }],
+      freezePane: { rows: 1, cols: 2 },
+      filters: [{ sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" }],
+      sorts: [{
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+        keys: [{ keyAddress: "B1", direction: "asc" }]
+      }]
+    });
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+
+    expect(restored.getWorkbookMetadataEntries()).toEqual([{ key: "locale", value: "en-US" }]);
+    expect(restored.getRowMetadata("Sheet1")).toEqual([{ sheetName: "Sheet1", start: 2, count: 2, size: 24, hidden: false }]);
+    expect(restored.getColumnMetadata("Sheet1")).toEqual([{ sheetName: "Sheet1", start: 1, count: 1, size: 140, hidden: null }]);
+    expect(restored.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 2 });
+    expect(restored.getFilters("Sheet1")).toEqual([{
+      sheetName: "Sheet1",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" }
+    }]);
+    expect(restored.getSorts("Sheet1")).toEqual([{
+      sheetName: "Sheet1",
+      range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+      keys: [{ keyAddress: "B1", direction: "asc" }]
+    }]);
+    expect(restored.getTables()).toEqual([{
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "C10",
+      columnNames: ["Region", "Product", "Sales"],
+      headerRow: true,
+      totalsRow: true
+    }]);
+    expect(restored.getSpillRanges()).toEqual([{ sheetName: "Sheet1", address: "E1", rows: 2, cols: 2 }]);
+    expect(restored.exportSnapshot()).toEqual(snapshot);
+  });
+
   it("routes multi-name scalar formulas through the wasm path once names exist", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

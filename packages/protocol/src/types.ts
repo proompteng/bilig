@@ -121,6 +121,11 @@ export interface WorkbookDefinedNameSnapshot {
   value: LiteralInput;
 }
 
+export interface WorkbookPropertySnapshot {
+  key: string;
+  value: LiteralInput;
+}
+
 export interface WorkbookSpillSnapshot {
   sheetName: string;
   address: string;
@@ -147,10 +152,52 @@ export interface WorkbookPivotSnapshot {
   cols: number;
 }
 
+export interface WorkbookTableSnapshot {
+  name: string;
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+  columnNames: string[];
+  headerRow: boolean;
+  totalsRow: boolean;
+}
+
+export interface WorkbookAxisMetadataSnapshot {
+  start: number;
+  count: number;
+  size?: number | null;
+  hidden?: boolean | null;
+}
+
+export interface WorkbookFreezePaneSnapshot {
+  rows: number;
+  cols: number;
+}
+
+export interface WorkbookSortKeySnapshot {
+  keyAddress: string;
+  direction: "asc" | "desc";
+}
+
+export interface WorkbookSortSnapshot {
+  range: CellRangeRef;
+  keys: WorkbookSortKeySnapshot[];
+}
+
 export interface WorkbookMetadataSnapshot {
+  properties?: WorkbookPropertySnapshot[];
   definedNames?: WorkbookDefinedNameSnapshot[];
+  tables?: WorkbookTableSnapshot[];
   spills?: WorkbookSpillSnapshot[];
   pivots?: WorkbookPivotSnapshot[];
+}
+
+export interface SheetMetadataSnapshot {
+  rowMetadata?: WorkbookAxisMetadataSnapshot[];
+  columnMetadata?: WorkbookAxisMetadataSnapshot[];
+  freezePane?: WorkbookFreezePaneSnapshot;
+  filters?: CellRangeRef[];
+  sorts?: WorkbookSortSnapshot[];
 }
 
 export interface WorkbookSnapshot {
@@ -162,6 +209,7 @@ export interface WorkbookSnapshot {
   sheets: Array<{
     name: string;
     order: number;
+    metadata?: SheetMetadataSnapshot;
     cells: Array<{
       address: string;
       value?: LiteralInput;

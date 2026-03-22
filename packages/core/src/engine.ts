@@ -15,7 +15,11 @@ import {
   type RecalcMetrics,
   type SyncState,
   type SelectionState,
+  type SheetMetadataSnapshot,
+  type WorkbookAxisMetadataSnapshot,
+  type WorkbookFreezePaneSnapshot,
   type WorkbookPivotSnapshot,
+  type WorkbookSortSnapshot,
   type WorkbookSnapshot
 } from "@bilig/protocol";
 import {
@@ -62,8 +66,14 @@ import {
   WorkbookStore,
   normalizeDefinedName,
   pivotKey,
+  type WorkbookAxisMetadataRecord,
   type WorkbookDefinedNameRecord,
-  type WorkbookPivotRecord
+  type WorkbookFilterRecord,
+  type WorkbookPivotRecord,
+  type WorkbookPropertyRecord,
+  type WorkbookSortRecord,
+  type WorkbookSpillRecord,
+  type WorkbookTableRecord
 } from "./workbook-store.js";
 import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
 
@@ -526,6 +536,183 @@ export class SpreadsheetEngine {
     return this.workbook.listDefinedNames();
   }
 
+  setWorkbookMetadata(key: string, value: LiteralInput): void {
+    const existing = this.workbook.getWorkbookProperty(key);
+    if (existing?.value === value || (existing === undefined && value === null)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setWorkbookMetadata", key, value }]);
+  }
+
+  getWorkbookMetadata(key: string): WorkbookPropertyRecord | undefined {
+    return this.workbook.getWorkbookProperty(key);
+  }
+
+  getWorkbookMetadataEntries(): WorkbookPropertyRecord[] {
+    return this.workbook.listWorkbookProperties();
+  }
+
+  updateRowMetadata(
+    sheetName: string,
+    start: number,
+    count: number,
+    size: number | null,
+    hidden: boolean | null
+  ): void {
+    const existing = this.workbook.getRowMetadata(sheetName, start, count);
+    if (existing?.size === size && existing.hidden === hidden) {
+      return;
+    }
+    if (existing === undefined && size === null && hidden === null) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "updateRowMetadata", sheetName, start, count, size, hidden }]);
+  }
+
+  getRowMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
+    return this.workbook.listRowMetadata(sheetName);
+  }
+
+  updateColumnMetadata(
+    sheetName: string,
+    start: number,
+    count: number,
+    size: number | null,
+    hidden: boolean | null
+  ): void {
+    const existing = this.workbook.getColumnMetadata(sheetName, start, count);
+    if (existing?.size === size && existing.hidden === hidden) {
+      return;
+    }
+    if (existing === undefined && size === null && hidden === null) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "updateColumnMetadata", sheetName, start, count, size, hidden }]);
+  }
+
+  getColumnMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
+    return this.workbook.listColumnMetadata(sheetName);
+  }
+
+  setFreezePane(sheetName: string, rows: number, cols: number): void {
+    const existing = this.workbook.getFreezePane(sheetName);
+    if (existing?.rows === rows && existing.cols === cols) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setFreezePane", sheetName, rows, cols }]);
+  }
+
+  clearFreezePane(sheetName: string): boolean {
+    if (!this.workbook.getFreezePane(sheetName)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "clearFreezePane", sheetName }]);
+    return true;
+  }
+
+  getFreezePane(sheetName: string): WorkbookFreezePaneSnapshot | undefined {
+    return this.workbook.getFreezePane(sheetName);
+  }
+
+  setFilter(sheetName: string, range: CellRangeRef): void {
+    const existing = this.workbook.getFilter(sheetName, range);
+    if (existing) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setFilter", sheetName, range: { ...range } }]);
+  }
+
+  clearFilter(sheetName: string, range: CellRangeRef): boolean {
+    if (!this.workbook.getFilter(sheetName, range)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "clearFilter", sheetName, range: { ...range } }]);
+    return true;
+  }
+
+  getFilters(sheetName: string): WorkbookFilterRecord[] {
+    return this.workbook.listFilters(sheetName);
+  }
+
+  setSort(sheetName: string, range: CellRangeRef, keys: WorkbookSortSnapshot["keys"]): void {
+    const existing = this.workbook.getSort(sheetName, range);
+    const normalizedKeys = keys.map((key) => Object.assign({}, key));
+    if (
+      existing
+      && existing.keys.length === normalizedKeys.length
+      && existing.keys.every((key, index) =>
+        key.keyAddress === normalizedKeys[index]?.keyAddress && key.direction === normalizedKeys[index]?.direction)
+    ) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setSort", sheetName, range: { ...range }, keys: normalizedKeys }]);
+  }
+
+  clearSort(sheetName: string, range: CellRangeRef): boolean {
+    if (!this.workbook.getSort(sheetName, range)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "clearSort", sheetName, range: { ...range } }]);
+    return true;
+  }
+
+  getSorts(sheetName: string): WorkbookSortRecord[] {
+    return this.workbook.listSorts(sheetName);
+  }
+
+  setTable(table: WorkbookTableRecord): void {
+    const existing = this.workbook.getTable(table.name);
+    if (
+      existing
+      && existing.sheetName === table.sheetName
+      && existing.startAddress === table.startAddress
+      && existing.endAddress === table.endAddress
+      && existing.headerRow === table.headerRow
+      && existing.totalsRow === table.totalsRow
+      && existing.columnNames.length === table.columnNames.length
+      && existing.columnNames.every((name, index) => name === table.columnNames[index])
+    ) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertTable", table: Object.assign({}, table, { columnNames: [...table.columnNames] }) }]);
+  }
+
+  deleteTable(name: string): boolean {
+    if (!this.workbook.getTable(name)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteTable", name }]);
+    return true;
+  }
+
+  getTable(name: string): WorkbookTableRecord | undefined {
+    return this.workbook.getTable(name);
+  }
+
+  getTables(): WorkbookTableRecord[] {
+    return this.workbook.listTables();
+  }
+
+  setSpillRange(sheetName: string, address: string, rows: number, cols: number): void {
+    const existing = this.workbook.getSpill(sheetName, address);
+    if (existing?.rows === rows && existing.cols === cols) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "upsertSpillRange", sheetName, address, rows, cols }]);
+  }
+
+  deleteSpillRange(sheetName: string, address: string): boolean {
+    if (!this.workbook.getSpill(sheetName, address)) {
+      return false;
+    }
+    this.executeLocalTransaction([{ kind: "deleteSpillRange", sheetName, address }]);
+    return true;
+  }
+
+  getSpillRanges(): WorkbookSpillRecord[] {
+    return this.workbook.listSpills();
+  }
+
   setPivotTable(sheetName: string, address: string, definition: PivotTableInput): void {
     this.executeLocalTransaction([{
       kind: "upsertPivotTable",
@@ -879,7 +1066,17 @@ export class SpreadsheetEngine {
     const workbook: WorkbookSnapshot["workbook"] = {
       name: this.workbook.workbookName
     };
+    const properties = this.workbook.listWorkbookProperties().map(({ key, value }) => ({ key, value }));
     const definedNames = this.workbook.listDefinedNames().map(({ name, value }) => ({ name, value }));
+    const tables = this.workbook.listTables().map((table) => ({
+      name: table.name,
+      sheetName: table.sheetName,
+      startAddress: table.startAddress,
+      endAddress: table.endAddress,
+      columnNames: [...table.columnNames],
+      headerRow: table.headerRow,
+      totalsRow: table.totalsRow
+    }));
     const spills = this.workbook.listSpills().map(({ sheetName, address, rows, cols }) => ({ sheetName, address, rows, cols }));
     const pivots = this.workbook.listPivots().map((pivot) => ({
       name: pivot.name,
@@ -891,10 +1088,16 @@ export class SpreadsheetEngine {
       rows: pivot.rows,
       cols: pivot.cols
     }));
-    if (definedNames.length > 0 || spills.length > 0 || pivots.length > 0) {
+    if (properties.length > 0 || definedNames.length > 0 || tables.length > 0 || spills.length > 0 || pivots.length > 0) {
       workbook.metadata = {};
+      if (properties.length > 0) {
+        workbook.metadata.properties = properties;
+      }
       if (definedNames.length > 0) {
         workbook.metadata.definedNames = definedNames;
+      }
+      if (tables.length > 0) {
+        workbook.metadata.tables = tables;
       }
       if (spills.length > 0) {
         workbook.metadata.spills = spills;
@@ -910,6 +1113,7 @@ export class SpreadsheetEngine {
       sheets: [...this.workbook.sheetsByName.values()]
         .sort((left, right) => left.order - right.order)
         .map((sheet) => {
+          const metadata = this.exportSheetMetadata(sheet.name);
           const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
           sheet.grid.forEachCell((cellIndex) => {
             const snapshot = this.getCellByIndex(cellIndex);
@@ -935,7 +1139,7 @@ export class SpreadsheetEngine {
             }
             cells.push(cell);
           });
-          return { name: sheet.name, order: sheet.order, cells };
+          return metadata ? { name: sheet.name, order: sheet.order, metadata, cells } : { name: sheet.name, order: sheet.order, cells };
         })
     };
   }
@@ -943,11 +1147,55 @@ export class SpreadsheetEngine {
   importSnapshot(snapshot: WorkbookSnapshot): void {
     this.resetWorkbook();
     const ops: EngineOp[] = [{ kind: "upsertWorkbook", name: snapshot.workbook.name }];
+    snapshot.workbook.metadata?.properties?.forEach(({ key, value }) => {
+      ops.push({ kind: "setWorkbookMetadata", key, value });
+    });
     snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
       ops.push({ kind: "upsertDefinedName", name, value });
     });
     snapshot.sheets.forEach((sheet) => {
       ops.push({ kind: "upsertSheet", name: sheet.name, order: sheet.order });
+    });
+    snapshot.sheets.forEach((sheet) => {
+      sheet.metadata?.rowMetadata?.forEach(({ start, count, size, hidden }) => {
+        ops.push({
+          kind: "updateRowMetadata",
+          sheetName: sheet.name,
+          start,
+          count,
+          size: size ?? null,
+          hidden: hidden ?? null
+        });
+      });
+      sheet.metadata?.columnMetadata?.forEach(({ start, count, size, hidden }) => {
+        ops.push({
+          kind: "updateColumnMetadata",
+          sheetName: sheet.name,
+          start,
+          count,
+          size: size ?? null,
+          hidden: hidden ?? null
+        });
+      });
+      if (sheet.metadata?.freezePane) {
+        ops.push({
+          kind: "setFreezePane",
+          sheetName: sheet.name,
+          rows: sheet.metadata.freezePane.rows,
+          cols: sheet.metadata.freezePane.cols
+        });
+      }
+      sheet.metadata?.filters?.forEach((range) => {
+        ops.push({ kind: "setFilter", sheetName: sheet.name, range: { ...range } });
+      });
+      sheet.metadata?.sorts?.forEach((sort) => {
+        ops.push({
+          kind: "setSort",
+          sheetName: sheet.name,
+          range: { ...sort.range },
+          keys: sort.keys.map((key) => Object.assign({}, key))
+        });
+      });
     });
     snapshot.sheets.forEach((sheet) => {
       sheet.cells.forEach((cell) => {
@@ -959,6 +1207,29 @@ export class SpreadsheetEngine {
         if (cell.format !== undefined) {
           ops.push({ kind: "setCellFormat", sheetName: sheet.name, address: cell.address, format: cell.format });
         }
+      });
+    });
+    snapshot.workbook.metadata?.tables?.forEach((table) => {
+      ops.push({
+        kind: "upsertTable",
+        table: {
+          name: table.name,
+          sheetName: table.sheetName,
+          startAddress: table.startAddress,
+          endAddress: table.endAddress,
+          columnNames: [...table.columnNames],
+          headerRow: table.headerRow,
+          totalsRow: table.totalsRow
+        }
+      });
+    });
+    snapshot.workbook.metadata?.spills?.forEach((spill) => {
+      ops.push({
+        kind: "upsertSpillRange",
+        sheetName: spill.sheetName,
+        address: spill.address,
+        rows: spill.rows,
+        cols: spill.cols
       });
     });
     snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
@@ -976,7 +1247,109 @@ export class SpreadsheetEngine {
     this.executeTransaction(
       potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
       "restore"
-    );
+      );
+  }
+
+  private exportSheetMetadata(sheetName: string): SheetMetadataSnapshot | undefined {
+    const rowMetadata = this.axisMetadataToSnapshot(this.workbook.listRowMetadata(sheetName));
+    const columnMetadata = this.axisMetadataToSnapshot(this.workbook.listColumnMetadata(sheetName));
+    const freezePane = this.freezePaneToSnapshot(this.workbook.getFreezePane(sheetName));
+    const filters = this.workbook.listFilters(sheetName).map((filter) => Object.assign({}, filter.range));
+    const sorts = this.workbook.listSorts(sheetName).map((sort) => ({
+      range: Object.assign({}, sort.range),
+      keys: sort.keys.map((key) => Object.assign({}, key))
+    }));
+
+    if (
+      rowMetadata.length === 0
+      && columnMetadata.length === 0
+      && freezePane === undefined
+      && filters.length === 0
+      && sorts.length === 0
+    ) {
+      return undefined;
+    }
+
+    const metadata: SheetMetadataSnapshot = {};
+    if (rowMetadata.length > 0) {
+      metadata.rowMetadata = rowMetadata;
+    }
+    if (columnMetadata.length > 0) {
+      metadata.columnMetadata = columnMetadata;
+    }
+    if (freezePane) {
+      metadata.freezePane = freezePane;
+    }
+    if (filters.length > 0) {
+      metadata.filters = filters;
+    }
+    if (sorts.length > 0) {
+      metadata.sorts = sorts;
+    }
+    return metadata;
+  }
+
+  private sheetMetadataToOps(sheetName: string): EngineOp[] {
+    const ops: EngineOp[] = [];
+    this.workbook.listRowMetadata(sheetName).forEach((record) => {
+      ops.push({
+        kind: "updateRowMetadata",
+        sheetName,
+        start: record.start,
+        count: record.count,
+        size: record.size,
+        hidden: record.hidden
+      });
+    });
+    this.workbook.listColumnMetadata(sheetName).forEach((record) => {
+      ops.push({
+        kind: "updateColumnMetadata",
+        sheetName,
+        start: record.start,
+        count: record.count,
+        size: record.size,
+        hidden: record.hidden
+      });
+    });
+    const freezePane = this.workbook.getFreezePane(sheetName);
+    if (freezePane) {
+      ops.push({ kind: "setFreezePane", sheetName, rows: freezePane.rows, cols: freezePane.cols });
+    }
+    this.workbook.listFilters(sheetName).forEach((record) => {
+      ops.push({ kind: "setFilter", sheetName, range: { ...record.range } });
+    });
+    this.workbook.listSorts(sheetName).forEach((record) => {
+      ops.push({
+        kind: "setSort",
+        sheetName,
+        range: { ...record.range },
+        keys: record.keys.map((key) => Object.assign({}, key))
+      });
+    });
+    return ops;
+  }
+
+  private axisMetadataToSnapshot(records: readonly WorkbookAxisMetadataRecord[]): WorkbookAxisMetadataSnapshot[] {
+    return records.map((record) => {
+      const snapshot: WorkbookAxisMetadataSnapshot = {
+        start: record.start,
+        count: record.count
+      };
+      if (record.size !== null) {
+        snapshot.size = record.size;
+      }
+      if (record.hidden !== null) {
+        snapshot.hidden = record.hidden;
+      }
+      return snapshot;
+    });
+  }
+
+  private freezePaneToSnapshot(record: { rows: number; cols: number } | undefined): WorkbookFreezePaneSnapshot | undefined {
+    if (!record) {
+      return undefined;
+    }
+    return { rows: record.rows, cols: record.cols };
   }
 
   private rebindDefinedNameDependents(names: readonly string[], formulaChangedCount: number): number {
@@ -1456,7 +1829,9 @@ export class SpreadsheetEngine {
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "setWorkbookMetadata":
-            throw new Error(`Workbook metadata op "${op.key}" is not implemented yet`);
+            this.workbook.setWorkbookProperty(op.key, op.value);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "upsertSheet":
             this.workbook.createSheet(op.name, op.order);
             this.entityVersions.set(this.entityKeyForOp(op), order);
@@ -1481,18 +1856,53 @@ export class SpreadsheetEngine {
             refreshAllPivots = true;
             break;
           case "updateRowMetadata":
+            this.workbook.setRowMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "updateColumnMetadata":
+            this.workbook.setColumnMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "setFreezePane":
+            this.workbook.setFreezePane(op.sheetName, op.rows, op.cols);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "clearFreezePane":
+            this.workbook.clearFreezePane(op.sheetName);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "setFilter":
+            this.workbook.setFilter(op.sheetName, op.range);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "clearFilter":
+            this.workbook.deleteFilter(op.sheetName, op.range);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "setSort":
+            this.workbook.setSort(op.sheetName, op.range, op.keys);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "clearSort":
+            this.workbook.deleteSort(op.sheetName, op.range);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "upsertTable":
+            this.workbook.setTable(op.table);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "deleteTable":
+            this.workbook.deleteTable(op.name);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "upsertSpillRange":
+            this.workbook.setSpill(op.sheetName, op.address, op.rows, op.cols);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "deleteSpillRange":
-            throw new Error(`Workbook op "${op.kind}" is not implemented yet`);
+            this.workbook.deleteSpill(op.sheetName, op.address);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "setCellValue": {
             const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
             if (existingIndex !== undefined) {
@@ -1679,20 +2089,10 @@ export class SpreadsheetEngine {
     switch (op.kind) {
       case "upsertWorkbook":
         return [{ kind: "upsertWorkbook", name: this.workbook.workbookName }];
-      case "setWorkbookMetadata":
-      case "updateRowMetadata":
-      case "updateColumnMetadata":
-      case "setFreezePane":
-      case "clearFreezePane":
-      case "setFilter":
-      case "clearFilter":
-      case "setSort":
-      case "clearSort":
-      case "upsertTable":
-      case "deleteTable":
-      case "upsertSpillRange":
-      case "deleteSpillRange":
-        throw new Error(`Inverse ops for "${op.kind}" are not implemented yet`);
+      case "setWorkbookMetadata": {
+        const existing = this.workbook.getWorkbookProperty(op.key);
+        return [{ kind: "setWorkbookMetadata", key: op.key, value: existing?.value ?? null }];
+      }
       case "upsertSheet": {
         const existing = this.workbook.getSheet(op.name);
         if (!existing) {
@@ -1706,6 +2106,47 @@ export class SpreadsheetEngine {
           return [];
         }
         const restoredOps: EngineOp[] = [{ kind: "upsertSheet", name: sheet.name, order: sheet.order }];
+        restoredOps.push(...this.sheetMetadataToOps(sheet.name));
+        this.workbook.listTables()
+          .filter((table) => table.sheetName === sheet.name)
+          .forEach((table) => {
+            restoredOps.push({
+              kind: "upsertTable",
+              table: {
+                name: table.name,
+                sheetName: table.sheetName,
+                startAddress: table.startAddress,
+                endAddress: table.endAddress,
+                columnNames: [...table.columnNames],
+                headerRow: table.headerRow,
+                totalsRow: table.totalsRow
+              }
+            });
+          });
+        this.workbook.listSpills()
+          .filter((spill) => spill.sheetName === sheet.name)
+          .forEach((spill) => {
+            restoredOps.push({
+              kind: "upsertSpillRange",
+              sheetName: spill.sheetName,
+              address: spill.address,
+              rows: spill.rows,
+              cols: spill.cols
+            });
+          });
+        this.workbook.listPivots()
+          .filter((pivot) => pivot.sheetName === sheet.name)
+          .forEach((pivot) => {
+            restoredOps.push({
+              kind: "upsertPivotTable",
+              name: pivot.name,
+              sheetName: pivot.sheetName,
+              address: pivot.address,
+              source: { ...pivot.source },
+              groupBy: [...pivot.groupBy],
+              values: pivot.values.map((value) => Object.assign({}, value))
+            });
+          });
         const cellIndices: number[] = [];
         sheet.grid.forEachCell((cellIndex) => {
           cellIndices.push(cellIndex);
@@ -1721,6 +2162,80 @@ export class SpreadsheetEngine {
           restoredOps.push(...this.toCellStateOps(sheet.name, this.workbook.getAddress(cellIndex), this.getCellByIndex(cellIndex)));
         }
         return restoredOps;
+      }
+      case "updateRowMetadata": {
+        const existing = this.workbook.getRowMetadata(op.sheetName, op.start, op.count);
+        return [{
+          kind: "updateRowMetadata",
+          sheetName: op.sheetName,
+          start: op.start,
+          count: op.count,
+          size: existing?.size ?? null,
+          hidden: existing?.hidden ?? null
+        }];
+      }
+      case "updateColumnMetadata": {
+        const existing = this.workbook.getColumnMetadata(op.sheetName, op.start, op.count);
+        return [{
+          kind: "updateColumnMetadata",
+          sheetName: op.sheetName,
+          start: op.start,
+          count: op.count,
+          size: existing?.size ?? null,
+          hidden: existing?.hidden ?? null
+        }];
+      }
+      case "setFreezePane": {
+        const existing = this.workbook.getFreezePane(op.sheetName);
+        if (!existing) {
+          return [{ kind: "clearFreezePane", sheetName: op.sheetName }];
+        }
+        return [{ kind: "setFreezePane", sheetName: op.sheetName, rows: existing.rows, cols: existing.cols }];
+      }
+      case "clearFreezePane": {
+        const existing = this.workbook.getFreezePane(op.sheetName);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "setFreezePane", sheetName: op.sheetName, rows: existing.rows, cols: existing.cols }];
+      }
+      case "setFilter": {
+        const existing = this.workbook.getFilter(op.sheetName, op.range);
+        if (!existing) {
+          return [{ kind: "clearFilter", sheetName: op.sheetName, range: { ...op.range } }];
+        }
+        return [{ kind: "setFilter", sheetName: op.sheetName, range: { ...existing.range } }];
+      }
+      case "clearFilter": {
+        const existing = this.workbook.getFilter(op.sheetName, op.range);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "setFilter", sheetName: op.sheetName, range: { ...existing.range } }];
+      }
+      case "setSort": {
+        const existing = this.workbook.getSort(op.sheetName, op.range);
+        if (!existing) {
+          return [{ kind: "clearSort", sheetName: op.sheetName, range: { ...op.range } }];
+        }
+        return [{
+          kind: "setSort",
+          sheetName: op.sheetName,
+          range: { ...existing.range },
+          keys: existing.keys.map((key) => Object.assign({}, key))
+        }];
+      }
+      case "clearSort": {
+        const existing = this.workbook.getSort(op.sheetName, op.range);
+        if (!existing) {
+          return [];
+        }
+        return [{
+          kind: "setSort",
+          sheetName: op.sheetName,
+          range: { ...existing.range },
+          keys: existing.keys.map((key) => Object.assign({}, key))
+        }];
       }
       case "setCellValue":
       case "setCellFormula":
@@ -1748,6 +2263,68 @@ export class SpreadsheetEngine {
           return [];
         }
         return [{ kind: "upsertDefinedName", name: existing.name, value: existing.value }];
+      }
+      case "upsertTable": {
+        const existing = this.workbook.getTable(op.table.name);
+        if (!existing) {
+          return [{ kind: "deleteTable", name: op.table.name }];
+        }
+        return [{
+          kind: "upsertTable",
+          table: {
+            name: existing.name,
+            sheetName: existing.sheetName,
+            startAddress: existing.startAddress,
+            endAddress: existing.endAddress,
+            columnNames: [...existing.columnNames],
+            headerRow: existing.headerRow,
+            totalsRow: existing.totalsRow
+          }
+        }];
+      }
+      case "deleteTable": {
+        const existing = this.workbook.getTable(op.name);
+        if (!existing) {
+          return [];
+        }
+        return [{
+          kind: "upsertTable",
+          table: {
+            name: existing.name,
+            sheetName: existing.sheetName,
+            startAddress: existing.startAddress,
+            endAddress: existing.endAddress,
+            columnNames: [...existing.columnNames],
+            headerRow: existing.headerRow,
+            totalsRow: existing.totalsRow
+          }
+        }];
+      }
+      case "upsertSpillRange": {
+        const existing = this.workbook.getSpill(op.sheetName, op.address);
+        if (!existing) {
+          return [{ kind: "deleteSpillRange", sheetName: op.sheetName, address: op.address }];
+        }
+        return [{
+          kind: "upsertSpillRange",
+          sheetName: existing.sheetName,
+          address: existing.address,
+          rows: existing.rows,
+          cols: existing.cols
+        }];
+      }
+      case "deleteSpillRange": {
+        const existing = this.workbook.getSpill(op.sheetName, op.address);
+        if (!existing) {
+          return [];
+        }
+        return [{
+          kind: "upsertSpillRange",
+          sheetName: existing.sheetName,
+          address: existing.address,
+          rows: existing.rows,
+          cols: existing.cols
+        }];
       }
       case "upsertPivotTable": {
         const existing = this.workbook.getPivot(op.sheetName, op.address);
