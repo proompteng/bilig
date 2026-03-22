@@ -1,6 +1,8 @@
 # bilig
 
-`bilig` is a local-first spreadsheet engine monorepo with a package-based custom workbook reconciler, a React/Vite playground shell, a framework-agnostic core engine, CRDT-ready mutation pipelines, and an AssemblyScript/WASM numeric fast path.
+`bilig` is a local-first spreadsheet engine monorepo with a package-based custom workbook reconciler, a React/Vite playground shell, a framework-agnostic core engine, replication-ready mutation pipelines, and an AssemblyScript/WASM numeric fast path.
+
+It already has the foundations of a serious spreadsheet/runtime stack: a real engine, a real local session loop, a real binary sync layer, a real reconciler, and a reasonably mature grid shell. The biggest remaining gap is not basic spreadsheet arithmetic; it is the seam between what the local engine can represent and what the authoritative replicated model can express.
 
 ## Workspace layout
 
@@ -58,6 +60,7 @@ pnpm run ci
 - The imperative engine now includes a single-sheet CSV bridge for import/export without pulling React into shared packages.
 - CI now enforces performance contracts for 100k snapshot load, 10k-downstream edits, and 10k-cell render commits instead of relying on a loose smoke check alone.
 - `pnpm release:check` enforces the documented production budgets for the built app JS and bundled WASM asset.
+- The next highest-leverage architecture work is to make the authoritative workbook op model exhaustive enough to match the local engine surface, then build worker-first runtime, durable multiplayer, and typed binary agent work on top of that seam.
 
 ## CI
 

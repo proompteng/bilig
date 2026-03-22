@@ -37,3 +37,8 @@ The backend sync layer is now part of the canonical product:
 ## Current tranche status
 
 The repo already had deterministic local-first replay semantics and persisted replica snapshots. The new production tranche adds binary transport framing and server-side durable-store abstractions so the CRDT model now has a concrete backend target instead of stopping at the engine boundary.
+
+## See also
+
+- [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)
+- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)

@@ -36,7 +36,7 @@ using the same typed request/response/event model.
 
 ## Target state
 
-- stdio and remote transports use the same typed binary request/response/event frames
+- stdio and remote transports use the same typed binary request/response/event schema
 - every documented agent operation executes against a live worksheet session
 - local agent chat messages fan into the same ordered workbook commit stream as UI and replay mutations
 - remote agent requests are authenticated, tenant-scoped, and idempotent where required
@@ -47,3 +47,8 @@ using the same typed request/response/event model.
 - the local app server executes canonical read/write worksheet operations against live workbook sessions
 - remote ingress no longer returns placeholder `NOT_IMPLEMENTED` responses for canonical worksheet mutations
 - the wire format used by agents is binary end to end, not JSON-inside-binary
+
+## See also
+
+- [typed-agent-protocol-rfc.md](/Users/gregkonush/github.com/bilig/docs/typed-agent-protocol-rfc.md)
+- [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)

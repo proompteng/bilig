@@ -34,3 +34,8 @@
 - cursor catch-up, snapshot restore, and reconnect replay are tested end to end
 - remote agent ingress executes against live worksheet sessions
 - production traffic runs through the websocket gateway rather than the HTTP-only scaffold path
+
+## See also
+
+- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
+- [typed-agent-protocol-rfc.md](/Users/gregkonush/github.com/bilig/docs/typed-agent-protocol-rfc.md)

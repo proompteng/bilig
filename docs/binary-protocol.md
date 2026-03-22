@@ -13,7 +13,8 @@ The binary protocol is the canonical hot-path transport for:
 - browser sync
 - backend relay
 - snapshot chunking
-- remote agent frames
+
+Agent traffic is adjacent but not fully unified yet. The sync protocol is already a real typed binary frame family; the agent surface still uses a separate binary envelope with JSON payloads.
 
 ## Versioning
 
@@ -40,11 +41,19 @@ The binary protocol is the canonical hot-path transport for:
 
 ## Target state
 
-- browser sync, backend relay, snapshot transport, stdio agent traffic, and remote agent traffic all use typed binary frames
-- websocket fanout and remote agent control run on the same canonical protocol family
+- browser sync, backend relay, and snapshot transport continue to use the typed binary sync frame family
+- stdio and remote agent transport move from JSON-in-binary-envelope to a true typed binary schema
+- websocket fanout and remote agent control align cleanly with the broader protocol architecture without pretending they are already one schema today
 
 ## Exit gate
 
-- no canonical hot path still relies on JSON payload bodies
-- browser, backend, stdio, and remote agent transports interoperate on the same typed frame definitions
+- browser, backend, and snapshot transports interoperate on the same typed sync frame definitions
+- agent transport no longer relies on JSON payload bodies inside a binary envelope
+- the sync protocol and the agent protocol each have clear typed binary contracts where they are intended to differ
 - roundtrip and malformed-frame tests cover every public frame family
+
+## See also
+
+- [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)
+- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
+- [typed-agent-protocol-rfc.md](/Users/gregkonush/github.com/bilig/docs/typed-agent-protocol-rfc.md)

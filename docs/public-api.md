@@ -5,6 +5,8 @@
 - `@bilig/core` now implements the documented range-mutation, undo/redo, selection, and sync-state surface.
 - `SelectionState` is additive: existing callers can keep using `sheetName` and `address`, while newer callers can use `anchorAddress`, `range`, and `editMode`.
 - `connectSyncClient` is live, but it is still an engine-side integration surface. The browser app is not worker-first yet, and the remote sync service is not the final durable backend.
+- `@bilig/binary-protocol` is already a real wire protocol for sync frames, but the authoritative replicated workbook op family is still narrower than the full local engine surface.
+- `@bilig/agent-api` is currently a binary envelope around JSON payloads, not yet a fully typed binary request/response/event schema.
 
 ## Stable packages
 
@@ -90,6 +92,8 @@ The current frame families are:
 - `heartbeat`
 - `error`
 
+The protocol surface is already real for sync and snapshot traffic. The remaining architecture gap is not “do we have binary frames?” but “does the authoritative workbook mutation language fully match what the local engine can represent?”
+
 ## Worker transport
 
 `@bilig/worker-transport` exposes:
@@ -128,4 +132,4 @@ The first tranche already supports:
 - `encodeStdioMessage`
 - `decodeStdioMessages`
 
-The canonical transport surface covers both stdio and remote network usage with the same typed request/response/event model.
+Today the package defines typed TypeScript request/response/event unions, but the transport payload is still serialized with `JSON.stringify(...)` inside the binary frame envelope. The target state is a true typed binary schema shared by stdio and remote network usage.

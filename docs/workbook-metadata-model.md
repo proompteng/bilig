@@ -28,3 +28,8 @@ The canonical formula corpus cannot close without workbook metadata because:
 ## Exit gate
 
 - metadata is persisted, transported, and used consistently across parser, engine, and WASM execution
+
+## See also
+
+- [workbook-metadata-runtime-rfc.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-runtime-rfc.md)
+- [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)
