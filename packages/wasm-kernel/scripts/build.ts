@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";

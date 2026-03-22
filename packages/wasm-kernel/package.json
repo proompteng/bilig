@@ -17,7 +17,7 @@
     "assemblyscript": "0.28.10"
   },
   "scripts": {
-    "build": "node ./scripts/build.mjs && tsc -p tsconfig.json"
+    "build": "bun ./scripts/build.ts && tsc -p tsconfig.json"
   },
   "description": "AssemblyScript and WebAssembly acceleration kernel for bilig spreadsheet execution.",
   "license": "MIT",
