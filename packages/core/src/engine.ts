@@ -198,6 +198,10 @@ function areCellValuesEqual(left: CellValue, right: CellValue): boolean {
   }
 }
 
+function assertNever(value: never): never {
+  throw new Error(`Unexpected value: ${String(value)}`);
+}
+
 function literalToFormulaNode(input: LiteralInput): FormulaNode | null {
   if (typeof input === "number") {
     return { kind: "NumberLiteral", value: input };
@@ -721,7 +725,9 @@ export class SpreadsheetEngine {
       address,
       source: { ...definition.source },
       groupBy: [...definition.groupBy],
-      values: definition.values.map((v) => Object.assign({}, v))
+      values: definition.values.map((v) => Object.assign({}, v)),
+      rows: 1,
+      cols: Math.max(definition.groupBy.length + definition.values.length, 1)
     }]);
   }
 
@@ -1240,7 +1246,9 @@ export class SpreadsheetEngine {
         address: pivot.address,
         source: { ...pivot.source },
         groupBy: [...pivot.groupBy],
-        values: pivot.values.map((value) => Object.assign({}, value))
+        values: pivot.values.map((value) => Object.assign({}, value)),
+        rows: pivot.rows,
+        cols: pivot.cols
       });
     });
     const potentialNewCells = snapshot.sheets.reduce((count, sheet) => count + sheet.cells.length, 0);
@@ -1632,8 +1640,19 @@ export class SpreadsheetEngine {
       }
     }
 
-    pivot.rows = rows;
-    pivot.cols = cols;
+    if (pivot.rows !== rows || pivot.cols !== cols) {
+      this.applyDerivedOp({
+        kind: "upsertPivotTable",
+        name: pivot.name,
+        sheetName: pivot.sheetName,
+        address: pivot.address,
+        source: { ...pivot.source },
+        groupBy: [...pivot.groupBy],
+        values: pivot.values.map((value) => Object.assign({}, value)),
+        rows,
+        cols
+      });
+    }
     return changedCellIndices;
   }
 
@@ -1668,9 +1687,7 @@ export class SpreadsheetEngine {
       this.pivotOutputOwners.delete(cellIndex);
       return [];
     }
-    const changedCellIndices = this.clearOwnedPivot(pivot);
-    this.workbook.deletePivot(pivot.sheetName, pivot.address);
-    return changedCellIndices;
+    return this.applyDerivedOp({ kind: "deletePivotTable", sheetName: pivot.sheetName, address: pivot.address });
   }
 
   private clearPivotOutputCell(cellIndex: number): boolean {
@@ -1796,6 +1813,70 @@ export class SpreadsheetEngine {
     this.applyBatch(batch, source, record.potentialNewCells);
   }
 
+  private applyDerivedOp(
+    op: Extract<EngineOp, { kind: "upsertSpillRange" | "deleteSpillRange" | "upsertPivotTable" | "deletePivotTable" }>
+  ): number[] {
+    const batch = createBatch(this.replica, [op]);
+    const order = batchOpOrder(batch, 0);
+    switch (op.kind) {
+      case "upsertSpillRange":
+      case "deleteSpillRange":
+        this.applySpillRangeOp(op, order);
+        return [];
+      case "upsertPivotTable":
+        this.applyPivotUpsertOp(op, order);
+        return [];
+      case "deletePivotTable":
+        return this.applyPivotDeleteOp(op, order);
+      default:
+        return assertNever(op);
+    }
+  }
+
+  private applySpillRangeOp(
+    op: Extract<EngineOp, { kind: "upsertSpillRange" | "deleteSpillRange" }>,
+    order: OpOrder
+  ): void {
+    if (op.kind === "upsertSpillRange") {
+      this.workbook.setSpill(op.sheetName, op.address, op.rows, op.cols);
+    } else {
+      this.workbook.deleteSpill(op.sheetName, op.address);
+    }
+    this.entityVersions.set(this.entityKeyForOp(op), order);
+  }
+
+  private applyPivotUpsertOp(
+    op: Extract<EngineOp, { kind: "upsertPivotTable" }>,
+    order: OpOrder
+  ): void {
+    this.workbook.setPivot({
+      name: op.name,
+      sheetName: op.sheetName,
+      address: op.address,
+      source: op.source,
+      groupBy: op.groupBy,
+      values: op.values,
+      rows: op.rows,
+      cols: op.cols
+    });
+    this.entityVersions.set(this.entityKeyForOp(op), order);
+  }
+
+  private applyPivotDeleteOp(
+    op: Extract<EngineOp, { kind: "deletePivotTable" }>,
+    order: OpOrder
+  ): number[] {
+    const pivot = this.workbook.getPivot(op.sheetName, op.address);
+    if (!pivot) {
+      this.entityVersions.set(this.entityKeyForOp(op), order);
+      return [];
+    }
+    const changedPivotOutputs = this.clearOwnedPivot(pivot);
+    this.workbook.deletePivot(op.sheetName, op.address);
+    this.entityVersions.set(this.entityKeyForOp(op), order);
+    return changedPivotOutputs;
+  }
+
   private applyBatch(
     batch: EngineOpBatch,
     source: "local" | "remote" | "restore" | "history",
@@ -1896,12 +1977,10 @@ export class SpreadsheetEngine {
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "upsertSpillRange":
-            this.workbook.setSpill(op.sheetName, op.address, op.rows, op.cols);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
+            this.applySpillRangeOp(op, order);
             break;
           case "deleteSpillRange":
-            this.workbook.deleteSpill(op.sheetName, op.address);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
+            this.applySpillRangeOp(op, order);
             break;
           case "setCellValue": {
             const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
@@ -1990,36 +2069,16 @@ export class SpreadsheetEngine {
             break;
           }
           case "upsertPivotTable": {
-            const existing = this.workbook.getPivot(op.sheetName, op.address);
-            const rows = existing?.rows ?? 1;
-            const cols = existing?.cols ?? Math.max(op.groupBy.length + op.values.length, 1);
-            this.workbook.setPivot({
-              name: op.name,
-              sheetName: op.sheetName,
-              address: op.address,
-              source: op.source,
-              groupBy: op.groupBy,
-              values: op.values,
-              rows,
-              cols
-            });
-            this.entityVersions.set(this.entityKeyForOp(op), order);
+            this.applyPivotUpsertOp(op, order);
             refreshAllPivots = true;
             break;
           }
           case "deletePivotTable": {
-            const pivot = this.workbook.getPivot(op.sheetName, op.address);
-            if (!pivot) {
-              this.entityVersions.set(this.entityKeyForOp(op), order);
-              break;
-            }
-            const changedPivotOutputs = this.clearOwnedPivot(pivot);
+            const changedPivotOutputs = this.applyPivotDeleteOp(op, order);
             changedInputCount = this.markPivotRootsChanged(changedPivotOutputs, changedInputCount);
             changedPivotOutputs.forEach((cellIndex) => {
               explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
             });
-            this.workbook.deletePivot(op.sheetName, op.address);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
             refreshAllPivots = true;
             break;
           }
@@ -2144,7 +2203,9 @@ export class SpreadsheetEngine {
               address: pivot.address,
               source: { ...pivot.source },
               groupBy: [...pivot.groupBy],
-              values: pivot.values.map((value) => Object.assign({}, value))
+              values: pivot.values.map((value) => Object.assign({}, value)),
+              rows: pivot.rows,
+              cols: pivot.cols
             });
           });
         const cellIndices: number[] = [];
@@ -2338,7 +2399,9 @@ export class SpreadsheetEngine {
           address: existing.address,
           source: { ...existing.source },
           groupBy: [...existing.groupBy],
-          values: existing.values.map((v) => Object.assign({}, v))
+          values: existing.values.map((v) => Object.assign({}, v)),
+          rows: existing.rows,
+          cols: existing.cols
         }];
       }
       case "deletePivotTable": {
@@ -2353,7 +2416,9 @@ export class SpreadsheetEngine {
           address: existing.address,
           source: { ...existing.source },
           groupBy: [...existing.groupBy],
-          values: existing.values.map((value) => Object.assign({}, value))
+          values: existing.values.map((value) => Object.assign({}, value)),
+          rows: existing.rows,
+          cols: existing.cols
         }];
       }
     }
@@ -3693,7 +3758,7 @@ export class SpreadsheetEngine {
         }
       }
     }
-    this.workbook.deleteSpill(sheetName, address);
+    this.applyDerivedOp({ kind: "deleteSpillRange", sheetName, address });
     return changedCellIndices;
   }
 
@@ -3743,7 +3808,13 @@ export class SpreadsheetEngine {
     }
 
     if (arrayValue.rows > 1 || arrayValue.cols > 1) {
-      this.workbook.setSpill(sheetName, address, arrayValue.rows, arrayValue.cols);
+      this.applyDerivedOp({
+        kind: "upsertSpillRange",
+        sheetName,
+        address,
+        rows: arrayValue.rows,
+        cols: arrayValue.cols
+      });
     }
 
     return {

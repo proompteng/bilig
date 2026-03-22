@@ -555,6 +555,8 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       writer.stringArray(op.groupBy);
       writer.u32(op.values.length);
       op.values.forEach((v) => encodePivotValue(writer, v));
+      writer.u32(op.rows);
+      writer.u32(op.cols);
       return;
     case "deletePivotTable":
       writer.string(op.sheetName);
@@ -700,7 +702,9 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
           const values: WorkbookPivotValueSnapshot[] = [];
           for (let i = 0; i < count; i++) values.push(decodePivotValue(reader));
           return values;
-        })()
+        })(),
+        rows: reader.u32(),
+        cols: reader.u32()
       };
     case 24:
       return {

@@ -94,6 +94,17 @@ describe("binary protocol", () => {
               totalsRow: false
             }
           },
+          {
+            kind: "upsertPivotTable",
+            name: "SalesPivot",
+            sheetName: "Sheet1",
+            address: "F2",
+            source: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+            groupBy: ["Region"],
+            values: [{ sourceColumn: "Amount", summarizeBy: "sum" }],
+            rows: 3,
+            cols: 2
+          },
           { kind: "deletePivotTable", sheetName: "Sheet1", address: "F2" }
         ]
       }
@@ -126,6 +137,17 @@ describe("binary protocol", () => {
           headerRow: true,
           totalsRow: false
         }
+      },
+      {
+        kind: "upsertPivotTable",
+        name: "SalesPivot",
+        sheetName: "Sheet1",
+        address: "F2",
+        source: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+        groupBy: ["Region"],
+        values: [{ sourceColumn: "Amount", summarizeBy: "sum" }],
+        rows: 3,
+        cols: 2
       },
       { kind: "deletePivotTable", sheetName: "Sheet1", address: "F2" }
     ]);

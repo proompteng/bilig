@@ -74,6 +74,8 @@ export type WorkbookOp =
       source: CellRangeRef;
       groupBy: string[];
       values: WorkbookPivotValueSnapshot[];
+      rows: number;
+      cols: number;
     }
   | { kind: "deletePivotTable"; sheetName: string; address: string };
 

@@ -103,7 +103,9 @@ describe("crdt", () => {
       address: "B2",
       source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
       groupBy: ["Region"],
-      values: [{ sourceColumn: "Amount", summarizeBy: "sum" }]
+      values: [{ sourceColumn: "Amount", summarizeBy: "sum" }],
+      rows: 3,
+      cols: 2
     }]);
     const pivotDelete = createBatch(state, [{ kind: "deletePivotTable", sheetName: "Pivot", address: "B2" }]);
 
