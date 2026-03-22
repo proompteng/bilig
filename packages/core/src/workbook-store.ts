@@ -3,9 +3,12 @@ import {
   MAX_ROWS,
   type CellRangeRef,
   type LiteralInput,
+  type WorkbookAxisEntrySnapshot,
+  type WorkbookCalculationSettingsSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookPivotValueSnapshot,
-  type WorkbookTableSnapshot
+  type WorkbookTableSnapshot,
+  type WorkbookVolatileContextSnapshot
 } from "@bilig/protocol";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { SheetGrid } from "./sheet-grid.js";
@@ -44,6 +47,16 @@ export interface WorkbookAxisMetadataRecord {
   hidden: boolean | null;
 }
 
+export interface WorkbookAxisEntryRecord {
+  id: string;
+  size: number | null;
+  hidden: boolean | null;
+}
+
+export interface WorkbookCalculationSettingsRecord extends WorkbookCalculationSettingsSnapshot {}
+
+export interface WorkbookVolatileContextRecord extends WorkbookVolatileContextSnapshot {}
+
 export interface WorkbookFreezePaneRecord {
   sheetName: string;
   rows: number;
@@ -74,6 +87,8 @@ export interface WorkbookMetadataRecord {
   pivots: Map<string, WorkbookPivotRecord>;
   rowMetadata: Map<string, WorkbookAxisMetadataRecord>;
   columnMetadata: Map<string, WorkbookAxisMetadataRecord>;
+  calculationSettings: WorkbookCalculationSettingsRecord;
+  volatileContext: WorkbookVolatileContextRecord;
   freezePanes: Map<string, WorkbookFreezePaneRecord>;
   filters: Map<string, WorkbookFilterRecord>;
   sorts: Map<string, WorkbookSortRecord>;
@@ -96,6 +111,8 @@ export interface SheetRecord {
   name: string;
   order: number;
   grid: SheetGrid;
+  rowAxis: Array<WorkbookAxisEntryRecord | undefined>;
+  columnAxis: Array<WorkbookAxisEntryRecord | undefined>;
 }
 
 export interface EnsuredCell {
@@ -117,12 +134,16 @@ export class WorkbookStore {
     pivots: new Map(),
     rowMetadata: new Map(),
     columnMetadata: new Map(),
+    calculationSettings: { mode: "automatic" },
+    volatileContext: { recalcEpoch: 0 },
     freezePanes: new Map(),
     filters: new Map(),
     sorts: new Map()
   };
   workbookName: string;
   private nextSheetId = 1;
+  private nextRowAxisId = 1;
+  private nextColumnAxisId = 1;
 
   constructor(workbookName = "Workbook") {
     this.workbookName = workbookName;
@@ -138,7 +159,9 @@ export class WorkbookStore {
       id: this.nextSheetId++,
       name,
       order,
-      grid: new SheetGrid()
+      grid: new SheetGrid(),
+      rowAxis: [],
+      columnAxis: []
     };
     this.sheetsByName.set(name, sheet);
     this.sheetsById.set(sheet.id, sheet);
@@ -246,6 +269,24 @@ export class WorkbookStore {
     return [...this.metadata.properties.values()].sort((left, right) => left.key.localeCompare(right.key));
   }
 
+  setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): WorkbookCalculationSettingsRecord {
+    this.metadata.calculationSettings = { ...settings };
+    return this.metadata.calculationSettings;
+  }
+
+  getCalculationSettings(): WorkbookCalculationSettingsRecord {
+    return { ...this.metadata.calculationSettings };
+  }
+
+  setVolatileContext(context: WorkbookVolatileContextSnapshot): WorkbookVolatileContextRecord {
+    this.metadata.volatileContext = { ...context };
+    return this.metadata.volatileContext;
+  }
+
+  getVolatileContext(): WorkbookVolatileContextRecord {
+    return { ...this.metadata.volatileContext };
+  }
+
   setDefinedName(name: string, value: LiteralInput): WorkbookDefinedNameRecord {
     const trimmedName = name.trim();
     const record: WorkbookDefinedNameRecord = { name: trimmedName, value };
@@ -300,15 +341,16 @@ export class WorkbookStore {
     size: number | null,
     hidden: boolean | null
   ): WorkbookAxisMetadataRecord | undefined {
-    return this.setAxisMetadata(this.metadata.rowMetadata, sheetName, start, count, size, hidden);
+    return this.setAxisMetadata(this.getOrCreateSheet(sheetName), "row", this.metadata.rowMetadata, sheetName, start, count, size, hidden);
   }
 
   getRowMetadata(sheetName: string, start: number, count: number): WorkbookAxisMetadataRecord | undefined {
-    return this.metadata.rowMetadata.get(axisMetadataKey(sheetName, start, count));
+    const sheet = this.getSheet(sheetName);
+    return sheet ? this.getAxisMetadataRecord(sheet, "row", sheetName, start, count) : undefined;
   }
 
   listRowMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
-    return this.listAxisMetadata(this.metadata.rowMetadata, sheetName);
+    return this.listAxisMetadata(this.getSheet(sheetName), this.metadata.rowMetadata, sheetName, "row");
   }
 
   setColumnMetadata(
@@ -318,15 +360,65 @@ export class WorkbookStore {
     size: number | null,
     hidden: boolean | null
   ): WorkbookAxisMetadataRecord | undefined {
-    return this.setAxisMetadata(this.metadata.columnMetadata, sheetName, start, count, size, hidden);
+    return this.setAxisMetadata(
+      this.getOrCreateSheet(sheetName),
+      "column",
+      this.metadata.columnMetadata,
+      sheetName,
+      start,
+      count,
+      size,
+      hidden
+    );
   }
 
   getColumnMetadata(sheetName: string, start: number, count: number): WorkbookAxisMetadataRecord | undefined {
-    return this.metadata.columnMetadata.get(axisMetadataKey(sheetName, start, count));
+    const sheet = this.getSheet(sheetName);
+    return sheet ? this.getAxisMetadataRecord(sheet, "column", sheetName, start, count) : undefined;
   }
 
   listColumnMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
-    return this.listAxisMetadata(this.metadata.columnMetadata, sheetName);
+    return this.listAxisMetadata(this.getSheet(sheetName), this.metadata.columnMetadata, sheetName, "column");
+  }
+
+  listRowAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
+    return this.listAxisEntries(this.getSheet(sheetName), "row");
+  }
+
+  listColumnAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
+    return this.listAxisEntries(this.getSheet(sheetName), "column");
+  }
+
+  materializeRowAxisEntries(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
+    return this.materializeAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count);
+  }
+
+  materializeColumnAxisEntries(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
+    return this.materializeAxisEntries(this.getOrCreateSheet(sheetName), "column", start, count);
+  }
+
+  insertRows(sheetName: string, start: number, count: number, entries?: readonly WorkbookAxisEntrySnapshot[]): void {
+    this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "row", start, 0, count, entries);
+  }
+
+  deleteRows(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
+    return this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count, 0);
+  }
+
+  moveRows(sheetName: string, start: number, count: number, target: number): void {
+    this.moveAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count, target);
+  }
+
+  insertColumns(sheetName: string, start: number, count: number, entries?: readonly WorkbookAxisEntrySnapshot[]): void {
+    this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "column", start, 0, count, entries);
+  }
+
+  deleteColumns(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
+    return this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "column", start, count, 0);
+  }
+
+  moveColumns(sheetName: string, start: number, count: number, target: number): void {
+    this.moveAxisEntries(this.getOrCreateSheet(sheetName), "column", start, count, target);
   }
 
   setFreezePane(sheetName: string, rows: number, cols: number): WorkbookFreezePaneRecord {
@@ -439,6 +531,45 @@ export class WorkbookStore {
     );
   }
 
+  remapSheetCells(
+    sheetName: string,
+    axis: "row" | "column",
+    remapIndex: (index: number) => number | undefined
+  ): { changedCellIndices: number[]; removedCellIndices: number[] } {
+    const sheet = this.getSheet(sheetName);
+    if (!sheet) {
+      return { changedCellIndices: [], removedCellIndices: [] };
+    }
+    const entries: Array<{ cellIndex: number; row: number; col: number }> = [];
+    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+      entries.push({ cellIndex, row, col });
+    });
+    entries.forEach(({ row, col }) => {
+      this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col));
+      sheet.grid.clear(row, col);
+    });
+
+    const changedCellIndices: number[] = [];
+    const removedCellIndices: number[] = [];
+    for (const { cellIndex, row, col } of entries) {
+      const nextRow = axis === "row" ? remapIndex(row) : row;
+      const nextCol = axis === "column" ? remapIndex(col) : col;
+      if (nextRow === undefined || nextCol === undefined) {
+        removedCellIndices.push(cellIndex);
+        continue;
+      }
+      this.cellStore.rows[cellIndex] = nextRow;
+      this.cellStore.cols[cellIndex] = nextCol;
+      this.cellKeyToIndex.set(makeCellKey(sheet.id, nextRow, nextCol), cellIndex);
+      sheet.grid.set(nextRow, nextCol, cellIndex);
+      if (nextRow !== row || nextCol !== col) {
+        changedCellIndices.push(cellIndex);
+      }
+    }
+
+    return { changedCellIndices, removedCellIndices };
+  }
+
   reset(workbookName = "Workbook"): void {
     this.workbookName = workbookName;
     this.sheetsByName.clear();
@@ -452,14 +583,20 @@ export class WorkbookStore {
     this.metadata.pivots.clear();
     this.metadata.rowMetadata.clear();
     this.metadata.columnMetadata.clear();
+    this.metadata.calculationSettings = { mode: "automatic" };
+    this.metadata.volatileContext = { recalcEpoch: 0 };
     this.metadata.freezePanes.clear();
     this.metadata.filters.clear();
     this.metadata.sorts.clear();
     this.nextSheetId = 1;
+    this.nextRowAxisId = 1;
+    this.nextColumnAxisId = 1;
     this.cellStore.reset();
   }
 
   private setAxisMetadata(
+    sheet: SheetRecord,
+    axis: "row" | "column",
     bucket: Map<string, WorkbookAxisMetadataRecord>,
     sheetName: string,
     start: number,
@@ -467,26 +604,36 @@ export class WorkbookStore {
     size: number | null,
     hidden: boolean | null
   ): WorkbookAxisMetadataRecord | undefined {
-    const key = axisMetadataKey(sheetName, start, count);
-    if (size === null && hidden === null) {
-      bucket.delete(key);
-      return undefined;
+    const entries = this.materializeAxisEntryRecords(sheet, axis, start, count);
+    entries.forEach((entry) => {
+      entry.size = size;
+      entry.hidden = hidden;
+    });
+    this.syncAxisMetadataBucket(sheetName, sheet, axis, bucket);
+    const record = this.getAxisMetadataRecord(sheet, axis, sheetName, start, count);
+    if (!record) {
+      bucket.delete(axisMetadataKey(sheetName, start, count));
     }
-    const record: WorkbookAxisMetadataRecord = { sheetName, start, count, size, hidden };
-    bucket.set(key, record);
     return record;
   }
 
   private listAxisMetadata(
+    sheet: SheetRecord | undefined,
     bucket: Map<string, WorkbookAxisMetadataRecord>,
-    sheetName: string
+    sheetName: string,
+    axis: "row" | "column"
   ): WorkbookAxisMetadataRecord[] {
+    if (!sheet) {
+      return [];
+    }
+    this.syncAxisMetadataBucket(sheetName, sheet, axis, bucket);
     return [...bucket.values()]
       .filter((record) => record.sheetName === sheetName)
       .sort((left, right) => left.start - right.start || left.count - right.count);
   }
 
   private deleteSheetMetadata(sheetName: string): void {
+    const sheet = this.getSheet(sheetName);
     deleteRecordsBySheet(this.metadata.tables, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(this.metadata.spills, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(this.metadata.pivots, sheetName, (record) => record.sheetName);
@@ -495,6 +642,196 @@ export class WorkbookStore {
     deleteRecordsBySheet(this.metadata.filters, sheetName, (record) => record.sheetName);
     deleteRecordsBySheet(this.metadata.sorts, sheetName, (record) => record.sheetName);
     this.metadata.freezePanes.delete(sheetName);
+    if (sheet) {
+      sheet.rowAxis.length = 0;
+      sheet.columnAxis.length = 0;
+    }
+  }
+
+  private listAxisEntries(sheet: SheetRecord | undefined, axis: "row" | "column"): WorkbookAxisEntrySnapshot[] {
+    if (!sheet) {
+      return [];
+    }
+    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    const result: WorkbookAxisEntrySnapshot[] = [];
+    entries.forEach((entry, index) => {
+      if (!entry) {
+        return;
+      }
+      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index };
+      if (entry.size !== null) {
+        snapshot.size = entry.size;
+      }
+      if (entry.hidden !== null) {
+        snapshot.hidden = entry.hidden;
+      }
+      result.push(snapshot);
+    });
+    return result;
+  }
+
+  private materializeAxisEntries(
+    sheet: SheetRecord,
+    axis: "row" | "column",
+    start: number,
+    count: number
+  ): WorkbookAxisEntrySnapshot[] {
+    return this.materializeAxisEntryRecords(sheet, axis, start, count).map((entry, offset) => {
+      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index: start + offset };
+      if (entry.size !== null) {
+        snapshot.size = entry.size;
+      }
+      if (entry.hidden !== null) {
+        snapshot.hidden = entry.hidden;
+      }
+      return snapshot;
+    });
+  }
+
+  private materializeAxisEntryRecords(
+    sheet: SheetRecord,
+    axis: "row" | "column",
+    start: number,
+    count: number
+  ): WorkbookAxisEntryRecord[] {
+    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    const materialized: WorkbookAxisEntryRecord[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const position = start + index;
+      let entry = entries[position];
+      if (!entry) {
+        entry = {
+          id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
+          size: null,
+          hidden: null
+        };
+        entries[position] = entry;
+      }
+      materialized.push(entry);
+    }
+    return materialized;
+  }
+
+  private spliceAxisEntries(
+    sheet: SheetRecord,
+    axis: "row" | "column",
+    start: number,
+    deleteCount: number,
+    insertCount: number,
+    entries?: readonly WorkbookAxisEntrySnapshot[]
+  ): WorkbookAxisEntrySnapshot[] {
+    const axisEntries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    if (axisEntries.length < start) {
+      axisEntries.length = start;
+    }
+    if (deleteCount > 0) {
+      this.materializeAxisEntryRecords(sheet, axis, start, deleteCount);
+    }
+    const removed = axisEntries.splice(start, deleteCount, ...Array.from({ length: insertCount }, (_, index) => {
+      const provided = entries?.[index];
+      return provided
+        ? { id: provided.id, size: provided.size ?? null, hidden: provided.hidden ?? null }
+        : {
+            id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
+            size: null,
+            hidden: null
+          };
+    }));
+    return removed.flatMap((entry, index) => {
+      if (!entry) {
+        return [];
+      }
+      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index: start + index };
+      if (entry.size !== null) {
+        snapshot.size = entry.size;
+      }
+      if (entry.hidden !== null) {
+        snapshot.hidden = entry.hidden;
+      }
+      return [snapshot];
+    });
+  }
+
+  private moveAxisEntries(
+    sheet: SheetRecord,
+    axis: "row" | "column",
+    start: number,
+    count: number,
+    target: number
+  ): void {
+    if (count <= 0 || start === target) {
+      return;
+    }
+    const axisEntries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    this.materializeAxisEntryRecords(sheet, axis, start, count);
+    const moved = axisEntries.splice(start, count);
+    axisEntries.splice(target, 0, ...moved);
+  }
+
+  private getAxisMetadataRecord(
+    sheet: SheetRecord,
+    axis: "row" | "column",
+    sheetName: string,
+    start: number,
+    count: number
+  ): WorkbookAxisMetadataRecord | undefined {
+    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    let size: number | null | undefined;
+    let hidden: boolean | null | undefined;
+    let sawMaterialized = false;
+    for (let index = start; index < start + count; index += 1) {
+      const entry = entries[index];
+      if (!entry) {
+        if (size === undefined) {
+          size = null;
+        }
+        if (hidden === undefined) {
+          hidden = null;
+        }
+        continue;
+      }
+      sawMaterialized = true;
+      size ??= entry.size;
+      hidden ??= entry.hidden;
+      if (size !== entry.size || hidden !== entry.hidden) {
+        return undefined;
+      }
+    }
+    if (!sawMaterialized || (size ?? null) === null && (hidden ?? null) === null) {
+      return undefined;
+    }
+    return { sheetName, start, count, size: size ?? null, hidden: hidden ?? null };
+  }
+
+  private syncAxisMetadataBucket(
+    sheetName: string,
+    sheet: SheetRecord,
+    axis: "row" | "column",
+    bucket: Map<string, WorkbookAxisMetadataRecord>
+  ): void {
+    deleteRecordsBySheet(bucket, sheetName, (record) => record.sheetName);
+    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    let cursor = 0;
+    while (cursor < entries.length) {
+      const entry = entries[cursor];
+      if (!entry || (entry.size === null && entry.hidden === null)) {
+        cursor += 1;
+        continue;
+      }
+      const start = cursor;
+      const size = entry.size;
+      const hidden = entry.hidden;
+      cursor += 1;
+      while (cursor < entries.length) {
+        const next = entries[cursor];
+        if (!next || next.size !== size || next.hidden !== hidden) {
+          break;
+        }
+        cursor += 1;
+      }
+      const record: WorkbookAxisMetadataRecord = { sheetName, start, count: cursor - start, size, hidden };
+      bucket.set(axisMetadataKey(sheetName, start, record.count), record);
+    }
   }
 }
 

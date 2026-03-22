@@ -245,7 +245,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
-  it("treats unsupported non-native formulas as value errors without invoking a JS fallback", async () => {
+  it("evaluates unsupported wasm formulas through the JS runtime fallback", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -253,8 +253,8 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "A2", 6);
     engine.setCellFormula("Sheet1", "B1", "LEN(A1:A2)");
 
-    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
-    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
     expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
   });
 
@@ -1307,6 +1307,11 @@ describe("SpreadsheetEngine", () => {
     }]);
     expect(snapshot.workbook.metadata?.spills).toEqual([{ sheetName: "Sheet1", address: "E1", rows: 2, cols: 2 }]);
     expect(snapshot.sheets.find((sheet) => sheet.name === "Sheet1")?.metadata).toEqual({
+      rows: [
+        { id: "row-1", index: 2, size: 24, hidden: false },
+        { id: "row-2", index: 3, size: 24, hidden: false }
+      ],
+      columns: [{ id: "column-1", index: 1, size: 140 }],
       rowMetadata: [{ start: 2, count: 2, size: 24, hidden: false }],
       columnMetadata: [{ start: 1, count: 1, size: 140 }],
       freezePane: { rows: 1, cols: 2 },
@@ -1322,6 +1327,11 @@ describe("SpreadsheetEngine", () => {
     restored.importSnapshot(snapshot);
 
     expect(restored.getWorkbookMetadataEntries()).toEqual([{ key: "locale", value: "en-US" }]);
+    expect(restored.getRowAxisEntries("Sheet1")).toEqual([
+      { id: "row-1", index: 2, size: 24, hidden: false },
+      { id: "row-2", index: 3, size: 24, hidden: false }
+    ]);
+    expect(restored.getColumnAxisEntries("Sheet1")).toEqual([{ id: "column-1", index: 1, size: 140 }]);
     expect(restored.getRowMetadata("Sheet1")).toEqual([{ sheetName: "Sheet1", start: 2, count: 2, size: 24, hidden: false }]);
     expect(restored.getColumnMetadata("Sheet1")).toEqual([{ sheetName: "Sheet1", start: 1, count: 1, size: 140, hidden: null }]);
     expect(restored.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 2 });
@@ -1347,6 +1357,80 @@ describe("SpreadsheetEngine", () => {
     expect(restored.exportSnapshot()).toEqual(snapshot);
   });
 
+  it("tracks structural row identities and rewrites formulas for row inserts and moves", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 20);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A2)");
+    engine.updateRowMetadata("Sheet1", 1, 1, 30, false);
+
+    const before = engine.getRowAxisEntries("Sheet1");
+    expect(before).toEqual([{ id: "row-1", index: 1, size: 30, hidden: false }]);
+
+    engine.insertRows("Sheet1", 1, 1);
+
+    expect(engine.getCell("Sheet1", "B1").formula).toBe("SUM(A1:A3)");
+    expect(engine.getRowAxisEntries("Sheet1")).toEqual([
+      { id: "row-2", index: 1 },
+      { id: "row-1", index: 2, size: 30, hidden: false }
+    ]);
+
+    engine.moveRows("Sheet1", 2, 1, 0);
+    expect(engine.getRowAxisEntries("Sheet1")).toEqual([
+      { id: "row-1", index: 0, size: 30, hidden: false },
+      { id: "row-2", index: 2 }
+    ]);
+  });
+
+  it("rewrites formulas for structural column inserts and roundtrips calc settings metadata", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellFormula("Sheet1", "C1", "SUM(A1:B1)");
+    engine.setCalculationSettings({ mode: "manual" });
+
+    engine.insertColumns("Sheet1", 1, 1);
+
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("SUM(A1:C1)");
+
+    engine.recalculateNow();
+    expect(engine.exportSnapshot().workbook.metadata?.calculationSettings).toEqual({ mode: "manual" });
+    expect(engine.exportSnapshot().workbook.metadata?.volatileContext?.recalcEpoch).toBeGreaterThan(0);
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(engine.exportSnapshot());
+    expect(restored.getCalculationSettings()).toEqual({ mode: "manual" });
+  });
+
+  it("rewrites formulas and axis identities for structural column deletes and moves", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellValue("Sheet1", "C1", 5);
+    engine.setCellFormula("Sheet1", "E1", "SUM(A1:B1)");
+    engine.updateColumnMetadata("Sheet1", 0, 1, 90, true);
+
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([{ id: "column-1", index: 0, size: 90, hidden: true }]);
+
+    engine.deleteColumns("Sheet1", 0, 1);
+    expect(engine.getCell("Sheet1", "D1").formula).toBe("SUM(A1:A1)");
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([]);
+
+    engine.updateColumnMetadata("Sheet1", 1, 1, 110, false);
+    engine.setCellFormula("Sheet1", "D2", "B1");
+    engine.moveColumns("Sheet1", 1, 1, 0);
+
+    expect(engine.getCell("Sheet1", "D2").formula).toBe("A1");
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([{ id: "column-2", index: 0, size: 110, hidden: false }]);
+  });
+
   it("routes multi-name scalar formulas through the wasm path once names exist", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -1360,6 +1444,74 @@ describe("SpreadsheetEngine", () => {
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 0.1 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("resolves named range formulas through workbook metadata and rebinds dependencies", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellValue("Sheet1", "A2", 12);
+    engine.setCellValue("Sheet1", "A3", 15);
+    engine.setDefinedName("SalesRange", "=Sheet1!A1:A3");
+    engine.setCellFormula("Sheet1", "B1", "SUM(SalesRange)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 37 });
+
+    engine.setCellValue("Sheet1", "A2", 20);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 45 });
+
+    engine.setDefinedName("SalesRange", "=Sheet1!A1:A2");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 30 });
+  });
+
+  it("binds structured table references through table metadata", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "Region");
+    engine.setCellValue("Sheet1", "B1", "Amount");
+    engine.setCellValue("Sheet1", "A2", "North");
+    engine.setCellValue("Sheet1", "B2", 10);
+    engine.setCellValue("Sheet1", "A3", "South");
+    engine.setCellValue("Sheet1", "B3", 12);
+    engine.setCellValue("Sheet1", "A4", "West");
+    engine.setCellValue("Sheet1", "B4", 15);
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B4",
+      columnNames: ["Region", "Amount"],
+      headerRow: true,
+      totalsRow: false
+    });
+
+    engine.setCellFormula("Sheet1", "C1", "SUM(Sales[Amount])");
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 37 });
+
+    engine.setCellValue("Sheet1", "B3", 20);
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 45 });
+
+    engine.setCellFormula("Sheet1", "D1", "Sales[Amount]");
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Sheet1", "D2")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Sheet1", "D3")).toEqual({ tag: ValueTag.Number, value: 15 });
+  });
+
+  it("rebinds spill-shape formulas when owner ranges appear and resize", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1#)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+
+    engine.setCellFormula("Sheet1", "A1", "SEQUENCE(3,1,1,1)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    engine.setCellFormula("Sheet1", "A1", "SEQUENCE(2,1,1,1)");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 3 });
   });
 
   it("materializes pivot tables, refreshes aggregates, and roundtrips snapshot metadata", async () => {

@@ -3,6 +3,9 @@ export type TokenKind =
   | "identifier"
   | "quotedIdentifier"
   | "string"
+  | "lbracket"
+  | "rbracket"
+  | "hash"
   | "lparen"
   | "rparen"
   | "comma"
@@ -119,6 +122,9 @@ export function lexFormula(input: string): Token[] {
     }
 
     const singleMap: Record<string, TokenKind> = {
+      "[": "lbracket",
+      "]": "rbracket",
+      "#": "hash",
       "(": "lparen",
       ")": "rparen",
       ",": "comma",

@@ -4,7 +4,9 @@ export type FormulaNode =
   | StringLiteralNode
   | ErrorLiteralNode
   | NameRefNode
+  | StructuredRefNode
   | CellRefNode
+  | SpillRefNode
   | RowRefNode
   | ColumnRefNode
   | RangeRefNode
@@ -37,8 +39,20 @@ export interface NameRefNode {
   name: string;
 }
 
+export interface StructuredRefNode {
+  kind: "StructuredRef";
+  tableName: string;
+  columnName: string;
+}
+
 export interface CellRefNode {
   kind: "CellRef";
+  ref: string;
+  sheetName?: string;
+}
+
+export interface SpillRefNode {
+  kind: "SpillRef";
   ref: string;
   sheetName?: string;
 }

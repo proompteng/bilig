@@ -97,6 +97,26 @@ describe("formula parser/compiler edges", () => {
     ]);
   });
 
+  it("parses structured references and spill refs as metadata-aware syntax", () => {
+    const structured = parseFormula("SUM(Sales[Amount])");
+    expect(structured).toEqual({
+      kind: "CallExpr",
+      callee: "SUM",
+      args: [{ kind: "StructuredRef", tableName: "Sales", columnName: "Amount" }]
+    });
+
+    const structuredBound = bindFormula(structured);
+    expect(structuredBound.symbolicTables).toEqual(["Sales"]);
+    expect(structuredBound.mode).toBe(FormulaMode.JsOnly);
+
+    const spill = parseFormula("A1#");
+    expect(spill).toEqual({ kind: "SpillRef", ref: "A1" });
+
+    const spillBound = bindFormula(spill);
+    expect(spillBound.symbolicSpills).toEqual(["A1"]);
+    expect(spillBound.mode).toBe(FormulaMode.JsOnly);
+  });
+
   it("throws on unsupported wasm builtin encodings and invalid axis compilation", () => {
     expect(isBuiltinAvailable("SUM")).toBe(true);
     expect(isBuiltinAvailable("MATCH")).toBe(true);

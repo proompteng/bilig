@@ -1,7 +1,10 @@
 import type {
   CellRangeRef,
   LiteralInput,
-  WorkbookPivotValueSnapshot
+  WorkbookAxisEntrySnapshot,
+  WorkbookCalculationSettingsSnapshot,
+  WorkbookPivotValueSnapshot,
+  WorkbookVolatileContextSnapshot
 } from "@bilig/protocol";
 
 export type ReplicaId = string;
@@ -29,11 +32,21 @@ export interface WorkbookSortKey {
   direction: WorkbookSortDirection;
 }
 
+export interface WorkbookAxisEntryOp extends WorkbookAxisEntrySnapshot {}
+
 export type WorkbookOp =
   | { kind: "upsertWorkbook"; name: string }
   | { kind: "setWorkbookMetadata"; key: string; value: LiteralInput }
+  | { kind: "setCalculationSettings"; settings: WorkbookCalculationSettingsSnapshot }
+  | { kind: "setVolatileContext"; context: WorkbookVolatileContextSnapshot }
   | { kind: "upsertSheet"; name: string; order: number }
   | { kind: "deleteSheet"; name: string }
+  | { kind: "insertRows"; sheetName: string; start: number; count: number; entries?: WorkbookAxisEntryOp[] }
+  | { kind: "deleteRows"; sheetName: string; start: number; count: number }
+  | { kind: "moveRows"; sheetName: string; start: number; count: number; target: number }
+  | { kind: "insertColumns"; sheetName: string; start: number; count: number; entries?: WorkbookAxisEntryOp[] }
+  | { kind: "deleteColumns"; sheetName: string; start: number; count: number }
+  | { kind: "moveColumns"; sheetName: string; start: number; count: number; target: number }
   | {
       kind: "updateRowMetadata";
       sheetName: string;
@@ -211,9 +224,21 @@ function entityKeyForOp(op: EngineOp): string {
       return "workbook";
     case "setWorkbookMetadata":
       return `workbook-meta:${op.key}`;
+    case "setCalculationSettings":
+      return "workbook-calc";
+    case "setVolatileContext":
+      return "workbook-volatile";
     case "upsertSheet":
     case "deleteSheet":
       return `sheet:${op.name}`;
+    case "insertRows":
+    case "deleteRows":
+    case "moveRows":
+      return `row-structure:${op.sheetName}`;
+    case "insertColumns":
+    case "deleteColumns":
+    case "moveColumns":
+      return `column-structure:${op.sheetName}`;
     case "updateRowMetadata":
       return `row-meta:${op.sheetName}:${op.start}:${op.count}`;
     case "updateColumnMetadata":
@@ -254,6 +279,8 @@ function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, O
   switch (op.kind) {
     case "upsertWorkbook":
     case "setWorkbookMetadata":
+    case "setCalculationSettings":
+    case "setVolatileContext":
     case "deleteSheet":
     case "upsertDefinedName":
     case "deleteDefinedName":
@@ -262,6 +289,13 @@ function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, O
       return undefined;
     case "upsertSheet":
       return latestSheetDeletes.get(op.name);
+    case "insertRows":
+    case "deleteRows":
+    case "moveRows":
+    case "insertColumns":
+    case "deleteColumns":
+    case "moveColumns":
+      return latestSheetDeletes.get(op.sheetName);
     case "updateRowMetadata":
     case "updateColumnMetadata":
     case "setFreezePane":

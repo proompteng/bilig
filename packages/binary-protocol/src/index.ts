@@ -2,6 +2,8 @@ import type {
   CellRangeRef,
   PivotAggregation,
   LiteralInput,
+  WorkbookAxisEntrySnapshot,
+  WorkbookCalculationMode,
   WorkbookPivotValueSnapshot
 } from "@bilig/protocol";
 import type {
@@ -149,7 +151,15 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   upsertSpillRange: 21,
   deleteSpillRange: 22,
   upsertPivotTable: 23,
-  deletePivotTable: 24
+  deletePivotTable: 24,
+  setCalculationSettings: 25,
+  setVolatileContext: 26,
+  insertRows: 27,
+  deleteRows: 28,
+  moveRows: 29,
+  insertColumns: 30,
+  deleteColumns: 31,
+  moveColumns: 32
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -364,6 +374,45 @@ function encodeSortDirection(writer: BinaryWriter, direction: WorkbookSortDirect
   }
 }
 
+function encodeCalculationMode(writer: BinaryWriter, mode: WorkbookCalculationMode): void {
+  writer.u8(mode === "manual" ? 2 : 1);
+}
+
+function decodeCalculationMode(reader: BinaryReader): WorkbookCalculationMode {
+  return reader.u8() === 2 ? "manual" : "automatic";
+}
+
+function encodeAxisEntries(writer: BinaryWriter, entries: readonly WorkbookAxisEntrySnapshot[] | undefined): void {
+  writer.u32(entries?.length ?? 0);
+  entries?.forEach((entry) => {
+    writer.string(entry.id);
+    writer.u32(entry.index);
+    encodeNullableNumber(writer, entry.size ?? null);
+    encodeNullableBoolean(writer, entry.hidden ?? null);
+  });
+}
+
+function decodeAxisEntries(reader: BinaryReader): WorkbookAxisEntrySnapshot[] {
+  const count = reader.u32();
+  const entries: WorkbookAxisEntrySnapshot[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const entry: WorkbookAxisEntrySnapshot = {
+      id: reader.string(),
+      index: reader.u32()
+    };
+    const size = decodeNullableNumber(reader);
+    const hidden = decodeNullableBoolean(reader);
+    if (size !== null) {
+      entry.size = size;
+    }
+    if (hidden !== null) {
+      entry.hidden = hidden;
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
 function decodeSortDirection(reader: BinaryReader): WorkbookSortDirection {
   switch (reader.u8()) {
     case 1:
@@ -464,12 +513,38 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       writer.string(op.key);
       encodeLiteral(writer, op.value);
       return;
+    case "setCalculationSettings":
+      encodeCalculationMode(writer, op.settings.mode);
+      return;
+    case "setVolatileContext":
+      writer.u32(op.context.recalcEpoch);
+      return;
     case "upsertSheet":
       writer.string(op.name);
       writer.u32(op.order);
       return;
     case "deleteSheet":
       writer.string(op.name);
+      return;
+    case "insertRows":
+    case "insertColumns":
+      writer.string(op.sheetName);
+      writer.u32(op.start);
+      writer.u32(op.count);
+      encodeAxisEntries(writer, op.entries);
+      return;
+    case "deleteRows":
+    case "deleteColumns":
+      writer.string(op.sheetName);
+      writer.u32(op.start);
+      writer.u32(op.count);
+      return;
+    case "moveRows":
+    case "moveColumns":
+      writer.string(op.sheetName);
+      writer.u32(op.start);
+      writer.u32(op.count);
+      writer.u32(op.target);
       return;
     case "updateRowMetadata":
     case "updateColumnMetadata":
@@ -573,10 +648,50 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       return { kind: "upsertWorkbook", name: reader.string() };
     case 2:
       return { kind: "setWorkbookMetadata", key: reader.string(), value: decodeLiteral(reader) };
+    case 25:
+      return { kind: "setCalculationSettings", settings: { mode: decodeCalculationMode(reader) } };
+    case 26:
+      return { kind: "setVolatileContext", context: { recalcEpoch: reader.u32() } };
     case 3:
       return { kind: "upsertSheet", name: reader.string(), order: reader.u32() };
     case 4:
       return { kind: "deleteSheet", name: reader.string() };
+    case 27:
+      return {
+        kind: "insertRows",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+        entries: decodeAxisEntries(reader)
+      };
+    case 28:
+      return { kind: "deleteRows", sheetName: reader.string(), start: reader.u32(), count: reader.u32() };
+    case 29:
+      return {
+        kind: "moveRows",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+        target: reader.u32()
+      };
+    case 30:
+      return {
+        kind: "insertColumns",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+        entries: decodeAxisEntries(reader)
+      };
+    case 31:
+      return { kind: "deleteColumns", sheetName: reader.string(), start: reader.u32(), count: reader.u32() };
+    case 32:
+      return {
+        kind: "moveColumns",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+        target: reader.u32()
+      };
     case 5:
       return {
         kind: "updateRowMetadata",

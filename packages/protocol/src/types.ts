@@ -169,6 +169,23 @@ export interface WorkbookAxisMetadataSnapshot {
   hidden?: boolean | null;
 }
 
+export interface WorkbookAxisEntrySnapshot {
+  id: string;
+  index: number;
+  size?: number | null;
+  hidden?: boolean | null;
+}
+
+export type WorkbookCalculationMode = "automatic" | "manual";
+
+export interface WorkbookCalculationSettingsSnapshot {
+  mode: WorkbookCalculationMode;
+}
+
+export interface WorkbookVolatileContextSnapshot {
+  recalcEpoch: number;
+}
+
 export interface WorkbookFreezePaneSnapshot {
   rows: number;
   cols: number;
@@ -190,9 +207,13 @@ export interface WorkbookMetadataSnapshot {
   tables?: WorkbookTableSnapshot[];
   spills?: WorkbookSpillSnapshot[];
   pivots?: WorkbookPivotSnapshot[];
+  calculationSettings?: WorkbookCalculationSettingsSnapshot;
+  volatileContext?: WorkbookVolatileContextSnapshot;
 }
 
 export interface SheetMetadataSnapshot {
+  rows?: WorkbookAxisEntrySnapshot[];
+  columns?: WorkbookAxisEntrySnapshot[];
   rowMetadata?: WorkbookAxisMetadataSnapshot[];
   columnMetadata?: WorkbookAxisMetadataSnapshot[];
   freezePane?: WorkbookFreezePaneSnapshot;

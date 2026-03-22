@@ -144,7 +144,12 @@ function toEvaluationResult(value: StackValue | undefined): EvaluationResult {
     return value.value;
   }
   if (value.kind === "range") {
-    return value.values[0] ?? emptyValue();
+    return {
+      kind: "array",
+      rows: value.rows,
+      cols: value.cols,
+      values: value.values
+    };
   }
   return value;
 }
@@ -165,6 +170,10 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       return;
     case "NameRef":
       plan.push({ opcode: "push-name", name: node.name });
+      return;
+    case "StructuredRef":
+    case "SpillRef":
+      plan.push({ opcode: "push-error", code: ErrorCode.Ref });
       return;
     case "CellRef":
       plan.push(

@@ -11,6 +11,8 @@ export interface BoundFormula {
   ast: FormulaNode;
   deps: string[];
   symbolicNames: string[];
+  symbolicTables: string[];
+  symbolicSpills: string[];
   mode: FormulaMode;
 }
 
@@ -187,6 +189,8 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
 export function bindFormula(ast: FormulaNode): BoundFormula {
   const deps = new Set<string>();
   const symbolicNames = new Set<string>();
+  const symbolicTables = new Set<string>();
+  const symbolicSpills = new Set<string>();
 
   function collectDeps(node: FormulaNode): void {
     switch (node.kind) {
@@ -198,8 +202,14 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "NameRef":
         symbolicNames.add(node.name);
         break;
+      case "StructuredRef":
+        symbolicTables.add(node.tableName);
+        break;
       case "CellRef":
         deps.add(node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref);
+        break;
+      case "SpillRef":
+        symbolicSpills.add(node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref);
         break;
       case "RowRef":
       case "ColumnRef":
@@ -230,6 +240,8 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "ErrorLiteral":
         return true;
       case "NameRef":
+      case "StructuredRef":
+      case "SpillRef":
         return false;
       case "CellRef":
         return true;
@@ -371,6 +383,8 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
     ast,
     deps: [...deps],
     symbolicNames: [...symbolicNames],
+    symbolicTables: [...symbolicTables],
+    symbolicSpills: [...symbolicSpills],
     mode:
       ast.kind === "RangeRef" || (!isWasmSafe(ast) && !isTopLevelWasmSafe(ast))
         ? FormulaMode.JsOnly

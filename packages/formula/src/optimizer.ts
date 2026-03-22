@@ -36,7 +36,9 @@ function isStaticNode(node: FormulaNode): boolean {
     case "ErrorLiteral":
       return true;
     case "NameRef":
+    case "StructuredRef":
     case "CellRef":
+    case "SpillRef":
     case "RowRef":
     case "ColumnRef":
     case "RangeRef":
@@ -125,7 +127,9 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
     case "StringLiteral":
     case "ErrorLiteral":
     case "NameRef":
+    case "StructuredRef":
     case "CellRef":
+    case "SpillRef":
     case "RowRef":
     case "ColumnRef":
     case "RangeRef":

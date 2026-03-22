@@ -36,7 +36,9 @@ function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
     case "StringLiteral":
     case "ErrorLiteral":
     case "NameRef":
+    case "StructuredRef":
     case "CellRef":
+    case "SpillRef":
     case "RowRef":
     case "ColumnRef":
     case "RangeRef":
@@ -114,6 +116,8 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       state.program.push(encodeInstruction(Opcode.PushError, node.code));
       return;
     case "NameRef":
+    case "StructuredRef":
+    case "SpillRef":
       throw new Error("Defined names are not supported on the wasm fast path");
     case "CellRef": {
       emitCellRef(node.ref, node.sheetName, state);
@@ -186,6 +190,8 @@ export interface CompiledFormula extends FormulaRecord {
   optimizedAst: FormulaNode;
   deps: string[];
   symbolicNames: string[];
+  symbolicTables: string[];
+  symbolicSpills: string[];
   volatile: boolean;
   randCallCount: number;
   producesSpill: boolean;
@@ -200,6 +206,8 @@ export interface CompiledFormula extends FormulaRecord {
 interface CompileFormulaAstOptions {
   originalAst?: FormulaNode;
   symbolicNames?: string[];
+  symbolicTables?: string[];
+  symbolicSpills?: string[];
 }
 
 function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
@@ -274,6 +282,8 @@ export function compileFormulaAst(
     optimizedAst,
     deps: bound.deps,
     symbolicNames: options.symbolicNames ?? bound.symbolicNames,
+    symbolicTables: options.symbolicTables ?? bound.symbolicTables,
+    symbolicSpills: options.symbolicSpills ?? bound.symbolicSpills,
     volatile: volatileMetadata.volatile,
     randCallCount: volatileMetadata.randCallCount,
     producesSpill: spillResult,

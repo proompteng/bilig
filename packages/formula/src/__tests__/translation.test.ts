@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { translateFormulaReferences } from "../translation.js";
+import { rewriteFormulaForStructuralTransform, translateFormulaReferences } from "../translation.js";
 
 describe("translateFormulaReferences", () => {
   it("shifts relative cell references", () => {
@@ -32,5 +32,32 @@ describe("translateFormulaReferences", () => {
     expect(() => translateFormulaReferences("$A1+B$1", -1, -2)).toThrow(
       "Translated reference moved outside worksheet bounds: $A1"
     );
+  });
+
+  it("rewrites row references for structural inserts and deletes", () => {
+    expect(
+      rewriteFormulaForStructuralTransform("SUM(A1:A2)", "Sheet1", "Sheet1", { kind: "insert", axis: "row", start: 1, count: 1 })
+    ).toBe("SUM(A1:A3)");
+    expect(
+      rewriteFormulaForStructuralTransform("SUM(A1:A3)", "Sheet1", "Sheet1", { kind: "delete", axis: "row", start: 1, count: 1 })
+    ).toBe("SUM(A1:A2)");
+  });
+
+  it("rewrites column references for structural moves", () => {
+    expect(
+      rewriteFormulaForStructuralTransform("A1", "Sheet1", "Sheet1", { kind: "move", axis: "column", start: 0, count: 1, target: 2 })
+    ).toBe("C1");
+    expect(
+      rewriteFormulaForStructuralTransform("C1", "Sheet1", "Sheet1", { kind: "move", axis: "column", start: 2, count: 1, target: 0 })
+    ).toBe("A1");
+  });
+
+  it("collapses deleted references to surviving ranges or #REF", () => {
+    expect(
+      rewriteFormulaForStructuralTransform("SUM(A1:B1)", "Sheet1", "Sheet1", { kind: "delete", axis: "column", start: 0, count: 1 })
+    ).toBe("SUM(A1:A1)");
+    expect(
+      rewriteFormulaForStructuralTransform("B2", "Sheet1", "Sheet1", { kind: "delete", axis: "column", start: 1, count: 1 })
+    ).toBe("#REF!");
   });
 });

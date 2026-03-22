@@ -16,7 +16,9 @@ import {
   type SyncState,
   type SelectionState,
   type SheetMetadataSnapshot,
+  type WorkbookAxisEntrySnapshot,
   type WorkbookAxisMetadataSnapshot,
+  type WorkbookCalculationSettingsSnapshot,
   type WorkbookFreezePaneSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookSortSnapshot,
@@ -26,10 +28,16 @@ import {
   type FormulaNode,
   compileFormula,
   compileFormulaAst,
+  evaluatePlanResult,
   formatAddress,
+  isArrayValue,
   parseCellAddress,
   parseFormula,
   parseRangeAddress,
+  rewriteAddressForStructuralTransform,
+  rewriteFormulaForStructuralTransform,
+  rewriteRangeForStructuralTransform,
+  type StructuralAxisTransform,
   translateFormulaReferences,
   utcDateToExcelSerial
 } from "@bilig/formula";
@@ -65,15 +73,18 @@ import { WasmKernelFacade } from "./wasm-facade.js";
 import {
   WorkbookStore,
   normalizeDefinedName,
-  pivotKey,
-  type WorkbookAxisMetadataRecord,
-  type WorkbookDefinedNameRecord,
-  type WorkbookFilterRecord,
-  type WorkbookPivotRecord,
-  type WorkbookPropertyRecord,
-  type WorkbookSortRecord,
-  type WorkbookSpillRecord,
-  type WorkbookTableRecord
+  normalizeWorkbookObjectName,
+    pivotKey,
+    type WorkbookAxisMetadataRecord,
+    type WorkbookCalculationSettingsRecord,
+    type WorkbookDefinedNameRecord,
+    type WorkbookFilterRecord,
+    type WorkbookPivotRecord,
+    type WorkbookPropertyRecord,
+    type WorkbookSortRecord,
+    type WorkbookSpillRecord,
+    type WorkbookTableRecord,
+    type WorkbookVolatileContextRecord
 } from "./workbook-store.js";
 import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
 
@@ -215,9 +226,27 @@ function literalToFormulaNode(input: LiteralInput): FormulaNode | null {
   return null;
 }
 
-function resolveDefinedNamesInAst(
+function definedNameValueToFormulaNode(input: LiteralInput): FormulaNode | null {
+  if (typeof input === "string" && input.startsWith("=")) {
+    try {
+      return parseFormula(input);
+    } catch {
+      return { kind: "ErrorLiteral", code: ErrorCode.Value };
+    }
+  }
+  return literalToFormulaNode(input);
+}
+
+interface MetadataResolutionContext {
+  resolveName: (name: string) => LiteralInput | undefined;
+  resolveStructuredReference: (tableName: string, columnName: string) => FormulaNode | undefined;
+  resolveSpillReference: (sheetName: string | undefined, address: string) => FormulaNode | undefined;
+}
+
+function resolveMetadataReferencesInAst(
   node: FormulaNode,
-  resolveName: (name: string) => LiteralInput | undefined
+  context: MetadataResolutionContext,
+  activeNames = new Set<string>()
 ): { node: FormulaNode; fullyResolved: boolean; substituted: boolean } {
   switch (node.kind) {
     case "NumberLiteral":
@@ -230,17 +259,38 @@ function resolveDefinedNamesInAst(
     case "RangeRef":
       return { node, fullyResolved: true, substituted: false };
     case "NameRef": {
-      const literal = resolveName(node.name);
+      const normalized = normalizeDefinedName(node.name);
+      if (activeNames.has(normalized)) {
+        return {
+          node: { kind: "ErrorLiteral", code: ErrorCode.Cycle },
+          fullyResolved: true,
+          substituted: true
+        };
+      }
+      const literal = context.resolveName(node.name);
       const replacement = literal === undefined
         ? { kind: "ErrorLiteral", code: ErrorCode.Name } satisfies FormulaNode
-        : literalToFormulaNode(literal);
+        : definedNameValueToFormulaNode(literal);
       if (!replacement) {
         return { node, fullyResolved: false, substituted: false };
       }
+      const nextActiveNames = new Set(activeNames);
+      nextActiveNames.add(normalized);
+      const resolved = resolveMetadataReferencesInAst(replacement, context, nextActiveNames);
+      return { node: resolved.node, fullyResolved: resolved.fullyResolved, substituted: true };
+    }
+    case "StructuredRef": {
+      const replacement = context.resolveStructuredReference(node.tableName, node.columnName)
+        ?? ({ kind: "ErrorLiteral", code: ErrorCode.Ref } satisfies FormulaNode);
+      return { node: replacement, fullyResolved: true, substituted: true };
+    }
+    case "SpillRef": {
+      const replacement = context.resolveSpillReference(node.sheetName, node.ref)
+        ?? ({ kind: "ErrorLiteral", code: ErrorCode.Ref } satisfies FormulaNode);
       return { node: replacement, fullyResolved: true, substituted: true };
     }
     case "UnaryExpr": {
-      const resolved = resolveDefinedNamesInAst(node.argument, resolveName);
+      const resolved = resolveMetadataReferencesInAst(node.argument, context, activeNames);
       return {
         node: resolved.substituted ? { ...node, argument: resolved.node } : node,
         fullyResolved: resolved.fullyResolved,
@@ -248,8 +298,8 @@ function resolveDefinedNamesInAst(
       };
     }
     case "BinaryExpr": {
-      const left = resolveDefinedNamesInAst(node.left, resolveName);
-      const right = resolveDefinedNamesInAst(node.right, resolveName);
+      const left = resolveMetadataReferencesInAst(node.left, context, activeNames);
+      const right = resolveMetadataReferencesInAst(node.right, context, activeNames);
       return {
         node: left.substituted || right.substituted ? { ...node, left: left.node, right: right.node } : node,
         fullyResolved: left.fullyResolved && right.fullyResolved,
@@ -260,7 +310,7 @@ function resolveDefinedNamesInAst(
       let fullyResolved = true;
       let substituted = false;
       const args = node.args.map((arg) => {
-        const resolved = resolveDefinedNamesInAst(arg, resolveName);
+        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames);
         fullyResolved = fullyResolved && resolved.fullyResolved;
         substituted = substituted || resolved.substituted;
         return resolved.node;
@@ -272,6 +322,24 @@ function resolveDefinedNamesInAst(
       };
     }
   }
+}
+
+function tableDependencyKey(name: string): string {
+  return normalizeWorkbookObjectName(name, "Table");
+}
+
+function spillDependencyKey(sheetName: string, address: string): string {
+  return `${sheetName}!${parseCellAddress(address, sheetName).text}`;
+}
+
+function spillDependencyKeyFromRef(ref: string, ownerSheetName: string): string {
+  if (ref.includes("!")) {
+    const separator = ref.indexOf("!");
+    const sheetName = ref.slice(0, separator).replace(/^'(.*)'$/, "$1");
+    const address = ref.slice(separator + 1);
+    return spillDependencyKey(sheetName, address);
+  }
+  return spillDependencyKey(ownerSheetName, ref);
 }
 
 export class SpreadsheetEngine {
@@ -292,6 +360,8 @@ export class SpreadsheetEngine {
   private reverseCellEdges: Array<EdgeSlice | undefined> = [];
   private reverseRangeEdges: Array<EdgeSlice | undefined> = [];
   private readonly reverseDefinedNameEdges = new Map<string, Set<number>>();
+  private readonly reverseTableEdges = new Map<string, Set<number>>();
+  private readonly reverseSpillEdges = new Map<string, Set<number>>();
   private readonly pivotOutputOwners = new Map<number, string>();
   private readonly batchListeners = new Set<(batch: EngineOpBatch) => void>();
   private readonly selectionListeners = new Set<() => void>();
@@ -556,6 +626,41 @@ export class SpreadsheetEngine {
     return this.workbook.listWorkbookProperties();
   }
 
+  setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): void {
+    const current = this.workbook.getCalculationSettings();
+    if (current.mode === settings.mode) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "setCalculationSettings", settings: { ...settings } }]);
+  }
+
+  getCalculationSettings(): WorkbookCalculationSettingsRecord {
+    return this.workbook.getCalculationSettings();
+  }
+
+  getVolatileContext(): WorkbookVolatileContextRecord {
+    return this.workbook.getVolatileContext();
+  }
+
+  recalculateNow(): void {
+    this.workbook.setVolatileContext({ recalcEpoch: this.workbook.getVolatileContext().recalcEpoch + 1 });
+    let formulaChangedCount = 0;
+    let explicitChangedCount = 0;
+    this.formulas.forEach((_formula, cellIndex) => {
+      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+      explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
+    });
+    const recalculated = this.reconcilePivotOutputs(
+      this.recalculate(this.composeMutationRoots(0, formulaChangedCount), this.changedInputBuffer.subarray(0, 0)),
+      true
+    );
+    const changed = this.composeEventChanges(recalculated, explicitChangedCount);
+    this.lastMetrics.batchId += 1;
+    this.lastMetrics.changedInputCount = formulaChangedCount;
+    this.events.emit({ kind: "batch", changedCellIndices: changed, metrics: this.lastMetrics }, changed, (cellIndex) =>
+      this.workbook.getQualifiedAddress(cellIndex));
+  }
+
   updateRowMetadata(
     sheetName: string,
     start: number,
@@ -577,6 +682,31 @@ export class SpreadsheetEngine {
     return this.workbook.listRowMetadata(sheetName);
   }
 
+  getRowAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
+    return this.workbook.listRowAxisEntries(sheetName);
+  }
+
+  insertRows(sheetName: string, start: number, count: number): void {
+    if (count <= 0) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "insertRows", sheetName, start, count }]);
+  }
+
+  deleteRows(sheetName: string, start: number, count: number): void {
+    if (count <= 0) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "deleteRows", sheetName, start, count }]);
+  }
+
+  moveRows(sheetName: string, start: number, count: number, target: number): void {
+    if (count <= 0 || start === target) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "moveRows", sheetName, start, count, target }]);
+  }
+
   updateColumnMetadata(
     sheetName: string,
     start: number,
@@ -596,6 +726,31 @@ export class SpreadsheetEngine {
 
   getColumnMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
     return this.workbook.listColumnMetadata(sheetName);
+  }
+
+  getColumnAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
+    return this.workbook.listColumnAxisEntries(sheetName);
+  }
+
+  insertColumns(sheetName: string, start: number, count: number): void {
+    if (count <= 0) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "insertColumns", sheetName, start, count }]);
+  }
+
+  deleteColumns(sheetName: string, start: number, count: number): void {
+    if (count <= 0) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "deleteColumns", sheetName, start, count }]);
+  }
+
+  moveColumns(sheetName: string, start: number, count: number, target: number): void {
+    if (count <= 0 || start === target) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "moveColumns", sheetName, start, count, target }]);
   }
 
   setFreezePane(sheetName: string, rows: number, cols: number): void {
@@ -1074,6 +1229,8 @@ export class SpreadsheetEngine {
     };
     const properties = this.workbook.listWorkbookProperties().map(({ key, value }) => ({ key, value }));
     const definedNames = this.workbook.listDefinedNames().map(({ name, value }) => ({ name, value }));
+    const calculationSettings = this.workbook.getCalculationSettings();
+    const volatileContext = this.workbook.getVolatileContext();
     const tables = this.workbook.listTables().map((table) => ({
       name: table.name,
       sheetName: table.sheetName,
@@ -1094,7 +1251,15 @@ export class SpreadsheetEngine {
       rows: pivot.rows,
       cols: pivot.cols
     }));
-    if (properties.length > 0 || definedNames.length > 0 || tables.length > 0 || spills.length > 0 || pivots.length > 0) {
+    if (
+      properties.length > 0
+      || definedNames.length > 0
+      || tables.length > 0
+      || spills.length > 0
+      || pivots.length > 0
+      || calculationSettings.mode !== "automatic"
+      || volatileContext.recalcEpoch !== 0
+    ) {
       workbook.metadata = {};
       if (properties.length > 0) {
         workbook.metadata.properties = properties;
@@ -1110,6 +1275,12 @@ export class SpreadsheetEngine {
       }
       if (pivots.length > 0) {
         workbook.metadata.pivots = pivots;
+      }
+      if (calculationSettings.mode !== "automatic") {
+        workbook.metadata.calculationSettings = calculationSettings;
+      }
+      if (volatileContext.recalcEpoch !== 0) {
+        workbook.metadata.volatileContext = volatileContext;
       }
     }
 
@@ -1156,6 +1327,12 @@ export class SpreadsheetEngine {
     snapshot.workbook.metadata?.properties?.forEach(({ key, value }) => {
       ops.push({ kind: "setWorkbookMetadata", key, value });
     });
+    if (snapshot.workbook.metadata?.calculationSettings) {
+      ops.push({ kind: "setCalculationSettings", settings: { ...snapshot.workbook.metadata.calculationSettings } });
+    }
+    if (snapshot.workbook.metadata?.volatileContext) {
+      ops.push({ kind: "setVolatileContext", context: { ...snapshot.workbook.metadata.volatileContext } });
+    }
     snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
       ops.push({ kind: "upsertDefinedName", name, value });
     });
@@ -1163,6 +1340,32 @@ export class SpreadsheetEngine {
       ops.push({ kind: "upsertSheet", name: sheet.name, order: sheet.order });
     });
     snapshot.sheets.forEach((sheet) => {
+      sheet.metadata?.rows?.forEach(({ index, id, size, hidden }) => {
+        const entry = { index, id } as WorkbookAxisEntrySnapshot;
+        if (size !== undefined) {
+          entry.size = size;
+        }
+        if (hidden !== undefined) {
+          entry.hidden = hidden;
+        }
+        ops.push({ kind: "insertRows", sheetName: sheet.name, start: index, count: 1, entries: [entry] });
+      });
+      sheet.metadata?.columns?.forEach(({ index, id, size, hidden }) => {
+        const entry = { index, id } as WorkbookAxisEntrySnapshot;
+        if (size !== undefined) {
+          entry.size = size;
+        }
+        if (hidden !== undefined) {
+          entry.hidden = hidden;
+        }
+        ops.push({
+          kind: "insertColumns",
+          sheetName: sheet.name,
+          start: index,
+          count: 1,
+          entries: [entry]
+        });
+      });
       sheet.metadata?.rowMetadata?.forEach(({ start, count, size, hidden }) => {
         ops.push({
           kind: "updateRowMetadata",
@@ -1259,6 +1462,8 @@ export class SpreadsheetEngine {
   }
 
   private exportSheetMetadata(sheetName: string): SheetMetadataSnapshot | undefined {
+    const rows = this.workbook.listRowAxisEntries(sheetName);
+    const columns = this.workbook.listColumnAxisEntries(sheetName);
     const rowMetadata = this.axisMetadataToSnapshot(this.workbook.listRowMetadata(sheetName));
     const columnMetadata = this.axisMetadataToSnapshot(this.workbook.listColumnMetadata(sheetName));
     const freezePane = this.freezePaneToSnapshot(this.workbook.getFreezePane(sheetName));
@@ -1269,7 +1474,9 @@ export class SpreadsheetEngine {
     }));
 
     if (
-      rowMetadata.length === 0
+      rows.length === 0
+      && columns.length === 0
+      && rowMetadata.length === 0
       && columnMetadata.length === 0
       && freezePane === undefined
       && filters.length === 0
@@ -1279,6 +1486,12 @@ export class SpreadsheetEngine {
     }
 
     const metadata: SheetMetadataSnapshot = {};
+    if (rows.length > 0) {
+      metadata.rows = rows;
+    }
+    if (columns.length > 0) {
+      metadata.columns = columns;
+    }
     if (rowMetadata.length > 0) {
       metadata.rowMetadata = rowMetadata;
     }
@@ -1299,6 +1512,12 @@ export class SpreadsheetEngine {
 
   private sheetMetadataToOps(sheetName: string): EngineOp[] {
     const ops: EngineOp[] = [];
+    this.workbook.listRowAxisEntries(sheetName).forEach((entry) => {
+      ops.push({ kind: "insertRows", sheetName, start: entry.index, count: 1, entries: [entry] });
+    });
+    this.workbook.listColumnAxisEntries(sheetName).forEach((entry) => {
+      ops.push({ kind: "insertColumns", sheetName, start: entry.index, count: 1, entries: [entry] });
+    });
     this.workbook.listRowMetadata(sheetName).forEach((record) => {
       ops.push({
         kind: "updateRowMetadata",
@@ -1360,24 +1579,273 @@ export class SpreadsheetEngine {
     return { rows: record.rows, cols: record.cols };
   }
 
-  private rebindDefinedNameDependents(names: readonly string[], formulaChangedCount: number): number {
-    names.forEach((name) => {
-      const dependents = this.reverseDefinedNameEdges.get(name);
-      if (!dependents) {
+  private captureRowRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
+    return this.captureAxisRangeCellState(sheetName, "row", start, count);
+  }
+
+  private captureColumnRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
+    return this.captureAxisRangeCellState(sheetName, "column", start, count);
+  }
+
+  private captureAxisRangeCellState(
+    sheetName: string,
+    axis: "row" | "column",
+    start: number,
+    count: number
+  ): EngineOp[] {
+    const sheet = this.workbook.getSheet(sheetName);
+    if (!sheet) {
+      return [];
+    }
+    const captured: Array<{ cellIndex: number; row: number; col: number }> = [];
+    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
+      const index = axis === "row" ? row : col;
+      if (index >= start && index < start + count) {
+        captured.push({ cellIndex, row, col });
+      }
+    });
+    captured.sort((left, right) => left.row - right.row || left.col - right.col);
+    return captured.flatMap(({ cellIndex, row, col }) =>
+      this.toCellStateOps(sheetName, formatAddress(row, col), this.getCellByIndex(cellIndex)));
+  }
+
+  private applyStructuralAxisOp(
+    op: Extract<
+      EngineOp,
+      {
+        kind:
+          | "insertRows"
+          | "deleteRows"
+          | "moveRows"
+          | "insertColumns"
+          | "deleteColumns"
+          | "moveColumns";
+      }
+    >
+  ): { changedCellIndices: number[]; formulaCellIndices: number[] } {
+    const axis = op.kind.includes("Rows") ? "row" : "column";
+    const transform = structuralTransformForOp(op);
+    const sheetName = op.sheetName;
+
+    this.rewriteDefinedNamesForStructuralTransform(sheetName, transform);
+    this.rewriteCellFormulasForStructuralTransform(sheetName, transform);
+    this.rewriteWorkbookMetadataForStructuralTransform(sheetName, transform);
+
+    switch (op.kind) {
+      case "insertRows":
+        this.workbook.insertRows(sheetName, op.start, op.count, op.entries);
+        break;
+      case "deleteRows":
+        this.workbook.deleteRows(sheetName, op.start, op.count);
+        break;
+      case "moveRows":
+        this.workbook.moveRows(sheetName, op.start, op.count, op.target);
+        break;
+      case "insertColumns":
+        this.workbook.insertColumns(sheetName, op.start, op.count, op.entries);
+        break;
+      case "deleteColumns":
+        this.workbook.deleteColumns(sheetName, op.start, op.count);
+        break;
+      case "moveColumns":
+        this.workbook.moveColumns(sheetName, op.start, op.count, op.target);
+        break;
+      default:
+        return assertNever(op);
+    }
+
+    const remapped = this.workbook.remapSheetCells(sheetName, axis, (index) => mapStructuralAxisIndex(index, transform));
+    remapped.removedCellIndices.forEach((cellIndex) => {
+      this.clearDerivedCellArtifacts(cellIndex);
+      this.removeFormula(cellIndex);
+      this.workbook.setCellFormat(cellIndex, null);
+      this.workbook.cellStore.setValue(cellIndex, emptyValue());
+      this.workbook.cellStore.flags[cellIndex] =
+        (this.workbook.cellStore.flags[cellIndex] ?? 0)
+        & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput);
+    });
+
+    this.clearAllSpillMetadata();
+    this.clearPivotOutputsForSheet(sheetName);
+    const formulaCellIndices = this.rebuildAllFormulaBindings();
+    return {
+      changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
+      formulaCellIndices
+    };
+  }
+
+  private rewriteDefinedNamesForStructuralTransform(sheetName: string, transform: StructuralAxisTransform): void {
+    this.workbook.listDefinedNames().forEach((record) => {
+      if (typeof record.value !== "string" || !record.value.startsWith("=")) {
         return;
       }
-      dependents.forEach((cellIndex) => {
-        const formula = this.formulas.get(cellIndex);
-        const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-        if (formula && ownerSheetName) {
-          const compiled = this.compileFormulaForSheet(formula.source);
-          const dependencies = this.materializeDependencies(ownerSheetName, compiled);
-          this.setFormula(cellIndex, formula.source, compiled, dependencies);
+      const nextFormula = rewriteFormulaForStructuralTransform(record.value.slice(1), sheetName, sheetName, transform);
+      if (`=${nextFormula}` !== record.value) {
+        this.workbook.setDefinedName(record.name, `=${nextFormula}`);
+      }
+    });
+  }
+
+  private rewriteCellFormulasForStructuralTransform(sheetName: string, transform: StructuralAxisTransform): void {
+    this.formulas.forEach((formula, cellIndex) => {
+      const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+      formula.source = rewriteFormulaForStructuralTransform(formula.source, ownerSheetName, sheetName, transform);
+    });
+  }
+
+  private rewriteWorkbookMetadataForStructuralTransform(sheetName: string, transform: StructuralAxisTransform): void {
+    this.workbook.listTables()
+      .filter((table) => table.sheetName === sheetName)
+      .forEach((table) => {
+        const range = rewriteRangeForStructuralTransform(table.startAddress, table.endAddress, transform);
+        if (!range) {
+          this.workbook.deleteTable(table.name);
+          return;
         }
-        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+        this.workbook.setTable({ ...table, startAddress: range.startAddress, endAddress: range.endAddress });
+      });
+    this.workbook.listFilters(sheetName).forEach((filter) => {
+      const range = rewriteRangeForStructuralTransform(filter.range.startAddress, filter.range.endAddress, transform);
+      this.workbook.deleteFilter(sheetName, filter.range);
+      if (range) {
+        this.workbook.setFilter(sheetName, { ...filter.range, startAddress: range.startAddress, endAddress: range.endAddress });
+      }
+    });
+    this.workbook.listSorts(sheetName).forEach((sort) => {
+      const range = rewriteRangeForStructuralTransform(sort.range.startAddress, sort.range.endAddress, transform);
+      this.workbook.deleteSort(sheetName, sort.range);
+      if (!range) {
+        return;
+      }
+      this.workbook.setSort(
+        sheetName,
+        { ...sort.range, startAddress: range.startAddress, endAddress: range.endAddress },
+        sort.keys.map((key) => ({
+          ...key,
+          keyAddress: rewriteAddressForStructuralTransform(key.keyAddress, transform) ?? key.keyAddress
+        }))
+      );
+    });
+    const freezePane = this.workbook.getFreezePane(sheetName);
+    if (freezePane) {
+      const nextRows = transform.axis === "row" ? mapStructuralBoundary(freezePane.rows, transform) : freezePane.rows;
+      const nextCols = transform.axis === "column" ? mapStructuralBoundary(freezePane.cols, transform) : freezePane.cols;
+      if (nextRows <= 0 && nextCols <= 0) {
+        this.workbook.clearFreezePane(sheetName);
+      } else {
+        this.workbook.setFreezePane(sheetName, nextRows, nextCols);
+      }
+    }
+    this.workbook.listPivots().forEach((pivot) => {
+      const nextAddress = pivot.sheetName === sheetName
+        ? rewriteAddressForStructuralTransform(pivot.address, transform)
+        : pivot.address;
+      const nextSource = pivot.source.sheetName === sheetName
+        ? rewriteRangeForStructuralTransform(pivot.source.startAddress, pivot.source.endAddress, transform)
+        : { startAddress: pivot.source.startAddress, endAddress: pivot.source.endAddress };
+      if (!nextAddress || !nextSource) {
+        this.workbook.deletePivot(pivot.sheetName, pivot.address);
+        return;
+      }
+      this.workbook.setPivot({
+        ...pivot,
+        address: nextAddress,
+        source: { ...pivot.source, startAddress: nextSource.startAddress, endAddress: nextSource.endAddress }
       });
     });
+  }
+
+  private clearAllSpillMetadata(): void {
+    this.workbook.listSpills().forEach((spill) => {
+      this.workbook.deleteSpill(spill.sheetName, spill.address);
+    });
+  }
+
+  private clearPivotOutputsForSheet(sheetName: string): void {
+    this.workbook.listPivots()
+      .filter((pivot) => pivot.sheetName === sheetName)
+      .forEach((pivot) => {
+        this.clearOwnedPivot(pivot);
+      });
+  }
+
+  private clearDerivedCellArtifacts(cellIndex: number): void {
+    this.pivotOutputOwners.delete(cellIndex);
+  }
+
+  private rebuildAllFormulaBindings(): number[] {
+    const pending = [...this.formulas.entries()].map(([cellIndex, formula]) => ({ cellIndex, source: formula.source }));
+    this.formulas.clear();
+    this.ranges.reset();
+    this.edgeArena.reset();
+    this.programArena.reset();
+    this.constantArena.reset();
+    this.rangeListArena.reset();
+    this.reverseCellEdges = [];
+    this.reverseRangeEdges = [];
+    this.reverseDefinedNameEdges.clear();
+    this.reverseTableEdges.clear();
+    this.reverseSpillEdges.clear();
+
+    const activeCellIndices: number[] = [];
+    pending.forEach(({ cellIndex, source }) => {
+      const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+      if (!ownerSheetName || !this.workbook.getSheet(ownerSheetName)) {
+        return;
+      }
+      try {
+        const compiled = this.compileFormulaForSheet(ownerSheetName, source);
+        const dependencies = this.materializeDependencies(ownerSheetName, compiled);
+        this.setFormula(cellIndex, source, compiled, dependencies);
+      } catch {
+        this.setInvalidFormulaValue(cellIndex);
+      }
+      activeCellIndices.push(cellIndex);
+    });
+    return activeCellIndices;
+  }
+
+  private collectTrackedDependents(
+    registry: Map<string, Set<number>>,
+    keys: readonly string[]
+  ): number[] {
+    const candidates = new Set<number>();
+    keys.forEach((key) => {
+      registry.get(key)?.forEach((cellIndex) => {
+        candidates.add(cellIndex);
+      });
+    });
+    return [...candidates];
+  }
+
+  private rebindFormulaCells(candidates: readonly number[], formulaChangedCount: number): number {
+    candidates.forEach((cellIndex) => {
+      const formula = this.formulas.get(cellIndex);
+      const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+      if (formula && ownerSheetName) {
+        const compiled = this.compileFormulaForSheet(ownerSheetName, formula.source);
+        const dependencies = this.materializeDependencies(ownerSheetName, compiled);
+        this.setFormula(cellIndex, formula.source, compiled, dependencies);
+      }
+      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+    });
     return formulaChangedCount;
+  }
+
+  private rebindTrackedDependents(
+    registry: Map<string, Set<number>>,
+    keys: readonly string[],
+    formulaChangedCount: number
+  ): number {
+    return this.rebindFormulaCells(this.collectTrackedDependents(registry, keys), formulaChangedCount);
+  }
+
+  private rebindDefinedNameDependents(names: readonly string[], formulaChangedCount: number): number {
+    return this.rebindTrackedDependents(this.reverseDefinedNameEdges, names, formulaChangedCount);
+  }
+
+  private rebindTableDependents(tableNames: readonly string[], formulaChangedCount: number): number {
+    return this.rebindTrackedDependents(this.reverseTableEdges, tableNames, formulaChangedCount);
   }
 
   private reconcilePivotOutputs(baseChanged: U32, forceAllPivots = false): U32 {
@@ -1820,9 +2288,11 @@ export class SpreadsheetEngine {
     const order = batchOpOrder(batch, 0);
     switch (op.kind) {
       case "upsertSpillRange":
-      case "deleteSpillRange":
-        this.applySpillRangeOp(op, order);
-        return [];
+      case "deleteSpillRange": {
+        const candidates = this.applySpillRangeOp(op, order);
+        this.rebindFormulaCells(candidates, 0);
+        return candidates;
+      }
       case "upsertPivotTable":
         this.applyPivotUpsertOp(op, order);
         return [];
@@ -1836,13 +2306,15 @@ export class SpreadsheetEngine {
   private applySpillRangeOp(
     op: Extract<EngineOp, { kind: "upsertSpillRange" | "deleteSpillRange" }>,
     order: OpOrder
-  ): void {
+  ): number[] {
     if (op.kind === "upsertSpillRange") {
       this.workbook.setSpill(op.sheetName, op.address, op.rows, op.cols);
     } else {
       this.workbook.deleteSpill(op.sheetName, op.address);
     }
     this.entityVersions.set(this.entityKeyForOp(op), order);
+    const spillKey = spillDependencyKey(op.sheetName, op.address);
+    return this.collectTrackedDependents(this.reverseSpillEdges, [spillKey]);
   }
 
   private applyPivotUpsertOp(
@@ -1913,6 +2385,14 @@ export class SpreadsheetEngine {
             this.workbook.setWorkbookProperty(op.key, op.value);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
+          case "setCalculationSettings":
+            this.workbook.setCalculationSettings(op.settings);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          case "setVolatileContext":
+            this.workbook.setVolatileContext(op.context);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "upsertSheet":
             this.workbook.createSheet(op.name, op.order);
             this.entityVersions.set(this.entityKeyForOp(op), order);
@@ -1920,9 +2400,9 @@ export class SpreadsheetEngine {
             if (!tombstone || compareOpOrder(order, tombstone) > 0) {
               this.sheetDeleteVersions.delete(op.name);
             }
-            const reboundCount = formulaChangedCount;
+            const sheetReboundCount = formulaChangedCount;
             formulaChangedCount = this.rebindFormulasForSheet(op.name, formulaChangedCount);
-            topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
+            topologyChanged = topologyChanged || formulaChangedCount !== sheetReboundCount;
             refreshAllPivots = true;
             break;
           case "deleteSheet":
@@ -1936,6 +2416,24 @@ export class SpreadsheetEngine {
             sheetDeleted = true;
             refreshAllPivots = true;
             break;
+          case "insertRows":
+          case "deleteRows":
+          case "moveRows":
+          case "insertColumns":
+          case "deleteColumns":
+          case "moveColumns": {
+            const structural = this.applyStructuralAxisOp(op);
+            structural.changedCellIndices.forEach((cellIndex) => {
+              explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
+            });
+            structural.formulaCellIndices.forEach((cellIndex) => {
+              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+            });
+            topologyChanged = true;
+            refreshAllPivots = true;
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          }
           case "updateRowMetadata":
             this.workbook.setRowMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
             this.entityVersions.set(this.entityKeyForOp(op), order);
@@ -1970,17 +2468,35 @@ export class SpreadsheetEngine {
             break;
           case "upsertTable":
             this.workbook.setTable(op.table);
+            {
+              const tableReboundCount = formulaChangedCount;
+              formulaChangedCount = this.rebindTableDependents([tableDependencyKey(op.table.name)], formulaChangedCount);
+              topologyChanged = topologyChanged || formulaChangedCount !== tableReboundCount;
+            }
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "deleteTable":
             this.workbook.deleteTable(op.name);
+            {
+              const tableReboundCount = formulaChangedCount;
+              formulaChangedCount = this.rebindTableDependents([tableDependencyKey(op.name)], formulaChangedCount);
+              topologyChanged = topologyChanged || formulaChangedCount !== tableReboundCount;
+            }
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "upsertSpillRange":
-            this.applySpillRangeOp(op, order);
+            {
+              const spillReboundCount = formulaChangedCount;
+              formulaChangedCount = this.rebindFormulaCells(this.applySpillRangeOp(op, order), formulaChangedCount);
+              topologyChanged = topologyChanged || formulaChangedCount !== spillReboundCount;
+            }
             break;
           case "deleteSpillRange":
-            this.applySpillRangeOp(op, order);
+            {
+              const spillReboundCount = formulaChangedCount;
+              formulaChangedCount = this.rebindFormulaCells(this.applySpillRangeOp(op, order), formulaChangedCount);
+              topologyChanged = topologyChanged || formulaChangedCount !== spillReboundCount;
+            }
             break;
           case "setCellValue": {
             const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
@@ -2013,7 +2529,7 @@ export class SpreadsheetEngine {
             changedInputCount = this.markSpillRootsChanged(this.clearOwnedSpill(cellIndex), changedInputCount);
             const compileStarted = performance.now();
             try {
-              const compiled = this.compileFormulaForSheet(op.formula);
+              const compiled = this.compileFormulaForSheet(op.sheetName, op.formula);
               this.lastMetrics.compileMs = performance.now() - compileStarted;
               const dependencies = this.materializeDependencies(op.sheetName, compiled);
               this.setFormula(cellIndex, op.formula, compiled, dependencies);
@@ -2057,14 +2573,18 @@ export class SpreadsheetEngine {
           case "upsertDefinedName": {
             const normalizedName = normalizeDefinedName(op.name);
             this.workbook.setDefinedName(op.name, op.value);
+            const nameReboundCount = formulaChangedCount;
             formulaChangedCount = this.rebindDefinedNameDependents([normalizedName], formulaChangedCount);
+            topologyChanged = topologyChanged || formulaChangedCount !== nameReboundCount;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
           case "deleteDefinedName": {
             const normalizedName = normalizeDefinedName(op.name);
             this.workbook.deleteDefinedName(op.name);
+            const nameReboundCount = formulaChangedCount;
             formulaChangedCount = this.rebindDefinedNameDependents([normalizedName], formulaChangedCount);
+            topologyChanged = topologyChanged || formulaChangedCount !== nameReboundCount;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
@@ -2152,6 +2672,10 @@ export class SpreadsheetEngine {
         const existing = this.workbook.getWorkbookProperty(op.key);
         return [{ kind: "setWorkbookMetadata", key: op.key, value: existing?.value ?? null }];
       }
+      case "setCalculationSettings":
+        return [{ kind: "setCalculationSettings", settings: this.workbook.getCalculationSettings() }];
+      case "setVolatileContext":
+        return [{ kind: "setVolatileContext", context: this.workbook.getVolatileContext() }];
       case "upsertSheet": {
         const existing = this.workbook.getSheet(op.name);
         if (!existing) {
@@ -2224,6 +2748,28 @@ export class SpreadsheetEngine {
         }
         return restoredOps;
       }
+      case "insertRows":
+        return [{ kind: "deleteRows", sheetName: op.sheetName, start: op.start, count: op.count }];
+      case "deleteRows": {
+        const entries = this.workbook.materializeRowAxisEntries(op.sheetName, op.start, op.count);
+        return [
+          { kind: "insertRows", sheetName: op.sheetName, start: op.start, count: op.count, entries },
+          ...this.captureRowRangeCellState(op.sheetName, op.start, op.count)
+        ];
+      }
+      case "moveRows":
+        return [{ kind: "moveRows", sheetName: op.sheetName, start: op.target, count: op.count, target: op.start }];
+      case "insertColumns":
+        return [{ kind: "deleteColumns", sheetName: op.sheetName, start: op.start, count: op.count }];
+      case "deleteColumns": {
+        const entries = this.workbook.materializeColumnAxisEntries(op.sheetName, op.start, op.count);
+        return [
+          { kind: "insertColumns", sheetName: op.sheetName, start: op.start, count: op.count, entries },
+          ...this.captureColumnRangeCellState(op.sheetName, op.start, op.count)
+        ];
+      }
+      case "moveColumns":
+        return [{ kind: "moveColumns", sheetName: op.sheetName, start: op.target, count: op.count, target: op.start }];
       case "updateRowMetadata": {
         const existing = this.workbook.getRowMetadata(op.sheetName, op.start, op.count);
         return [{
@@ -2680,6 +3226,12 @@ export class SpreadsheetEngine {
     runtimeFormula.compiled.symbolicNames.forEach((name) => {
       this.appendDefinedNameReverseEdge(name, cellIndex);
     });
+    runtimeFormula.compiled.symbolicTables.forEach((name) => {
+      this.appendTrackedReverseEdge(this.reverseTableEdges, tableDependencyKey(name), cellIndex);
+    });
+    runtimeFormula.compiled.symbolicSpills.forEach((key) => {
+      this.appendTrackedReverseEdge(this.reverseSpillEdges, spillDependencyKeyFromRef(key, this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!)), cellIndex);
+    });
     this.scheduleWasmProgramSync();
   }
 
@@ -2701,6 +3253,13 @@ export class SpreadsheetEngine {
       }
       existing.compiled.symbolicNames.forEach((name) => {
         this.removeDefinedNameReverseEdge(name, cellIndex);
+      });
+      existing.compiled.symbolicTables.forEach((name) => {
+        this.removeTrackedReverseEdge(this.reverseTableEdges, tableDependencyKey(name), cellIndex);
+      });
+      const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+      existing.compiled.symbolicSpills.forEach((key) => {
+        this.removeTrackedReverseEdge(this.reverseSpillEdges, spillDependencyKeyFromRef(key, ownerSheetName), cellIndex);
       });
       for (let index = 0; index < existing.rangeDependencies.length; index += 1) {
         const rangeIndex = existing.rangeDependencies[index]!;
@@ -2928,6 +3487,7 @@ export class SpreadsheetEngine {
         wasmBatchCount = 0;
         wasmBatchHasVolatile = false;
         wasmBatchRandCount = 0;
+        jsCount += 1;
         const spillChanges = this.evaluateUnsupportedFormula(cellIndex);
         noteSpillChanges(spillChanges);
         queueKernelSync(cellIndex);
@@ -3111,28 +3671,143 @@ export class SpreadsheetEngine {
   }
 
   private evaluateUnsupportedFormula(cellIndex: number): number[] {
-    const changedCellIndices = this.clearOwnedSpill(cellIndex);
+    const formula = this.formulas.get(cellIndex);
+    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+    if (!formula || !sheetName) {
+      return [];
+    }
+
+    const result = evaluatePlanResult(formula.compiled.jsPlan, {
+      sheetName,
+      resolveCell: (targetSheetName, address) => this.readCellValue(targetSheetName, address),
+      resolveRange: (targetSheetName, start, end, refKind) => this.readRangeValues(targetSheetName, start, end, refKind),
+      resolveName: (name) => {
+        const definedName = this.workbook.getDefinedName(name);
+        if (!definedName) {
+          return errorValue(ErrorCode.Name);
+        }
+        return literalToValue(definedName.value, this.strings);
+      }
+    });
+
+    const materialization = isArrayValue(result)
+      ? this.materializeSpill(cellIndex, result)
+      : {
+          changedCellIndices: this.clearOwnedSpill(cellIndex),
+          ownerValue: result
+        };
+
     this.workbook.cellStore.flags[cellIndex] =
       (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput);
-    this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Value));
-    return changedCellIndices;
+    this.workbook.cellStore.setValue(
+      cellIndex,
+      materialization.ownerValue,
+      materialization.ownerValue.tag === ValueTag.String ? this.strings.intern(materialization.ownerValue.value) : 0
+    );
+    return materialization.changedCellIndices;
   }
 
-  private compileFormulaForSheet(source: string): ReturnType<typeof compileFormula> {
+  private compileFormulaForSheet(currentSheetName: string, source: string): ReturnType<typeof compileFormula> {
     const compiled = compileFormula(source);
-    if (compiled.symbolicNames.length === 0) {
+    if (
+      compiled.symbolicNames.length === 0
+      && compiled.symbolicTables.length === 0
+      && compiled.symbolicSpills.length === 0
+    ) {
       return compiled;
     }
 
-    const resolved = resolveDefinedNamesInAst(parseFormula(source), (name) => this.workbook.getDefinedName(name)?.value);
+    const resolved = resolveMetadataReferencesInAst(compiled.ast, {
+      resolveName: (name) => this.workbook.getDefinedName(name)?.value,
+      resolveStructuredReference: (tableName, columnName) => this.resolveStructuredReference(tableName, columnName),
+      resolveSpillReference: (sheetName, address) => this.resolveSpillReference(currentSheetName, sheetName, address)
+    });
     if (!resolved.substituted || !resolved.fullyResolved) {
       return compiled;
     }
 
     return compileFormulaAst(source, resolved.node, {
       originalAst: compiled.ast,
-      symbolicNames: compiled.symbolicNames
+      symbolicNames: compiled.symbolicNames,
+      symbolicTables: compiled.symbolicTables,
+      symbolicSpills: compiled.symbolicSpills
     });
+  }
+
+  private resolveStructuredReference(tableName: string, columnName: string): FormulaNode | undefined {
+    const table = this.workbook.getTable(tableName);
+    if (!table) {
+      return undefined;
+    }
+    const columnIndex = table.columnNames.findIndex((name) => name.trim().toUpperCase() === columnName.trim().toUpperCase());
+    if (columnIndex === -1) {
+      return undefined;
+    }
+    const start = parseCellAddress(table.startAddress, table.sheetName);
+    const end = parseCellAddress(table.endAddress, table.sheetName);
+    const startRow = start.row + (table.headerRow ? 1 : 0);
+    const endRow = end.row - (table.totalsRow ? 1 : 0);
+    if (endRow < startRow) {
+      return { kind: "ErrorLiteral", code: ErrorCode.Ref };
+    }
+    const column = start.col + columnIndex;
+    return {
+      kind: "RangeRef",
+      refKind: "cells",
+      sheetName: table.sheetName,
+      start: formatAddress(startRow, column),
+      end: formatAddress(endRow, column)
+    };
+  }
+
+  private resolveSpillReference(
+    currentSheetName: string,
+    sheetName: string | undefined,
+    address: string
+  ): FormulaNode | undefined {
+    const targetSheetName = sheetName ?? currentSheetName;
+    const spill = this.workbook.getSpill(targetSheetName, address);
+    if (!spill) {
+      return undefined;
+    }
+    const owner = parseCellAddress(address, targetSheetName);
+    return {
+      kind: "RangeRef",
+      refKind: "cells",
+      sheetName: targetSheetName,
+      start: owner.text,
+      end: formatAddress(owner.row + spill.rows - 1, owner.col + spill.cols - 1)
+    };
+  }
+
+  private readCellValue(sheetName: string, address: string): CellValue {
+    const cellIndex = this.workbook.getCellIndex(sheetName, address);
+    if (cellIndex === undefined) {
+      return emptyValue();
+    }
+    return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+  }
+
+  private readRangeValues(
+    sheetName: string,
+    start: string,
+    end: string,
+    refKind: "cells" | "rows" | "cols"
+  ): CellValue[] {
+    if (refKind !== "cells") {
+      return [];
+    }
+    const range = parseRangeAddress(`${start}:${end}`, sheetName);
+    if (range.kind !== "cells") {
+      return [];
+    }
+    const values: CellValue[] = [];
+    for (let row = range.start.row; row <= range.end.row; row += 1) {
+      for (let col = range.start.col; col <= range.end.col; col += 1) {
+        values.push(this.readCellValue(sheetName, formatAddress(row, col)));
+      }
+    }
+    return values;
   }
 
   private syncWasmPrograms(): void {
@@ -3255,24 +3930,38 @@ export class SpreadsheetEngine {
   }
 
   private appendDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
-    const normalizedName = normalizeDefinedName(name);
-    const existing = this.reverseDefinedNameEdges.get(normalizedName);
+    this.appendTrackedReverseEdge(this.reverseDefinedNameEdges, normalizeDefinedName(name), dependentCellIndex);
+  }
+
+  private removeDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
+    this.removeTrackedReverseEdge(this.reverseDefinedNameEdges, normalizeDefinedName(name), dependentCellIndex);
+  }
+
+  private appendTrackedReverseEdge(
+    registry: Map<string, Set<number>>,
+    key: string,
+    dependentCellIndex: number
+  ): void {
+    const existing = registry.get(key);
     if (existing) {
       existing.add(dependentCellIndex);
       return;
     }
-    this.reverseDefinedNameEdges.set(normalizedName, new Set([dependentCellIndex]));
+    registry.set(key, new Set([dependentCellIndex]));
   }
 
-  private removeDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
-    const normalizedName = normalizeDefinedName(name);
-    const existing = this.reverseDefinedNameEdges.get(normalizedName);
+  private removeTrackedReverseEdge(
+    registry: Map<string, Set<number>>,
+    key: string,
+    dependentCellIndex: number
+  ): void {
+    const existing = registry.get(key);
     if (!existing) {
       return;
     }
     existing.delete(dependentCellIndex);
     if (existing.size === 0) {
-      this.reverseDefinedNameEdges.delete(normalizedName);
+      registry.delete(key);
     }
   }
 
@@ -3370,9 +4059,21 @@ export class SpreadsheetEngine {
         return "workbook";
       case "setWorkbookMetadata":
         return `workbook-meta:${op.key}`;
+      case "setCalculationSettings":
+        return "workbook-calc";
+      case "setVolatileContext":
+        return "workbook-volatile";
       case "upsertSheet":
       case "deleteSheet":
         return `sheet:${op.name}`;
+      case "insertRows":
+      case "deleteRows":
+      case "moveRows":
+        return `row-structure:${op.sheetName}`;
+      case "insertColumns":
+      case "deleteColumns":
+      case "moveColumns":
+        return `column-structure:${op.sheetName}`;
       case "updateRowMetadata":
         return `row-meta:${op.sheetName}:${op.start}:${op.count}`;
       case "updateColumnMetadata":
@@ -3412,6 +4113,8 @@ export class SpreadsheetEngine {
     switch (op.kind) {
       case "upsertWorkbook":
       case "setWorkbookMetadata":
+      case "setCalculationSettings":
+      case "setVolatileContext":
       case "deleteSheet":
       case "upsertDefinedName":
       case "deleteDefinedName":
@@ -3420,6 +4123,12 @@ export class SpreadsheetEngine {
         return undefined;
       case "updateRowMetadata":
       case "updateColumnMetadata":
+      case "insertRows":
+      case "deleteRows":
+      case "moveRows":
+      case "insertColumns":
+      case "deleteColumns":
+      case "moveColumns":
       case "setFreezePane":
       case "clearFreezePane":
       case "setFilter":
@@ -3499,7 +4208,7 @@ export class SpreadsheetEngine {
           return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
         });
         if (!touchesSheet) continue;
-        const compiled = this.compileFormulaForSheet(formula.source);
+        const compiled = this.compileFormulaForSheet(ownerSheetName, formula.source);
         const dependencies = this.materializeDependencies(ownerSheetName, compiled);
         this.setFormula(cellIndex, formula.source, compiled, dependencies);
         formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
@@ -3517,7 +4226,7 @@ export class SpreadsheetEngine {
         return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
       });
       if (!touchesSheet) return;
-      const compiled = this.compileFormulaForSheet(formula.source);
+      const compiled = this.compileFormulaForSheet(ownerSheetName, formula.source);
       const dependencies = this.materializeDependencies(ownerSheetName, compiled);
       this.setFormula(cellIndex, formula.source, compiled, dependencies);
       formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
@@ -3758,7 +4467,7 @@ export class SpreadsheetEngine {
         }
       }
     }
-    this.applyDerivedOp({ kind: "deleteSpillRange", sheetName, address });
+    changedCellIndices.push(...this.applyDerivedOp({ kind: "deleteSpillRange", sheetName, address }));
     return changedCellIndices;
   }
 
@@ -3808,13 +4517,13 @@ export class SpreadsheetEngine {
     }
 
     if (arrayValue.rows > 1 || arrayValue.cols > 1) {
-      this.applyDerivedOp({
+      changedCellIndices.push(...this.applyDerivedOp({
         kind: "upsertSpillRange",
         sheetName,
         address,
         rows: arrayValue.rows,
         cols: arrayValue.cols
-      });
+      }));
     }
 
     return {
@@ -3906,6 +4615,8 @@ export class SpreadsheetEngine {
     this.reverseCellEdges = [];
     this.reverseRangeEdges = [];
     this.reverseDefinedNameEdges.clear();
+    this.reverseTableEdges.clear();
+    this.reverseSpillEdges.clear();
     this.pivotOutputOwners.clear();
     this.ranges.reset();
     this.edgeArena.reset();
@@ -3973,6 +4684,77 @@ function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32A
   next.set(indices);
   next[indices.length] = cellIndex;
   return next;
+}
+
+function structuralTransformForOp(
+  op: Extract<
+    EngineOp,
+    {
+      kind:
+        | "insertRows"
+        | "deleteRows"
+        | "moveRows"
+        | "insertColumns"
+        | "deleteColumns"
+        | "moveColumns";
+    }
+  >
+): StructuralAxisTransform {
+  switch (op.kind) {
+    case "insertRows":
+      return { kind: "insert", axis: "row", start: op.start, count: op.count };
+    case "deleteRows":
+      return { kind: "delete", axis: "row", start: op.start, count: op.count };
+    case "moveRows":
+      return { kind: "move", axis: "row", start: op.start, count: op.count, target: op.target };
+    case "insertColumns":
+      return { kind: "insert", axis: "column", start: op.start, count: op.count };
+    case "deleteColumns":
+      return { kind: "delete", axis: "column", start: op.start, count: op.count };
+    case "moveColumns":
+      return { kind: "move", axis: "column", start: op.start, count: op.count, target: op.target };
+    default:
+      return assertNever(op);
+  }
+}
+
+function mapStructuralAxisIndex(index: number, transform: StructuralAxisTransform): number | undefined {
+  switch (transform.kind) {
+    case "insert":
+      return index >= transform.start ? index + transform.count : index;
+    case "delete":
+      if (index < transform.start) {
+        return index;
+      }
+      if (index >= transform.start + transform.count) {
+        return index - transform.count;
+      }
+      return undefined;
+    case "move":
+      if (transform.target < transform.start) {
+        if (index >= transform.target && index < transform.start) {
+          return index + transform.count;
+        }
+      } else if (transform.target > transform.start) {
+        if (index >= transform.start + transform.count && index < transform.target + transform.count) {
+          return index - transform.count;
+        }
+      }
+      if (index >= transform.start && index < transform.start + transform.count) {
+        return transform.target + (index - transform.start);
+      }
+      return index;
+    default:
+      return assertNever(transform);
+  }
+}
+
+function mapStructuralBoundary(boundary: number, transform: StructuralAxisTransform): number {
+  if (boundary <= 0) {
+    return 0;
+  }
+  const mapped = mapStructuralAxisIndex(boundary - 1, transform);
+  return mapped === undefined ? 0 : mapped + 1;
 }
 
 function normalizeRange(range: CellRangeRef): {

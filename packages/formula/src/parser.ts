@@ -7,6 +7,8 @@ import type {
   NameRefNode,
   RangeRefNode,
   RowRefNode,
+  SpillRefNode,
+  StructuredRefNode,
   UnaryExprNode
 } from "./ast.js";
 import { isCellReferenceText, isColumnReferenceText, isRowReferenceText } from "./addressing.js";
@@ -87,6 +89,26 @@ export function parseFormula(source: string): FormulaNode {
       : ({ kind: "NameRef", name: identifier } satisfies NameRefNode);
   }
 
+  function parseStructuredReference(tableName: string): StructuredRefNode {
+    eat("lbracket");
+    const token = current();
+    if (
+      token.kind !== "identifier"
+      && token.kind !== "quotedIdentifier"
+      && token.kind !== "string"
+      && token.kind !== "number"
+    ) {
+      throw new Error(`Expected a structured reference column, received ${token.kind}`);
+    }
+    eat(token.kind);
+    eat("rbracket");
+    return {
+      kind: "StructuredRef",
+      tableName,
+      columnName: token.value
+    };
+  }
+
   function parseSheetQualifiedReference(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode {
     const token = current();
     if (token.kind === "identifier") {
@@ -139,6 +161,8 @@ export function parseFormula(source: string): FormulaNode {
       case "UnaryExpr":
       case "BinaryExpr":
       case "CallExpr":
+      case "StructuredRef":
+      case "SpillRef":
       case "RangeRef":
         return undefined;
       case "NameRef":
@@ -155,6 +179,8 @@ export function parseFormula(source: string): FormulaNode {
       case "StringLiteral":
       case "ErrorLiteral":
       case "NameRef":
+      case "StructuredRef":
+      case "SpillRef":
       case "CellRef":
       case "RangeRef":
         return;
@@ -227,6 +253,8 @@ export function parseFormula(source: string): FormulaNode {
         }
         eat("rparen");
         result = { kind: "CallExpr", callee: first.toUpperCase(), args } satisfies CallExprNode;
+      } else if (current().kind === "lbracket") {
+        result = parseStructuredReference(first);
       } else {
         const upper = first.toUpperCase();
         if (upper === "TRUE" || upper === "FALSE") {
@@ -239,7 +267,23 @@ export function parseFormula(source: string): FormulaNode {
       throw new Error(`Unexpected token ${token.kind}`);
     }
 
-    while (current().kind === "percent") {
+    while (current().kind === "hash" || current().kind === "percent") {
+      if (current().kind === "hash") {
+        eat("hash");
+        if (result.kind !== "CellRef") {
+          throw new Error("Spill references must target a single cell");
+        }
+        const spill: SpillRefNode = {
+          kind: "SpillRef",
+          ref: result.ref
+        };
+        if (result.sheetName !== undefined) {
+          spill.sheetName = result.sheetName;
+        }
+        result = spill;
+        continue;
+      }
+
       eat("percent");
       result = {
         kind: "BinaryExpr",
