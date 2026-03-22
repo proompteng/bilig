@@ -22,7 +22,6 @@
 - Run the playground Playwright suite with `pnpm exec playwright test e2e/tests/playground.pw.ts --config playwright.config.ts`.
 - Run the product web-shell Playwright suite with `pnpm exec playwright test e2e/tests/web-shell.pw.ts --config playwright.web.config.ts`.
 - Run the full repository gate with `pnpm run ci`.
-- Run the local pre-push equivalent plus cleanliness checks with `pnpm run ci:strict`.
 - Use `tea` for Forgejo workflow checks and logs (for example `tea login ls`, `tea actions ls`, and `tea actions jobs --run <id>`).
 
 ## High-level architecture

@@ -18,7 +18,7 @@
     "protocol:generate": "node scripts/gen-protocol.mjs",
     "protocol:check": "node scripts/gen-protocol.mjs --check",
     "naming:check": "node scripts/check-canonical-naming.mjs",
-    "sheet:agent": "bun scripts/spreadsheet-agent.mjs",
+    "sheet:agent": "bun scripts/spreadsheet-agent.ts",
     "lint": "oxlint --config .oxlintrc.json --type-aware --disable-unicorn-plugin --deny-warnings packages apps e2e scripts",
     "lint:fix": "oxlint --config .oxlintrc.json --type-aware --disable-unicorn-plugin --fix packages apps e2e scripts",
     "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
@@ -33,8 +33,7 @@
     "publish:check": "node scripts/clean-package-builds.mjs && pnpm build && node scripts/check-package-publish.mjs",
     "release:check": "node scripts/release-check.mjs",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && node scripts/coverage-contracts.mjs && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check",
-    "ci:strict": "pnpm run ci && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "pnpm protocol:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && node scripts/coverage-contracts.mjs && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "repository": {
     "type": "git",
