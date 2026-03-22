@@ -31,6 +31,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Enable Corepack
         run: |
           set -eu

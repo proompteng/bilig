@@ -1,10 +1,12 @@
-import { execFileSync } from "node:child_process";
+#!/usr/bin/env bun
+
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
 const rootDir = resolve(new URL("..", import.meta.url).pathname);
 const packagesDir = join(rootDir, "packages");
 const packDir = join(rootDir, "build", "npm-packages");
+const textDecoder = new TextDecoder();
 
 const packageDirs = readdirSync(packagesDir)
   .map((name) => join(packagesDir, name))
@@ -22,10 +24,7 @@ for (const packageDir of packageDirs) {
 
   validateManifestShape(packageLabel, manifest, failures);
 
-  const tarballName = execFileSync("pnpm", ["pack", "--pack-destination", packDir], {
-    cwd: packageDir,
-    encoding: "utf8"
-  })
+  const tarballName = runTextCommand("pnpm", ["pack", "--pack-destination", packDir], { cwd: packageDir })
     .trim()
     .split("\n")
     .pop();
@@ -36,13 +35,13 @@ for (const packageDir of packageDirs) {
   }
 
   const tarballPath = isAbsolute(tarballName) ? tarballName : join(packDir, tarballName);
-  const tarEntries = execFileSync("tar", ["-tf", tarballPath], { encoding: "utf8" })
+  const tarEntries = runTextCommand("tar", ["-tf", tarballPath])
     .split("\n")
     .filter(Boolean);
 
   validateTarballContents(packageLabel, manifest, tarEntries, failures);
 
-  const packedManifest = JSON.parse(execFileSync("tar", ["-xOf", tarballPath, "package/package.json"], { encoding: "utf8" }));
+  const packedManifest = JSON.parse(runTextCommand("tar", ["-xOf", tarballPath, "package/package.json"]));
   validatePackedManifest(packageLabel, packedManifest, failures);
 }
 
@@ -60,6 +59,21 @@ console.log(
     2
   )
 );
+
+function runTextCommand(command, args, options = {}) {
+  const result = Bun.spawnSync([command, ...args], {
+    cwd: options.cwd,
+    env: process.env,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe"
+  });
+  if (result.exitCode !== 0) {
+    const stderr = textDecoder.decode(result.stderr).trim();
+    throw new Error(`Command failed: ${command} ${args.join(" ")}${stderr ? `\n${stderr}` : ""}`);
+  }
+  return textDecoder.decode(result.stdout);
+}
 
 function validateManifestShape(packageLabel, manifest, failureMessages) {
   const requiredFields = ["name", "version", "description", "license", "repository", "homepage", "bugs", "main", "types", "exports", "files"];

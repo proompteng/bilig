@@ -1,5 +1,7 @@
+#!/usr/bin/env bun
+
 import { gzipSync } from "node:zlib";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const budgets = {
@@ -27,7 +29,7 @@ async function findAssets() {
 }
 
 async function measureAsset(file) {
-  const bytes = await readFile(file);
+  const bytes = new Uint8Array(await Bun.file(file).arrayBuffer());
   return {
     file,
     rawBytes: bytes.byteLength,

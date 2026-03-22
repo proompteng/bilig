@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import { runEditBenchmark } from "../packages/benchmarks/src/benchmark-edit.ts";
 
 const { elapsedMs: elapsed, metrics, downstreamCount } = await runEditBenchmark(1_000);

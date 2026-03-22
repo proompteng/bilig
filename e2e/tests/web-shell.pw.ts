@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
 
@@ -12,8 +11,7 @@ const AGENT_STDIN_MAGIC = 0x41474e54;
 const AGENT_PROTOCOL_VERSION = 1;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const require = createRequire(import.meta.url);
-const tsxCliPath = require.resolve("tsx/cli");
+const bunExecutable = process.env["BUN_BIN"] ?? "bun";
 
 interface LocalDocumentStateSummary {
   documentId: string;
@@ -127,7 +125,7 @@ async function stopChildProcess(process: ChildProcess) {
 }
 
 async function startLocalServer(port: number) {
-  const child = spawn(process.execPath, [tsxCliPath, "apps/local-server/src/index.ts"], {
+  const child = spawn(bunExecutable, ["apps/local-server/src/index.ts"], {
     cwd: process.cwd(),
     env: {
       ...process.env,

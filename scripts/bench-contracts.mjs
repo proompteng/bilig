@@ -1,8 +1,9 @@
-import { spawnSync } from "node:child_process";
+#!/usr/bin/env bun
+
 import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("../", import.meta.url));
-const tsxBin = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
+const textDecoder = new TextDecoder();
 
 const baseBudgets = {
   load100kP95Ms: 1500,
@@ -64,16 +65,19 @@ function quantile(sortedValues, percentile) {
 
 function runBenchmarkScript(scriptRelativePath, arg) {
   const args = Array.isArray(arg) ? arg.map(String) : [String(arg)];
-  const result = spawnSync(tsxBin, [scriptRelativePath, ...args], {
+  const result = Bun.spawnSync([process.execPath, scriptRelativePath, ...args], {
     cwd: rootDir,
-    encoding: "utf8"
+    env: process.env,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe"
   });
-  if (result.status !== 0) {
+  if (result.exitCode !== 0) {
     throw new Error(
-      `Benchmark script failed (${scriptRelativePath} ${arg})\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
+      `Benchmark script failed (${scriptRelativePath} ${arg})\nstdout:\n${textDecoder.decode(result.stdout)}\nstderr:\n${textDecoder.decode(result.stderr)}`
     );
   }
-  return JSON.parse(result.stdout.trim());
+  return JSON.parse(textDecoder.decode(result.stdout).trim());
 }
 
 function sampleBenchmark(scriptRelativePath, arg, iterations) {

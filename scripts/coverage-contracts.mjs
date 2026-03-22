@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+#!/usr/bin/env bun
 
 const coveragePath = new URL("../coverage/coverage-final.json", import.meta.url);
 
@@ -9,7 +9,7 @@ const thresholds = [
 ];
 
 const ignoredSuffixes = ["/index.ts", "/snapshot.ts", "/ast.ts"];
-const coverage = JSON.parse(await readFile(coveragePath, "utf8"));
+const coverage = await Bun.file(coveragePath).json();
 
 function lineStatsForFile(fileCoverage) {
   const totalLines = new Set();

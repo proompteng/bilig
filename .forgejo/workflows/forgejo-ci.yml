@@ -36,6 +36,13 @@ jobs:
           pnpm --version
           test "$(pnpm --version)" = "10.32.1"
 
+      - name: Install latest Bun
+        run: |
+          set -eu
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun --version
+
       - name: Install dependencies
         run: |
           set -eu
@@ -49,6 +56,7 @@ jobs:
       - name: Run strict repository CI
         run: |
           set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
           pnpm run ci
 
       - name: Ensure tracked files stay clean

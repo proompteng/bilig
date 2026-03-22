@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 

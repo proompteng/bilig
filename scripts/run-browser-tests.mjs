@@ -1,23 +1,26 @@
-import { execFileSync, spawnSync } from "node:child_process";
+#!/usr/bin/env bun
+
+const textDecoder = new TextDecoder();
 
 const PREVIEW_PORTS = [4179, 4180];
 
 function getListeningPids(port) {
-  try {
-    const output = execFileSync("lsof", ["-tiTCP:" + String(port), "-sTCP:LISTEN"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-    if (!output) {
-      return [];
-    }
-    return output
-      .split(/\s+/)
-      .map((value) => Number.parseInt(value, 10))
-      .filter((value) => Number.isInteger(value));
-  } catch {
+  const result = Bun.spawnSync(["lsof", "-tiTCP:" + String(port), "-sTCP:LISTEN"], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "ignore"
+  });
+  if (result.exitCode !== 0) {
     return [];
   }
+  const output = textDecoder.decode(result.stdout).trim();
+  if (!output) {
+    return [];
+  }
+  return output
+    .split(/\s+/)
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value));
 }
 
 function sleep(ms) {
@@ -47,12 +50,14 @@ function terminatePreviewServers() {
 }
 
 function runPlaywright(args) {
-  const result = spawnSync("pnpm", ["exec", "playwright", "test", ...args], {
-    stdio: "inherit",
+  const result = Bun.spawnSync(["pnpm", "exec", "playwright", "test", ...args], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
     env: process.env
   });
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+  if (result.exitCode !== 0) {
+    process.exit(result.exitCode ?? 1);
   }
 }
 

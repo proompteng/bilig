@@ -1,9 +1,8 @@
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+#!/usr/bin/env bun
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "..");
+import path from "node:path";
+
+const repoRoot = path.resolve(import.meta.dir, "..");
 
 const enumManifest = {
   ValueTag: [
@@ -306,11 +305,11 @@ const generatedFiles = [
 ];
 
 async function main() {
-  const checkMode = process.argv.includes("--check");
+  const checkMode = Bun.argv.includes("--check");
   const staleFiles = (await Promise.all(generatedFiles.map(async (file) => {
     let existing = "";
     try {
-      existing = await readFile(file.path, "utf8");
+      existing = await Bun.file(file.path).text();
     } catch {
       existing = "";
     }
@@ -319,7 +318,7 @@ async function main() {
       return null;
     }
     if (!checkMode) {
-      await writeFile(file.path, file.contents, "utf8");
+      await Bun.write(file.path, file.contents);
     }
     return path.relative(repoRoot, file.path);
   }))).filter((entry) => entry !== null);
