@@ -91,4 +91,25 @@ describe("crdt", () => {
     expect(compareOpOrder(left, right)).toBeLessThan(0);
     expect(compareOpOrder(right, left)).toBeGreaterThan(0);
   });
+
+  it("compacts workbook metadata entities by logical key", () => {
+    const state = createReplicaState("replica");
+    const define = createBatch(state, [{ kind: "upsertDefinedName", name: "TaxRate", value: 0.08 }]);
+    const redefine = createBatch(state, [{ kind: "upsertDefinedName", name: "taxrate", value: 0.09 }]);
+    const pivotCreate = createBatch(state, [{
+      kind: "upsertPivotTable",
+      name: "SalesByRegion",
+      sheetName: "Pivot",
+      address: "B2",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Amount", summarizeBy: "sum" }]
+    }]);
+    const pivotDelete = createBatch(state, [{ kind: "deletePivotTable", sheetName: "Pivot", address: "B2" }]);
+
+    expect(compactLog([define, redefine, pivotCreate, pivotDelete])).toEqual([
+      redefine,
+      pivotDelete
+    ]);
+  });
 });

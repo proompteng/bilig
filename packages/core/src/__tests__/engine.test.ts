@@ -1056,6 +1056,41 @@ describe("SpreadsheetEngine", () => {
     unsubscribe();
   });
 
+  it("replicates defined-name batches and replays them through transaction history", async () => {
+    const primary = new SpreadsheetEngine({ workbookName: "spec", replicaId: "a" });
+    const replica = new SpreadsheetEngine({ workbookName: "spec", replicaId: "b" });
+    await Promise.all([primary.ready(), replica.ready()]);
+
+    const outbound: EngineOpBatch[] = [];
+    primary.subscribeBatches((batch) => outbound.push(batch));
+
+    primary.createSheet("Sheet1");
+    primary.setCellValue("Sheet1", "A1", 100);
+    primary.setCellFormula("Sheet1", "A2", "TaxRate*A1");
+    outbound.forEach((batch) => replica.applyRemoteBatch(batch));
+
+    primary.setDefinedName("TaxRate", 0.08);
+    const defineBatch = outbound.at(-1);
+    expect(defineBatch?.ops).toEqual([{ kind: "upsertDefinedName", name: "TaxRate", value: 0.08 }]);
+    expect(primary.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 8 });
+
+    replica.applyRemoteBatch(defineBatch);
+    expect(replica.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 8 });
+
+    expect(primary.undo()).toBe(true);
+    expect(primary.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+
+    expect(primary.redo()).toBe(true);
+    expect(primary.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 8 });
+
+    primary.deleteDefinedName("taxrate");
+    const deleteBatch = outbound.at(-1);
+    expect(deleteBatch?.ops).toEqual([{ kind: "deleteDefinedName", name: "taxrate" }]);
+
+    replica.applyRemoteBatch(deleteBatch);
+    expect(replica.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+  });
+
   it("persists workbook defined names through snapshot roundtrip", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -1172,6 +1207,37 @@ describe("SpreadsheetEngine", () => {
     expect(restored.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 15 });
     expect(restored.getCellValue("Pivot", "C4")).toEqual({ tag: ValueTag.Number, value: 9 });
     expect(restored.exportSnapshot().workbook.metadata?.pivots).toEqual(snapshot.workbook.metadata?.pivots);
+  });
+
+  it("undoes pivot deletion through the transaction log", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Pivot");
+    engine.setRangeValues(
+      { sheetName: "Data", startAddress: "A1", endAddress: "D3" },
+      [
+        ["Region", "Notes", "Product", "Sales"],
+        ["East", "priority", "Widget", 10],
+        ["West", "priority", "Widget", 7]
+      ]
+    );
+
+    engine.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "D3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }]
+    });
+
+    expect(engine.getCellValue("Pivot", "B3")).toMatchObject({ tag: ValueTag.String, value: "East" });
+    expect(engine.deletePivotTable("Pivot", "B2")).toBe(true);
+    expect(engine.getPivotTables()).toEqual([]);
+    expect(engine.getCellValue("Pivot", "B3")).toEqual({ tag: ValueTag.Empty });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getPivotTables()).toHaveLength(1);
+    expect(engine.getCellValue("Pivot", "B3")).toMatchObject({ tag: ValueTag.String, value: "East" });
   });
 
   it("returns #VALUE for pivots whose configured headers are missing", async () => {
@@ -1511,6 +1577,27 @@ describe("SpreadsheetEngine", () => {
     expect(seen).toEqual(["Sheet2!B3", "Sheet1!A1"]);
 
     unsubscribe();
+  });
+
+  it("restores snapshots through transactions without emitting batches or undo history", async () => {
+    const source = new SpreadsheetEngine({ workbookName: "source" });
+    await source.ready();
+    source.createSheet("Sheet1");
+    source.setCellValue("Sheet1", "A1", 100);
+    source.setDefinedName("TaxRate", 0.1);
+    source.setCellFormula("Sheet1", "A2", "TaxRate*A1");
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    const outbound: EngineOpBatch[] = [];
+    restored.subscribeBatches((batch) => outbound.push(batch));
+
+    restored.importSnapshot(source.exportSnapshot());
+
+    expect(restored.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(restored.getDefinedNames()).toEqual([{ name: "TaxRate", value: 0.1 }]);
+    expect(outbound).toEqual([]);
+    expect(restored.undo()).toBe(false);
   });
 
   it("supports range mutation helpers and undo/redo over the same local apply path", async () => {

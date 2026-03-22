@@ -268,6 +268,18 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const syncLatencyMs = 120;
   const relayQueueRef = useRef<RelayEntry[]>([]);
   const relayTimerRef = useRef<number | null>(null);
+  const captureRelayBatchesRef = useRef(false);
+  const syncMirrorFromPrimary = useCallback(() => {
+    mirrorEngine.importSnapshot(engine.exportSnapshot());
+    const replicaSnapshot = engine.exportReplicaSnapshot();
+    mirrorEngine.importReplicaSnapshot({
+      ...replicaSnapshot,
+      replica: {
+        ...replicaSnapshot.replica,
+        replicaId: mirrorEngine.replica.replicaId
+      }
+    });
+  }, [engine, mirrorEngine]);
   const sheetNames = [...engine.workbook.sheetsByName.values()]
     .sort((left, right) => left.order - right.order)
     .map((sheet) => sheet.name);
@@ -291,12 +303,14 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   });
 
   const loadPreset = useCallback(
-    async (presetId: PlaygroundPresetId) => {
+    async (presetId: PlaygroundPresetId, syncMirror = true) => {
       startTransition(() => {
         setLoadingPresetId(presetId);
         setPresetError(null);
       });
       await waitForTaskCycles(1);
+      const previousCaptureState = captureRelayBatchesRef.current;
+      captureRelayBatchesRef.current = false;
 
       try {
         const preset = await loadPlaygroundPreset(presetId);
@@ -311,16 +325,20 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           engine.importSnapshot(preset.snapshot);
         }
 
-        mirrorEngine.importSnapshot(engine.exportSnapshot());
+        if (syncMirror) {
+          syncMirrorFromPrimary();
+          captureRelayBatchesRef.current = true;
+        }
         selectCell(preset.defaultSheet, preset.defaultAddress);
         setActivePresetId(presetId);
       } catch (error) {
+        captureRelayBatchesRef.current = previousCaptureState;
         setPresetError(error instanceof Error ? error.message : String(error));
       } finally {
         setLoadingPresetId(null);
       }
     },
-    [engine, mirrorEngine, rendererRoot, selectCell]
+    [engine, rendererRoot, selectCell, syncMirrorFromPrimary]
   );
 
   useEffect(() => {
@@ -354,9 +372,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           setRelayQueue([]);
           setSyncPaused(false);
         }
-        await loadPreset("starter");
-        mirrorEngine.importSnapshot(engine.exportSnapshot());
+        await loadPreset("starter", false);
+        syncMirrorFromPrimary();
         if (!cancelled) {
+          captureRelayBatchesRef.current = true;
           setReplicationReady(true);
         }
         return undefined;
@@ -374,14 +393,14 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
         engine.importReplicaSnapshot(primaryPersisted.replica);
         setActivePresetId(null);
       } else {
-        await loadPreset("starter");
+        await loadPreset("starter", false);
       }
 
       if (mirrorPersisted) {
         mirrorEngine.importSnapshot(mirrorPersisted.snapshot);
         mirrorEngine.importReplicaSnapshot(mirrorPersisted.replica);
       } else {
-        mirrorEngine.importSnapshot(engine.exportSnapshot());
+        syncMirrorFromPrimary();
       }
 
       if (relayPersisted) {
@@ -393,6 +412,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       }
 
       if (!cancelled) {
+        captureRelayBatchesRef.current = true;
         setReplicationReady(true);
       }
       return undefined;
@@ -407,7 +427,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       relayQueueRef.current = [];
       void rendererRoot.unmount();
     };
-  }, [engine, isProductShell, loadPreset, mirrorEngine, rendererRoot]);
+  }, [engine, isProductShell, loadPreset, mirrorEngine, rendererRoot, syncMirrorFromPrimary]);
 
   useEffect(() => {
     if (!replicationReady || isProductShell) {
@@ -443,11 +463,14 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   }, [engine, isProductShell, mirrorEngine, replicationReady]);
 
   useEffect(() => {
-    if (!replicationReady || isProductShell) {
+    if (isProductShell) {
       return;
     }
 
     const enqueueBatch = (target: RelayEntry["target"], batch: EngineOpBatch) => {
+      if (!captureRelayBatchesRef.current) {
+        return;
+      }
       setRelayQueue((current) =>
         compactRelayEntries([
           ...current,
@@ -467,7 +490,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       unsubscribeLocal();
       unsubscribeMirror();
     };
-  }, [engine, isProductShell, mirrorEngine, replicationReady]);
+  }, [engine, isProductShell, mirrorEngine]);
 
   useEffect(() => {
     if (!replicationReady || isProductShell) {
@@ -667,7 +690,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       queuedEntries.forEach(({ target, batch }) => {
         (target === "mirror" ? mirrorEngine : engine).applyRemoteBatch(batch);
       });
-      mirrorEngine.importSnapshot(engine.exportSnapshot());
+      syncMirrorFromPrimary();
       relayQueueRef.current = [];
       setRelayQueue([]);
       setSyncPaused(false);
@@ -675,7 +698,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     }
 
     setSyncPaused(true);
-  }, [engine, mirrorEngine, syncPaused]);
+  }, [engine, mirrorEngine, syncMirrorFromPrimary, syncPaused]);
 
   const statusBar = isProductShell ? (
     <>
@@ -758,43 +781,49 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           {presetError}
         </div>
       ) : null}
-      <WorkbookView
-        editorValue={visibleEditorValue}
-        editorSelectionBehavior={editorSelectionBehavior}
-        engine={engine}
-        isEditing={isEditing}
-        isEditingCell={isEditingCell}
-        onAddressCommit={(input) => {
-          const nextTarget = parseSelectionTarget(input, selection.sheetName);
-          if (nextTarget) {
-            selectAddress(nextTarget.sheetName, nextTarget.address);
-          }
-        }}
-        onBeginEdit={beginEditing}
-        onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "select-all", "formula")}
-        onCancelEdit={cancelEditor}
-        onClearCell={clearSelectedCell}
-        onCommitEdit={commitEditor}
-        onCopyRange={copySelectionRange}
-        onEditorChange={(next) => {
-          setEditorValue(next);
-          setEditingMode((current) => (current === "idle" ? "cell" : current));
-        }}
-        onFillRange={fillSelectionRange}
-        onPaste={pasteIntoSelection}
-        onSelectionLabelChange={setSelectionLabel}
-        onSelect={(addr) => selectAddress(selection.sheetName, addr)}
-        onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}
-        resolvedValue={resolvedValue}
-        ribbon={ribbon}
-        selectedAddr={selectedAddr}
-        sheetName={selection.sheetName}
-        sheetNames={sheetNames}
-        sidebar={sidebar}
-        statusBar={statusBar}
-        variant={variant}
-        workbookName={engine.workbook.workbookName}
-      />
+      {!isProductShell && !replicationReady ? (
+        <div className="loading-banner" data-testid="replication-loading">
+          Preparing local-first mirror...
+        </div>
+      ) : (
+        <WorkbookView
+          editorValue={visibleEditorValue}
+          editorSelectionBehavior={editorSelectionBehavior}
+          engine={engine}
+          isEditing={isEditing}
+          isEditingCell={isEditingCell}
+          onAddressCommit={(input) => {
+            const nextTarget = parseSelectionTarget(input, selection.sheetName);
+            if (nextTarget) {
+              selectAddress(nextTarget.sheetName, nextTarget.address);
+            }
+          }}
+          onBeginEdit={beginEditing}
+          onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "select-all", "formula")}
+          onCancelEdit={cancelEditor}
+          onClearCell={clearSelectedCell}
+          onCommitEdit={commitEditor}
+          onCopyRange={copySelectionRange}
+          onEditorChange={(next) => {
+            setEditorValue(next);
+            setEditingMode((current) => (current === "idle" ? "cell" : current));
+          }}
+          onFillRange={fillSelectionRange}
+          onPaste={pasteIntoSelection}
+          onSelectionLabelChange={setSelectionLabel}
+          onSelect={(addr) => selectAddress(selection.sheetName, addr)}
+          onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}
+          resolvedValue={resolvedValue}
+          ribbon={ribbon}
+          selectedAddr={selectedAddr}
+          sheetName={selection.sheetName}
+          sheetNames={sheetNames}
+          sidebar={sidebar}
+          statusBar={statusBar}
+          variant={variant}
+          workbookName={engine.workbook.workbookName}
+        />
+      )}
     </div>
   );
 }

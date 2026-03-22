@@ -62,6 +62,75 @@ describe("binary protocol", () => {
     ]);
   });
 
+  it("roundtrips expanded workbook metadata and structural ops", () => {
+    const decoded = decodeFrame(encodeFrame({
+      kind: "appendBatch",
+      documentId: "book-2",
+      cursor: 9,
+      batch: {
+        id: "replica:2",
+        replicaId: "replica",
+        clock: { counter: 2 },
+        ops: [
+          { kind: "setWorkbookMetadata", key: "locale", value: "en-US" },
+          { kind: "updateRowMetadata", sheetName: "Sheet1", start: 1, count: 2, size: 24, hidden: null },
+          { kind: "setFreezePane", sheetName: "Sheet1", rows: 1, cols: 2 },
+          {
+            kind: "setSort",
+            sheetName: "Sheet1",
+            range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+            keys: [{ keyAddress: "C1", direction: "desc" }]
+          },
+          { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
+          {
+            kind: "upsertTable",
+            table: {
+              name: "Sales",
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "C10",
+              columnNames: ["Region", "Product", "Amount"],
+              headerRow: true,
+              totalsRow: false
+            }
+          },
+          { kind: "deletePivotTable", sheetName: "Sheet1", address: "F2" }
+        ]
+      }
+    }));
+
+    expect(decoded.kind).toBe("appendBatch");
+    if (decoded.kind !== "appendBatch") {
+      return;
+    }
+
+    expect(decoded.batch.ops).toEqual([
+      { kind: "setWorkbookMetadata", key: "locale", value: "en-US" },
+      { kind: "updateRowMetadata", sheetName: "Sheet1", start: 1, count: 2, size: 24, hidden: null },
+      { kind: "setFreezePane", sheetName: "Sheet1", rows: 1, cols: 2 },
+      {
+        kind: "setSort",
+        sheetName: "Sheet1",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "C10" },
+        keys: [{ keyAddress: "C1", direction: "desc" }]
+      },
+      { kind: "upsertDefinedName", name: "TaxRate", value: 0.085 },
+      {
+        kind: "upsertTable",
+        table: {
+          name: "Sales",
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "C10",
+          columnNames: ["Region", "Product", "Amount"],
+          headerRow: true,
+          totalsRow: false
+        }
+      },
+      { kind: "deletePivotTable", sheetName: "Sheet1", address: "F2" }
+    ]);
+  });
+
   it("rejects malformed payload lengths", () => {
     const encoded = encodeFrame({
       kind: "heartbeat",

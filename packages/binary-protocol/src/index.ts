@@ -1,10 +1,16 @@
 import type {
   CellRangeRef,
   PivotAggregation,
+  LiteralInput,
   WorkbookPivotValueSnapshot
 } from "@bilig/protocol";
-import type { EngineOp, EngineOpBatch } from "@bilig/crdt";
-import type { LiteralInput } from "@bilig/protocol";
+import type {
+  EngineOp,
+  EngineOpBatch,
+  WorkbookSortDirection,
+  WorkbookSortKey,
+  WorkbookTableOp
+} from "@bilig/crdt";
 
 export const PROTOCOL_MAGIC = 0x424c4731;
 export const PROTOCOL_VERSION = 1;
@@ -121,13 +127,29 @@ const FRAME_BY_TAG = new Map<number, FrameKind>(
 
 const OP_TAGS: Record<EngineOp["kind"], number> = {
   upsertWorkbook: 1,
-  upsertSheet: 2,
-  deleteSheet: 3,
-  setCellValue: 4,
-  setCellFormula: 5,
-  setCellFormat: 6,
-  clearCell: 7,
-  upsertPivotTable: 8
+  setWorkbookMetadata: 2,
+  upsertSheet: 3,
+  deleteSheet: 4,
+  updateRowMetadata: 5,
+  updateColumnMetadata: 6,
+  setFreezePane: 7,
+  clearFreezePane: 8,
+  setFilter: 9,
+  clearFilter: 10,
+  setSort: 11,
+  clearSort: 12,
+  setCellValue: 13,
+  setCellFormula: 14,
+  setCellFormat: 15,
+  clearCell: 16,
+  upsertDefinedName: 17,
+  deleteDefinedName: 18,
+  upsertTable: 19,
+  deleteTable: 20,
+  upsertSpillRange: 21,
+  deleteSpillRange: 22,
+  upsertPivotTable: 23,
+  deletePivotTable: 24
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -289,6 +311,34 @@ function decodeLiteral(reader: BinaryReader): LiteralInput {
   }
 }
 
+function encodeNullableNumber(writer: BinaryWriter, value: number | null): void {
+  writer.bool(value !== null);
+  if (value !== null) {
+    writer.f64(value);
+  }
+}
+
+function decodeNullableNumber(reader: BinaryReader): number | null {
+  return reader.bool() ? reader.f64() : null;
+}
+
+function encodeNullableBoolean(writer: BinaryWriter, value: boolean | null): void {
+  writer.u8(value === null ? 0 : value ? 2 : 1);
+}
+
+function decodeNullableBoolean(reader: BinaryReader): boolean | null {
+  switch (reader.u8()) {
+    case 0:
+      return null;
+    case 1:
+      return false;
+    case 2:
+      return true;
+    default:
+      throw new BinaryProtocolError("Unknown nullable boolean tag");
+  }
+}
+
 function encodeCellRangeRef(writer: BinaryWriter, ref: CellRangeRef): void {
   writer.string(ref.sheetName);
   writer.string(ref.startAddress);
@@ -300,6 +350,40 @@ function decodeCellRangeRef(reader: BinaryReader): CellRangeRef {
     sheetName: reader.string(),
     startAddress: reader.string(),
     endAddress: reader.string()
+  };
+}
+
+function encodeSortDirection(writer: BinaryWriter, direction: WorkbookSortDirection): void {
+  switch (direction) {
+    case "asc":
+      writer.u8(1);
+      return;
+    case "desc":
+      writer.u8(2);
+      return;
+  }
+}
+
+function decodeSortDirection(reader: BinaryReader): WorkbookSortDirection {
+  switch (reader.u8()) {
+    case 1:
+      return "asc";
+    case 2:
+      return "desc";
+    default:
+      throw new BinaryProtocolError("Unknown sort direction tag");
+  }
+}
+
+function encodeSortKey(writer: BinaryWriter, key: WorkbookSortKey): void {
+  writer.string(key.keyAddress);
+  encodeSortDirection(writer, key.direction);
+}
+
+function decodeSortKey(reader: BinaryReader): WorkbookSortKey {
+  return {
+    keyAddress: reader.string(),
+    direction: decodeSortDirection(reader)
   };
 }
 
@@ -348,11 +432,37 @@ function decodePivotValue(reader: BinaryReader): WorkbookPivotValueSnapshot {
   return result;
 }
 
+function encodeTable(writer: BinaryWriter, table: WorkbookTableOp): void {
+  writer.string(table.name);
+  writer.string(table.sheetName);
+  writer.string(table.startAddress);
+  writer.string(table.endAddress);
+  writer.stringArray(table.columnNames);
+  writer.bool(table.headerRow);
+  writer.bool(table.totalsRow);
+}
+
+function decodeTable(reader: BinaryReader): WorkbookTableOp {
+  return {
+    name: reader.string(),
+    sheetName: reader.string(),
+    startAddress: reader.string(),
+    endAddress: reader.string(),
+    columnNames: reader.stringArray(),
+    headerRow: reader.bool(),
+    totalsRow: reader.bool()
+  };
+}
+
 function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
   writer.u8(OP_TAGS[op.kind]);
   switch (op.kind) {
     case "upsertWorkbook":
       writer.string(op.name);
+      return;
+    case "setWorkbookMetadata":
+      writer.string(op.key);
+      encodeLiteral(writer, op.value);
       return;
     case "upsertSheet":
       writer.string(op.name);
@@ -360,6 +470,37 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       return;
     case "deleteSheet":
       writer.string(op.name);
+      return;
+    case "updateRowMetadata":
+    case "updateColumnMetadata":
+      writer.string(op.sheetName);
+      writer.u32(op.start);
+      writer.u32(op.count);
+      encodeNullableNumber(writer, op.size);
+      encodeNullableBoolean(writer, op.hidden);
+      return;
+    case "setFreezePane":
+      writer.string(op.sheetName);
+      writer.u32(op.rows);
+      writer.u32(op.cols);
+      return;
+    case "clearFreezePane":
+      writer.string(op.sheetName);
+      return;
+    case "setFilter":
+    case "clearFilter":
+      writer.string(op.sheetName);
+      encodeCellRangeRef(writer, op.range);
+      return;
+    case "setSort":
+      writer.string(op.sheetName);
+      encodeCellRangeRef(writer, op.range);
+      writer.u32(op.keys.length);
+      op.keys.forEach((key) => encodeSortKey(writer, key));
+      return;
+    case "clearSort":
+      writer.string(op.sheetName);
+      encodeCellRangeRef(writer, op.range);
       return;
     case "setCellValue":
       writer.string(op.sheetName);
@@ -383,6 +524,29 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       writer.string(op.sheetName);
       writer.string(op.address);
       return;
+    case "upsertDefinedName":
+      writer.string(op.name);
+      encodeLiteral(writer, op.value);
+      return;
+    case "deleteDefinedName":
+      writer.string(op.name);
+      return;
+    case "upsertTable":
+      encodeTable(writer, op.table);
+      return;
+    case "deleteTable":
+      writer.string(op.name);
+      return;
+    case "upsertSpillRange":
+      writer.string(op.sheetName);
+      writer.string(op.address);
+      writer.u32(op.rows);
+      writer.u32(op.cols);
+      return;
+    case "deleteSpillRange":
+      writer.string(op.sheetName);
+      writer.string(op.address);
+      return;
     case "upsertPivotTable":
       writer.string(op.name);
       writer.string(op.sheetName);
@@ -391,6 +555,10 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       writer.stringArray(op.groupBy);
       writer.u32(op.values.length);
       op.values.forEach((v) => encodePivotValue(writer, v));
+      return;
+    case "deletePivotTable":
+      writer.string(op.sheetName);
+      writer.string(op.address);
       return;
     default:
       assertNever(op);
@@ -402,24 +570,85 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
     case 1:
       return { kind: "upsertWorkbook", name: reader.string() };
     case 2:
-      return { kind: "upsertSheet", name: reader.string(), order: reader.u32() };
+      return { kind: "setWorkbookMetadata", key: reader.string(), value: decodeLiteral(reader) };
     case 3:
-      return { kind: "deleteSheet", name: reader.string() };
+      return { kind: "upsertSheet", name: reader.string(), order: reader.u32() };
     case 4:
+      return { kind: "deleteSheet", name: reader.string() };
+    case 5:
+      return {
+        kind: "updateRowMetadata",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+        size: decodeNullableNumber(reader),
+        hidden: decodeNullableBoolean(reader)
+      };
+    case 6:
+      return {
+        kind: "updateColumnMetadata",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+        size: decodeNullableNumber(reader),
+        hidden: decodeNullableBoolean(reader)
+      };
+    case 7:
+      return {
+        kind: "setFreezePane",
+        sheetName: reader.string(),
+        rows: reader.u32(),
+        cols: reader.u32()
+      };
+    case 8:
+      return { kind: "clearFreezePane", sheetName: reader.string() };
+    case 9:
+      return {
+        kind: "setFilter",
+        sheetName: reader.string(),
+        range: decodeCellRangeRef(reader)
+      };
+    case 10:
+      return {
+        kind: "clearFilter",
+        sheetName: reader.string(),
+        range: decodeCellRangeRef(reader)
+      };
+    case 11:
+      return {
+        kind: "setSort",
+        sheetName: reader.string(),
+        range: decodeCellRangeRef(reader),
+        keys: (() => {
+          const count = reader.u32();
+          const keys: WorkbookSortKey[] = [];
+          for (let index = 0; index < count; index += 1) {
+            keys.push(decodeSortKey(reader));
+          }
+          return keys;
+        })()
+      };
+    case 12:
+      return {
+        kind: "clearSort",
+        sheetName: reader.string(),
+        range: decodeCellRangeRef(reader)
+      };
+    case 13:
       return {
         kind: "setCellValue",
         sheetName: reader.string(),
         address: reader.string(),
         value: decodeLiteral(reader)
       };
-    case 5:
+    case 14:
       return {
         kind: "setCellFormula",
         sheetName: reader.string(),
         address: reader.string(),
         formula: reader.string()
       };
-    case 6: {
+    case 15: {
       const sheetName = reader.string();
       const address = reader.string();
       const hasFormat = reader.bool();
@@ -430,9 +659,35 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         format: hasFormat ? reader.string() : null
       };
     }
-    case 7:
+    case 16:
       return { kind: "clearCell", sheetName: reader.string(), address: reader.string() };
-    case 8:
+    case 17:
+      return {
+        kind: "upsertDefinedName",
+        name: reader.string(),
+        value: decodeLiteral(reader)
+      };
+    case 18:
+      return { kind: "deleteDefinedName", name: reader.string() };
+    case 19:
+      return { kind: "upsertTable", table: decodeTable(reader) };
+    case 20:
+      return { kind: "deleteTable", name: reader.string() };
+    case 21:
+      return {
+        kind: "upsertSpillRange",
+        sheetName: reader.string(),
+        address: reader.string(),
+        rows: reader.u32(),
+        cols: reader.u32()
+      };
+    case 22:
+      return {
+        kind: "deleteSpillRange",
+        sheetName: reader.string(),
+        address: reader.string()
+      };
+    case 23:
       return {
         kind: "upsertPivotTable",
         name: reader.string(),
@@ -446,6 +701,12 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
           for (let i = 0; i < count; i++) values.push(decodePivotValue(reader));
           return values;
         })()
+      };
+    case 24:
+      return {
+        kind: "deletePivotTable",
+        sheetName: reader.string(),
+        address: reader.string()
       };
     default:
       throw new BinaryProtocolError("Unknown engine op tag");

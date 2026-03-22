@@ -11,14 +11,61 @@ export interface Clock {
   counter: number;
 }
 
-export type EngineOp =
+export type WorkbookStructuralAxis = "row" | "column";
+export type WorkbookSortDirection = "asc" | "desc";
+
+export interface WorkbookTableOp {
+  name: string;
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+  columnNames: string[];
+  headerRow: boolean;
+  totalsRow: boolean;
+}
+
+export interface WorkbookSortKey {
+  keyAddress: string;
+  direction: WorkbookSortDirection;
+}
+
+export type WorkbookOp =
   | { kind: "upsertWorkbook"; name: string }
+  | { kind: "setWorkbookMetadata"; key: string; value: LiteralInput }
   | { kind: "upsertSheet"; name: string; order: number }
   | { kind: "deleteSheet"; name: string }
+  | {
+      kind: "updateRowMetadata";
+      sheetName: string;
+      start: number;
+      count: number;
+      size: number | null;
+      hidden: boolean | null;
+    }
+  | {
+      kind: "updateColumnMetadata";
+      sheetName: string;
+      start: number;
+      count: number;
+      size: number | null;
+      hidden: boolean | null;
+    }
+  | { kind: "setFreezePane"; sheetName: string; rows: number; cols: number }
+  | { kind: "clearFreezePane"; sheetName: string }
+  | { kind: "setFilter"; sheetName: string; range: CellRangeRef }
+  | { kind: "clearFilter"; sheetName: string; range: CellRangeRef }
+  | { kind: "setSort"; sheetName: string; range: CellRangeRef; keys: WorkbookSortKey[] }
+  | { kind: "clearSort"; sheetName: string; range: CellRangeRef }
   | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
   | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
   | { kind: "clearCell"; sheetName: string; address: string }
+  | { kind: "upsertDefinedName"; name: string; value: LiteralInput }
+  | { kind: "deleteDefinedName"; name: string }
+  | { kind: "upsertTable"; table: WorkbookTableOp }
+  | { kind: "deleteTable"; name: string }
+  | { kind: "upsertSpillRange"; sheetName: string; address: string; rows: number; cols: number }
+  | { kind: "deleteSpillRange"; sheetName: string; address: string }
   | {
       kind: "upsertPivotTable";
       name: string;
@@ -27,14 +74,19 @@ export type EngineOp =
       source: CellRangeRef;
       groupBy: string[];
       values: WorkbookPivotValueSnapshot[];
-    };
+    }
+  | { kind: "deletePivotTable"; sheetName: string; address: string };
 
-export interface EngineOpBatch {
+export type EngineOp = WorkbookOp;
+
+export interface WorkbookOpBatch {
   id: OpId;
   replicaId: ReplicaId;
   clock: Clock;
-  ops: EngineOp[];
+  ops: WorkbookOp[];
 }
+
+export type EngineOpBatch = WorkbookOpBatch;
 
 export interface ReplicaState {
   replicaId: ReplicaId;
@@ -58,6 +110,14 @@ export interface OpOrder {
 export interface ReplicaVersionSnapshot {
   entityKey: string;
   order: OpOrder;
+}
+
+function normalizedDefinedName(name: string): string {
+  return name.trim().toUpperCase();
+}
+
+function pivotEntityKey(sheetName: string, address: string): string {
+  return `pivot:${sheetName}!${address}`;
 }
 
 export function createReplicaState(replicaId: ReplicaId): ReplicaState {
@@ -147,32 +207,75 @@ function entityKeyForOp(op: EngineOp): string {
   switch (op.kind) {
     case "upsertWorkbook":
       return "workbook";
+    case "setWorkbookMetadata":
+      return `workbook-meta:${op.key}`;
     case "upsertSheet":
     case "deleteSheet":
       return `sheet:${op.name}`;
+    case "updateRowMetadata":
+      return `row-meta:${op.sheetName}:${op.start}:${op.count}`;
+    case "updateColumnMetadata":
+      return `column-meta:${op.sheetName}:${op.start}:${op.count}`;
+    case "setFreezePane":
+    case "clearFreezePane":
+      return `freeze:${op.sheetName}`;
+    case "setFilter":
+    case "clearFilter":
+      return `filter:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+    case "setSort":
+    case "clearSort":
+      return `sort:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
     case "setCellValue":
     case "setCellFormula":
     case "clearCell":
       return `cell:${op.sheetName}!${op.address}`;
     case "setCellFormat":
       return `format:${op.sheetName}!${op.address}`;
+    case "upsertDefinedName":
+    case "deleteDefinedName":
+      return `defined-name:${normalizedDefinedName(op.name)}`;
+    case "upsertTable":
+      return `table:${normalizedDefinedName(op.table.name)}`;
+    case "deleteTable":
+      return `table:${normalizedDefinedName(op.name)}`;
+    case "upsertSpillRange":
+    case "deleteSpillRange":
+      return `spill:${op.sheetName}!${op.address}`;
     case "upsertPivotTable":
-      return `pivot:${op.name}`;
+      return pivotEntityKey(op.sheetName, op.address);
+    case "deletePivotTable":
+      return pivotEntityKey(op.sheetName, op.address);
   }
 }
 
 function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, OpOrder>): OpOrder | undefined {
   switch (op.kind) {
     case "upsertWorkbook":
+    case "setWorkbookMetadata":
     case "deleteSheet":
+    case "upsertDefinedName":
+    case "deleteDefinedName":
+    case "upsertTable":
+    case "deleteTable":
       return undefined;
+    case "upsertSheet":
+      return latestSheetDeletes.get(op.name);
+    case "updateRowMetadata":
+    case "updateColumnMetadata":
+    case "setFreezePane":
+    case "clearFreezePane":
+    case "setFilter":
+    case "clearFilter":
+    case "setSort":
+    case "clearSort":
     case "setCellValue":
     case "setCellFormula":
     case "setCellFormat":
     case "clearCell":
+    case "upsertSpillRange":
+    case "deleteSpillRange":
+    case "deletePivotTable":
       return latestSheetDeletes.get(op.sheetName);
-    case "upsertSheet":
-      return latestSheetDeletes.get(op.name);
     case "upsertPivotTable":
       return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
   }
