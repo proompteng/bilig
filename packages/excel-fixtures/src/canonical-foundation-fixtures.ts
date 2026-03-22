@@ -106,6 +106,7 @@ export const canonicalFoundationFixtures: ExcelFixtureCase[] = [
   fixture("information", "isnumber-basic", "ISNUMBER", "=ISNUMBER(A1)", [input("A1", 42)], [output("A2", booleanExpected(true))]),
   fixture("information", "istext-basic", "ISTEXT", "=ISTEXT(A1)", [input("A1", "hello")], [output("A2", booleanExpected(true))]),
   fixture("dynamic-array", "sequence-spill", "SEQUENCE spill", "=SEQUENCE(3,1,1,1)", [], [output("A1", numberExpected(1)), output("A2", numberExpected(2)), output("A3", numberExpected(3))]),
+  fixture("dynamic-array", "sequence-aggregate", "SUM over SEQUENCE", "=SUM(SEQUENCE(A1,1,1,1))", [input("A1", 3)], [output("B1", numberExpected(6))]),
   fixture("dynamic-array", "filter-basic", "FILTER", "=FILTER(A1:A4,A1:A4>2)", [input("A1", 1), input("A2", 3), input("A3", 2), input("A4", 4)], [output("B1", numberExpected(3)), output("B2", numberExpected(4))]),
   fixture("dynamic-array", "unique-basic", "UNIQUE", "=UNIQUE(A1:A4)", [input("A1", "A"), input("A2", "B"), input("A3", "A"), input("A4", "C")], [output("B1", stringExpected("A")), output("B2", stringExpected("B")), output("B3", stringExpected("C"))]),
   {

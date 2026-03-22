@@ -688,7 +688,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   ) : (
     <>
       <span data-testid="status-active-preset">{selectedPreset?.label ?? "Restored workspace"}</span>
-      <span data-testid="metric-js">JS {metrics.jsFormulaCount.toLocaleString()}</span>
+      <span data-testid="metric-js">Fallback {metrics.jsFormulaCount.toLocaleString()}</span>
       <span data-testid="metric-wasm">WASM {metrics.wasmFormulaCount.toLocaleString()}</span>
       <span data-testid="metric-recalc">Recalc {metrics.recalcMs.toFixed(2)} ms</span>
     </>

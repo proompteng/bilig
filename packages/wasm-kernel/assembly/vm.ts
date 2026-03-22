@@ -1,4 +1,4 @@
-import { applyBuiltin, STACK_KIND_RANGE, STACK_KIND_SCALAR } from "./builtins";
+import { applyBuiltin, STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR } from "./builtins";
 import { ErrorCode, Opcode, ValueTag } from "./protocol";
 
 export let tags = new Uint8Array(64);
@@ -18,9 +18,139 @@ let constantOffsets = new Uint32Array(64);
 let constantLengths = new Uint32Array(64);
 export let rangeOffsets = new Uint32Array(64);
 export let rangeLengths = new Uint32Array(64);
+export let rangeRowCounts = new Uint32Array(64);
+export let rangeColCounts = new Uint32Array(64);
 export let rangeMembers = new Uint32Array(64);
 let formulaForCell = new Uint32Array(64);
 let formulaCount = 0;
+
+let outputStringLengths = new Uint32Array(64);
+let outputStringOffsets = new Uint32Array(64);
+let outputStringData = new Uint16Array(64);
+let outputStringCount = 0;
+let outputStringDataLength = 0;
+let spillRows = new Uint32Array(64);
+let spillCols = new Uint32Array(64);
+let spillOffsets = new Uint32Array(64);
+let spillLengths = new Uint32Array(64);
+let spillArrayRows = new Uint32Array(16);
+let spillArrayCols = new Uint32Array(16);
+let spillArrayOffsets = new Uint32Array(16);
+let spillArrayLengths = new Uint32Array(16);
+let spillArrayCount = 0;
+let spillNumbers = new Float64Array(64);
+let spillValueCount = 0;
+const OUTPUT_STRING_BASE: f64 = 2147483648.0;
+let volatileNowSerial: f64 = NaN;
+let volatileRandomValues = new Float64Array(0);
+let volatileRandomCursor = 0;
+const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff;
+
+export function getOutputStringLengthsPtr(): usize { return outputStringLengths.dataStart; }
+export function getOutputStringOffsetsPtr(): usize { return outputStringOffsets.dataStart; }
+export function getOutputStringDataPtr(): usize { return outputStringData.dataStart; }
+export function getOutputStringCount(): i32 { return outputStringCount; }
+export function getOutputStringDataLength(): i32 { return outputStringDataLength; }
+export function getSpillResultRowsPtr(): usize { return spillRows.dataStart; }
+export function getSpillResultColsPtr(): usize { return spillCols.dataStart; }
+export function getSpillResultOffsetsPtr(): usize { return spillOffsets.dataStart; }
+export function getSpillResultLengthsPtr(): usize { return spillLengths.dataStart; }
+export function getSpillResultNumbersPtr(): usize { return spillNumbers.dataStart; }
+export function getSpillResultValueCount(): i32 { return spillValueCount; }
+
+export function resetOutputStrings(): void {
+  outputStringCount = 0;
+  outputStringDataLength = 0;
+}
+
+function resetSpillResults(): void {
+  spillArrayCount = 0;
+  spillValueCount = 0;
+}
+
+function ensureSpillArrayCapacity(nextCapacity: i32): void {
+  spillArrayRows = ensureU32(spillArrayRows, nextCapacity);
+  spillArrayCols = ensureU32(spillArrayCols, nextCapacity);
+  spillArrayOffsets = ensureU32(spillArrayOffsets, nextCapacity);
+  spillArrayLengths = ensureU32(spillArrayLengths, nextCapacity);
+}
+
+function ensureSpillValueCapacity(nextCapacity: i32): void {
+  spillNumbers = ensureF64(spillNumbers, nextCapacity);
+}
+
+export function allocateSpillArrayResult(rows: i32, cols: i32): u32 {
+  const index = spillArrayCount;
+  spillArrayCount += 1;
+  ensureSpillArrayCapacity(spillArrayCount);
+  const length = rows * cols;
+  spillArrayRows[index] = rows;
+  spillArrayCols[index] = cols;
+  spillArrayOffsets[index] = spillValueCount;
+  spillArrayLengths[index] = length;
+  spillValueCount += length;
+  ensureSpillValueCapacity(spillValueCount);
+  return index;
+}
+
+export function writeSpillArrayNumber(arrayIndex: u32, offset: i32, value: f64): void {
+  const baseOffset = spillArrayOffsets[arrayIndex];
+  spillNumbers[baseOffset + offset] = value;
+}
+
+export function readSpillArrayLength(arrayIndex: u32): i32 {
+  return <i32>spillArrayLengths[arrayIndex];
+}
+
+export function readSpillArrayNumber(arrayIndex: u32, offset: i32): f64 {
+  return spillNumbers[spillArrayOffsets[arrayIndex] + offset];
+}
+
+export function allocateOutputString(length: i32): i32 {
+  const index = outputStringCount;
+  outputStringCount += 1;
+  outputStringLengths = ensureU32(outputStringLengths, outputStringCount);
+  outputStringOffsets = ensureU32(outputStringOffsets, outputStringCount);
+  
+  outputStringLengths[index] = length;
+  outputStringOffsets[index] = outputStringDataLength;
+  
+  outputStringDataLength += length;
+  outputStringData = ensureU16(outputStringData, outputStringDataLength);
+  
+  return index;
+}
+
+export function writeOutputStringData(index: i32, offset: i32, char: u16): void {
+  const dataOffset = outputStringOffsets[index];
+  outputStringData[dataOffset + offset] = char;
+}
+
+export function encodeOutputStringId(index: i32): f64 {
+  return OUTPUT_STRING_BASE + <f64>index;
+}
+
+export function uploadVolatileNowSerial(nowSerial: f64): void {
+  volatileNowSerial = nowSerial;
+}
+
+export function readVolatileNowSerial(): f64 {
+  return volatileNowSerial;
+}
+
+export function uploadVolatileRandomValues(values: Float64Array): void {
+  volatileRandomValues = values;
+  volatileRandomCursor = 0;
+}
+
+export function nextVolatileRandomValue(): f64 {
+  if (volatileRandomCursor >= volatileRandomValues.length) {
+    return NaN;
+  }
+  const next = volatileRandomValues[volatileRandomCursor];
+  volatileRandomCursor += 1;
+  return next;
+}
 
 const valueStack = new Float64Array(256);
 const tagStack = new Uint8Array(256);
@@ -32,6 +162,111 @@ function toNumeric(kind: u8, tag: u8, value: f64): f64 {
   if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
   if (tag == ValueTag.Empty) return 0;
   return NaN;
+}
+
+function outputStringIndex(value: f64): i32 {
+  if (value < OUTPUT_STRING_BASE) {
+    return -1;
+  }
+  return <i32>(value - OUTPUT_STRING_BASE);
+}
+
+function isTextLike(tag: u8): bool {
+  return tag == ValueTag.String || tag == ValueTag.Empty;
+}
+
+function poolString(stringId: i32): string | null {
+  if (stringId < 0 || stringId >= stringLengths.length) {
+    return null;
+  }
+  const offset = <i32>stringOffsets[stringId];
+  const length = <i32>stringLengths[stringId];
+  let text = "";
+  for (let index = 0; index < length; index++) {
+    text += String.fromCharCode(stringData[offset + index]);
+  }
+  return text;
+}
+
+function outputString(index: i32): string | null {
+  if (index < 0 || index >= outputStringLengths.length) {
+    return null;
+  }
+  const offset = <i32>outputStringOffsets[index];
+  const length = <i32>outputStringLengths[index];
+  let text = "";
+  for (let i = 0; i < length; i++) {
+    text += String.fromCharCode(outputStringData[offset + i]);
+  }
+  return text;
+}
+
+function scalarText(tag: u8, value: f64): string | null {
+  if (tag == ValueTag.Empty) {
+    return "";
+  }
+  if (tag == ValueTag.Number) {
+    return value.toString();
+  }
+  if (tag == ValueTag.Boolean) {
+    return value != 0 ? "TRUE" : "FALSE";
+  }
+  if (tag == ValueTag.String) {
+    const outputIndex = outputStringIndex(value);
+    if (outputIndex >= 0) {
+      return outputString(outputIndex);
+    }
+    return poolString(<i32>value);
+  }
+  return null;
+}
+
+function compareText(left: string, right: string): i32 {
+  const normalizedLeft = left.toUpperCase();
+  const normalizedRight = right.toUpperCase();
+  if (normalizedLeft == normalizedRight) {
+    return 0;
+  }
+  return normalizedLeft < normalizedRight ? -1 : 1;
+}
+
+function compareScalars(leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f64): i32 {
+  if (isTextLike(leftTag) && isTextLike(rightTag)) {
+    const leftText = scalarText(leftTag, leftValue);
+    const rightText = scalarText(rightTag, rightValue);
+    if (leftText == null || rightText == null) {
+      return i32.MIN_VALUE;
+    }
+    return compareText(leftText, rightText);
+  }
+
+  const leftNumeric = toNumeric(STACK_KIND_SCALAR, leftTag, leftValue);
+  const rightNumeric = toNumeric(STACK_KIND_SCALAR, rightTag, rightValue);
+  if (isNaN(leftNumeric) || isNaN(rightNumeric)) {
+    return i32.MIN_VALUE;
+  }
+  if (leftNumeric == rightNumeric) {
+    return 0;
+  }
+  return leftNumeric < rightNumeric ? -1 : 1;
+}
+
+function writeConcatenatedString(slot: i32, leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f64): void {
+  const leftText = scalarText(leftTag, leftValue);
+  const rightText = scalarText(rightTag, rightValue);
+  if (leftText == null || rightText == null) {
+    writeScalar(slot, <u8>ValueTag.Error, ErrorCode.Value);
+    return;
+  }
+  const outputIndex = allocateOutputString(leftText.length + rightText.length);
+  let offset = 0;
+  for (let index = 0; index < leftText.length; index++) {
+    writeOutputStringData(outputIndex, offset++, <u16>leftText.charCodeAt(index));
+  }
+  for (let index = 0; index < rightText.length; index++) {
+    writeOutputStringData(outputIndex, offset++, <u16>rightText.charCodeAt(index));
+  }
+  writeScalar(slot, <u8>ValueTag.String, encodeOutputStringId(outputIndex));
 }
 
 function ensureU8(buffer: Uint8Array, size: i32): Uint8Array {
@@ -90,6 +325,10 @@ export function ensureCellCapacity(nextCapacity: i32): void {
   stringIds = ensureU32(stringIds, nextCapacity);
   errors = ensureU16(errors, nextCapacity);
   formulaForCell = ensureU32(formulaForCell, nextCapacity);
+  spillRows = ensureU32(spillRows, nextCapacity);
+  spillCols = ensureU32(spillCols, nextCapacity);
+  spillOffsets = ensureU32(spillOffsets, nextCapacity);
+  spillLengths = ensureU32(spillLengths, nextCapacity);
 }
 
 export function ensureFormulaCapacity(nextCapacity: i32): void {
@@ -107,6 +346,8 @@ export function ensureConstantCapacity(nextCapacity: i32): void {
 export function ensureRangeCapacity(nextCapacity: i32): void {
   rangeOffsets = ensureU32(rangeOffsets, nextCapacity);
   rangeLengths = ensureU32(rangeLengths, nextCapacity);
+  rangeRowCounts = ensureU32(rangeRowCounts, nextCapacity);
+  rangeColCounts = ensureU32(rangeColCounts, nextCapacity);
 }
 
 export function ensureMemberCapacity(nextCapacity: i32): void {
@@ -163,6 +404,18 @@ export function uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, l
   for (let index = 0; index < offsets.length; index++) {
     rangeOffsets[index] = offsets[index];
     rangeLengths[index] = lengths[index];
+  }
+}
+
+export function uploadRangeShapes(rowCounts: Uint32Array, colCounts: Uint32Array): void {
+  ensureRangeCapacity(max<i32>(rowCounts.length, colCounts.length));
+  rangeRowCounts.fill(0);
+  rangeColCounts.fill(0);
+  for (let index = 0; index < rowCounts.length; index++) {
+    rangeRowCounts[index] = rowCounts[index];
+  }
+  for (let index = 0; index < colCounts.length; index++) {
+    rangeColCounts[index] = colCounts[index];
   }
 }
 
@@ -237,7 +490,24 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       continue;
     }
 
+    if (opcode == Opcode.PushString) {
+      writeScalar(sp, <u8>ValueTag.String, <f64>operand);
+      sp++;
+      continue;
+    }
+
+    if (opcode == Opcode.PushError) {
+      writeScalar(sp, <u8>ValueTag.Error, operand);
+      sp++;
+      continue;
+    }
+
     if (opcode == Opcode.PushCell) {
+      if (operand == UNRESOLVED_WASM_OPERAND) {
+        writeScalar(sp, <u8>ValueTag.Error, ErrorCode.Ref);
+        sp++;
+        continue;
+      }
       if (tags[operand] == ValueTag.Error) {
         writeScalar(sp, <u8>ValueTag.Error, errors[operand]);
       } else if (tags[operand] == ValueTag.String) {
@@ -260,7 +530,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
 
     if (
       opcode == Opcode.Add || opcode == Opcode.Sub || opcode == Opcode.Mul || opcode == Opcode.Div ||
-      opcode == Opcode.Pow || opcode == Opcode.Eq || opcode == Opcode.Neq || opcode == Opcode.Gt ||
+      opcode == Opcode.Pow || opcode == Opcode.Concat || opcode == Opcode.Eq || opcode == Opcode.Neq || opcode == Opcode.Gt ||
       opcode == Opcode.Gte || opcode == Opcode.Lt || opcode == Opcode.Lte
     ) {
       const rightTag = tagStack[sp - 1];
@@ -274,6 +544,29 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       }
       if (rightTag == ValueTag.Error || leftTag == ValueTag.Error) {
         writeScalar(sp - 2, <u8>ValueTag.Error, rightTag == ValueTag.Error ? valueStack[sp - 1] : valueStack[sp - 2]);
+        sp--;
+        continue;
+      }
+      if (opcode == Opcode.Concat) {
+        writeConcatenatedString(sp - 2, leftTag, valueStack[sp - 2], rightTag, valueStack[sp - 1]);
+        sp--;
+        continue;
+      }
+      if (opcode == Opcode.Eq || opcode == Opcode.Neq || opcode == Opcode.Gt || opcode == Opcode.Gte || opcode == Opcode.Lt || opcode == Opcode.Lte) {
+        const comparison = compareScalars(leftTag, valueStack[sp - 2], rightTag, valueStack[sp - 1]);
+        if (comparison == i32.MIN_VALUE) {
+          writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
+          sp--;
+          continue;
+        }
+        let result = 0;
+        if (opcode == Opcode.Eq) result = comparison == 0 ? 1 : 0;
+        else if (opcode == Opcode.Neq) result = comparison != 0 ? 1 : 0;
+        else if (opcode == Opcode.Gt) result = comparison > 0 ? 1 : 0;
+        else if (opcode == Opcode.Gte) result = comparison >= 0 ? 1 : 0;
+        else if (opcode == Opcode.Lt) result = comparison < 0 ? 1 : 0;
+        else result = comparison <= 0 ? 1 : 0;
+        writeScalar(sp - 2, <u8>ValueTag.Boolean, result);
         sp--;
         continue;
       }
@@ -321,6 +614,13 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     }
 
     if (opcode == Opcode.JumpIfFalse) {
+      if (kindStack[sp - 1] == STACK_KIND_SCALAR && tagStack[sp - 1] == ValueTag.Error) {
+        const skipInstruction = programArena[start + operand - 1];
+        if ((skipInstruction >>> 24) == Opcode.Jump) {
+          pc = start + (skipInstruction & 0x00ffffff) - 1;
+          continue;
+        }
+      }
       const numeric = toNumeric(kindStack[sp - 1], tagStack[sp - 1], valueStack[sp - 1]);
       sp--;
       if (isNaN(numeric) || numeric == 0) {
@@ -348,16 +648,42 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         stringData,
         rangeOffsets,
         rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
         rangeMembers,
+        outputStringOffsets,
+        outputStringLengths,
+        outputStringData,
         sp
       );
       continue;
     }
 
     if (opcode == Opcode.Ret) {
+      if (kindStack[sp - 1] == STACK_KIND_ARRAY) {
+        const arrayIndex = rangeIndexStack[sp - 1];
+        const offset = spillArrayOffsets[arrayIndex];
+        const length = spillArrayLengths[arrayIndex];
+        spillRows[cellIndex] = spillArrayRows[arrayIndex];
+        spillCols[cellIndex] = spillArrayCols[arrayIndex];
+        spillOffsets[cellIndex] = offset;
+        spillLengths[cellIndex] = length;
+        tags[cellIndex] = length > 0 ? <u8>ValueTag.Number : <u8>ValueTag.Empty;
+        numbers[cellIndex] = length > 0 ? spillNumbers[offset] : 0;
+        stringIds[cellIndex] = 0;
+        errors[cellIndex] = ErrorCode.None;
+        return;
+      }
       const resultTag = tagStack[sp - 1];
       tags[cellIndex] = resultTag;
-      stringIds[cellIndex] = resultTag == ValueTag.String ? <u32>valueStack[sp - 1] : 0;
+      if (resultTag == ValueTag.String) {
+        const stringValue = valueStack[sp - 1];
+        stringIds[cellIndex] = stringValue >= OUTPUT_STRING_BASE
+          ? (0x80000000 | <u32>(stringValue - OUTPUT_STRING_BASE))
+          : <u32>stringValue;
+      } else {
+        stringIds[cellIndex] = 0;
+      }
       if (resultTag == ValueTag.Error) {
         errors[cellIndex] = <u16>valueStack[sp - 1];
         numbers[cellIndex] = 0;
@@ -374,8 +700,14 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
 }
 
 export function evalBatch(cellIndices: Uint32Array): void {
+  resetOutputStrings();
+  resetSpillResults();
   for (let index = 0; index < cellIndices.length; index++) {
     const cellIndex = cellIndices[index];
+    spillRows[cellIndex] = 0;
+    spillCols[cellIndex] = 0;
+    spillOffsets[cellIndex] = 0;
+    spillLengths[cellIndex] = 0;
     const formulaIndex = formulaForCell[cellIndex];
     if (formulaIndex == 0) continue;
     evalProgram(cellIndex, formulaIndex - 1);

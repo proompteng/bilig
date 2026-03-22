@@ -168,9 +168,8 @@ describe("js evaluator", () => {
   it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
     expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
     expect(optimizeFormula(parseFormula("-\"text\""))).toEqual({
-      kind: "UnaryExpr",
-      operator: "-",
-      argument: { kind: "StringLiteral", value: "text" }
+      kind: "ErrorLiteral",
+      code: ErrorCode.Value
     });
     expect(optimizeFormula(parseFormula("IF(FALSE, A1, 1+2)"))).toEqual({
       kind: "NumberLiteral",

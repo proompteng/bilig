@@ -15,6 +15,14 @@ export interface WasmRangeUploadLayout {
   members: Uint32Array;
   offsets: Uint32Array;
   lengths: Uint32Array;
+  rowCounts: Uint32Array;
+  colCounts: Uint32Array;
+}
+
+export interface WasmNumericSpillResult {
+  rows: number;
+  cols: number;
+  values: Float64Array;
 }
 
 export class WasmKernelFacade {
@@ -81,6 +89,15 @@ export class WasmKernelFacade {
       memberCapacity
     );
     this.kernel.uploadRangeMembers(layout.members, layout.offsets, layout.lengths);
+    this.kernel.uploadRangeShapes(layout.rowCounts, layout.colCounts);
+  }
+
+  uploadVolatileNowSerial(nowSerial: number): void {
+    this.kernel?.uploadVolatileNowSerial(nowSerial);
+  }
+
+  uploadVolatileRandomValues(values: Float64Array): void {
+    this.kernel?.uploadVolatileRandomValues(values);
   }
 
   syncStringPool(layout: { offsets: Uint32Array; lengths: Uint32Array; data: Uint16Array }): void {
@@ -134,29 +151,59 @@ export class WasmKernelFacade {
     this.kernel?.evalBatch(cellIndices);
   }
 
+  readNumericSpill(cellIndex: number): WasmNumericSpillResult | undefined {
+    if (!this.kernel) {
+      return undefined;
+    }
+    const rows = this.kernel.readSpillRows()[cellIndex] ?? 0;
+    const cols = this.kernel.readSpillCols()[cellIndex] ?? 0;
+    if (rows === 0 || cols === 0) {
+      return undefined;
+    }
+    const offset = this.kernel.readSpillOffsets()[cellIndex] ?? 0;
+    const length = this.kernel.readSpillLengths()[cellIndex] ?? 0;
+    return {
+      rows,
+      cols,
+      values: this.kernel.readSpillNumbers().subarray(offset, offset + length)
+    };
+  }
+
   materializePivotTable(
     sourceRangeIndex: number,
+    sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
     valueAggregations: Uint8Array
   ): {
-    rows: number;
-    cols: number;
-    tags: Uint8Array;
+      rows: number;
+      cols: number;
+      tags: Uint8Array;
     numbers: Float64Array;
     stringIds: Uint32Array;
     errors: Uint16Array;
   } | undefined {
     return this.kernel?.materializePivotTable(
       sourceRangeIndex,
+      sourceWidth,
       groupByColumnIndices,
       valueColumnIndices,
       valueAggregations
     );
   }
 
-  syncToStore(store: CellStore, changedCellIndices: Uint32Array): void {
+  syncToStore(store: CellStore, changedCellIndices: Uint32Array, strings: import("./string-pool.js").StringPool): void {
     if (!this.kernel) return;
+    
+    // Read and intern new output strings from WASM before updating cells
+    const newStrings = this.kernel.readOutputStrings();
+    const outputStringIdMap = new Map<number, number>();
+    for (let index = 0; index < newStrings.length; index += 1) {
+      const str = newStrings[index]!;
+      const internedId = strings.intern(str);
+      outputStringIdMap.set((index | 0x80000000) >>> 0, internedId);
+    }
+    
     const tags = this.kernel.readTags();
     const numbers = this.kernel.readNumbers();
     const stringIds = this.kernel.readStringIds();
@@ -169,7 +216,13 @@ export class WasmKernelFacade {
       const previousError = store.errors[cellIndex]!;
       store.tags[cellIndex] = tags[cellIndex]!;
       store.numbers[cellIndex] = numbers[cellIndex]!;
-      store.stringIds[cellIndex] = stringIds[cellIndex]!;
+      
+      let newStringId = stringIds[cellIndex]!;
+      if ((newStringId & 0x80000000) !== 0) {
+        newStringId = outputStringIdMap.get(newStringId) ?? 0;
+      }
+      store.stringIds[cellIndex] = newStringId;
+      
       store.errors[cellIndex] = errors[cellIndex]!;
       if (
         previousTag !== store.tags[cellIndex] ||

@@ -54,7 +54,7 @@ describe("excel fixture harness", () => {
     const randFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "volatile:rand-basic");
 
     expect(randFixture).toBeDefined();
-    expect(getCompatibilityEntry("volatile:rand-basic")?.status).toBe("implemented-js");
+    expect(getCompatibilityEntry("volatile:rand-basic")?.status).toBe("implemented-wasm-production");
 
     const compiled = compileFormula(randFixture!.formula);
     const value = evaluatePlan(compiled.jsPlan, {
@@ -76,8 +76,8 @@ describe("excel fixture harness", () => {
 
     expect(todayFixture).toBeDefined();
     expect(nowFixture).toBeDefined();
-    expect(getCompatibilityEntry("date-time:today-volatile")?.status).toBe("implemented-js");
-    expect(getCompatibilityEntry("date-time:now-volatile")?.status).toBe("implemented-js");
+    expect(getCompatibilityEntry("date-time:today-volatile")?.status).toBe("implemented-wasm-production");
+    expect(getCompatibilityEntry("date-time:now-volatile")?.status).toBe("implemented-wasm-production");
 
     const todayCompiled = compileFormula(todayFixture!.formula);
     const nowCompiled = compileFormula(nowFixture!.formula);
@@ -91,14 +91,14 @@ describe("excel fixture harness", () => {
     expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(firstOutput(nowFixture).expected));
   });
 
-  it("executes the seeded logical backlog fixtures through the JS evaluator once they are promoted", () => {
+  it("executes the seeded logical backlog fixtures after native promotion", () => {
     const ifFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "logical:if-condition-error");
     const ifnaFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "logical:ifna-catches-na-only");
 
     expect(ifFixture).toBeDefined();
     expect(ifnaFixture).toBeDefined();
-    expect(getCompatibilityEntry("logical:if-condition-error")?.status).toBe("implemented-js");
-    expect(getCompatibilityEntry("logical:ifna-catches-na-only")?.status).toBe("implemented-js");
+    expect(getCompatibilityEntry("logical:if-condition-error")?.status).toBe("implemented-wasm-production");
+    expect(getCompatibilityEntry("logical:ifna-catches-na-only")?.status).toBe("implemented-wasm-production");
 
     expect(evaluateFixture(ifFixture)).toEqual(expectedValueToCellValue(firstOutput(ifFixture).expected));
     expect(evaluateFixture(ifnaFixture)).toEqual(expectedValueToCellValue(firstOutput(ifnaFixture).expected));

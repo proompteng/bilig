@@ -11,3 +11,4 @@ export * from "./js-evaluator.js";
 export * from "./runtime-values.js";
 export * from "./translation.js";
 export * from "./compatibility.js";
+export * from "./builtins/datetime.js";

@@ -181,6 +181,7 @@ const canonicalBaseFixtureIds = new Set<string>([
   "information:isnumber-basic",
   "information:istext-basic",
   "dynamic-array:sequence-spill",
+  "dynamic-array:sequence-aggregate",
   "dynamic-array:filter-basic",
   "dynamic-array:unique-basic",
   "names:defined-name-scalar",

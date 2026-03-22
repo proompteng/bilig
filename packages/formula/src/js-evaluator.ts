@@ -15,12 +15,14 @@ export interface EvaluationContext {
   resolveCell: (sheetName: string, address: string) => CellValue;
   resolveRange: (sheetName: string, start: string, end: string, refKind: "cells" | "rows" | "cols") => CellValue[];
   resolveName?: (name: string) => CellValue;
+  resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
 }
 
 export type JsPlanInstruction =
   | { opcode: "push-number"; value: number }
   | { opcode: "push-boolean"; value: boolean }
   | { opcode: "push-string"; value: string }
+  | { opcode: "push-error"; code: ErrorCode }
   | { opcode: "push-name"; name: string }
   | { opcode: "push-cell"; sheetName?: string; address: string }
   | { opcode: "push-range"; sheetName?: string; start: string; end: string; refKind: "cells" | "rows" | "cols" }
@@ -158,6 +160,9 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
     case "StringLiteral":
       plan.push({ opcode: "push-string", value: node.value });
       return;
+    case "ErrorLiteral":
+      plan.push({ opcode: "push-error", code: node.code as ErrorCode });
+      return;
     case "NameRef":
       plan.push({ opcode: "push-name", name: node.name });
       return;
@@ -243,6 +248,9 @@ export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: 
         break;
       case "push-string":
         stack.push({ kind: "scalar", value: { tag: ValueTag.String, value: instruction.value, stringId: 0 } });
+        break;
+      case "push-error":
+        stack.push({ kind: "scalar", value: error(instruction.code) });
         break;
       case "push-name":
         stack.push({
@@ -398,7 +406,7 @@ export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: 
           break;
         }
 
-        const builtin = getBuiltin(instruction.callee);
+        const builtin = context.resolveBuiltin?.(instruction.callee) ?? getBuiltin(instruction.callee);
         if (!builtin) {
           stack.push({ kind: "scalar", value: error(ErrorCode.Name) });
           break;

@@ -47,6 +47,8 @@ export enum Opcode {
   Jump = 18,
   JumpIfFalse = 19,
   CallBuiltin = 20,
+  PushString = 21,
+  PushError = 22,
   Ret = 255
 }
 
@@ -112,5 +114,33 @@ export enum BuiltinId {
   Weeknum = 59,
   Replace = 60,
   Substitute = 61,
-  Rept = 62
+  Rept = 62,
+  Na = 63,
+  Iferror = 64,
+  Match = 65,
+  Index = 66,
+  Vlookup = 67,
+  Hlookup = 68,
+  Xlookup = 69,
+  Xmatch = 70,
+  Countif = 71,
+  Countifs = 72,
+  Sumif = 73,
+  Sumifs = 74,
+  Averageif = 75,
+  Averageifs = 76,
+  Sumproduct = 77,
+  Left = 78,
+  Right = 79,
+  Mid = 80,
+  Trim = 81,
+  Upper = 82,
+  Lower = 83,
+  Find = 84,
+  Search = 85,
+  Value = 86,
+  Today = 87,
+  Now = 88,
+  Rand = 89,
+  Sequence = 90
 }

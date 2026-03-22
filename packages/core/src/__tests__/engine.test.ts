@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { utcDateToExcelSerial } from "@bilig/formula";
 import { SpreadsheetEngine, type EngineSyncClient } from "../index.js";
-import { ErrorCode, Opcode, ValueTag } from "@bilig/protocol";
+import { ErrorCode, FormulaMode, Opcode, ValueTag } from "@bilig/protocol";
 import type { EngineOpBatch } from "@bilig/crdt";
 
 type RuntimeFormulaWithDependencies = {
@@ -68,6 +69,11 @@ function isRuntimeFormulaWithRanges(value: unknown): value is RuntimeFormulaWith
 }
 
 describe("SpreadsheetEngine", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it("recalculates simple formulas", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -81,14 +87,17 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 24 });
   });
 
-  it("evaluates string formulas and string comparisons on the JS path", async () => {
+  it("evaluates string concatenation and string comparisons on the wasm path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
     engine.setCellValue("Sheet1", "A1", "hello");
     engine.setCellFormula("Sheet1", "B1", "A1&\" world\"");
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
     engine.setCellFormula("Sheet1", "C1", "A1=\"HELLO\"");
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
     engine.setCellFormula("Sheet1", "D1", "\"b\">\"A\"");
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     expect(engine.getCellValue("Sheet1", "B1")).toMatchObject({ tag: ValueTag.String, value: "hello world" });
     expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Boolean, value: true });
@@ -167,6 +176,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.getCellValue("Sheet1", "A3")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 2, jsFormulaCount: 0 });
     expect(engine.exportSnapshot().workbook.metadata?.spills).toEqual([
       { sheetName: "Sheet1", address: "A1", rows: 3, cols: 1 }
     ]);
@@ -208,9 +218,44 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A1", "SEQUENCE(3,1,1,1)");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 99 });
     expect(engine.getCellValue("Sheet1", "A3")).toEqual({ tag: ValueTag.Empty });
     expect(engine.exportSnapshot().workbook.metadata?.spills).toBeUndefined();
+  });
+
+  it("evaluates nested sequence aggregates on the wasm path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 3);
+    engine.setCellFormula("Sheet1", "B1", "SUM(SEQUENCE(A1,1,1,1))");
+    engine.setCellFormula("Sheet1", "C1", "AVG(SEQUENCE(A1,1,1,1))");
+    engine.setCellFormula("Sheet1", "D1", "MIN(SEQUENCE(A1,1,1,1))");
+    engine.setCellFormula("Sheet1", "E1", "MAX(SEQUENCE(A1,1,1,1))");
+    engine.setCellFormula("Sheet1", "F1", "COUNT(SEQUENCE(A1,1,1,1))");
+    engine.setCellFormula("Sheet1", "G1", "COUNTA(SEQUENCE(A1,1,1,1))");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "G1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("treats unsupported non-native formulas as value errors without invoking a JS fallback", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 4);
+    engine.setCellValue("Sheet1", "A2", 6);
+    engine.setCellFormula("Sheet1", "B1", "LEN(A1:A2)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 0 });
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
   });
 
   it("supports cross-sheet references", async () => {
@@ -223,7 +268,59 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet2", "B2")).toEqual({ tag: ValueTag.Number, value: 12 });
   });
 
-  it("evaluates row and column aggregate ranges on the JS path", async () => {
+  it("recalculates TODAY and NOW on the wasm path for each recalc-triggering batch", async () => {
+    vi.useFakeTimers();
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    vi.setSystemTime(new Date("2026-03-19T15:45:30.000Z"));
+    engine.setCellFormula("Sheet1", "A1", "TODAY()");
+    engine.setCellFormula("Sheet1", "B1", "NOW()");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({
+      tag: ValueTag.Number,
+      value: Math.floor(utcDateToExcelSerial(new Date("2026-03-19T15:45:30.000Z")))
+    });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({
+      tag: ValueTag.Number,
+      value: utcDateToExcelSerial(new Date("2026-03-19T15:45:30.000Z"))
+    });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 2, jsFormulaCount: 0 });
+
+    vi.setSystemTime(new Date("2026-03-20T01:02:03.000Z"));
+    engine.setCellValue("Sheet1", "C1", 1);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({
+      tag: ValueTag.Number,
+      value: Math.floor(utcDateToExcelSerial(new Date("2026-03-20T01:02:03.000Z")))
+    });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({
+      tag: ValueTag.Number,
+      value: utcDateToExcelSerial(new Date("2026-03-20T01:02:03.000Z"))
+    });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 2, jsFormulaCount: 0 });
+  });
+
+  it("recalculates RAND on the wasm path for each recalc-triggering batch", async () => {
+    const randomSpy = vi.spyOn(Math, "random");
+    randomSpy.mockReturnValueOnce(0.125).mockReturnValueOnce(0.875);
+
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "RAND()");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 0.125 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "B1", 1);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 0.875 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("evaluates row and column aggregate ranges on the wasm path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -235,7 +332,7 @@ describe("SpreadsheetEngine", () => {
 
     expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 7 });
     expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 12 });
-    expect(engine.getLastMetrics().jsFormulaCount).toBeGreaterThanOrEqual(1);
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
   it("uses the wasm fast path for supported aggregate formulas", async () => {
@@ -262,7 +359,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getDependencies("Sheet1", "B1").directPrecedents).toEqual(["Sheet1!A1", "Sheet1!A2"]);
   });
 
-  it("keeps branch formulas on the JS path until wasm semantics catch up", async () => {
+  it("uses the wasm fast path for IF branch formulas once comparison parity exists", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -271,11 +368,11 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "B1", "IF(A1>0,A1*2,A2-1)");
 
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 6 });
-    expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.setCellValue("Sheet1", "A1", 0);
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 8 });
-    expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
   it("uses the wasm fast path for exact-parity logical builtins", async () => {
@@ -297,10 +394,162 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Boolean, value: true });
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
 
+    engine.setCellFormula("Sheet1", "B11", "AND(TRUE,A4)");
+    expect(engine.getCellValue("Sheet1", "B11")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B12", "OR(A4,TRUE)");
+    expect(engine.getCellValue("Sheet1", "B12")).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B13", "NOT(2)");
+    expect(engine.getCellValue("Sheet1", "B13")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B14", "IF(1/0,1,2)");
+    expect(engine.getCellValue("Sheet1", "B14")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
     engine.setCellValue("Sheet1", "A3", "hello");
     engine.setCellFormula("Sheet1", "B4", "AND(A3,TRUE)");
     expect(engine.getCellValue("Sheet1", "B4")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
     expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
+
+    engine.setCellFormula("Sheet1", "B5", "IFERROR(A1/0,\"fallback\")");
+    expect(engine.getCellValue("Sheet1", "B5")).toMatchObject({ tag: ValueTag.String, value: "fallback" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B6", "IFNA(NA(),\"missing\")");
+    expect(engine.getCellValue("Sheet1", "B6")).toMatchObject({ tag: ValueTag.String, value: "missing" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("uses the wasm fast path for INDEX VLOOKUP and HLOOKUP", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "pear");
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setCellValue("Sheet1", "A2", "apple");
+    engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellValue("Sheet1", "D1", "Q1");
+    engine.setCellValue("Sheet1", "E1", "Q2");
+    engine.setCellValue("Sheet1", "F1", "Q3");
+    engine.setCellValue("Sheet1", "D2", 100);
+    engine.setCellValue("Sheet1", "E2", 200);
+    engine.setCellValue("Sheet1", "F2", 300);
+    engine.setCellFormula("Sheet1", "H1", "INDEX(A1:B2,2,2)");
+    engine.setCellFormula("Sheet1", "H2", "VLOOKUP(\"apple\",A1:B2,2,FALSE)");
+    engine.setCellFormula("Sheet1", "H3", "HLOOKUP(\"Q3\",D1:F2,2,FALSE)");
+
+    expect(engine.getCellValue("Sheet1", "H1")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Sheet1", "H2")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Sheet1", "H3")).toEqual({ tag: ValueTag.Number, value: 300 });
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0 });
+  });
+
+  it("uses the wasm fast path for conditional aggregates and SUMPRODUCT", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 2);
+    engine.setCellValue("Sheet1", "A2", 4);
+    engine.setCellValue("Sheet1", "A3", -1);
+    engine.setCellValue("Sheet1", "A4", 6);
+    engine.setCellValue("Sheet1", "B1", "x");
+    engine.setCellValue("Sheet1", "B2", "x");
+    engine.setCellValue("Sheet1", "B3", "y");
+    engine.setCellValue("Sheet1", "B4", "x");
+    engine.setCellValue("Sheet1", "C1", 10);
+    engine.setCellValue("Sheet1", "C2", 20);
+    engine.setCellValue("Sheet1", "C3", 30);
+    engine.setCellValue("Sheet1", "C4", 40);
+    engine.setCellValue("Sheet1", "D1", 1);
+    engine.setCellValue("Sheet1", "D2", 2);
+    engine.setCellValue("Sheet1", "D3", 3);
+    engine.setCellValue("Sheet1", "E1", 4);
+    engine.setCellValue("Sheet1", "E2", 5);
+    engine.setCellValue("Sheet1", "E3", 6);
+
+    engine.setCellFormula("Sheet1", "F1", "COUNTIF(A1:A4,\">0\")");
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "F2", "COUNTIFS(A1:A4,\">0\",B1:B4,\"x\")");
+    expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "F3", "SUMIF(A1:A4,\">0\",C1:C4)");
+    expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 70 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "F4", "SUMIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")");
+    expect(engine.getCellValue("Sheet1", "F4")).toEqual({ tag: ValueTag.Number, value: 70 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "F5", "AVERAGEIF(A1:A4,\">0\")");
+    expect(engine.getCellValue("Sheet1", "F5")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "F6", "AVERAGEIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")");
+    expect(engine.getCellValue("Sheet1", "F6")).toEqual({ tag: ValueTag.Number, value: (10 + 20 + 40) / 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "F7", "SUMPRODUCT(D1:D3,E1:E3)");
+    expect(engine.getCellValue("Sheet1", "F7")).toEqual({ tag: ValueTag.Number, value: 32 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "A3", 8);
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 100 });
+    expect(engine.getCellValue("Sheet1", "F4")).toEqual({ tag: ValueTag.Number, value: 70 });
+    expect(engine.getCellValue("Sheet1", "F5")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "F6")).toEqual({ tag: ValueTag.Number, value: (10 + 20 + 40) / 3 });
+    expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
+  });
+
+  it("uses the wasm fast path for vector lookup builtins", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "apple");
+    engine.setCellValue("Sheet1", "A2", "pear");
+    engine.setCellValue("Sheet1", "A3", "pear");
+    engine.setCellValue("Sheet1", "A4", "plum");
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellValue("Sheet1", "B3", 30);
+    engine.setCellValue("Sheet1", "B4", 40);
+    engine.setCellValue("Sheet1", "C1", 1);
+    engine.setCellValue("Sheet1", "C2", 3);
+    engine.setCellValue("Sheet1", "C3", 5);
+
+    engine.setCellFormula("Sheet1", "D1", "MATCH(\"pear\",A1:A4,0)");
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "D2", "MATCH(4,C1:C3,1)");
+    expect(engine.getCellValue("Sheet1", "D2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "D3", "XMATCH(\"pear\",A1:A4,0,-1)");
+    expect(engine.getCellValue("Sheet1", "D3")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "D4", "XLOOKUP(\"pear\",A1:A4,B1:B4)");
+    expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "D5", "XLOOKUP(\"missing\",A1:A4,B1:B4,\"fallback\")");
+    expect(engine.getCellValue("Sheet1", "D5")).toMatchObject({ tag: ValueTag.String, value: "fallback" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "A1", "pear");
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "D3")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "D4")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
   });
 
   it("uses the wasm fast path for exact-parity info and date builtins", async () => {
@@ -400,7 +649,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
-  it("constant-folds literal VALUE calls onto the native path while keeping cell-text VALUE on JS", async () => {
+  it("uses the wasm fast path for literal and dynamic VALUE coercion", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -409,10 +658,15 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 42 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
-    engine.setCellValue("Sheet1", "A1", "not-a-number");
+    engine.setCellValue("Sheet1", "A1", "  -17.25e1  ");
     engine.setCellFormula("Sheet1", "B2", "VALUE(A1)");
-    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
-    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: -172.5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellValue("Sheet1", "A2", "not-a-number");
+    engine.setCellFormula("Sheet1", "B3", "VALUE(A2)");
+    expect(engine.getCellValue("Sheet1", "B3")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
   it("uses the wasm fast path for exact-parity LEN builtin", async () => {
@@ -459,6 +713,68 @@ describe("SpreadsheetEngine", () => {
 
     engine.setCellFormula("Sheet1", "B2", "EXACT(A1,A2)");
     expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("uses the wasm fast path for string literals, direct refs, and CONCAT", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "world");
+
+    engine.setCellFormula("Sheet1", "B1", "\"hello\"");
+    expect(engine.getCellValue("Sheet1", "B1")).toMatchObject({ tag: ValueTag.String, value: "hello" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B2", "A1");
+    expect(engine.getCellValue("Sheet1", "B2")).toMatchObject({ tag: ValueTag.String, value: "world" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B3", "CONCAT(\"hi \",A1)");
+    expect(engine.getCellValue("Sheet1", "B3")).toMatchObject({ tag: ValueTag.String, value: "hi world" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
+  it("uses the wasm fast path for text slicing, casing, and search builtins", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "Alpha");
+    engine.setCellValue("Sheet1", "A2", "  alpha   beta  ");
+    engine.setCellValue("Sheet1", "A3", "alpha");
+    engine.setCellValue("Sheet1", "A4", "BETA");
+    engine.setCellValue("Sheet1", "A5", "alphabet");
+
+    engine.setCellFormula("Sheet1", "B1", "LEFT(A1,2)");
+    expect(engine.getCellValue("Sheet1", "B1")).toMatchObject({ tag: ValueTag.String, value: "Al" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B2", "RIGHT(A1)");
+    expect(engine.getCellValue("Sheet1", "B2")).toMatchObject({ tag: ValueTag.String, value: "a" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B3", "MID(A1,2,3)");
+    expect(engine.getCellValue("Sheet1", "B3")).toMatchObject({ tag: ValueTag.String, value: "lph" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B4", "TRIM(A2)");
+    expect(engine.getCellValue("Sheet1", "B4")).toMatchObject({ tag: ValueTag.String, value: "alpha beta" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B5", "UPPER(A3)");
+    expect(engine.getCellValue("Sheet1", "B5")).toMatchObject({ tag: ValueTag.String, value: "ALPHA" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B6", "LOWER(A4)");
+    expect(engine.getCellValue("Sheet1", "B6")).toMatchObject({ tag: ValueTag.String, value: "beta" });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B7", "FIND(\"ph\",A5,3)");
+    expect(engine.getCellValue("Sheet1", "B7")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+
+    engine.setCellFormula("Sheet1", "B8", "SEARCH(\"P*\",A5)");
+    expect(engine.getCellValue("Sheet1", "B8")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
@@ -514,8 +830,8 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "A1", 12);
 
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 22 });
-    expect(engine.getLastMetrics().wasmFormulaCount).toBe(1);
-    expect(engine.getLastMetrics().jsFormulaCount).toBe(1);
+    expect(engine.getLastMetrics().wasmFormulaCount).toBe(2);
+    expect(engine.getLastMetrics().jsFormulaCount).toBe(0);
   });
 
   it("rebinds formulas when a referenced sheet appears later", async () => {
@@ -525,12 +841,15 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A1", "Sheet2!B1*2");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.createSheet("Sheet2");
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.setCellValue("Sheet2", "B1", 3);
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
   it("rebinds bounded cross-sheet ranges from #REF! back onto the wasm path when a sheet appears", async () => {
@@ -540,6 +859,7 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A1", "SUM(Sheet2!A1:A2)");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.createSheet("Sheet2");
 
@@ -562,10 +882,12 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A1", "Sheet2!B1*2");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.deleteSheet("Sheet2");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
   it("rebinds bounded cross-sheet ranges to #REF! when a referenced sheet is deleted", async () => {
@@ -578,10 +900,12 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A1", "SUM(Sheet2!A1:A2)");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.deleteSheet("Sheet2");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
   it("clears reverse range edges when a range-backed formula is removed", async () => {
@@ -703,6 +1027,7 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "A2", "TaxRate*A1");
 
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     const changed: number[][] = [];
     const unsubscribe = engine.subscribe((event) => {
@@ -717,13 +1042,16 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getDefinedName("taxrate")).toEqual({ name: "TaxRate", value: 0.085 });
     expect(engine.getDefinedNames()).toEqual([{ name: "TaxRate", value: 0.085 }]);
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 8.5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
     expect(changed.at(-1)).toContain(a2Index!);
 
     engine.setDefinedName("TAXRATE", 0.09);
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Number, value: 9 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     expect(engine.deleteDefinedName("taxrate")).toBe(true);
     expect(engine.getCellValue("Sheet1", "A2")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     unsubscribe();
   });
@@ -749,24 +1077,39 @@ describe("SpreadsheetEngine", () => {
     expect(restored.exportSnapshot().workbook.metadata?.definedNames).toEqual([{ name: "TaxRate", value: 0.085 }]);
   });
 
+  it("routes multi-name scalar formulas through the wasm path once names exist", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "TaxRate+FeeRate");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+
+    engine.setDefinedName("TaxRate", 0.085);
+    engine.setDefinedName("FeeRate", 0.015);
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 0.1 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+  });
+
   it("materializes pivot tables, refreshes aggregates, and roundtrips snapshot metadata", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Data");
     engine.createSheet("Pivot");
     engine.setRangeValues(
-      { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+      { sheetName: "Data", startAddress: "A1", endAddress: "D4" },
       [
-        ["Region", "Product", "Sales"],
-        ["East", "Widget", 10],
-        ["West", "Widget", 7],
-        ["East", "Gizmo", 5]
+        ["Region", "Notes", "Product", "Sales"],
+        ["East", "priority", "Widget", 10],
+        ["West", "priority", "Widget", 7],
+        ["East", "priority", "Gizmo", 5]
       ]
     );
 
     engine.setPivotTable("Pivot", "B2", {
       name: "SalesByRegion",
-      source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "D4" },
       groupBy: ["Region"],
       values: [
         { sourceColumn: "Sales", summarizeBy: "sum" },
@@ -788,7 +1131,7 @@ describe("SpreadsheetEngine", () => {
         name: "SalesByRegion",
         sheetName: "Pivot",
         address: "B2",
-        source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+        source: { sheetName: "Data", startAddress: "A1", endAddress: "D4" },
         groupBy: ["Region"],
         values: [
           { sourceColumn: "Sales", summarizeBy: "sum" },
@@ -799,7 +1142,7 @@ describe("SpreadsheetEngine", () => {
       }
     ]);
 
-    engine.setCellValue("Data", "C3", 9);
+    engine.setCellValue("Data", "D3", 9);
 
     expect(engine.getCellValue("Pivot", "C4")).toEqual({ tag: ValueTag.Number, value: 9 });
 
@@ -809,7 +1152,7 @@ describe("SpreadsheetEngine", () => {
         name: "SalesByRegion",
         sheetName: "Pivot",
         address: "B2",
-        source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+        source: { sheetName: "Data", startAddress: "A1", endAddress: "D4" },
         groupBy: ["Region"],
         values: [
           { sourceColumn: "Sales", summarizeBy: "sum" },
@@ -829,6 +1172,30 @@ describe("SpreadsheetEngine", () => {
     expect(restored.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 15 });
     expect(restored.getCellValue("Pivot", "C4")).toEqual({ tag: ValueTag.Number, value: 9 });
     expect(restored.exportSnapshot().workbook.metadata?.pivots).toEqual(snapshot.workbook.metadata?.pivots);
+  });
+
+  it("returns #VALUE for pivots whose configured headers are missing", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Pivot");
+    engine.setRangeValues(
+      { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      [
+        ["Region", "Sales"],
+        ["East", 10],
+        ["West", 5]
+      ]
+    );
+
+    engine.setPivotTable("Pivot", "A1", {
+      name: "BrokenPivot",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Missing"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }]
+    });
+
+    expect(engine.getCellValue("Pivot", "A1")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
   it("returns #REF for missing pivot source sheets and rebinds once source cells appear", async () => {

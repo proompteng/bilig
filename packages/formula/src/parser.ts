@@ -135,6 +135,7 @@ export function parseFormula(source: string): FormulaNode {
         return undefined;
       case "BooleanLiteral":
       case "StringLiteral":
+      case "ErrorLiteral":
       case "UnaryExpr":
       case "BinaryExpr":
       case "CallExpr":
@@ -152,6 +153,7 @@ export function parseFormula(source: string): FormulaNode {
       case "NumberLiteral":
       case "BooleanLiteral":
       case "StringLiteral":
+      case "ErrorLiteral":
       case "NameRef":
       case "CellRef":
       case "RangeRef":

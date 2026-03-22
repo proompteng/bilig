@@ -14,8 +14,9 @@ function cellValueToAst(value: CellValue): FormulaNode | undefined {
     case ValueTag.String:
       return { kind: "StringLiteral", value: value.value };
     case ValueTag.Empty:
-    case ValueTag.Error:
       return undefined;
+    case ValueTag.Error:
+      return { kind: "ErrorLiteral", code: value.code };
   }
 }
 
@@ -32,6 +33,7 @@ function isStaticNode(node: FormulaNode): boolean {
     case "NumberLiteral":
     case "BooleanLiteral":
     case "StringLiteral":
+    case "ErrorLiteral":
       return true;
     case "NameRef":
     case "CellRef":
@@ -121,6 +123,7 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
     case "NumberLiteral":
     case "BooleanLiteral":
     case "StringLiteral":
+    case "ErrorLiteral":
     case "NameRef":
     case "CellRef":
     case "RowRef":

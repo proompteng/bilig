@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ErrorCode, FormulaMode, ValueTag, type CellValue } from "@bilig/protocol";
+import { ErrorCode, FormulaMode, Opcode, ValueTag, type CellValue } from "@bilig/protocol";
 import {
   bindFormula,
   compileFormula,
@@ -65,10 +65,10 @@ describe("formula parser/compiler edges", () => {
 
     const anchoredRange = bindFormula(parseFormula("SUM('My Sheet'!$A:$B)"));
     expect(anchoredRange.deps).toEqual(["'My Sheet'!A:B"]);
-    expect(anchoredRange.mode).toBe(FormulaMode.JsOnly);
+    expect(anchoredRange.mode).toBe(FormulaMode.WasmFastPath);
 
-    expect(bindFormula(parseFormula("\"hello\"")).mode).toBe(FormulaMode.JsOnly);
-    expect(bindFormula(parseFormula("A1")).mode).toBe(FormulaMode.JsOnly);
+    expect(bindFormula(parseFormula("\"hello\"")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("A1")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("LEN(A1)")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("LEN(A1:A2)")).mode).toBe(FormulaMode.JsOnly);
   });
@@ -107,17 +107,27 @@ describe("formula parser/compiler edges", () => {
     expect(() => compileFormula("Sheet1!A")).toThrow("Row and column references must appear inside a range");
   });
 
-  it("compiles non-wasm IF and text formulas onto the JS plan only", () => {
+  it("compiles literal text, CONCAT, and IF text branches onto the wasm path", () => {
     const textIf = compileFormula("IF(A1, CONCAT(\"x\", \"y\"), \"z\")");
-    expect(textIf.mode).toBe(FormulaMode.JsOnly);
-    expect(textIf.program).toEqual(Uint32Array.from([255 << 24]));
+    expect(textIf.mode).toBe(FormulaMode.WasmFastPath);
+    expect(textIf.program[0] >>> 24).toBe(Opcode.PushCell);
+    expect(textIf.symbolicStrings).toEqual(["xy", "z"]);
 
     const plainString = compileFormula("\"hello\"");
-    expect(plainString.mode).toBe(FormulaMode.JsOnly);
+    expect(plainString.mode).toBe(FormulaMode.WasmFastPath);
+    expect(plainString.symbolicStrings).toEqual(["hello"]);
+    expect(plainString.program).toEqual(Uint32Array.from([(Opcode.PushString << 24) | 0, 255 << 24]));
     expect(plainString.jsPlan).toEqual([
       { opcode: "push-string", value: "hello" },
       { opcode: "return" }
     ]);
+
+    const concat = compileFormula("CONCAT(\"x\", \"y\")");
+    expect(concat.mode).toBe(FormulaMode.WasmFastPath);
+    expect(concat.symbolicStrings).toEqual(["xy"]);
+
+    const compared = compileFormula("A1=\"HELLO\"");
+    expect(compared.mode).toBe(FormulaMode.WasmFastPath);
   });
 
   it("parses postfix percent as arithmetic scaling", () => {

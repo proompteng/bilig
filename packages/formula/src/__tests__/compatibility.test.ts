@@ -20,7 +20,7 @@ describe("formula compatibility registry", () => {
   it("keeps the canonical formula fixture corpus and registry in exact lockstep", () => {
     const canonicalRegistryEntries = formulaCompatibilityRegistry.filter((entry) => entry.scope === "canonical");
 
-    expect(canonicalFormulaFixtures).toHaveLength(100);
+    expect(canonicalFormulaFixtures).toHaveLength(101);
     expect(canonicalRegistryEntries).toHaveLength(canonicalFormulaFixtures.length);
 
     const fixtureIds = new Set(canonicalFormulaFixtures.map((fixture) => fixture.id));

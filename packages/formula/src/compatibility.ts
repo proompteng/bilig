@@ -142,14 +142,10 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     notes: "Postfix percent is in the canonical formula corpus and tracked as part of the arithmetic lane."
   }),
   entry("comparison:equality-number", "comparison", "=A1=A2", "implemented-wasm-production"),
-  entry("comparison:equality-text", "comparison", "=\"hello\"=\"HELLO\"", "implemented-js", {
-    prerequisites: ["core:value-model", "core:comparison-model", "core:string-coercion"]
-  }),
+  entry("comparison:equality-text", "comparison", "=\"hello\"=\"HELLO\"", "implemented-wasm-production"),
   entry("comparison:greater-than", "comparison", "=A1>A2", "implemented-wasm-production"),
   entry("comparison:less-than-or-equal", "comparison", "=A1<=A2", "implemented-wasm-production"),
-  entry("logical:if-basic", "logical", "=IF(A1>0,\"yes\",\"no\")", "implemented-js", {
-    notes: "Control-flow semantics stay JS-authoritative until branch laziness parity is proven in differential tests."
-  }),
+  entry("logical:if-basic", "logical", "=IF(A1>0,\"yes\",\"no\")", "implemented-wasm-production"),
   entry("logical:and-basic", "logical", "=AND(A1,A2)", "implemented-wasm-production"),
   entry("logical:or-basic", "logical", "=OR(A1,A2)", "implemented-wasm-production"),
   entry("logical:not-basic", "logical", "=NOT(A1)", "implemented-wasm-production"),
@@ -164,84 +160,85 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("math:floor-basic", "math", "=FLOOR(A1,2)", "implemented-wasm-production"),
   entry("math:ceiling-basic", "math", "=CEILING(A1,2)", "implemented-wasm-production"),
   entry("math:mod-basic", "math", "=MOD(A1,A2)", "implemented-wasm-production"),
-  entry("text:concat-operator", "text", "=\"bi\"&\"lig\"", "implemented-js"),
-  entry("text:concat-function", "text", "=CONCAT(\"bi\",\"lig\")", "implemented-js"),
+  entry("text:concat-operator", "text", "=\"bi\"&\"lig\"", "implemented-wasm-production"),
+  entry("text:concat-function", "text", "=CONCAT(\"bi\",\"lig\")", "implemented-wasm-production"),
   entry("text:len-basic", "text", "=LEN(\"bilig\")", "implemented-wasm-production", {
     notes: "LEN now executes through the string-aware native runtime for scalar inputs."
   }),
   entry("date-time:serial-addition", "date-time", "=A1+7", "implemented-wasm-production"),
   entry("date-time:date-constructor", "date-time", "=DATE(2026,3,15)", "implemented-wasm-production"),
-  entry("date-time:today-volatile", "date-time", "=TODAY()", "implemented-js", {
+  entry("date-time:today-volatile", "date-time", "=TODAY()", "implemented-wasm-production", {
     prerequisites: ["core:value-model", "core:date-serial-model", "core:volatile-context"]
   }),
-  entry("lookup-reference:index-basic", "lookup-reference", "=INDEX(A1:B2,2,1)", "implemented-js"),
-  entry("lookup-reference:match-exact", "lookup-reference", "=MATCH(\"pear\",A1:A3,0)", "implemented-js"),
-  entry("lookup-reference:vlookup-exact", "lookup-reference", "=VLOOKUP(\"pear\",A1:B3,2,FALSE)", "implemented-js"),
-  entry("lookup-reference:xlookup-exact", "lookup-reference", "=XLOOKUP(\"pear\",A1:A3,B1:B3)", "implemented-js"),
-  entry("statistical:averageif-basic", "statistical", "=AVERAGEIF(A1:A4,\">0\")", "implemented-js"),
-  entry("statistical:countif-basic", "statistical", "=COUNTIF(A1:A4,\">0\")", "implemented-js"),
+  entry("lookup-reference:index-basic", "lookup-reference", "=INDEX(A1:B2,2,1)", "implemented-wasm-production"),
+  entry("lookup-reference:match-exact", "lookup-reference", "=MATCH(\"pear\",A1:A3,0)", "implemented-wasm-production"),
+  entry("lookup-reference:vlookup-exact", "lookup-reference", "=VLOOKUP(\"pear\",A1:B3,2,FALSE)", "implemented-wasm-production"),
+  entry("lookup-reference:xlookup-exact", "lookup-reference", "=XLOOKUP(\"pear\",A1:A3,B1:B3)", "implemented-wasm-production"),
+  entry("statistical:averageif-basic", "statistical", "=AVERAGEIF(A1:A4,\">0\")", "implemented-wasm-production"),
+  entry("statistical:countif-basic", "statistical", "=COUNTIF(A1:A4,\">0\")", "implemented-wasm-production"),
   entry("information:isblank-basic", "information", "=ISBLANK(A1)", "implemented-wasm-production"),
   entry("information:isnumber-basic", "information", "=ISNUMBER(A1)", "implemented-wasm-production"),
   entry("information:istext-basic", "information", "=ISTEXT(A1)", "implemented-wasm-production"),
-  entry("dynamic-array:sequence-spill", "dynamic-array", "=SEQUENCE(3,1,1,1)", "implemented-js", {
-    notes: "SEQUENCE spills through the JS runtime and workbook spill metadata; broader array families remain blocked."
+  entry("dynamic-array:sequence-spill", "dynamic-array", "=SEQUENCE(3,1,1,1)", "implemented-wasm-production", {
+    notes: "Top-level SEQUENCE spills now execute on the AssemblyScript path and reuse the existing workbook spill metadata contract; broader array families remain blocked."
+  }),
+  entry("dynamic-array:sequence-aggregate", "dynamic-array", "=SUM(SEQUENCE(A1,1,1,1))", "implemented-wasm-production", {
+    notes: "Numeric aggregate consumers can now read transient native SEQUENCE arrays directly on the AssemblyScript path without reviving the removed JS runtime fallback."
   }),
   entry("dynamic-array:filter-basic", "dynamic-array", "=FILTER(A1:A4,A1:A4>2)", "blocked"),
   entry("dynamic-array:unique-basic", "dynamic-array", "=UNIQUE(A1:A4)", "blocked"),
-  entry("names:defined-name-scalar", "names", "=TaxRate*A1", "implemented-js", {
-    notes: "Scalar defined names resolve through the JS evaluator's name hook; reference-valued names remain blocked."
+  entry("names:defined-name-scalar", "names", "=TaxRate*A1", "implemented-wasm-production", {
+    notes: "Scalar workbook names rebind onto the AssemblyScript path once the engine has concrete scalar metadata; reference-valued names remain blocked."
   }),
-  entry("names:defined-name-case-insensitive", "names", "=taxrate*A1", "implemented-js", {
+  entry("names:defined-name-case-insensitive", "names", "=taxrate*A1", "implemented-wasm-production", {
     scope: "extended",
-    notes: "Workbook defined names normalize case-insensitively through the JS evaluator's name hook."
+    notes: "Case-insensitive scalar workbook names rebind onto the AssemblyScript path after metadata normalization."
   }),
-  entry("names:defined-name-multi-scalar-pack", "names", "=TaxRate+FeeRate", "implemented-js", {
+  entry("names:defined-name-multi-scalar-pack", "names", "=TaxRate+FeeRate", "implemented-wasm-production", {
     scope: "extended",
-    notes: "Multiple workbook names can participate in one scalar expression without widening onto reference-valued metadata."
+    notes: "Multiple scalar workbook names can participate in one AssemblyScript-routed scalar expression without widening onto reference-valued metadata."
   }),
-  entry("names:defined-name-missing", "names", "=MissingRate*A1", "implemented-js", {
+  entry("names:defined-name-missing", "names", "=MissingRate*A1", "implemented-wasm-production", {
     scope: "extended",
-    notes: "Missing workbook-level names still surface #NAME? instead of falling back to empty cells."
+    notes: "Missing workbook-level names now stay on the AssemblyScript path, surface #NAME?, and rebind natively once the name appears."
   }),
   entry("tables:table-total-row-sum", "tables", "=SUM(Sales[Amount])", "blocked"),
   entry("structured-reference:table-column-ref", "structured-reference", "=SUM(Sales[Amount])", "blocked"),
-  entry("volatile:rand-basic", "volatile", "=RAND()", "implemented-js", {
+  entry("volatile:rand-basic", "volatile", "=RAND()", "implemented-wasm-production", {
     prerequisites: ["core:volatile-context", "core:value-model"]
   }),
   entry("lambda:let-basic", "lambda", "=LET(x,2,x+3)", "blocked"),
   entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "blocked"),
   entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "blocked"),
-  entry("logical:if-true-branch", "logical", "=IF(A1,A2,A3)", "implemented-js"),
-  entry("logical:if-condition-error", "logical", "=IF(1/0,1,2)", "implemented-js", {
-    notes: "The JS evaluator now propagates IF condition errors before either branch executes."
+  entry("logical:if-true-branch", "logical", "=IF(A1,A2,A3)", "implemented-wasm-production"),
+  entry("logical:if-condition-error", "logical", "=IF(1/0,1,2)", "implemented-wasm-production", {
+    notes: "The native branch VM now propagates IF condition errors before either branch executes."
   }),
-  entry("logical:iferror-catches-any-error", "logical", "=IFERROR(1/0,\"fallback\")", "implemented-js"),
-  entry("logical:ifna-catches-na-only", "logical", "=IFNA(NA(),\"missing\")", "implemented-js", {
-    notes: "NA() now normalizes to #N/A on the JS oracle path, allowing IFNA parity to execute."
-  }),
-  entry("logical:and-false-on-empty", "logical", "=AND(TRUE,A1)", "implemented-js"),
-  entry("logical:or-true-branch", "logical", "=OR(A1,TRUE)", "implemented-js"),
-  entry("logical:not-number", "logical", "=NOT(2)", "implemented-js"),
+  entry("logical:iferror-catches-any-error", "logical", "=IFERROR(1/0,\"fallback\")", "implemented-wasm-production"),
+  entry("logical:ifna-catches-na-only", "logical", "=IFNA(NA(),\"missing\")", "implemented-wasm-production"),
+  entry("logical:and-false-on-empty", "logical", "=AND(TRUE,A1)", "implemented-wasm-production"),
+  entry("logical:or-true-branch", "logical", "=OR(A1,TRUE)", "implemented-wasm-production"),
+  entry("logical:not-number", "logical", "=NOT(2)", "implemented-wasm-production"),
   entry("information:isblank-empty", "information", "=ISBLANK(A1)", "implemented-wasm-production"),
   entry("information:isnumber-number", "information", "=ISNUMBER(42)", "implemented-wasm-production"),
   entry("information:istext-string", "information", "=ISTEXT(\"hello\")", "implemented-wasm-production"),
-  entry("text:len-counts-plain-string-length", "text", "=LEN(\"hello\")", "implemented-js"),
+  entry("text:len-counts-plain-string-length", "text", "=LEN(\"hello\")", "implemented-wasm-production"),
   entry("text:exact-basic", "text", "=EXACT(\"Alpha\",\"alpha\")", "implemented-wasm-production", {
     notes: "EXACT now routes through the string-aware WASM runtime."
   }),
-  entry("text:left-basic", "text", "=LEFT(\"alpha\",3)", "implemented-js"),
-  entry("text:right-basic", "text", "=RIGHT(\"alpha\",2)", "implemented-js"),
-  entry("text:mid-basic", "text", "=MID(\"alphabet\",2,3)", "implemented-js"),
-  entry("text:trim-basic", "text", "=TRIM(\"  alpha   beta  \")", "implemented-js"),
-  entry("text:upper-basic", "text", "=UPPER(\"Alpha beta\")", "implemented-js"),
-  entry("text:lower-basic", "text", "=LOWER(\"Alpha BETA\")", "implemented-js"),
-  entry("text:find-basic", "text", "=FIND(\"ph\",\"alphabet\")", "implemented-js"),
-  entry("text:search-basic", "text", "=SEARCH(\"PH\",\"alphabet\")", "implemented-js"),
+  entry("text:left-basic", "text", "=LEFT(\"alpha\",3)", "implemented-wasm-production"),
+  entry("text:right-basic", "text", "=RIGHT(\"alpha\",2)", "implemented-wasm-production"),
+  entry("text:mid-basic", "text", "=MID(\"alphabet\",2,3)", "implemented-wasm-production"),
+  entry("text:trim-basic", "text", "=TRIM(\"  alpha   beta  \")", "implemented-wasm-production"),
+  entry("text:upper-basic", "text", "=UPPER(\"Alpha beta\")", "implemented-wasm-production"),
+  entry("text:lower-basic", "text", "=LOWER(\"Alpha BETA\")", "implemented-wasm-production"),
+  entry("text:find-basic", "text", "=FIND(\"ph\",\"alphabet\")", "implemented-wasm-production"),
+  entry("text:search-basic", "text", "=SEARCH(\"PH\",\"alphabet\")", "implemented-wasm-production"),
   entry("text:value-basic", "text", "=VALUE(\"42\")", "implemented-wasm-production", {
-    notes: "The canonical literal case constant-folds to a native-safe number; dynamic text inputs still execute through JS until string coercion is promoted."
+    notes: "VALUE now coerces scalar text inputs on the AssemblyScript path, including trimmed decimals and exponent forms."
   }),
-  entry("lookup-reference:xmatch-basic", "lookup-reference", "=XMATCH(\"pear\",A1:A3,0)", "implemented-js"),
-  entry("lookup-reference:hlookup-basic", "lookup-reference", "=HLOOKUP(\"pear\",A1:C2,2,FALSE)", "implemented-js"),
+  entry("lookup-reference:xmatch-basic", "lookup-reference", "=XMATCH(\"pear\",A1:A3,0)", "implemented-wasm-production"),
+  entry("lookup-reference:hlookup-basic", "lookup-reference", "=HLOOKUP(\"pear\",A1:C2,2,FALSE)", "implemented-wasm-production"),
   entry("lookup-reference:offset-basic", "lookup-reference", "=OFFSET(A1,1,1)", "blocked", {
     notes: "Reference-returning OFFSET depends on richer reference model and rebinding semantics."
   }),
@@ -249,11 +246,11 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("dynamic-array:drop-basic", "dynamic-array", "=DROP(A1:A4,2)", "blocked"),
   entry("dynamic-array:choosecols-basic", "dynamic-array", "=CHOOSECOLS(A1:C2,1,3)", "blocked"),
   entry("dynamic-array:chooserows-basic", "dynamic-array", "=CHOOSEROWS(A1:B3,1,3)", "blocked"),
-  entry("statistical:sumif-basic", "statistical", "=SUMIF(A1:A4,\">0\",B1:B4)", "implemented-js"),
-  entry("statistical:sumifs-basic", "statistical", "=SUMIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")", "implemented-js"),
-  entry("statistical:averageifs-basic", "statistical", "=AVERAGEIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")", "implemented-js"),
-  entry("statistical:countifs-basic", "statistical", "=COUNTIFS(A1:A4,\">0\",B1:B4,\"x\")", "implemented-js"),
-  entry("math:sumproduct-basic", "math", "=SUMPRODUCT(A1:A3,B1:B3)", "implemented-js"),
+  entry("statistical:sumif-basic", "statistical", "=SUMIF(A1:A4,\">0\",B1:B4)", "implemented-wasm-production"),
+  entry("statistical:sumifs-basic", "statistical", "=SUMIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")", "implemented-wasm-production"),
+  entry("statistical:averageifs-basic", "statistical", "=AVERAGEIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")", "implemented-wasm-production"),
+  entry("statistical:countifs-basic", "statistical", "=COUNTIFS(A1:A4,\">0\",B1:B4,\"x\")", "implemented-wasm-production"),
+  entry("math:sumproduct-basic", "math", "=SUMPRODUCT(A1:A3,B1:B3)", "implemented-wasm-production"),
   entry("math:int-basic", "math", "=INT(-3.1)", "implemented-wasm-production"),
   entry("math:roundup-basic", "math", "=ROUNDUP(12.341,2)", "implemented-wasm-production"),
   entry("math:rounddown-basic", "math", "=ROUNDDOWN(12.349,2)", "implemented-wasm-production"),
@@ -267,14 +264,14 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     prerequisites: ["core:value-model", "core:reference-model"],
     notes: "Existing blank cells on another sheet coerce through the usual arithmetic empty-cell semantics."
   }),
-  entry("arithmetic:missing-sheet-ref-error", "arithmetic", "=Sheet2!B1*3", "implemented-js", {
+  entry("arithmetic:missing-sheet-ref-error", "arithmetic", "=Sheet2!B1*3", "implemented-wasm-production", {
     scope: "extended",
     prerequisites: ["core:value-model", "core:reference-model"],
-    notes: "Unresolved qualified cells emit #REF! and temporarily fall back to the JS path until rebinding can occur."
+    notes: "Unresolved qualified cells now stay on the native path via explicit unresolved-ref operands that emit #REF! until rebinding can occur."
   }),
-  entry("date-time:now-volatile", "date-time", "=NOW()", "implemented-js", {
+  entry("date-time:now-volatile", "date-time", "=NOW()", "implemented-wasm-production", {
     prerequisites: ["core:value-model", "core:date-serial-model", "core:volatile-context"],
-    notes: "NOW executes on the JS oracle with deterministic capture tests; native promotion still depends on a recalc-epoch runtime contract."
+    notes: "NOW now captures a single recalc-epoch serial on the host and executes on the AssemblyScript path."
   }),
   entry("date-time:time-basic", "date-time", "=TIME(12,30,0)", "implemented-wasm-production"),
   entry("date-time:hour-basic", "date-time", "=HOUR(A1)", "implemented-wasm-production"),
@@ -291,10 +288,10 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     prerequisites: ["core:value-model", "core:range-iterators", "core:reference-model"],
     notes: "Existing blank ranges on another sheet aggregate as zero once the referenced sheet exists."
   }),
-  entry("aggregation:missing-sheet-range-ref-error", "aggregation", "=SUM(Sheet2!A1:A2)", "implemented-js", {
+  entry("aggregation:missing-sheet-range-ref-error", "aggregation", "=SUM(Sheet2!A1:A2)", "implemented-wasm-production", {
     scope: "extended",
     prerequisites: ["core:value-model", "core:range-iterators", "core:reference-model"],
-    notes: "Missing qualified ranges emit #REF! until a later sheet creation can restore native evaluation."
+    notes: "Missing qualified ranges now stay on the native path via explicit unresolved-range operands that emit #REF! until later rebinding."
   }),
   entry("dynamic-array:sort-basic", "dynamic-array", "=SORT(A1:A4)", "blocked"),
   entry("dynamic-array:sortby-basic", "dynamic-array", "=SORTBY(A1:A3,B1:B3)", "blocked"),

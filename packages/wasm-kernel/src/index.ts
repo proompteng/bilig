@@ -20,12 +20,16 @@ interface RawKernelExports {
   uploadPrograms(programs: number, offsets: number, lengths: number, targets: number): void;
   uploadConstants(constants: number, offsets: number, lengths: number): void;
   uploadRangeMembers(members: number, offsets: number, lengths: number): void;
+  uploadRangeShapes(rowCounts: number, colCounts: number): void;
+  uploadVolatileNowSerial(nowSerial: number): void;
+  uploadVolatileRandomValues(values: number): void;
   uploadStringLengths(lengths: number): void;
   uploadStrings(offsets: number, lengths: number, data: number): void;
   writeCells(tags: number, numbers: number, stringIds: number, errors: number): void;
   evalBatch(cellIndices: number): void;
   materializePivotTable(
     sourceRangeIndex: number,
+    sourceWidth: number,
     groupByCount: number,
     groupByColumnIndices: number,
     valueCount: number,
@@ -50,6 +54,17 @@ interface RawKernelExports {
   getRangeOffsetsPtr(): number;
   getRangeLengthsPtr(): number;
   getRangeMembersPtr(): number;
+  getOutputStringLengthsPtr(): number;
+  getOutputStringOffsetsPtr(): number;
+  getOutputStringDataPtr(): number;
+  getOutputStringCount(): number;
+  getOutputStringDataLength(): number;
+  getSpillResultRowsPtr(): number;
+  getSpillResultColsPtr(): number;
+  getSpillResultOffsetsPtr(): number;
+  getSpillResultLengthsPtr(): number;
+  getSpillResultNumbersPtr(): number;
+  getSpillResultValueCount(): number;
   getCellCapacity(): number;
   getFormulaCapacity(): number;
   getConstantCapacity(): number;
@@ -75,6 +90,9 @@ function isRawKernelExports(value: unknown): value is RawKernelExports {
     "uploadPrograms",
     "uploadConstants",
     "uploadRangeMembers",
+    "uploadRangeShapes",
+    "uploadVolatileNowSerial",
+    "uploadVolatileRandomValues",
     "uploadStringLengths",
     "uploadStrings",
     "writeCells",
@@ -98,6 +116,17 @@ function isRawKernelExports(value: unknown): value is RawKernelExports {
     "getRangeOffsetsPtr",
     "getRangeLengthsPtr",
     "getRangeMembersPtr",
+    "getOutputStringLengthsPtr",
+    "getOutputStringOffsetsPtr",
+    "getOutputStringDataPtr",
+    "getOutputStringCount",
+    "getOutputStringDataLength",
+    "getSpillResultRowsPtr",
+    "getSpillResultColsPtr",
+    "getSpillResultOffsetsPtr",
+    "getSpillResultLengthsPtr",
+    "getSpillResultNumbersPtr",
+    "getSpillResultValueCount",
     "getCellCapacity",
     "getFormulaCapacity",
     "getConstantCapacity",
@@ -130,12 +159,16 @@ export interface SpreadsheetKernel {
   ): void;
   uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void;
   uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void;
+  uploadRangeShapes(rowCounts: Uint32Array, colCounts: Uint32Array): void;
+  uploadVolatileNowSerial(nowSerial: number): void;
+  uploadVolatileRandomValues(values: Float64Array): void;
   uploadStringLengths(lengths: Uint32Array): void;
   uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void;
   writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void;
   evalBatch(cellIndices: Uint32Array): void;
   materializePivotTable(
     sourceRangeIndex: number,
+    sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
     valueAggregations: Uint8Array
@@ -159,6 +192,13 @@ export interface SpreadsheetKernel {
   readRangeOffsets(): Uint32Array;
   readRangeLengths(): Uint32Array;
   readRangeMembers(): Uint32Array;
+  readOutputStrings(): string[];
+  readSpillRows(): Uint32Array;
+  readSpillCols(): Uint32Array;
+  readSpillOffsets(): Uint32Array;
+  readSpillLengths(): Uint32Array;
+  readSpillNumbers(): Float64Array;
+  getSpillValueCount(): number;
   getCellCapacity(): number;
   getFormulaCapacity(): number;
   getConstantCapacity(): number;
@@ -267,6 +307,30 @@ class RawKernelBridge {
     }
   }
 
+  uploadRangeShapes(rowCounts: Uint32Array, colCounts: Uint32Array): void {
+    const rowCountsPtr = this.lowerTypedArray(rowCounts, uint32Spec);
+    const colCountsPtr = this.lowerTypedArray(colCounts, uint32Spec);
+    try {
+      this.raw.uploadRangeShapes(rowCountsPtr, colCountsPtr);
+    } finally {
+      this.raw.__unpin(rowCountsPtr);
+      this.raw.__unpin(colCountsPtr);
+    }
+  }
+
+  uploadVolatileNowSerial(nowSerial: number): void {
+    this.raw.uploadVolatileNowSerial(nowSerial);
+  }
+
+  uploadVolatileRandomValues(values: Float64Array): void {
+    const valuesPtr = this.lowerTypedArray(values, float64Spec);
+    try {
+      this.raw.uploadVolatileRandomValues(valuesPtr);
+    } finally {
+      this.raw.__unpin(valuesPtr);
+    }
+  }
+
   uploadStringLengths(lengths: Uint32Array): void {
     const lengthsPtr = this.lowerTypedArray(lengths, uint32Spec);
     try {
@@ -315,6 +379,7 @@ class RawKernelBridge {
 
   materializePivotTable(
     sourceRangeIndex: number,
+    sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
     valueAggregations: Uint8Array
@@ -325,6 +390,7 @@ class RawKernelBridge {
     try {
       this.raw.materializePivotTable(
         sourceRangeIndex,
+        sourceWidth,
         groupByColumnIndices.length,
         groupByPtr,
         valueColumnIndices.length,
@@ -377,6 +443,11 @@ class KernelHandle implements SpreadsheetKernel {
   private rangeOffsets = new Uint32Array();
   private rangeLengths = new Uint32Array();
   private rangeMembers = new Uint32Array();
+  private spillRows = new Uint32Array();
+  private spillCols = new Uint32Array();
+  private spillOffsets = new Uint32Array();
+  private spillLengths = new Uint32Array();
+  private spillNumbers = new Float64Array();
 
   constructor(private readonly raw: RawKernelExports) {
     this.bridge = new RawKernelBridge(raw);
@@ -433,6 +504,19 @@ class KernelHandle implements SpreadsheetKernel {
     this.refreshViews();
   }
 
+  uploadRangeShapes(rowCounts: Uint32Array, colCounts: Uint32Array): void {
+    this.bridge.uploadRangeShapes(rowCounts, colCounts);
+    this.refreshViews();
+  }
+
+  uploadVolatileNowSerial(nowSerial: number): void {
+    this.bridge.uploadVolatileNowSerial(nowSerial);
+  }
+
+  uploadVolatileRandomValues(values: Float64Array): void {
+    this.bridge.uploadVolatileRandomValues(values);
+  }
+
   uploadStringLengths(lengths: Uint32Array): void {
     this.bridge.uploadStringLengths(lengths);
     this.refreshViews();
@@ -455,6 +539,7 @@ class KernelHandle implements SpreadsheetKernel {
 
   materializePivotTable(
     sourceRangeIndex: number,
+    sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
     valueAggregations: Uint8Array
@@ -468,6 +553,7 @@ class KernelHandle implements SpreadsheetKernel {
   } {
     this.bridge.materializePivotTable(
       sourceRangeIndex,
+      sourceWidth,
       groupByColumnIndices,
       valueColumnIndices,
       valueAggregations
@@ -534,6 +620,52 @@ class KernelHandle implements SpreadsheetKernel {
     return this.rangeMembers;
   }
 
+  readOutputStrings(): string[] {
+    const memory = this.raw.memory.buffer;
+    const count = this.raw.getOutputStringCount();
+    if (count === 0) return [];
+    
+    const lengths = new Uint32Array(memory, this.raw.getOutputStringLengthsPtr(), count);
+    const offsets = new Uint32Array(memory, this.raw.getOutputStringOffsetsPtr(), count);
+    const data = new Uint16Array(memory, this.raw.getOutputStringDataPtr(), this.raw.getOutputStringDataLength());
+    
+    const strings: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const length = lengths[index]!;
+      const offset = offsets[index]!;
+      let str = "";
+      for (let charIndex = 0; charIndex < length; charIndex += 1) {
+        str += String.fromCharCode(data[offset + charIndex]!);
+      }
+      strings.push(str);
+    }
+    return strings;
+  }
+
+  readSpillRows(): Uint32Array {
+    return this.spillRows;
+  }
+
+  readSpillCols(): Uint32Array {
+    return this.spillCols;
+  }
+
+  readSpillOffsets(): Uint32Array {
+    return this.spillOffsets;
+  }
+
+  readSpillLengths(): Uint32Array {
+    return this.spillLengths;
+  }
+
+  readSpillNumbers(): Float64Array {
+    return this.spillNumbers;
+  }
+
+  getSpillValueCount(): number {
+    return this.raw.getSpillResultValueCount();
+  }
+
   getCellCapacity(): number {
     return this.raw.getCellCapacity();
   }
@@ -568,6 +700,11 @@ class KernelHandle implements SpreadsheetKernel {
     this.rangeOffsets = new Uint32Array(memory, this.raw.getRangeOffsetsPtr(), this.raw.getRangeCapacity());
     this.rangeLengths = new Uint32Array(memory, this.raw.getRangeLengthsPtr(), this.raw.getRangeCapacity());
     this.rangeMembers = new Uint32Array(memory, this.raw.getRangeMembersPtr(), this.raw.getMemberCapacity());
+    this.spillRows = new Uint32Array(memory, this.raw.getSpillResultRowsPtr(), this.raw.getCellCapacity());
+    this.spillCols = new Uint32Array(memory, this.raw.getSpillResultColsPtr(), this.raw.getCellCapacity());
+    this.spillOffsets = new Uint32Array(memory, this.raw.getSpillResultOffsetsPtr(), this.raw.getCellCapacity());
+    this.spillLengths = new Uint32Array(memory, this.raw.getSpillResultLengthsPtr(), this.raw.getCellCapacity());
+    this.spillNumbers = new Float64Array(memory, this.raw.getSpillResultNumbersPtr(), this.raw.getSpillResultValueCount());
   }
 }
 

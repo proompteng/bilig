@@ -50,9 +50,9 @@ describe("formula", () => {
     expect([...compiled.symbolicRefs]).toEqual(["A1"]);
   });
 
-  it("keeps pass-through cell refs on the JS path", () => {
+  it("keeps pass-through cell refs on the wasm-safe path", () => {
     const compiled = compileFormula("A1");
-    expect(compiled.mode).toBe(0);
+    expect(compiled.mode).toBe(1);
   });
 
   it("compiles bounded aggregate formulas into the wasm-safe path", () => {
@@ -96,28 +96,61 @@ describe("formula", () => {
     expect(compileFormula("INT(A1)").mode).toBe(1);
     expect(compileFormula("ROUNDUP(A1,2)").mode).toBe(1);
     expect(compileFormula("ROUNDDOWN(A1,2)").mode).toBe(1);
+    expect(compileFormula("LEFT(A1,2)").mode).toBe(1);
+    expect(compileFormula("RIGHT(A1,2)").mode).toBe(1);
+    expect(compileFormula("MID(A1,2,3)").mode).toBe(1);
+    expect(compileFormula("TRIM(A1)").mode).toBe(1);
+    expect(compileFormula("UPPER(A1)").mode).toBe(1);
+    expect(compileFormula("LOWER(A1)").mode).toBe(1);
+    expect(compileFormula("FIND(\"a\",A1)").mode).toBe(1);
+    expect(compileFormula("SEARCH(\"a\",A1)").mode).toBe(1);
   });
 
   it("keeps LEN on the JS path when it depends on a range until the range-string bridge lands", () => {
     expect(compileFormula("LEN(A1:B2)").mode).toBe(0);
-    expect(compileFormula("VALUE(A1)").mode).toBe(0);
+    expect(compileFormula("VALUE(A1)").mode).toBe(1);
   });
 
-  it("keeps volatile date builtins on the JS path", () => {
-    expect(compileFormula("TODAY()").mode).toBe(0);
-    expect(compileFormula("NOW()").mode).toBe(0);
-    expect(compileFormula("RAND()").mode).toBe(0);
+  it("routes volatile scalar builtins through the wasm path", () => {
+    expect(compileFormula("TODAY()").mode).toBe(1);
+    expect(compileFormula("NOW()").mode).toBe(1);
+    expect(compileFormula("RAND()").mode).toBe(1);
+  });
+
+  it("routes native sequence spills through the wasm path, including numeric aggregate consumers", () => {
+    expect(compileFormula("SEQUENCE(3,1,1,1)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("SUM(SEQUENCE(A1,1,1,1))").mode).toBe(1);
+    expect(compileFormula("AVG(SEQUENCE(A1,1,1,1))").mode).toBe(1);
+    expect(compileFormula("MIN(SEQUENCE(A1,1,1,1))").mode).toBe(1);
+    expect(compileFormula("MAX(SEQUENCE(A1,1,1,1))").mode).toBe(1);
+    expect(compileFormula("COUNT(SEQUENCE(A1,1,1,1))").mode).toBe(1);
+    expect(compileFormula("COUNTA(SEQUENCE(A1,1,1,1))").mode).toBe(1);
   });
 
   it("keeps row and column aggregate formulas on the JS path", () => {
-    expect(compileFormula("SUM(A:A)").mode).toBe(0);
-    expect(compileFormula("SUM(1:10)").mode).toBe(0);
+    expect(compileFormula("SUM(A:A)").mode).toBe(1);
+    expect(compileFormula("SUM(1:10)").mode).toBe(1);
   });
 
-  it("keeps IF on the JS path while promoting exact-parity logical and rounding formulas", () => {
+  it("compiles IF, IFERROR, IFNA, and NA onto the wasm-safe path alongside exact-parity logical formulas", () => {
     const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
-    expect(compiled.mode).toBe(0);
-    expect(compileFormula("IFNA(NA(),\"missing\")").mode).toBe(0);
+    expect(compiled.mode).toBe(1);
+    expect(compileFormula("IFERROR(A1,\"missing\")").mode).toBe(1);
+    expect(compileFormula("IFNA(NA(),\"missing\")").mode).toBe(1);
+    expect(compileFormula("NA()").mode).toBe(1);
+    expect(compileFormula("COUNTIF(A1:A4,\">0\")").mode).toBe(1);
+    expect(compileFormula("COUNTIFS(A1:A4,\">0\",B1:B4,\"x\")").mode).toBe(1);
+    expect(compileFormula("SUMIF(A1:A4,\">0\",B1:B4)").mode).toBe(1);
+    expect(compileFormula("SUMIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")").mode).toBe(1);
+    expect(compileFormula("AVERAGEIF(A1:A4,\">0\")").mode).toBe(1);
+    expect(compileFormula("AVERAGEIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")").mode).toBe(1);
+    expect(compileFormula("SUMPRODUCT(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("MATCH(\"pear\",A1:A3,0)").mode).toBe(1);
+    expect(compileFormula("XMATCH(\"pear\",A1:A3)").mode).toBe(1);
+    expect(compileFormula("XLOOKUP(\"pear\",A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("INDEX(A1:B3,2,2)").mode).toBe(1);
+    expect(compileFormula("VLOOKUP(\"pear\",A1:B3,2,FALSE)").mode).toBe(1);
+    expect(compileFormula("HLOOKUP(\"pear\",A1:C2,2,FALSE)").mode).toBe(1);
 
     expect(compileFormula("AND(A1,TRUE)").mode).toBe(1);
     expect(compileFormula("OR(A1,FALSE)").mode).toBe(1);
@@ -130,7 +163,12 @@ describe("formula", () => {
   it("keeps unsupported candidate builtin arities on the JS path", () => {
     expect(compileFormula("IF(A1,1)").mode).toBe(0);
     expect(compileFormula("NOT(A1,A2)").mode).toBe(0);
-    expect(compileFormula("AND()").mode).toBe(0);
+    expect(compileFormula("COUNTIF(A:A,\">0\")").mode).toBe(0);
+    expect(compileFormula("SUMIF(A1:A4,B1:B4,C1:C4,D1:D4)").mode).toBe(0);
+    expect(compileFormula("SUMIFS(A1:A4,\">0\")").mode).toBe(0);
+    expect(compileFormula("MATCH(\"pear\",A1:B3,0)").mode).toBe(0);
+    expect(compileFormula("XLOOKUP(\"pear\",A1:B3,C1:D4)").mode).toBe(0);
+    expect(compileFormula("VLOOKUP(\"pear\",A1:B3,2,FALSE,1)").mode).toBe(0);
     expect(compileFormula("ROUND(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("FLOOR(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("CEILING(A1,A2,A3)").mode).toBe(0);

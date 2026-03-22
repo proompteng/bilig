@@ -4,6 +4,7 @@ import {
   FormulaMode,
   MAX_COLS,
   MAX_ROWS,
+  Opcode,
   ValueTag,
   type CellSnapshot,
   type CellValue,
@@ -18,13 +19,15 @@ import {
   type WorkbookSnapshot
 } from "@bilig/protocol";
 import {
+  type FormulaNode,
   compileFormula,
-  evaluatePlanResult,
+  compileFormulaAst,
   formatAddress,
-  isArrayValue,
   parseCellAddress,
+  parseFormula,
   parseRangeAddress,
-  translateFormulaReferences
+  translateFormulaReferences,
+  utcDateToExcelSerial
 } from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import {
@@ -123,13 +126,14 @@ interface RuntimeFormula {
 
 type U32 = Uint32Array;
 
+const UNRESOLVED_WASM_OPERAND = 0x00ff_ffff;
+
 interface MaterializedDependencies {
   dependencyIndices: Uint32Array;
   dependencyEntities: Uint32Array;
   rangeDependencies: Uint32Array;
   symbolicRangeIndices: U32;
   symbolicRangeCount: number;
-  hasUnresolvedSymbolicRange: boolean;
   newRangeIndices: U32;
   newRangeCount: number;
 }
@@ -140,6 +144,12 @@ interface SpillMaterialization {
 }
 
 export type PivotTableInput = Omit<WorkbookPivotSnapshot, "sheetName" | "address" | "rows" | "cols">;
+
+interface RecalcVolatileState {
+  nowSerial: number;
+  randomValues: number[];
+  randomCursor: number;
+}
 
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty };
@@ -171,6 +181,78 @@ function areCellValuesEqual(left: CellValue, right: CellValue): boolean {
       return right.tag === ValueTag.String && left.value === right.value;
     case ValueTag.Error:
       return right.tag === ValueTag.Error && left.code === right.code;
+  }
+}
+
+function literalToFormulaNode(input: LiteralInput): FormulaNode | null {
+  if (typeof input === "number") {
+    return { kind: "NumberLiteral", value: input };
+  }
+  if (typeof input === "string") {
+    return { kind: "StringLiteral", value: input };
+  }
+  if (typeof input === "boolean") {
+    return { kind: "BooleanLiteral", value: input };
+  }
+  return null;
+}
+
+function resolveDefinedNamesInAst(
+  node: FormulaNode,
+  resolveName: (name: string) => LiteralInput | undefined
+): { node: FormulaNode; fullyResolved: boolean; substituted: boolean } {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "CellRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "RangeRef":
+      return { node, fullyResolved: true, substituted: false };
+    case "NameRef": {
+      const literal = resolveName(node.name);
+      const replacement = literal === undefined
+        ? { kind: "ErrorLiteral", code: ErrorCode.Name } satisfies FormulaNode
+        : literalToFormulaNode(literal);
+      if (!replacement) {
+        return { node, fullyResolved: false, substituted: false };
+      }
+      return { node: replacement, fullyResolved: true, substituted: true };
+    }
+    case "UnaryExpr": {
+      const resolved = resolveDefinedNamesInAst(node.argument, resolveName);
+      return {
+        node: resolved.substituted ? { ...node, argument: resolved.node } : node,
+        fullyResolved: resolved.fullyResolved,
+        substituted: resolved.substituted
+      };
+    }
+    case "BinaryExpr": {
+      const left = resolveDefinedNamesInAst(node.left, resolveName);
+      const right = resolveDefinedNamesInAst(node.right, resolveName);
+      return {
+        node: left.substituted || right.substituted ? { ...node, left: left.node, right: right.node } : node,
+        fullyResolved: left.fullyResolved && right.fullyResolved,
+        substituted: left.substituted || right.substituted
+      };
+    }
+    case "CallExpr": {
+      let fullyResolved = true;
+      let substituted = false;
+      const args = node.args.map((arg) => {
+        const resolved = resolveDefinedNamesInAst(arg, resolveName);
+        fullyResolved = fullyResolved && resolved.fullyResolved;
+        substituted = substituted || resolved.substituted;
+        return resolved.node;
+      });
+      return {
+        node: substituted ? { ...node, args } : node,
+        fullyResolved,
+        substituted
+      };
+    }
   }
 }
 
@@ -244,6 +326,8 @@ export class SpreadsheetEngine {
   private wasmConstantLengths: U32 = new Uint32Array(128);
   private wasmRangeOffsets: U32 = new Uint32Array(128);
   private wasmRangeLengths: U32 = new Uint32Array(128);
+  private wasmRangeRowCounts: U32 = new Uint32Array(128);
+  private wasmRangeColCounts: U32 = new Uint32Array(128);
   private topoIndegree: U32 = new Uint32Array(128);
   private topoQueue: U32 = new Uint32Array(128);
   private topoFormulaBuffer: U32 = new Uint32Array(128);
@@ -909,7 +993,7 @@ export class SpreadsheetEngine {
           if (cell.formula !== undefined) {
             const compileStarted = performance.now();
             try {
-              const compiled = compileFormula(cell.formula);
+              const compiled = this.compileFormulaForSheet(cell.formula);
               compileMs += performance.now() - compileStarted;
               const dependencies = this.materializeDependencies(sheet.name, compiled);
               this.setFormula(cellIndex, cell.formula, compiled, dependencies);
@@ -982,9 +1066,17 @@ export class SpreadsheetEngine {
         return;
       }
       dependents.forEach((cellIndex) => {
+        const formula = this.formulas.get(cellIndex);
+        const ownerSheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
+        if (formula && ownerSheetName) {
+          const compiled = this.compileFormulaForSheet(formula.source);
+          const dependencies = this.materializeDependencies(ownerSheetName, compiled);
+          this.setFormula(cellIndex, formula.source, compiled, dependencies);
+        }
         formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
       });
     });
+    formulaChangedCount = this.markVolatileFormulasChanged(formulaChangedCount);
 
     if (formulaChangedCount === 0) {
       return;
@@ -1008,17 +1100,25 @@ export class SpreadsheetEngine {
 
   private applyPivotMutation(forceAllPivots: boolean, initialChanged: readonly number[] = []): void {
     this.beginMutationCollection();
+    const formulaChangedCount = this.markVolatileFormulasChanged(0);
     let changed = this.changedUnion.subarray(0, 0);
-    if (initialChanged.length > 0) {
-      const roots = Uint32Array.from(initialChanged);
-      changed = this.recalculate(roots, roots);
+    if (initialChanged.length > 0 || formulaChangedCount > 0) {
+      this.ensureRecalcScratchCapacity(initialChanged.length + 1);
+      for (let index = 0; index < initialChanged.length; index += 1) {
+        this.changedInputBuffer[index] = initialChanged[index]!;
+      }
+      const roots = this.composeMutationRoots(initialChanged.length, formulaChangedCount);
+      changed = this.recalculate(
+        roots,
+        initialChanged.length === 0 ? roots : this.changedInputBuffer.subarray(0, initialChanged.length)
+      );
     }
     changed = this.reconcilePivotOutputs(changed, forceAllPivots);
     if (changed.length === 0) {
       return;
     }
     this.lastMetrics.batchId += 1;
-    this.lastMetrics.changedInputCount = initialChanged.length;
+    this.lastMetrics.changedInputCount = initialChanged.length + formulaChangedCount;
     const event: EngineEvent = {
       kind: "batch",
       changedCellIndices: changed,
@@ -1122,49 +1222,64 @@ export class SpreadsheetEngine {
       })[0] ?? [];
       const headerLookup = new Map<string, number>();
       sourceHeader.forEach((cell, index) => {
-        if (cell.tag === ValueTag.String) {
-          headerLookup.set(cell.value.trim().toUpperCase(), index);
+        let label = "";
+        if (cell.tag === ValueTag.Number) {
+          label = String(cell.value);
+        } else if (cell.tag === ValueTag.Boolean) {
+          label = cell.value ? "TRUE" : "FALSE";
+        } else if (cell.tag === ValueTag.String) {
+          label = cell.value.trim();
+        }
+        const normalized = label.trim().toUpperCase();
+        if (normalized.length > 0 && !headerLookup.has(normalized)) {
+          headerLookup.set(normalized, index);
         }
       });
 
-      const groupByIndices = new Uint32Array(pivot.groupBy.map((g) => headerLookup.get(g.trim().toUpperCase()) ?? 0));
-      const valueIndices = new Uint32Array(pivot.values.map((v) => headerLookup.get(v.sourceColumn.trim().toUpperCase()) ?? 0));
-      const valueAggs = new Uint8Array(pivot.values.map((v) => (v.summarizeBy === "sum" ? 1 : 2)));
+      const groupByIndexValues = pivot.groupBy.map((g) => headerLookup.get(g.trim().toUpperCase()));
+      const valueIndexValues = pivot.values.map((v) => headerLookup.get(v.sourceColumn.trim().toUpperCase()));
+      if (groupByIndexValues.every((value): value is number => value !== undefined)
+        && valueIndexValues.every((value): value is number => value !== undefined)) {
+        const groupByIndices = new Uint32Array(groupByIndexValues);
+        const valueIndices = new Uint32Array(valueIndexValues);
+        const valueAggs = new Uint8Array(pivot.values.map((v) => (v.summarizeBy === "sum" ? 1 : 2)));
 
-      const materialized = this.wasm.materializePivotTable(
-        registered.rangeIndex,
-        groupByIndices,
-        valueIndices,
-        valueAggs
-      );
+        const materialized = this.wasm.materializePivotTable(
+          registered.rangeIndex,
+          bounds.endCol - bounds.startCol + 1,
+          groupByIndices,
+          valueIndices,
+          valueAggs
+        );
 
-      if (materialized) {
-        const values: CellValue[] = [];
-        const count = materialized.rows * materialized.cols;
-        const groupByCount = pivot.groupBy.length;
-        for (let i = 0; i < count; i += 1) {
-          if (i < materialized.cols && i >= groupByCount) {
-            const valueIndex = i - groupByCount;
-            const field = pivot.values[valueIndex]!;
-            const label = field.outputLabel?.trim() || `${field.summarizeBy.toUpperCase()} of ${field.sourceColumn}`;
-            values.push({ tag: ValueTag.String, value: label, stringId: this.strings.intern(label) });
-            continue;
+        if (materialized) {
+          const values: CellValue[] = [];
+          const count = materialized.rows * materialized.cols;
+          const groupByCount = pivot.groupBy.length;
+          for (let i = 0; i < count; i += 1) {
+            if (i < materialized.cols && i >= groupByCount) {
+              const valueIndex = i - groupByCount;
+              const field = pivot.values[valueIndex]!;
+              const label = field.outputLabel?.trim() || `${field.summarizeBy.toUpperCase()} of ${field.sourceColumn}`;
+              values.push({ tag: ValueTag.String, value: label, stringId: this.strings.intern(label) });
+              continue;
+            }
+            const tag = materialized.tags[i]! as ValueTag;
+            if (tag === ValueTag.Empty) {
+              values.push(emptyValue());
+            } else if (tag === ValueTag.Number) {
+              values.push({ tag: ValueTag.Number, value: materialized.numbers[i]! });
+            } else if (tag === ValueTag.Boolean) {
+              values.push({ tag: ValueTag.Boolean, value: materialized.numbers[i]! !== 0 });
+            } else if (tag === ValueTag.String) {
+              const stringId = materialized.stringIds[i]!;
+              values.push({ tag: ValueTag.String, value: this.strings.get(stringId), stringId });
+            } else if (tag === ValueTag.Error) {
+              values.push({ tag: ValueTag.Error, code: materialized.errors[i]! });
+            }
           }
-          const tag = materialized.tags[i]! as ValueTag;
-          if (tag === ValueTag.Empty) {
-            values.push(emptyValue());
-          } else if (tag === ValueTag.Number) {
-            values.push({ tag: ValueTag.Number, value: materialized.numbers[i]! });
-          } else if (tag === ValueTag.Boolean) {
-            values.push({ tag: ValueTag.Boolean, value: materialized.numbers[i]! !== 0 });
-          } else if (tag === ValueTag.String) {
-            const stringId = materialized.stringIds[i]!;
-            values.push({ tag: ValueTag.String, value: this.strings.get(stringId), stringId });
-          } else if (tag === ValueTag.Error) {
-            values.push({ tag: ValueTag.Error, code: materialized.errors[i]! });
-          }
+          return this.writePivotOutput(pivot, materialized.rows, materialized.cols, values, changedCellIndices);
         }
-        return this.writePivotOutput(pivot, materialized.rows, materialized.cols, values, changedCellIndices);
       }
     }
 
@@ -1512,7 +1627,7 @@ export class SpreadsheetEngine {
             changedInputCount = this.markSpillRootsChanged(this.clearOwnedSpill(cellIndex), changedInputCount);
             const compileStarted = performance.now();
             try {
-              const compiled = compileFormula(op.formula);
+              const compiled = this.compileFormulaForSheet(op.formula);
               this.lastMetrics.compileMs = performance.now() - compileStarted;
               const dependencies = this.materializeDependencies(op.sheetName, compiled);
               this.setFormula(cellIndex, op.formula, compiled, dependencies);
@@ -1595,6 +1710,7 @@ export class SpreadsheetEngine {
       this.rebuildTopoRanks();
       this.detectCycles();
     }
+    formulaChangedCount = this.markVolatileFormulasChanged(formulaChangedCount);
     const changedInputArray = this.changedInputBuffer.subarray(0, changedInputCount);
     let recalculated = this.recalculate(
       this.composeMutationRoots(changedInputCount, formulaChangedCount),
@@ -1791,25 +1907,18 @@ export class SpreadsheetEngine {
     let dependencyIndexCount = 0;
     let dependencyEntityCount = 0;
     let rangeDependencyCount = 0;
-    let hasUnresolvedSymbolicRange = false;
     let newRangeCount = 0;
-    this.symbolicRangeBindings.fill(0, 0, compiled.symbolicRanges.length);
+    this.symbolicRangeBindings.fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length);
     for (const dep of deps) {
       if (dep.includes(":")) {
         const range = parseRangeAddress(dep, currentSheet);
         const sheetName = range.sheetName ?? currentSheet;
         const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
         if (range.sheetName && !this.workbook.getSheet(sheetName)) {
-          if (symbolicRangeIndex !== -1) {
-            hasUnresolvedSymbolicRange = true;
-          }
           continue;
         }
         const sheet = this.workbook.getSheet(sheetName);
         if (!sheet) {
-          if (symbolicRangeIndex !== -1) {
-            hasUnresolvedSymbolicRange = true;
-          }
           continue;
         }
         const registered = this.ranges.intern(sheet.id, range, {
@@ -1860,7 +1969,6 @@ export class SpreadsheetEngine {
       rangeDependencies: this.dependencyBuildRanges.slice(0, rangeDependencyCount),
       symbolicRangeIndices: this.symbolicRangeBindings,
       symbolicRangeCount: compiled.symbolicRanges.length,
-      hasUnresolvedSymbolicRange,
       newRangeIndices: this.dependencyBuildNewRanges,
       newRangeCount
     };
@@ -1880,38 +1988,37 @@ export class SpreadsheetEngine {
       compiled.symbolicRefs.length + 1,
       compiled.symbolicRanges.length + 1
     );
-    let hasUnresolvedSymbolicRef = false;
     for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
       const ref = compiled.symbolicRefs[index]!;
       const [qualifiedSheetName, qualifiedAddress] = ref.includes("!") ? ref.split("!") : [undefined, ref];
       const parsed = parseCellAddress(qualifiedAddress, qualifiedSheetName);
       const sheetName = qualifiedSheetName ?? this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
       if (qualifiedSheetName && !this.workbook.getSheet(sheetName)) {
-        hasUnresolvedSymbolicRef = true;
-        this.symbolicRefBindings[index] = 0;
+        this.symbolicRefBindings[index] = UNRESOLVED_WASM_OPERAND;
         continue;
       }
       this.symbolicRefBindings[index] = this.ensureCellTracked(sheetName, parsed.text);
     }
 
-    const effectiveCompiled =
-      (hasUnresolvedSymbolicRef || dependencies.hasUnresolvedSymbolicRange) && compiled.mode === FormulaMode.WasmFastPath
-        ? { ...compiled, mode: FormulaMode.JsOnly }
-        : compiled;
-
+    const literalStringIds = compiled.symbolicStrings.map((value) => this.strings.intern(value));
     const runtimeProgram = new Uint32Array(compiled.program.length);
     runtimeProgram.set(compiled.program);
     compiled.program.forEach((instruction, index) => {
-      const opcode = instruction >>> 24;
+      const opcode = (instruction >>> 24) as Opcode;
       const operand = instruction & 0x00ff_ffff;
-      if (opcode === 3) {
+      if (opcode === Opcode.PushCell) {
         const targetIndex = operand < compiled.symbolicRefs.length ? this.symbolicRefBindings[operand] ?? 0 : 0;
         runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
         return;
       }
-      if (opcode === 4) {
+      if (opcode === Opcode.PushRange) {
         const targetIndex = operand < dependencies.symbolicRangeCount ? dependencies.symbolicRangeIndices[operand] ?? 0 : 0;
         runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
+        return;
+      }
+      if (opcode === Opcode.PushString) {
+        const stringId = operand < literalStringIds.length ? literalStringIds[operand] ?? 0 : 0;
+        runtimeProgram[index] = (opcode << 24) | (stringId & 0x00ff_ffff);
       }
     });
 
@@ -1920,7 +2027,7 @@ export class SpreadsheetEngine {
       cellIndex,
       source,
       compiled: {
-        ...effectiveCompiled,
+        ...compiled,
         depsPtr: dependencyEntities.ptr,
         depsLen: dependencyEntities.len
       },
@@ -1928,11 +2035,11 @@ export class SpreadsheetEngine {
       dependencyEntities,
       rangeDependencies: dependencies.rangeDependencies,
       runtimeProgram,
-      constants: effectiveCompiled.constants,
+      constants: compiled.constants,
       programOffset: 0,
       programLength: runtimeProgram.length,
       constNumberOffset: 0,
-      constNumberLength: effectiveCompiled.constants.length,
+      constNumberLength: compiled.constants.length,
       rangeListOffset: 0,
       rangeListLength: dependencies.rangeDependencies.length
     };
@@ -1940,7 +2047,7 @@ export class SpreadsheetEngine {
     runtimeFormula.compiled.id = formulaId;
     this.workbook.cellStore.flags[cellIndex] =
       ((this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula;
-    if (effectiveCompiled.mode === FormulaMode.JsOnly) {
+    if (runtimeFormula.compiled.mode === FormulaMode.JsOnly) {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
     } else {
       this.workbook.cellStore.flags[cellIndex] = (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly;
@@ -2090,16 +2197,21 @@ export class SpreadsheetEngine {
     let wasmCount = 0;
     let jsCount = 0;
     let pendingKernelSyncCount = 0;
+    const volatileState = this.createRecalcVolatileState();
 
-    const flushWasmBatch = (batchCount: number): number => {
+    const flushWasmBatch = (batchCount: number, hasVolatile: boolean, randCount: number): number => {
       if (batchCount === 0) {
         return 0;
       }
       this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
       pendingKernelSyncCount = 0;
+      if (hasVolatile) {
+        this.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
+        this.wasm.uploadVolatileRandomValues(this.consumeVolatileRandomValues(volatileState, randCount));
+      }
       const batchIndices = this.wasmBatch.subarray(0, batchCount);
       this.wasm.evalBatch(batchIndices);
-      this.wasm.syncToStore(this.workbook.cellStore, batchIndices);
+      this.wasm.syncToStore(this.workbook.cellStore, batchIndices, this.strings);
       return batchCount;
     };
 
@@ -2126,8 +2238,56 @@ export class SpreadsheetEngine {
       }
 
       let wasmBatchCount = 0;
+      let wasmBatchHasVolatile = false;
+      let wasmBatchRandCount = 0;
       const spillChangedRoots: number[] = [];
       const spillChangedSeen = new Set<number>();
+      const noteSpillChanges = (changedCellIndices: readonly number[]): void => {
+        for (let spillIndex = 0; spillIndex < changedCellIndices.length; spillIndex += 1) {
+          const changedCellIndex = changedCellIndices[spillIndex]!;
+          if (spillChangedSeen.has(changedCellIndex)) {
+            continue;
+          }
+          spillChangedSeen.add(changedCellIndex);
+          spillChangedRoots.push(changedCellIndex);
+        }
+      };
+      const queueKernelSync = (cellIndex: number): void => {
+        this.pendingKernelSync[pendingKernelSyncCount] = cellIndex;
+        pendingKernelSyncCount += 1;
+      };
+      const evaluateWasmSpillFormula = (cellIndex: number, formula: RuntimeFormula): number => {
+        this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
+        pendingKernelSyncCount = 0;
+        if (formula.compiled.volatile) {
+          this.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
+          this.wasm.uploadVolatileRandomValues(this.consumeVolatileRandomValues(volatileState, formula.compiled.randCallCount));
+        }
+        const batchIndices = Uint32Array.of(cellIndex);
+        this.wasm.evalBatch(batchIndices);
+        this.wasm.syncToStore(this.workbook.cellStore, batchIndices, this.strings);
+        const spill = this.wasm.readNumericSpill(cellIndex);
+        const spillMaterialization = spill
+          ? this.materializeSpill(cellIndex, {
+              rows: spill.rows,
+              cols: spill.cols,
+              values: Array.from(spill.values, (value): CellValue => ({ tag: ValueTag.Number, value }))
+            })
+          : {
+              changedCellIndices: this.clearOwnedSpill(cellIndex),
+              ownerValue: this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id))
+            };
+        const currentFlags =
+          (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput);
+        this.workbook.cellStore.setValue(cellIndex, spillMaterialization.ownerValue);
+        this.workbook.cellStore.flags[cellIndex] = currentFlags;
+        queueKernelSync(cellIndex);
+        for (let spillIndex = 0; spillIndex < spillMaterialization.changedCellIndices.length; spillIndex += 1) {
+          queueKernelSync(spillMaterialization.changedCellIndices[spillIndex]!);
+        }
+        noteSpillChanges(spillMaterialization.changedCellIndices);
+        return 1;
+      };
       for (let index = 0; index < orderedCount; index += 1) {
         const cellIndex = ordered[index]!;
         const formula = this.formulas.get(cellIndex);
@@ -2138,27 +2298,30 @@ export class SpreadsheetEngine {
           continue;
         }
         if (formula.compiled.mode === FormulaMode.WasmFastPath && this.wasm.ready) {
-          this.wasmBatch[wasmBatchCount] = cellIndex;
-          wasmBatchCount += 1;
-          continue;
-        }
-        wasmCount += flushWasmBatch(wasmBatchCount);
-        wasmBatchCount = 0;
-        jsCount += 1;
-        const spillChanges = this.evaluateFormulaJs(cellIndex, formula);
-        for (let spillIndex = 0; spillIndex < spillChanges.length; spillIndex += 1) {
-          const changedCellIndex = spillChanges[spillIndex]!;
-          if (spillChangedSeen.has(changedCellIndex)) {
+          if (formula.compiled.producesSpill) {
+            wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
+            wasmBatchCount = 0;
+            wasmBatchHasVolatile = false;
+            wasmBatchRandCount = 0;
+            wasmCount += evaluateWasmSpillFormula(cellIndex, formula);
             continue;
           }
-          spillChangedSeen.add(changedCellIndex);
-          spillChangedRoots.push(changedCellIndex);
+          this.wasmBatch[wasmBatchCount] = cellIndex;
+          wasmBatchCount += 1;
+          wasmBatchHasVolatile = wasmBatchHasVolatile || formula.compiled.volatile;
+          wasmBatchRandCount += formula.compiled.randCallCount;
+          continue;
         }
-        this.pendingKernelSync[pendingKernelSyncCount] = cellIndex;
-        pendingKernelSyncCount += 1;
+        wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
+        wasmBatchCount = 0;
+        wasmBatchHasVolatile = false;
+        wasmBatchRandCount = 0;
+        const spillChanges = this.evaluateUnsupportedFormula(cellIndex);
+        noteSpillChanges(spillChanges);
+        queueKernelSync(cellIndex);
       }
 
-      wasmCount += flushWasmBatch(wasmBatchCount);
+      wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
       if (pendingKernelSyncCount > 0) {
         this.wasm.syncFromStore(this.workbook.cellStore, this.pendingKernelSync.subarray(0, pendingKernelSyncCount));
       }
@@ -2280,6 +2443,12 @@ export class SpreadsheetEngine {
     if (rangeSize > this.wasmRangeLengths.length) {
       this.wasmRangeLengths = growUint32(this.wasmRangeLengths, rangeSize);
     }
+    if (rangeSize > this.wasmRangeRowCounts.length) {
+      this.wasmRangeRowCounts = growUint32(this.wasmRangeRowCounts, rangeSize);
+    }
+    if (rangeSize > this.wasmRangeColCounts.length) {
+      this.wasmRangeColCounts = growUint32(this.wasmRangeColCounts, rangeSize);
+    }
   }
 
   private ensureTopoScratchCapacity(cellSize: number, entitySize: number, rangeSize: number): void {
@@ -2303,46 +2472,55 @@ export class SpreadsheetEngine {
     }
   }
 
-  private evaluateFormulaJs(cellIndex: number, formula: RuntimeFormula): number[] {
-    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-    const evaluation = evaluatePlanResult(formula.compiled.jsPlan, {
-      sheetName,
-      resolveCell: (targetSheetName, address) => {
-        const targetCell = this.workbook.getCellIndex(targetSheetName, address);
-        if (targetCell === undefined) {
-          return targetSheetName === sheetName ? emptyValue() : errorValue(ErrorCode.Ref);
-        }
-        return this.workbook.cellStore.getValue(targetCell, (id) => this.strings.get(id));
-      },
-      resolveRange: (targetSheetName, start, end, _refKind) => {
-        if (targetSheetName && !this.workbook.getSheet(targetSheetName)) {
-          return [errorValue(ErrorCode.Ref)];
-        }
-        return this.resolveRangeValues(targetSheetName, parseRangeAddress(`${start}:${end}`, targetSheetName));
-      },
-      resolveName: (name) => this.resolveDefinedNameValue(name)
-    });
-    const spillMaterialization = isArrayValue(evaluation)
-      ? this.materializeSpill(cellIndex, evaluation)
-      : {
-          changedCellIndices: this.clearOwnedSpill(cellIndex),
-          ownerValue: evaluation
-        };
-    this.workbook.cellStore.flags[cellIndex] =
-      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput);
-    this.workbook.cellStore.setValue(
-      cellIndex,
-      spillMaterialization.ownerValue,
-      spillMaterialization.ownerValue.tag === ValueTag.String
-        ? this.strings.intern(spillMaterialization.ownerValue.value)
-        : 0
-    );
-    return spillMaterialization.changedCellIndices;
+  private createRecalcVolatileState(): RecalcVolatileState {
+    return {
+      nowSerial: utcDateToExcelSerial(new Date()),
+      randomValues: [],
+      randomCursor: 0
+    };
   }
 
-  private resolveDefinedNameValue(name: string): CellValue {
-    const definedName = this.workbook.getDefinedName(name);
-    return definedName ? literalToValue(definedName.value, this.strings) : errorValue(ErrorCode.Name);
+  private ensureVolatileRandomValues(state: RecalcVolatileState, count: number): void {
+    const required = state.randomCursor + count;
+    while (state.randomValues.length < required) {
+      state.randomValues.push(Math.random());
+    }
+  }
+
+  private consumeVolatileRandomValues(state: RecalcVolatileState, count: number): Float64Array {
+    if (count === 0) {
+      return new Float64Array();
+    }
+    this.ensureVolatileRandomValues(state, count);
+    const end = state.randomCursor + count;
+    const slice = state.randomValues.slice(state.randomCursor, end);
+    state.randomCursor = end;
+    return Float64Array.from(slice);
+  }
+
+  private evaluateUnsupportedFormula(cellIndex: number): number[] {
+    const changedCellIndices = this.clearOwnedSpill(cellIndex);
+    this.workbook.cellStore.flags[cellIndex] =
+      (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput);
+    this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Value));
+    return changedCellIndices;
+  }
+
+  private compileFormulaForSheet(source: string): ReturnType<typeof compileFormula> {
+    const compiled = compileFormula(source);
+    if (compiled.symbolicNames.length === 0) {
+      return compiled;
+    }
+
+    const resolved = resolveDefinedNamesInAst(parseFormula(source), (name) => this.workbook.getDefinedName(name)?.value);
+    if (!resolved.substituted || !resolved.fullyResolved) {
+      return compiled;
+    }
+
+    return compileFormulaAst(source, resolved.node, {
+      originalAst: compiled.ast,
+      symbolicNames: compiled.symbolicNames
+    });
   }
 
   private syncWasmPrograms(): void {
@@ -2404,17 +2582,23 @@ export class SpreadsheetEngine {
     if (this.ranges.size === 0) {
       this.wasmRangeOffsets[0] = 0;
       this.wasmRangeLengths[0] = 0;
+      this.wasmRangeRowCounts[0] = 0;
+      this.wasmRangeColCounts[0] = 0;
     }
     for (let rangeIndex = 0; rangeIndex < this.ranges.size; rangeIndex += 1) {
       const descriptor = this.ranges.getDescriptor(rangeIndex);
       this.wasmRangeOffsets[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersOffset : 0;
       this.wasmRangeLengths[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersLength : 0;
+      this.wasmRangeRowCounts[rangeIndex] = descriptor.refCount > 0 ? (descriptor.row2 - descriptor.row1 + 1) : 0;
+      this.wasmRangeColCounts[rangeIndex] = descriptor.refCount > 0 ? (descriptor.col2 - descriptor.col1 + 1) : 0;
     }
 
     this.wasm.uploadRanges({
       members: this.ranges.getMemberPoolView(),
       offsets: this.wasmRangeOffsets.subarray(0, rangeCapacity),
-      lengths: this.wasmRangeLengths.subarray(0, rangeCapacity)
+      lengths: this.wasmRangeLengths.subarray(0, rangeCapacity),
+      rowCounts: this.wasmRangeRowCounts.subarray(0, rangeCapacity),
+      colCounts: this.wasmRangeColCounts.subarray(0, rangeCapacity)
     });
   }
 
@@ -2661,7 +2845,7 @@ export class SpreadsheetEngine {
           return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
         });
         if (!touchesSheet) continue;
-        const compiled = compileFormula(formula.source);
+        const compiled = this.compileFormulaForSheet(formula.source);
         const dependencies = this.materializeDependencies(ownerSheetName, compiled);
         this.setFormula(cellIndex, formula.source, compiled, dependencies);
         formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
@@ -2679,7 +2863,7 @@ export class SpreadsheetEngine {
         return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
       });
       if (!touchesSheet) return;
-      const compiled = compileFormula(formula.source);
+      const compiled = this.compileFormulaForSheet(formula.source);
       const dependencies = this.materializeDependencies(ownerSheetName, compiled);
       this.setFormula(cellIndex, formula.source, compiled, dependencies);
       formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
@@ -2749,6 +2933,16 @@ export class SpreadsheetEngine {
     this.changedFormulaSeen[cellIndex] = this.changedFormulaEpoch;
     this.changedFormulaBuffer[count] = cellIndex;
     return count + 1;
+  }
+
+  private markVolatileFormulasChanged(count: number): number {
+    this.formulas.forEach((formula, cellIndex) => {
+      if (!formula.compiled.volatile) {
+        return;
+      }
+      count = this.markFormulaChanged(cellIndex, count);
+    });
+    return count;
   }
 
   private markSpillRootsChanged(cellIndices: readonly number[], count: number): number {
@@ -3004,43 +3198,6 @@ export class SpreadsheetEngine {
     sheet.grid.forEachCellEntry((cellIndex, row, col) => {
       fn(cellIndex, row, col);
     });
-  }
-
-  private resolveRangeValues(sheetName: string, range: ReturnType<typeof parseRangeAddress>): CellValue[] {
-    if (range.kind === "cells") {
-      const values: CellValue[] = [];
-      for (let row = range.start.row; row <= range.end.row; row += 1) {
-        for (let col = range.start.col; col <= range.end.col; col += 1) {
-          const addr = formatAddress(row, col);
-          const index = this.workbook.getCellIndex(sheetName, addr);
-          values.push(index === undefined ? emptyValue() : this.workbook.cellStore.getValue(index, (id) => this.strings.get(id)));
-        }
-      }
-      return values;
-    }
-
-    const sheet = this.workbook.getSheet(sheetName);
-    if (!sheet) {
-      return [errorValue(ErrorCode.Ref)];
-    }
-
-    const matches: Array<{ row: number; col: number; value: CellValue }> = [];
-    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
-      const inRange =
-        range.kind === "rows"
-          ? row >= range.start.row && row <= range.end.row
-          : col >= range.start.col && col <= range.end.col;
-      if (!inRange) {
-        return;
-      }
-      matches.push({
-        row,
-        col,
-        value: this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id))
-      });
-    });
-    matches.sort((left, right) => left.row - right.row || left.col - right.col);
-    return matches.map((match) => match.value);
   }
 
   private syncDynamicRanges(formulaChangedCount: number): number {

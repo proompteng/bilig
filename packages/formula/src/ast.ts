@@ -2,6 +2,7 @@ export type FormulaNode =
   | NumberLiteralNode
   | BooleanLiteralNode
   | StringLiteralNode
+  | ErrorLiteralNode
   | NameRefNode
   | CellRefNode
   | RowRefNode
@@ -24,6 +25,11 @@ export interface BooleanLiteralNode {
 export interface StringLiteralNode {
   kind: "StringLiteral";
   value: string;
+}
+
+export interface ErrorLiteralNode {
+  kind: "ErrorLiteral";
+  code: number;
 }
 
 export interface NameRefNode {

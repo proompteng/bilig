@@ -30,6 +30,7 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
     case "NumberLiteral":
     case "BooleanLiteral":
     case "StringLiteral":
+    case "ErrorLiteral":
     case "NameRef":
       return node;
     case "CellRef":
@@ -134,6 +135,8 @@ function serializeFormula(node: FormulaNode, parentPrecedence = 0, parentAssocia
       return node.value ? "TRUE" : "FALSE";
     case "StringLiteral":
       return `"${node.value.replaceAll("\"", "\"\"")}"`;
+    case "ErrorLiteral":
+      return "#ERROR!";
     case "NameRef":
       return node.name;
     case "CellRef":

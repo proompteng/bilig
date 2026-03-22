@@ -117,7 +117,7 @@ test("playground shell supports formula-bar navigation, in-grid editing, and Exc
   await jumpTo(page, "D1");
   await expect(page.getByTestId("formula-resolved-value")).toContainText("22");
   const statusBar = page.locator(".workbook-status");
-  await expect(statusBar.getByTestId("metric-js")).not.toContainText("JS 0");
+  await expect(statusBar.getByTestId("metric-js")).toContainText("Fallback 0");
   await expect(statusBar.getByTestId("metric-wasm")).not.toContainText("WASM 0");
   await expect(page.getByTestId("replica-value")).toHaveText("22");
 
@@ -136,6 +136,25 @@ test("playground shell supports formula-bar navigation, in-grid editing, and Exc
   await jumpTo(page, "XFD1048576");
   await expect(page.getByTestId("formula-input")).toHaveValue("=B1048576+1");
   await expect(page.getByTestId("formula-resolved-value")).toContainText("2097153");
+});
+
+test("cross-sheet formulas recalculate end to end after editing the source sheet", async ({ page }) => {
+  await clearWorkspace(page);
+
+  const gridHost = page.getByTestId("sheet-grid");
+  await gridHost.focus();
+  await gridHost.press("F2");
+
+  const overlay = page.getByTestId("cell-editor-overlay");
+  await expect(overlay).toBeVisible();
+  await page.getByTestId("cell-editor-input").fill("12");
+  await page.getByTestId("cell-editor-input").press("Enter");
+
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A2");
+  await page.getByRole("tab", { name: "Sheet2" }).click();
+  await expect(page.getByTestId("selection-chip")).toHaveText("Sheet2!A1");
+  await expect(page.getByTestId("formula-input")).toHaveValue("=IF(Sheet1!B1>20,Sheet1!B1+1,Sheet1!B2-1)");
+  await expect(page.getByTestId("formula-resolved-value")).toContainText("25");
 });
 
 test("pointer clicks select the visible cell instead of an offset row", async ({ page }) => {

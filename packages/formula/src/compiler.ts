@@ -15,6 +15,54 @@ interface CompilerState {
   constants: number[];
   refs: string[];
   ranges: string[];
+  strings: string[];
+}
+
+const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND"]);
+
+interface VolatileMetadata {
+  volatile: boolean;
+  randCallCount: number;
+}
+
+function producesSpillResult(node: FormulaNode): boolean {
+  return node.kind === "CallExpr" && node.callee.toUpperCase() === "SEQUENCE";
+}
+
+function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "NameRef":
+    case "CellRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "RangeRef":
+      return { volatile: false, randCallCount: 0 };
+    case "UnaryExpr":
+      return analyzeVolatileMetadata(node.argument);
+    case "BinaryExpr": {
+      const left = analyzeVolatileMetadata(node.left);
+      const right = analyzeVolatileMetadata(node.right);
+      return {
+        volatile: left.volatile || right.volatile,
+        randCallCount: left.randCallCount + right.randCallCount
+      };
+    }
+    case "CallExpr": {
+      const callee = node.callee.toUpperCase();
+      let volatile = VOLATILE_BUILTINS.has(callee);
+      let randCallCount = callee === "RAND" ? 1 : 0;
+      node.args.forEach((arg) => {
+        const child = analyzeVolatileMetadata(arg);
+        volatile = volatile || child.volatile;
+        randCallCount += child.randCallCount;
+      });
+      return { volatile, randCallCount };
+    }
+  }
 }
 
 function emitCellRef(ref: string, sheetName: string | undefined, state: CompilerState): void {
@@ -56,7 +104,15 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       state.program.push(encodeInstruction(Opcode.PushBoolean, node.value ? 1 : 0));
       return;
     case "StringLiteral":
-      throw new Error("String literals are not supported on the wasm fast path");
+      {
+        let index = state.strings.indexOf(node.value);
+        if (index === -1) index = state.strings.push(node.value) - 1;
+        state.program.push(encodeInstruction(Opcode.PushString, index));
+      }
+      return;
+    case "ErrorLiteral":
+      state.program.push(encodeInstruction(Opcode.PushError, node.code));
+      return;
     case "NameRef":
       throw new Error("Defined names are not supported on the wasm fast path");
     case "CellRef": {
@@ -130,11 +186,20 @@ export interface CompiledFormula extends FormulaRecord {
   optimizedAst: FormulaNode;
   deps: string[];
   symbolicNames: string[];
+  volatile: boolean;
+  randCallCount: number;
+  producesSpill: boolean;
   jsPlan: JsPlanInstruction[];
   program: Uint32Array;
   constants: Float64Array;
   symbolicRefs: string[];
   symbolicRanges: string[];
+  symbolicStrings: string[];
+}
+
+interface CompileFormulaAstOptions {
+  originalAst?: FormulaNode;
+  symbolicNames?: string[];
 }
 
 function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
@@ -144,8 +209,9 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
     switch (instruction.opcode) {
       case "push-number":
       case "push-boolean":
-      case "push-string":
-      case "push-name":
+        case "push-string":
+        case "push-error":
+        case "push-name":
       case "push-cell":
       case "push-range":
         current += 1;
@@ -170,12 +236,17 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
   return max;
 }
 
-export function compileFormula(source: string): CompiledFormula {
-  const ast = parseFormula(source);
+export function compileFormulaAst(
+  source: string,
+  ast: FormulaNode,
+  options: CompileFormulaAstOptions = {}
+): CompiledFormula {
   const optimizedAst = optimizeFormula(ast);
   const bound = bindFormula(optimizedAst);
-  const state: CompilerState = { program: [], constants: [], refs: [], ranges: [] };
+  const state: CompilerState = { program: [], constants: [], refs: [], ranges: [], strings: [] };
   const jsPlan = lowerToPlan(optimizedAst);
+  const volatileMetadata = analyzeVolatileMetadata(options.originalAst ?? ast);
+  const spillResult = producesSpillResult(optimizedAst);
 
   if (bound.mode === FormulaMode.WasmFastPath) {
     emitNode(optimizedAst, state);
@@ -198,11 +269,19 @@ export function compileFormula(source: string): CompiledFormula {
     constants: Float64Array.from(state.constants),
     symbolicRefs: state.refs,
     symbolicRanges: state.ranges,
-    ast,
+    symbolicStrings: state.strings,
+    ast: options.originalAst ?? ast,
     optimizedAst,
     deps: bound.deps,
-    symbolicNames: bound.symbolicNames,
+    symbolicNames: options.symbolicNames ?? bound.symbolicNames,
+    volatile: volatileMetadata.volatile,
+    randCallCount: volatileMetadata.randCallCount,
+    producesSpill: spillResult,
     jsPlan,
     maxStackDepth: computeMaxStackDepth(jsPlan)
   };
+}
+
+export function compileFormula(source: string): CompiledFormula {
+  return compileFormulaAst(source, parseFormula(source));
 }
