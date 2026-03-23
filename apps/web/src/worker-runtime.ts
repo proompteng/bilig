@@ -1,18 +1,21 @@
-import type { EngineSyncClient } from "@bilig/core";
+import type { CommitOp, EngineReplicaSnapshot, EngineSyncClient } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/crdt";
 import { formatAddress, indexToColumn } from "@bilig/formula";
 import { createBrowserPersistence, type BrowserPersistence } from "@bilig/storage-browser";
 import {
+  type CellRangeRef,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
   formatErrorCode,
   type CellSnapshot,
   type EngineEvent,
+  type LiteralInput,
   type RecalcMetrics,
   type SyncState,
   type WorkbookAxisEntrySnapshot,
+  type WorkbookSnapshot,
 } from "@bilig/protocol";
 import {
   createWebSocketSyncClient,
@@ -24,8 +27,51 @@ import {
   type WebSocketSyncClientOptions,
 } from "@bilig/worker-transport";
 
-const SpreadsheetEngineCtor = SpreadsheetEngine;
-type WorkbookEngine = SpreadsheetEngine;
+interface WorkerSheet {
+  name: string;
+  order: number;
+  grid: {
+    forEachCellEntry(listener: (cellIndex: number, row: number, col: number) => void): void;
+  };
+}
+
+interface WorkerWorkbook {
+  workbookName: string;
+  sheetsByName: Map<string, WorkerSheet>;
+  getSheet(sheetName: string): WorkerSheet | undefined;
+}
+
+interface WorkerEngine {
+  workbook: WorkerWorkbook;
+  ready(): Promise<void>;
+  createSheet(name: string): void;
+  subscribe(listener: (event: EngineEvent) => void): () => void;
+  subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void;
+  getLastMetrics(): RecalcMetrics;
+  getSyncState(): SyncState;
+  getCell(sheetName: string, address: string): CellSnapshot;
+  setCellValue(sheetName: string, address: string, value: LiteralInput): unknown;
+  setCellFormula(sheetName: string, address: string, formula: string): unknown;
+  clearCell(sheetName: string, address: string): void;
+  renderCommit(ops: CommitOp[]): void;
+  fillRange(source: CellRangeRef, target: CellRangeRef): void;
+  copyRange(source: CellRangeRef, target: CellRangeRef): void;
+  updateColumnMetadata(
+    sheetName: string,
+    start: number,
+    count: number,
+    size: number | null,
+    hidden: boolean | null,
+  ): unknown;
+  connectSyncClient(client: EngineSyncClient): Promise<void>;
+  disconnectSyncClient(): Promise<void>;
+  exportSnapshot(): WorkbookSnapshot;
+  exportReplicaSnapshot(): EngineReplicaSnapshot;
+  importSnapshot(snapshot: WorkbookSnapshot): void;
+  importReplicaSnapshot(snapshot: EngineReplicaSnapshot): void;
+  getColumnAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[];
+  getRowAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[];
+}
 
 const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_ROW_HEIGHT = 22;
@@ -49,8 +95,8 @@ export interface WorkbookWorkerStateSnapshot {
 }
 
 interface PersistedWorkbookState {
-  snapshot: ReturnType<WorkbookEngine["exportSnapshot"]>;
-  replica: ReturnType<WorkbookEngine["exportReplicaSnapshot"]>;
+  snapshot: WorkbookSnapshot;
+  replica: EngineReplicaSnapshot;
 }
 
 interface ViewportSubscriptionState {
@@ -87,7 +133,7 @@ export class WorkbookWorkerRuntime {
   [method: string]: unknown;
   private readonly persistence: BrowserPersistence;
   private readonly createSyncClient: (options: WebSocketSyncClientOptions) => EngineSyncClient;
-  private engine: WorkbookEngine | null = null;
+  private engine: WorkerEngine | null = null;
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionState>();
@@ -111,7 +157,7 @@ export class WorkbookWorkerRuntime {
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerStateSnapshot> {
     this.cleanup();
     this.bootstrapOptions = options;
-    this.engine = new SpreadsheetEngineCtor({
+    this.engine = new SpreadsheetEngine({
       workbookName: options.documentId,
       replicaId: options.replicaId,
     });
@@ -187,21 +233,15 @@ export class WorkbookWorkerRuntime {
     return this.getCell(sheetName, address);
   }
 
-  renderCommit(ops: Parameters<WorkbookEngine["renderCommit"]>[0]): void {
+  renderCommit(ops: CommitOp[]): void {
     this.requireEngine().renderCommit(ops);
   }
 
-  fillRange(
-    source: Parameters<WorkbookEngine["fillRange"]>[0],
-    target: Parameters<WorkbookEngine["fillRange"]>[1],
-  ): void {
+  fillRange(source: CellRangeRef, target: CellRangeRef): void {
     this.requireEngine().fillRange(source, target);
   }
 
-  copyRange(
-    source: Parameters<WorkbookEngine["copyRange"]>[0],
-    target: Parameters<WorkbookEngine["copyRange"]>[1],
-  ): void {
+  copyRange(source: CellRangeRef, target: CellRangeRef): void {
     this.requireEngine().copyRange(source, target);
   }
 
@@ -261,7 +301,7 @@ export class WorkbookWorkerRuntime {
     this.engine = null;
   }
 
-  private requireEngine(): WorkbookEngine {
+  private requireEngine(): WorkerEngine {
     if (!this.engine) {
       throw new Error("Workbook worker runtime has not been bootstrapped");
     }
