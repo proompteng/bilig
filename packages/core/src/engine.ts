@@ -1304,7 +1304,7 @@ export class SpreadsheetEngine {
       version: 1,
       workbook,
       sheets: [...this.workbook.sheetsByName.values()]
-        .sort((left, right) => left.order - right.order)
+        .toSorted((left, right) => left.order - right.order)
         .map((sheet) => {
           const metadata = this.exportSheetMetadata(sheet.name);
           const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
@@ -1620,8 +1620,9 @@ export class SpreadsheetEngine {
         captured.push({ cellIndex, row, col });
       }
     });
-    captured.sort((left, right) => left.row - right.row || left.col - right.col);
-    return captured.flatMap(({ cellIndex, row, col }) =>
+    return captured
+      .toSorted((left, right) => left.row - right.row || left.col - right.col)
+      .flatMap(({ cellIndex, row, col }) =>
       this.toCellStateOps(sheetName, formatAddress(row, col), this.getCellByIndex(cellIndex)));
   }
 
@@ -2752,14 +2753,14 @@ export class SpreadsheetEngine {
         sheet.grid.forEachCell((cellIndex) => {
           cellIndices.push(cellIndex);
         });
-        cellIndices.sort((left, right) => {
+        const orderedCellIndices = cellIndices.toSorted((left, right) => {
           const leftRow = this.workbook.cellStore.rows[left] ?? 0;
           const rightRow = this.workbook.cellStore.rows[right] ?? 0;
           const leftCol = this.workbook.cellStore.cols[left] ?? 0;
           const rightCol = this.workbook.cellStore.cols[right] ?? 0;
           return leftRow - rightRow || leftCol - rightCol;
         });
-        for (const cellIndex of cellIndices) {
+        for (const cellIndex of orderedCellIndices) {
           restoredOps.push(...this.toCellStateOps(sheet.name, this.workbook.getAddress(cellIndex), this.getCellByIndex(cellIndex)));
         }
         return restoredOps;
@@ -4195,7 +4196,7 @@ export class SpreadsheetEngine {
 
     this.workbook.deleteSheet(sheetName);
     if (this.selection.sheetName === sheetName) {
-      const nextSheet = [...this.workbook.sheetsByName.values()].sort((left, right) => left.order - right.order)[0];
+      const nextSheet = [...this.workbook.sheetsByName.values()].toSorted((left, right) => left.order - right.order)[0];
       this.setSelection(nextSheet?.name ?? sheetName, "A1");
     }
     formulaChangedCount = this.rebindFormulasForSheet(

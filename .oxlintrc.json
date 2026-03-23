@@ -3,6 +3,7 @@
   "plugins": [
     "typescript",
     "oxc",
+    "unicorn",
     "promise",
     "node",
     "react",

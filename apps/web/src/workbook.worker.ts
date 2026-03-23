@@ -8,7 +8,7 @@ const listenerMap = new Map<PortListener, EventListener>();
 
 createWorkerEngineHost(runtime, {
   postMessage(message: unknown) {
-    scope.postMessage(message);
+    scope.postMessage(message, []);
   },
   addEventListener(_type: "message", listener: PortListener) {
     const wrapped: EventListener = (event) => {

@@ -18,7 +18,7 @@ interface SnapshotAssembly {
   cursor: number;
   contentType: string;
   chunkCount: number;
-  chunks: Uint8Array[];
+  chunks: Array<Uint8Array | undefined>;
 }
 
 export interface DocumentStateSummary {
@@ -216,12 +216,12 @@ export class DocumentSessionManager {
       cursor: frame.cursor,
       contentType: frame.contentType,
       chunkCount: frame.chunkCount,
-      chunks: new Array<Uint8Array>(frame.chunkCount)
+      chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount })
     };
     assembly.chunks[frame.chunkIndex] = frame.bytes;
     this.snapshotAssemblies.set(frame.snapshotId, assembly);
 
-    if (assembly.chunks.every(Boolean)) {
+    if (assembly.chunks.every((chunk): chunk is Uint8Array => chunk !== undefined)) {
       const totalLength = assembly.chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
       const bytes = new Uint8Array(totalLength);
       let offset = 0;

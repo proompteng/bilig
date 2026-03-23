@@ -35,7 +35,7 @@ export function compactRelayEntries(entries: RelayEntry[]): RelayEntry[] {
     });
   });
 
-  return compacted.sort(
+  return compacted.toSorted(
     (left, right) =>
       left.deliverAt - right.deliverAt ||
       left.target.localeCompare(right.target) ||

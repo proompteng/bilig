@@ -1057,7 +1057,7 @@ describe("SpreadsheetEngine", () => {
     engineA.setCellValue("Sheet1", "A1", 1);
     engineB.setCellValue("Sheet1", "A1", 2);
 
-    [...outboundB].reverse().forEach((batch) => engineA.applyRemoteBatch(batch));
+    [...outboundB].toReversed().forEach((batch) => engineA.applyRemoteBatch(batch));
     [...outboundA].forEach((batch) => engineB.applyRemoteBatch(batch));
 
     expect(engineA.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 2 });

@@ -69,8 +69,7 @@ export function collectMountOps(descriptor: Descriptor): CommitOp[] {
 export function collectDeleteOps(descriptor: Descriptor): CommitOp[] {
   if (descriptor.kind === "Workbook") {
     return descriptor.children
-      .slice()
-      .reverse()
+      .toReversed()
       .map((sheet) => ({ kind: "deleteSheet", name: sheet.props.name }) satisfies CommitOp);
   }
 

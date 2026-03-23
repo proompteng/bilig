@@ -12,7 +12,7 @@ export function summarizeNumbers(values: readonly number[]): NumericSummary {
     throw new Error("Cannot summarize an empty sample set");
   }
 
-  const samples = [...values].sort((left, right) => left - right);
+  const samples = [...values].toSorted((left, right) => left - right);
   const min = samples[0]!;
   const max = samples[samples.length - 1]!;
   const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;

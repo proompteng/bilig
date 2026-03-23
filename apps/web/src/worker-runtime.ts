@@ -24,6 +24,8 @@ import {
   type WebSocketSyncClientOptions
 } from "@bilig/worker-transport";
 
+type WorkbookEngine = InstanceType<typeof SpreadsheetEngine>;
+
 const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_ROW_HEIGHT = 22;
 const MIN_COLUMN_WIDTH = 44;
@@ -46,8 +48,8 @@ export interface WorkbookWorkerStateSnapshot {
 }
 
 interface PersistedWorkbookState {
-  snapshot: ReturnType<SpreadsheetEngine["exportSnapshot"]>;
-  replica: ReturnType<SpreadsheetEngine["exportReplicaSnapshot"]>;
+  snapshot: ReturnType<WorkbookEngine["exportSnapshot"]>;
+  replica: ReturnType<WorkbookEngine["exportReplicaSnapshot"]>;
 }
 
 interface ViewportSubscriptionState {
@@ -80,7 +82,7 @@ export class WorkbookWorkerRuntime {
   [method: string]: unknown;
   private readonly persistence: BrowserPersistence;
   private readonly createSyncClient: (options: WebSocketSyncClientOptions) => EngineSyncClient;
-  private engine: SpreadsheetEngine | null = null;
+  private engine: WorkbookEngine | null = null;
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionState>();
@@ -170,20 +172,20 @@ export class WorkbookWorkerRuntime {
     return this.getCell(sheetName, address);
   }
 
-  renderCommit(ops: Parameters<SpreadsheetEngine["renderCommit"]>[0]): void {
+  renderCommit(ops: Parameters<WorkbookEngine["renderCommit"]>[0]): void {
     this.requireEngine().renderCommit(ops);
   }
 
   fillRange(
-    source: Parameters<SpreadsheetEngine["fillRange"]>[0],
-    target: Parameters<SpreadsheetEngine["fillRange"]>[1]
+    source: Parameters<WorkbookEngine["fillRange"]>[0],
+    target: Parameters<WorkbookEngine["fillRange"]>[1]
   ): void {
     this.requireEngine().fillRange(source, target);
   }
 
   copyRange(
-    source: Parameters<SpreadsheetEngine["copyRange"]>[0],
-    target: Parameters<SpreadsheetEngine["copyRange"]>[1]
+    source: Parameters<WorkbookEngine["copyRange"]>[0],
+    target: Parameters<WorkbookEngine["copyRange"]>[1]
   ): void {
     this.requireEngine().copyRange(source, target);
   }
@@ -244,7 +246,7 @@ export class WorkbookWorkerRuntime {
     this.engine = null;
   }
 
-  private requireEngine(): SpreadsheetEngine {
+  private requireEngine(): WorkbookEngine {
     if (!this.engine) {
       throw new Error("Workbook worker runtime has not been bootstrapped");
     }
@@ -253,7 +255,7 @@ export class WorkbookWorkerRuntime {
 
   private listSheetNames(): string[] {
     return [...this.requireEngine().workbook.sheetsByName.values()]
-      .sort((left, right) => left.order - right.order)
+      .toSorted((left, right) => left.order - right.order)
       .map((sheet) => sheet.name);
   }
 

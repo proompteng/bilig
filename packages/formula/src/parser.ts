@@ -31,6 +31,38 @@ const PRECEDENCE: Record<string, number> = {
   colon: 6
 };
 
+function assertNoStandaloneAxisRefs(node: FormulaNode): void {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "NameRef":
+    case "StructuredRef":
+    case "SpillRef":
+    case "CellRef":
+    case "RangeRef":
+      return;
+    case "ColumnRef":
+    case "RowRef":
+      throw new Error("Row and column references must appear inside a range");
+    case "UnaryExpr":
+      assertNoStandaloneAxisRefs(node.argument);
+      return;
+    case "BinaryExpr":
+      assertNoStandaloneAxisRefs(node.left);
+      assertNoStandaloneAxisRefs(node.right);
+      return;
+    case "CallExpr":
+      node.args.forEach(assertNoStandaloneAxisRefs);
+      return;
+    case "InvokeExpr":
+      assertNoStandaloneAxisRefs(node.callee);
+      node.args.forEach(assertNoStandaloneAxisRefs);
+      return;
+  }
+}
+
 export function parseFormula(source: string): FormulaNode {
   const tokens = lexFormula(source.startsWith("=") ? source.slice(1) : source);
   let position = 0;
@@ -187,38 +219,6 @@ export function parseFormula(source: string): FormulaNode {
         return maybeParseReferenceValue(node.name);
       default:
         return undefined;
-    }
-  }
-
-  function assertNoStandaloneAxisRefs(node: FormulaNode): void {
-    switch (node.kind) {
-      case "NumberLiteral":
-      case "BooleanLiteral":
-      case "StringLiteral":
-      case "ErrorLiteral":
-      case "NameRef":
-      case "StructuredRef":
-      case "SpillRef":
-      case "CellRef":
-      case "RangeRef":
-        return;
-      case "ColumnRef":
-      case "RowRef":
-        throw new Error("Row and column references must appear inside a range");
-      case "UnaryExpr":
-        assertNoStandaloneAxisRefs(node.argument);
-        return;
-      case "BinaryExpr":
-        assertNoStandaloneAxisRefs(node.left);
-        assertNoStandaloneAxisRefs(node.right);
-        return;
-      case "CallExpr":
-        node.args.forEach(assertNoStandaloneAxisRefs);
-        return;
-      case "InvokeExpr":
-        assertNoStandaloneAxisRefs(node.callee);
-        node.args.forEach(assertNoStandaloneAxisRefs);
-        return;
     }
   }
 

@@ -2,6 +2,12 @@ const DEFAULT_DB_NAME = "bilig-browser-state";
 const DEFAULT_STORE_NAME = "state";
 const WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES = 128 * 1024;
 
+function addOnceEventListener(target: EventTarget, type: string, listener: () => void): void {
+  target.addEventListener(type, () => {
+    listener();
+  }, { once: true });
+}
+
 function getLocalStorage(): Storage | null {
   try {
     const scope = globalThis as typeof globalThis & { localStorage?: Storage };
@@ -26,9 +32,9 @@ async function openDatabase(databaseName: string, storeName: string): Promise<ID
           database.createObjectStore(storeName);
         }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-      request.onblocked = () => resolve(null);
+      addOnceEventListener(request, "success", () => resolve(request.result));
+      addOnceEventListener(request, "error", () => resolve(null));
+      addOnceEventListener(request, "blocked", () => resolve(null));
     } catch {
       resolve(null);
     }
@@ -46,11 +52,11 @@ async function readFromStore(databaseName: string, storeName: string, key: strin
     const store = transaction.objectStore(storeName);
     const request = store.get(key);
 
-    request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
-    request.onerror = () => resolve(null);
-    transaction.oncomplete = () => database.close();
-    transaction.onerror = () => database.close();
-    transaction.onabort = () => database.close();
+    addOnceEventListener(request, "success", () => resolve(typeof request.result === "string" ? request.result : null));
+    addOnceEventListener(request, "error", () => resolve(null));
+    addOnceEventListener(transaction, "complete", () => database.close());
+    addOnceEventListener(transaction, "error", () => database.close());
+    addOnceEventListener(transaction, "abort", () => database.close());
   });
 }
 
@@ -72,20 +78,20 @@ async function writeToStore(databaseName: string, storeName: string, key: string
 
     const transaction = database.transaction(storeName, "readwrite");
     const request = transaction.objectStore(storeName).put(value, key);
-    request.onsuccess = () => finish(true);
-    request.onerror = () => finish(false);
-    transaction.oncomplete = () => {
+    addOnceEventListener(request, "success", () => finish(true));
+    addOnceEventListener(request, "error", () => finish(false));
+    addOnceEventListener(transaction, "complete", () => {
       database.close();
       finish(true);
-    };
-    transaction.onerror = () => {
+    });
+    addOnceEventListener(transaction, "error", () => {
       database.close();
       finish(false);
-    };
-    transaction.onabort = () => {
+    });
+    addOnceEventListener(transaction, "abort", () => {
       database.close();
       finish(false);
-    };
+    });
   });
 }
 
@@ -98,20 +104,20 @@ async function removeFromStore(databaseName: string, storeName: string, key: str
   await new Promise<void>((resolve) => {
     const transaction = database.transaction(storeName, "readwrite");
     const request = transaction.objectStore(storeName).delete(key);
-    request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    transaction.oncomplete = () => {
+    addOnceEventListener(request, "success", () => resolve());
+    addOnceEventListener(request, "error", () => resolve());
+    addOnceEventListener(transaction, "complete", () => {
       database.close();
       resolve();
-    };
-    transaction.onerror = () => {
+    });
+    addOnceEventListener(transaction, "error", () => {
       database.close();
       resolve();
-    };
-    transaction.onabort = () => {
+    });
+    addOnceEventListener(transaction, "abort", () => {
       database.close();
       resolve();
-    };
+    });
   });
 }
 

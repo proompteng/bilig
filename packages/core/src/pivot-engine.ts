@@ -85,7 +85,7 @@ export function materializePivotTable(
     if (!bucket) {
       bucket = {
         keyValues,
-        aggregates: new Array(materializedValueFields.length).fill(0)
+        aggregates: Array.from({ length: materializedValueFields.length }, () => 0)
       };
       buckets.set(key, bucket);
     }

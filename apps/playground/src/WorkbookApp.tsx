@@ -196,17 +196,17 @@ function parseSelectionTarget(input: string, fallbackSheet: string): { sheetName
 }
 
 async function waitForTaskCycles(count = 2): Promise<void> {
-  const advance = async (remaining: number): Promise<void> => {
-    if (remaining <= 0) {
-      return;
-    }
-    await new Promise<void>((resolve) => {
-      window.setTimeout(() => resolve(), 0);
-    });
-    await advance(remaining - 1);
-  };
+  await advanceTaskCycles(count);
+}
 
-  await advance(count);
+async function advanceTaskCycles(remaining: number): Promise<void> {
+  if (remaining <= 0) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    window.setTimeout(() => resolve(), 0);
+  });
+  await advanceTaskCycles(remaining - 1);
 }
 
 async function settleRendererBoundary(operation: Promise<void>): Promise<void> {
@@ -281,7 +281,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     });
   }, [engine, mirrorEngine]);
   const sheetNames = [...engine.workbook.sheetsByName.values()]
-    .sort((left, right) => left.order - right.order)
+    .toSorted((left, right) => left.order - right.order)
     .map((sheet) => sheet.name);
   const pendingSyncCount = syncPaused ? 0 : relayQueue.length;
   const queuedSyncCount = syncPaused ? relayQueue.length : 0;
@@ -686,7 +686,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
 
   const toggleSync = useCallback(() => {
     if (syncPaused) {
-      const queuedEntries = [...relayQueueRef.current].sort((left, right) => left.deliverAt - right.deliverAt);
+      const queuedEntries = [...relayQueueRef.current].toSorted((left, right) => left.deliverAt - right.deliverAt);
       queuedEntries.forEach(({ target, batch }) => {
         (target === "mirror" ? mirrorEngine : engine).applyRemoteBatch(batch);
       });

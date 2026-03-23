@@ -6,9 +6,9 @@ async function clearWorkspace(page: Page) {
     window.localStorage.clear();
     await new Promise<void>((resolve) => {
       const request = window.indexedDB.deleteDatabase("bilig-playground");
-      request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
-      request.onblocked = () => resolve();
+      request.addEventListener("success", () => resolve(), { once: true });
+      request.addEventListener("error", () => resolve(), { once: true });
+      request.addEventListener("blocked", () => resolve(), { once: true });
     });
   });
   await page.reload();

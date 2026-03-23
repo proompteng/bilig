@@ -60,7 +60,7 @@ function createWorkerPort(worker: Worker): MessagePortLike {
   const listenerMap = new Map<PortListener, EventListener>();
   return {
     postMessage(message: unknown) {
-      worker.postMessage(message);
+      worker.postMessage(message, []);
     },
     addEventListener(type: "message", listener: PortListener) {
       const wrapped: EventListener = (event) => {

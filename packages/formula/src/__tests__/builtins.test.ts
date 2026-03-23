@@ -420,9 +420,9 @@ describe("formula builtins", () => {
     expect(settlement?.tag).toBe(ValueTag.Number);
 
     const firstAccrual = getBuiltin("ACCRINT")?.(
-      issue!,
-      firstInterest!,
-      settlement!,
+      issue,
+      firstInterest,
+      settlement,
       rate,
       { tag: ValueTag.Number, value: 1000 },
       { tag: ValueTag.Number, value: 2 },
@@ -432,9 +432,9 @@ describe("formula builtins", () => {
     expect(firstAccrual?.tag === ValueTag.Number ? firstAccrual.value : Number.NaN).toBeCloseTo(91.66666666666667, 12);
 
     const omittedBasisAccrual = getBuiltin("ACCRINT")?.(
-      issue!,
-      firstInterest!,
-      settlement!,
+      issue,
+      firstInterest,
+      settlement,
       rate,
       { tag: ValueTag.Number, value: 1000 },
       { tag: ValueTag.Number, value: 2 }
@@ -446,18 +446,18 @@ describe("formula builtins", () => {
     );
 
     const fullAccrual = getBuiltin("ACCRINT")?.(
-      issue!,
-      firstInterest!,
-      settlement!,
+      issue,
+      firstInterest,
+      settlement,
       rate,
       { tag: ValueTag.Number, value: 1000 },
       { tag: ValueTag.Number, value: 2 },
       basis
     );
     const shortAccrual = getBuiltin("ACCRINT")?.(
-      issue!,
-      firstInterest!,
-      settlement!,
+      issue,
+      firstInterest,
+      settlement,
       rate,
       { tag: ValueTag.Number, value: 1000 },
       { tag: ValueTag.Number, value: 2 },
@@ -470,14 +470,14 @@ describe("formula builtins", () => {
     const fullAccrualValue = fullAccrual?.tag === ValueTag.Number ? fullAccrual.value : Number.NaN;
     expect(shortAccrualValue).toBeLessThan(fullAccrualValue);
 
-    const maturityAccrual = getBuiltin("ACCRINTM")?.(issue!, settlement!, rate, undefined, basis);
+    const maturityAccrual = getBuiltin("ACCRINTM")?.(issue, settlement, rate, undefined, basis);
     expect(maturityAccrual).toMatchObject({ tag: ValueTag.Number });
     expect(maturityAccrual?.tag === ValueTag.Number ? maturityAccrual.value : Number.NaN).toBeCloseTo(91.66666666666667, 12);
 
     expect(getBuiltin("AMORLINC")?.(
       cost,
-      issue!,
-      settlement!,
+      issue,
+      settlement,
       salvage,
       period,
       rate,
@@ -486,8 +486,8 @@ describe("formula builtins", () => {
 
     expect(getBuiltin("AMORDEGRC")?.(
       cost,
-      issue!,
-      settlement!,
+      issue,
+      settlement,
       salvage,
       period,
       rate,
@@ -495,18 +495,18 @@ describe("formula builtins", () => {
     )).toEqual({ tag: ValueTag.Number, value: 163 });
 
     expect(getBuiltin("ACCRINT")?.(
-      issue!,
-      settlement!,
-      issue!,
+      issue,
+      settlement,
+      issue,
       rate,
       { tag: ValueTag.Number, value: 1000 },
       { tag: ValueTag.Number, value: 2 }
     )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
 
     expect(getBuiltin("ACCRINT")?.(
-      issue!,
-      settlement!,
-      settlement!,
+      issue,
+      settlement,
+      settlement,
       rate,
       { tag: ValueTag.Number, value: 1000 },
       { tag: ValueTag.Number, value: 3 }
@@ -528,9 +528,9 @@ describe("formula builtins", () => {
     for (const basis of [0, 1, 2, 3, 4]) {
       expect(
         getBuiltin("ACCRINT")?.(
-          issue!,
-          firstInterest!,
-          settlement!,
+          issue,
+          firstInterest,
+          settlement,
           rate,
           par,
           frequency,
@@ -539,8 +539,8 @@ describe("formula builtins", () => {
       ).toMatchObject({ tag: ValueTag.Number });
       expect(
         getBuiltin("ACCRINTM")?.(
-          issue!,
-          settlement!,
+          issue,
+          settlement,
           rate,
           par,
           { tag: ValueTag.Number, value: basis }
@@ -550,9 +550,9 @@ describe("formula builtins", () => {
 
     expect(
       getBuiltin("ACCRINT")?.(
-        issue!,
-        firstInterest!,
-        settlement!,
+        issue,
+        firstInterest,
+        settlement,
         rate,
         par,
         frequency,
@@ -562,8 +562,8 @@ describe("formula builtins", () => {
 
     expect(
       getBuiltin("ACCRINTM")?.(
-        issue!,
-        settlement!,
+        issue,
+        settlement,
         rate,
         par,
         { tag: ValueTag.Number, value: 5 }
@@ -583,8 +583,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORLINC")?.(
         cost,
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 25 },
         { tag: ValueTag.Number, value: 0 },
         { tag: ValueTag.Number, value: 0.15 },
@@ -595,8 +595,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORLINC")?.(
         cost,
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 25 },
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 0.15 },
@@ -607,8 +607,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORLINC")?.(
         cost,
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 25 },
         { tag: ValueTag.Number, value: 6 },
         { tag: ValueTag.Number, value: 0.15 },
@@ -619,8 +619,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORLINC")?.(
         cost,
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 25 },
         { tag: ValueTag.Number, value: 7 },
         { tag: ValueTag.Number, value: 0.15 },
@@ -631,8 +631,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORDEGRC")?.(
         { tag: ValueTag.Number, value: 1000 },
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 10 },
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 0.2 },
@@ -643,8 +643,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORDEGRC")?.(
         { tag: ValueTag.Number, value: 1000 },
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 10 },
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 0.3 },
@@ -655,8 +655,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORDEGRC")?.(
         { tag: ValueTag.Number, value: 1000 },
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 10 },
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 0.5 },
@@ -667,8 +667,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORDEGRC")?.(
         { tag: ValueTag.Number, value: 1000 },
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 0 },
         { tag: ValueTag.Number, value: 3 },
         { tag: ValueTag.Number, value: 1.2 },
@@ -679,8 +679,8 @@ describe("formula builtins", () => {
     expect(
       getBuiltin("AMORDEGRC")?.(
         { tag: ValueTag.Number, value: 100 },
-        datePurchased!,
-        firstPeriod!,
+        datePurchased,
+        firstPeriod,
         { tag: ValueTag.Number, value: 200 },
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 0.1 },

@@ -6,8 +6,7 @@ export function renderSnapshotWorkbook(snapshot: WorkbookSnapshot): React.ReactN
   return (
     <Workbook name={snapshot.workbook.name}>
       {snapshot.sheets
-        .slice()
-        .sort((left, right) => left.order - right.order)
+        .toSorted((left, right) => left.order - right.order)
         .map((sheet) => (
           <Sheet key={sheet.name} name={sheet.name}>
             {sheet.cells.map((cell) =>

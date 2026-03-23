@@ -528,9 +528,9 @@ function arabicValue(text: string): number | undefined {
 
 function isValidBaseDigits(raw: string, radix: number): boolean {
   const upper = raw.toUpperCase();
-  const digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".slice(0, radix);
-  for (const char of Array.from(upper)) {
-    if (!digits.includes(char)) {
+  const digits = new Set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".slice(0, radix));
+  for (const char of upper) {
+    if (!digits.has(char)) {
       return false;
     }
   }

@@ -1,4 +1,4 @@
-import type { GridEngineLike, GridSheetLike } from "@bilig/grid";
+import type { GridEngineLike } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { ValueTag, type CellSnapshot, type Viewport } from "@bilig/protocol";
 import { decodeViewportPatch, type WorkerEngineClient } from "@bilig/worker-transport";
@@ -14,7 +14,7 @@ interface CellSubscription {
 
 export class WorkerViewportCache implements GridEngineLike {
   readonly workbook = {
-    getSheet: (sheetName: string): GridSheetLike | undefined => {
+    getSheet: (sheetName: string) => {
       const entries = [...this.cellSnapshots.values()].filter((snapshot) => snapshot.sheetName === sheetName);
       if (entries.length === 0) {
         return undefined;
@@ -67,7 +67,7 @@ export class WorkerViewportCache implements GridEngineLike {
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
-    const widths = { ...(this.columnWidthsBySheet.get(sheetName) ?? {}) };
+    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
     widths[columnIndex] = width;
     this.columnWidthsBySheet.set(sheetName, widths);
     this.listeners.forEach((listener) => listener());
@@ -113,7 +113,7 @@ export class WorkerViewportCache implements GridEngineLike {
     }
 
     if (patch.columns.length > 0) {
-      const widths = { ...(this.columnWidthsBySheet.get(patch.viewport.sheetName) ?? {}) };
+      const widths = { ...this.columnWidthsBySheet.get(patch.viewport.sheetName) };
       patch.columns.forEach((column: { index: number; size: number }) => {
         widths[column.index] = column.size;
       });
@@ -121,7 +121,7 @@ export class WorkerViewportCache implements GridEngineLike {
     }
 
     if (patch.rows.length > 0) {
-      const heights = { ...(this.rowHeightsBySheet.get(patch.viewport.sheetName) ?? {}) };
+      const heights = { ...this.rowHeightsBySheet.get(patch.viewport.sheetName) };
       patch.rows.forEach((row: { index: number; size: number }) => {
         heights[row.index] = row.size;
       });

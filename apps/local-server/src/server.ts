@@ -6,6 +6,8 @@ import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 
 import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
 
+function noop(): void {}
+
 export interface LocalServerOptions {
   sessionManager?: LocalWorkbookSessionManager;
   logger?: boolean;
@@ -52,7 +54,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
       const ws = normalizeWebSocket(socket);
       let documentId: string | null = null;
       const subscriberId = `browser:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-      let detach = () => {};
+      let detach = noop;
 
       ws.on("message", async (raw: unknown) => {
         try {

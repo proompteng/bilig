@@ -45,8 +45,8 @@ describe("CellStore", () => {
     store.reset();
 
     expect(store.size).toBe(0);
-    expect([...store.tags.slice(0, store.capacity)]).toEqual(new Array(store.capacity).fill(0));
-    expect([...store.stringIds.slice(0, store.capacity)]).toEqual(new Array(store.capacity).fill(0));
-    expect([...store.cycleGroupIds.slice(0, store.capacity)]).toEqual(new Array(store.capacity).fill(-1));
+    expect(Array.from(store.tags.slice(0, store.capacity))).toEqual(Array.from({ length: store.capacity }, () => 0));
+    expect(Array.from(store.stringIds.slice(0, store.capacity))).toEqual(Array.from({ length: store.capacity }, () => 0));
+    expect(Array.from(store.cycleGroupIds.slice(0, store.capacity))).toEqual(Array.from({ length: store.capacity }, () => -1));
   });
 });

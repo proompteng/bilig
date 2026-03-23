@@ -151,7 +151,7 @@ export function hydrateReplicaState(state: ReplicaState, snapshot: ReplicaSnapsh
 }
 
 export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): ReplicaSnapshot {
-  const appliedBatchIds = [...state.appliedBatchIds].sort();
+  const appliedBatchIds = [...state.appliedBatchIds].toSorted();
   const trimmed = appliedBatchIds.slice(Math.max(0, appliedBatchIds.length - limit));
   return {
     replicaId: state.replicaId,
@@ -322,7 +322,7 @@ export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
   batches.forEach((batch) => {
     deduped.set(batch.id, batch);
   });
-  const ordered = [...deduped.values()].sort(compareBatches);
+  const ordered = [...deduped.values()].toSorted(compareBatches);
   const latestByEntity = new Map<string, OpOrder>();
   const latestSheetDeletes = new Map<string, OpOrder>();
 
@@ -363,5 +363,5 @@ export function mergeBatches(batches: EngineOpBatch[]): EngineOpBatch[] {
   batches.forEach((batch) => {
     deduped.set(batch.id, batch);
   });
-  return [...deduped.values()].sort(compareBatches);
+  return [...deduped.values()].toSorted(compareBatches);
 }

@@ -266,7 +266,7 @@ export class WorkbookStore {
   }
 
   listWorkbookProperties(): WorkbookPropertyRecord[] {
-    return [...this.metadata.properties.values()].sort((left, right) => left.key.localeCompare(right.key));
+    return [...this.metadata.properties.values()].toSorted((left, right) => left.key.localeCompare(right.key));
   }
 
   setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): WorkbookCalculationSettingsRecord {
@@ -303,7 +303,7 @@ export class WorkbookStore {
   }
 
   listDefinedNames(): WorkbookDefinedNameRecord[] {
-    return [...this.metadata.definedNames.values()].sort((left, right) =>
+    return [...this.metadata.definedNames.values()].toSorted((left, right) =>
       normalizeDefinedName(left.name).localeCompare(normalizeDefinedName(right.name))
     );
   }
@@ -331,7 +331,7 @@ export class WorkbookStore {
   }
 
   listTables(): WorkbookTableRecord[] {
-    return [...this.metadata.tables.values()].sort((left, right) => tableKey(left.name).localeCompare(tableKey(right.name)));
+    return [...this.metadata.tables.values()].toSorted((left, right) => tableKey(left.name).localeCompare(tableKey(right.name)));
   }
 
   setRowMetadata(
@@ -453,7 +453,7 @@ export class WorkbookStore {
   listFilters(sheetName: string): WorkbookFilterRecord[] {
     return [...this.metadata.filters.values()]
       .filter((record) => record.sheetName === sheetName)
-      .sort((left, right) => filterKey(left.sheetName, left.range).localeCompare(filterKey(right.sheetName, right.range)));
+      .toSorted((left, right) => filterKey(left.sheetName, left.range).localeCompare(filterKey(right.sheetName, right.range)));
   }
 
   setSort(sheetName: string, range: CellRangeRef, keys: readonly WorkbookSortKeyRecord[]): WorkbookSortRecord {
@@ -478,7 +478,7 @@ export class WorkbookStore {
   listSorts(sheetName: string): WorkbookSortRecord[] {
     return [...this.metadata.sorts.values()]
       .filter((record) => record.sheetName === sheetName)
-      .sort((left, right) => sortKey(left.sheetName, left.range).localeCompare(sortKey(right.sheetName, right.range)));
+      .toSorted((left, right) => sortKey(left.sheetName, left.range).localeCompare(sortKey(right.sheetName, right.range)));
   }
 
   setSpill(sheetName: string, address: string, rows: number, cols: number): WorkbookSpillRecord {
@@ -496,7 +496,7 @@ export class WorkbookStore {
   }
 
   listSpills(): WorkbookSpillRecord[] {
-    return [...this.metadata.spills.values()].sort((left, right) =>
+    return [...this.metadata.spills.values()].toSorted((left, right) =>
       `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`)
     );
   }
@@ -526,7 +526,7 @@ export class WorkbookStore {
   }
 
   listPivots(): WorkbookPivotRecord[] {
-    return [...this.metadata.pivots.values()].sort((left, right) =>
+    return [...this.metadata.pivots.values()].toSorted((left, right) =>
       `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`)
     );
   }
@@ -629,7 +629,7 @@ export class WorkbookStore {
     this.syncAxisMetadataBucket(sheetName, sheet, axis, bucket);
     return [...bucket.values()]
       .filter((record) => record.sheetName === sheetName)
-      .sort((left, right) => left.start - right.start || left.count - right.count);
+      .toSorted((left, right) => left.start - right.start || left.count - right.count);
   }
 
   private deleteSheetMetadata(sheetName: string): void {

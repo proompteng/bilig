@@ -40,7 +40,7 @@ function summarizeNumbers(values) {
   if (values.length === 0) {
     throw new Error("Cannot summarize empty benchmark samples");
   }
-  const samples = [...values].sort((left, right) => left - right);
+  const samples = [...values].toSorted((left, right) => left - right);
   const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
   return {
     samples,

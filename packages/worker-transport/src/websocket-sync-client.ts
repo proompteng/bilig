@@ -1,13 +1,20 @@
 import type { EngineSyncClient } from "@bilig/core";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 
+interface BrowserWebSocketEventMap {
+  open: Event;
+  message: MessageEvent<unknown>;
+  error: Event;
+  close: Event;
+}
+
 export interface BrowserWebSocketLike {
   binaryType: string;
   readyState: number;
-  onopen: (() => void) | null;
-  onmessage: ((event: { data: unknown }) => void) | null;
-  onerror: (() => void) | null;
-  onclose: (() => void) | null;
+  addEventListener<K extends keyof BrowserWebSocketEventMap>(
+    type: K,
+    listener: (event: BrowserWebSocketEventMap[K]) => void
+  ): void;
   send(data: ArrayBufferLike | ArrayBufferView): void;
   close(): void;
 }
@@ -130,7 +137,7 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
           }
         };
 
-        socket.onopen = () => {
+        socket.addEventListener("open", () => {
           handlers.setState("syncing");
           socket.send(encodeFrame({
             kind: "hello",
@@ -141,23 +148,22 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
             lastServerCursor,
             capabilities: ["browser-sync"]
           }));
-        };
-        socket.onmessage = (event: { data: unknown }) => {
+        });
+        socket.addEventListener("message", (event) => {
           void handleFrame(event.data).catch((error: unknown) => {
             fail(error instanceof Error ? error.message : String(error));
           });
-        };
-        socket.onerror = () => {
+        });
+        socket.addEventListener("error", () => {
           fail("WebSocket sync connection failed");
-        };
-        socket.onclose = () => {
+        });
+        socket.addEventListener("close", () => {
           handlers.setState("local-only");
           if (!settled) {
             fail("WebSocket sync connection closed before handshake");
           }
-        };
+        });
       });
     }
   };
 }
-

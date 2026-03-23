@@ -27,6 +27,6 @@ describe("SheetGrid", () => {
 
     const all: number[] = [];
     grid.forEachCell((cellIndex) => all.push(cellIndex));
-    expect(all.sort((left, right) => left - right)).toEqual([1, 2, 3]);
+    expect(all.toSorted((left, right) => left - right)).toEqual([1, 2, 3]);
   });
 });

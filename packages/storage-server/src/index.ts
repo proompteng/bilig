@@ -130,7 +130,7 @@ export class InMemoryPresenceStore implements PresenceStore {
   }
 
   async sessions(documentId: string): Promise<string[]> {
-    return [...(this.documents.get(documentId) ?? new Set<string>())].sort();
+    return [...(this.documents.get(documentId) ?? new Set<string>())].toSorted();
   }
 }
 

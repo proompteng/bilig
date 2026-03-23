@@ -9,11 +9,25 @@ import { createWebSocketSyncClient, type BrowserWebSocketLike } from "../createW
 class FakeSocket implements BrowserWebSocketLike {
   binaryType = "arraybuffer";
   readyState = 0;
-  onopen: (() => void) | null = null;
-  onmessage: ((event: { data: unknown }) => void) | null = null;
-  onerror: (() => void) | null = null;
-  onclose: (() => void) | null = null;
   readonly sent: Uint8Array[] = [];
+  private listeners: {
+    open: ((event: Event) => void) | null;
+    message: ((event: MessageEvent<unknown>) => void) | null;
+    error: ((event: Event) => void) | null;
+    close: ((event: Event) => void) | null;
+  } = {
+    open: null,
+    message: null,
+    error: null,
+    close: null
+  };
+
+  addEventListener<K extends "open" | "message" | "error" | "close">(
+    type: K,
+    listener: typeof this.listeners[K]
+  ): void {
+    this.listeners[type] = listener;
+  }
 
   send(data: ArrayBufferLike | ArrayBufferView): void {
     if (data instanceof Uint8Array) {
@@ -29,16 +43,16 @@ class FakeSocket implements BrowserWebSocketLike {
 
   close(): void {
     this.readyState = 3;
-    this.onclose?.();
+    this.listeners.close?.(new Event("close"));
   }
 
   open(): void {
     this.readyState = 1;
-    this.onopen?.();
+    this.listeners.open?.(new Event("open"));
   }
 
   push(frame: Parameters<typeof encodeFrame>[0]): void {
-    this.onmessage?.({ data: encodeFrame(frame) });
+    this.listeners.message?.(new MessageEvent<Uint8Array>("message", { data: encodeFrame(frame) }));
   }
 }
 

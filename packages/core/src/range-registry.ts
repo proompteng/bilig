@@ -233,8 +233,7 @@ function materializeDynamicMembers(
       cursor += 1;
     }
   });
-  matches.sort();
-  return matches;
+  return matches.toSorted();
 }
 
 function matchesDynamicRange(descriptor: RangeDescriptor, row: number, col: number): boolean {

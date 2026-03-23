@@ -26,7 +26,7 @@ describe("formula compatibility registry", () => {
     const fixtureIds = new Set(canonicalFormulaFixtures.map((fixture) => fixture.id));
     const registryIds = new Set(canonicalRegistryEntries.map((entry) => entry.id));
 
-    expect([...fixtureIds].sort()).toEqual([...registryIds].sort());
+    expect([...fixtureIds].toSorted()).toEqual([...registryIds].toSorted());
   });
 
   it("tracks workbook semantics fixtures as extended coverage without redefining the canonical corpus", () => {
@@ -65,8 +65,8 @@ describe("formula compatibility registry", () => {
     const fixtureFamiliesSeen = new Set(canonicalFormulaFixtures.map((fixture) => fixture.family));
     const registryFamiliesSeen = new Set(formulaCompatibilityRegistry.map((entry) => entry.family));
 
-    expect([...fixtureFamiliesSeen].sort()).toEqual([...excelFixtureFamilies].sort());
-    expect([...registryFamiliesSeen].sort()).toEqual([...compatibilityFamilies].sort());
+    expect([...fixtureFamiliesSeen].toSorted()).toEqual([...excelFixtureFamilies].toSorted());
+    expect([...registryFamiliesSeen].toSorted()).toEqual([...compatibilityFamilies].toSorted());
   });
 
   it("exposes lookup by id", () => {
@@ -89,7 +89,7 @@ describe("formula compatibility registry", () => {
     const statuses = new Set(formulaCompatibilityRegistry.map((entry) => entry.status));
     const wasmStatuses = new Set(formulaCompatibilityRegistry.map((entry) => entry.wasmStatus));
 
-    expect([...statuses].sort()).toEqual(compatibilityStatuses.filter((status) => statuses.has(status)).sort());
-    expect([...wasmStatuses].sort()).toEqual(wasmCompatibilityStatuses.filter((status) => wasmStatuses.has(status)).sort());
+    expect([...statuses].toSorted()).toEqual(compatibilityStatuses.filter((status) => statuses.has(status)).toSorted());
+    expect([...wasmStatuses].toSorted()).toEqual(wasmCompatibilityStatuses.filter((status) => wasmStatuses.has(status)).toSorted());
   });
 });

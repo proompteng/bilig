@@ -616,7 +616,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       return errorValue(ErrorCode.Value);
     }
 
-    const values = searchMode === -1 ? [...rangeOrError.values].reverse() : rangeOrError.values;
+    const values = searchMode === -1 ? rangeOrError.values.toReversed() : rangeOrError.values;
     const probe =
       searchMode === -1
         ? { ...rangeOrError, values }
