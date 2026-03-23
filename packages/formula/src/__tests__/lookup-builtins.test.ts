@@ -170,4 +170,124 @@ describe("lookup builtins", () => {
       values: [text("A"), text("B"), text("C")]
     });
   });
+
+  it("covers FILTER fallbacks and UNIQUE row and column modes", () => {
+    const FILTER = getLookupBuiltin("FILTER")!;
+    const UNIQUE = getLookupBuiltin("UNIQUE")!;
+
+    expect(
+      FILTER(
+        cellRange([num(1), num(2), num(3), num(4), num(5), num(6)], 2, 3),
+        cellRange([bool(true), bool(false), bool(true)], 1, 3)
+      )
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(3), num(4), num(6)]
+    });
+
+    expect(
+      FILTER(
+        cellRange([num(1), num(2)], 2, 1),
+        cellRange([bool(false), bool(false)], 2, 1),
+        text("empty")
+      )
+    ).toEqual(text("empty"));
+
+    expect(
+      FILTER(
+        cellRange([num(1), num(2)], 2, 1),
+        cellRange([text("bad"), bool(true)], 2, 1)
+      )
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(
+      FILTER(
+        cellRange([num(1), num(2)], 2, 1),
+        cellRange([bool(true), bool(false), bool(true)], 3, 1)
+      )
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(
+      FILTER(
+        cellRange([num(1), num(2)], 2, 1),
+        cellRange([err(ErrorCode.Ref), bool(true)], 2, 1)
+      )
+    ).toEqual(err(ErrorCode.Ref));
+
+    expect(
+      UNIQUE(
+        cellRange([text("A"), text("b"), text("a"), text("C"), text("c")], 5, 1),
+        bool(false),
+        bool(true)
+      )
+    ).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [text("b")]
+    });
+
+    expect(
+      UNIQUE(
+        cellRange(
+          [
+            text("A"), text("B"), text("A"), text("C"),
+            num(1), num(2), num(1), num(3)
+          ],
+          2,
+          4
+        ),
+        bool(true)
+      )
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 3,
+      values: [text("A"), text("B"), text("C"), num(1), num(2), num(3)]
+    });
+
+    expect(
+      UNIQUE(
+        cellRange(
+          [
+            text("A"), text("B"), text("A"), text("C"),
+            num(1), num(2), num(1), num(3)
+          ],
+          2,
+          4
+        ),
+        bool(true),
+        bool(true)
+      )
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [text("B"), text("C"), num(2), num(3)]
+    });
+
+    expect(
+      UNIQUE(
+        cellRange(
+          [
+            text("A"), num(1),
+            text("a"), num(1),
+            text("B"), num(2)
+          ],
+          3,
+          2
+        )
+      )
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [text("A"), num(1), text("B"), num(2)]
+    });
+
+    expect(UNIQUE(cellRange([err(ErrorCode.Name)], 1, 1))).toEqual(err(ErrorCode.Name));
+    expect(UNIQUE(cellRange([num(1), num(2)], 2, 1), text("bad"))).toEqual(err(ErrorCode.Value));
+  });
 });

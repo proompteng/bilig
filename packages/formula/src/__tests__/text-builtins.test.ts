@@ -57,6 +57,28 @@ describe("text builtins", () => {
     expect(getTextBuiltin("VALUE")?.({ tag: ValueTag.Boolean, value: true })).toEqual(number(1));
     expect(getTextBuiltin("VALUE")?.({ tag: ValueTag.Empty })).toEqual(number(0));
   });
+
+  it("supports TEXTBEFORE search modes, negative instances, and fallbacks", () => {
+    const TEXTBEFORE = getTextBuiltin("TEXTBEFORE")!;
+
+    expect(TEXTBEFORE(text("alpha-beta-gamma"), text("-"))).toEqual(text("alpha"));
+    expect(TEXTBEFORE(text("alpha-beta-gamma"), text("-"), number(-1))).toEqual(text("alpha-beta"));
+    expect(TEXTBEFORE(text("Alpha-beta"), text("a"), number(2), number(1))).toEqual(text("Alph"));
+    expect(TEXTBEFORE(text("alpha"), text("-"), number(1), number(0), number(0), text("fallback"))).toEqual(text("fallback"));
+    expect(TEXTBEFORE(text("alpha-beta"), text("-"), number(-5), number(0), number(1), text("edge"))).toEqual(text("edge"));
+  });
+
+  it("returns TEXTBEFORE validation and lookup errors when arguments are invalid", () => {
+    const TEXTBEFORE = getTextBuiltin("TEXTBEFORE")!;
+
+    expect(TEXTBEFORE()).toEqual(valueError());
+    expect(TEXTBEFORE(text("alpha"), text(""))).toEqual(valueError());
+    expect(TEXTBEFORE(text("alpha"), text("-"), number(0))).toEqual(valueError());
+    expect(TEXTBEFORE(text("alpha"), text("-"), number(1), number(2))).toEqual(valueError());
+    expect(TEXTBEFORE(text("alpha"), text("-"), number(1), number(0), number(0))).toEqual({ tag: ValueTag.Error, code: ErrorCode.NA });
+    expect(TEXTBEFORE(err(ErrorCode.Ref), text("-"))).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(getTextBuiltin("VALUE")?.()).toEqual(valueError());
+  });
 });
 
 function number(value: number): CellValue {
@@ -65,6 +87,10 @@ function number(value: number): CellValue {
 
 function text(value: string): CellValue {
   return { tag: ValueTag.String, value, stringId: 0 };
+}
+
+function err(code: ErrorCode): CellValue {
+  return { tag: ValueTag.Error, code };
 }
 
 function valueError(): CellValue {
