@@ -152,6 +152,133 @@ function arrayResult(values: CellValue[], rows: number, cols: number): ArrayValu
   return { kind: "array", values, rows, cols };
 }
 
+function toCellRange(arg: LookupBuiltinArgument): RangeBuiltinArgument | CellValue {
+  if (!isRangeArg(arg)) {
+    return { kind: "range", values: [arg], refKind: "cells", rows: 1, cols: 1 };
+  }
+  if (arg.refKind !== "cells") {
+    return errorValue(ErrorCode.Value);
+  }
+  return arg;
+}
+
+function toNumericMatrix(arg: LookupBuiltinArgument): number[][] | CellValue {
+  const range = toCellRange(arg);
+  if (!isRangeArg(range)) {
+    return range;
+  }
+  const matrix: number[][] = [];
+  for (let row = 0; row < range.rows; row += 1) {
+    const rowValues: number[] = [];
+    for (let col = 0; col < range.cols; col += 1) {
+      const numeric = toNumber(getRangeValue(range, row, col));
+      if (numeric === undefined) {
+        return errorValue(ErrorCode.Value);
+      }
+      rowValues.push(numeric);
+    }
+    matrix.push(rowValues);
+  }
+  return matrix;
+}
+
+function determinantOf(matrix: number[][]): number {
+  const size = matrix.length;
+  const working = matrix.map((row) => [...row]);
+  let determinant = 1;
+  let sign = 1;
+  for (let pivot = 0; pivot < size; pivot += 1) {
+    let pivotRow = pivot;
+    while (pivotRow < size && working[pivotRow]![pivot] === 0) {
+      pivotRow += 1;
+    }
+    if (pivotRow === size) {
+      return 0;
+    }
+    if (pivotRow !== pivot) {
+      const pivotValues = working[pivot];
+      const swapValues = working[pivotRow];
+      if (!pivotValues || !swapValues) {
+        return 0;
+      }
+      [working[pivot], working[pivotRow]] = [swapValues, pivotValues];
+      sign *= -1;
+    }
+    const pivotValue = working[pivot]![pivot]!;
+    determinant *= pivotValue;
+    for (let row = pivot + 1; row < size; row += 1) {
+      const factor = working[row]![pivot]! / pivotValue;
+      for (let col = pivot; col < size; col += 1) {
+        working[row]![col] = working[row]![col]! - factor * working[pivot]![col]!;
+      }
+    }
+  }
+  return determinant * sign;
+}
+
+function inverseOf(matrix: number[][]): number[][] | undefined {
+  const size = matrix.length;
+  const augmented = matrix.map((row, rowIndex) => [
+    ...row,
+    ...Array.from({ length: size }, (_, colIndex) => (rowIndex === colIndex ? 1 : 0))
+  ]);
+  for (let pivot = 0; pivot < size; pivot += 1) {
+    let pivotRow = pivot;
+    while (pivotRow < size && augmented[pivotRow]![pivot] === 0) {
+      pivotRow += 1;
+    }
+    if (pivotRow === size) {
+      return undefined;
+    }
+    if (pivotRow !== pivot) {
+      const pivotValues = augmented[pivot];
+      const swapValues = augmented[pivotRow];
+      if (!pivotValues || !swapValues) {
+        return undefined;
+      }
+      [augmented[pivot], augmented[pivotRow]] = [swapValues, pivotValues];
+    }
+    const pivotValue = augmented[pivot]![pivot]!;
+    if (pivotValue === 0) {
+      return undefined;
+    }
+    for (let col = 0; col < size * 2; col += 1) {
+      augmented[pivot]![col] = augmented[pivot]![col]! / pivotValue;
+    }
+    for (let row = 0; row < size; row += 1) {
+      if (row === pivot) {
+        continue;
+      }
+      const factor = augmented[row]![pivot]!;
+      for (let col = 0; col < size * 2; col += 1) {
+        augmented[row]![col] = augmented[row]![col]! - factor * augmented[pivot]![col]!;
+      }
+    }
+  }
+  return augmented.map((row) => row.slice(size));
+}
+
+function flattenNumbers(arg: LookupBuiltinArgument): number[] | CellValue {
+  if (!isRangeArg(arg)) {
+    const numeric = toNumber(arg);
+    return numeric === undefined ? errorValue(ErrorCode.Value) : [numeric];
+  }
+  const values: number[] = [];
+  for (const value of arg.values) {
+    const numeric = toNumber(value);
+    if (numeric === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    values.push(numeric);
+  }
+  return values;
+}
+
+function sumOfNumbers(arg: LookupBuiltinArgument): number | CellValue {
+  const values = flattenNumbers(arg);
+  return Array.isArray(values) ? values.reduce((sum, value) => sum + value, 0) : values;
+}
+
 function pickRangeRow(range: RangeBuiltinArgument, row: number): CellValue[] {
   const values: CellValue[] = [];
   for (let col = 0; col < range.cols; col += 1) {
@@ -734,6 +861,125 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       sum += product;
     }
     return { tag: ValueTag.Number, value: sum };
+  },
+  SUMX2MY2: (xArg, yArg) => {
+    const xValues = flattenNumbers(xArg);
+    const yValues = flattenNumbers(yArg);
+    if (!Array.isArray(xValues)) {
+      return xValues;
+    }
+    if (!Array.isArray(yValues)) {
+      return yValues;
+    }
+    if (xValues.length !== yValues.length) {
+      return errorValue(ErrorCode.Value);
+    }
+    let sum = 0;
+    for (let index = 0; index < xValues.length; index += 1) {
+      sum += xValues[index]! ** 2 - yValues[index]! ** 2;
+    }
+    return { tag: ValueTag.Number, value: sum };
+  },
+  SUMX2PY2: (xArg, yArg) => {
+    const xValues = flattenNumbers(xArg);
+    const yValues = flattenNumbers(yArg);
+    if (!Array.isArray(xValues)) {
+      return xValues;
+    }
+    if (!Array.isArray(yValues)) {
+      return yValues;
+    }
+    if (xValues.length !== yValues.length) {
+      return errorValue(ErrorCode.Value);
+    }
+    let sum = 0;
+    for (let index = 0; index < xValues.length; index += 1) {
+      sum += xValues[index]! ** 2 + yValues[index]! ** 2;
+    }
+    return { tag: ValueTag.Number, value: sum };
+  },
+  SUMXMY2: (xArg, yArg) => {
+    const xValues = flattenNumbers(xArg);
+    const yValues = flattenNumbers(yArg);
+    if (!Array.isArray(xValues)) {
+      return xValues;
+    }
+    if (!Array.isArray(yValues)) {
+      return yValues;
+    }
+    if (xValues.length !== yValues.length) {
+      return errorValue(ErrorCode.Value);
+    }
+    let sum = 0;
+    for (let index = 0; index < xValues.length; index += 1) {
+      sum += (xValues[index]! - yValues[index]!) ** 2;
+    }
+    return { tag: ValueTag.Number, value: sum };
+  },
+  MDETERM: (matrixArg) => {
+    const matrix = toNumericMatrix(matrixArg);
+    if (!Array.isArray(matrix)) {
+      return matrix;
+    }
+    if (matrix.length === 0 || matrix.some((row) => row.length !== matrix.length)) {
+      return errorValue(ErrorCode.Value);
+    }
+    return { tag: ValueTag.Number, value: determinantOf(matrix) };
+  },
+  MINVERSE: (matrixArg) => {
+    const matrix = toNumericMatrix(matrixArg);
+    if (!Array.isArray(matrix)) {
+      return matrix;
+    }
+    if (matrix.length === 0 || matrix.some((row) => row.length !== matrix.length)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const inverse = inverseOf(matrix);
+    if (!inverse) {
+      return errorValue(ErrorCode.Value);
+    }
+    return arrayResult(inverse.flat().map((value) => ({ tag: ValueTag.Number, value })), matrix.length, matrix.length);
+  },
+  MMULT: (leftArg, rightArg) => {
+    const left = toNumericMatrix(leftArg);
+    const right = toNumericMatrix(rightArg);
+    if (!Array.isArray(left)) {
+      return left;
+    }
+    if (!Array.isArray(right)) {
+      return right;
+    }
+    if (left.length === 0 || right.length === 0 || left[0]!.length !== right.length) {
+      return errorValue(ErrorCode.Value);
+    }
+    const rows = left.length;
+    const cols = right[0]!.length;
+    const inner = right.length;
+    const values: CellValue[] = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        let sum = 0;
+        for (let index = 0; index < inner; index += 1) {
+          sum += left[row]![index]! * right[index]![col]!;
+        }
+        values.push({ tag: ValueTag.Number, value: sum });
+      }
+    }
+    return arrayResult(values, rows, cols);
+  },
+  PERCENTOF: (subsetArg, totalArg) => {
+    const subset = sumOfNumbers(subsetArg);
+    const total = sumOfNumbers(totalArg);
+    if (typeof subset !== "number") {
+      return subset;
+    }
+    if (typeof total !== "number") {
+      return total;
+    }
+    if (total === 0) {
+      return errorValue(ErrorCode.Div0);
+    }
+    return { tag: ValueTag.Number, value: subset / total };
   },
   FILTER: (arrayArg, includeArg, ifEmptyArg = { tag: ValueTag.Error, code: ErrorCode.Value }) => {
     const array = requireCellRange(arrayArg);

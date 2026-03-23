@@ -69,6 +69,10 @@ describe("formula", () => {
     expect(compileFormula("ROUND(A1,1)").mode).toBe(1);
     expect(compileFormula("FLOOR(A1,2)").mode).toBe(1);
     expect(compileFormula("CEILING(A1,2)").mode).toBe(1);
+    expect(compileFormula("SIN(A1)").mode).toBe(1);
+    expect(compileFormula("ATAN2(A1,A2)").mode).toBe(1);
+    expect(compileFormula("LOG(A1,10)").mode).toBe(1);
+    expect(compileFormula("PI()").mode).toBe(1);
   });
 
   it("compiles exact-parity info and date builtins onto the wasm-safe path", () => {
@@ -174,7 +178,7 @@ describe("formula", () => {
     expect(compileFormula("CEILING(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("TIME(A1,A2)").mode).toBe(0);
     expect(compileFormula("WEEKDAY(A1,A2,A3)").mode).toBe(0);
-    expect(compileFormula("SIN(A1)").mode).toBe(0);
+    expect(compileFormula("SIN(A1,A2)").mode).toBe(0);
     expect(compileFormula("SWITCH(A1,1,\"yes\")").mode).toBe(1);
     expect(compileFormula("WEEKNUM(A1)").mode).toBe(0);
     expect(compileFormula("SUBSTITUTE(A1,\"a\",\"b\")").mode).toBe(0);
@@ -202,6 +206,19 @@ describe("formula", () => {
     expect(compileFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))").mode).toBe(0);
+  });
+
+  it("keeps newly added JS math families on the JS path while marking spill producers", () => {
+    expect(compileFormula("TRUNC(A1,1)").mode).toBe(0);
+    expect(compileFormula("ACOSH(A1)").mode).toBe(0);
+    expect(compileFormula("PRODUCT(A1:A3)").mode).toBe(0);
+    expect(compileFormula("SUMXMY2(A1:A3,B1:B3)").mode).toBe(0);
+    expect(compileFormula("MDETERM(A1:B2)").mode).toBe(0);
+    expect(compileFormula("MMULT(A1:B2,C1:D2)")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("MINVERSE(A1:B2)")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("MUNIT(3)")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("RANDARRAY(2,2)")).toMatchObject({ mode: 0, producesSpill: true, volatile: true });
+    expect(compileFormula("RANDBETWEEN(1,10)").volatile).toBe(true);
   });
 
   it("evaluates AST against a context", () => {

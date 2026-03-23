@@ -100,7 +100,24 @@ describe("formula builtins and JS evaluator", () => {
     expect(evaluateAst(parseFormula("SUM(1:1)"), context)).toEqual({ tag: ValueTag.Number, value: 6 });
     expect(evaluateAst(parseFormula("A1/0"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 });
     expect(evaluateAst(parseFormula("A2+1"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
-    expect(evaluateAst(parseFormula("SIN(A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("SIN(A1)"), context)).toEqual({ tag: ValueTag.Number, value: Math.sin(4) });
+    expect(evaluateAst(parseFormula("POWER(2,3)"), context)).toEqual({ tag: ValueTag.Number, value: 8 });
+    expect(evaluateAst(parseFormula("TRUNC(-3.98,1)"), context)).toEqual({ tag: ValueTag.Number, value: -3.9 });
+    expect(evaluateAst(parseFormula("PRODUCT(2,3,4)"), context)).toEqual({ tag: ValueTag.Number, value: 24 });
+    expect(evaluateAst(parseFormula("SUMSQ(2,3)"), context)).toEqual({ tag: ValueTag.Number, value: 13 });
+    expect(evaluateAst(parseFormula("SIGN(-2)"), context)).toEqual({ tag: ValueTag.Number, value: -1 });
+    expect(evaluateAst(parseFormula("MDETERM(C1:D2)"), {
+      ...context,
+      resolveRange: (_sheetName: string, start: string, end: string): CellValue[] =>
+        start === "C1" && end === "D2"
+          ? [
+              { tag: ValueTag.Number, value: 1 },
+              { tag: ValueTag.Number, value: 2 },
+              { tag: ValueTag.Number, value: 3 },
+              { tag: ValueTag.Number, value: 4 }
+            ]
+          : context.resolveRange(_sheetName, start, end, "cells")
+    })).toEqual({ tag: ValueTag.Number, value: -2 });
     expect(evaluateAst(parseFormula("NETWORKDAYS(A1,A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
     expect(evaluateAst(parseFormula("REPT(\"x\",3)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
     expect(evaluateAst(parseFormula("T.DIST(0.1,2,TRUE)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
@@ -210,6 +227,78 @@ describe("formula builtins and JS evaluator", () => {
         { tag: ValueTag.Number, value: 4 }
       ]
     });
+
+    expect(evaluateAstResult(parseFormula("MUNIT(3)"), context)).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 3,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 }
+      ]
+    });
+
+    expect(evaluateAstResult(parseFormula("MMULT(A1:B2,C1:D2)"), {
+      ...context,
+      resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+        if (start === "A1" && end === "B2") {
+          return [
+            { tag: ValueTag.Number, value: 1 },
+            { tag: ValueTag.Number, value: 2 },
+            { tag: ValueTag.Number, value: 3 },
+            { tag: ValueTag.Number, value: 4 }
+          ];
+        }
+        return [
+          { tag: ValueTag.Number, value: 5 },
+          { tag: ValueTag.Number, value: 6 },
+          { tag: ValueTag.Number, value: 7 },
+          { tag: ValueTag.Number, value: 8 }
+        ];
+      }
+    })).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 19 },
+        { tag: ValueTag.Number, value: 22 },
+        { tag: ValueTag.Number, value: 43 },
+        { tag: ValueTag.Number, value: 50 }
+      ]
+    });
+
+    expect(evaluateAst(parseFormula("SUMXMY2(A1:A2,B1:B2)"), {
+      ...context,
+      resolveRange: (_sheetName: string, start: string, _end: string): CellValue[] =>
+        start === "A1"
+          ? [
+              { tag: ValueTag.Number, value: 1 },
+              { tag: ValueTag.Number, value: 2 }
+            ]
+          : [
+              { tag: ValueTag.Number, value: 3 },
+              { tag: ValueTag.Number, value: 4 }
+            ]
+    })).toEqual({ tag: ValueTag.Number, value: 8 });
+
+    const randomGrid = evaluateAstResult(parseFormula("RANDARRAY(2,2,3,7,TRUE())"), context);
+    expect(randomGrid).toMatchObject({ kind: "array", rows: 2, cols: 2 });
+    if (randomGrid.kind !== "array") {
+      throw new Error("expected RANDARRAY to return an array");
+    }
+    for (const value of randomGrid.values) {
+      expect(value.tag).toBe(ValueTag.Number);
+      expect(value.value).toBeGreaterThanOrEqual(3);
+      expect(value.value).toBeLessThanOrEqual(7);
+    }
 
     expect(evaluateAstResult(parseFormula("MAP(A1:A3,LAMBDA(x,x*2))"), {
       ...context,

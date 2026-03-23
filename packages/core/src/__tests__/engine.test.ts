@@ -318,6 +318,40 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "H3")).toEqual({ tag: ValueTag.Number, value: 9 });
   });
 
+  it("evaluates accelerated math builtins and JS matrix spills", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "B1", 3);
+    engine.setCellValue("Sheet1", "B2", 4);
+    engine.setCellValue("Sheet1", "C1", 4);
+    engine.setCellValue("Sheet1", "C2", 5);
+    engine.setCellValue("Sheet1", "D1", 6);
+    engine.setCellValue("Sheet1", "D2", 7);
+    engine.setCellValue("Sheet1", "K1", Math.PI / 2);
+    engine.setCellValue("Sheet1", "K2", -3.98);
+    engine.setCellFormula("Sheet1", "E1", "SIN(K1)");
+    engine.setCellFormula("Sheet1", "F1", "TRUNC(K2,1)");
+    engine.setCellFormula("Sheet1", "G1", "MUNIT(2)");
+    engine.setCellFormula("Sheet1", "I1", "MMULT(A1:B2,C1:D2)");
+
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: -3.9 });
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.getCellValue("Sheet1", "G1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "G2")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "H1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "H2")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.getCellValue("Sheet1", "I1")).toEqual({ tag: ValueTag.Number, value: 19 });
+    expect(engine.getCellValue("Sheet1", "J1")).toEqual({ tag: ValueTag.Number, value: 27 });
+    expect(engine.getCellValue("Sheet1", "I2")).toEqual({ tag: ValueTag.Number, value: 28 });
+    expect(engine.getCellValue("Sheet1", "J2")).toEqual({ tag: ValueTag.Number, value: 40 });
+  });
+
   it("supports cross-sheet references", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

@@ -38,6 +38,22 @@ const WASM_SAFE_BUILTINS = new Set([
   "VLOOKUP",
   "HLOOKUP",
   "ABS",
+  "SIN",
+  "COS",
+  "TAN",
+  "ASIN",
+  "ACOS",
+  "ATAN",
+  "ATAN2",
+  "DEGREES",
+  "RADIANS",
+  "EXP",
+  "LN",
+  "LOG",
+  "LOG10",
+  "POWER",
+  "SQRT",
+  "PI",
   "MOD",
   "IF",
   "IFERROR",
@@ -121,6 +137,18 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "MINUTE":
     case "SECOND":
     case "INT":
+    case "SIN":
+    case "COS":
+    case "TAN":
+    case "ASIN":
+    case "ACOS":
+    case "ATAN":
+    case "DEGREES":
+    case "RADIANS":
+    case "EXP":
+    case "LN":
+    case "LOG10":
+    case "SQRT":
       return argc === 1;
     case "TODAY":
     case "NOW":
@@ -136,6 +164,8 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "WEEKDAY":
       return argc === 1 || argc === 2;
     case "EXACT":
+    case "ATAN2":
+    case "POWER":
       return argc === 2;
     case "UPPER":
     case "LOWER":
@@ -170,6 +200,7 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "ROUNDDOWN":
     case "FLOOR":
     case "CEILING":
+    case "LOG":
       return argc === 1 || argc === 2;
     case "DATE":
     case "TIME":
@@ -467,6 +498,22 @@ export function encodeBuiltin(name: string): BuiltinId {
     COUNT: BuiltinId.Count,
     COUNTA: BuiltinId.CountA,
     ABS: BuiltinId.Abs,
+    SIN: BuiltinId.Sin,
+    COS: BuiltinId.Cos,
+    TAN: BuiltinId.Tan,
+    ASIN: BuiltinId.Asin,
+    ACOS: BuiltinId.Acos,
+    ATAN: BuiltinId.Atan,
+    ATAN2: BuiltinId.Atan2,
+    DEGREES: BuiltinId.Degrees,
+    RADIANS: BuiltinId.Radians,
+    EXP: BuiltinId.Exp,
+    LN: BuiltinId.Ln,
+    LOG: BuiltinId.Log,
+    LOG10: BuiltinId.Log10,
+    POWER: BuiltinId.Power,
+    SQRT: BuiltinId.Sqrt,
+    PI: BuiltinId.Pi,
     ROUND: BuiltinId.Round,
     FLOOR: BuiltinId.Floor,
     CEILING: BuiltinId.Ceiling,

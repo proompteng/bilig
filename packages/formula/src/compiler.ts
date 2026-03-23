@@ -19,7 +19,7 @@ interface CompilerState {
   strings: string[];
 }
 
-const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND"]);
+const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND", "RANDBETWEEN", "RANDARRAY"]);
 
 interface VolatileMetadata {
   volatile: boolean;
@@ -28,7 +28,7 @@ interface VolatileMetadata {
 
 function producesSpillResult(node: FormulaNode): boolean {
   return node.kind === "CallExpr"
-    && ["SEQUENCE", "FILTER", "UNIQUE", "MAKEARRAY", "MAP", "SCAN", "BYROW", "BYCOL"].includes(node.callee.toUpperCase());
+    && ["SEQUENCE", "FILTER", "UNIQUE", "MAKEARRAY", "MAP", "SCAN", "BYROW", "BYCOL", "RANDARRAY", "MUNIT", "MINVERSE", "MMULT"].includes(node.callee.toUpperCase());
 }
 
 function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {

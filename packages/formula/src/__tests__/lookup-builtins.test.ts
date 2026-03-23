@@ -290,4 +290,75 @@ describe("lookup builtins", () => {
     expect(UNIQUE(cellRange([err(ErrorCode.Name)], 1, 1))).toEqual(err(ErrorCode.Name));
     expect(UNIQUE(cellRange([num(1), num(2)], 2, 1), text("bad"))).toEqual(err(ErrorCode.Value));
   });
+
+  it("supports matrix and extended numeric lookup builtins", () => {
+    const SUMX2MY2 = getLookupBuiltin("SUMX2MY2")!;
+    const SUMX2PY2 = getLookupBuiltin("SUMX2PY2")!;
+    const SUMXMY2 = getLookupBuiltin("SUMXMY2")!;
+    const MDETERM = getLookupBuiltin("MDETERM")!;
+    const MINVERSE = getLookupBuiltin("MINVERSE")!;
+    const MMULT = getLookupBuiltin("MMULT")!;
+    const PERCENTOF = getLookupBuiltin("PERCENTOF")!;
+
+    expect(SUMX2MY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(num(11));
+    expect(SUMX2PY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(num(15));
+    expect(SUMXMY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(num(5));
+
+    expect(MDETERM(cellRange([num(1), num(2), num(3), num(4)], 2, 2))).toEqual(num(-2));
+    expect(MDETERM(cellRange([num(1), num(2), num(3)], 3, 1))).toEqual(err(ErrorCode.Value));
+
+    const inverse = MINVERSE(cellRange([num(4), num(7), num(2), num(6)], 2, 2));
+    expect(inverse).toMatchObject({ kind: "array", rows: 2, cols: 2 });
+    if (!(inverse && "kind" in inverse && inverse.kind === "array")) {
+      throw new Error("expected MINVERSE to return an array");
+    }
+    expect(inverse.values.map((value) => value.tag)).toEqual([
+      ValueTag.Number,
+      ValueTag.Number,
+      ValueTag.Number,
+      ValueTag.Number
+    ]);
+    expect(inverse.values.map((value) => value.value)).toEqual([
+      expect.closeTo(0.6, 12),
+      expect.closeTo(-0.7, 12),
+      expect.closeTo(-0.2, 12),
+      expect.closeTo(0.4, 12)
+    ]);
+    expect(MINVERSE(cellRange([num(1), num(2), num(2), num(4)], 2, 2))).toEqual(err(ErrorCode.Value));
+
+    expect(MMULT(
+      cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+      cellRange([num(5), num(6), num(7), num(8)], 2, 2)
+    )).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(19), num(22), num(43), num(50)]
+    });
+    expect(MMULT(
+      cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+      cellRange([num(5), num(6), num(7)], 3, 1)
+    )).toEqual(err(ErrorCode.Value));
+
+    expect(PERCENTOF(cellRange([num(2), num(3)], 2, 1), cellRange([num(10), num(10)], 2, 1))).toEqual(num(0.25));
+    expect(PERCENTOF(cellRange([num(2)], 1, 1), cellRange([num(0)], 1, 1))).toEqual(err(ErrorCode.Div0));
+    expect(SUMXMY2(err(ErrorCode.Ref), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("covers conditional criteria parsing variants", () => {
+    const COUNTIF = getLookupBuiltin("COUNTIF")!;
+    const SUMIF = getLookupBuiltin("SUMIF")!;
+
+    expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), num(2))).toEqual(num(1));
+    expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text("<>2"))).toEqual(num(2));
+    expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text(">=2"))).toEqual(num(2));
+    expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text("<=2"))).toEqual(num(2));
+    expect(COUNTIF(cellRange([bool(true), bool(false), bool(true)], 3, 1), text("=TRUE"))).toEqual(num(2));
+    expect(COUNTIF(cellRange([text(""), text("x"), text("")], 3, 1), text("="))).toEqual(num(2));
+    expect(SUMIF(
+      cellRange([text("a"), text("b"), text("c")], 3, 1),
+      text("<>b"),
+      cellRange([num(1), num(2), num(3)], 3, 1)
+    )).toEqual(num(4));
+  });
 });
