@@ -14,8 +14,8 @@ function batchEvent(changedCellIndices: Uint32Array = new Uint32Array()): Engine
       jsFormulaCount: 0,
       rangeNodeVisits: 0,
       recalcMs: 0,
-      compileMs: 0
-    }
+      compileMs: 0,
+    },
   };
 }
 
@@ -26,7 +26,7 @@ describe("EngineEventBus", () => {
 
     const unsubscribe = events.subscribeCells([4, 9], ["Sheet1!A1"], listener);
     events.emit(batchEvent(new Uint32Array([4, 9])), new Uint32Array([4, 9]), (cellIndex) =>
-      cellIndex === 4 ? "Sheet1!A1" : "Sheet1!B1"
+      cellIndex === 4 ? "Sheet1!A1" : "Sheet1!B1",
     );
 
     expect(listener).toHaveBeenCalledTimes(1);

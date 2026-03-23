@@ -13,7 +13,7 @@ export interface InternalClipboardRange {
 
 export function buildInternalClipboardRange(
   range: Rectangle,
-  values: readonly (readonly string[])[]
+  values: readonly (readonly string[])[],
 ): InternalClipboardRange {
   return {
     sourceStartAddress: formatAddress(range.y, range.x),
@@ -21,20 +21,20 @@ export function buildInternalClipboardRange(
     signature: serializeClipboardMatrix(values),
     plainText: serializeClipboardPlainText(values),
     rowCount: range.height,
-    colCount: range.width
+    colCount: range.width,
   };
 }
 
 export function matchesInternalClipboardPaste(
   internalClipboard: InternalClipboardRange | null,
-  values: readonly (readonly string[])[]
+  values: readonly (readonly string[])[],
 ): boolean {
   if (!internalClipboard || values.length === 0 || values[0]?.length === 0) {
     return false;
   }
   return (
-    internalClipboard.signature === serializeClipboardMatrix(values)
-    && internalClipboard.rowCount === values.length
-    && internalClipboard.colCount === (values[0]?.length ?? 0)
+    internalClipboard.signature === serializeClipboardMatrix(values) &&
+    internalClipboard.rowCount === values.length &&
+    internalClipboard.colCount === (values[0]?.length ?? 0)
   );
 }

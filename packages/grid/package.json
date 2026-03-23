@@ -1,7 +1,31 @@
 {
   "name": "@bilig/grid",
   "version": "0.1.0",
+  "description": "Excel-like React grid shell components for bilig built on Glide Data Grid.",
+  "keywords": [
+    "bilig",
+    "excel",
+    "grid",
+    "react",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/grid#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/grid"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,46 +34,22 @@
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
   "dependencies": {
     "@bilig/core": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@glideapps/glide-data-grid": "6.0.4-alpha24"
   },
-  "scripts": {
-    "build": "tsc -p tsconfig.json"
-  },
-  "description": "Excel-like React grid shell components for bilig built on Glide Data Grid.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/grid"
-  },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/grid#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "grid",
-    "react",
-    "excel",
-    "spreadsheet"
-  ],
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "peerDependencies": {
     "react": "^19.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
   }
 }

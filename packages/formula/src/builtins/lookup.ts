@@ -26,15 +26,19 @@ function isRangeArg(value: LookupBuiltinArgument): value is RangeBuiltinArgument
 }
 
 function isCriteriaOperator(value: string): value is CriteriaOperator {
-  return value === "="
-    || value === "<>"
-    || value === ">"
-    || value === ">="
-    || value === "<"
-    || value === "<=";
+  return (
+    value === "=" ||
+    value === "<>" ||
+    value === ">" ||
+    value === ">=" ||
+    value === "<" ||
+    value === "<="
+  );
 }
 
-function findFirstNonRange(values: readonly (RangeBuiltinArgument | CellValue)[]): CellValue | undefined {
+function findFirstNonRange(
+  values: readonly (RangeBuiltinArgument | CellValue)[],
+): CellValue | undefined {
   for (const value of values) {
     if (!isRangeArg(value)) {
       return value;
@@ -43,7 +47,9 @@ function findFirstNonRange(values: readonly (RangeBuiltinArgument | CellValue)[]
   return undefined;
 }
 
-function areRangeArgs(values: readonly (RangeBuiltinArgument | CellValue)[]): values is RangeBuiltinArgument[] {
+function areRangeArgs(
+  values: readonly (RangeBuiltinArgument | CellValue)[],
+): values is RangeBuiltinArgument[] {
   return values.every((value) => isRangeArg(value));
 }
 
@@ -103,7 +109,10 @@ function toStringValue(value: CellValue): string {
 }
 
 function compareScalars(left: CellValue, right: CellValue): number | undefined {
-  if ((left.tag === ValueTag.String || left.tag === ValueTag.Empty) && (right.tag === ValueTag.String || right.tag === ValueTag.Empty)) {
+  if (
+    (left.tag === ValueTag.String || left.tag === ValueTag.Empty) &&
+    (right.tag === ValueTag.String || right.tag === ValueTag.Empty)
+  ) {
     const normalizedLeft = toStringValue(left).toUpperCase();
     const normalizedRight = toStringValue(right).toUpperCase();
     if (normalizedLeft === normalizedRight) {
@@ -220,7 +229,7 @@ function inverseOf(matrix: number[][]): number[][] | undefined {
   const size = matrix.length;
   const augmented = matrix.map((row, rowIndex) => [
     ...row,
-    ...Array.from({ length: size }, (_, colIndex) => (rowIndex === colIndex ? 1 : 0))
+    ...Array.from({ length: size }, (_, colIndex) => (rowIndex === colIndex ? 1 : 0)),
   ]);
   for (let pivot = 0; pivot < size; pivot += 1) {
     let pivotRow = pivot;
@@ -302,7 +311,7 @@ function normalizeKeyValue(value: CellValue): CellValue {
   return {
     tag: ValueTag.String,
     value: value.value.toUpperCase(),
-    stringId: value.stringId
+    stringId: value.stringId,
   };
 }
 
@@ -431,7 +440,12 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
 
     return getRangeValue(array, rowNum - 1, colNum - 1);
   },
-  VLOOKUP: (lookupValue, tableArray, colIndexValue, rangeLookupValue = { tag: ValueTag.Boolean, value: true }) => {
+  VLOOKUP: (
+    lookupValue,
+    tableArray,
+    colIndexValue,
+    rangeLookupValue = { tag: ValueTag.Boolean, value: true },
+  ) => {
     if (isRangeArg(lookupValue)) {
       return errorValue(ErrorCode.Value);
     }
@@ -453,7 +467,12 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
 
     const colIndex = toInteger(colIndexValue);
     const rangeLookup = toBoolean(rangeLookupValue);
-    if (colIndex === undefined || colIndex < 1 || colIndex > tableArray.cols || rangeLookup === undefined) {
+    if (
+      colIndex === undefined ||
+      colIndex < 1 ||
+      colIndex > tableArray.cols ||
+      rangeLookup === undefined
+    ) {
       return errorValue(ErrorCode.Value);
     }
 
@@ -481,7 +500,12 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
     return getRangeValue(tableArray, matchedRow, colIndex - 1);
   },
-  HLOOKUP: (lookupValue, tableArray, rowIndexValue, rangeLookupValue = { tag: ValueTag.Boolean, value: true }) => {
+  HLOOKUP: (
+    lookupValue,
+    tableArray,
+    rowIndexValue,
+    rangeLookupValue = { tag: ValueTag.Boolean, value: true },
+  ) => {
     if (isRangeArg(lookupValue)) {
       return errorValue(ErrorCode.Value);
     }
@@ -503,7 +527,12 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
 
     const rowIndex = toInteger(rowIndexValue);
     const rangeLookup = toBoolean(rangeLookupValue);
-    if (rowIndex === undefined || rowIndex < 1 || rowIndex > tableArray.rows || rangeLookup === undefined) {
+    if (
+      rowIndex === undefined ||
+      rowIndex < 1 ||
+      rowIndex > tableArray.rows ||
+      rangeLookup === undefined
+    ) {
       return errorValue(ErrorCode.Value);
     }
 
@@ -537,9 +566,14 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     returnArray,
     ifNotFound = { tag: ValueTag.Error, code: ErrorCode.NA },
     matchMode = { tag: ValueTag.Number, value: 0 },
-    searchMode = { tag: ValueTag.Number, value: 1 }
+    searchMode = { tag: ValueTag.Number, value: 1 },
   ) => {
-    if (isRangeArg(lookupValue) || isRangeArg(ifNotFound) || isRangeArg(matchMode) || isRangeArg(searchMode)) {
+    if (
+      isRangeArg(lookupValue) ||
+      isRangeArg(ifNotFound) ||
+      isRangeArg(matchMode) ||
+      isRangeArg(searchMode)
+    ) {
       return errorValue(ErrorCode.Value);
     }
     const lookupRange = requireCellVector(lookupArray);
@@ -589,7 +623,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     lookupValue,
     lookupArray,
     matchModeValue = { tag: ValueTag.Number, value: 0 },
-    searchModeValue = { tag: ValueTag.Number, value: 1 }
+    searchModeValue = { tag: ValueTag.Number, value: 1 },
   ) => {
     if (isRangeArg(lookupValue) || isRangeArg(matchModeValue) || isRangeArg(searchModeValue)) {
       return errorValue(ErrorCode.Value);
@@ -617,10 +651,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
 
     const values = searchMode === -1 ? rangeOrError.values.toReversed() : rangeOrError.values;
-    const probe =
-      searchMode === -1
-        ? { ...rangeOrError, values }
-        : rangeOrError;
+    const probe = searchMode === -1 ? { ...rangeOrError, values } : rangeOrError;
     const position =
       matchMode === 0
         ? exactMatch(lookupValue, probe)
@@ -630,7 +661,8 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     if (position === -1) {
       return errorValue(ErrorCode.NA);
     }
-    const normalizedPosition = searchMode === -1 ? rangeOrError.values.length - position + 1 : position;
+    const normalizedPosition =
+      searchMode === -1 ? rangeOrError.values.length - position + 1 : position;
     return { tag: ValueTag.Number, value: normalizedPosition };
   },
   COUNTIF: (rangeArg, criteriaArg) => {
@@ -678,7 +710,9 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
 
     let count = 0;
     for (let row = 0; row < expectedLength; row += 1) {
-      if (rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))) {
+      if (
+        rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
+      ) {
         count += 1;
       }
     }
@@ -735,15 +769,15 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       }
       rangeCriteriaPairs.push({ range, criteria });
     }
-    if (
-      rangeCriteriaPairs.some((pair) => pair.range.values.length !== sumRange.values.length)
-    ) {
+    if (rangeCriteriaPairs.some((pair) => pair.range.values.length !== sumRange.values.length)) {
       return errorValue(ErrorCode.Value);
     }
 
     let sum = 0;
     for (let row = 0; row < sumRange.values.length; row += 1) {
-      if (!rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))) {
+      if (
+        !rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
+      ) {
         continue;
       }
       sum += toNumber(sumRange.values[row]!) ?? 0;
@@ -820,7 +854,9 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     let count = 0;
     let sum = 0;
     for (let row = 0; row < averageRange.values.length; row += 1) {
-      if (!rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))) {
+      if (
+        !rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
+      ) {
         continue;
       }
       const numeric = toNumber(averageRange.values[row]!);
@@ -938,7 +974,11 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     if (!inverse) {
       return errorValue(ErrorCode.Value);
     }
-    return arrayResult(inverse.flat().map((value) => ({ tag: ValueTag.Number, value })), matrix.length, matrix.length);
+    return arrayResult(
+      inverse.flat().map((value) => ({ tag: ValueTag.Number, value })),
+      matrix.length,
+      matrix.length,
+    );
   },
   MMULT: (leftArg, rightArg) => {
     const left = toNumericMatrix(leftArg);
@@ -1046,7 +1086,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
   UNIQUE: (
     arrayArg,
     byColArg = { tag: ValueTag.Boolean, value: false },
-    exactlyOnceArg = { tag: ValueTag.Boolean, value: false }
+    exactlyOnceArg = { tag: ValueTag.Boolean, value: false },
   ) => {
     const array = requireCellRange(arrayArg);
     if (!isRangeArg(array)) {
@@ -1074,7 +1114,9 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
         if (isError(value)) {
           return value;
         }
-        const key = JSON.stringify(value.tag === ValueTag.String ? { ...value, value: value.value.toUpperCase() } : value);
+        const key = JSON.stringify(
+          value.tag === ValueTag.String ? { ...value, value: value.value.toUpperCase() } : value,
+        );
         keys.push(key);
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
@@ -1157,7 +1199,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       values.push(...pickRangeRow(array, row));
     }
     return arrayResult(values, keptRows.length, array.cols);
-  }
+  },
 };
 
 type CriteriaOperator = "=" | "<>" | ">" | ">=" | "<" | "<=";
@@ -1200,7 +1242,7 @@ function parseCriteria(criteria: CellValue): { operator: CriteriaOperator; opera
   const operator = match[1] ?? "=";
   return {
     operator: isCriteriaOperator(operator) ? operator : "=",
-    operand: parseCriteriaOperand(match[2] ?? "")
+    operand: parseCriteriaOperand(match[2] ?? ""),
   };
 }
 

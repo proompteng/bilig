@@ -15,7 +15,7 @@ export interface RangeAggregateBenchmarkResult {
 
 export async function runRangeAggregateBenchmark(
   sourceCount = 1_024,
-  aggregateCount = 10_000
+  aggregateCount = 10_000,
 ): Promise<RangeAggregateBenchmarkResult> {
   const engine = new SpreadsheetEngine({ workbookName: "benchmark-range-aggregates" });
   await engine.ready();
@@ -33,12 +33,14 @@ export async function runRangeAggregateBenchmark(
     aggregateCount,
     elapsedMs: elapsed,
     metrics: engine.getLastMetrics(),
-    memory: measureMemory(memoryBefore, memoryAfter)
+    memory: measureMemory(memoryBefore, memoryAfter),
   };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const sourceCount = Number.parseInt(process.argv[2] ?? "1024", 10);
   const aggregateCount = Number.parseInt(process.argv[3] ?? "10000", 10);
-  console.log(JSON.stringify(await runRangeAggregateBenchmark(sourceCount, aggregateCount), null, 2));
+  console.log(
+    JSON.stringify(await runRangeAggregateBenchmark(sourceCount, aggregateCount), null, 2),
+  );
 }

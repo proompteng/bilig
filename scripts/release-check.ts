@@ -6,13 +6,15 @@ import { resolve } from "node:path";
 
 const budgets = {
   mainJsGzipBytes: 350 * 1024,
-  wasmGzipBytes: 250 * 1024
+  wasmGzipBytes: 250 * 1024,
 };
 
 async function findAssets() {
   const assetDir = resolve("apps/playground/dist/assets");
   const entries = await readdir(assetDir, { withFileTypes: true });
-  const files = entries.filter((entry) => entry.isFile()).map((entry) => resolve(assetDir, entry.name));
+  const files = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => resolve(assetDir, entry.name));
 
   const jsAssets = files.filter((file) => file.endsWith(".js"));
   const wasmAssets = files.filter((file) => file.endsWith(".wasm"));
@@ -33,7 +35,7 @@ async function measureAsset(file) {
   return {
     file,
     rawBytes: bytes.byteLength,
-    gzipBytes: gzipSync(bytes).byteLength
+    gzipBytes: gzipSync(bytes).byteLength,
   };
 }
 
@@ -46,8 +48,12 @@ function assertBudget(label, actual, budget) {
 const { jsAssets, wasmAssets } = await findAssets();
 const jsMeasurements = await Promise.all(jsAssets.map((file) => measureAsset(file)));
 const wasmMeasurements = await Promise.all(wasmAssets.map((file) => measureAsset(file)));
-const largestJs = jsMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest));
-const largestWasm = wasmMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest));
+const largestJs = jsMeasurements.reduce((largest, entry) =>
+  entry.gzipBytes > largest.gzipBytes ? entry : largest,
+);
+const largestWasm = wasmMeasurements.reduce((largest, entry) =>
+  entry.gzipBytes > largest.gzipBytes ? entry : largest,
+);
 
 assertBudget("Main JavaScript gzip size", largestJs.gzipBytes, budgets.mainJsGzipBytes);
 assertBudget("WASM gzip size", largestWasm.gzipBytes, budgets.wasmGzipBytes);
@@ -57,9 +63,9 @@ console.log(
     {
       budgets,
       largestJs,
-      largestWasm
+      largestWasm,
     },
     null,
-    2
-  )
+    2,
+  ),
 );

@@ -9,7 +9,7 @@ import {
   type GridColumn,
   type GridSelection,
   type Item,
-  type Rectangle
+  type Rectangle,
 } from "@glideapps/glide-data-grid";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
 import {
@@ -18,7 +18,7 @@ import {
   MIN_COLUMN_WIDTH,
   getGridMetrics,
   getResolvedColumnWidth,
-  type GridRect
+  type GridRect,
 } from "./gridMetrics.js";
 import {
   createColumnSelection,
@@ -27,7 +27,7 @@ import {
   createRangeSelection,
   createRowSliceSelection,
   formatSelectionSummary,
-  rectangleToAddresses
+  rectangleToAddresses,
 } from "./gridSelection.js";
 import { resolveActivatedCell, resolveSelectionChange } from "./gridSelectionSync.js";
 import {
@@ -38,24 +38,34 @@ import {
   resolvePointerCell as resolvePointerCellFromGeometry,
   type HeaderSelection,
   type PointerGeometry,
-  type VisibleRegionState
+  type VisibleRegionState,
 } from "./gridPointer.js";
-import { resolveBodyDragSelection, resolveBodyPointerUpResult, resolveHeaderDragSelection } from "./gridDragSelection.js";
 import {
-  parseClipboardPlainText
-} from "./gridClipboard.js";
+  resolveBodyDragSelection,
+  resolveBodyPointerUpResult,
+  resolveHeaderDragSelection,
+} from "./gridDragSelection.js";
+import { parseClipboardPlainText } from "./gridClipboard.js";
 import { cellToEditorSeed, cellToGridCell } from "./gridCells.js";
 import {
   isClipboardShortcut,
   isHandledGridKey,
   isNavigationKey,
   isPrintableKey,
-  normalizeKeyboardKey
+  normalizeKeyboardKey,
 } from "./gridKeyboard.js";
 import { resolveGridKeyAction } from "./gridKeyActions.js";
 import { getEditorTextAlign, getGridTheme, getOverlayStyle } from "./gridPresentation.js";
-import { resolveBodyDoubleClickIntent, resolveHeaderClickIntent, shouldSkipGridSelectionChange } from "./gridEventPolicy.js";
-import { buildInternalClipboardRange, matchesInternalClipboardPaste, type InternalClipboardRange } from "./gridInternalClipboard.js";
+import {
+  resolveBodyDoubleClickIntent,
+  resolveHeaderClickIntent,
+  shouldSkipGridSelectionChange,
+} from "./gridEventPolicy.js";
+import {
+  buildInternalClipboardRange,
+  matchesInternalClipboardPaste,
+  type InternalClipboardRange,
+} from "./gridInternalClipboard.js";
 import type { GridEngineLike } from "./grid-engine.js";
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
@@ -63,7 +73,7 @@ export type EditSelectionBehavior = "select-all" | "caret-end";
 export type SheetGridViewportSubscription = (
   sheetName: string,
   viewport: Viewport,
-  listener: (damage?: readonly { cell: Item }[]) => void
+  listener: (damage?: readonly { cell: Item }[]) => void,
 ) => () => void;
 
 interface SheetGridViewProps {
@@ -82,13 +92,27 @@ interface SheetGridViewProps {
   onCommitEdit(this: void, movement?: EditMovement): void;
   onCancelEdit(this: void): void;
   onClearCell(this: void): void;
-  onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
-  onCopyRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
+  onFillRange(
+    this: void,
+    sourceStartAddr: string,
+    sourceEndAddr: string,
+    targetStartAddr: string,
+    targetEndAddr: string,
+  ): void;
+  onCopyRange(
+    this: void,
+    sourceStartAddr: string,
+    sourceEndAddr: string,
+    targetStartAddr: string,
+    targetEndAddr: string,
+  ): void;
   onPaste(this: void, addr: string, values: readonly (readonly string[])[]): void;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
-  onAutofitColumn?: ((columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined;
+  onAutofitColumn?:
+    | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
+    | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
 }
 
@@ -97,7 +121,10 @@ function isCellEditorInputFocused(): boolean {
     return false;
   }
   const activeElement = document.activeElement;
-  return activeElement instanceof HTMLInputElement && activeElement.dataset["testid"] === "cell-editor-input";
+  return (
+    activeElement instanceof HTMLInputElement &&
+    activeElement.dataset["testid"] === "cell-editor-input"
+  );
 }
 
 function isEditableElement(element: Element | null): element is HTMLElement {
@@ -111,7 +138,12 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
   if (!left || !right) {
     return false;
   }
-  return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
 }
 
 export function SheetGridView({
@@ -137,7 +169,7 @@ export function SheetGridView({
   columnWidths: controlledColumnWidths,
   onColumnWidthChange,
   onAutofitColumn,
-  onVisibleViewportChange
+  onVisibleViewportChange,
 }: SheetGridViewProps) {
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -160,28 +192,36 @@ export function SheetGridView({
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
-    ty: 0
+    ty: 0,
   });
   const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined);
-  const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<Record<string, Record<number, number>>>({});
-  const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName]);
-  const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row));
+  const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<
+    Record<string, Record<number, number>>
+  >({});
+  const selectedCell = useMemo(
+    () => parseCellAddress(selectedAddr, sheetName),
+    [selectedAddr, sheetName],
+  );
+  const [gridSelection, setGridSelection] = useState<GridSelection>(() =>
+    createGridSelection(selectedCell.col, selectedCell.row),
+  );
   const gridMetrics = useMemo(() => getGridMetrics(variant), [variant]);
-  const columnWidths = controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
+  const columnWidths =
+    controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
 
   const columns = useMemo<readonly GridColumn[]>(
     () =>
       Array.from({ length: MAX_COLS }, (_, index) => ({
         id: indexToColumn(index),
         title: indexToColumn(index),
-        width: getResolvedColumnWidth(columnWidths, index, gridMetrics.columnWidth)
+        width: getResolvedColumnWidth(columnWidths, index, gridMetrics.columnWidth),
       })),
-    [columnWidths, gridMetrics.columnWidth]
+    [columnWidths, gridMetrics.columnWidth],
   );
 
   const getCellContent = useCallback(
     ([col, row]: Item) => cellToGridCell(engine, sheetName, formatAddress(row, col)),
-    [engine, sheetName]
+    [engine, sheetName],
   );
 
   const visibleItems = useMemo<Item[]>(() => {
@@ -194,19 +234,32 @@ export function SheetGridView({
       }
     }
     return items;
-  }, [visibleRegion.range.height, visibleRegion.range.width, visibleRegion.range.x, visibleRegion.range.y]);
+  }, [
+    visibleRegion.range.height,
+    visibleRegion.range.width,
+    visibleRegion.range.x,
+    visibleRegion.range.y,
+  ]);
 
   const visibleAddresses = useMemo(
     () => visibleItems.map(([col, row]) => formatAddress(row, col)),
-    [visibleItems]
+    [visibleItems],
   );
   const visibleDamage = useMemo(() => visibleItems.map((cell) => ({ cell })), [visibleItems]);
-  const viewport = useMemo<Viewport>(() => ({
-    rowStart: visibleRegion.range.y,
-    rowEnd: Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1),
-    colStart: visibleRegion.range.x,
-    colEnd: Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1)
-  }), [visibleRegion.range.height, visibleRegion.range.width, visibleRegion.range.x, visibleRegion.range.y]);
+  const viewport = useMemo<Viewport>(
+    () => ({
+      rowStart: visibleRegion.range.y,
+      rowEnd: Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1),
+      colStart: visibleRegion.range.x,
+      colEnd: Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1),
+    }),
+    [
+      visibleRegion.range.height,
+      visibleRegion.range.width,
+      visibleRegion.range.x,
+      visibleRegion.range.y,
+    ],
+  );
 
   useEffect(() => {
     onVisibleViewportChange?.(viewport);
@@ -232,7 +285,12 @@ export function SheetGridView({
     activeSheetRef.current = sheetName;
     setGridSelection((current) => {
       const currentCell = current.current?.cell;
-      if (!sheetChanged && currentCell && currentCell[0] === selectedCell.col && currentCell[1] === selectedCell.row) {
+      if (
+        !sheetChanged &&
+        currentCell &&
+        currentCell[0] === selectedCell.col &&
+        currentCell[1] === selectedCell.row
+      ) {
         return current;
       }
       pendingPointerCellRef.current = null;
@@ -286,20 +344,17 @@ export function SheetGridView({
     (seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
       onBeginEdit(
         seed ?? cellToEditorSeed(engine.getCell(sheetName, selectedAddr)),
-        selectionBehavior
+        selectionBehavior,
       );
     },
-    [engine, onBeginEdit, selectedAddr, sheetName]
+    [engine, onBeginEdit, selectedAddr, sheetName],
   );
 
   const beginEditAt = useCallback(
     (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
-      onBeginEdit(
-        seed ?? cellToEditorSeed(engine.getCell(sheetName, addr)),
-        selectionBehavior
-      );
+      onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, addr)), selectionBehavior);
     },
-    [engine, onBeginEdit, sheetName]
+    [engine, onBeginEdit, sheetName],
   );
 
   const resolvePointerGeometry = useCallback(
@@ -313,11 +368,11 @@ export function SheetGridView({
         left: hostBounds.left,
         top: hostBounds.top,
         right: hostBounds.right,
-        bottom: hostBounds.bottom
+        bottom: hostBounds.bottom,
       };
       return createPointerGeometry(rect, region, columnWidths, gridMetrics);
     },
-    [columnWidths, gridMetrics, visibleRegion]
+    [columnWidths, gridMetrics, visibleRegion],
   );
 
   const resolvePointerCell = useCallback(
@@ -325,7 +380,7 @@ export function SheetGridView({
       clientX: number,
       clientY: number,
       region: VisibleRegionState = visibleRegion,
-      geometry?: PointerGeometry | null
+      geometry?: PointerGeometry | null,
     ): Item | null => {
       const activeGeometry = geometry ?? resolvePointerGeometry(region);
       if (!activeGeometry) {
@@ -339,13 +394,22 @@ export function SheetGridView({
         columnWidths,
         gridMetrics,
         selectedCell: [selectedCell.col, selectedCell.row],
-        selectedCellBounds: editorRef.current?.getBounds(selectedCell.col, selectedCell.row) ?? null,
+        selectedCellBounds:
+          editorRef.current?.getBounds(selectedCell.col, selectedCell.row) ?? null,
         selectionRange: gridSelection.current?.range ?? null,
         hasColumnSelection: gridSelection.columns.length > 0,
-        hasRowSelection: gridSelection.rows.length > 0
+        hasRowSelection: gridSelection.rows.length > 0,
       });
     },
-    [columnWidths, gridMetrics, gridSelection, resolvePointerGeometry, selectedCell.col, selectedCell.row, visibleRegion]
+    [
+      columnWidths,
+      gridMetrics,
+      gridSelection,
+      resolvePointerGeometry,
+      selectedCell.col,
+      selectedCell.row,
+      visibleRegion,
+    ],
   );
 
   const resolveHeaderSelectionAtPointer = useCallback(
@@ -353,15 +417,22 @@ export function SheetGridView({
       clientX: number,
       clientY: number,
       region: VisibleRegionState = visibleRegion,
-      geometry?: PointerGeometry | null
+      geometry?: PointerGeometry | null,
     ): HeaderSelection | null => {
       const activeGeometry = geometry ?? resolvePointerGeometry(region);
       if (!activeGeometry) {
         return null;
       }
-      return resolveHeaderSelectionFromGeometry(clientX, clientY, region, activeGeometry, columnWidths, gridMetrics);
+      return resolveHeaderSelectionFromGeometry(
+        clientX,
+        clientY,
+        region,
+        activeGeometry,
+        columnWidths,
+        gridMetrics,
+      );
     },
-    [columnWidths, gridMetrics, resolvePointerGeometry, visibleRegion]
+    [columnWidths, gridMetrics, resolvePointerGeometry, visibleRegion],
   );
 
   const resolveHeaderSelectionForPointerDrag = useCallback(
@@ -370,20 +441,28 @@ export function SheetGridView({
       clientX: number,
       clientY: number,
       region: VisibleRegionState = visibleRegion,
-      geometry?: PointerGeometry | null
+      geometry?: PointerGeometry | null,
     ): HeaderSelection | null => {
       const activeGeometry = geometry ?? resolvePointerGeometry(region);
       if (!activeGeometry) {
         return null;
       }
-      return resolveHeaderSelectionForDragFromGeometry(kind, clientX, clientY, region, activeGeometry, columnWidths, gridMetrics);
+      return resolveHeaderSelectionForDragFromGeometry(
+        kind,
+        clientX,
+        clientY,
+        region,
+        activeGeometry,
+        columnWidths,
+        gridMetrics,
+      );
     },
-    [columnWidths, gridMetrics, resolvePointerGeometry, visibleRegion]
+    [columnWidths, gridMetrics, resolvePointerGeometry, visibleRegion],
   );
 
   const selectionSummary = useMemo(
     () => formatSelectionSummary(gridSelection, selectedAddr),
-    [gridSelection, selectedAddr]
+    [gridSelection, selectedAddr],
   );
 
   const applyClipboardValues = useCallback(
@@ -403,15 +482,15 @@ export function SheetGridView({
           formatAddress(target[1], target[0]),
           formatAddress(
             target[1] + internalClipboard.rowCount - 1,
-            target[0] + internalClipboard.colCount - 1
-          )
+            target[0] + internalClipboard.colCount - 1,
+          ),
         );
         return;
       }
 
       onPaste(formatAddress(target[1], target[0]), values);
     },
-    [onCopyRange, onPaste]
+    [onCopyRange, onPaste],
   );
 
   const captureInternalClipboardSelection = useCallback(() => {
@@ -422,10 +501,12 @@ export function SheetGridView({
     }
 
     const values = Array.from({ length: range.height }, (_rowEntry, rowOffset) =>
-        Array.from({ length: range.width }, (_colEntry, colOffset) =>
-          cellToEditorSeed(engine.getCell(sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)))
-        )
-      );
+      Array.from({ length: range.width }, (_colEntry, colOffset) =>
+        cellToEditorSeed(
+          engine.getCell(sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)),
+        ),
+      ),
+    );
 
     internalClipboardRef.current = buildInternalClipboardRange(range, values);
   }, [engine, gridSelection, sheetName]);
@@ -452,7 +533,7 @@ export function SheetGridView({
         pendingTypeSeed: pendingTypeSeedRef.current,
         selectedCell: [selectedCell.col, selectedCell.row],
         currentSelectionCell: gridSelection.current?.cell ?? null,
-        currentRangeAnchor: gridSelection.current?.cell ?? null
+        currentRangeAnchor: gridSelection.current?.cell ?? null,
       });
 
       if (action.kind === "none") {
@@ -475,7 +556,13 @@ export function SheetGridView({
           onSelect(formatAddress(action.cell[1], action.cell[0]));
           return;
         case "extend-selection":
-          setGridSelection(createRangeSelection(createGridSelection(action.anchor[0], action.anchor[1]), action.anchor, action.target));
+          setGridSelection(
+            createRangeSelection(
+              createGridSelection(action.anchor[0], action.anchor[1]),
+              action.anchor,
+              action.target,
+            ),
+          );
           return;
         case "clear-cell":
           pendingTypeSeedRef.current = action.pendingTypeSeed;
@@ -494,16 +581,31 @@ export function SheetGridView({
           return;
         case "clipboard-paste":
           if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
-            void navigator.clipboard.readText().then((rawText) => {
-              const values = parseClipboardPlainText(rawText);
-              applyClipboardValues(action.target, values);
-              return undefined;
-            }).catch(() => undefined);
+            void navigator.clipboard
+              .readText()
+              .then((rawText) => {
+                const values = parseClipboardPlainText(rawText);
+                applyClipboardValues(action.target, values);
+                return undefined;
+              })
+              .catch(() => undefined);
           }
           return;
       }
     },
-    [applyClipboardValues, beginSelectedEdit, captureInternalClipboardSelection, editorValue, gridSelection.current?.cell, isEditingCell, onClearCell, onEditorChange, onSelect, selectedCell.col, selectedCell.row]
+    [
+      applyClipboardValues,
+      beginSelectedEdit,
+      captureInternalClipboardSelection,
+      editorValue,
+      gridSelection.current?.cell,
+      isEditingCell,
+      onClearCell,
+      onEditorChange,
+      onSelect,
+      selectedCell.col,
+      selectedCell.row,
+    ],
   );
 
   useEffect(() => {
@@ -511,17 +613,19 @@ export function SheetGridView({
       const normalizedKey = normalizeKeyboardKey(event.key, event.code);
       const activeElement = document.activeElement;
       if (
-        activeElement instanceof HTMLInputElement
-        || activeElement instanceof HTMLTextAreaElement
-        || activeElement instanceof HTMLSelectElement
-        || isEditableElement(activeElement)
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement instanceof HTMLSelectElement ||
+        isEditableElement(activeElement)
       ) {
         return;
       }
 
       const withinGridHost = Boolean(activeElement && hostRef.current?.contains(activeElement));
       const onDocumentBody =
-        activeElement === document.body || activeElement === document.documentElement || activeElement === null;
+        activeElement === document.body ||
+        activeElement === document.documentElement ||
+        activeElement === null;
       if (withinGridHost) {
         return;
       }
@@ -529,12 +633,14 @@ export function SheetGridView({
         return;
       }
 
-      if (!isHandledGridKey({
-        altKey: event.altKey,
-        ctrlKey: event.ctrlKey,
-        key: normalizedKey,
-        metaKey: event.metaKey
-      })) {
+      if (
+        !isHandledGridKey({
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          key: normalizedKey,
+          metaKey: event.metaKey,
+        })
+      ) {
         return;
       }
 
@@ -547,7 +653,7 @@ export function SheetGridView({
         key: normalizedKey,
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
-        preventDefault: () => event.preventDefault()
+        preventDefault: () => event.preventDefault(),
       });
     };
 
@@ -557,9 +663,15 @@ export function SheetGridView({
     };
   }, [handleGridKey]);
 
-  const overlayStyle = useMemo(() => getOverlayStyle(isEditingCell, overlayBounds), [isEditingCell, overlayBounds]);
+  const overlayStyle = useMemo(
+    () => getOverlayStyle(isEditingCell, overlayBounds),
+    [isEditingCell, overlayBounds],
+  );
 
-  const editorTextAlign = useMemo<"left" | "right">(() => getEditorTextAlign(editorValue), [editorValue]);
+  const editorTextAlign = useMemo<"left" | "right">(
+    () => getEditorTextAlign(editorValue),
+    [editorValue],
+  );
 
   const gridTheme = useMemo(() => getGridTheme(variant), [variant]);
 
@@ -567,21 +679,21 @@ export function SheetGridView({
     (event: FillPatternEventArgs) => {
       const source = rectangleToAddresses(event.patternSource);
       const target = rectangleToAddresses(event.fillDestination);
-      if (
-        source.startAddress === target.startAddress
-        && source.endAddress === target.endAddress
-      ) {
+      if (source.startAddress === target.startAddress && source.endAddress === target.endAddress) {
         return;
       }
       event.preventDefault();
       onFillRange(source.startAddress, source.endAddress, target.startAddress, target.endAddress);
     },
-    [onFillRange]
+    [onFillRange],
   );
 
   const applyColumnWidth = useCallback(
     (columnIndex: number, newSize: number) => {
-      const clampedSize = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)));
+      const clampedSize = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)),
+      );
       if (onColumnWidthChange) {
         onColumnWidthChange(columnIndex, clampedSize);
         return;
@@ -595,12 +707,12 @@ export function SheetGridView({
           ...current,
           [sheetName]: {
             ...nextSheetWidths,
-            [columnIndex]: clampedSize
-          }
+            [columnIndex]: clampedSize,
+          },
         };
       });
     },
-    [onColumnWidthChange, sheetName]
+    [onColumnWidthChange, sheetName],
   );
 
   const computeAutofitColumnWidth = useCallback(
@@ -617,7 +729,10 @@ export function SheetGridView({
       let measuredWidth = 0;
 
       context.font = headerFont;
-      measuredWidth = Math.max(measuredWidth, context.measureText(indexToColumn(columnIndex)).width);
+      measuredWidth = Math.max(
+        measuredWidth,
+        context.measureText(indexToColumn(columnIndex)).width,
+      );
 
       const sheet = engine.workbook.getSheet(sheetName);
       sheet?.grid.forEachCellEntry((_cellIndex, row, col) => {
@@ -625,17 +740,30 @@ export function SheetGridView({
           return;
         }
         const cell = cellToGridCell(engine, sheetName, formatAddress(row, col));
-        const displayText = "displayData" in cell ? String(cell.displayData ?? "") : "copyData" in cell ? String(cell.copyData ?? "") : "";
+        const displayText =
+          "displayData" in cell
+            ? String(cell.displayData ?? "")
+            : "copyData" in cell
+              ? String(cell.copyData ?? "")
+              : "";
         context.font = cellFont;
         measuredWidth = Math.max(measuredWidth, context.measureText(displayText).width);
       });
 
       return Math.max(
         MIN_COLUMN_WIDTH,
-        Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + (variant === "product" ? 28 : 32)))
+        Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + (variant === "product" ? 28 : 32))),
       );
     },
-    [engine, gridMetrics.columnWidth, gridTheme.editorFontSize, gridTheme.fontFamily, gridTheme.headerFontStyle, sheetName, variant]
+    [
+      engine,
+      gridMetrics.columnWidth,
+      gridTheme.editorFontSize,
+      gridTheme.fontFamily,
+      gridTheme.headerFontStyle,
+      sheetName,
+      variant,
+    ],
   );
 
   return (
@@ -674,12 +802,14 @@ export function SheetGridView({
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
 
-          if (!isHandledGridKey({
-            altKey: event.altKey,
-            ctrlKey: event.ctrlKey,
-            key: normalizedKey,
-            metaKey: event.metaKey
-          })) {
+          if (
+            !isHandledGridKey({
+              altKey: event.altKey,
+              ctrlKey: event.ctrlKey,
+              key: normalizedKey,
+              metaKey: event.metaKey,
+            })
+          ) {
             return;
           }
 
@@ -690,7 +820,7 @@ export function SheetGridView({
             key: normalizedKey,
             metaKey: event.metaKey,
             shiftKey: event.shiftKey,
-            preventDefault: () => event.preventDefault()
+            preventDefault: () => event.preventDefault(),
           });
           if (event.defaultPrevented) {
             event.stopPropagation();
@@ -734,15 +864,15 @@ export function SheetGridView({
               visibleRegion,
               activeGeometry,
               columnWidths,
-              gridMetrics.columnWidth
+              gridMetrics.columnWidth,
             ),
             bodyCell: resolvePointerCell(
               event.clientX,
               event.clientY,
               visibleRegion,
-              activeGeometry
+              activeGeometry,
             ),
-            lastBodyClickCell: lastBodyClickCellRef.current
+            lastBodyClickCell: lastBodyClickCellRef.current,
           });
           if (doubleClickIntent.kind === "ignore") {
             return;
@@ -751,7 +881,9 @@ export function SheetGridView({
           event.stopPropagation();
           if (doubleClickIntent.kind === "edit-cell") {
             const editAddress = formatAddress(doubleClickIntent.cell[1], doubleClickIntent.cell[0]);
-            setGridSelection(createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1]));
+            setGridSelection(
+              createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1]),
+            );
             onSelect(editAddress);
             beginEditAt(editAddress);
             return;
@@ -766,10 +898,18 @@ export function SheetGridView({
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
           if (onAutofitColumn) {
-            void Promise.resolve(onAutofitColumn(doubleClickIntent.columnIndex, computeAutofitColumnWidth(doubleClickIntent.columnIndex)));
+            void Promise.resolve(
+              onAutofitColumn(
+                doubleClickIntent.columnIndex,
+                computeAutofitColumnWidth(doubleClickIntent.columnIndex),
+              ),
+            );
             return;
           }
-          applyColumnWidth(doubleClickIntent.columnIndex, computeAutofitColumnWidth(doubleClickIntent.columnIndex));
+          applyColumnWidth(
+            doubleClickIntent.columnIndex,
+            computeAutofitColumnWidth(doubleClickIntent.columnIndex),
+          );
         }}
         onPointerMoveCapture={(event) => {
           if (columnResizeActiveRef.current) {
@@ -785,14 +925,19 @@ export function SheetGridView({
               event.clientX,
               event.clientY,
               dragViewportRef.current ?? visibleRegion,
-              dragGeometryRef.current
+              dragGeometryRef.current,
             );
             if (!nextHeader || nextHeader.index === headerAnchor.index) {
               return;
             }
             dragPointerCellRef.current = null;
             dragDidMoveRef.current = true;
-            setGridSelection(resolveHeaderDragSelection(headerAnchor, nextHeader.index, [selectedCell.col, selectedCell.row]).selection);
+            setGridSelection(
+              resolveHeaderDragSelection(headerAnchor, nextHeader.index, [
+                selectedCell.col,
+                selectedCell.row,
+              ]).selection,
+            );
             return;
           }
           if (dragAnchorCellRef.current === null) {
@@ -802,17 +947,24 @@ export function SheetGridView({
             event.clientX,
             event.clientY,
             dragViewportRef.current ?? visibleRegion,
-            dragGeometryRef.current
+            dragGeometryRef.current,
           );
           if (!pointerCell) {
             return;
           }
           const currentPointer = dragPointerCellRef.current;
-          if (currentPointer && currentPointer[0] === pointerCell[0] && currentPointer[1] === pointerCell[1]) {
+          if (
+            currentPointer &&
+            currentPointer[0] === pointerCell[0] &&
+            currentPointer[1] === pointerCell[1]
+          ) {
             return;
           }
           dragPointerCellRef.current = pointerCell;
-          if (pointerCell[0] !== dragAnchorCellRef.current[0] || pointerCell[1] !== dragAnchorCellRef.current[1]) {
+          if (
+            pointerCell[0] !== dragAnchorCellRef.current[0] ||
+            pointerCell[1] !== dragAnchorCellRef.current[1]
+          ) {
             dragDidMoveRef.current = true;
             ignoreNextPointerSelectionRef.current = false;
             setGridSelection(resolveBodyDragSelection(dragAnchorCellRef.current, pointerCell));
@@ -824,15 +976,15 @@ export function SheetGridView({
           }
           const activeGeometry = resolvePointerGeometry(visibleRegion);
           if (
-            variant === "product"
-            && activeGeometry
-            && resolveColumnResizeTarget(
+            variant === "product" &&
+            activeGeometry &&
+            resolveColumnResizeTarget(
               event.clientX,
               event.clientY,
               visibleRegion,
               activeGeometry,
               columnWidths,
-              gridMetrics.columnWidth
+              gridMetrics.columnWidth,
             ) !== null
           ) {
             pendingPointerCellRef.current = null;
@@ -862,7 +1014,13 @@ export function SheetGridView({
             dragViewportRef.current = visibleRegion;
             if (headerSelection.kind === "row") {
               ignoreNextPointerSelectionRef.current = true;
-              setGridSelection(createRowSliceSelection(selectedCell.col, headerSelection.index, headerSelection.index));
+              setGridSelection(
+                createRowSliceSelection(
+                  selectedCell.col,
+                  headerSelection.index,
+                  headerSelection.index,
+                ),
+              );
               onSelect(formatAddress(headerSelection.index, selectedCell.col));
               focusGrid();
               window.requestAnimationFrame(() => {
@@ -871,7 +1029,13 @@ export function SheetGridView({
               return;
             }
             ignoreNextPointerSelectionRef.current = true;
-            setGridSelection(createColumnSliceSelection(headerSelection.index, headerSelection.index, selectedCell.row));
+            setGridSelection(
+              createColumnSliceSelection(
+                headerSelection.index,
+                headerSelection.index,
+                selectedCell.row,
+              ),
+            );
             onSelect(formatAddress(selectedCell.row, headerSelection.index));
             focusGrid();
             window.requestAnimationFrame(() => {
@@ -903,14 +1067,18 @@ export function SheetGridView({
           }
           const headerAnchor = dragHeaderSelectionRef.current;
           if (headerAnchor) {
-            const finalHeader = resolveHeaderSelectionForPointerDrag(
-              headerAnchor.kind,
-              event.clientX,
-              event.clientY,
-              dragViewportRef.current ?? visibleRegion,
-              dragGeometryRef.current
-            ) ?? headerAnchor;
-            const resolvedHeaderDrag = resolveHeaderDragSelection(headerAnchor, finalHeader.index, [selectedCell.col, selectedCell.row]);
+            const finalHeader =
+              resolveHeaderSelectionForPointerDrag(
+                headerAnchor.kind,
+                event.clientX,
+                event.clientY,
+                dragViewportRef.current ?? visibleRegion,
+                dragGeometryRef.current,
+              ) ?? headerAnchor;
+            const resolvedHeaderDrag = resolveHeaderDragSelection(headerAnchor, finalHeader.index, [
+              selectedCell.col,
+              selectedCell.row,
+            ]);
             setGridSelection(resolvedHeaderDrag.selection);
             onSelect(resolvedHeaderDrag.addr);
             window.requestAnimationFrame(() => {
@@ -930,16 +1098,19 @@ export function SheetGridView({
           }
 
           if (dragDidMoveRef.current) {
-            const pointerCell = resolvePointerCell(
+            const pointerCell =
+              resolvePointerCell(
                 event.clientX,
                 event.clientY,
                 dragViewportRef.current ?? visibleRegion,
-                dragGeometryRef.current
-              )
-              ?? dragPointerCellRef.current
-              ?? anchorCell;
+                dragGeometryRef.current,
+              ) ??
+              dragPointerCellRef.current ??
+              anchorCell;
             const pointerUpResult = resolveBodyPointerUpResult(anchorCell, pointerCell, true);
-            postDragSelectionExpiryRef.current = pointerUpResult.shouldSetDragExpiry ? window.performance.now() + 200 : 0;
+            postDragSelectionExpiryRef.current = pointerUpResult.shouldSetDragExpiry
+              ? window.performance.now() + 200
+              : 0;
             if (pointerUpResult.selection) {
               setGridSelection(pointerUpResult.selection);
             }
@@ -948,7 +1119,11 @@ export function SheetGridView({
             }
             lastBodyClickCellRef.current = pointerUpResult.clickedCell;
           } else {
-            const pointerUpResult = resolveBodyPointerUpResult(anchorCell, dragPointerCellRef.current ?? anchorCell, false);
+            const pointerUpResult = resolveBodyPointerUpResult(
+              anchorCell,
+              dragPointerCellRef.current ?? anchorCell,
+              false,
+            );
             lastBodyClickCellRef.current = pointerUpResult.clickedCell;
           }
 
@@ -992,9 +1167,9 @@ export function SheetGridView({
                   dragViewportRef.current = null;
                   postDragSelectionExpiryRef.current = 0;
                 },
-              onColumnResize: (_column: GridColumn, newSize: number, columnIndex: number) => {
-                applyColumnWidth(columnIndex, newSize);
-              },
+                onColumnResize: (_column: GridColumn, newSize: number, columnIndex: number) => {
+                  applyColumnWidth(columnIndex, newSize);
+                },
                 onColumnResizeEnd: (_column: GridColumn, newSize: number, columnIndex: number) => {
                   applyColumnWidth(columnIndex, newSize);
                   window.requestAnimationFrame(() => {
@@ -1002,11 +1177,15 @@ export function SheetGridView({
                   });
                 },
                 maxColumnWidth: MAX_COLUMN_WIDTH,
-                minColumnWidth: MIN_COLUMN_WIDTH
+                minColumnWidth: MIN_COLUMN_WIDTH,
               }
             : {})}
           onCellActivated={([col, row]) => {
-            const cell = resolveActivatedCell([col, row], dragAnchorCellRef.current, pendingPointerCellRef.current);
+            const cell = resolveActivatedCell(
+              [col, row],
+              dragAnchorCellRef.current,
+              pendingPointerCellRef.current,
+            );
             pendingPointerCellRef.current = null;
             dragAnchorCellRef.current = null;
             dragPointerCellRef.current = null;
@@ -1026,13 +1205,16 @@ export function SheetGridView({
               isDoubleClick: Boolean(event.isDoubleClick),
               columnResizeActive: columnResizeActiveRef.current,
               columnIndex: col,
-              selectedRow: selectedCell.row
+              selectedRow: selectedCell.row,
             });
             if (headerClickIntent.kind === "ignore") {
               return;
             }
             if (headerClickIntent.kind === "autofit-column") {
-              applyColumnWidth(headerClickIntent.columnIndex, computeAutofitColumnWidth(headerClickIntent.columnIndex));
+              applyColumnWidth(
+                headerClickIntent.columnIndex,
+                computeAutofitColumnWidth(headerClickIntent.columnIndex),
+              );
               columnResizeActiveRef.current = false;
               return;
             }
@@ -1047,7 +1229,9 @@ export function SheetGridView({
             if (isEditingCell) {
               onCommitEdit();
             }
-            setGridSelection(createColumnSelection(headerClickIntent.columnIndex, headerClickIntent.selectedRow));
+            setGridSelection(
+              createColumnSelection(headerClickIntent.columnIndex, headerClickIntent.selectedRow),
+            );
             onSelect(headerClickIntent.addr);
             focusGrid();
             window.requestAnimationFrame(() => {
@@ -1060,7 +1244,7 @@ export function SheetGridView({
               postDragSelectionExpiry: postDragSelectionExpiryRef.current,
               now: window.performance.now(),
               ignoreNextPointerSelection: ignoreNextPointerSelectionRef.current,
-              hasDragViewport: dragViewportRef.current !== null
+              hasDragViewport: dragViewportRef.current !== null,
             });
             if (selectionPolicy.clearPostDragSelectionExpiry) {
               postDragSelectionExpiryRef.current = 0;
@@ -1075,7 +1259,7 @@ export function SheetGridView({
               nextSelection,
               anchorCell: dragAnchorCellRef.current ?? pendingPointerCellRef.current,
               pointerCell: dragPointerCellRef.current ?? pendingPointerCellRef.current,
-              selectedCell: [selectedCell.col, selectedCell.row]
+              selectedCell: [selectedCell.col, selectedCell.row],
             });
             if (!resolvedSelection) {
               return;
@@ -1087,7 +1271,16 @@ export function SheetGridView({
             onSelect(resolvedSelection.addr);
           }}
           onKeyDown={(event) => {
-            if (!isPrintableKey(event) && !isClipboardShortcut(event) && !isNavigationKey(event.key) && event.key !== "Enter" && event.key !== "Tab" && event.key !== "F2" && event.key !== "Backspace" && event.key !== "Delete") {
+            if (
+              !isPrintableKey(event) &&
+              !isClipboardShortcut(event) &&
+              !isNavigationKey(event.key) &&
+              event.key !== "Enter" &&
+              event.key !== "Tab" &&
+              event.key !== "F2" &&
+              event.key !== "Backspace" &&
+              event.key !== "Delete"
+            ) {
               return;
             }
             handleGridKey(event);

@@ -2,5 +2,5 @@ export {
   createBrowserPersistence,
   loadPersistedJson,
   removePersistedJson,
-  savePersistedJson
+  savePersistedJson,
 } from "@bilig/storage-browser";

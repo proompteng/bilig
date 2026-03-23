@@ -10,7 +10,7 @@ const enumManifest = {
     ["Number", 1],
     ["Boolean", 2],
     ["String", 3],
-    ["Error", 4]
+    ["Error", 4],
   ],
   ErrorCode: [
     ["None", 0],
@@ -21,11 +21,11 @@ const enumManifest = {
     ["NA", 5],
     ["Cycle", 6],
     ["Spill", 7],
-    ["Blocked", 8]
+    ["Blocked", 8],
   ],
   FormulaMode: [
     ["JsOnly", 0],
-    ["WasmFastPath", 1]
+    ["WasmFastPath", 1],
   ],
   Opcode: [
     ["PushNumber", 1],
@@ -50,7 +50,7 @@ const enumManifest = {
     ["CallBuiltin", 20],
     ["PushString", 21],
     ["PushError", 22],
-    ["Ret", 255]
+    ["Ret", 255],
   ],
   BuiltinId: [
     ["Sum", 1],
@@ -142,8 +142,8 @@ const enumManifest = {
     ["Today", 87],
     ["Now", 88],
     ["Rand", 89],
-    ["Sequence", 90]
-  ]
+    ["Sequence", 90],
+  ],
 };
 
 const builtinManifest = [
@@ -236,7 +236,7 @@ const builtinManifest = [
   { id: "Today", name: "TODAY", supportsWasm: true },
   { id: "Now", name: "NOW", supportsWasm: true },
   { id: "Rand", name: "RAND", supportsWasm: true },
-  { id: "Sequence", name: "SEQUENCE", supportsWasm: true }
+  { id: "Sequence", name: "SEQUENCE", supportsWasm: true },
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.ts\n\n`;
@@ -256,16 +256,14 @@ function renderProtocolEnums() {
 }
 
 function renderOpcodeNames() {
-  return enumManifest.Opcode.map(
-    ([name]) => `  [Opcode.${name}]: "${name}"`
-  ).join(",\n");
+  return enumManifest.Opcode.map(([name]) => `  [Opcode.${name}]: "${name}"`).join(",\n");
 }
 
 function renderBuiltins() {
   return builtinManifest
     .map(
       ({ id, name, supportsWasm }) =>
-        `  { id: BuiltinId.${id}, name: "${name}", supportsWasm: ${supportsWasm} }`
+        `  { id: BuiltinId.${id}, name: "${name}", supportsWasm: ${supportsWasm} }`,
     )
     .join(",\n");
 }
@@ -292,39 +290,45 @@ ${renderBuiltins()}
 const generatedFiles = [
   {
     path: path.join(repoRoot, "packages/protocol/src/enums.ts"),
-    contents: renderProtocolEnums()
+    contents: renderProtocolEnums(),
   },
   {
     path: path.join(repoRoot, "packages/protocol/src/opcodes.ts"),
-    contents: renderOpcodesModule()
+    contents: renderOpcodesModule(),
   },
   {
     path: path.join(repoRoot, "packages/wasm-kernel/assembly/protocol.ts"),
-    contents: renderProtocolEnums()
-  }
+    contents: renderProtocolEnums(),
+  },
 ];
 
 async function main() {
   const checkMode = Bun.argv.includes("--check");
-  const staleFiles = (await Promise.all(generatedFiles.map(async (file) => {
-    let existing = "";
-    try {
-      existing = await Bun.file(file.path).text();
-    } catch {
-      existing = "";
-    }
+  const staleFiles = (
+    await Promise.all(
+      generatedFiles.map(async (file) => {
+        let existing = "";
+        try {
+          existing = await Bun.file(file.path).text();
+        } catch {
+          existing = "";
+        }
 
-    if (existing === file.contents) {
-      return null;
-    }
-    if (!checkMode) {
-      await Bun.write(file.path, file.contents);
-    }
-    return path.relative(repoRoot, file.path);
-  }))).filter((entry) => entry !== null);
+        if (existing === file.contents) {
+          return null;
+        }
+        if (!checkMode) {
+          await Bun.write(file.path, file.contents);
+        }
+        return path.relative(repoRoot, file.path);
+      }),
+    )
+  ).filter((entry) => entry !== null);
 
   if (checkMode && staleFiles.length > 0) {
-    console.error(`Protocol artifacts are stale:\n${staleFiles.map((entry) => `- ${entry}`).join("\n")}`);
+    console.error(
+      `Protocol artifacts are stale:\n${staleFiles.map((entry) => `- ${entry}`).join("\n")}`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -334,7 +338,9 @@ async function main() {
       console.log("Protocol artifacts are already up to date.");
       return;
     }
-    console.log(`Updated protocol artifacts:\n${staleFiles.map((entry) => `- ${entry}`).join("\n")}`);
+    console.log(
+      `Updated protocol artifacts:\n${staleFiles.map((entry) => `- ${entry}`).join("\n")}`,
+    );
   }
 }
 

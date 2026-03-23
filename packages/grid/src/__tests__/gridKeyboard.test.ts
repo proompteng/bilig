@@ -5,7 +5,7 @@ import {
   isNavigationKey,
   isNumericEditorSeed,
   isPrintableKey,
-  normalizeKeyboardKey
+  normalizeKeyboardKey,
 } from "../gridKeyboard.js";
 
 describe("gridKeyboard", () => {
@@ -22,9 +22,15 @@ describe("gridKeyboard", () => {
     expect(isPrintableKey({ altKey: false, ctrlKey: true, key: "x", metaKey: false })).toBe(false);
     expect(isNavigationKey("ArrowDown")).toBe(true);
     expect(isNavigationKey("Enter")).toBe(false);
-    expect(isClipboardShortcut({ altKey: false, ctrlKey: true, key: "c", metaKey: false })).toBe(true);
-    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: "F2", metaKey: false })).toBe(true);
-    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: "Escape", metaKey: false })).toBe(false);
+    expect(isClipboardShortcut({ altKey: false, ctrlKey: true, key: "c", metaKey: false })).toBe(
+      true,
+    );
+    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: "F2", metaKey: false })).toBe(
+      true,
+    );
+    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: "Escape", metaKey: false })).toBe(
+      false,
+    );
   });
 
   test("detects numeric editor seeds", () => {

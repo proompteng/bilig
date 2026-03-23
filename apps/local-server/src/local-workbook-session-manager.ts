@@ -1,14 +1,11 @@
-import {
-  SpreadsheetEngine,
-  type EngineReplicaSnapshot
-} from "@bilig/core";
+import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
 import type { CellRangeRef, CellValue } from "@bilig/protocol";
 import type {
   AckFrame,
   CursorWatermarkFrame,
   ErrorFrame,
   HeartbeatFrame,
-  ProtocolFrame
+  ProtocolFrame,
 } from "@bilig/binary-protocol";
 import type { AgentEvent, AgentFrame, AgentResponse } from "@bilig/agent-api";
 import { shouldApplyBatch } from "@bilig/crdt";
@@ -128,7 +125,7 @@ export class LocalWorkbookSessionManager {
 
     const engine = new SpreadsheetEngine({
       workbookName: documentId,
-      replicaId: `local-server:${documentId}`
+      replicaId: `local-server:${documentId}`,
     });
 
     const session: LocalWorkbookSession = {
@@ -143,7 +140,7 @@ export class LocalWorkbookSessionManager {
       cursor: 0,
       replicaSnapshot: null,
       upstreamRelay: this.options.createSyncRelay?.(documentId) ?? null,
-      unsubscribeBatches: () => {}
+      unsubscribeBatches: () => {},
     };
 
     session.unsubscribeBatches = engine.subscribeBatches((batch) => {
@@ -152,7 +149,7 @@ export class LocalWorkbookSessionManager {
         kind: "appendBatch",
         documentId,
         cursor: session.cursor,
-        batch
+        batch,
       } satisfies Extract<ProtocolFrame, { kind: "appendBatch" }>;
       session.batches.push({ cursor: session.cursor, frame });
       session.replicaSnapshot = engine.exportReplicaSnapshot();
@@ -164,7 +161,11 @@ export class LocalWorkbookSessionManager {
     return session;
   }
 
-  attachBrowser(documentId: string, subscriberId: string, send: (frame: ProtocolFrame) => void): () => void {
+  attachBrowser(
+    documentId: string,
+    subscriberId: string,
+    send: (frame: ProtocolFrame) => void,
+  ): () => void {
     const session = this.ensureSession(documentId);
     session.browserSubscribers.set(subscriberId, { id: subscriberId, send });
     return () => {
@@ -196,8 +197,8 @@ export class LocalWorkbookSessionManager {
             kind: "cursorWatermark",
             documentId: frame.documentId,
             cursor: session.cursor,
-            compactedCursor: Math.max(0, session.cursor - session.batches.length)
-          } satisfies CursorWatermarkFrame
+            compactedCursor: Math.max(0, session.cursor - session.batches.length),
+          } satisfies CursorWatermarkFrame,
         ];
       }
 
@@ -211,7 +212,7 @@ export class LocalWorkbookSessionManager {
           kind: "appendBatch",
           documentId: frame.documentId,
           cursor: session.cursor,
-          batch: frame.batch
+          batch: frame.batch,
         } satisfies Extract<ProtocolFrame, { kind: "appendBatch" }>;
         session.batches.push({ cursor: session.cursor, frame: committedFrame });
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
@@ -226,8 +227,8 @@ export class LocalWorkbookSessionManager {
             kind: "heartbeat",
             documentId: frame.documentId,
             cursor: session.cursor,
-            sentAtUnixMs: Date.now()
-          } satisfies HeartbeatFrame
+            sentAtUnixMs: Date.now(),
+          } satisfies HeartbeatFrame,
         ];
 
       case "cursorWatermark":
@@ -241,8 +242,8 @@ export class LocalWorkbookSessionManager {
             documentId: frame.documentId,
             code: "UNSUPPORTED_LOCAL_SNAPSHOT_UPLOAD",
             message: "Local server snapshot uploads are not wired yet",
-            retryable: false
-          } satisfies ErrorFrame
+            retryable: false,
+          } satisfies ErrorFrame,
         ];
 
       case "error":
@@ -255,15 +256,20 @@ export class LocalWorkbookSessionManager {
             documentId,
             code: "UNSUPPORTED_SYNC_FRAME",
             message: "Unsupported frame",
-            retryable: false
-          } satisfies ErrorFrame
+            retryable: false,
+          } satisfies ErrorFrame,
         ];
     }
   }
 
   async handleAgentFrame(frame: AgentFrame): Promise<AgentFrame> {
     if (frame.kind !== "request") {
-      return this.agentError("unknown", "INVALID_AGENT_FRAME", "Local server accepts only agent requests", false);
+      return this.agentError(
+        "unknown",
+        "INVALID_AGENT_FRAME",
+        "Local server accepts only agent requests",
+        false,
+      );
     }
 
     const request = frame.request;
@@ -278,7 +284,7 @@ export class LocalWorkbookSessionManager {
             sessionId,
             documentId: request.documentId,
             replicaId: request.replicaId,
-            subscriptionIds: new Set()
+            subscriptionIds: new Set(),
           });
           response = { kind: "ok", id: request.id, sessionId };
           break;
@@ -302,7 +308,7 @@ export class LocalWorkbookSessionManager {
           response = {
             kind: "rangeValues",
             id: request.id,
-            values: this.readRange(engine, request.range)
+            values: this.readRange(engine, request.range),
           };
           break;
         }
@@ -355,7 +361,7 @@ export class LocalWorkbookSessionManager {
           response = {
             kind: "dependencies",
             id: request.id,
-            addresses: dependencies.directDependents
+            addresses: dependencies.directDependents,
           };
           break;
         }
@@ -366,7 +372,7 @@ export class LocalWorkbookSessionManager {
           response = {
             kind: "dependencies",
             id: request.id,
-            addresses: dependencies.directPrecedents
+            addresses: dependencies.directPrecedents,
           };
           break;
         }
@@ -403,28 +409,32 @@ export class LocalWorkbookSessionManager {
           }
 
           const changedAddresses = iterateRange(request.range);
-          const unsubscribe = session.engine.subscribeCells(request.range.sheetName, changedAddresses, () => {
-            this.queueAgentEvent(session.documentId, {
-              kind: "rangeChanged",
-              subscriptionId: request.subscriptionId,
-              range: request.range,
-              changedAddresses: [...changedAddresses]
-            });
-          });
+          const unsubscribe = session.engine.subscribeCells(
+            request.range.sheetName,
+            changedAddresses,
+            () => {
+              this.queueAgentEvent(session.documentId, {
+                kind: "rangeChanged",
+                subscriptionId: request.subscriptionId,
+                range: request.range,
+                changedAddresses: [...changedAddresses],
+              });
+            },
+          );
 
           session.agentSubscriptions.set(request.subscriptionId, {
             subscriptionId: request.subscriptionId,
             sessionId: request.sessionId,
             range: request.range,
             changedAddresses,
-            unsubscribe
+            unsubscribe,
           });
           agentSession.subscriptionIds.add(request.subscriptionId);
           this.agentSubscriptionOwners.set(request.subscriptionId, request.sessionId);
           response = {
             kind: "ok",
             id: request.id,
-            value: { subscriptionId: request.subscriptionId }
+            value: { subscriptionId: request.subscriptionId },
           };
           break;
         }
@@ -442,7 +452,7 @@ export class LocalWorkbookSessionManager {
             name: request.name,
             source: request.source,
             groupBy: request.groupBy,
-            values: request.values
+            values: request.values,
           });
           response = { kind: "ok", id: request.id };
           break;
@@ -455,7 +465,7 @@ export class LocalWorkbookSessionManager {
             id: requestId,
             code: "UNSUPPORTED_AGENT_REQUEST",
             message: `Unsupported agent request ${(exhaustiveRequest as { kind: string }).kind}`,
-            retryable: false
+            retryable: false,
           };
           break;
         }
@@ -466,7 +476,7 @@ export class LocalWorkbookSessionManager {
         id: request.id,
         code: "LOCAL_SERVER_FAILURE",
         message: error instanceof Error ? error.message : String(error),
-        retryable: false
+        retryable: false,
       };
     }
 
@@ -480,7 +490,7 @@ export class LocalWorkbookSessionManager {
       cursor: session.cursor,
       browserSessions: [...session.browserSubscribers.keys()],
       agentSessions: [...session.agentSessions.keys()],
-      lastBatchId: session.batches.at(-1)?.frame.batch.id ?? null
+      lastBatchId: session.batches.at(-1)?.frame.batch.id ?? null,
     };
   }
 
@@ -492,7 +502,9 @@ export class LocalWorkbookSessionManager {
     const rows: CellValue[][] = [];
     for (let index = 0; index < addresses.length; index += width) {
       rows.push(
-        addresses.slice(index, index + width).map((address) => engine.getCellValue(range.sheetName, address))
+        addresses
+          .slice(index, index + width)
+          .map((address) => engine.getCellValue(range.sheetName, address)),
       );
     }
     return rows;
@@ -513,14 +525,16 @@ export class LocalWorkbookSessionManager {
   private removeAgentSubscription(
     session: LocalWorkbookSession,
     sessionId: string,
-    subscriptionId: string
+    subscriptionId: string,
   ): void {
     const subscription = session.agentSubscriptions.get(subscriptionId);
     if (!subscription) {
       return;
     }
     if (subscription.sessionId !== sessionId) {
-      throw new Error(`Subscription ${subscriptionId} does not belong to agent session ${sessionId}`);
+      throw new Error(
+        `Subscription ${subscriptionId} does not belong to agent session ${sessionId}`,
+      );
     }
     subscription.unsubscribe();
     session.agentSubscriptions.delete(subscriptionId);
@@ -566,7 +580,10 @@ export class LocalWorkbookSessionManager {
     session.browserSubscribers.forEach((subscriber) => subscriber.send(frame));
   }
 
-  private async relayUpstream(session: LocalWorkbookSession, batch: Extract<ProtocolFrame, { kind: "appendBatch" }>["batch"]): Promise<void> {
+  private async relayUpstream(
+    session: LocalWorkbookSession,
+    batch: Extract<ProtocolFrame, { kind: "appendBatch" }>["batch"],
+  ): Promise<void> {
     if (!session.upstreamRelay) {
       return;
     }
@@ -583,7 +600,7 @@ export class LocalWorkbookSessionManager {
       documentId,
       batchId,
       cursor,
-      acceptedAtUnixMs: Date.now()
+      acceptedAtUnixMs: Date.now(),
     };
   }
 
@@ -595,8 +612,8 @@ export class LocalWorkbookSessionManager {
         id,
         code,
         message,
-        retryable
-      }
+        retryable,
+      },
     };
   }
 }

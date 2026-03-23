@@ -73,7 +73,10 @@ function integerValue(value: CellValue | undefined, fallback?: number): number |
   return Math.trunc(numeric);
 }
 
-function nonNegativeIntegerValue(value: CellValue | undefined, fallback?: number): number | undefined {
+function nonNegativeIntegerValue(
+  value: CellValue | undefined,
+  fallback?: number,
+): number | undefined {
   const integer = integerValue(value, fallback);
   return integer !== undefined && integer >= 0 ? integer : undefined;
 }
@@ -83,7 +86,12 @@ function positiveIntegerValue(value: CellValue | undefined, fallback?: number): 
   return integer !== undefined && integer >= 1 ? integer : undefined;
 }
 
-function sequenceResult(rowsArg: CellValue | undefined, colsArg: CellValue | undefined, startArg: CellValue | undefined, stepArg: CellValue | undefined): ArrayValue | CellValue {
+function sequenceResult(
+  rowsArg: CellValue | undefined,
+  colsArg: CellValue | undefined,
+  startArg: CellValue | undefined,
+  stepArg: CellValue | undefined,
+): ArrayValue | CellValue {
   const rows = coercePositiveInteger(rowsArg, 1);
   const cols = coercePositiveInteger(colsArg, 1);
   const start = coerceNumber(startArg, 1);
@@ -100,7 +108,7 @@ function sequenceResult(rowsArg: CellValue | undefined, colsArg: CellValue | und
     kind: "array",
     rows,
     cols,
-    values
+    values,
   };
 }
 
@@ -139,7 +147,11 @@ function yearsDaysInYear(year: number): number {
   return isLeapYear(year) ? 366 : 365;
 }
 
-function yearFracByBasis(startSerial: number, endSerial: number, basis: number): number | undefined {
+function yearFracByBasis(
+  startSerial: number,
+  endSerial: number,
+  basis: number,
+): number | undefined {
   if (!isValidBasis(basis)) {
     return undefined;
   }
@@ -202,11 +214,10 @@ function yearFracByBasis(startSerial: number, endSerial: number, basis: number):
     case 1: {
       const isYearDifferent = startYear !== endYear;
       if (
-        isYearDifferent && (
-          (endYear !== startYear + 1) ||
-          (endMonth < startMonth) ||
-          (endMonth === startMonth && endDay > startDay)
-        )
+        isYearDifferent &&
+        (endYear !== startYear + 1 ||
+          endMonth < startMonth ||
+          (endMonth === startMonth && endDay > startDay))
       ) {
         let dayCount = 0;
         for (let year = startYear; year <= endYear; year += 1) {
@@ -214,8 +225,9 @@ function yearFracByBasis(startSerial: number, endSerial: number, basis: number):
         }
         daysInYear = dayCount / (endYear - startYear + 1);
       } else if (isYearDifferent) {
-        const crossesLeap = (isLeapYear(startYear) && (startMonth < 2 || (startMonth === 2 && startDay <= 29)))
-          || (isLeapYear(endYear) && (endMonth > 2 || (endMonth === 2 && endDay === 29)));
+        const crossesLeap =
+          (isLeapYear(startYear) && (startMonth < 2 || (startMonth === 2 && startDay <= 29))) ||
+          (isLeapYear(endYear) && (endMonth > 2 || (endMonth === 2 && endDay === 29)));
         daysInYear = crossesLeap ? 366 : 365;
       } else {
         daysInYear = yearsDaysInYear(startYear);
@@ -244,9 +256,16 @@ function getAmordegrc(
   salvage: number,
   period: number,
   rate: number,
-  basis: number
+  basis: number,
 ): number | undefined {
-  if (datePurchased > firstPeriod || rate <= 0 || salvage > cost || cost <= 0 || salvage < 0 || period < 0) {
+  if (
+    datePurchased > firstPeriod ||
+    rate <= 0 ||
+    salvage > cost ||
+    cost <= 0 ||
+    salvage < 0 ||
+    period < 0
+  ) {
     return undefined;
   }
 
@@ -299,9 +318,16 @@ function getAmorlinc(
   salvage: number,
   period: number,
   rate: number,
-  basis: number
+  basis: number,
 ): number | undefined {
-  if (datePurchased > firstPeriod || rate <= 0 || salvage > cost || cost <= 0 || salvage < 0 || period < 0) {
+  if (
+    datePurchased > firstPeriod ||
+    rate <= 0 ||
+    salvage > cost ||
+    cost <= 0 ||
+    salvage < 0 ||
+    period < 0
+  ) {
     return undefined;
   }
 
@@ -405,7 +431,11 @@ function unaryMath(value: CellValue, evaluate: (numeric: number) => number): Cel
   return numericResultOrError(evaluate(toNumber(value) ?? 0));
 }
 
-function binaryMath(left: CellValue, right: CellValue, evaluate: (left: number, right: number) => number): CellValue {
+function binaryMath(
+  left: CellValue,
+  right: CellValue,
+  evaluate: (left: number, right: number) => number,
+): CellValue {
   return numericResultOrError(evaluate(toNumber(left) ?? 0, toNumber(right) ?? 0));
 }
 
@@ -484,9 +514,19 @@ function romanValue(numberValue: number): string | undefined {
     return undefined;
   }
   const numerals: Array<[number, string]> = [
-    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"],
-    [100, "C"], [90, "XC"], [50, "L"], [40, "XL"],
-    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]
+    [1000, "M"],
+    [900, "CM"],
+    [500, "D"],
+    [400, "CD"],
+    [100, "C"],
+    [90, "XC"],
+    [50, "L"],
+    [40, "XL"],
+    [10, "X"],
+    [9, "IX"],
+    [5, "V"],
+    [4, "IV"],
+    [1, "I"],
   ];
   let remaining = number;
   let result = "";
@@ -501,7 +541,13 @@ function romanValue(numberValue: number): string | undefined {
 
 function arabicValue(text: string): number | undefined {
   const numerals = new Map<string, number>([
-    ["I", 1], ["V", 5], ["X", 10], ["L", 50], ["C", 100], ["D", 500], ["M", 1000]
+    ["I", 1],
+    ["V", 5],
+    ["X", 10],
+    ["L", 50],
+    ["C", 100],
+    ["D", 500],
+    ["M", 1000],
   ]);
   const upper = text.trim().toUpperCase();
   if (!/^[IVXLCDM]+$/.test(upper)) {
@@ -537,24 +583,28 @@ function isValidBaseDigits(raw: string, radix: number): boolean {
   return true;
 }
 
-function baseString(numberArg: CellValue, radixArg: CellValue, minLengthArg?: CellValue): CellValue {
+function baseString(
+  numberArg: CellValue,
+  radixArg: CellValue,
+  minLengthArg?: CellValue,
+): CellValue {
   const numberValue = integerValue(numberArg);
   const radixValue = integerValue(radixArg);
   const minLengthValue = nonNegativeIntegerValue(minLengthArg, 0);
   if (
-    numberValue === undefined
-    || numberValue < 0
-    || radixValue === undefined
-    || radixValue < 2
-    || radixValue > 36
-    || minLengthValue === undefined
+    numberValue === undefined ||
+    numberValue < 0 ||
+    radixValue === undefined ||
+    radixValue < 2 ||
+    radixValue > 36 ||
+    minLengthValue === undefined
   ) {
     return valueError();
   }
   return {
     tag: ValueTag.String,
     value: numberValue.toString(radixValue).toUpperCase().padStart(minLengthValue, "0"),
-    stringId: 0
+    stringId: 0,
   };
 }
 
@@ -566,7 +616,10 @@ function decimalValue(textArg: CellValue, radixArg: CellValue): CellValue {
   if (radixValue === undefined || radixValue < 2 || radixValue > 36) {
     return valueError();
   }
-  const raw = textArg.tag === ValueTag.String ? textArg.value.trim() : String(Math.trunc(toNumber(textArg) ?? NaN));
+  const raw =
+    textArg.tag === ValueTag.String
+      ? textArg.value.trim()
+      : String(Math.trunc(toNumber(textArg) ?? NaN));
   if (raw === "" || raw === "NaN" || !isValidBaseDigits(raw, radixValue)) {
     return valueError();
   }
@@ -600,7 +653,10 @@ function aggregateByCode(functionNum: number, values: CellValue[]): CellValue {
         ? numberResult(0)
         : numberResult(numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length);
     case 2:
-      return numberResult(values.filter((value) => value.tag === ValueTag.Number || value.tag === ValueTag.Boolean).length);
+      return numberResult(
+        values.filter((value) => value.tag === ValueTag.Number || value.tag === ValueTag.Boolean)
+          .length,
+      );
     case 3:
       return numberResult(values.filter((value) => value.tag !== ValueTag.Empty).length);
     case 4:
@@ -608,7 +664,11 @@ function aggregateByCode(functionNum: number, values: CellValue[]): CellValue {
     case 5:
       return numberResult(numericValues.length === 0 ? 0 : Math.min(...numericValues));
     case 6:
-      return numberResult(numericValues.length === 0 ? 0 : numericValues.reduce((product, value) => product * value, 1));
+      return numberResult(
+        numericValues.length === 0
+          ? 0
+          : numericValues.reduce((product, value) => product * value, 1),
+      );
     case 7:
       return numberResult(Math.sqrt(sampleVariance(numericValues)));
     case 8:
@@ -646,9 +706,14 @@ const scalarBuiltins: Record<string, Builtin> = {
     if (numbers.length === 0) return numberResult(0);
     return numberResult(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
   },
-  MIN: (...args) => numberResult(Math.min(...args.map((arg) => toNumber(arg) ?? Number.POSITIVE_INFINITY))),
-  MAX: (...args) => numberResult(Math.max(...args.map((arg) => toNumber(arg) ?? Number.NEGATIVE_INFINITY))),
-  COUNT: (...args) => numberResult(args.filter((arg) => arg.tag === ValueTag.Number || arg.tag === ValueTag.Boolean).length),
+  MIN: (...args) =>
+    numberResult(Math.min(...args.map((arg) => toNumber(arg) ?? Number.POSITIVE_INFINITY))),
+  MAX: (...args) =>
+    numberResult(Math.max(...args.map((arg) => toNumber(arg) ?? Number.NEGATIVE_INFINITY))),
+  COUNT: (...args) =>
+    numberResult(
+      args.filter((arg) => arg.tag === ValueTag.Number || arg.tag === ValueTag.Boolean).length,
+    ),
   COUNTA: (...args) => numberResult(args.filter((arg) => arg.tag !== ValueTag.Empty).length),
   ABS: (value) => numberResult(Math.abs(toNumber(value) ?? 0)),
   SIN: (value) => unaryMath(value, Math.sin),
@@ -658,15 +723,16 @@ const scalarBuiltins: Record<string, Builtin> = {
   ACOS: (value) => unaryMath(value, Math.acos),
   ATAN: (value) => unaryMath(value, Math.atan),
   ATAN2: (left, right) => binaryMath(left, right, Math.atan2),
-  DEGREES: (value) => unaryMath(value, (numeric) => numeric * 180 / Math.PI),
-  RADIANS: (value) => unaryMath(value, (numeric) => numeric * Math.PI / 180),
+  DEGREES: (value) => unaryMath(value, (numeric) => (numeric * 180) / Math.PI),
+  RADIANS: (value) => unaryMath(value, (numeric) => (numeric * Math.PI) / 180),
   EXP: (value) => unaryMath(value, Math.exp),
   LN: (value) => unaryMath(value, Math.log),
   LOG10: (value) => unaryMath(value, Math.log10),
   LOG: (value, base) => {
     const numeric = toNumber(value) ?? 0;
     const baseValue = base === undefined ? 10 : (toNumber(base) ?? 10);
-    const result = base === undefined ? Math.log10(numeric) : Math.log(numeric) / Math.log(baseValue);
+    const result =
+      base === undefined ? Math.log10(numeric) : Math.log(numeric) / Math.log(baseValue);
     return numericResultOrError(result);
   },
   POWER: (base, exponent) => binaryMath(base, exponent, Math.pow),
@@ -688,11 +754,15 @@ const scalarBuiltins: Record<string, Builtin> = {
   },
   COT: (value) => {
     const tangent = Math.tan(toNumber(value) ?? 0);
-    return tangent === 0 ? { tag: ValueTag.Error, code: ErrorCode.Div0 } : numberResult(1 / tangent);
+    return tangent === 0
+      ? { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : numberResult(1 / tangent);
   },
   COTH: (value) => {
     const hyperbolic = Math.tanh(toNumber(value) ?? 0);
-    return hyperbolic === 0 ? { tag: ValueTag.Error, code: ErrorCode.Div0 } : numberResult(1 / hyperbolic);
+    return hyperbolic === 0
+      ? { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : numberResult(1 / hyperbolic);
   },
   CSC: (value) => {
     const sine = Math.sin(toNumber(value) ?? 0);
@@ -700,7 +770,9 @@ const scalarBuiltins: Record<string, Builtin> = {
   },
   CSCH: (value) => {
     const hyperbolic = Math.sinh(toNumber(value) ?? 0);
-    return hyperbolic === 0 ? { tag: ValueTag.Error, code: ErrorCode.Div0 } : numberResult(1 / hyperbolic);
+    return hyperbolic === 0
+      ? { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : numberResult(1 / hyperbolic);
   },
   SEC: (value) => {
     const cosine = Math.cos(toNumber(value) ?? 0);
@@ -719,7 +791,9 @@ const scalarBuiltins: Record<string, Builtin> = {
   CEILING: (value, significance) => ceilingWith(value, significance),
   "FLOOR.MATH": (value, significance, mode) => {
     const numberValue = toNumber(value);
-    const significanceValue = Math.abs(toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1);
+    const significanceValue = Math.abs(
+      toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1,
+    );
     const modeValue = toNumber(mode ?? { tag: ValueTag.Number, value: 0 }) ?? 0;
     if (numberValue === undefined || significanceValue === 0) {
       return valueError();
@@ -727,12 +801,17 @@ const scalarBuiltins: Record<string, Builtin> = {
     if (numberValue >= 0) {
       return numberResult(Math.floor(numberValue / significanceValue) * significanceValue);
     }
-    const magnitude = modeValue === 0 ? Math.ceil(Math.abs(numberValue) / significanceValue) : Math.floor(Math.abs(numberValue) / significanceValue);
+    const magnitude =
+      modeValue === 0
+        ? Math.ceil(Math.abs(numberValue) / significanceValue)
+        : Math.floor(Math.abs(numberValue) / significanceValue);
     return numberResult(-magnitude * significanceValue);
   },
   "FLOOR.PRECISE": (value, significance) => {
     const numberValue = toNumber(value);
-    const significanceValue = Math.abs(toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1);
+    const significanceValue = Math.abs(
+      toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1,
+    );
     if (numberValue === undefined || significanceValue === 0) {
       return valueError();
     }
@@ -740,7 +819,9 @@ const scalarBuiltins: Record<string, Builtin> = {
   },
   "CEILING.MATH": (value, significance, mode) => {
     const numberValue = toNumber(value);
-    const significanceValue = Math.abs(toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1);
+    const significanceValue = Math.abs(
+      toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1,
+    );
     const modeValue = toNumber(mode ?? { tag: ValueTag.Number, value: 0 }) ?? 0;
     if (numberValue === undefined || significanceValue === 0) {
       return valueError();
@@ -748,12 +829,17 @@ const scalarBuiltins: Record<string, Builtin> = {
     if (numberValue >= 0) {
       return numberResult(Math.ceil(numberValue / significanceValue) * significanceValue);
     }
-    const magnitude = modeValue === 0 ? Math.floor(Math.abs(numberValue) / significanceValue) : Math.ceil(Math.abs(numberValue) / significanceValue);
+    const magnitude =
+      modeValue === 0
+        ? Math.floor(Math.abs(numberValue) / significanceValue)
+        : Math.ceil(Math.abs(numberValue) / significanceValue);
     return numberResult(-magnitude * significanceValue);
   },
   "CEILING.PRECISE": (value, significance) => {
     const numberValue = toNumber(value);
-    const significanceValue = Math.abs(toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1);
+    const significanceValue = Math.abs(
+      toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1,
+    );
     if (numberValue === undefined || significanceValue === 0) {
       return valueError();
     }
@@ -761,7 +847,9 @@ const scalarBuiltins: Record<string, Builtin> = {
   },
   "ISO.CEILING": (value, significance) => {
     const numberValue = toNumber(value);
-    const significanceValue = Math.abs(toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1);
+    const significanceValue = Math.abs(
+      toNumber(significance ?? { tag: ValueTag.Number, value: 1 }) ?? 1,
+    );
     if (numberValue === undefined || significanceValue === 0) {
       return valueError();
     }
@@ -822,11 +910,7 @@ const scalarBuiltins: Record<string, Builtin> = {
   COMBIN: (numberArg, chosenArg) => {
     const numberValue = nonNegativeIntegerValue(numberArg);
     const chosenValue = nonNegativeIntegerValue(chosenArg);
-    if (
-      numberValue === undefined
-      || chosenValue === undefined
-      || chosenValue > numberValue
-    ) {
+    if (numberValue === undefined || chosenValue === undefined || chosenValue > numberValue) {
       return valueError();
     }
     const numerator = factorialValue(numberValue);
@@ -887,14 +971,21 @@ const scalarBuiltins: Record<string, Builtin> = {
       return valueError();
     }
     const numerator = factorialValue(numbers.reduce((sum, value) => sum + value, 0));
-    const denominator = numbers.reduce((product, value) => product * (factorialValue(value) ?? Number.NaN), 1);
-    return numerator === undefined || Number.isNaN(denominator) ? valueError() : numberResult(numerator / denominator);
+    const denominator = numbers.reduce(
+      (product, value) => product * (factorialValue(value) ?? Number.NaN),
+      1,
+    );
+    return numerator === undefined || Number.isNaN(denominator)
+      ? valueError()
+      : numberResult(numerator / denominator);
   },
   PRODUCT: (...args) => {
     const error = firstError(args);
     if (error) return error;
     const numbers = collectNumericArgs(args);
-    return numberResult(numbers.length === 0 ? 0 : numbers.reduce((product, value) => product * value, 1));
+    return numberResult(
+      numbers.length === 0 ? 0 : numbers.reduce((product, value) => product * value, 1),
+    );
   },
   QUOTIENT: (numeratorArg, denominatorArg) => {
     const numerator = toNumber(numeratorArg);
@@ -907,7 +998,16 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     return numberResult(Math.trunc(numerator / denominator));
   },
-  ACCRINT: (issueArg, firstInterestArg, settlementArg, rateArg, parArg, frequencyArg, basisArg, calcMethodArg) => {
+  ACCRINT: (
+    issueArg,
+    firstInterestArg,
+    settlementArg,
+    rateArg,
+    parArg,
+    frequencyArg,
+    basisArg,
+    calcMethodArg,
+  ) => {
     const issue = coerceDateSerial(issueArg);
     const firstInterest = coerceDateSerial(firstInterestArg);
     const settlement = coerceDateSerial(settlementArg);
@@ -917,21 +1017,21 @@ const scalarBuiltins: Record<string, Builtin> = {
     const basis = integerValue(basisArg, 0);
     const calcMethod = coerceBoolean(calcMethodArg, true);
     if (
-      issue === undefined
-      || firstInterest === undefined
-      || settlement === undefined
-      || rate === undefined
-      || frequency === undefined
-      || basis === undefined
-      || calcMethod === undefined
-      || par === undefined
-      || rate <= 0
-      || par <= 0
-      || issue >= settlement
-      || firstInterest <= issue
-      || firstInterest >= settlement
-      || !isValidFrequency(frequency)
-      || !isValidBasis(basis)
+      issue === undefined ||
+      firstInterest === undefined ||
+      settlement === undefined ||
+      rate === undefined ||
+      frequency === undefined ||
+      basis === undefined ||
+      calcMethod === undefined ||
+      par === undefined ||
+      rate <= 0 ||
+      par <= 0 ||
+      issue >= settlement ||
+      firstInterest <= issue ||
+      firstInterest >= settlement ||
+      !isValidFrequency(frequency) ||
+      !isValidBasis(basis)
     ) {
       return valueError();
     }
@@ -946,22 +1046,30 @@ const scalarBuiltins: Record<string, Builtin> = {
     const par = coerceNumber(parArg, 1000);
     const basis = integerValue(basisArg, 0);
     if (
-      issue === undefined
-      || settlement === undefined
-      || rate === undefined
-      || basis === undefined
-      || par === undefined
-      || rate <= 0
-      || par <= 0
-      || issue >= settlement
-      || !isValidBasis(basis)
+      issue === undefined ||
+      settlement === undefined ||
+      rate === undefined ||
+      basis === undefined ||
+      par === undefined ||
+      rate <= 0 ||
+      par <= 0 ||
+      issue >= settlement ||
+      !isValidBasis(basis)
     ) {
       return valueError();
     }
     const years = yearFracByBasis(issue, settlement, basis);
     return years === undefined ? valueError() : numberResult(par * rate * years);
   },
-  AMORDEGRC: (costArg, datePurchasedArg, firstPeriodArg, salvageArg, periodArg, rateArg, basisArg) => {
+  AMORDEGRC: (
+    costArg,
+    datePurchasedArg,
+    firstPeriodArg,
+    salvageArg,
+    periodArg,
+    rateArg,
+    basisArg,
+  ) => {
     const cost = toNumber(costArg);
     const datePurchased = coerceDateSerial(datePurchasedArg);
     const firstPeriod = coerceDateSerial(firstPeriodArg);
@@ -970,21 +1078,37 @@ const scalarBuiltins: Record<string, Builtin> = {
     const rate = toNumber(rateArg);
     const basis = integerValue(basisArg, 0);
     if (
-      cost === undefined
-      || datePurchased === undefined
-      || firstPeriod === undefined
-      || salvage === undefined
-      || period === undefined
-      || rate === undefined
-      || basis === undefined
-      || !isValidBasis(basis)
+      cost === undefined ||
+      datePurchased === undefined ||
+      firstPeriod === undefined ||
+      salvage === undefined ||
+      period === undefined ||
+      rate === undefined ||
+      basis === undefined ||
+      !isValidBasis(basis)
     ) {
       return valueError();
     }
-    const depreciation = getAmordegrc(cost, datePurchased, firstPeriod, salvage, period, rate, basis);
+    const depreciation = getAmordegrc(
+      cost,
+      datePurchased,
+      firstPeriod,
+      salvage,
+      period,
+      rate,
+      basis,
+    );
     return depreciation === undefined ? valueError() : numberResult(depreciation);
   },
-  AMORLINC: (costArg, datePurchasedArg, firstPeriodArg, salvageArg, periodArg, rateArg, basisArg) => {
+  AMORLINC: (
+    costArg,
+    datePurchasedArg,
+    firstPeriodArg,
+    salvageArg,
+    periodArg,
+    rateArg,
+    basisArg,
+  ) => {
     const cost = toNumber(costArg);
     const datePurchased = coerceDateSerial(datePurchasedArg);
     const firstPeriod = coerceDateSerial(firstPeriodArg);
@@ -993,18 +1117,26 @@ const scalarBuiltins: Record<string, Builtin> = {
     const rate = toNumber(rateArg);
     const basis = integerValue(basisArg, 0);
     if (
-      cost === undefined
-      || datePurchased === undefined
-      || firstPeriod === undefined
-      || salvage === undefined
-      || period === undefined
-      || rate === undefined
-      || basis === undefined
-      || !isValidBasis(basis)
+      cost === undefined ||
+      datePurchased === undefined ||
+      firstPeriod === undefined ||
+      salvage === undefined ||
+      period === undefined ||
+      rate === undefined ||
+      basis === undefined ||
+      !isValidBasis(basis)
     ) {
       return valueError();
     }
-    const depreciation = getAmorlinc(cost, datePurchased, firstPeriod, salvage, period, rate, basis);
+    const depreciation = getAmorlinc(
+      cost,
+      datePurchased,
+      firstPeriod,
+      salvage,
+      period,
+      rate,
+      basis,
+    );
     return depreciation === undefined ? valueError() : numberResult(depreciation);
   },
   RANDBETWEEN: (bottomArg, topArg) => {
@@ -1021,7 +1153,13 @@ const scalarBuiltins: Record<string, Builtin> = {
     const min = coerceNumber(minArg, 0);
     const max = coerceNumber(maxArg, 1);
     const whole = wholeArg === undefined ? false : (toNumber(wholeArg) ?? 0) !== 0;
-    if (rows === undefined || cols === undefined || min === undefined || max === undefined || max < min) {
+    if (
+      rows === undefined ||
+      cols === undefined ||
+      min === undefined ||
+      max === undefined ||
+      max < min
+    ) {
       return valueError();
     }
     const values: CellValue[] = [];
@@ -1047,13 +1185,15 @@ const scalarBuiltins: Record<string, Builtin> = {
     let sum = 0;
     coefficientArgs.forEach((coefficientArg, index) => {
       const coefficient = toNumber(coefficientArg) ?? 0;
-      sum += coefficient * (x ** (n + index * m));
+      sum += coefficient * x ** (n + index * m);
     });
     return numberResult(sum);
   },
   SQRTPI: (value) => {
     const numeric = toNumber(value);
-    return numeric === undefined ? valueError() : numericResultOrError(Math.sqrt(numeric * Math.PI));
+    return numeric === undefined
+      ? valueError()
+      : numericResultOrError(Math.sqrt(numeric * Math.PI));
   },
   SUMSQ: (...args) => {
     const error = firstError(args);
@@ -1082,17 +1222,26 @@ const scalarBuiltins: Record<string, Builtin> = {
     return functionNum === undefined ? valueError() : aggregateByCode(functionNum, args);
   },
   SEQUENCE: (...args) => sequenceResult(args[0], args[1], args[2], args[3]),
-  ...scalarPlaceholderBuiltins
+  ...scalarPlaceholderBuiltins,
 };
 
 const builtins: Record<string, Builtin> = {
   ...scalarBuiltins,
   ...logicalBuiltins,
   ...textBuiltins,
-  ...datetimeBuiltins
+  ...datetimeBuiltins,
 };
 
-const jsSpecialBuiltins = new Set(["LET", "LAMBDA", "MAKEARRAY", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL"]);
+const jsSpecialBuiltins = new Set([
+  "LET",
+  "LAMBDA",
+  "MAKEARRAY",
+  "MAP",
+  "REDUCE",
+  "SCAN",
+  "BYROW",
+  "BYCOL",
+]);
 
 function isBuiltinIdKey(value: string): value is keyof typeof BuiltinId {
   return value in BuiltinId;
@@ -1104,7 +1253,12 @@ export function getBuiltin(name: string): Builtin | undefined {
 
 export function hasBuiltin(name: string): boolean {
   const upper = name.toUpperCase();
-  return builtins[upper] !== undefined || lookupBuiltins[upper] !== undefined || jsSpecialBuiltins.has(upper) || hasExternalFunction(upper);
+  return (
+    builtins[upper] !== undefined ||
+    lookupBuiltins[upper] !== undefined ||
+    jsSpecialBuiltins.has(upper) ||
+    hasExternalFunction(upper)
+  );
 }
 
 export function getBuiltinId(name: string): BuiltinId | undefined {

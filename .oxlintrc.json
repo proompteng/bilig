@@ -1,15 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "oxc",
-    "unicorn",
-    "promise",
-    "node",
-    "react",
-    "vitest",
-    "jsx-a11y"
-  ],
+  "plugins": ["typescript", "oxc", "unicorn", "promise", "node", "react", "vitest", "jsx-a11y"],
   "ignorePatterns": [
     "**/coverage/**",
     "**/dist/**",

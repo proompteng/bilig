@@ -18,7 +18,7 @@ export function useSheetViewport(engine: SpreadsheetEngine, sheetName: string, v
   useSyncExternalStore(
     (listener) => engine.subscribeCells(sheetName, watchedAddresses, listener),
     () => engine.getLastMetrics().batchId,
-    () => engine.getLastMetrics().batchId
+    () => engine.getLastMetrics().batchId,
   );
 
   return selectors.selectViewportCells(engine, sheetName, viewport);

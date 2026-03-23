@@ -1,22 +1,31 @@
 import { formatAddress } from "@bilig/formula";
 import type { GridSelection, Item } from "@glideapps/glide-data-grid";
-import { createColumnSliceSelection, createGridSelection, createRangeSelection, createRowSliceSelection } from "./gridSelection.js";
+import {
+  createColumnSliceSelection,
+  createGridSelection,
+  createRangeSelection,
+  createRowSliceSelection,
+} from "./gridSelection.js";
 import type { HeaderSelection } from "./gridPointer.js";
 
-export function resolveHeaderDragSelection(headerAnchor: HeaderSelection, targetIndex: number, selectedCell: Item): {
+export function resolveHeaderDragSelection(
+  headerAnchor: HeaderSelection,
+  targetIndex: number,
+  selectedCell: Item,
+): {
   selection: GridSelection;
   addr: string;
 } {
   if (headerAnchor.kind === "column") {
     return {
       selection: createColumnSliceSelection(headerAnchor.index, targetIndex, selectedCell[1]),
-      addr: formatAddress(selectedCell[1], headerAnchor.index)
+      addr: formatAddress(selectedCell[1], headerAnchor.index),
     };
   }
 
   return {
     selection: createRowSliceSelection(selectedCell[0], headerAnchor.index, targetIndex),
-    addr: formatAddress(headerAnchor.index, selectedCell[0])
+    addr: formatAddress(headerAnchor.index, selectedCell[0]),
   };
 }
 
@@ -24,11 +33,15 @@ export function resolveBodyDragSelection(anchorCell: Item, pointerCell: Item): G
   return createRangeSelection(
     createGridSelection(anchorCell[0], anchorCell[1]),
     anchorCell,
-    pointerCell
+    pointerCell,
   );
 }
 
-export function resolveBodyPointerUpResult(anchorCell: Item, pointerCell: Item, didMove: boolean): {
+export function resolveBodyPointerUpResult(
+  anchorCell: Item,
+  pointerCell: Item,
+  didMove: boolean,
+): {
   selection: GridSelection | null;
   addr: string | null;
   clickedCell: Item | null;
@@ -39,7 +52,7 @@ export function resolveBodyPointerUpResult(anchorCell: Item, pointerCell: Item, 
       selection: null,
       addr: null,
       clickedCell: anchorCell,
-      shouldSetDragExpiry: false
+      shouldSetDragExpiry: false,
     };
   }
 
@@ -47,6 +60,6 @@ export function resolveBodyPointerUpResult(anchorCell: Item, pointerCell: Item, 
     selection: resolveBodyDragSelection(anchorCell, pointerCell),
     addr: formatAddress(anchorCell[1], anchorCell[0]),
     clickedCell: null,
-    shouldSetDragExpiry: true
+    shouldSetDragExpiry: true,
   };
 }

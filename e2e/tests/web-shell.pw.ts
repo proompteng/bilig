@@ -45,9 +45,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isAgentFrame(value: unknown): value is AgentFrame {
-  return isRecord(value)
-    && (value.kind === "request" || value.kind === "response")
-    && (("request" in value && isRecord(value.request)) || ("response" in value && isRecord(value.response)));
+  return (
+    isRecord(value) &&
+    (value.kind === "request" || value.kind === "response") &&
+    (("request" in value && isRecord(value.request)) ||
+      ("response" in value && isRecord(value.response)))
+  );
 }
 
 function delay(ms: number) {
@@ -82,7 +85,9 @@ async function waitForLocalServerHealthy(localServerUrl: string, timeoutMs = 15_
   const deadline = Date.now() + timeoutMs;
   const poll = async (lastError: string | null): Promise<void> => {
     if (Date.now() >= deadline) {
-      throw new Error(`Timed out waiting for local-server on ${localServerUrl}${lastError ? `: ${lastError}` : ""}`);
+      throw new Error(
+        `Timed out waiting for local-server on ${localServerUrl}${lastError ? `: ${lastError}` : ""}`,
+      );
     }
     try {
       const response = await fetch(`${localServerUrl}/healthz`);
@@ -112,10 +117,7 @@ async function stopChildProcess(process: ChildProcess) {
   });
 
   process.kill("SIGTERM");
-  const exited = await Promise.race([
-    exitPromise.then(() => true),
-    delay(5_000).then(() => false)
-  ]);
+  const exited = await Promise.race([exitPromise.then(() => true), delay(5_000).then(() => false)]);
   if (exited) {
     return;
   }
@@ -130,9 +132,9 @@ async function startLocalServer(port: number) {
     env: {
       ...process.env,
       HOST: "127.0.0.1",
-      PORT: String(port)
+      PORT: String(port),
     },
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const localServerUrl = `http://127.0.0.1:${port}`;
 
@@ -146,20 +148,22 @@ async function startLocalServer(port: number) {
   child.stdout?.on("data", appendLogChunk);
   child.stderr?.on("data", appendLogChunk);
 
-  const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-    child.once("exit", (code, signal) => {
-      resolve({ code, signal });
-    });
-  });
+  const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve) => {
+      child.once("exit", (code, signal) => {
+        resolve({ code, signal });
+      });
+    },
+  );
 
   try {
     await Promise.race([
       waitForLocalServerHealthy(localServerUrl),
       exitPromise.then(({ code, signal }) => {
         throw new Error(
-          `local-server exited before becoming healthy (code=${code ?? "null"}, signal=${signal ?? "null"})\n${logs}`
+          `local-server exited before becoming healthy (code=${code ?? "null"}, signal=${signal ?? "null"})\n${logs}`,
         );
-      })
+      }),
     ]);
   } catch (error) {
     await stopChildProcess(child);
@@ -171,7 +175,7 @@ async function startLocalServer(port: number) {
     stop: async () => {
       await stopChildProcess(child);
     },
-    getLogs: () => logs
+    getLogs: () => logs,
   };
 }
 
@@ -209,16 +213,21 @@ function decodeAgentFrame(bytes: Uint8Array | ArrayBuffer): AgentFrame {
   return parsed;
 }
 
-async function sendAgentRequest(localServerUrl: string, request: AgentRequest): Promise<AgentResponse> {
+async function sendAgentRequest(
+  localServerUrl: string,
+  request: AgentRequest,
+): Promise<AgentResponse> {
   const response = await fetch(`${localServerUrl}/v1/agent/frames`, {
     method: "POST",
     headers: {
-      "content-type": "application/octet-stream"
+      "content-type": "application/octet-stream",
     },
-    body: Buffer.from(encodeAgentFrame({
-      kind: "request",
-      request
-    }))
+    body: Buffer.from(
+      encodeAgentFrame({
+        kind: "request",
+        request,
+      }),
+    ),
   });
   if (!response.ok) {
     throw new Error(`Agent request failed with status ${response.status}`);
@@ -237,13 +246,13 @@ async function withAgentSession(
   localServerUrl: string,
   documentId: string,
   replicaId: string,
-  callback: (sessionId: string) => Promise<void>
+  callback: (sessionId: string) => Promise<void>,
 ) {
   const openResponse = await sendAgentRequest(localServerUrl, {
     kind: "openWorkbookSession",
     id: `open:${Date.now()}`,
     documentId,
-    replicaId
+    replicaId,
   });
   if (openResponse.kind !== "ok" || !openResponse.sessionId) {
     throw new Error("Failed to open local-server workbook session");
@@ -255,21 +264,26 @@ async function withAgentSession(
     await sendAgentRequest(localServerUrl, {
       kind: "closeWorkbookSession",
       id: `close:${Date.now()}`,
-      sessionId: openResponse.sessionId
+      sessionId: openResponse.sessionId,
     }).catch(() => undefined);
   }
 }
 
 function isLocalDocumentStateSummary(value: unknown): value is LocalDocumentStateSummary {
-  return isRecord(value)
-    && typeof value.documentId === "string"
-    && typeof value.cursor === "number"
-    && Array.isArray(value.browserSessions)
-    && Array.isArray(value.agentSessions)
-    && (typeof value.lastBatchId === "string" || value.lastBatchId === null);
+  return (
+    isRecord(value) &&
+    typeof value.documentId === "string" &&
+    typeof value.cursor === "number" &&
+    Array.isArray(value.browserSessions) &&
+    Array.isArray(value.agentSessions) &&
+    (typeof value.lastBatchId === "string" || value.lastBatchId === null)
+  );
 }
 
-async function fetchDocumentState(localServerUrl: string, documentId: string): Promise<LocalDocumentStateSummary> {
+async function fetchDocumentState(
+  localServerUrl: string,
+  documentId: string,
+): Promise<LocalDocumentStateSummary> {
   const response = await fetch(`${localServerUrl}/v1/documents/${documentId}/state`);
   if (!response.ok) {
     throw new Error(`Failed to fetch local-server document state: ${response.status}`);
@@ -289,15 +303,20 @@ function parseColumnWidthOverrides(raw: string | null): Record<string, number> {
   if (typeof parsed !== "object" || parsed === null) {
     return {};
   }
-  const entries = Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === "number");
+  const entries = Object.entries(parsed).filter(
+    (entry): entry is [string, number] => typeof entry[1] === "number",
+  );
   return Object.fromEntries(entries);
 }
 
-async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
+async function getProductColumnWidth(
+  page: Parameters<typeof test>[0]["page"],
+  columnIndex: number,
+) {
   const grid = page.getByTestId("sheet-grid");
   const [defaultWidthRaw, overridesRaw] = await Promise.all([
     grid.getAttribute("data-default-column-width"),
-    grid.getAttribute("data-column-width-overrides")
+    grid.getAttribute("data-column-width-overrides"),
   ]);
   const defaultWidth = Number(defaultWidthRaw ?? String(PRODUCT_COLUMN_WIDTH));
   const overrides = parseColumnWidthOverrides(overridesRaw);
@@ -306,7 +325,7 @@ async function getProductColumnWidth(page: Parameters<typeof test>[0]["page"], c
 
 async function getProductColumnLeft(page: Parameters<typeof test>[0]["page"], columnIndex: number) {
   const widths = await Promise.all(
-    Array.from({ length: columnIndex }, (_, index) => getProductColumnWidth(page, index))
+    Array.from({ length: columnIndex }, (_, index) => getProductColumnWidth(page, index)),
   );
   return PRODUCT_ROW_MARKER_WIDTH + widths.reduce((total, width) => total + width, 0);
 }
@@ -314,7 +333,7 @@ async function getProductColumnLeft(page: Parameters<typeof test>[0]["page"], co
 async function dragProductColumnResize(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
-  deltaX: number
+  deltaX: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -336,7 +355,7 @@ async function dragProductColumnResize(
 
 async function doubleClickProductColumnResizeHandle(
   page: Parameters<typeof test>[0]["page"],
-  columnIndex: number
+  columnIndex: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -356,7 +375,7 @@ async function dragProductHeaderSelection(
   page: Parameters<typeof test>[0]["page"],
   axis: "column" | "row",
   startIndex: number,
-  endIndex: number
+  endIndex: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -369,18 +388,28 @@ async function dragProductHeaderSelection(
   const endColumnLeft = axis === "column" ? await getProductColumnLeft(page, endIndex) : 0;
   const startColumnWidth = axis === "column" ? await getProductColumnWidth(page, startIndex) : 0;
   const endColumnWidth = axis === "column" ? await getProductColumnWidth(page, endIndex) : 0;
-  const startX = axis === "column"
-    ? grid.x + startColumnLeft + Math.floor(startColumnWidth / 2)
-    : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
-  const startY = axis === "column"
-    ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
-    : grid.y + PRODUCT_HEADER_HEIGHT + (startIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
-  const endX = axis === "column"
-    ? grid.x + endColumnLeft + Math.floor(endColumnWidth / 2)
-    : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
-  const endY = axis === "column"
-    ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
-    : grid.y + PRODUCT_HEADER_HEIGHT + (endIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const startX =
+    axis === "column"
+      ? grid.x + startColumnLeft + Math.floor(startColumnWidth / 2)
+      : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
+  const startY =
+    axis === "column"
+      ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
+      : grid.y +
+        PRODUCT_HEADER_HEIGHT +
+        startIndex * PRODUCT_ROW_HEIGHT +
+        Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const endX =
+    axis === "column"
+      ? grid.x + endColumnLeft + Math.floor(endColumnWidth / 2)
+      : grid.x + Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2);
+  const endY =
+    axis === "column"
+      ? grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
+      : grid.y +
+        PRODUCT_HEADER_HEIGHT +
+        endIndex * PRODUCT_ROW_HEIGHT +
+        Math.floor(PRODUCT_ROW_HEIGHT / 2);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -397,7 +426,11 @@ async function clickGridRightEdge(page: Parameters<typeof test>[0]["page"], rowI
   }
 
   const x = grid.x + grid.width - 3;
-  const y = grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const y =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    rowIndex * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
   await page.mouse.click(x, y);
 }
 
@@ -406,7 +439,7 @@ async function dragProductFillHandle(
   sourceCol: number,
   sourceRow: number,
   targetCol: number,
-  targetRow: number
+  targetRow: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -415,23 +448,25 @@ async function dragProductFillHandle(
     throw new Error("sheet grid is not visible");
   }
 
-  const sourceLeft = grid.x + await getProductColumnLeft(page, sourceCol);
-  const sourceTop = grid.y + PRODUCT_HEADER_HEIGHT + (sourceRow * PRODUCT_ROW_HEIGHT);
-  const targetLeft = grid.x + await getProductColumnLeft(page, targetCol);
-  const targetTop = grid.y + PRODUCT_HEADER_HEIGHT + (targetRow * PRODUCT_ROW_HEIGHT);
+  const sourceLeft = grid.x + (await getProductColumnLeft(page, sourceCol));
+  const sourceTop = grid.y + PRODUCT_HEADER_HEIGHT + sourceRow * PRODUCT_ROW_HEIGHT;
+  const targetLeft = grid.x + (await getProductColumnLeft(page, targetCol));
+  const targetTop = grid.y + PRODUCT_HEADER_HEIGHT + targetRow * PRODUCT_ROW_HEIGHT;
   const sourceWidth = await getProductColumnWidth(page, sourceCol);
   const targetWidth = await getProductColumnWidth(page, targetCol);
 
   await page.mouse.move(sourceLeft + sourceWidth - 3, sourceTop + PRODUCT_ROW_HEIGHT - 3);
   await page.mouse.down();
-  await page.mouse.move(targetLeft + targetWidth - 3, targetTop + PRODUCT_ROW_HEIGHT - 3, { steps: 10 });
+  await page.mouse.move(targetLeft + targetWidth - 3, targetTop + PRODUCT_ROW_HEIGHT - 3, {
+    steps: 10,
+  });
   await page.mouse.up();
 }
 
 async function clickProductBodyOffset(
   page: Parameters<typeof test>[0]["page"],
   offsetX: number,
-  rowIndex = 0
+  rowIndex = 0,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -442,14 +477,17 @@ async function clickProductBodyOffset(
 
   await page.mouse.click(
     grid.x + PRODUCT_ROW_MARKER_WIDTH + offsetX,
-    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2)
+    grid.y +
+      PRODUCT_HEADER_HEIGHT +
+      rowIndex * PRODUCT_ROW_HEIGHT +
+      Math.floor(PRODUCT_ROW_HEIGHT / 2),
   );
 }
 
 async function clickProductCell(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
-  rowIndex: number
+  rowIndex: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -462,14 +500,17 @@ async function clickProductCell(
   const columnWidth = await getProductColumnWidth(page, columnIndex);
   await page.mouse.click(
     grid.x + columnLeft + Math.floor(columnWidth / 2),
-    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2)
+    grid.y +
+      PRODUCT_HEADER_HEIGHT +
+      rowIndex * PRODUCT_ROW_HEIGHT +
+      Math.floor(PRODUCT_ROW_HEIGHT / 2),
   );
 }
 
 async function clickProductCellUpperHalf(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
-  rowIndex: number
+  rowIndex: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -482,14 +523,14 @@ async function clickProductCellUpperHalf(
   const columnWidth = await getProductColumnWidth(page, columnIndex);
   await page.mouse.click(
     grid.x + columnLeft + Math.floor(columnWidth / 2),
-    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) + 4
+    grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + 4,
   );
 }
 
 async function clickProductSelectedCellTopBorder(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
-  rowIndex: number
+  rowIndex: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -502,7 +543,7 @@ async function clickProductSelectedCellTopBorder(
   const columnWidth = await getProductColumnWidth(page, columnIndex);
   await page.mouse.click(
     grid.x + columnLeft + Math.floor(columnWidth / 2),
-    grid.y + PRODUCT_HEADER_HEIGHT + (rowIndex * PRODUCT_ROW_HEIGHT) - 1
+    grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT - 1,
   );
 }
 
@@ -511,7 +552,7 @@ async function dragProductBodySelection(
   startColumn: number,
   startRow: number,
   endColumn: number,
-  endRow: number
+  endRow: number,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -526,9 +567,17 @@ async function dragProductBodySelection(
   const endWidth = await getProductColumnWidth(page, endColumn);
 
   const startX = grid.x + startLeft + Math.floor(startWidth / 2);
-  const startY = grid.y + PRODUCT_HEADER_HEIGHT + (startRow * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const startY =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    startRow * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
   const endX = grid.x + endLeft + Math.floor(endWidth / 2);
-  const endY = grid.y + PRODUCT_HEADER_HEIGHT + (endRow * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const endY =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    endRow * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -555,14 +604,18 @@ test("web app renders the minimal product shell without playground chrome", asyn
   await expect(page.locator(".formula-result-shell")).toHaveCount(0);
 });
 
-test("web app reflects a local-server agent write in the rendered spreadsheet", async ({ page }) => {
+test("web app reflects a local-server agent write in the rendered spreadsheet", async ({
+  page,
+}) => {
   test.slow();
   const port = await reserveLocalPort();
   const documentId = `playwright-${Date.now()}`;
   const localServer = await startLocalServer(port);
 
   try {
-    await page.goto(`/?document=${encodeURIComponent(documentId)}&server=${encodeURIComponent(localServer.localServerUrl)}`);
+    await page.goto(
+      `/?document=${encodeURIComponent(documentId)}&server=${encodeURIComponent(localServer.localServerUrl)}`,
+    );
 
     const nameBox = page.getByTestId("name-box");
     const formulaInput = page.getByTestId("formula-input");
@@ -570,32 +623,42 @@ test("web app reflects a local-server agent write in the rendered spreadsheet", 
     await expect(nameBox).toHaveValue("A1");
     await expect(formulaInput).toHaveValue("");
 
-    await expect.poll(async () => {
-      const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
-      return documentState.browserSessions.length > 0;
-    }, {
-      message: "browser should attach to the local-server document session"
-    }).toBe(true);
-
-    await withAgentSession(localServer.localServerUrl, documentId, `playwright-agent:${Date.now()}`, async (sessionId) => {
-      await sendAgentRequest(localServer.localServerUrl, {
-        kind: "writeRange",
-        id: `write:${Date.now()}`,
-        sessionId,
-        range: {
-          sheetName: "Sheet1",
-          startAddress: "A1",
-          endAddress: "A1"
+    await expect
+      .poll(
+        async () => {
+          const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
+          return documentState.browserSessions.length > 0;
         },
-        values: [[42]]
-      });
-    });
+        {
+          message: "browser should attach to the local-server document session",
+        },
+      )
+      .toBe(true);
+
+    await withAgentSession(
+      localServer.localServerUrl,
+      documentId,
+      `playwright-agent:${Date.now()}`,
+      async (sessionId) => {
+        await sendAgentRequest(localServer.localServerUrl, {
+          kind: "writeRange",
+          id: `write:${Date.now()}`,
+          sessionId,
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "A1",
+          },
+          values: [[42]],
+        });
+      },
+    );
 
     await expect(formulaInput).toHaveValue("42");
   } catch (error) {
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\nLocal-server logs:\n${localServer.getLogs()}`,
-      { cause: error }
+      { cause: error },
     );
   } finally {
     await localServer.stop();
@@ -627,10 +690,20 @@ test("web app supports column and row header selection", async ({ page }) => {
 
   const grid = page.getByTestId("sheet-grid");
 
-  await grid.click({ position: { x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2), y: Math.floor(PRODUCT_HEADER_HEIGHT / 2) } });
+  await grid.click({
+    position: {
+      x: PRODUCT_ROW_MARKER_WIDTH + PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
+      y: Math.floor(PRODUCT_HEADER_HEIGHT / 2),
+    },
+  });
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B:B");
 
-  await grid.click({ position: { x: Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2), y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2) } });
+  await grid.click({
+    position: {
+      x: Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2),
+      y: PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+    },
+  });
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!2:2");
 });
 
@@ -651,7 +724,9 @@ test("web app supports rectangular drag selection", async ({ page }) => {
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:D4");
 });
 
-test("web app keeps the active focus inside the Glide grid when clicking a cell", async ({ page }) => {
+test("web app keeps the active focus inside the Glide grid when clicking a cell", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await clickProductCell(page, 2, 2);
@@ -661,7 +736,7 @@ test("web app keeps the active focus inside the Glide grid when clicking a cell"
     const active = document.activeElement;
     return {
       testId: active?.getAttribute("data-testid") ?? null,
-      insideSheetGrid: Boolean(active?.closest('[data-testid="sheet-grid"]'))
+      insideSheetGrid: Boolean(active?.closest('[data-testid="sheet-grid"]')),
     };
   });
 
@@ -669,7 +744,9 @@ test("web app keeps the active focus inside the Glide grid when clicking a cell"
   expect(activeElementState.testId).not.toBe("sheet-grid");
 });
 
-test("web app maps clicks in the upper half of a cell to that same visible cell", async ({ page }) => {
+test("web app maps clicks in the upper half of a cell to that same visible cell", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await clickProductCellUpperHalf(page, 4, 11);
@@ -732,7 +809,7 @@ test("web app accepts string values and string comparison formulas", async ({ pa
   await nameBox.fill("A2");
   await nameBox.press("Enter");
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A2");
-  await formulaInput.fill("=A1=\"HELLO\"");
+  await formulaInput.fill('=A1="HELLO"');
   await formulaInput.press("Enter");
   await clickProductCell(page, 0, 1);
   await expect(resolvedValue).toHaveText("TRUE");
@@ -903,7 +980,8 @@ test("web app double-click edits the exact clicked cell", async ({ page }) => {
   const columnLeft = await getProductColumnLeft(page, 2);
   const columnWidth = await getProductColumnWidth(page, 2);
   const targetX = grid.x + columnLeft + Math.floor(columnWidth / 2);
-  const targetY = grid.y + PRODUCT_HEADER_HEIGHT + (4 * PRODUCT_ROW_HEIGHT) + Math.floor(PRODUCT_ROW_HEIGHT / 2);
+  const targetY =
+    grid.y + PRODUCT_HEADER_HEIGHT + 4 * PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2);
   await page.mouse.dblclick(targetX, targetY);
 
   await expect(nameBox).toHaveValue("C5");
@@ -947,7 +1025,10 @@ test("web app supports fill-handle propagation", async ({ page }) => {
   await expect(resolvedValue).toHaveText("7");
 });
 
-test("web app supports rectangular clipboard copy and external paste", async ({ page, context }) => {
+test("web app supports rectangular clipboard copy and external paste", async ({
+  page,
+  context,
+}) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
 
@@ -979,7 +1060,9 @@ test("web app supports rectangular clipboard copy and external paste", async ({ 
   await dragProductBodySelection(page, 1, 1, 2, 2);
   await grid.press(`${PRIMARY_MODIFIER}+C`);
 
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("11\t12\n13\t14");
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("11\t12\n13\t14");
 
   await page.evaluate(() => navigator.clipboard.writeText("21\t22\n23\t24"));
   await clickProductCell(page, 4, 4);
@@ -1007,7 +1090,10 @@ test("web app supports rectangular clipboard copy and external paste", async ({ 
   await expect(resolvedValue).toHaveText("24");
 });
 
-test("web app relocates formulas when using rectangular clipboard paste", async ({ page, context }) => {
+test("web app relocates formulas when using rectangular clipboard paste", async ({
+  page,
+  context,
+}) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
 

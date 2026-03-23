@@ -6,19 +6,21 @@ import {
   formulaCompatibilityRegistry,
   getCompatibilityEntry,
   isWasmCompatibilityStatus,
-  wasmCompatibilityStatuses
+  wasmCompatibilityStatuses,
 } from "../compatibility.js";
 import {
   canonicalFormulaFixtures,
   canonicalFormulaSmokeSuite,
   canonicalWorkbookSemanticsFixtures,
   excelFixtureFamilies,
-  excelFixtureIdPattern
+  excelFixtureIdPattern,
 } from "../../../excel-fixtures/src/index.js";
 
 describe("formula compatibility registry", () => {
   it("keeps the canonical formula fixture corpus and registry in exact lockstep", () => {
-    const canonicalRegistryEntries = formulaCompatibilityRegistry.filter((entry) => entry.scope === "canonical");
+    const canonicalRegistryEntries = formulaCompatibilityRegistry.filter(
+      (entry) => entry.scope === "canonical",
+    );
 
     expect(canonicalFormulaFixtures).toHaveLength(101);
     expect(canonicalRegistryEntries).toHaveLength(canonicalFormulaFixtures.length);
@@ -30,8 +32,12 @@ describe("formula compatibility registry", () => {
   });
 
   it("tracks workbook semantics fixtures as extended coverage without redefining the canonical corpus", () => {
-    const workbookSemanticsIds = new Set(canonicalWorkbookSemanticsFixtures.map((fixture) => fixture.id));
-    const extendedRegistryEntries = formulaCompatibilityRegistry.filter((entry) => entry.scope === "extended");
+    const workbookSemanticsIds = new Set(
+      canonicalWorkbookSemanticsFixtures.map((fixture) => fixture.id),
+    );
+    const extendedRegistryEntries = formulaCompatibilityRegistry.filter(
+      (entry) => entry.scope === "extended",
+    );
 
     expect(extendedRegistryEntries).toHaveLength(canonicalWorkbookSemanticsFixtures.length);
     expect(new Set(extendedRegistryEntries.map((entry) => entry.id))).toEqual(workbookSemanticsIds);
@@ -75,7 +81,7 @@ describe("formula compatibility registry", () => {
       id: "aggregation:sum-range",
       family: "aggregation",
       status: "implemented-wasm-production",
-      wasmStatus: "production"
+      wasmStatus: "production",
     });
   });
 
@@ -89,7 +95,11 @@ describe("formula compatibility registry", () => {
     const statuses = new Set(formulaCompatibilityRegistry.map((entry) => entry.status));
     const wasmStatuses = new Set(formulaCompatibilityRegistry.map((entry) => entry.wasmStatus));
 
-    expect([...statuses].toSorted()).toEqual(compatibilityStatuses.filter((status) => statuses.has(status)).toSorted());
-    expect([...wasmStatuses].toSorted()).toEqual(wasmCompatibilityStatuses.filter((status) => wasmStatuses.has(status)).toSorted());
+    expect([...statuses].toSorted()).toEqual(
+      compatibilityStatuses.filter((status) => statuses.has(status)).toSorted(),
+    );
+    expect([...wasmStatuses].toSorted()).toEqual(
+      wasmCompatibilityStatuses.filter((status) => wasmStatuses.has(status)).toSorted(),
+    );
   });
 });

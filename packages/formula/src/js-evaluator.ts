@@ -8,14 +8,19 @@ import {
   scalarFromEvaluationResult,
   type ArrayValue,
   type EvaluationResult,
-  type RangeLikeValue
+  type RangeLikeValue,
 } from "./runtime-values.js";
 import { rewriteSpecialCall } from "./special-call-rewrites.js";
 
 export interface EvaluationContext {
   sheetName: string;
   resolveCell: (sheetName: string, address: string) => CellValue;
-  resolveRange: (sheetName: string, start: string, end: string, refKind: "cells" | "rows" | "cols") => CellValue[];
+  resolveRange: (
+    sheetName: string,
+    start: string,
+    end: string,
+    refKind: "cells" | "rows" | "cols",
+  ) => CellValue[];
   resolveName?: (name: string) => CellValue;
   resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
 }
@@ -27,10 +32,19 @@ export type JsPlanInstruction =
   | { opcode: "push-error"; code: ErrorCode }
   | { opcode: "push-name"; name: string }
   | { opcode: "push-cell"; sheetName?: string; address: string }
-  | { opcode: "push-range"; sheetName?: string; start: string; end: string; refKind: "cells" | "rows" | "cols" }
+  | {
+      opcode: "push-range";
+      sheetName?: string;
+      start: string;
+      end: string;
+      refKind: "cells" | "rows" | "cols";
+    }
   | { opcode: "push-lambda"; params: string[]; body: JsPlanInstruction[] }
   | { opcode: "unary"; operator: "+" | "-" }
-  | { opcode: "binary"; operator: "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | ">" | ">=" | "<" | "<=" }
+  | {
+      opcode: "binary";
+      operator: "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | ">" | ">=" | "<" | "<=";
+    }
   | { opcode: "call"; callee: string; argc: number }
   | { opcode: "invoke"; argc: number }
   | { opcode: "begin-scope" }
@@ -44,8 +58,19 @@ type BinaryOperator = Extract<JsPlanInstruction, { opcode: "binary" }>["operator
 
 type StackValue =
   | { kind: "scalar"; value: CellValue }
-  | { kind: "range"; values: CellValue[]; refKind: "cells" | "rows" | "cols"; rows: number; cols: number }
-  | { kind: "lambda"; params: string[]; body: JsPlanInstruction[]; scopes: Array<Map<string, StackValue>> }
+  | {
+      kind: "range";
+      values: CellValue[];
+      refKind: "cells" | "rows" | "cols";
+      rows: number;
+      cols: number;
+    }
+  | {
+      kind: "lambda";
+      params: string[];
+      body: JsPlanInstruction[];
+      scopes: Array<Map<string, StackValue>>;
+    }
   | ArrayValue;
 
 function emptyValue(): CellValue {
@@ -153,7 +178,7 @@ function toEvaluationResult(value: StackValue | undefined): EvaluationResult {
       kind: "array",
       rows: value.rows,
       cols: value.cols,
-      values: value.values
+      values: value.values,
     };
   }
   return value;
@@ -164,17 +189,28 @@ function cloneStackValue(value: StackValue): StackValue {
     return { kind: "scalar", value: value.value };
   }
   if (value.kind === "range") {
-    return { kind: "range", values: value.values, refKind: value.refKind, rows: value.rows, cols: value.cols };
+    return {
+      kind: "range",
+      values: value.values,
+      refKind: value.refKind,
+      rows: value.rows,
+      cols: value.cols,
+    };
   }
   if (value.kind === "lambda") {
-    return { kind: "lambda", params: [...value.params], body: value.body, scopes: cloneScopes(value.scopes) };
+    return {
+      kind: "lambda",
+      params: [...value.params],
+      body: value.body,
+      scopes: cloneScopes(value.scopes),
+    };
   }
   return { kind: "array", values: value.values, rows: value.rows, cols: value.cols };
 }
 
 function cloneScopes(scopes: readonly Map<string, StackValue>[]): Array<Map<string, StackValue>> {
-  return scopes.map((scope) =>
-    new Map([...scope.entries()].map(([name, value]) => [name, cloneStackValue(value)]))
+  return scopes.map(
+    (scope) => new Map([...scope.entries()].map(([name, value]) => [name, cloneStackValue(value)])),
   );
 }
 
@@ -186,12 +222,22 @@ function toRangeLike(value: StackValue): RangeLikeValue {
     return value;
   }
   if (value.kind === "array") {
-    return { kind: "range", values: value.values, rows: value.rows, cols: value.cols, refKind: "cells" };
+    return {
+      kind: "range",
+      values: value.values,
+      rows: value.rows,
+      cols: value.cols,
+      refKind: "cells",
+    };
   }
   return { kind: "range", values: [value.value], rows: 1, cols: 1, refKind: "cells" };
 }
 
-function scalarBinary(operator: BinaryOperator, leftValue: CellValue, rightValue: CellValue): CellValue {
+function scalarBinary(
+  operator: BinaryOperator,
+  leftValue: CellValue,
+  rightValue: CellValue,
+): CellValue {
   if (leftValue.tag === ValueTag.Error) {
     return leftValue;
   }
@@ -200,7 +246,11 @@ function scalarBinary(operator: BinaryOperator, leftValue: CellValue, rightValue
   }
 
   if (operator === "&") {
-    return { tag: ValueTag.String, value: `${toStringValue(leftValue)}${toStringValue(rightValue)}`, stringId: 0 };
+    return {
+      tag: ValueTag.String,
+      value: `${toStringValue(leftValue)}${toStringValue(rightValue)}`,
+      stringId: 0,
+    };
   }
 
   if (["+", "-", "*", "/", "^"].includes(operator)) {
@@ -242,11 +292,15 @@ function scalarBinary(operator: BinaryOperator, leftValue: CellValue, rightValue
               ? comparison >= 0
               : operator === "<"
                 ? comparison < 0
-                : comparison <= 0
+                : comparison <= 0,
   };
 }
 
-function evaluateBinary(operator: BinaryOperator, leftValue: StackValue, rightValue: StackValue): EvaluationResult {
+function evaluateBinary(
+  operator: BinaryOperator,
+  leftValue: StackValue,
+  rightValue: StackValue,
+): EvaluationResult {
   if (leftValue.kind === "scalar" && rightValue.kind === "scalar") {
     return scalarBinary(operator, leftValue.value, rightValue.value);
   }
@@ -276,12 +330,22 @@ function evaluateBinary(operator: BinaryOperator, leftValue: StackValue, rightVa
   const values: CellValue[] = [];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
-      const leftIndex = Math.min(row, leftRange.rows - 1) * leftRange.cols + Math.min(col, leftRange.cols - 1);
-      const rightIndex = Math.min(row, rightRange.rows - 1) * rightRange.cols + Math.min(col, rightRange.cols - 1);
-      values.push(scalarBinary(operator, leftRange.values[leftIndex] ?? emptyValue(), rightRange.values[rightIndex] ?? emptyValue()));
+      const leftIndex =
+        Math.min(row, leftRange.rows - 1) * leftRange.cols + Math.min(col, leftRange.cols - 1);
+      const rightIndex =
+        Math.min(row, rightRange.rows - 1) * rightRange.cols + Math.min(col, rightRange.cols - 1);
+      values.push(
+        scalarBinary(
+          operator,
+          leftRange.values[leftIndex] ?? emptyValue(),
+          rightRange.values[rightIndex] ?? emptyValue(),
+        ),
+      );
     }
   }
-  return rows === 1 && cols === 1 ? values[0] ?? emptyValue() : { kind: "array", values, rows, cols };
+  return rows === 1 && cols === 1
+    ? (values[0] ?? emptyValue())
+    : { kind: "array", values, rows, cols };
 }
 
 function stackScalar(value: CellValue): StackValue {
@@ -299,7 +363,7 @@ function isSingleCellValue(value: StackValue): CellValue | undefined {
   if (value.kind === "lambda") {
     return undefined;
   }
-  return value.rows * value.cols === 1 ? value.values[0] ?? emptyValue() : undefined;
+  return value.rows * value.cols === 1 ? (value.values[0] ?? emptyValue()) : undefined;
 }
 
 function toRangeArgument(value: StackValue): CellValue | RangeBuiltinArgument {
@@ -314,7 +378,7 @@ function toRangeArgument(value: StackValue): CellValue | RangeBuiltinArgument {
     values: value.values,
     refKind: value.kind === "range" ? value.refKind : "cells",
     rows: value.rows,
-    cols: value.cols
+    cols: value.cols,
   };
 }
 
@@ -335,21 +399,30 @@ function getRangeCell(range: RangeLikeValue, row: number, col: number): CellValu
   return range.values[row * range.cols + col] ?? emptyValue();
 }
 
-function getBroadcastShape(values: readonly StackValue[]): { rows: number; cols: number } | undefined {
+function getBroadcastShape(
+  values: readonly StackValue[],
+): { rows: number; cols: number } | undefined {
   const ranges = values.map(toRangeLike);
   const rows = Math.max(...ranges.map((range) => range.rows));
   const cols = Math.max(...ranges.map((range) => range.cols));
-  const compatible = ranges.every((range) => (range.rows === rows || range.rows === 1) && (range.cols === cols || range.cols === 1));
+  const compatible = ranges.every(
+    (range) =>
+      (range.rows === rows || range.rows === 1) && (range.cols === cols || range.cols === 1),
+  );
   return compatible ? { rows, cols } : undefined;
 }
 
 function applyLambda(
   lambdaValue: StackValue,
   args: StackValue[],
-  context: EvaluationContext
+  context: EvaluationContext,
 ): StackValue {
   if (lambdaValue.kind !== "lambda") {
-    return stackScalar(lambdaValue.kind === "scalar" && lambdaValue.value.tag === ValueTag.Error ? lambdaValue.value : error(ErrorCode.Value));
+    return stackScalar(
+      lambdaValue.kind === "scalar" && lambdaValue.value.tag === ValueTag.Error
+        ? lambdaValue.value
+        : error(ErrorCode.Value),
+    );
   }
   if (lambdaValue.params.length !== args.length) {
     return stackScalar(error(ErrorCode.Value));
@@ -358,13 +431,16 @@ function applyLambda(
   lambdaValue.params.forEach((name, index) => {
     parameterScope.set(normalizeScopeName(name), cloneStackValue(args[index]!));
   });
-  return executePlan(lambdaValue.body, context, [...cloneScopes(lambdaValue.scopes), parameterScope]) ?? stackScalar(error(ErrorCode.Value));
+  return (
+    executePlan(lambdaValue.body, context, [...cloneScopes(lambdaValue.scopes), parameterScope]) ??
+    stackScalar(error(ErrorCode.Value))
+  );
 }
 
 function evaluateSpecialCall(
   callee: string,
   rawArgs: StackValue[],
-  context: EvaluationContext
+  context: EvaluationContext,
 ): StackValue | undefined {
   switch (callee) {
     case "MAKEARRAY": {
@@ -380,7 +456,14 @@ function evaluateSpecialCall(
       const values: CellValue[] = [];
       for (let row = 1; row <= rows; row += 1) {
         for (let col = 1; col <= cols; col += 1) {
-          const result = applyLambda(lambda, [stackScalar({ tag: ValueTag.Number, value: row }), stackScalar({ tag: ValueTag.Number, value: col })], context);
+          const result = applyLambda(
+            lambda,
+            [
+              stackScalar({ tag: ValueTag.Number, value: row }),
+              stackScalar({ tag: ValueTag.Number, value: col }),
+            ],
+            context,
+          );
           const scalar = isSingleCellValue(result);
           if (!scalar) {
             return stackScalar(error(ErrorCode.Value));
@@ -406,8 +489,8 @@ function evaluateSpecialCall(
         for (let col = 0; col < shape.cols; col += 1) {
           const lambdaArgs = ranges.map((range) =>
             stackScalar(
-              getRangeCell(range, Math.min(row, range.rows - 1), Math.min(col, range.cols - 1))
-            )
+              getRangeCell(range, Math.min(row, range.rows - 1), Math.min(col, range.cols - 1)),
+            ),
           );
           const result = applyLambda(lambda, lambdaArgs, context);
           const scalar = isSingleCellValue(result);
@@ -433,7 +516,11 @@ function evaluateSpecialCall(
           for (let col = 0; col < source.cols; col += 1) {
             rowValues.push(getRangeCell(source, row, col));
           }
-          const result = applyLambda(lambda, [{ kind: "range", values: rowValues, rows: 1, cols: source.cols, refKind: "cells" }], context);
+          const result = applyLambda(
+            lambda,
+            [{ kind: "range", values: rowValues, rows: 1, cols: source.cols, refKind: "cells" }],
+            context,
+          );
           const scalar = isSingleCellValue(result);
           if (!scalar) {
             return stackScalar(error(ErrorCode.Value));
@@ -447,7 +534,11 @@ function evaluateSpecialCall(
         for (let row = 0; row < source.rows; row += 1) {
           colValues.push(getRangeCell(source, row, col));
         }
-        const result = applyLambda(lambda, [{ kind: "range", values: colValues, rows: source.rows, cols: 1, refKind: "cells" }], context);
+        const result = applyLambda(
+          lambda,
+          [{ kind: "range", values: colValues, rows: source.rows, cols: 1, refKind: "cells" }],
+          context,
+        );
         const scalar = isSingleCellValue(result);
         if (!scalar) {
           return stackScalar(error(ErrorCode.Value));
@@ -510,7 +601,7 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       plan.push(
         node.sheetName
           ? { opcode: "push-cell", sheetName: node.sheetName, address: node.ref }
-          : { opcode: "push-cell", address: node.ref }
+          : { opcode: "push-cell", address: node.ref },
       );
       return;
     case "RangeRef":
@@ -521,14 +612,14 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
               sheetName: node.sheetName,
               start: node.start,
               end: node.end,
-              refKind: node.refKind
+              refKind: node.refKind,
             }
           : {
               opcode: "push-range",
               start: node.start,
               end: node.end,
-              refKind: node.refKind
-            }
+              refKind: node.refKind,
+            },
       );
       return;
     case "RowRef":
@@ -632,7 +723,7 @@ export function lowerToPlan(node: FormulaNode): JsPlanInstruction[] {
 function executePlan(
   plan: readonly JsPlanInstruction[],
   context: EvaluationContext,
-  initialScopes: readonly Map<string, StackValue>[] = []
+  initialScopes: readonly Map<string, StackValue>[] = [],
 ): StackValue | undefined {
   const stack: StackValue[] = [];
   const scopes: Array<Map<string, StackValue>> = cloneScopes(initialScopes);
@@ -648,7 +739,10 @@ function executePlan(
         stack.push({ kind: "scalar", value: { tag: ValueTag.Boolean, value: instruction.value } });
         break;
       case "push-string":
-        stack.push({ kind: "scalar", value: { tag: ValueTag.String, value: instruction.value, stringId: 0 } });
+        stack.push({
+          kind: "scalar",
+          value: { tag: ValueTag.String, value: instruction.value, stringId: 0 },
+        });
         break;
       case "push-error":
         stack.push({ kind: "scalar", value: error(instruction.code) });
@@ -657,24 +751,29 @@ function executePlan(
         {
           let scopedValue: StackValue | undefined;
           for (let index = scopes.length - 1; index >= 0; index -= 1) {
-              const found = scopes[index]!.get(normalizeScopeName(instruction.name));
+            const found = scopes[index]!.get(normalizeScopeName(instruction.name));
             if (found) {
               scopedValue = found;
               break;
             }
           }
-          stack.push(scopedValue
-            ? cloneStackValue(scopedValue)
-            : {
-                kind: "scalar",
-                value: context.resolveName?.(instruction.name) ?? error(ErrorCode.Name)
-              });
+          stack.push(
+            scopedValue
+              ? cloneStackValue(scopedValue)
+              : {
+                  kind: "scalar",
+                  value: context.resolveName?.(instruction.name) ?? error(ErrorCode.Name),
+                },
+          );
         }
         break;
       case "push-cell":
         stack.push({
           kind: "scalar",
-          value: context.resolveCell(instruction.sheetName ?? context.sheetName, instruction.address)
+          value: context.resolveCell(
+            instruction.sheetName ?? context.sheetName,
+            instruction.address,
+          ),
         });
         break;
       case "push-range":
@@ -683,14 +782,16 @@ function executePlan(
             instruction.sheetName ?? context.sheetName,
             instruction.start,
             instruction.end,
-            instruction.refKind
+            instruction.refKind,
           );
           let rows = values.length;
           let cols = 1;
           if (instruction.refKind === "cells") {
             try {
               const sheetPrefix = instruction.sheetName ? `${instruction.sheetName}!` : "";
-              const range = parseRangeAddress(`${sheetPrefix}${instruction.start}:${instruction.end}`);
+              const range = parseRangeAddress(
+                `${sheetPrefix}${instruction.start}:${instruction.end}`,
+              );
               if (range.kind === "cells") {
                 rows = range.end.row - range.start.row + 1;
                 cols = range.end.col - range.start.col + 1;
@@ -705,21 +806,27 @@ function executePlan(
             values,
             refKind: instruction.refKind,
             rows,
-            cols
+            cols,
           });
         }
         break;
       case "push-lambda":
-        stack.push({ kind: "lambda", params: [...instruction.params], body: instruction.body, scopes: cloneScopes(scopes) });
+        stack.push({
+          kind: "lambda",
+          params: [...instruction.params],
+          body: instruction.body,
+          scopes: cloneScopes(scopes),
+        });
         break;
       case "unary": {
         const value = popScalar(stack);
         const numeric = toNumber(value);
         stack.push({
           kind: "scalar",
-          value: numeric === undefined
-            ? error(ErrorCode.Value)
-            : { tag: ValueTag.Number, value: instruction.operator === "-" ? -numeric : numeric }
+          value:
+            numeric === undefined
+              ? error(ErrorCode.Value)
+              : { tag: ValueTag.Number, value: instruction.operator === "-" ? -numeric : numeric },
         });
         break;
       }
@@ -766,7 +873,8 @@ function executePlan(
           break;
         }
 
-        const builtin = context.resolveBuiltin?.(instruction.callee) ?? getBuiltin(instruction.callee);
+        const builtin =
+          context.resolveBuiltin?.(instruction.callee) ?? getBuiltin(instruction.callee);
         if (!builtin) {
           stack.push({ kind: "scalar", value: error(ErrorCode.Name) });
           break;
@@ -784,11 +892,7 @@ function executePlan(
           args.push(...rawArg.values);
         }
         const result = builtin(...args);
-        stack.push(
-          isArrayValue(result)
-            ? result
-            : { kind: "scalar", value: result }
-        );
+        stack.push(isArrayValue(result) ? result : { kind: "scalar", value: result });
         break;
       }
       case "invoke": {
@@ -823,11 +927,17 @@ function executePlan(
   return stack.pop();
 }
 
-export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: EvaluationContext): EvaluationResult {
+export function evaluatePlanResult(
+  plan: readonly JsPlanInstruction[],
+  context: EvaluationContext,
+): EvaluationResult {
   return toEvaluationResult(executePlan(plan, context));
 }
 
-export function evaluatePlan(plan: readonly JsPlanInstruction[], context: EvaluationContext): CellValue {
+export function evaluatePlan(
+  plan: readonly JsPlanInstruction[],
+  context: EvaluationContext,
+): CellValue {
   return scalarFromEvaluationResult(evaluatePlanResult(plan, context));
 }
 

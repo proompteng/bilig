@@ -34,9 +34,9 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
     const response = await fetchImpl(`${baseUrl}/v1/frames`, {
       method: "POST",
       headers: {
-        "content-type": "application/octet-stream"
+        "content-type": "application/octet-stream",
       },
-      body: Buffer.from(encodeFrame(frame))
+      body: Buffer.from(encodeFrame(frame)),
     });
     if (!response.ok) {
       throw new Error(`Sync relay request failed with status ${response.status}`);
@@ -62,7 +62,7 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
       sessionId,
       protocolVersion: 1,
       lastServerCursor,
-      capabilities: ["local-relay"]
+      capabilities: ["local-relay"],
     }).then(() => undefined);
     try {
       await connectPromise;
@@ -79,11 +79,11 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
         kind: "appendBatch",
         documentId: options.documentId,
         cursor: lastServerCursor,
-        batch
+        batch,
       });
     },
     async disconnect() {
       connectPromise = null;
-    }
+    },
   };
 }

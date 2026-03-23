@@ -15,7 +15,7 @@ describe("playground reconciler", () => {
           <Cell addr="A1" value={10} />
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 20 });
@@ -33,7 +33,7 @@ describe("playground reconciler", () => {
         <Sheet name="Sheet1">
           <Cell addr="A1" format="currency-usd" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "A1").format).toBe("currency-usd");
@@ -55,7 +55,7 @@ describe("playground reconciler", () => {
           <Cell addr="A1" value={10} />
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     await root.render(
@@ -64,7 +64,7 @@ describe("playground reconciler", () => {
           <Cell addr="A1" value={21} />
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 42 });
@@ -89,7 +89,7 @@ describe("playground reconciler", () => {
           <Cell addr="A1" value={10} />
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
     await root.render(
       <Workbook name="same-tree">
@@ -97,7 +97,7 @@ describe("playground reconciler", () => {
           <Cell addr="A1" value={10} />
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 20 });
@@ -124,7 +124,7 @@ describe("playground reconciler", () => {
             <Cell addr="B1" formula="A1*2" />
           </Sheet>
         </Workbook>
-      </React.StrictMode>
+      </React.StrictMode>,
     );
 
     expect(engine.getCell("Sheet1", "B1").value).toEqual({ tag: 1, value: 20 });
@@ -145,14 +145,14 @@ describe("playground reconciler", () => {
         root.render(
           <Workbook name="invalid">
             <Cell addr="A1" value={10} />
-          </Workbook>
-        )
+          </Workbook>,
+        ),
       ).rejects.toThrow("Only <Sheet> nodes can exist under <Workbook>.");
 
       expect(engine.exportSnapshot()).toEqual({
         version: 1,
         workbook: { name: "reconciler-invalid-test" },
-        sheets: []
+        sheets: [],
       });
     } finally {
       consoleError.mockRestore();
@@ -175,14 +175,14 @@ describe("playground reconciler", () => {
             <Sheet name="Sheet1">
               <Cell addr="B1" value={11} />
             </Sheet>
-          </Workbook>
-        )
+          </Workbook>,
+        ),
       ).rejects.toThrow("Duplicate sheet name 'Sheet1'.");
 
       expect(engine.exportSnapshot()).toEqual({
         version: 1,
         workbook: { name: "reconciler-duplicate-sheet-test" },
-        sheets: []
+        sheets: [],
       });
     } finally {
       consoleError.mockRestore();
@@ -199,7 +199,7 @@ describe("playground reconciler", () => {
         <Sheet name="Sheet1">
           <Cell addr="A1" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     await root.render(
@@ -207,7 +207,7 @@ describe("playground reconciler", () => {
         <Sheet name="Renamed">
           <Cell addr="A1" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "A1").value).toEqual({ tag: 0 });
@@ -227,7 +227,7 @@ describe("playground reconciler", () => {
           <Cell addr="A1" value={10} />
           <Cell addr="B1" value={11} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     await root.render(
@@ -235,7 +235,7 @@ describe("playground reconciler", () => {
         <Sheet name="Sheet1">
           <Cell addr="A2" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "A1").value).toEqual({ tag: 0 });
@@ -253,17 +253,15 @@ describe("playground reconciler", () => {
     await expect(
       root.render(
         <Workbook name="invalid-text">
-          <Sheet name="Sheet1">
-            {"text node"}
-          </Sheet>
-        </Workbook>
-      )
+          <Sheet name="Sheet1">{"text node"}</Sheet>
+        </Workbook>,
+      ),
     ).rejects.toThrow("Workbook DSL does not support text nodes.");
 
     expect(engine.exportSnapshot()).toEqual({
       version: 1,
       workbook: { name: "reconciler-text-node-test" },
-      sheets: []
+      sheets: [],
     });
   });
 
@@ -277,7 +275,7 @@ describe("playground reconciler", () => {
         <Sheet name="Sheet1">
           <Cell addr="A1" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     await root.unmount();

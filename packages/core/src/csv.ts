@@ -12,7 +12,7 @@ function escapeCsvValue(value: string): string {
   if (!/[",\n\r]/.test(value)) {
     return value;
   }
-  return `"${value.replaceAll("\"", "\"\"")}"`;
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 export function cellToCsvValue(cell: CellSnapshot): string {
@@ -50,12 +50,12 @@ export function parseCsv(csv: string): string[][] {
     const nextChar = csv[index + 1];
 
     if (inQuotes) {
-      if (char === "\"" && nextChar === "\"") {
-        currentValue += "\"";
+      if (char === '"' && nextChar === '"') {
+        currentValue += '"';
         index += 2;
         continue;
       }
-      if (char === "\"") {
+      if (char === '"') {
         inQuotes = false;
         index += 1;
         continue;
@@ -65,7 +65,7 @@ export function parseCsv(csv: string): string[][] {
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inQuotes = true;
       index += 1;
       continue;

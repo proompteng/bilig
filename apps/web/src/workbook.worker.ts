@@ -1,9 +1,15 @@
+/// <reference lib="webworker" />
+
 import { createWorkerEngineHost } from "@bilig/worker-transport";
 import { WorkbookWorkerRuntime } from "./worker-runtime.js";
 
+declare const self: DedicatedWorkerGlobalScope;
+
 const scope = self;
 const runtime = new WorkbookWorkerRuntime();
-type PortListener = Parameters<NonNullable<import("@bilig/worker-transport").MessagePortLike["addEventListener"]>>[1];
+type PortListener = Parameters<
+  NonNullable<import("@bilig/worker-transport").MessagePortLike["addEventListener"]>
+>[1];
 const listenerMap = new Map<PortListener, EventListener>();
 
 createWorkerEngineHost(runtime, {
@@ -26,5 +32,5 @@ createWorkerEngineHost(runtime, {
     }
     listenerMap.delete(listener);
     scope.removeEventListener("message", wrapped);
-  }
+  },
 });

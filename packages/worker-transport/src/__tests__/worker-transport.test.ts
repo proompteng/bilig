@@ -8,7 +8,7 @@ import {
   createWorkerEngineClient,
   createWorkerEngineHost,
   decodeViewportPatch,
-  encodeViewportPatch
+  encodeViewportPatch,
 } from "../index.js";
 
 async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
@@ -29,14 +29,17 @@ async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
 describe("worker transport", () => {
   it("invokes engine methods across a message channel", async () => {
     const channel = new MessageChannel();
-    const host = createWorkerEngineHost({
-      async ready() {
-        return;
+    const host = createWorkerEngineHost(
+      {
+        async ready() {
+          return;
+        },
+        add(left: number, right: number) {
+          return left + right;
+        },
       },
-      add(left: number, right: number) {
-        return left + right;
-      }
-    }, channel.port1);
+      channel.port1,
+    );
 
     const client = createWorkerEngineClient({ port: channel.port2 });
 
@@ -69,12 +72,15 @@ describe("worker transport", () => {
   it("relays subscriptions back to the client", async () => {
     const channel = new MessageChannel();
     const eventListeners = new Set<(event: EngineEvent) => void>();
-    const host = createWorkerEngineHost({
-      subscribe(listener: (event: EngineEvent) => void) {
-        eventListeners.add(listener);
-        return () => eventListeners.delete(listener);
-      }
-    }, channel.port1);
+    const host = createWorkerEngineHost(
+      {
+        subscribe(listener: (event: EngineEvent) => void) {
+          eventListeners.add(listener);
+          return () => eventListeners.delete(listener);
+        },
+      },
+      channel.port1,
+    );
 
     const client = createWorkerEngineClient({ port: channel.port2 });
     const received: EngineEvent[] = [];
@@ -96,8 +102,8 @@ describe("worker transport", () => {
           jsFormulaCount: 0,
           rangeNodeVisits: 0,
           recalcMs: 0,
-          compileMs: 0
-        }
+          compileMs: 0,
+        },
       });
     });
 
@@ -111,41 +117,49 @@ describe("worker transport", () => {
 
   it("relays viewport patch subscriptions with subscription args", async () => {
     const channel = new MessageChannel();
-    const host = createWorkerEngineHost({
-      subscribeViewportPatches(subscription, listener) {
-        listener(encodeViewportPatch({
-          version: 1,
-          full: true,
-          viewport: subscription,
-          metrics: {
-            batchId: 3,
-            changedInputCount: 1,
-            dirtyFormulaCount: 0,
-            wasmFormulaCount: 0,
-            jsFormulaCount: 0,
-            rangeNodeVisits: 0,
-            recalcMs: 0,
-            compileMs: 0
-          },
-          cells: [],
-          columns: [],
-          rows: []
-        }));
-        return () => undefined;
-      }
-    }, channel.port1);
+    const host = createWorkerEngineHost(
+      {
+        subscribeViewportPatches(subscription, listener) {
+          listener(
+            encodeViewportPatch({
+              version: 1,
+              full: true,
+              viewport: subscription,
+              metrics: {
+                batchId: 3,
+                changedInputCount: 1,
+                dirtyFormulaCount: 0,
+                wasmFormulaCount: 0,
+                jsFormulaCount: 0,
+                rangeNodeVisits: 0,
+                recalcMs: 0,
+                compileMs: 0,
+              },
+              cells: [],
+              columns: [],
+              rows: [],
+            }),
+          );
+          return () => undefined;
+        },
+      },
+      channel.port1,
+    );
 
     const client = createWorkerEngineClient({ port: channel.port2 });
     const received: Uint8Array[] = [];
-    const unsubscribe = client.subscribeViewportPatches({
-      sheetName: "Sheet1",
-      rowStart: 0,
-      rowEnd: 10,
-      colStart: 0,
-      colEnd: 5
-    }, (patch) => {
-      received.push(patch);
-    });
+    const unsubscribe = client.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 10,
+        colStart: 0,
+        colEnd: 5,
+      },
+      (patch) => {
+        received.push(patch);
+      },
+    );
 
     await waitFor(() => received.length === 1);
 
@@ -161,8 +175,8 @@ describe("worker transport", () => {
         rowStart: 0,
         rowEnd: 10,
         colStart: 0,
-        colEnd: 5
-      }
+        colEnd: 5,
+      },
     });
 
     unsubscribe();

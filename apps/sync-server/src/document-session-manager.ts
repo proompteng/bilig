@@ -3,12 +3,12 @@ import type {
   CursorWatermarkFrame,
   ErrorFrame,
   HeartbeatFrame,
-  ProtocolFrame
+  ProtocolFrame,
 } from "@bilig/binary-protocol";
 import type { AgentFrame, AgentResponse } from "@bilig/agent-api";
 import {
   type InMemoryDocumentPersistence,
-  createInMemoryDocumentPersistence
+  createInMemoryDocumentPersistence,
 } from "@bilig/storage-server";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
 
@@ -35,7 +35,7 @@ export class DocumentSessionManager {
   constructor(
     readonly persistence: InMemoryDocumentPersistence = createInMemoryDocumentPersistence(),
     private readonly ownerId = "bilig-sync-server",
-    private readonly worksheetExecutor: WorksheetExecutor | null = null
+    private readonly worksheetExecutor: WorksheetExecutor | null = null,
   ) {}
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
@@ -47,7 +47,7 @@ export class DocumentSessionManager {
           kind: "cursorWatermark",
           documentId: frame.documentId,
           cursor: await this.persistence.batches.latestCursor(frame.documentId),
-          compactedCursor: (await this.persistence.snapshots.latest(frame.documentId))?.cursor ?? 0
+          compactedCursor: (await this.persistence.snapshots.latest(frame.documentId))?.cursor ?? 0,
         } satisfies CursorWatermarkFrame;
 
       case "appendBatch": {
@@ -57,7 +57,7 @@ export class DocumentSessionManager {
           documentId: frame.documentId,
           batchId: frame.batch.id,
           cursor: stored.cursor,
-          acceptedAtUnixMs: stored.receivedAtUnixMs
+          acceptedAtUnixMs: stored.receivedAtUnixMs,
         } satisfies AckFrame;
       }
 
@@ -68,7 +68,7 @@ export class DocumentSessionManager {
           documentId: frame.documentId,
           batchId: frame.snapshotId,
           cursor: frame.cursor,
-          acceptedAtUnixMs: Date.now()
+          acceptedAtUnixMs: Date.now(),
         } satisfies AckFrame;
 
       case "heartbeat":
@@ -76,7 +76,7 @@ export class DocumentSessionManager {
           kind: "heartbeat",
           documentId: frame.documentId,
           cursor: await this.persistence.batches.latestCursor(frame.documentId),
-          sentAtUnixMs: Date.now()
+          sentAtUnixMs: Date.now(),
         } satisfies HeartbeatFrame;
 
       case "cursorWatermark":
@@ -92,7 +92,7 @@ export class DocumentSessionManager {
           documentId: "unknown",
           code: "UNSUPPORTED_FRAME",
           message: `Unsupported sync frame ${(frame as ProtocolFrame).kind}`,
-          retryable: false
+          retryable: false,
         } satisfies ErrorFrame;
     }
   }
@@ -106,8 +106,8 @@ export class DocumentSessionManager {
           id: "unknown",
           code: "INVALID_AGENT_FRAME",
           message: "Sync server accepts only agent requests on the remote API ingress",
-          retryable: false
-        }
+          retryable: false,
+        },
       };
     }
 
@@ -116,10 +116,16 @@ export class DocumentSessionManager {
     if (this.worksheetExecutor) {
       switch (request.kind) {
         case "openWorkbookSession":
-          await this.persistence.presence.join(request.documentId, `${request.documentId}:${request.replicaId}`);
+          await this.persistence.presence.join(
+            request.documentId,
+            `${request.documentId}:${request.replicaId}`,
+          );
           return this.worksheetExecutor.execute(frame);
         case "closeWorkbookSession":
-          await this.persistence.presence.leave(request.sessionId.split(":")[0] ?? request.sessionId, request.sessionId);
+          await this.persistence.presence.leave(
+            request.sessionId.split(":")[0] ?? request.sessionId,
+            request.sessionId,
+          );
           return this.worksheetExecutor.execute(frame);
         case "readRange":
         case "writeRange":
@@ -146,14 +152,17 @@ export class DocumentSessionManager {
         response = {
           kind: "ok",
           id: request.id,
-          sessionId: `${request.documentId}:${request.replicaId}`
+          sessionId: `${request.documentId}:${request.replicaId}`,
         };
         break;
       case "closeWorkbookSession":
-        await this.persistence.presence.leave(request.sessionId.split(":")[0] ?? request.sessionId, request.sessionId);
+        await this.persistence.presence.leave(
+          request.sessionId.split(":")[0] ?? request.sessionId,
+          request.sessionId,
+        );
         response = {
           kind: "ok",
-          id: request.id
+          id: request.id,
         };
         break;
       case "getMetrics":
@@ -162,8 +171,12 @@ export class DocumentSessionManager {
           id: request.id,
           value: {
             service: "sync-server",
-            documentSessions: (await this.persistence.presence.sessions(request.sessionId.split(":")[0] ?? request.sessionId)).length
-          }
+            documentSessions: (
+              await this.persistence.presence.sessions(
+                request.sessionId.split(":")[0] ?? request.sessionId,
+              )
+            ).length,
+          },
         };
         break;
       case "readRange":
@@ -185,14 +198,14 @@ export class DocumentSessionManager {
           id: request.id,
           code: "NOT_IMPLEMENTED",
           message: `${request.kind} is reserved in the remote API contract but not wired to a live worksheet host yet`,
-          retryable: false
+          retryable: false,
         };
         break;
     }
 
     return {
       kind: "response",
-      response
+      response,
     };
   }
 
@@ -203,12 +216,12 @@ export class DocumentSessionManager {
       cursor: await this.persistence.batches.latestCursor(documentId),
       owner: await this.persistence.ownership.owner(documentId),
       sessions: await this.persistence.presence.sessions(documentId),
-      latestSnapshotCursor: latestSnapshot?.cursor ?? null
+      latestSnapshotCursor: latestSnapshot?.cursor ?? null,
     };
   }
 
   private async acceptSnapshotChunk(
-    frame: Extract<ProtocolFrame, { kind: "snapshotChunk" }>
+    frame: Extract<ProtocolFrame, { kind: "snapshotChunk" }>,
   ): Promise<void> {
     const assembly = this.snapshotAssemblies.get(frame.snapshotId) ?? {
       documentId: frame.documentId,
@@ -216,7 +229,7 @@ export class DocumentSessionManager {
       cursor: frame.cursor,
       contentType: frame.contentType,
       chunkCount: frame.chunkCount,
-      chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount })
+      chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
     };
     assembly.chunks[frame.chunkIndex] = frame.bytes;
     this.snapshotAssemblies.set(frame.snapshotId, assembly);
@@ -235,7 +248,7 @@ export class DocumentSessionManager {
         cursor: frame.cursor,
         contentType: frame.contentType,
         bytes,
-        createdAtUnixMs: Date.now()
+        createdAtUnixMs: Date.now(),
       });
       this.snapshotAssemblies.delete(frame.snapshotId);
     }

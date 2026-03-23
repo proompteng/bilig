@@ -23,15 +23,17 @@ describe("local-server", () => {
       method: "POST",
       url: "/v1/agent/frames",
       headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from(encodeAgentFrame({
-        kind: "request",
-        request: {
-          kind: "openWorkbookSession",
-          id: "open-1",
-          documentId: "book-1",
-          replicaId: "agent-a"
-        }
-      }))
+      payload: Buffer.from(
+        encodeAgentFrame({
+          kind: "request",
+          request: {
+            kind: "openWorkbookSession",
+            id: "open-1",
+            documentId: "book-1",
+            replicaId: "agent-a",
+          },
+        }),
+      ),
     });
 
     const openFrame = decodeAgentFrame(openResponse.rawPayload);
@@ -45,23 +47,25 @@ describe("local-server", () => {
       method: "POST",
       url: "/v1/agent/frames",
       headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from(encodeAgentFrame({
-        kind: "request",
-        request: {
-          kind: "writeRange",
-          id: "write-1",
-          sessionId: "book-1:agent-a",
-          range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "B2"
+      payload: Buffer.from(
+        encodeAgentFrame({
+          kind: "request",
+          request: {
+            kind: "writeRange",
+            id: "write-1",
+            sessionId: "book-1:agent-a",
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "B2",
+            },
+            values: [
+              [1, 2],
+              [3, 4],
+            ],
           },
-          values: [
-            [1, 2],
-            [3, 4]
-          ]
-        }
-      }))
+        }),
+      ),
     });
 
     const writeFrame = decodeAgentFrame(writeResponse.rawPayload);
@@ -74,19 +78,21 @@ describe("local-server", () => {
       method: "POST",
       url: "/v1/agent/frames",
       headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from(encodeAgentFrame({
-        kind: "request",
-        request: {
-          kind: "readRange",
-          id: "read-1",
-          sessionId: "book-1:agent-a",
-          range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "B2"
-          }
-        }
-      }))
+      payload: Buffer.from(
+        encodeAgentFrame({
+          kind: "request",
+          request: {
+            kind: "readRange",
+            id: "read-1",
+            sessionId: "book-1:agent-a",
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "B2",
+            },
+          },
+        }),
+      ),
     });
 
     const readFrame = decodeAgentFrame(readResponse.rawPayload);
@@ -94,9 +100,13 @@ describe("local-server", () => {
     if (readFrame.kind !== "response" || readFrame.response.kind !== "rangeValues") {
       throw new Error("Expected rangeValues response");
     }
-    expect(readFrame.response.values.map((row) => row.map((cell) => cell.tag === ValueTag.Number ? cell.value : null))).toEqual([
+    expect(
+      readFrame.response.values.map((row) =>
+        row.map((cell) => (cell.tag === ValueTag.Number ? cell.value : null)),
+      ),
+    ).toEqual([
       [1, 2],
-      [3, 4]
+      [3, 4],
     ]);
   });
 
@@ -105,15 +115,17 @@ describe("local-server", () => {
       method: "POST",
       url: "/v1/agent/frames",
       headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from(encodeAgentFrame({
-        kind: "request",
-        request: {
-          kind: "openWorkbookSession",
-          id: "open-http-stream",
-          documentId: "http-stream-doc",
-          replicaId: "agent-http"
-        }
-      }))
+      payload: Buffer.from(
+        encodeAgentFrame({
+          kind: "request",
+          request: {
+            kind: "openWorkbookSession",
+            id: "open-http-stream",
+            documentId: "http-stream-doc",
+            replicaId: "agent-http",
+          },
+        }),
+      ),
     });
 
     const openFrame = decodeAgentFrame(openResponse.rawPayload);
@@ -121,28 +133,30 @@ describe("local-server", () => {
       kind: "response",
       response: {
         kind: "ok",
-        sessionId: "http-stream-doc:agent-http"
-      }
+        sessionId: "http-stream-doc:agent-http",
+      },
     });
 
     const subscribeResponse = await app.inject({
       method: "POST",
       url: "/v1/agent/frames",
       headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from(encodeAgentFrame({
-        kind: "request",
-        request: {
-          kind: "subscribeRange",
-          id: "subscribe-http-stream",
-          sessionId: "http-stream-doc:agent-http",
-          subscriptionId: "sub-http",
-          range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "A1"
-          }
-        }
-      }))
+      payload: Buffer.from(
+        encodeAgentFrame({
+          kind: "request",
+          request: {
+            kind: "subscribeRange",
+            id: "subscribe-http-stream",
+            sessionId: "http-stream-doc:agent-http",
+            subscriptionId: "sub-http",
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "A1",
+            },
+          },
+        }),
+      ),
     });
 
     const subscribeFrame = decodeAgentFrame(subscribeResponse.rawPayload);
@@ -153,8 +167,8 @@ describe("local-server", () => {
         id: "subscribe-http-stream",
         code: "AGENT_STREAM_REQUIRES_STREAMING_TRANSPORT",
         message: "subscribeRange requires a streaming agent transport such as stdio",
-        retryable: false
-      }
+        retryable: false,
+      },
     });
   });
 
@@ -172,15 +186,17 @@ describe("local-server", () => {
       sessionId: "browser-a",
       protocolVersion: 1,
       lastServerCursor: 0,
-      capabilities: ["local-session"]
+      capabilities: ["local-session"],
     });
 
-    expect(helloFrames).toEqual([{
-      kind: "cursorWatermark",
-      documentId: "book-2",
-      cursor: 0,
-      compactedCursor: 0
-    }]);
+    expect(helloFrames).toEqual([
+      {
+        kind: "cursorWatermark",
+        documentId: "book-2",
+        cursor: 0,
+        compactedCursor: 0,
+      },
+    ]);
 
     const responses = await manager.handleSyncFrame({
       kind: "appendBatch",
@@ -190,8 +206,8 @@ describe("local-server", () => {
         id: "browser-a:1",
         replicaId: "browser-a",
         clock: { counter: 1 },
-          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 42 }]
-        }
+        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 42 }],
+      },
     });
 
     expect(broadcasts).toHaveLength(1);
@@ -215,8 +231,8 @@ describe("local-server", () => {
         async send(batch) {
           relayedBatchIds.push(batch.id);
         },
-        async disconnect() {}
-      })
+        async disconnect() {},
+      }),
     });
 
     await manager.handleAgentFrame({
@@ -225,8 +241,8 @@ describe("local-server", () => {
         kind: "openWorkbookSession",
         id: "open-relay",
         documentId: "relay-doc",
-        replicaId: "agent-relay"
-      }
+        replicaId: "agent-relay",
+      },
     });
 
     await manager.handleAgentFrame({
@@ -238,10 +254,10 @@ describe("local-server", () => {
         range: {
           sheetName: "Sheet1",
           startAddress: "A1",
-          endAddress: "A1"
+          endAddress: "A1",
         },
-        values: [[7]]
-      }
+        values: [[7]],
+      },
     });
     await Promise.resolve();
 
@@ -253,8 +269,8 @@ describe("local-server", () => {
         id: "browser-relay:1",
         replicaId: "browser-relay",
         clock: { counter: 1 },
-        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "B1", value: 9 }]
-      }
+        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "B1", value: 9 }],
+      },
     });
     await Promise.resolve();
 

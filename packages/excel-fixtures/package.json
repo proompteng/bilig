@@ -1,7 +1,31 @@
 {
   "name": "@bilig/excel-fixtures",
   "version": "0.1.0",
+  "description": "Checked-in Excel compatibility fixtures and parity inputs for bilig.",
+  "keywords": [
+    "bilig",
+    "excel",
+    "fixtures",
+    "parity",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/excel-fixtures#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/excel-fixtures"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,40 +34,16 @@
       "import": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@bilig/protocol": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
-  "description": "Checked-in Excel compatibility fixtures and parity inputs for bilig.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/excel-fixtures"
+  "dependencies": {
+    "@bilig/protocol": "workspace:*"
   },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/excel-fixtures#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "excel",
-    "fixtures",
-    "parity",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

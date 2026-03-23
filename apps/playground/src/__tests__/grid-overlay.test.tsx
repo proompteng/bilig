@@ -6,9 +6,11 @@ import { CellEditorOverlay } from "@bilig/grid";
 
 describe("grid overlay editing", () => {
   it("commits directional moves and cancels with escape", async () => {
-    (globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT?: boolean;
-    }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & {
+        IS_REACT_ACT_ENVIRONMENT?: boolean;
+      }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
 
     const onChange = vi.fn();
     const onCommit = vi.fn();
@@ -29,7 +31,7 @@ describe("grid overlay editing", () => {
           resolvedValue="20"
           style={{ left: 40, top: 60, width: 180 }}
           value="=A1*2"
-        />
+        />,
       );
     });
 
@@ -53,7 +55,7 @@ describe("grid overlay editing", () => {
           resolvedValue="42"
           style={{ left: 40, top: 60, width: 180 }}
           value="42"
-        />
+        />,
       );
     });
 

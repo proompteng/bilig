@@ -8,7 +8,7 @@ import {
   type WorkbookPivotSnapshot,
   type WorkbookPivotValueSnapshot,
   type WorkbookTableSnapshot,
-  type WorkbookVolatileContextSnapshot
+  type WorkbookVolatileContextSnapshot,
 } from "@bilig/protocol";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { SheetGrid } from "./sheet-grid.js";
@@ -138,7 +138,7 @@ export class WorkbookStore {
     volatileContext: { recalcEpoch: 0 },
     freezePanes: new Map(),
     filters: new Map(),
-    sorts: new Map()
+    sorts: new Map(),
   };
   workbookName: string;
   private nextSheetId = 1;
@@ -161,7 +161,7 @@ export class WorkbookStore {
       order,
       grid: new SheetGrid(),
       rowAxis: [],
-      columnAxis: []
+      columnAxis: [],
     };
     this.sheetsByName.set(name, sheet);
     this.sheetsById.set(sheet.id, sheet);
@@ -172,7 +172,11 @@ export class WorkbookStore {
     const sheet = this.sheetsByName.get(name);
     if (!sheet) return;
     sheet.grid.forEachCell((cellIndex) => {
-      const key = makeCellKey(sheet.id, this.cellStore.rows[cellIndex]!, this.cellStore.cols[cellIndex]!);
+      const key = makeCellKey(
+        sheet.id,
+        this.cellStore.rows[cellIndex]!,
+        this.cellStore.cols[cellIndex]!,
+      );
       this.cellKeyToIndex.delete(key);
       this.cellFormats.delete(cellIndex);
     });
@@ -266,10 +270,14 @@ export class WorkbookStore {
   }
 
   listWorkbookProperties(): WorkbookPropertyRecord[] {
-    return [...this.metadata.properties.values()].toSorted((left, right) => left.key.localeCompare(right.key));
+    return [...this.metadata.properties.values()].toSorted((left, right) =>
+      left.key.localeCompare(right.key),
+    );
   }
 
-  setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): WorkbookCalculationSettingsRecord {
+  setCalculationSettings(
+    settings: WorkbookCalculationSettingsSnapshot,
+  ): WorkbookCalculationSettingsRecord {
     this.metadata.calculationSettings = { ...settings };
     return this.metadata.calculationSettings;
   }
@@ -304,7 +312,7 @@ export class WorkbookStore {
 
   listDefinedNames(): WorkbookDefinedNameRecord[] {
     return [...this.metadata.definedNames.values()].toSorted((left, right) =>
-      normalizeDefinedName(left.name).localeCompare(normalizeDefinedName(right.name))
+      normalizeDefinedName(left.name).localeCompare(normalizeDefinedName(right.name)),
     );
   }
 
@@ -316,7 +324,7 @@ export class WorkbookStore {
       endAddress: record.endAddress,
       columnNames: [...record.columnNames],
       headerRow: record.headerRow,
-      totalsRow: record.totalsRow
+      totalsRow: record.totalsRow,
     };
     this.metadata.tables.set(tableKey(stored.name), stored);
     return stored;
@@ -331,7 +339,9 @@ export class WorkbookStore {
   }
 
   listTables(): WorkbookTableRecord[] {
-    return [...this.metadata.tables.values()].toSorted((left, right) => tableKey(left.name).localeCompare(tableKey(right.name)));
+    return [...this.metadata.tables.values()].toSorted((left, right) =>
+      tableKey(left.name).localeCompare(tableKey(right.name)),
+    );
   }
 
   setRowMetadata(
@@ -339,18 +349,36 @@ export class WorkbookStore {
     start: number,
     count: number,
     size: number | null,
-    hidden: boolean | null
+    hidden: boolean | null,
   ): WorkbookAxisMetadataRecord | undefined {
-    return this.setAxisMetadata(this.getOrCreateSheet(sheetName), "row", this.metadata.rowMetadata, sheetName, start, count, size, hidden);
+    return this.setAxisMetadata(
+      this.getOrCreateSheet(sheetName),
+      "row",
+      this.metadata.rowMetadata,
+      sheetName,
+      start,
+      count,
+      size,
+      hidden,
+    );
   }
 
-  getRowMetadata(sheetName: string, start: number, count: number): WorkbookAxisMetadataRecord | undefined {
+  getRowMetadata(
+    sheetName: string,
+    start: number,
+    count: number,
+  ): WorkbookAxisMetadataRecord | undefined {
     const sheet = this.getSheet(sheetName);
     return sheet ? this.getAxisMetadataRecord(sheet, "row", sheetName, start, count) : undefined;
   }
 
   listRowMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
-    return this.listAxisMetadata(this.getSheet(sheetName), this.metadata.rowMetadata, sheetName, "row");
+    return this.listAxisMetadata(
+      this.getSheet(sheetName),
+      this.metadata.rowMetadata,
+      sheetName,
+      "row",
+    );
   }
 
   setColumnMetadata(
@@ -358,7 +386,7 @@ export class WorkbookStore {
     start: number,
     count: number,
     size: number | null,
-    hidden: boolean | null
+    hidden: boolean | null,
   ): WorkbookAxisMetadataRecord | undefined {
     return this.setAxisMetadata(
       this.getOrCreateSheet(sheetName),
@@ -368,17 +396,26 @@ export class WorkbookStore {
       start,
       count,
       size,
-      hidden
+      hidden,
     );
   }
 
-  getColumnMetadata(sheetName: string, start: number, count: number): WorkbookAxisMetadataRecord | undefined {
+  getColumnMetadata(
+    sheetName: string,
+    start: number,
+    count: number,
+  ): WorkbookAxisMetadataRecord | undefined {
     const sheet = this.getSheet(sheetName);
     return sheet ? this.getAxisMetadataRecord(sheet, "column", sheetName, start, count) : undefined;
   }
 
   listColumnMetadata(sheetName: string): WorkbookAxisMetadataRecord[] {
-    return this.listAxisMetadata(this.getSheet(sheetName), this.metadata.columnMetadata, sheetName, "column");
+    return this.listAxisMetadata(
+      this.getSheet(sheetName),
+      this.metadata.columnMetadata,
+      sheetName,
+      "column",
+    );
   }
 
   listRowAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
@@ -389,15 +426,28 @@ export class WorkbookStore {
     return this.listAxisEntries(this.getSheet(sheetName), "column");
   }
 
-  materializeRowAxisEntries(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
+  materializeRowAxisEntries(
+    sheetName: string,
+    start: number,
+    count: number,
+  ): WorkbookAxisEntrySnapshot[] {
     return this.materializeAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count);
   }
 
-  materializeColumnAxisEntries(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
+  materializeColumnAxisEntries(
+    sheetName: string,
+    start: number,
+    count: number,
+  ): WorkbookAxisEntrySnapshot[] {
     return this.materializeAxisEntries(this.getOrCreateSheet(sheetName), "column", start, count);
   }
 
-  insertRows(sheetName: string, start: number, count: number, entries?: readonly WorkbookAxisEntrySnapshot[]): void {
+  insertRows(
+    sheetName: string,
+    start: number,
+    count: number,
+    entries?: readonly WorkbookAxisEntrySnapshot[],
+  ): void {
     this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "row", start, 0, count, entries);
   }
 
@@ -409,7 +459,12 @@ export class WorkbookStore {
     this.moveAxisEntries(this.getOrCreateSheet(sheetName), "row", start, count, target);
   }
 
-  insertColumns(sheetName: string, start: number, count: number, entries?: readonly WorkbookAxisEntrySnapshot[]): void {
+  insertColumns(
+    sheetName: string,
+    start: number,
+    count: number,
+    entries?: readonly WorkbookAxisEntrySnapshot[],
+  ): void {
     this.spliceAxisEntries(this.getOrCreateSheet(sheetName), "column", start, 0, count, entries);
   }
 
@@ -453,15 +508,23 @@ export class WorkbookStore {
   listFilters(sheetName: string): WorkbookFilterRecord[] {
     return [...this.metadata.filters.values()]
       .filter((record) => record.sheetName === sheetName)
-      .toSorted((left, right) => filterKey(left.sheetName, left.range).localeCompare(filterKey(right.sheetName, right.range)));
+      .toSorted((left, right) =>
+        filterKey(left.sheetName, left.range).localeCompare(
+          filterKey(right.sheetName, right.range),
+        ),
+      );
   }
 
-  setSort(sheetName: string, range: CellRangeRef, keys: readonly WorkbookSortKeyRecord[]): WorkbookSortRecord {
+  setSort(
+    sheetName: string,
+    range: CellRangeRef,
+    keys: readonly WorkbookSortKeyRecord[],
+  ): WorkbookSortRecord {
     const storedRange = { ...range };
     const record: WorkbookSortRecord = {
       sheetName,
       range: storedRange,
-      keys: keys.map((key) => Object.assign({}, key))
+      keys: keys.map((key) => Object.assign({}, key)),
     };
     this.metadata.sorts.set(sortKey(sheetName, storedRange), record);
     return record;
@@ -478,7 +541,9 @@ export class WorkbookStore {
   listSorts(sheetName: string): WorkbookSortRecord[] {
     return [...this.metadata.sorts.values()]
       .filter((record) => record.sheetName === sheetName)
-      .toSorted((left, right) => sortKey(left.sheetName, left.range).localeCompare(sortKey(right.sheetName, right.range)));
+      .toSorted((left, right) =>
+        sortKey(left.sheetName, left.range).localeCompare(sortKey(right.sheetName, right.range)),
+      );
   }
 
   setSpill(sheetName: string, address: string, rows: number, cols: number): WorkbookSpillRecord {
@@ -497,7 +562,7 @@ export class WorkbookStore {
 
   listSpills(): WorkbookSpillRecord[] {
     return [...this.metadata.spills.values()].toSorted((left, right) =>
-      `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`)
+      `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`),
     );
   }
 
@@ -507,7 +572,7 @@ export class WorkbookStore {
       name: record.name.trim(),
       groupBy: [...record.groupBy],
       values: record.values.map((value) => Object.assign({}, value)),
-      source: { ...record.source }
+      source: { ...record.source },
     };
     this.metadata.pivots.set(pivotKey(record.sheetName, record.address), stored);
     return stored;
@@ -527,14 +592,14 @@ export class WorkbookStore {
 
   listPivots(): WorkbookPivotRecord[] {
     return [...this.metadata.pivots.values()].toSorted((left, right) =>
-      `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`)
+      `${left.sheetName}!${left.address}`.localeCompare(`${right.sheetName}!${right.address}`),
     );
   }
 
   remapSheetCells(
     sheetName: string,
     axis: "row" | "column",
-    remapIndex: (index: number) => number | undefined
+    remapIndex: (index: number) => number | undefined,
   ): { changedCellIndices: number[]; removedCellIndices: number[] } {
     const sheet = this.getSheet(sheetName);
     if (!sheet) {
@@ -602,7 +667,7 @@ export class WorkbookStore {
     start: number,
     count: number,
     size: number | null,
-    hidden: boolean | null
+    hidden: boolean | null,
   ): WorkbookAxisMetadataRecord | undefined {
     const entries = this.materializeAxisEntryRecords(sheet, axis, start, count);
     entries.forEach((entry) => {
@@ -621,7 +686,7 @@ export class WorkbookStore {
     sheet: SheetRecord | undefined,
     bucket: Map<string, WorkbookAxisMetadataRecord>,
     sheetName: string,
-    axis: "row" | "column"
+    axis: "row" | "column",
   ): WorkbookAxisMetadataRecord[] {
     if (!sheet) {
       return [];
@@ -648,7 +713,10 @@ export class WorkbookStore {
     }
   }
 
-  private listAxisEntries(sheet: SheetRecord | undefined, axis: "row" | "column"): WorkbookAxisEntrySnapshot[] {
+  private listAxisEntries(
+    sheet: SheetRecord | undefined,
+    axis: "row" | "column",
+  ): WorkbookAxisEntrySnapshot[] {
     if (!sheet) {
       return [];
     }
@@ -674,7 +742,7 @@ export class WorkbookStore {
     sheet: SheetRecord,
     axis: "row" | "column",
     start: number,
-    count: number
+    count: number,
   ): WorkbookAxisEntrySnapshot[] {
     return this.materializeAxisEntryRecords(sheet, axis, start, count).map((entry, offset) => {
       const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index: start + offset };
@@ -692,7 +760,7 @@ export class WorkbookStore {
     sheet: SheetRecord,
     axis: "row" | "column",
     start: number,
-    count: number
+    count: number,
   ): WorkbookAxisEntryRecord[] {
     const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
     const materialized: WorkbookAxisEntryRecord[] = [];
@@ -703,7 +771,7 @@ export class WorkbookStore {
         entry = {
           id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
           size: null,
-          hidden: null
+          hidden: null,
         };
         entries[position] = entry;
       }
@@ -718,7 +786,7 @@ export class WorkbookStore {
     start: number,
     deleteCount: number,
     insertCount: number,
-    entries?: readonly WorkbookAxisEntrySnapshot[]
+    entries?: readonly WorkbookAxisEntrySnapshot[],
   ): WorkbookAxisEntrySnapshot[] {
     const axisEntries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
     if (axisEntries.length < start) {
@@ -727,16 +795,23 @@ export class WorkbookStore {
     if (deleteCount > 0) {
       this.materializeAxisEntryRecords(sheet, axis, start, deleteCount);
     }
-    const removed = axisEntries.splice(start, deleteCount, ...Array.from({ length: insertCount }, (_, index) => {
-      const provided = entries?.[index];
-      return provided
-        ? { id: provided.id, size: provided.size ?? null, hidden: provided.hidden ?? null }
-        : {
-            id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
-            size: null,
-            hidden: null
-          };
-    }));
+    const removed = axisEntries.splice(
+      start,
+      deleteCount,
+      ...Array.from({ length: insertCount }, (_, index) => {
+        const provided = entries?.[index];
+        return provided
+          ? { id: provided.id, size: provided.size ?? null, hidden: provided.hidden ?? null }
+          : {
+              id:
+                axis === "row"
+                  ? `row-${this.nextRowAxisId++}`
+                  : `column-${this.nextColumnAxisId++}`,
+              size: null,
+              hidden: null,
+            };
+      }),
+    );
     return removed.flatMap((entry, index) => {
       if (!entry) {
         return [];
@@ -757,7 +832,7 @@ export class WorkbookStore {
     axis: "row" | "column",
     start: number,
     count: number,
-    target: number
+    target: number,
   ): void {
     if (count <= 0 || start === target) {
       return;
@@ -773,7 +848,7 @@ export class WorkbookStore {
     axis: "row" | "column",
     sheetName: string,
     start: number,
-    count: number
+    count: number,
   ): WorkbookAxisMetadataRecord | undefined {
     const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
     let size: number | null | undefined;
@@ -797,7 +872,7 @@ export class WorkbookStore {
         return undefined;
       }
     }
-    if (!sawMaterialized || (size ?? null) === null && (hidden ?? null) === null) {
+    if (!sawMaterialized || ((size ?? null) === null && (hidden ?? null) === null)) {
       return undefined;
     }
     return { sheetName, start, count, size: size ?? null, hidden: hidden ?? null };
@@ -807,7 +882,7 @@ export class WorkbookStore {
     sheetName: string,
     sheet: SheetRecord,
     axis: "row" | "column",
-    bucket: Map<string, WorkbookAxisMetadataRecord>
+    bucket: Map<string, WorkbookAxisMetadataRecord>,
   ): void {
     deleteRecordsBySheet(bucket, sheetName, (record) => record.sheetName);
     const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
@@ -829,7 +904,13 @@ export class WorkbookStore {
         }
         cursor += 1;
       }
-      const record: WorkbookAxisMetadataRecord = { sheetName, start, count: cursor - start, size, hidden };
+      const record: WorkbookAxisMetadataRecord = {
+        sheetName,
+        start,
+        count: cursor - start,
+        size,
+        hidden,
+      };
       bucket.set(axisMetadataKey(sheetName, start, record.count), record);
     }
   }
@@ -838,7 +919,7 @@ export class WorkbookStore {
 function deleteRecordsBySheet<T>(
   bucket: Map<string, T>,
   sheetName: string,
-  readSheetName: (record: T) => string
+  readSheetName: (record: T) => string,
 ): void {
   for (const [key, record] of bucket.entries()) {
     if (readSheetName(record) === sheetName) {

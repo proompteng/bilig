@@ -2,7 +2,11 @@ import { formatAddress } from "@bilig/formula";
 import type { GridSelection, Item } from "@glideapps/glide-data-grid";
 import { clampCell, clampSelectionRange, createRangeSelection } from "./gridSelection.js";
 
-export function resolveActivatedCell(activatedCell: Item, dragAnchorCell: Item | null, pendingPointerCell: Item | null): Item {
+export function resolveActivatedCell(
+  activatedCell: Item,
+  dragAnchorCell: Item | null,
+  pendingPointerCell: Item | null,
+): Item {
   return dragAnchorCell ?? pendingPointerCell ?? clampCell(activatedCell);
 }
 
@@ -25,7 +29,7 @@ export function resolveSelectionChange({
   nextSelection,
   anchorCell,
   pointerCell,
-  selectedCell
+  selectedCell,
 }: ResolveSelectionChangeOptions): SelectionChangeResult | null {
   if (nextSelection.columns.length > 0) {
     const nextColumn = nextSelection.columns.first();
@@ -33,7 +37,7 @@ export function resolveSelectionChange({
       return {
         kind: "column",
         selection: nextSelection,
-        addr: formatAddress(selectedCell[1], nextColumn)
+        addr: formatAddress(selectedCell[1], nextColumn),
       };
     }
   }
@@ -44,7 +48,7 @@ export function resolveSelectionChange({
       return {
         kind: "row",
         selection: nextSelection,
-        addr: formatAddress(nextRow, selectedCell[0])
+        addr: formatAddress(nextRow, selectedCell[0]),
       };
     }
   }
@@ -54,23 +58,24 @@ export function resolveSelectionChange({
     return null;
   }
 
-  const selection = anchorCell && pointerCell
-    ? createRangeSelection(nextSelection, anchorCell, pointerCell)
-    : {
-        ...nextSelection,
-        current: nextSelection.current
-          ? {
-              ...nextSelection.current,
-              cell: clampCell(nextSelection.current.cell),
-              range: clampSelectionRange(nextSelection.current.range)
-            }
-          : nextSelection.current
-      };
+  const selection =
+    anchorCell && pointerCell
+      ? createRangeSelection(nextSelection, anchorCell, pointerCell)
+      : {
+          ...nextSelection,
+          current: nextSelection.current
+            ? {
+                ...nextSelection.current,
+                cell: clampCell(nextSelection.current.cell),
+                range: clampSelectionRange(nextSelection.current.range),
+              }
+            : nextSelection.current,
+        };
 
   const cell = selection.current?.cell ?? nextCell;
   return {
     kind: "cell",
     selection,
-    addr: formatAddress(cell[1], cell[0])
+    addr: formatAddress(cell[1], cell[0]),
   };
 }

@@ -110,11 +110,15 @@ export function excelSerialToDateParts(serial: number): ExcelDateParts | undefin
   return {
     year: date.getUTCFullYear(),
     month: date.getUTCMonth() + 1,
-    day: date.getUTCDate()
+    day: date.getUTCDate(),
   };
 }
 
-export function excelDatePartsToSerial(year: number, month: number, day: number): number | undefined {
+export function excelDatePartsToSerial(
+  year: number,
+  month: number,
+  day: number,
+): number | undefined {
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
     return undefined;
   }
@@ -150,12 +154,12 @@ export function utcDateToExcelSerial(date: Date): number {
     daySerial += 1;
   }
 
-  const dayFraction = (
-    date.getUTCHours() * 3_600_000
-    + date.getUTCMinutes() * 60_000
-    + date.getUTCSeconds() * 1_000
-    + date.getUTCMilliseconds()
-  ) / MS_PER_DAY;
+  const dayFraction =
+    (date.getUTCHours() * 3_600_000 +
+      date.getUTCMinutes() * 60_000 +
+      date.getUTCSeconds() * 1_000 +
+      date.getUTCMilliseconds()) /
+    MS_PER_DAY;
 
   return daySerial + dayFraction;
 }
@@ -211,7 +215,7 @@ function normalizeTimeSerial(hours: number, minutes: number, seconds: number): n
     return undefined;
   }
   const totalSeconds = Math.trunc(hours) * 3600 + Math.trunc(minutes) * 60 + Math.trunc(seconds);
-  return ((totalSeconds % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY / SECONDS_PER_DAY;
+  return (((totalSeconds % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY) / SECONDS_PER_DAY;
 }
 
 export function createDateBuiltin(): Builtin {
@@ -322,7 +326,7 @@ function createWeekdayBuiltin(): Builtin {
 
     const whole = floorDateSerial(serial);
     const adjustedWhole = whole < 60 ? whole : whole - 1;
-    const sundayOne = ((adjustedWhole % 7) + 7) % 7 + 1;
+    const sundayOne = (((adjustedWhole % 7) + 7) % 7) + 1;
     if (args.length === 1) {
       return numberResult(sundayOne);
     }
@@ -344,7 +348,7 @@ function createWeekdayBuiltin(): Builtin {
       14: 5,
       15: 6,
       16: 7,
-      17: 1
+      17: 1,
     };
     const startDay = startDayMap[returnType];
     if (startDay === undefined) {
@@ -426,7 +430,7 @@ function createWeeknumBuiltin(): Builtin {
 
     const adjustedJan1 = serialJan1 < 60 ? Math.floor(serialJan1) : Math.floor(serialJan1) - 1;
     const jan1Weekday = ((adjustedJan1 % 7) + 7) % 7;
-    const shift = ((jan1Weekday - weekStartDay) + 7) % 7;
+    const shift = (jan1Weekday - weekStartDay + 7) % 7;
 
     let dayOfYear = dateParts.day;
     for (let month = 1; month < dateParts.month; month += 1) {
@@ -444,7 +448,9 @@ function isWeekendSerial(serial: number): boolean {
   return dow === 0 || dow === 6;
 }
 
-function normalizeHolidayDateSet(holidays: readonly CellValue[] | undefined): Set<number> | CellValue {
+function normalizeHolidayDateSet(
+  holidays: readonly CellValue[] | undefined,
+): Set<number> | CellValue {
   if (!holidays || holidays.length === 0) {
     return new Set<number>();
   }
@@ -484,7 +490,8 @@ function createWorkdayBuiltin(): Builtin {
       return holidays;
     }
 
-    const isWorkday = (value: number): boolean => !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
+    const isWorkday = (value: number): boolean =>
+      !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
     let cursor = Math.trunc(start);
     const direction = offset >= 0 ? 1 : -1;
 
@@ -527,7 +534,8 @@ function createNetworkdaysBuiltin(): Builtin {
       return holidays;
     }
 
-    const isWorkday = (value: number): boolean => !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
+    const isWorkday = (value: number): boolean =>
+      !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
     const step = start <= end ? 1 : -1;
     let count = 0;
     for (let cursor = Math.trunc(start); ; cursor += step) {
@@ -651,5 +659,5 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   RAND: createRandBuiltin(),
   EDATE: createEdateBuiltin(),
   EOMONTH: createEomonthBuiltin(),
-  ...datetimePlaceholderBuiltins
+  ...datetimePlaceholderBuiltins,
 };

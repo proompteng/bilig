@@ -27,7 +27,7 @@ export function FormulaBar({
   onChange,
   onCommit,
   onCancel,
-  onClear
+  onClear,
 }: FormulaBarProps) {
   const [addressValue, setAddressValue] = useState(address);
 
@@ -82,7 +82,10 @@ export function FormulaBar({
             value={value}
             onBlur={(event) => {
               const nextTarget = event.relatedTarget;
-              if (nextTarget instanceof Node && event.currentTarget.closest(".formula-bar")?.contains(nextTarget)) {
+              if (
+                nextTarget instanceof Node &&
+                event.currentTarget.closest(".formula-bar")?.contains(nextTarget)
+              ) {
                 return;
               }
               if (isEditing) {

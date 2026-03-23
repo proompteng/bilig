@@ -45,12 +45,18 @@ async function clickVisibleCell(page: Page, colIndex: number, rowIndex: number) 
   const headerHeight = 30;
   const columnWidth = 120;
   const rowHeight = 28;
-  const x = grid.x + rowMarkerWidth + (colIndex * columnWidth) + 24;
-  const y = grid.y + headerHeight + (rowIndex * rowHeight) + Math.floor(rowHeight / 2);
+  const x = grid.x + rowMarkerWidth + colIndex * columnWidth + 24;
+  const y = grid.y + headerHeight + rowIndex * rowHeight + Math.floor(rowHeight / 2);
   await page.mouse.click(x, y);
 }
 
-async function dragVisibleSelection(page: Page, startCol: number, startRow: number, endCol: number, endRow: number) {
+async function dragVisibleSelection(
+  page: Page,
+  startCol: number,
+  startRow: number,
+  endCol: number,
+  endRow: number,
+) {
   const grid = await page.getByTestId("sheet-grid").boundingBox();
   if (!grid) {
     throw new Error("sheet grid is not visible");
@@ -60,10 +66,10 @@ async function dragVisibleSelection(page: Page, startCol: number, startRow: numb
   const headerHeight = 30;
   const columnWidth = 120;
   const rowHeight = 28;
-  const startX = grid.x + rowMarkerWidth + (startCol * columnWidth) + 24;
-  const startY = grid.y + headerHeight + (startRow * rowHeight) + Math.floor(rowHeight / 2);
-  const endX = grid.x + rowMarkerWidth + (endCol * columnWidth) + 24;
-  const endY = grid.y + headerHeight + (endRow * rowHeight) + Math.floor(rowHeight / 2);
+  const startX = grid.x + rowMarkerWidth + startCol * columnWidth + 24;
+  const startY = grid.y + headerHeight + startRow * rowHeight + Math.floor(rowHeight / 2);
+  const endX = grid.x + rowMarkerWidth + endCol * columnWidth + 24;
+  const endY = grid.y + headerHeight + endRow * rowHeight + Math.floor(rowHeight / 2);
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -80,11 +86,13 @@ async function clickGridRightEdge(page: Page, rowIndex = 2) {
   const headerHeight = 30;
   const rowHeight = 28;
   const x = grid.x + grid.width - 3;
-  const y = grid.y + headerHeight + (rowIndex * rowHeight) + Math.floor(rowHeight / 2);
+  const y = grid.y + headerHeight + rowIndex * rowHeight + Math.floor(rowHeight / 2);
   await page.mouse.click(x, y);
 }
 
-test("playground shell supports formula-bar navigation, in-grid editing, and Excel-scale presets", async ({ page }) => {
+test("playground shell supports formula-bar navigation, in-grid editing, and Excel-scale presets", async ({
+  page,
+}) => {
   await clearWorkspace(page);
 
   await expect(page.getByRole("heading", { name: "bilig-demo" })).toBeVisible();
@@ -138,7 +146,9 @@ test("playground shell supports formula-bar navigation, in-grid editing, and Exc
   await expect(page.getByTestId("formula-resolved-value")).toContainText("2097153");
 });
 
-test("cross-sheet formulas recalculate end to end after editing the source sheet", async ({ page }) => {
+test("cross-sheet formulas recalculate end to end after editing the source sheet", async ({
+  page,
+}) => {
   await clearWorkspace(page);
 
   const gridHost = page.getByTestId("sheet-grid");
@@ -153,7 +163,9 @@ test("cross-sheet formulas recalculate end to end after editing the source sheet
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A2");
   await page.getByRole("tab", { name: "Sheet2" }).click();
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet2!A1");
-  await expect(page.getByTestId("formula-input")).toHaveValue("=IF(Sheet1!B1>20,Sheet1!B1+1,Sheet1!B2-1)");
+  await expect(page.getByTestId("formula-input")).toHaveValue(
+    "=IF(Sheet1!B1>20,Sheet1!B1+1,Sheet1!B2-1)",
+  );
   await expect(page.getByTestId("formula-resolved-value")).toContainText("25");
 });
 
@@ -180,7 +192,9 @@ test("dragging selects a rectangular range like a spreadsheet", async ({ page })
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!B2:D5");
 });
 
-test("keyboard shortcuts work for navigation, editing, cancel, delete, and formula bar commit", async ({ page }) => {
+test("keyboard shortcuts work for navigation, editing, cancel, delete, and formula bar commit", async ({
+  page,
+}) => {
   await clearWorkspace(page);
 
   const gridHost = page.getByTestId("sheet-grid");
@@ -239,7 +253,9 @@ test("keyboard shortcuts work for navigation, editing, cancel, delete, and formu
   await expect(page.getByTestId("formula-resolved-value")).toContainText("84");
 });
 
-test("clicking the right scrollbar gutter does not select the last visible column", async ({ page }) => {
+test("clicking the right scrollbar gutter does not select the last visible column", async ({
+  page,
+}) => {
   await clearWorkspace(page);
 
   await expect(page.getByTestId("selection-chip")).toHaveText("Sheet1!A1");

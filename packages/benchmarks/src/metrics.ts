@@ -27,7 +27,7 @@ export function sampleMemory(): MemorySnapshot {
     heapUsedBytes: memory.heapUsed,
     heapTotalBytes: memory.heapTotal,
     externalBytes: memory.external,
-    arrayBuffersBytes: memory.arrayBuffers
+    arrayBuffersBytes: memory.arrayBuffers,
   };
 }
 
@@ -40,7 +40,7 @@ export function measureMemory(before: MemorySnapshot, after: MemorySnapshot): Me
       heapUsedBytes: after.heapUsedBytes - before.heapUsedBytes,
       heapTotalBytes: after.heapTotalBytes - before.heapTotalBytes,
       externalBytes: after.externalBytes - before.externalBytes,
-      arrayBuffersBytes: after.arrayBuffersBytes - before.arrayBuffersBytes
-    }
+      arrayBuffersBytes: after.arrayBuffersBytes - before.arrayBuffersBytes,
+    },
   };
 }

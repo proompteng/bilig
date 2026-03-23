@@ -9,7 +9,7 @@ export const enum CellFlags {
   Materialized = 1 << 4,
   PendingDelete = 1 << 5,
   SpillChild = 1 << 6,
-  PivotOutput = 1 << 7
+  PivotOutput = 1 << 7,
 }
 
 export class CellStore {
@@ -120,17 +120,28 @@ export class CellStore {
   }
 }
 
-const valueReaders: Array<((store: CellStore, index: number, stringLookup: (id: number) => string) => CellValue) | undefined> = [];
+const valueReaders: Array<
+  ((store: CellStore, index: number, stringLookup: (id: number) => string) => CellValue) | undefined
+> = [];
 
 valueReaders[ValueTag.Empty] = () => ({ tag: ValueTag.Empty });
-valueReaders[ValueTag.Number] = (store, index) => ({ tag: ValueTag.Number, value: store.numbers[index]! });
-valueReaders[ValueTag.Boolean] = (store, index) => ({ tag: ValueTag.Boolean, value: store.numbers[index]! !== 0 });
+valueReaders[ValueTag.Number] = (store, index) => ({
+  tag: ValueTag.Number,
+  value: store.numbers[index]!,
+});
+valueReaders[ValueTag.Boolean] = (store, index) => ({
+  tag: ValueTag.Boolean,
+  value: store.numbers[index]! !== 0,
+});
 valueReaders[ValueTag.String] = (store, index, stringLookup) => ({
   tag: ValueTag.String,
   value: stringLookup(store.stringIds[index]!),
-  stringId: store.stringIds[index]!
+  stringId: store.stringIds[index]!,
 });
-valueReaders[ValueTag.Error] = (store, index) => ({ tag: ValueTag.Error, code: store.errors[index]! });
+valueReaders[ValueTag.Error] = (store, index) => ({
+  tag: ValueTag.Error,
+  code: store.errors[index]!,
+});
 
 function grow(buffer: Uint8Array, capacity: number): Uint8Array;
 function grow(buffer: Uint16Array, capacity: number): Uint16Array;
@@ -139,7 +150,7 @@ function grow(buffer: Int32Array, capacity: number): Int32Array;
 function grow(buffer: Float64Array, capacity: number): Float64Array;
 function grow(
   buffer: Uint8Array | Uint16Array | Uint32Array | Int32Array | Float64Array,
-  capacity: number
+  capacity: number,
 ): Uint8Array | Uint16Array | Uint32Array | Int32Array | Float64Array {
   if (buffer instanceof Uint8Array) {
     const next = new Uint8Array(capacity);

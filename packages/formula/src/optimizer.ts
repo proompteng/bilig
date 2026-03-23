@@ -25,7 +25,7 @@ function staticContext(): EvaluationContext {
   return {
     sheetName: "Sheet1",
     resolveCell: () => ({ tag: ValueTag.Empty }),
-    resolveRange: () => []
+    resolveRange: () => [],
   };
 }
 
@@ -91,13 +91,14 @@ function optimizeCall(node: CallExprNode): FormulaNode {
   if (callee === "IF" && args.length === 3) {
     const conditionValue = tryEvaluateStatic(args[0]!);
     if (conditionValue && conditionValue.tag !== ValueTag.Error) {
-      const truthy = conditionValue.tag === ValueTag.Boolean
-        ? conditionValue.value
-        : conditionValue.tag === ValueTag.Number
-          ? conditionValue.value !== 0
-          : conditionValue.tag === ValueTag.String
-            ? conditionValue.value.length > 0
-            : false;
+      const truthy =
+        conditionValue.tag === ValueTag.Boolean
+          ? conditionValue.value
+          : conditionValue.tag === ValueTag.Number
+            ? conditionValue.value !== 0
+            : conditionValue.tag === ValueTag.String
+              ? conditionValue.value.length > 0
+              : false;
       return optimizeFormula(truthy ? args[1]! : args[2]!);
     }
   }
@@ -105,7 +106,7 @@ function optimizeCall(node: CallExprNode): FormulaNode {
   const rewritten = rewriteSpecialCall({
     kind: "CallExpr",
     callee,
-    args
+    args,
   });
   if (rewritten) {
     return optimizeFormula(rewritten);
@@ -114,7 +115,7 @@ function optimizeCall(node: CallExprNode): FormulaNode {
   const candidate: CallExprNode = {
     kind: "CallExpr",
     callee,
-    args
+    args,
   };
 
   if (VOLATILE_BUILTINS.has(callee)) {
@@ -152,13 +153,15 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
         return argument;
       }
       const folded = tryEvaluateStatic({ ...node, argument });
-      return folded ? cellValueToAst(folded) ?? { ...node, argument } : { ...node, argument };
+      return folded ? (cellValueToAst(folded) ?? { ...node, argument }) : { ...node, argument };
     }
     case "BinaryExpr": {
       const left = optimizeFormula(node.left);
       const right = optimizeFormula(node.right);
       const folded = tryEvaluateStatic({ ...node, left, right });
-      return folded ? cellValueToAst(folded) ?? { ...node, left, right } : { ...node, left, right };
+      return folded
+        ? (cellValueToAst(folded) ?? { ...node, left, right })
+        : { ...node, left, right };
     }
     case "CallExpr":
       return optimizeCall(node);
@@ -167,7 +170,7 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
       const args = node.args.map(optimizeFormula);
       const candidate = { ...node, callee, args };
       const folded = isStaticNode(candidate) ? tryEvaluateStatic(candidate) : undefined;
-      return folded ? cellValueToAst(folded) ?? candidate : candidate;
+      return folded ? (cellValueToAst(folded) ?? candidate) : candidate;
     }
   }
 }

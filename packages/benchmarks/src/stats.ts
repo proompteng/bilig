@@ -23,7 +23,7 @@ export function summarizeNumbers(values: readonly number[]): NumericSummary {
     median: quantile(samples, 0.5),
     p95: quantile(samples, 0.95),
     max,
-    mean
+    mean,
   };
 }
 

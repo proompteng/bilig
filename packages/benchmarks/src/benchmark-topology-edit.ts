@@ -12,7 +12,9 @@ export interface TopologyEditBenchmarkResult {
   memory: MemoryMeasurement;
 }
 
-export async function runTopologyEditBenchmark(chainLength = 10_000): Promise<TopologyEditBenchmarkResult> {
+export async function runTopologyEditBenchmark(
+  chainLength = 10_000,
+): Promise<TopologyEditBenchmarkResult> {
   const engine = new SpreadsheetEngine({ workbookName: "benchmark-topology-edit" });
   await engine.ready();
   seedTopologyEditWorkbook(engine, chainLength);
@@ -28,7 +30,7 @@ export async function runTopologyEditBenchmark(chainLength = 10_000): Promise<To
     chainLength,
     elapsedMs: elapsed,
     metrics: engine.getLastMetrics(),
-    memory: measureMemory(memoryBefore, memoryAfter)
+    memory: measureMemory(memoryBefore, memoryAfter),
   };
 }
 

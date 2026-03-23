@@ -1,7 +1,31 @@
 {
   "name": "@bilig/agent-api",
   "version": "0.1.0",
+  "description": "Binary agent API frames and typed workbook session operations for bilig.",
+  "keywords": [
+    "agent",
+    "api",
+    "bilig",
+    "binary",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/agent-api#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/agent-api"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,41 +34,17 @@
       "import": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@bilig/binary-protocol": "workspace:*",
-    "@bilig/protocol": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
-  "description": "Binary agent API frames and typed workbook session operations for bilig.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/agent-api"
+  "dependencies": {
+    "@bilig/binary-protocol": "workspace:*",
+    "@bilig/protocol": "workspace:*"
   },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/agent-api#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "agent",
-    "api",
-    "binary",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

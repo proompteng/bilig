@@ -22,10 +22,10 @@ export const excelFixtureFamilies = [
   "tables",
   "structured-reference",
   "volatile",
-  "lambda"
+  "lambda",
 ] as const;
 
-export type ExcelFixtureFamily = typeof excelFixtureFamilies[number];
+export type ExcelFixtureFamily = (typeof excelFixtureFamilies)[number];
 
 export const excelFixtureIdPattern = /^[a-z][a-z0-9-]*:[a-z0-9-]+$/;
 
@@ -137,7 +137,10 @@ function dedupeFixtures(fixtures: readonly ExcelFixtureCase[]): ExcelFixtureCase
   return output;
 }
 
-const canonicalCorpusExclusions = new Set<string>(["text:case-insensitive-compare", "information:value-error-display"]);
+const canonicalCorpusExclusions = new Set<string>([
+  "text:case-insensitive-compare",
+  "information:value-error-display",
+]);
 
 const canonicalBaseFixtureIds = new Set<string>([
   "arithmetic:add-basic",
@@ -201,28 +204,32 @@ const canonicalBaseFixtureIds = new Set<string>([
   "information:isblank-empty",
   "information:isnumber-number",
   "information:istext-string",
-  "text:len-counts-plain-string-length"
+  "text:len-counts-plain-string-length",
 ]);
 
 const canonicalBaseFixtures = dedupeFixtures([
   ...canonicalFoundationFixtures,
   ...canonicalLogicalFixtures,
   ...canonicalTextFixtures,
-  ...(excelDateTimeFixtureSuite.cases ?? [])
-]).filter((fixture) => canonicalBaseFixtureIds.has(fixture.id) && !canonicalCorpusExclusions.has(fixture.id));
+  ...(excelDateTimeFixtureSuite.cases ?? []),
+]).filter(
+  (fixture) =>
+    canonicalBaseFixtureIds.has(fixture.id) && !canonicalCorpusExclusions.has(fixture.id),
+);
 
 export const canonicalFormulaFixtures: readonly ExcelFixtureCase[] = dedupeFixtures([
   ...canonicalBaseFixtures,
-  ...canonicalExpansionFixtures
+  ...canonicalExpansionFixtures,
 ]);
 
 export const workbookSemanticsFormulaFixtureSuite: ExcelFixtureSuite = {
   id: "workbook-semantics",
-  description: "Extended workbook semantics fixture slice for names and cross-sheet reference behavior.",
+  description:
+    "Extended workbook semantics fixture slice for names and cross-sheet reference behavior.",
   sheets: [{ name: "Sheet1" }, { name: "Sheet2" }],
   excelBuild: "Microsoft 365 / 2026-03-19",
   capturedAt: "2026-03-19T00:00:00.000Z",
-  cases: canonicalWorkbookSemanticsFixtures
+  cases: canonicalWorkbookSemanticsFixtures,
 };
 
 export const canonicalFormulaSmokeSuite: ExcelFixtureSuite = {
@@ -231,54 +238,58 @@ export const canonicalFormulaSmokeSuite: ExcelFixtureSuite = {
   sheets: [{ name: "Sheet1" }],
   excelBuild: "Microsoft 365 / 2026-03-19",
   capturedAt: "2026-03-19T00:00:00.000Z",
-  cases: canonicalFormulaFixtures.slice(0, 5)
+  cases: canonicalFormulaFixtures.slice(0, 5),
 };
 
-function buildFamilySuite(id: string, description: string, families: readonly ExcelFixtureFamily[]): ExcelFixtureSuite {
+function buildFamilySuite(
+  id: string,
+  description: string,
+  families: readonly ExcelFixtureFamily[],
+): ExcelFixtureSuite {
   return {
     id,
     description,
     sheets: [{ name: "Sheet1" }],
     excelBuild: "Microsoft 365 / 2026-03-19",
     capturedAt: "2026-03-19T00:00:00.000Z",
-    cases: canonicalFormulaFixtures.filter((fixture) => families.includes(fixture.family))
+    cases: canonicalFormulaFixtures.filter((fixture) => families.includes(fixture.family)),
   };
 }
 
 export const textFormulaFixtureSuite = buildFamilySuite(
   "canonical-text",
   "Canonical formula corpus text-function fixture slice.",
-  ["text"]
+  ["text"],
 );
 
 export const lookupReferenceFormulaFixtureSuite = buildFamilySuite(
   "canonical-lookup-reference",
   "Canonical formula corpus lookup/reference fixture slice.",
-  ["lookup-reference", "statistical"]
+  ["lookup-reference", "statistical"],
 );
 
 export const dateTimeFormulaFixtureSuite = buildFamilySuite(
   "canonical-date-time",
   "Canonical formula corpus date/time and volatile fixture slice.",
-  ["date-time", "volatile"]
+  ["date-time", "volatile"],
 );
 
 export const dynamicArrayFormulaFixtureSuite = buildFamilySuite(
   "canonical-dynamic-array",
   "Canonical formula corpus dynamic-array fixture slice.",
-  ["dynamic-array"]
+  ["dynamic-array"],
 );
 
 export const namesTablesFormulaFixtureSuite = buildFamilySuite(
   "canonical-names-tables",
   "Canonical formula corpus names, tables, and structured-reference fixture slice.",
-  ["names", "tables", "structured-reference"]
+  ["names", "tables", "structured-reference"],
 );
 
 export const lambdaFormulaFixtureSuite = buildFamilySuite(
   "canonical-lambda",
   "Canonical formula corpus lambda fixture slice.",
-  ["lambda"]
+  ["lambda"],
 );
 
 export { canonicalFoundationFixtures } from "./canonical-foundation-fixtures.js";

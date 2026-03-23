@@ -4,10 +4,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "allowSyntheticDefaultImports": true,
-    "types": [
-      "node",
-      "react"
-    ]
+    "types": ["node", "react"]
   },
   "references": [
     {
@@ -20,10 +17,6 @@
       "path": "../core"
     }
   ],
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "src/**/__tests__/**"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/__tests__/**"]
 }

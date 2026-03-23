@@ -1,7 +1,31 @@
 {
   "name": "@bilig/worker-transport",
   "version": "0.1.0",
+  "description": "Worker transport client and host primitives for bilig browser runtime execution.",
+  "keywords": [
+    "bilig",
+    "browser",
+    "spreadsheet",
+    "transport",
+    "worker"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/worker-transport#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/worker-transport"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,43 +34,19 @@
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
   "dependencies": {
     "@bilig/binary-protocol": "workspace:*",
     "@bilig/core": "workspace:*",
     "@bilig/crdt": "workspace:*",
     "@bilig/protocol": "workspace:*"
   },
-  "scripts": {
-    "build": "tsc -p tsconfig.json"
-  },
-  "description": "Worker transport client and host primitives for bilig browser runtime execution.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/worker-transport"
-  },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/worker-transport#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "worker",
-    "transport",
-    "browser",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

@@ -1,7 +1,31 @@
 {
   "name": "@bilig/binary-protocol",
   "version": "0.1.0",
+  "description": "Binary frame encoder and decoder for bilig sync, agent, and local transport.",
+  "keywords": [
+    "bilig",
+    "binary",
+    "crdt",
+    "protocol",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/binary-protocol#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/binary-protocol"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,41 +34,17 @@
       "import": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@bilig/crdt": "workspace:*",
-    "@bilig/protocol": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
-  "description": "Binary frame encoder and decoder for bilig sync, agent, and local transport.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/binary-protocol"
+  "dependencies": {
+    "@bilig/crdt": "workspace:*",
+    "@bilig/protocol": "workspace:*"
   },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/binary-protocol#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "binary",
-    "protocol",
-    "crdt",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

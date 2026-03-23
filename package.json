@@ -1,14 +1,14 @@
 {
   "name": "bilig",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "description": "Local-first spreadsheet engine monorepo with React playground, custom reconciler, and AssemblyScript/WASM fast path.",
-  "type": "module",
-  "packageManager": "pnpm@10.32.1",
-  "engines": {
-    "node": ">=24.0.0",
-    "bun": ">=1.0.0"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git"
   },
+  "type": "module",
   "scripts": {
     "dev": "pnpm --filter @bilig/playground dev",
     "dev:web": "pnpm --filter @bilig/web dev",
@@ -20,8 +20,13 @@
     "protocol:check": "bun scripts/gen-protocol.ts --check",
     "naming:check": "bun scripts/check-canonical-naming.ts",
     "sheet:agent": "bun scripts/spreadsheet-agent.ts",
+    "format": "oxfmt --write .oxlintrc.json package.json playwright.config.ts playwright.web.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
+    "format:check": "oxfmt --check .oxlintrc.json package.json playwright.config.ts playwright.web.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
     "lint": "oxlint --config .oxlintrc.json --type-aware --deny-warnings packages apps e2e scripts",
     "lint:fix": "oxlint --config .oxlintrc.json --type-aware --fix packages apps e2e scripts",
+    "hooks:pre-commit": "lint-staged",
+    "hooks:pre-push": "pnpm lint",
+    "prepare": "simple-git-hooks",
     "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
@@ -36,11 +41,6 @@
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
     "ci": "pnpm protocol:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git"
-  },
-  "license": "MIT",
   "devDependencies": {
     "@playwright/test": "1.56.1",
     "@types/node": "24.10.0",
@@ -50,11 +50,31 @@
     "@vitest/coverage-v8": "4.1.0",
     "assemblyscript": "0.28.10",
     "jsdom": "27.0.1",
+    "lint-staged": "^16.4.0",
+    "oxfmt": "^0.41.0",
     "oxlint": "^1.56.0",
     "oxlint-tsgolint": "^0.17.1",
+    "simple-git-hooks": "^2.13.1",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vite": "8.0.0",
     "vitest": "4.1.0"
-  }
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm hooks:pre-commit",
+    "pre-push": "pnpm hooks:pre-push"
+  },
+  "lint-staged": {
+    "*.{js,cjs,mjs,jsx,ts,tsx,json,css,html}": [
+      "oxfmt --write"
+    ],
+    "*.{js,cjs,mjs,jsx,ts,tsx}": [
+      "oxlint --config .oxlintrc.json --type-aware --fix --deny-warnings"
+    ]
+  },
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@10.32.1"
 }

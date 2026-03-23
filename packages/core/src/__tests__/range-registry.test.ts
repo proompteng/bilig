@@ -11,12 +11,12 @@ describe("RangeRegistry", () => {
       {
         kind: "cells",
         start: { row: 0, col: 0, text: "A1" },
-        end: { row: 1, col: 1, text: "B2" }
+        end: { row: 1, col: 1, text: "B2" },
       },
       {
         ensureCell: () => nextCellIndex++,
-        forEachSheetCell: () => {}
-      }
+        forEachSheetCell: () => {},
+      },
     );
 
     const descriptor = registry.getDescriptor(registered.rangeIndex);
@@ -33,7 +33,7 @@ describe("RangeRegistry", () => {
       {
         kind: "rows",
         start: { row: 1, text: "2" },
-        end: { row: 1, text: "2" }
+        end: { row: 1, text: "2" },
       },
       {
         ensureCell: () => {
@@ -41,8 +41,8 @@ describe("RangeRegistry", () => {
         },
         forEachSheetCell: (_sheetId, fn) => {
           fn(4, 1, 0);
-        }
-      }
+        },
+      },
     );
 
     const before = registry.getDescriptor(registered.rangeIndex);
@@ -55,9 +55,11 @@ describe("RangeRegistry", () => {
     expect(after.membersOffset).toBeGreaterThanOrEqual(before.membersOffset);
     expect(after.membersLength).toBe(2);
     expect(registry.getMembers(registered.rangeIndex)).toEqual(Uint32Array.from([4, 9]));
-    expect(registry.getMemberPoolView().subarray(after.membersOffset, after.membersOffset + after.membersLength)).toEqual(
-      Uint32Array.from([4, 9])
-    );
+    expect(
+      registry
+        .getMemberPoolView()
+        .subarray(after.membersOffset, after.membersOffset + after.membersLength),
+    ).toEqual(Uint32Array.from([4, 9]));
   });
 
   it("clears descriptor slices when the last reference is released", () => {
@@ -67,12 +69,16 @@ describe("RangeRegistry", () => {
       {
         kind: "cells",
         start: { row: 0, col: 0, text: "A1" },
-        end: { row: 0, col: 1, text: "B1" }
+        end: { row: 0, col: 1, text: "B1" },
       },
       {
-        ensureCell: ((_sheetId, _row, col) => col + 20) as (sheetId: number, row: number, col: number) => number,
-        forEachSheetCell: () => {}
-      }
+        ensureCell: ((_sheetId, _row, col) => col + 20) as (
+          sheetId: number,
+          row: number,
+          col: number,
+        ) => number,
+        forEachSheetCell: () => {},
+      },
     );
 
     const released = registry.release(registered.rangeIndex);

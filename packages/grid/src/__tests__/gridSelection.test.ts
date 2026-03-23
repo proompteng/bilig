@@ -6,7 +6,7 @@ import {
   createRangeSelection,
   createRowSliceSelection,
   formatSelectionSummary,
-  rectangleToAddresses
+  rectangleToAddresses,
 } from "../gridSelection.js";
 
 describe("gridSelection", () => {
@@ -27,7 +27,7 @@ describe("gridSelection", () => {
     expect(clamped).toEqual({ x: 0, y: 0, width: 5, height: 8 });
     expect(rectangleToAddresses({ x: 1, y: 2, width: 3, height: 2 })).toEqual({
       startAddress: "B3",
-      endAddress: "D4"
+      endAddress: "D4",
     });
   });
 });

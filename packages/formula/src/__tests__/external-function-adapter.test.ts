@@ -9,7 +9,7 @@ import {
   isBuiltinAvailable,
   listExternalFunctionAdapterSurfaces,
   lowerToPlan,
-  parseFormula
+  parseFormula,
 } from "../index.js";
 
 const context = {
@@ -20,7 +20,7 @@ const context = {
       return [numberValue(1), numberValue(2), numberValue(3)];
     }
     return [];
-  }
+  },
 };
 
 describe("external function adapters", () => {
@@ -38,9 +38,11 @@ describe("external function adapters", () => {
         return {
           kind: "scalar",
           implementation: (value = { tag: ValueTag.Empty }) =>
-            value.tag === ValueTag.Number ? numberValue(value.value * 2) : { tag: ValueTag.Error, code: ErrorCode.Value }
+            value.tag === ValueTag.Number
+              ? numberValue(value.value * 2)
+              : { tag: ValueTag.Error, code: ErrorCode.Value },
         };
-      }
+      },
     });
 
     const ast = parseFormula("HOSTDOUBLE(21)");
@@ -62,13 +64,18 @@ describe("external function adapters", () => {
           kind: "lookup",
           implementation: (...args) => {
             const range = args[0];
-            if (!range || typeof range !== "object" || !("kind" in range) || range.kind !== "range") {
+            if (
+              !range ||
+              typeof range !== "object" ||
+              !("kind" in range) ||
+              range.kind !== "range"
+            ) {
               return { tag: ValueTag.Error, code: ErrorCode.Value };
             }
             return range.values.at(-1) ?? { tag: ValueTag.Empty };
-          }
+          },
         };
-      }
+      },
     });
 
     const ast = parseFormula("EXTERNALPICK(A1:A3)");

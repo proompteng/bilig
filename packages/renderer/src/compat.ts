@@ -19,7 +19,7 @@ export function createFiberRoot(container: WorkbookContainer): unknown {
     onError,
     onError,
     onError,
-    null
+    null,
   );
 }
 

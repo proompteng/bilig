@@ -15,21 +15,23 @@ interface CellSubscription {
 export class WorkerViewportCache implements GridEngineLike {
   readonly workbook = {
     getSheet: (sheetName: string) => {
-      const entries = [...this.cellSnapshots.values()].filter((snapshot) => snapshot.sheetName === sheetName);
+      const entries = [...this.cellSnapshots.values()].filter(
+        (snapshot) => snapshot.sheetName === sheetName,
+      );
       if (entries.length === 0) {
         return undefined;
       }
       return {
         grid: {
-          forEachCellEntry: (listener) => {
+          forEachCellEntry: (listener: (cellIndex: number, row: number, col: number) => void) => {
             entries.forEach((snapshot, index) => {
               const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
               listener(index, parsed.row, parsed.col);
             });
-          }
-        }
+          },
+        },
       };
-    }
+    },
   };
 
   private readonly cellSnapshots = new Map<string, CellSnapshot>();
@@ -73,11 +75,15 @@ export class WorkerViewportCache implements GridEngineLike {
     this.listeners.forEach((listener) => listener());
   }
 
-  subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void {
+  subscribeCells(
+    sheetName: string,
+    addresses: readonly string[],
+    listener: () => void,
+  ): () => void {
     const subscription: CellSubscription = {
       sheetName,
       addresses: new Set(addresses),
-      listener
+      listener,
     };
     this.cellSubscriptions.add(subscription);
     return () => {
@@ -88,7 +94,7 @@ export class WorkerViewportCache implements GridEngineLike {
   subscribeViewport(
     sheetName: string,
     viewport: Viewport,
-    listener: (damage?: readonly { cell: CellItem }[]) => void
+    listener: (damage?: readonly { cell: CellItem }[]) => void,
   ): () => void {
     return this.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
       const damage = this.applyPatch(decodeViewportPatch(bytes));
@@ -99,8 +105,18 @@ export class WorkerViewportCache implements GridEngineLike {
   private applyPatch(patch: ReturnType<typeof decodeViewportPatch>): readonly { cell: CellItem }[] {
     if (patch.full) {
       this.clearViewportRegion(patch.viewport.sheetName, patch.viewport);
-      this.clearAxisRange(this.columnWidthsBySheet, patch.viewport.sheetName, patch.viewport.colStart, patch.viewport.colEnd);
-      this.clearAxisRange(this.rowHeightsBySheet, patch.viewport.sheetName, patch.viewport.rowStart, patch.viewport.rowEnd);
+      this.clearAxisRange(
+        this.columnWidthsBySheet,
+        patch.viewport.sheetName,
+        patch.viewport.colStart,
+        patch.viewport.colEnd,
+      );
+      this.clearAxisRange(
+        this.rowHeightsBySheet,
+        patch.viewport.sheetName,
+        patch.viewport.rowStart,
+        patch.viewport.rowEnd,
+      );
     }
 
     const changedKeys = new Set<string>();
@@ -156,7 +172,7 @@ export class WorkerViewportCache implements GridEngineLike {
     store: Map<string, Record<number, number>>,
     sheetName: string,
     start: number,
-    end: number
+    end: number,
   ): void {
     const current = store.get(sheetName);
     if (!current) {
@@ -175,7 +191,7 @@ export class WorkerViewportCache implements GridEngineLike {
       address,
       value: { tag: ValueTag.Empty },
       flags: 0,
-      version: 0
+      version: 0,
     };
   }
 }

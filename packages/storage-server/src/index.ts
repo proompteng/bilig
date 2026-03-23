@@ -42,13 +42,17 @@ export interface PresenceStore {
 export class InMemoryBatchStore implements BatchStore {
   private readonly documents = new Map<string, StoredBatch[]>();
 
-  async append(documentId: string, batch: EngineOpBatch, receivedAtUnixMs = Date.now()): Promise<StoredBatch> {
+  async append(
+    documentId: string,
+    batch: EngineOpBatch,
+    receivedAtUnixMs = Date.now(),
+  ): Promise<StoredBatch> {
     const entries = this.documents.get(documentId) ?? [];
     const record = {
       documentId,
       cursor: entries.length === 0 ? 1 : entries[entries.length - 1]!.cursor + 1,
       batch,
-      receivedAtUnixMs
+      receivedAtUnixMs,
     } satisfies StoredBatch;
     entries.push(record);
     this.documents.set(documentId, entries);
@@ -56,7 +60,9 @@ export class InMemoryBatchStore implements BatchStore {
   }
 
   async listAfter(documentId: string, cursor: number, limit = 256): Promise<StoredBatch[]> {
-    return (this.documents.get(documentId) ?? []).filter((entry) => entry.cursor > cursor).slice(0, limit);
+    return (this.documents.get(documentId) ?? [])
+      .filter((entry) => entry.cursor > cursor)
+      .slice(0, limit);
   }
 
   async latestCursor(documentId: string): Promise<number> {
@@ -146,6 +152,6 @@ export function createInMemoryDocumentPersistence(): InMemoryDocumentPersistence
     batches: new InMemoryBatchStore(),
     snapshots: new InMemorySnapshotStore(),
     ownership: new InMemoryDocumentOwnershipStore(),
-    presence: new InMemoryPresenceStore()
+    presence: new InMemoryPresenceStore(),
   };
 }

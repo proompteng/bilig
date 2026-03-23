@@ -55,7 +55,10 @@ function coerceNumber(value: CellValue): number | undefined {
   }
 }
 
-function coercePositiveStart(value: CellValue | undefined, defaultValue: number): number | CellValue {
+function coercePositiveStart(
+  value: CellValue | undefined,
+  defaultValue: number,
+): number | CellValue {
   if (value === undefined) {
     return defaultValue;
   }
@@ -83,7 +86,10 @@ function isErrorValue(value: number | CellValue): value is CellValue {
   return typeof value !== "number";
 }
 
-function coerceNonNegativeInt(value: CellValue | undefined, defaultValue: number): number | CellValue {
+function coerceNonNegativeInt(
+  value: CellValue | undefined,
+  defaultValue: number,
+): number | CellValue {
   if (value === undefined) {
     return defaultValue;
   }
@@ -137,7 +143,12 @@ function createReplaceBuiltin(): TextBuiltin {
       return existingError;
     }
     const [textValue, startValue, countValue, replacementValue] = args;
-    if (textValue === undefined || startValue === undefined || countValue === undefined || replacementValue === undefined) {
+    if (
+      textValue === undefined ||
+      startValue === undefined ||
+      countValue === undefined ||
+      replacementValue === undefined
+    ) {
       return error(ErrorCode.Value);
     }
     const start = coercePositiveStart(startValue, 1);
@@ -223,14 +234,24 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function indexOfWithMode(text: string, delimiter: string, start: number, matchMode: number): number {
+function indexOfWithMode(
+  text: string,
+  delimiter: string,
+  start: number,
+  matchMode: number,
+): number {
   if (matchMode === 1) {
     return text.toLowerCase().indexOf(delimiter.toLowerCase(), start);
   }
   return text.indexOf(delimiter, start);
 }
 
-function lastIndexOfWithMode(text: string, delimiter: string, start: number, matchMode: number): number {
+function lastIndexOfWithMode(
+  text: string,
+  delimiter: string,
+  start: number,
+  matchMode: number,
+): number {
   if (matchMode === 1) {
     return text.toLowerCase().lastIndexOf(delimiter.toLowerCase(), start);
   }
@@ -279,7 +300,13 @@ function buildSearchRegex(pattern: string): RegExp {
   return new RegExp(source, "i");
 }
 
-function findPosition(needle: string, haystack: string, start: number, caseSensitive: boolean, wildcardAware: boolean): number | CellValue {
+function findPosition(
+  needle: string,
+  haystack: string,
+  start: number,
+  caseSensitive: boolean,
+  wildcardAware: boolean,
+): number | CellValue {
   const startIndex = start - 1;
 
   if (needle === "") {
@@ -434,7 +461,13 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     if (isErrorValue(start)) {
       return start;
     }
-    const found = findPosition(coerceText(findTextValue), coerceText(withinTextValue), start, true, false);
+    const found = findPosition(
+      coerceText(findTextValue),
+      coerceText(withinTextValue),
+      start,
+      true,
+      false,
+    );
     return isErrorValue(found) ? found : numberResult(found);
   },
   SEARCH: (...args) => {
@@ -450,7 +483,13 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     if (isErrorValue(start)) {
       return start;
     }
-    const found = findPosition(coerceText(findTextValue), coerceText(withinTextValue), start, false, true);
+    const found = findPosition(
+      coerceText(findTextValue),
+      coerceText(withinTextValue),
+      start,
+      false,
+      true,
+    );
     return isErrorValue(found) ? found : numberResult(found);
   },
   VALUE: (...args) => {
@@ -470,7 +509,14 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     if (existingError) {
       return existingError;
     }
-    const [textValue, delimiterValue, instanceValue, matchModeValue, matchEndValue, ifNotFoundValue] = args;
+    const [
+      textValue,
+      delimiterValue,
+      instanceValue,
+      matchModeValue,
+      matchEndValue,
+      ifNotFoundValue,
+    ] = args;
     if (textValue === undefined || delimiterValue === undefined) {
       return error(ErrorCode.Value);
     }
@@ -485,13 +531,13 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     const matchMode = matchModeValue === undefined ? 0 : coerceNumber(matchModeValue);
     const matchEndNumber = matchEndValue === undefined ? 0 : coerceNumber(matchEndValue);
     if (
-      instanceNumber === undefined
-      || matchMode === undefined
-      || matchEndNumber === undefined
-      || !Number.isInteger(instanceNumber)
-      || instanceNumber === 0
-      || !Number.isInteger(matchMode)
-      || (matchMode !== 0 && matchMode !== 1)
+      instanceNumber === undefined ||
+      matchMode === undefined ||
+      matchEndNumber === undefined ||
+      !Number.isInteger(instanceNumber) ||
+      instanceNumber === 0 ||
+      !Number.isInteger(matchMode) ||
+      (matchMode !== 0 && matchMode !== 1)
     ) {
       return error(ErrorCode.Value);
     }
@@ -524,7 +570,7 @@ export const textBuiltins: Record<string, TextBuiltin> = {
   REPLACE: createReplaceBuiltin(),
   SUBSTITUTE: createSubstituteBuiltin(),
   REPT: createReptBuiltin(),
-  ...textPlaceholderBuiltins
+  ...textPlaceholderBuiltins,
 };
 
 export function getTextBuiltin(name: string): TextBuiltin | undefined {

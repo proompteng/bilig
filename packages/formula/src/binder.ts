@@ -103,7 +103,7 @@ const WASM_SAFE_BUILTINS = new Set([
   "LOWER",
   "FIND",
   "SEARCH",
-  "VALUE"
+  "VALUE",
 ]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
@@ -126,8 +126,10 @@ function isCellVectorNode(node: FormulaNode): boolean {
   try {
     const sheetPrefix = node.sheetName ? `${node.sheetName}!` : "";
     const range = parseRangeAddress(`${sheetPrefix}${node.start}:${node.end}`);
-    return range.kind === "cells"
-      && (range.start.row === range.end.row || range.start.col === range.end.col);
+    return (
+      range.kind === "cells" &&
+      (range.start.row === range.end.row || range.start.col === range.end.col)
+    );
   } catch {
     return false;
   }
@@ -269,7 +271,15 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "ColumnRef":
         throw new Error("Row and column references must appear inside a range");
       case "RangeRef":
-        deps.add(formatRangeAddress(parseRangeAddress(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`)));
+        deps.add(
+          formatRangeAddress(
+            parseRangeAddress(
+              node.sheetName
+                ? `${node.sheetName}!${node.start}:${node.end}`
+                : `${node.start}:${node.end}`,
+            ),
+          ),
+        );
         break;
       case "UnaryExpr":
         collectDeps(node.argument, localNames);
@@ -347,7 +357,8 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           if (range.kind !== "cells") {
             return true;
           }
-          const cellCount = (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1);
+          const cellCount =
+            (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1);
           return cellCount <= MAX_WASM_RANGE_CELLS;
         } catch {
           return false;
@@ -355,9 +366,11 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "UnaryExpr":
         return ["+", "-"].includes(node.operator) && isWasmSafe(node.argument);
       case "BinaryExpr":
-        return ["+", "-", "*", "/", "^", "&", "=", "<>", ">", ">=", "<", "<="].includes(node.operator)
-          && isWasmSafe(node.left)
-          && isWasmSafe(node.right);
+        return (
+          ["+", "-", "*", "/", "^", "&", "=", "<>", ">", ">=", "<", "<="].includes(node.operator) &&
+          isWasmSafe(node.left) &&
+          isWasmSafe(node.right)
+        );
       case "CallExpr": {
         const rewritten = rewriteSpecialCall(node);
         if (rewritten) {
@@ -365,14 +378,14 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         }
         const callee = node.callee.toUpperCase();
         if (
-          callee === "LET"
-          || callee === "LAMBDA"
-          || callee === "MAKEARRAY"
-          || callee === "MAP"
-          || callee === "REDUCE"
-          || callee === "SCAN"
-          || callee === "BYROW"
-          || callee === "BYCOL"
+          callee === "LET" ||
+          callee === "LAMBDA" ||
+          callee === "MAKEARRAY" ||
+          callee === "MAP" ||
+          callee === "REDUCE" ||
+          callee === "SCAN" ||
+          callee === "BYROW" ||
+          callee === "BYCOL"
         ) {
           return false;
         }
@@ -391,13 +404,15 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
 
   function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode[]): boolean {
     const isScalarArg = (arg: FormulaNode): boolean => isWasmSafe(arg);
-    const isCellRangeArg = (arg: FormulaNode): boolean => isWasmSafe(arg, true) && isCellRangeNode(arg);
-    const isCellVectorArg = (arg: FormulaNode): boolean => isWasmSafe(arg, true) && isCellVectorNode(arg);
+    const isCellRangeArg = (arg: FormulaNode): boolean =>
+      isWasmSafe(arg, true) && isCellRangeNode(arg);
+    const isCellVectorArg = (arg: FormulaNode): boolean =>
+      isWasmSafe(arg, true) && isCellVectorNode(arg);
     const isNativeSequenceArg = (arg: FormulaNode): boolean =>
-      arg.kind === "CallExpr"
-      && arg.callee.toUpperCase() === "SEQUENCE"
-      && isWasmSafeBuiltinArity("SEQUENCE", arg.args.length)
-      && arg.args.every((child) => isWasmSafe(child));
+      arg.kind === "CallExpr" &&
+      arg.callee.toUpperCase() === "SEQUENCE" &&
+      isWasmSafeBuiltinArity("SEQUENCE", arg.args.length) &&
+      arg.args.every((child) => isWasmSafe(child));
 
     switch (callee) {
       case "SUM":
@@ -413,15 +428,19 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         if (args.length === 0 || args.length % 2 !== 0) {
           return false;
         }
-        return args.every((arg, index) => (index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg)));
+        return args.every((arg, index) =>
+          index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg),
+        );
       case "SUMIF":
       case "AVERAGEIF":
         if (args.length !== 2 && args.length !== 3) {
           return false;
         }
-        return isCellRangeArg(args[0]!)
-          && isScalarArg(args[1]!)
-          && (args.length === 2 || isCellRangeArg(args[2]!));
+        return (
+          isCellRangeArg(args[0]!) &&
+          isScalarArg(args[1]!) &&
+          (args.length === 2 || isCellRangeArg(args[2]!))
+        );
       case "SUMIFS":
       case "AVERAGEIFS":
         if (args.length < 3 || args.length % 2 === 0) {
@@ -430,42 +449,58 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         if (!isCellRangeArg(args[0]!)) {
           return false;
         }
-        return args.slice(1).every((arg, index) => (index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg)));
+        return args
+          .slice(1)
+          .every((arg, index) => (index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg)));
       case "SUMPRODUCT":
         return args.length >= 1 && args.every((arg) => isCellRangeArg(arg));
       case "MATCH":
-        return (args.length === 2 || args.length === 3)
-          && isScalarArg(args[0]!)
-          && isCellVectorArg(args[1]!)
-          && (args.length === 2 || isScalarArg(args[2]!));
+        return (
+          (args.length === 2 || args.length === 3) &&
+          isScalarArg(args[0]!) &&
+          isCellVectorArg(args[1]!) &&
+          (args.length === 2 || isScalarArg(args[2]!))
+        );
       case "XMATCH":
-        return (args.length >= 2 && args.length <= 4)
-          && isScalarArg(args[0]!)
-          && isCellVectorArg(args[1]!)
-          && args.slice(2).every((arg) => isScalarArg(arg));
+        return (
+          args.length >= 2 &&
+          args.length <= 4 &&
+          isScalarArg(args[0]!) &&
+          isCellVectorArg(args[1]!) &&
+          args.slice(2).every((arg) => isScalarArg(arg))
+        );
       case "XLOOKUP":
-        return (args.length >= 3 && args.length <= 6)
-          && isScalarArg(args[0]!)
-          && isCellVectorArg(args[1]!)
-          && isCellVectorArg(args[2]!)
-          && args.slice(3).every((arg) => isScalarArg(arg));
+        return (
+          args.length >= 3 &&
+          args.length <= 6 &&
+          isScalarArg(args[0]!) &&
+          isCellVectorArg(args[1]!) &&
+          isCellVectorArg(args[2]!) &&
+          args.slice(3).every((arg) => isScalarArg(arg))
+        );
       case "INDEX":
-        return (args.length === 2 || args.length === 3)
-          && isCellRangeArg(args[0]!)
-          && isScalarArg(args[1]!)
-          && (args.length === 2 || isScalarArg(args[2]!));
+        return (
+          (args.length === 2 || args.length === 3) &&
+          isCellRangeArg(args[0]!) &&
+          isScalarArg(args[1]!) &&
+          (args.length === 2 || isScalarArg(args[2]!))
+        );
       case "VLOOKUP":
-        return (args.length === 3 || args.length === 4)
-          && isScalarArg(args[0]!)
-          && isCellRangeArg(args[1]!)
-          && isScalarArg(args[2]!)
-          && (args.length === 3 || isScalarArg(args[3]!));
+        return (
+          (args.length === 3 || args.length === 4) &&
+          isScalarArg(args[0]!) &&
+          isCellRangeArg(args[1]!) &&
+          isScalarArg(args[2]!) &&
+          (args.length === 3 || isScalarArg(args[3]!))
+        );
       case "HLOOKUP":
-        return (args.length === 3 || args.length === 4)
-          && isScalarArg(args[0]!)
-          && isCellRangeArg(args[1]!)
-          && isScalarArg(args[2]!)
-          && (args.length === 3 || isScalarArg(args[3]!));
+        return (
+          (args.length === 3 || args.length === 4) &&
+          isScalarArg(args[0]!) &&
+          isCellRangeArg(args[1]!) &&
+          isScalarArg(args[2]!) &&
+          (args.length === 3 || isScalarArg(args[3]!))
+        );
       case "DAYS":
       case "WEEKNUM":
         return args.every((arg) => isScalarArg(arg));
@@ -516,7 +551,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
     mode:
       ast.kind === "RangeRef" || (!isWasmSafe(ast) && !isTopLevelWasmSafe(ast))
         ? FormulaMode.JsOnly
-        : FormulaMode.WasmFastPath
+        : FormulaMode.WasmFastPath,
   };
 }
 
@@ -612,7 +647,7 @@ export function encodeBuiltin(name: string): BuiltinId {
     AVERAGEIF: BuiltinId.Averageif,
     AVERAGEIFS: BuiltinId.Averageifs,
     SUMPRODUCT: BuiltinId.Sumproduct,
-    SEQUENCE: BuiltinId.Sequence
+    SEQUENCE: BuiltinId.Sequence,
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

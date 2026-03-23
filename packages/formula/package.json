@@ -1,7 +1,31 @@
 {
   "name": "@bilig/formula",
   "version": "0.1.0",
+  "description": "Excel-style formula parsing, binding, compilation, and evaluation for bilig.",
+  "keywords": [
+    "bilig",
+    "excel",
+    "formula",
+    "parser",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/formula#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/formula"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,40 +38,16 @@
       "import": "./dist/program-arena.js"
     }
   },
-  "dependencies": {
-    "@bilig/protocol": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
-  "description": "Excel-style formula parsing, binding, compilation, and evaluation for bilig.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/formula"
+  "dependencies": {
+    "@bilig/protocol": "workspace:*"
   },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/formula#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "formula",
-    "excel",
-    "parser",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

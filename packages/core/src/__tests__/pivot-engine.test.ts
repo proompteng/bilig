@@ -17,15 +17,15 @@ describe("materializePivotTable", () => {
         groupBy: ["Region", "Product"],
         values: [
           { sourceColumn: "Sales", summarizeBy: "sum" },
-          { sourceColumn: "Sales", summarizeBy: "count", outputLabel: "Rows" }
-        ]
+          { sourceColumn: "Sales", summarizeBy: "count", outputLabel: "Rows" },
+        ],
       },
       [
         [stringValue("Region"), stringValue("Product"), stringValue("Sales")],
         [stringValue("East"), stringValue("Widget"), numberValue(10)],
         [stringValue("East"), stringValue("Widget"), numberValue(5)],
-        [stringValue("West"), stringValue("Gizmo"), numberValue(7)]
-      ]
+        [stringValue("West"), stringValue("Gizmo"), numberValue(7)],
+      ],
     );
 
     expect(result).toEqual({
@@ -44,8 +44,8 @@ describe("materializePivotTable", () => {
         stringValue("West"),
         stringValue("Gizmo"),
         numberValue(7),
-        numberValue(1)
-      ]
+        numberValue(1),
+      ],
     });
   });
 
@@ -53,9 +53,9 @@ describe("materializePivotTable", () => {
     const result = materializePivotTable(
       {
         groupBy: ["Region"],
-        values: [{ sourceColumn: "Sales", summarizeBy: "sum" }]
+        values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
       },
-      [[stringValue("Category"), stringValue("Amount")]]
+      [[stringValue("Category"), stringValue("Amount")]],
     );
 
     expect(result).toEqual({
@@ -63,7 +63,7 @@ describe("materializePivotTable", () => {
       code: ErrorCode.Value,
       rows: 1,
       cols: 1,
-      values: [{ tag: ValueTag.Error, code: ErrorCode.Value }]
+      values: [{ tag: ValueTag.Error, code: ErrorCode.Value }],
     });
   });
 });

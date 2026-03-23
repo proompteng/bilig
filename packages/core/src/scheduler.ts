@@ -28,7 +28,7 @@ export class RecalcScheduler {
     graph: SchedulerReverseGraph,
     cellStore: CellStore,
     hasFormula: (cellIndex: number) => boolean,
-    rangeCount: number
+    rangeCount: number,
   ): SchedulerResult {
     this.ensureCellCapacity(cellStore.size + 1);
     this.ensureRangeCapacity(rangeCount + 1);
@@ -100,7 +100,7 @@ export class RecalcScheduler {
       return {
         orderedFormulaCellIndices: this.orderedDirty,
         orderedFormulaCount: 0,
-        rangeNodeVisits
+        rangeNodeVisits,
       };
     }
 
@@ -132,7 +132,7 @@ export class RecalcScheduler {
     return {
       orderedFormulaCellIndices: this.orderedDirty,
       orderedFormulaCount: dirtyLength,
-      rangeNodeVisits
+      rangeNodeVisits,
     };
   }
 

@@ -4,19 +4,28 @@ import {
   canonicalFormulaFixtures,
   canonicalWorkbookSemanticsFixtures,
   type ExcelExpectedValue,
-  type ExcelFixtureCase
+  type ExcelFixtureCase,
 } from "../../../excel-fixtures/src/index.js";
 import { excelDateTimeFixtureSuite } from "../../../excel-fixtures/src/datetime-fixtures.js";
 import { formatAddress, parseCellAddress, parseRangeAddress } from "../addressing.js";
 import { compileFormula, evaluatePlan, evaluatePlanResult, isArrayValue } from "../index.js";
 import { getCompatibilityEntry } from "../compatibility.js";
 
-const executableStatuses = new Set(["implemented-js", "implemented-js-and-wasm-shadow", "implemented-wasm-production"]);
+const executableStatuses = new Set([
+  "implemented-js",
+  "implemented-js-and-wasm-shadow",
+  "implemented-wasm-production",
+]);
 
 const executableFixtures = canonicalFormulaFixtures.filter((fixture) => {
   const entry = getCompatibilityEntry(fixture.id);
   const hasVolatileCall = /\b(TODAY|NOW)\s*\(/i.test(fixture.formula);
-  return entry !== undefined && executableStatuses.has(entry.status) && fixture.family !== "volatile" && !hasVolatileCall;
+  return (
+    entry !== undefined &&
+    executableStatuses.has(entry.status) &&
+    fixture.family !== "volatile" &&
+    !hasVolatileCall
+  );
 });
 
 const executableWorkbookSemanticsFixtures = canonicalWorkbookSemanticsFixtures.filter((fixture) => {
@@ -27,7 +36,12 @@ const executableWorkbookSemanticsFixtures = canonicalWorkbookSemanticsFixtures.f
 const executableDateTimeFixtures = (excelDateTimeFixtureSuite.cases ?? []).filter((fixture) => {
   const entry = getCompatibilityEntry(fixture.id);
   const hasVolatileCall = /\b(TODAY|NOW|RAND)\s*\(/i.test(fixture.formula);
-  return entry !== undefined && executableStatuses.has(entry.status) && fixture.family !== "volatile" && !hasVolatileCall;
+  return (
+    entry !== undefined &&
+    executableStatuses.has(entry.status) &&
+    fixture.family !== "volatile" &&
+    !hasVolatileCall
+  );
 });
 
 describe("excel fixture harness", () => {
@@ -51,16 +65,20 @@ describe("excel fixture harness", () => {
 
   it("executes implemented volatile RAND fixtures deterministically through the JS evaluator", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.625);
-    const randFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "volatile:rand-basic");
+    const randFixture = canonicalFormulaFixtures.find(
+      (fixture) => fixture.id === "volatile:rand-basic",
+    );
 
     expect(randFixture).toBeDefined();
-    expect(getCompatibilityEntry("volatile:rand-basic")?.status).toBe("implemented-wasm-production");
+    expect(getCompatibilityEntry("volatile:rand-basic")?.status).toBe(
+      "implemented-wasm-production",
+    );
 
     const compiled = compileFormula(randFixture!.formula);
     const value = evaluatePlan(compiled.jsPlan, {
       sheetName: randFixture!.sheetName ?? "Sheet1",
       resolveCell: () => ({ tag: ValueTag.Empty }),
-      resolveRange: () => []
+      resolveRange: () => [],
     });
 
     expect(randomSpy).toHaveBeenCalled();
@@ -71,37 +89,61 @@ describe("excel fixture harness", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-19T15:45:30.000Z"));
 
-    const todayFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "date-time:today-volatile");
-    const nowFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "date-time:now-volatile");
+    const todayFixture = canonicalFormulaFixtures.find(
+      (fixture) => fixture.id === "date-time:today-volatile",
+    );
+    const nowFixture = canonicalFormulaFixtures.find(
+      (fixture) => fixture.id === "date-time:now-volatile",
+    );
 
     expect(todayFixture).toBeDefined();
     expect(nowFixture).toBeDefined();
-    expect(getCompatibilityEntry("date-time:today-volatile")?.status).toBe("implemented-wasm-production");
-    expect(getCompatibilityEntry("date-time:now-volatile")?.status).toBe("implemented-wasm-production");
+    expect(getCompatibilityEntry("date-time:today-volatile")?.status).toBe(
+      "implemented-wasm-production",
+    );
+    expect(getCompatibilityEntry("date-time:now-volatile")?.status).toBe(
+      "implemented-wasm-production",
+    );
 
     const todayCompiled = compileFormula(todayFixture!.formula);
     const nowCompiled = compileFormula(nowFixture!.formula);
     const context = {
       sheetName: "Sheet1",
-      resolveCell: () => ({ tag: ValueTag.Empty } as const),
-      resolveRange: () => []
+      resolveCell: () => ({ tag: ValueTag.Empty }) as const,
+      resolveRange: () => [],
     };
 
-    expect(evaluatePlan(todayCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(firstOutput(todayFixture).expected));
-    expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(expectedValueToCellValue(firstOutput(nowFixture).expected));
+    expect(evaluatePlan(todayCompiled.jsPlan, context)).toEqual(
+      expectedValueToCellValue(firstOutput(todayFixture).expected),
+    );
+    expect(evaluatePlan(nowCompiled.jsPlan, context)).toEqual(
+      expectedValueToCellValue(firstOutput(nowFixture).expected),
+    );
   });
 
   it("executes the seeded logical backlog fixtures after native promotion", () => {
-    const ifFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "logical:if-condition-error");
-    const ifnaFixture = canonicalFormulaFixtures.find((fixture) => fixture.id === "logical:ifna-catches-na-only");
+    const ifFixture = canonicalFormulaFixtures.find(
+      (fixture) => fixture.id === "logical:if-condition-error",
+    );
+    const ifnaFixture = canonicalFormulaFixtures.find(
+      (fixture) => fixture.id === "logical:ifna-catches-na-only",
+    );
 
     expect(ifFixture).toBeDefined();
     expect(ifnaFixture).toBeDefined();
-    expect(getCompatibilityEntry("logical:if-condition-error")?.status).toBe("implemented-wasm-production");
-    expect(getCompatibilityEntry("logical:ifna-catches-na-only")?.status).toBe("implemented-wasm-production");
+    expect(getCompatibilityEntry("logical:if-condition-error")?.status).toBe(
+      "implemented-wasm-production",
+    );
+    expect(getCompatibilityEntry("logical:ifna-catches-na-only")?.status).toBe(
+      "implemented-wasm-production",
+    );
 
-    expect(evaluateFixture(ifFixture)).toEqual(expectedValueToCellValue(firstOutput(ifFixture).expected));
-    expect(evaluateFixture(ifnaFixture)).toEqual(expectedValueToCellValue(firstOutput(ifnaFixture).expected));
+    expect(evaluateFixture(ifFixture)).toEqual(
+      expectedValueToCellValue(firstOutput(ifFixture).expected),
+    );
+    expect(evaluateFixture(ifnaFixture)).toEqual(
+      expectedValueToCellValue(firstOutput(ifnaFixture).expected),
+    );
   });
 });
 
@@ -120,7 +162,7 @@ function expectFixtureResult(fixture: ExcelFixtureCase): void {
 
 function assertArrayFixtureResult(
   fixture: ExcelFixtureCase,
-  result: Extract<ReturnType<typeof evaluatePlanResult>, { kind: "array" }>
+  result: Extract<ReturnType<typeof evaluatePlanResult>, { kind: "array" }>,
 ): void {
   const defaultSheetName = fixture.sheetName ?? "Sheet1";
   const first = fixture.outputs[0];
@@ -141,7 +183,7 @@ function assertArrayFixtureResult(
     maxCol = Math.max(maxCol, address.col);
     expectedByOffset.set(
       `${address.row - firstAddress.row}:${address.col - firstAddress.col}`,
-      expectedValueToCellValue(output.expected)
+      expectedValueToCellValue(output.expected),
     );
   });
 
@@ -152,7 +194,7 @@ function assertArrayFixtureResult(
       const rowOffset = Math.floor(index / result.cols);
       const colOffset = index % result.cols;
       return expectedByOffset.get(`${rowOffset}:${colOffset}`) ?? { tag: ValueTag.Empty };
-    })
+    }),
   );
 }
 
@@ -175,9 +217,13 @@ function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluateP
     values.set(input.address.toUpperCase(), literalToCellValue(input.input));
   }
   const definedNames = new Map<string, CellValue>(
-    (fixture.definedNames ?? []).map((definedName) => [definedName.name.toUpperCase(), literalToCellValue(definedName.value)])
+    (fixture.definedNames ?? []).map((definedName) => [
+      definedName.name.toUpperCase(),
+      literalToCellValue(definedName.value),
+    ]),
   );
-  const hasSheet = (sheetName: string) => sheetName === defaultSheetName || sheetValues.has(sheetName);
+  const hasSheet = (sheetName: string) =>
+    sheetName === defaultSheetName || sheetValues.has(sheetName);
 
   return evaluatePlanResult(compiled.jsPlan, {
     sheetName: defaultSheetName,
@@ -202,16 +248,21 @@ function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluateP
       const sheetCells = sheetValues.get(sheetName);
       for (let row = range.start.row; row <= range.end.row; row += 1) {
         for (let col = range.start.col; col <= range.end.col; col += 1) {
-          output.push(sheetCells?.get(formatAddress(row, col).toUpperCase()) ?? { tag: ValueTag.Empty });
+          output.push(
+            sheetCells?.get(formatAddress(row, col).toUpperCase()) ?? { tag: ValueTag.Empty },
+          );
         }
       }
       return output;
     },
-    resolveName: (name) => definedNames.get(name.toUpperCase()) ?? { tag: ValueTag.Error, code: ErrorCode.Name }
+    resolveName: (name) =>
+      definedNames.get(name.toUpperCase()) ?? { tag: ValueTag.Error, code: ErrorCode.Name },
   });
 }
 
-function firstOutput(fixture: { outputs: { expected: ExcelExpectedValue }[] }): { expected: ExcelExpectedValue } {
+function firstOutput(fixture: { outputs: { expected: ExcelExpectedValue }[] }): {
+  expected: ExcelExpectedValue;
+} {
   expect(fixture.outputs).toHaveLength(1);
   return fixture.outputs[0];
 }

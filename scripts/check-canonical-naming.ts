@@ -7,16 +7,33 @@ const root = process.cwd();
 const roots = ["packages", "apps", "scripts", "docs", "e2e"];
 const allowedHistoricalSegments = ["/history/", "/historical/"];
 const ignoredDirNames = new Set(["node_modules", "dist", "coverage", ".git", ".turbo"]);
-const ignoredExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".wasm", ".tsbuildinfo"]);
+const ignoredExtensions = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".wasm",
+  ".tsbuildinfo",
+]);
 const token = (...parts) => parts.join("");
 const bannedPatterns = [
   { label: token("top", "50"), regex: new RegExp(token("top", "50"), "gi") },
   { label: token("top", "100"), regex: new RegExp(token("top", "100"), "gi") },
   { label: token("Top", " ", "50"), regex: new RegExp(token("Top", " ", "50"), "g") },
   { label: token("Top", " ", "100"), regex: new RegExp(token("Top", " ", "100"), "g") },
-  { label: token("top", "100", "-", "canonical"), regex: new RegExp(token("top", "100", "-", "canonical"), "g") },
-  { label: token("post", "-", "top", "100"), regex: new RegExp(token("post", "-", "top", "100"), "g") },
-  { label: token("formula", "-", "top", "100"), regex: new RegExp(token("formula", "-", "top", "100"), "g") }
+  {
+    label: token("top", "100", "-", "canonical"),
+    regex: new RegExp(token("top", "100", "-", "canonical"), "g"),
+  },
+  {
+    label: token("post", "-", "top", "100"),
+    regex: new RegExp(token("post", "-", "top", "100"), "g"),
+  },
+  {
+    label: token("formula", "-", "top", "100"),
+    regex: new RegExp(token("formula", "-", "top", "100"), "g"),
+  },
 ];
 
 const violations = [];

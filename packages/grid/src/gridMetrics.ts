@@ -39,20 +39,20 @@ export function getGridMetrics(variant: "playground" | "product"): GridMetrics {
         columnWidth: PRODUCT_COLUMN_WIDTH,
         rowHeight: PRODUCT_ROW_HEIGHT,
         headerHeight: PRODUCT_HEADER_HEIGHT,
-        rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH
+        rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH,
       }
     : {
         columnWidth: PLAYGROUND_COLUMN_WIDTH,
         rowHeight: PLAYGROUND_ROW_HEIGHT,
         headerHeight: PLAYGROUND_HEADER_HEIGHT,
-        rowMarkerWidth: PLAYGROUND_ROW_MARKER_WIDTH
+        rowMarkerWidth: PLAYGROUND_ROW_MARKER_WIDTH,
       };
 }
 
 export function getResolvedColumnWidth(
   columnWidths: Readonly<Record<number, number>>,
   col: number,
-  defaultWidth: number
+  defaultWidth: number,
 ): number {
   return columnWidths[col] ?? defaultWidth;
 }
@@ -62,7 +62,7 @@ export function getVisibleColumnBounds(
   dataLeft: number,
   maxCols: number,
   columnWidths: Readonly<Record<number, number>>,
-  defaultWidth: number
+  defaultWidth: number,
 ): VisibleColumnBound[] {
   const bounds: VisibleColumnBound[] = [];
   const colEnd = Math.min(maxCols - 1, range.x + range.width - 1);
@@ -81,9 +81,15 @@ export function resolveColumnAtClientX(
   dataLeft: number,
   maxCols: number,
   columnWidths: Readonly<Record<number, number>>,
-  defaultWidth: number
+  defaultWidth: number,
 ): number | null {
-  for (const column of getVisibleColumnBounds(range, dataLeft, maxCols, columnWidths, defaultWidth)) {
+  for (const column of getVisibleColumnBounds(
+    range,
+    dataLeft,
+    maxCols,
+    columnWidths,
+    defaultWidth,
+  )) {
     if (clientX >= column.left && clientX < column.right) {
       return column.index;
     }

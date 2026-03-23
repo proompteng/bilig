@@ -5,15 +5,18 @@ export function useSelection(engine: SpreadsheetEngine) {
   const selection = useSyncExternalStore(
     (listener) => engine.subscribeSelection(listener),
     () => selectors.selectSelectionState(engine),
-    () => selectors.selectSelectionState(engine)
+    () => selectors.selectSelectionState(engine),
   );
-  const select = useCallback((nextSheetName: string, nextAddress: string | null) => {
-    engine.setSelection(nextSheetName, nextAddress);
-  }, [engine]);
+  const select = useCallback(
+    (nextSheetName: string, nextAddress: string | null) => {
+      engine.setSelection(nextSheetName, nextAddress);
+    },
+    [engine],
+  );
 
   return {
     sheetName: selection.sheetName,
     address: selection.address,
-    select
+    select,
   };
 }

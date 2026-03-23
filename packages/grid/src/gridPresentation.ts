@@ -10,7 +10,7 @@ export function getOverlayStyle(isEditingCell: boolean, overlayBounds: Rectangle
     left: overlayBounds.x - 1,
     position: "fixed" as const,
     top: overlayBounds.y - 1,
-    width: overlayBounds.width + 2
+    width: overlayBounds.width + 2,
   };
 }
 
@@ -31,13 +31,14 @@ export function getGridTheme(variant: "playground" | "product") {
     drilldownBorder: "#d5d9de",
     editorFontSize: variant === "product" ? "12px" : "13px",
     fontFamily: '"Aptos","Segoe UI","IBM Plex Sans",sans-serif',
-    headerFontStyle: variant === "product"
-      ? "600 11px Aptos, Segoe UI, IBM Plex Sans, sans-serif"
-      : "600 12px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
+    headerFontStyle:
+      variant === "product"
+        ? "600 11px Aptos, Segoe UI, IBM Plex Sans, sans-serif"
+        : "600 12px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
     horizontalBorderColor: "#e5e7eb",
     lineHeight: variant === "product" ? 1.2 : 1.3,
     textDark: "#101828",
     textHeader: "#344054",
-    textLight: "#667085"
+    textLight: "#667085",
   };
 }

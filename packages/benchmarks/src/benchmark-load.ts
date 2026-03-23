@@ -20,7 +20,12 @@ export async function runLoadBenchmark(materializedCells = 10_000): Promise<Load
   const elapsed = performance.now() - started;
   const memoryAfter = sampleMemory();
 
-  return { scenario: "load", materializedCells, elapsedMs: elapsed, memory: measureMemory(memoryBefore, memoryAfter) };
+  return {
+    scenario: "load",
+    materializedCells,
+    elapsedMs: elapsed,
+    memory: measureMemory(memoryBefore, memoryAfter),
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

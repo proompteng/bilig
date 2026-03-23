@@ -8,7 +8,9 @@ import { ValueTag } from "@bilig/protocol";
 
 describe("playground cell subscriptions", () => {
   it("rerenders a watched cell when its own value and format change", async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     const engine = new SpreadsheetEngine({ workbookName: "subscription-test" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -16,7 +18,8 @@ describe("playground cell subscriptions", () => {
 
     const Probe = React.memo(function Probe() {
       const snapshot = useCell(engine, "Sheet1", "A1");
-      const value = snapshot.value.tag === ValueTag.Number ? String(snapshot.value.value) : snapshot.value.tag;
+      const value =
+        snapshot.value.tag === ValueTag.Number ? String(snapshot.value.value) : snapshot.value.tag;
       return <div data-testid="watched-cell">{`${value}|${snapshot.format ?? ""}`}</div>;
     });
 
@@ -49,7 +52,9 @@ describe("playground cell subscriptions", () => {
   });
 
   it("rerenders a watched empty cell when it materializes later", async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     const engine = new SpreadsheetEngine({ workbookName: "materialize-test" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -83,7 +88,9 @@ describe("playground cell subscriptions", () => {
   });
 
   it("rerenders selection subscribers when the engine selection changes", async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     const engine = new SpreadsheetEngine({ workbookName: "selection-test" });
     await engine.ready();
 

@@ -28,7 +28,7 @@ function snapshotSignature(snapshot: CellSnapshot): string {
     snapshot.formula ?? "",
     snapshot.format ?? "",
     snapshot.input ?? "",
-    valueKey
+    valueKey,
   ].join("|");
 }
 
@@ -41,7 +41,7 @@ export function useCell(engine: SpreadsheetEngine, sheetName: string, addr: stri
   useSyncExternalStore(
     (listener) => engine.subscribeCell(sheetName, addr, listener),
     getRevision,
-    getRevision
+    getRevision,
   );
 
   return selectors.selectCellSnapshot(engine, sheetName, addr);

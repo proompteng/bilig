@@ -1,7 +1,31 @@
 {
   "name": "@bilig/renderer",
   "version": "0.1.0",
+  "description": "Declarative React renderer root and workbook DSL for bilig.",
+  "keywords": [
+    "bilig",
+    "react",
+    "reconciler",
+    "renderer",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/renderer#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/renderer"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,45 +34,21 @@
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
   "dependencies": {
     "@bilig/core": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "react-reconciler": "0.33.0"
   },
-  "scripts": {
-    "build": "tsc -p tsconfig.json"
-  },
-  "description": "Declarative React renderer root and workbook DSL for bilig.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/renderer"
-  },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/renderer#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "renderer",
-    "react",
-    "reconciler",
-    "spreadsheet"
-  ],
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "peerDependencies": {
     "react": "^19.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
   }
 }

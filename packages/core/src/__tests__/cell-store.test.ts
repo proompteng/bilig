@@ -35,9 +35,12 @@ describe("CellStore", () => {
     expect(store.getValue(stringIndex, (id) => `string-${id}`)).toEqual({
       tag: ValueTag.String,
       value: "string-4",
-      stringId: 4
+      stringId: 4,
     });
-    expect(store.getValue(errorIndex, () => "")).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(store.getValue(errorIndex, () => "")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
     expect(store.versions[numberIndex]).toBe(1);
     expect(store.versions[stringIndex]).toBe(1);
     expect(store.versions[errorIndex]).toBe(1);
@@ -45,8 +48,14 @@ describe("CellStore", () => {
     store.reset();
 
     expect(store.size).toBe(0);
-    expect(Array.from(store.tags.slice(0, store.capacity))).toEqual(Array.from({ length: store.capacity }, () => 0));
-    expect(Array.from(store.stringIds.slice(0, store.capacity))).toEqual(Array.from({ length: store.capacity }, () => 0));
-    expect(Array.from(store.cycleGroupIds.slice(0, store.capacity))).toEqual(Array.from({ length: store.capacity }, () => -1));
+    expect(Array.from(store.tags.slice(0, store.capacity))).toEqual(
+      Array.from({ length: store.capacity }, () => 0),
+    );
+    expect(Array.from(store.stringIds.slice(0, store.capacity))).toEqual(
+      Array.from({ length: store.capacity }, () => 0),
+    );
+    expect(Array.from(store.cycleGroupIds.slice(0, store.capacity))).toEqual(
+      Array.from({ length: store.capacity }, () => -1),
+    );
   });
 });

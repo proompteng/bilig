@@ -22,7 +22,7 @@ describe("benchmark workbook generators", () => {
       { address: "B1", formula: "A1*2" },
       { address: "B2", formula: "B1+1" },
       { address: "B3", formula: "B2+1" },
-      { address: "B4", formula: "B3+1" }
+      { address: "B4", formula: "B3+1" },
     ]);
   });
 });

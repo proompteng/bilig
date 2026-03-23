@@ -11,20 +11,21 @@ const stdioMode = process.env["BILIG_AGENT_STDIO"] === "1";
 const sessionManager = new LocalWorkbookSessionManager(
   syncServerUrl
     ? {
-        createSyncRelay: (documentId) => createHttpSyncRelay({
-          documentId,
-          baseUrl: syncServerUrl
-        })
+        createSyncRelay: (documentId) =>
+          createHttpSyncRelay({
+            documentId,
+            baseUrl: syncServerUrl,
+          }),
       }
-    : {}
+    : {},
 );
 const { app } = createLocalServer({
   sessionManager,
-  logger: !stdioMode
+  logger: !stdioMode,
 });
 const stdioLoop = stdioMode
   ? attachStdioAgentLoop({
-      handler: sessionManager
+      handler: sessionManager,
     })
   : null;
 

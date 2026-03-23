@@ -27,8 +27,23 @@ interface VolatileMetadata {
 }
 
 function producesSpillResult(node: FormulaNode): boolean {
-  return node.kind === "CallExpr"
-    && ["SEQUENCE", "FILTER", "UNIQUE", "MAKEARRAY", "MAP", "SCAN", "BYROW", "BYCOL", "RANDARRAY", "MUNIT", "MINVERSE", "MMULT"].includes(node.callee.toUpperCase());
+  return (
+    node.kind === "CallExpr" &&
+    [
+      "SEQUENCE",
+      "FILTER",
+      "UNIQUE",
+      "MAKEARRAY",
+      "MAP",
+      "SCAN",
+      "BYROW",
+      "BYCOL",
+      "RANDARRAY",
+      "MUNIT",
+      "MINVERSE",
+      "MMULT",
+    ].includes(node.callee.toUpperCase())
+  );
 }
 
 function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
@@ -52,7 +67,7 @@ function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
       const right = analyzeVolatileMetadata(node.right);
       return {
         volatile: left.volatile || right.volatile,
-        randCallCount: left.randCallCount + right.randCallCount
+        randCallCount: left.randCallCount + right.randCallCount,
       };
     }
     case "CallExpr": {
@@ -75,7 +90,8 @@ function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
       const args = node.args.map(analyzeVolatileMetadata);
       return {
         volatile: callee.volatile || args.some((child) => child.volatile),
-        randCallCount: callee.randCallCount + args.reduce((sum, child) => sum + child.randCallCount, 0)
+        randCallCount:
+          callee.randCallCount + args.reduce((sum, child) => sum + child.randCallCount, 0),
       };
     }
   }
@@ -88,9 +104,14 @@ function emitCellRef(ref: string, sheetName: string | undefined, state: Compiler
   state.program.push(encodeInstruction(Opcode.PushCell, index));
 }
 
-function emitRangeRef(node: Extract<FormulaNode, { kind: "RangeRef" }>, state: CompilerState): void {
+function emitRangeRef(
+  node: Extract<FormulaNode, { kind: "RangeRef" }>,
+  state: CompilerState,
+): void {
   const qualifiedRange = formatRangeAddress(
-    parseRangeAddress(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`)
+    parseRangeAddress(
+      node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`,
+    ),
   );
   let index = state.ranges.indexOf(qualifiedRange);
   if (index === -1) {
@@ -166,9 +187,9 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
             ">": Opcode.Gt,
             ">=": Opcode.Gte,
             "<": Opcode.Lt,
-            "<=": Opcode.Lte
-          }[node.operator]
-        )
+            "<=": Opcode.Lte,
+          }[node.operator],
+        ),
       );
       return;
     case "CallExpr":
@@ -198,7 +219,9 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
         node.args.forEach((arg) => {
           argc += emitArgument(arg, state);
         });
-        state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(callee) << 8) | argc));
+        state.program.push(
+          encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(callee) << 8) | argc),
+        );
       }
       return;
     case "InvokeExpr":
@@ -278,7 +301,7 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
 export function compileFormulaAst(
   source: string,
   ast: FormulaNode,
-  options: CompileFormulaAstOptions = {}
+  options: CompileFormulaAstOptions = {},
 ): CompiledFormula {
   const optimizedAst = optimizeFormula(ast);
   const bound = bindFormula(optimizedAst);
@@ -319,7 +342,7 @@ export function compileFormulaAst(
     randCallCount: volatileMetadata.randCallCount,
     producesSpill: spillResult,
     jsPlan,
-    maxStackDepth: computeMaxStackDepth(jsPlan)
+    maxStackDepth: computeMaxStackDepth(jsPlan),
   };
 }
 

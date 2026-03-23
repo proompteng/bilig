@@ -3,9 +3,13 @@ const DEFAULT_STORE_NAME = "state";
 const WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES = 128 * 1024;
 
 function addOnceEventListener(target: EventTarget, type: string, listener: () => void): void {
-  target.addEventListener(type, () => {
-    listener();
-  }, { once: true });
+  target.addEventListener(
+    type,
+    () => {
+      listener();
+    },
+    { once: true },
+  );
 }
 
 function getLocalStorage(): Storage | null {
@@ -41,7 +45,11 @@ async function openDatabase(databaseName: string, storeName: string): Promise<ID
   });
 }
 
-async function readFromStore(databaseName: string, storeName: string, key: string): Promise<string | null> {
+async function readFromStore(
+  databaseName: string,
+  storeName: string,
+  key: string,
+): Promise<string | null> {
   const database = await openDatabase(databaseName, storeName);
   if (!database) {
     return null;
@@ -52,7 +60,9 @@ async function readFromStore(databaseName: string, storeName: string, key: strin
     const store = transaction.objectStore(storeName);
     const request = store.get(key);
 
-    addOnceEventListener(request, "success", () => resolve(typeof request.result === "string" ? request.result : null));
+    addOnceEventListener(request, "success", () =>
+      resolve(typeof request.result === "string" ? request.result : null),
+    );
     addOnceEventListener(request, "error", () => resolve(null));
     addOnceEventListener(transaction, "complete", () => database.close());
     addOnceEventListener(transaction, "error", () => database.close());
@@ -60,7 +70,12 @@ async function readFromStore(databaseName: string, storeName: string, key: strin
   });
 }
 
-async function writeToStore(databaseName: string, storeName: string, key: string, value: string): Promise<boolean> {
+async function writeToStore(
+  databaseName: string,
+  storeName: string,
+  key: string,
+  value: string,
+): Promise<boolean> {
   const database = await openDatabase(databaseName, storeName);
   if (!database) {
     return false;
@@ -95,7 +110,11 @@ async function writeToStore(databaseName: string, storeName: string, key: string
   });
 }
 
-async function removeFromStore(databaseName: string, storeName: string, key: string): Promise<void> {
+async function removeFromStore(
+  databaseName: string,
+  storeName: string,
+  key: string,
+): Promise<void> {
   const database = await openDatabase(databaseName, storeName);
   if (!database) {
     return;
@@ -132,7 +151,9 @@ export interface BrowserPersistence {
   remove(key: string): Promise<void>;
 }
 
-export function createBrowserPersistence(options: BrowserPersistenceOptions = {}): BrowserPersistence {
+export function createBrowserPersistence(
+  options: BrowserPersistenceOptions = {},
+): BrowserPersistence {
   const databaseName = options.databaseName ?? DEFAULT_DB_NAME;
   const storeName = options.storeName ?? DEFAULT_STORE_NAME;
 
@@ -193,13 +214,16 @@ export function createBrowserPersistence(options: BrowserPersistenceOptions = {}
     async remove(key: string): Promise<void> {
       await removeFromStore(databaseName, storeName, key);
       getLocalStorage()?.removeItem(key);
-    }
+    },
   };
 }
 
 const defaultPersistence = createBrowserPersistence();
 
-export async function loadPersistedJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
+export async function loadPersistedJson<T>(
+  key: string,
+  parser: (value: unknown) => T | null,
+): Promise<T | null> {
   return defaultPersistence.loadJson<T>(key, parser);
 }
 

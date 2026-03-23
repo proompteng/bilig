@@ -18,7 +18,7 @@ const BINARY_PRECEDENCE: Record<BinaryExprNode["operator"], number> = {
   "-": 3,
   "*": 4,
   "/": 4,
-  "^": 5
+  "^": 5,
 };
 
 export type StructuralAxisKind = "row" | "column";
@@ -40,10 +40,14 @@ const ERROR_LITERAL_TEXT: Record<number, string> = {
   [ErrorCode.Value]: "#VALUE!",
   [ErrorCode.Cycle]: "#CYCLE!",
   [ErrorCode.Spill]: "#SPILL!",
-  [ErrorCode.Blocked]: "#BLOCKED!"
+  [ErrorCode.Blocked]: "#BLOCKED!",
 };
 
-export function translateFormulaReferences(source: string, rowDelta: number, colDelta: number): string {
+export function translateFormulaReferences(
+  source: string,
+  rowDelta: number,
+  colDelta: number,
+): string {
   const ast = parseFormula(source);
   return serializeFormula(translateNode(ast, rowDelta, colDelta));
 }
@@ -52,15 +56,17 @@ export function rewriteFormulaForStructuralTransform(
   source: string,
   ownerSheetName: string,
   targetSheetName: string,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): string {
   const ast = parseFormula(source);
-  return serializeFormula(rewriteNodeForStructuralTransform(ast, ownerSheetName, targetSheetName, transform));
+  return serializeFormula(
+    rewriteNodeForStructuralTransform(ast, ownerSheetName, targetSheetName, transform),
+  );
 }
 
 export function rewriteAddressForStructuralTransform(
   address: string,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): string | undefined {
   const parsed = parseCellReferenceParts(address);
   if (!parsed) {
@@ -77,7 +83,7 @@ export function rewriteAddressForStructuralTransform(
 export function rewriteRangeForStructuralTransform(
   startAddress: string,
   endAddress: string,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): { startAddress: string; endAddress: string } | undefined {
   const start = parseCellReferenceParts(startAddress);
   const end = parseCellReferenceParts(endAddress);
@@ -97,7 +103,7 @@ export function rewriteRangeForStructuralTransform(
   }
   return {
     startAddress: formatCellReference(start, nextRows.start, nextCols.start),
-    endAddress: formatCellReference(end, nextRows.end, nextCols.end)
+    endAddress: formatCellReference(end, nextRows.end, nextCols.end),
   };
 }
 
@@ -113,22 +119,22 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
     case "CellRef":
       return {
         ...node,
-        ref: translateCellReference(node.ref, rowDelta, colDelta)
+        ref: translateCellReference(node.ref, rowDelta, colDelta),
       };
     case "SpillRef":
       return {
         ...node,
-        ref: translateCellReference(node.ref, rowDelta, colDelta)
+        ref: translateCellReference(node.ref, rowDelta, colDelta),
       };
     case "ColumnRef":
       return {
         ...node,
-        ref: translateColumnReference(node.ref, colDelta)
+        ref: translateColumnReference(node.ref, colDelta),
       };
     case "RowRef":
       return {
         ...node,
-        ref: translateRowReference(node.ref, rowDelta)
+        ref: translateRowReference(node.ref, rowDelta),
       };
     case "RangeRef":
       return {
@@ -144,29 +150,29 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
             ? translateCellReference(node.end, rowDelta, colDelta)
             : node.refKind === "cols"
               ? translateColumnReference(node.end, colDelta)
-              : translateRowReference(node.end, rowDelta)
+              : translateRowReference(node.end, rowDelta),
       };
     case "UnaryExpr":
       return {
         ...node,
-        argument: translateNode(node.argument, rowDelta, colDelta)
+        argument: translateNode(node.argument, rowDelta, colDelta),
       };
     case "BinaryExpr":
       return {
         ...node,
         left: translateNode(node.left, rowDelta, colDelta),
-        right: translateNode(node.right, rowDelta, colDelta)
+        right: translateNode(node.right, rowDelta, colDelta),
       };
     case "CallExpr":
       return {
         ...node,
-        args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta))
+        args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta)),
       };
     case "InvokeExpr":
       return {
         ...node,
         callee: translateNode(node.callee, rowDelta, colDelta),
-        args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta))
+        args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta)),
       };
   }
 }
@@ -175,7 +181,7 @@ function rewriteNodeForStructuralTransform(
   node: FormulaNode,
   ownerSheetName: string,
   targetSheetName: string,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): FormulaNode {
   switch (node.kind) {
     case "NumberLiteral":
@@ -190,12 +196,18 @@ function rewriteNodeForStructuralTransform(
     case "SpillRef":
       return rewriteCellLikeNode(node, ownerSheetName, targetSheetName, transform);
     case "ColumnRef":
-      if (!targetsSheet(node.sheetName, ownerSheetName, targetSheetName) || transform.axis !== "column") {
+      if (
+        !targetsSheet(node.sheetName, ownerSheetName, targetSheetName) ||
+        transform.axis !== "column"
+      ) {
         return node;
       }
       return rewriteAxisNode(node, transform);
     case "RowRef":
-      if (!targetsSheet(node.sheetName, ownerSheetName, targetSheetName) || transform.axis !== "row") {
+      if (
+        !targetsSheet(node.sheetName, ownerSheetName, targetSheetName) ||
+        transform.axis !== "row"
+      ) {
         return node;
       }
       return rewriteAxisNode(node, transform);
@@ -204,24 +216,48 @@ function rewriteNodeForStructuralTransform(
     case "UnaryExpr":
       return {
         ...node,
-        argument: rewriteNodeForStructuralTransform(node.argument, ownerSheetName, targetSheetName, transform)
+        argument: rewriteNodeForStructuralTransform(
+          node.argument,
+          ownerSheetName,
+          targetSheetName,
+          transform,
+        ),
       };
     case "BinaryExpr":
       return {
         ...node,
-        left: rewriteNodeForStructuralTransform(node.left, ownerSheetName, targetSheetName, transform),
-        right: rewriteNodeForStructuralTransform(node.right, ownerSheetName, targetSheetName, transform)
+        left: rewriteNodeForStructuralTransform(
+          node.left,
+          ownerSheetName,
+          targetSheetName,
+          transform,
+        ),
+        right: rewriteNodeForStructuralTransform(
+          node.right,
+          ownerSheetName,
+          targetSheetName,
+          transform,
+        ),
       };
     case "CallExpr":
       return {
         ...node,
-        args: node.args.map((arg) => rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform))
+        args: node.args.map((arg) =>
+          rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform),
+        ),
       };
     case "InvokeExpr":
       return {
         ...node,
-        callee: rewriteNodeForStructuralTransform(node.callee, ownerSheetName, targetSheetName, transform),
-        args: node.args.map((arg) => rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform))
+        callee: rewriteNodeForStructuralTransform(
+          node.callee,
+          ownerSheetName,
+          targetSheetName,
+          transform,
+        ),
+        args: node.args.map((arg) =>
+          rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform),
+        ),
       };
   }
 }
@@ -230,7 +266,7 @@ function rewriteCellLikeNode<T extends Extract<FormulaNode, { kind: "CellRef" | 
   node: T,
   ownerSheetName: string,
   targetSheetName: string,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): FormulaNode {
   if (!targetsSheet(node.sheetName, ownerSheetName, targetSheetName)) {
     return node;
@@ -246,13 +282,13 @@ function rewriteCellLikeNode<T extends Extract<FormulaNode, { kind: "CellRef" | 
   }
   return {
     ...node,
-    ref: formatCellReference(parsed, nextRow, nextCol)
+    ref: formatCellReference(parsed, nextRow, nextCol),
   };
 }
 
 function rewriteAxisNode<T extends Extract<FormulaNode, { kind: "RowRef" | "ColumnRef" }>>(
   node: T,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): FormulaNode {
   const parsed = parseAxisReferenceParts(node.ref, node.kind === "RowRef" ? "row" : "column");
   if (!parsed) {
@@ -264,7 +300,7 @@ function rewriteAxisNode<T extends Extract<FormulaNode, { kind: "RowRef" | "Colu
   }
   return {
     ...node,
-    ref: formatAxisReference(parsed.absolute, nextIndex, node.kind === "RowRef" ? "row" : "column")
+    ref: formatAxisReference(parsed.absolute, nextIndex, node.kind === "RowRef" ? "row" : "column"),
   };
 }
 
@@ -272,14 +308,14 @@ function rewriteRangeNode(
   node: Extract<FormulaNode, { kind: "RangeRef" }>,
   ownerSheetName: string,
   targetSheetName: string,
-  transform: StructuralAxisTransform
+  transform: StructuralAxisTransform,
 ): FormulaNode {
   if (!targetsSheet(node.sheetName, ownerSheetName, targetSheetName)) {
     return node;
   }
   if (
-    (node.refKind === "rows" && transform.axis === "column")
-    || (node.refKind === "cols" && transform.axis === "row")
+    (node.refKind === "rows" && transform.axis === "column") ||
+    (node.refKind === "cols" && transform.axis === "row")
   ) {
     return node;
   }
@@ -303,7 +339,7 @@ function rewriteRangeNode(
     return {
       ...node,
       start: formatCellReference(start, nextRows.start, nextCols.start),
-      end: formatCellReference(end, nextRows.end, nextCols.end)
+      end: formatCellReference(end, nextRows.end, nextCols.end),
     };
   }
   const start = parseAxisReferenceParts(node.start, node.refKind === "rows" ? "row" : "column");
@@ -311,14 +347,26 @@ function rewriteRangeNode(
   if (!start || !end) {
     return { kind: "ErrorLiteral", code: ErrorCode.Ref };
   }
-  const nextInterval = mapInterval(Math.min(start.index, end.index), Math.max(start.index, end.index), transform);
+  const nextInterval = mapInterval(
+    Math.min(start.index, end.index),
+    Math.max(start.index, end.index),
+    transform,
+  );
   if (!nextInterval) {
     return { kind: "ErrorLiteral", code: ErrorCode.Ref };
   }
   return {
     ...node,
-    start: formatAxisReference(start.absolute, nextInterval.start, node.refKind === "rows" ? "row" : "column"),
-    end: formatAxisReference(end.absolute, nextInterval.end, node.refKind === "rows" ? "row" : "column")
+    start: formatAxisReference(
+      start.absolute,
+      nextInterval.start,
+      node.refKind === "rows" ? "row" : "column",
+    ),
+    end: formatAxisReference(
+      end.absolute,
+      nextInterval.end,
+      node.refKind === "rows" ? "row" : "column",
+    ),
   };
 }
 
@@ -362,7 +410,7 @@ function translateRowReference(ref: string, rowDelta: number): string {
 export function serializeFormula(
   node: FormulaNode,
   parentPrecedence = 0,
-  parentAssociativity: "left" | "right" | null = null
+  parentAssociativity: "left" | "right" | null = null,
 ): string {
   switch (node.kind) {
     case "NumberLiteral":
@@ -370,7 +418,7 @@ export function serializeFormula(
     case "BooleanLiteral":
       return node.value ? "TRUE" : "FALSE";
     case "StringLiteral":
-      return `"${node.value.replaceAll("\"", "\"\"")}"`;
+      return `"${node.value.replaceAll('"', '""')}"`;
     case "ErrorLiteral":
       return ERROR_LITERAL_TEXT[node.code] ?? "#ERROR!";
     case "NameRef":
@@ -447,7 +495,7 @@ function indexToColumn(index: number): string {
 function targetsSheet(
   explicitSheetName: string | undefined,
   ownerSheetName: string,
-  targetSheetName: string
+  targetSheetName: string,
 ): boolean {
   return (explicitSheetName ?? ownerSheetName) === targetSheetName;
 }
@@ -469,7 +517,7 @@ function parseCellReferenceParts(ref: string): ParsedCellReference | undefined {
     colAbsolute: colAbsolute === "$",
     rowAbsolute: rowAbsolute === "$",
     col: columnToIndex(columnText!),
-    row: Number.parseInt(rowText!, 10) - 1
+    row: Number.parseInt(rowText!, 10) - 1,
   };
 }
 
@@ -482,7 +530,10 @@ interface ParsedAxisReference {
   index: number;
 }
 
-function parseAxisReferenceParts(ref: string, kind: StructuralAxisKind): ParsedAxisReference | undefined {
+function parseAxisReferenceParts(
+  ref: string,
+  kind: StructuralAxisKind,
+): ParsedAxisReference | undefined {
   const match = (kind === "row" ? ROW_REF_RE : COLUMN_REF_RE).exec(ref.toUpperCase());
   if (!match) {
     return undefined;
@@ -490,11 +541,11 @@ function parseAxisReferenceParts(ref: string, kind: StructuralAxisKind): ParsedA
   return kind === "row"
     ? {
         absolute: match[1] === "$",
-        index: Number.parseInt(match[2]!, 10) - 1
+        index: Number.parseInt(match[2]!, 10) - 1,
       }
     : {
         absolute: match[1] === "$",
-        index: columnToIndex(match[2]!)
+        index: columnToIndex(match[2]!),
       };
 }
 
@@ -521,7 +572,10 @@ function mapPointIndex(index: number, transform: StructuralAxisTransform): numbe
           return index + transform.count;
         }
       } else if (transform.target > transform.start) {
-        if (index >= transform.start + transform.count && index < transform.target + transform.count) {
+        if (
+          index >= transform.start + transform.count &&
+          index < transform.target + transform.count
+        ) {
           return index - transform.count;
         }
       }
@@ -534,7 +588,11 @@ function mapPointIndex(index: number, transform: StructuralAxisTransform): numbe
   }
 }
 
-function mapInterval(start: number, end: number, transform: StructuralAxisTransform): { start: number; end: number } | undefined {
+function mapInterval(
+  start: number,
+  end: number,
+  transform: StructuralAxisTransform,
+): { start: number; end: number } | undefined {
   switch (transform.kind) {
     case "insert": {
       if (transform.start <= start) {
@@ -560,7 +618,9 @@ function mapInterval(start: number, end: number, transform: StructuralAxisTransf
       }
       const nextStart = mapPointIndex(survivingStart, transform);
       const nextEnd = mapPointIndex(survivingEnd, transform);
-      return nextStart === undefined || nextEnd === undefined ? undefined : { start: nextStart, end: nextEnd };
+      return nextStart === undefined || nextEnd === undefined
+        ? undefined
+        : { start: nextStart, end: nextEnd };
     }
     case "move": {
       const segments =
@@ -568,14 +628,26 @@ function mapInterval(start: number, end: number, transform: StructuralAxisTransf
           ? [
               { start: 0, end: transform.target - 1, delta: 0 },
               { start: transform.target, end: transform.start - 1, delta: transform.count },
-              { start: transform.start, end: transform.start + transform.count - 1, delta: transform.target - transform.start },
-              { start: transform.start + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 }
+              {
+                start: transform.start,
+                end: transform.start + transform.count - 1,
+                delta: transform.target - transform.start,
+              },
+              { start: transform.start + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 },
             ]
           : [
               { start: 0, end: transform.start - 1, delta: 0 },
-              { start: transform.start, end: transform.start + transform.count - 1, delta: transform.target - transform.start },
-              { start: transform.start + transform.count, end: transform.target + transform.count - 1, delta: -transform.count },
-              { start: transform.target + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 }
+              {
+                start: transform.start,
+                end: transform.start + transform.count - 1,
+                delta: transform.target - transform.start,
+              },
+              {
+                start: transform.start + transform.count,
+                end: transform.target + transform.count - 1,
+                delta: -transform.count,
+              },
+              { start: transform.target + transform.count, end: Number.MAX_SAFE_INTEGER, delta: 0 },
             ];
       let nextStart: number | undefined;
       let nextEnd: number | undefined;

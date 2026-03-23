@@ -17,10 +17,7 @@ describe("renderer components", () => {
   it("wraps workbook and sheet children with stable keys", () => {
     const workbookElement = Workbook({
       name: "book",
-      children: [
-        <Sheet name="Sheet1" key="ignored-1" />,
-        <Sheet key="ignored-2" name="Sheet2" />
-      ]
+      children: [<Sheet name="Sheet1" key="ignored-1" />, <Sheet key="ignored-2" name="Sheet2" />],
     });
     expect(isPropsWithChildren(workbookElement.props)).toBe(true);
     if (!isPropsWithChildren(workbookElement.props)) {
@@ -36,8 +33,8 @@ describe("renderer components", () => {
       name: "Sheet1",
       children: [
         <Cell addr="A1" value={10} key="ignored-a1" />,
-        <Cell addr="B1" formula="A1*2" key="ignored-b1" />
-      ]
+        <Cell addr="B1" formula="A1*2" key="ignored-b1" />,
+      ],
     });
     expect(isPropsWithChildren(sheetElement.props)).toBe(true);
     if (!isPropsWithChildren(sheetElement.props)) {
@@ -56,7 +53,7 @@ describe("renderer components", () => {
     expect(element.props).toMatchObject({
       addr: "A1",
       value: 10,
-      format: "currency-usd"
+      format: "currency-usd",
     });
   });
 });

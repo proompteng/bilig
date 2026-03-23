@@ -16,7 +16,7 @@ describe("gridPresentation", () => {
       left: 9,
       position: "fixed",
       top: 19,
-      width: 32
+      width: 32,
     });
   });
 

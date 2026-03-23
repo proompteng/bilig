@@ -23,8 +23,11 @@ export class CycleDetector {
   detect(
     formulaCellIndices: Iterable<number>,
     maxCellIndexExclusive: number,
-    forEachFormulaDependency: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void,
-    isFormula: (cellIndex: number) => boolean
+    forEachFormulaDependency: (
+      cellIndex: number,
+      fn: (dependencyCellIndex: number) => void,
+    ) => void,
+    isFormula: (cellIndex: number) => boolean,
   ): PackedCycleDetectionResult {
     this.ensureCapacity(maxCellIndexExclusive);
     this.bumpEpochs();
@@ -61,7 +64,10 @@ export class CycleDetector {
         }
         if (this.visitMarks[dependency] !== this.visitEpoch) {
           strongConnect(dependency);
-          this.lowLinks[cellIndex] = Math.min(this.lowLinks[cellIndex]!, this.lowLinks[dependency]!);
+          this.lowLinks[cellIndex] = Math.min(
+            this.lowLinks[cellIndex]!,
+            this.lowLinks[dependency]!,
+          );
           return;
         }
         if (this.onStackMarks[dependency] === this.visitEpoch) {
@@ -118,7 +124,7 @@ export class CycleDetector {
     return {
       cycleMembers: this.cycleMembers,
       cycleMemberCount,
-      cycleGroups: this.cycleGroups
+      cycleGroups: this.cycleGroups,
     };
   }
 

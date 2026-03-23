@@ -16,7 +16,7 @@ describe("createWorkbookRendererRoot", () => {
           <Cell addr="A1" value={10} format="currency-usd" />
           <Cell addr="B1" formula="A1*2" />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.getCell("Sheet1", "A1").format).toBe("currency-usd");
@@ -68,14 +68,14 @@ describe("createWorkbookRendererRoot", () => {
         root.render(
           <Workbook name="invalid">
             <Cell addr="A1" value={10} />
-          </Workbook>
-        )
+          </Workbook>,
+        ),
       ).rejects.toThrow("Only <Sheet> nodes can exist under <Workbook>.");
 
       expect(engine.exportSnapshot()).toEqual({
         version: 1,
         workbook: { name: "renderer-root-invalid" },
-        sheets: []
+        sheets: [],
       });
     } finally {
       consoleError.mockRestore();
@@ -96,7 +96,7 @@ describe("createWorkbookRendererRoot", () => {
             </Sheet>
           </React.Fragment>
         </Workbook>
-      </>
+      </>,
     );
 
     await root.render(
@@ -104,7 +104,7 @@ describe("createWorkbookRendererRoot", () => {
         <Sheet name="Renamed">
           <Cell addr="B2" value={21} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     expect(engine.exportSnapshot()).toEqual({
@@ -114,9 +114,9 @@ describe("createWorkbookRendererRoot", () => {
         {
           name: "Renamed",
           order: 0,
-          cells: [{ address: "B2", value: 21 }]
-        }
-      ]
+          cells: [{ address: "B2", value: 21 }],
+        },
+      ],
     });
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: 0 });
   });
@@ -131,17 +131,15 @@ describe("createWorkbookRendererRoot", () => {
         <Sheet name="Sheet1">
           <Cell addr="A1" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     await expect(
       root.render(
         <Workbook name="invalid">
-          <Sheet name="Sheet1">
-            {"bad"}
-          </Sheet>
-        </Workbook>
-      )
+          <Sheet name="Sheet1">{"bad"}</Sheet>
+        </Workbook>,
+      ),
     ).rejects.toThrow("Workbook DSL does not support text nodes.");
 
     expect(engine.exportSnapshot()).toEqual({
@@ -151,9 +149,9 @@ describe("createWorkbookRendererRoot", () => {
         {
           name: "Sheet1",
           order: 0,
-          cells: [{ address: "A1", value: 10 }]
-        }
-      ]
+          cells: [{ address: "A1", value: 10 }],
+        },
+      ],
     });
   });
 
@@ -166,8 +164,8 @@ describe("createWorkbookRendererRoot", () => {
       root.render(
         <Sheet name="Sheet1">
           <Cell addr="A1" value={1} />
-        </Sheet>
-      )
+        </Sheet>,
+      ),
     ).rejects.toThrow("Root descriptor must be a Workbook.");
 
     await expect(
@@ -176,8 +174,8 @@ describe("createWorkbookRendererRoot", () => {
           <Sheet name={""}>
             <Cell addr="A1" value={1} />
           </Sheet>
-        </Workbook>
-      )
+        </Workbook>,
+      ),
     ).rejects.toThrow("<Sheet> requires a name prop.");
 
     await expect(
@@ -186,8 +184,8 @@ describe("createWorkbookRendererRoot", () => {
           <Sheet name="Sheet1">
             <Cell addr={""} value={1} />
           </Sheet>
-        </Workbook>
-      )
+        </Workbook>,
+      ),
     ).rejects.toThrow("<Cell> requires an addr prop.");
 
     await expect(
@@ -196,14 +194,14 @@ describe("createWorkbookRendererRoot", () => {
           <Sheet name="Sheet1">
             <Cell addr="A1" value={1} formula="B1" />
           </Sheet>
-        </Workbook>
-      )
+        </Workbook>,
+      ),
     ).rejects.toThrow("<Cell> cannot specify both value and formula.");
 
     expect(engine.exportSnapshot()).toEqual({
       version: 1,
       workbook: { name: "renderer-root-contracts" },
-      sheets: []
+      sheets: [],
     });
   });
 
@@ -217,7 +215,7 @@ describe("createWorkbookRendererRoot", () => {
         <Sheet name="Sheet1">
           <Cell addr="A1" value={10} />
         </Sheet>
-      </Workbook>
+      </Workbook>,
     );
 
     await root.render(null);
@@ -225,7 +223,7 @@ describe("createWorkbookRendererRoot", () => {
     expect(engine.exportSnapshot()).toEqual({
       version: 1,
       workbook: { name: "clearable" },
-      sheets: []
+      sheets: [],
     });
   });
 });

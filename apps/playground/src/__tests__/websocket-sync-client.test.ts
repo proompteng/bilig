@@ -4,30 +4,15 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 import { ValueTag } from "@bilig/protocol";
 
-import { createWebSocketSyncClient, type BrowserWebSocketLike } from "../createWebSocketSyncClient.js";
+import {
+  createWebSocketSyncClient,
+  type BrowserWebSocketLike,
+} from "../createWebSocketSyncClient.js";
 
-class FakeSocket implements BrowserWebSocketLike {
+class FakeSocket extends EventTarget implements BrowserWebSocketLike {
   binaryType = "arraybuffer";
   readyState = 0;
   readonly sent: Uint8Array[] = [];
-  private listeners: {
-    open: ((event: Event) => void) | null;
-    message: ((event: MessageEvent<unknown>) => void) | null;
-    error: ((event: Event) => void) | null;
-    close: ((event: Event) => void) | null;
-  } = {
-    open: null,
-    message: null,
-    error: null,
-    close: null
-  };
-
-  addEventListener<K extends "open" | "message" | "error" | "close">(
-    type: K,
-    listener: typeof this.listeners[K]
-  ): void {
-    this.listeners[type] = listener;
-  }
 
   send(data: ArrayBufferLike | ArrayBufferView): void {
     if (data instanceof Uint8Array) {
@@ -43,16 +28,16 @@ class FakeSocket implements BrowserWebSocketLike {
 
   close(): void {
     this.readyState = 3;
-    this.listeners.close?.(new Event("close"));
+    this.dispatchEvent(new Event("close"));
   }
 
   open(): void {
     this.readyState = 1;
-    this.listeners.open?.(new Event("open"));
+    this.dispatchEvent(new Event("open"));
   }
 
   push(frame: Parameters<typeof encodeFrame>[0]): void {
-    this.listeners.message?.(new MessageEvent<Uint8Array>("message", { data: encodeFrame(frame) }));
+    this.dispatchEvent(new MessageEvent<Uint8Array>("message", { data: encodeFrame(frame) }));
   }
 }
 
@@ -62,12 +47,14 @@ describe("websocket sync client", () => {
     await engine.ready();
     const socket = new FakeSocket();
 
-    const connectPromise = engine.connectSyncClient(createWebSocketSyncClient({
-      documentId: "remote-doc",
-      replicaId: "browser:test",
-      baseUrl: "http://127.0.0.1:4381",
-      createSocket: () => socket
-    }));
+    const connectPromise = engine.connectSyncClient(
+      createWebSocketSyncClient({
+        documentId: "remote-doc",
+        replicaId: "browser:test",
+        baseUrl: "http://127.0.0.1:4381",
+        createSocket: () => socket,
+      }),
+    );
 
     await Promise.resolve();
     socket.open();
@@ -81,7 +68,7 @@ describe("websocket sync client", () => {
       kind: "cursorWatermark",
       documentId: "remote-doc",
       cursor: 0,
-      compactedCursor: 0
+      compactedCursor: 0,
     });
     await connectPromise;
     expect(engine.getSyncState()).toBe("live");
@@ -94,13 +81,13 @@ describe("websocket sync client", () => {
         id: "remote:1",
         replicaId: "remote",
         clock: { counter: 1 },
-        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "B1", value: 9 }]
-      }
+        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "B1", value: 9 }],
+      },
     });
     await Promise.resolve();
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({
       tag: ValueTag.Number,
-      value: 9
+      value: 9,
     });
 
     engine.setCellValue("Sheet1", "A1", 42);
@@ -110,7 +97,7 @@ describe("websocket sync client", () => {
       throw new Error("Expected appendBatch frame");
     }
     expect(appendFrame.batch.ops).toEqual([
-      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 42 }
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 42 },
     ]);
   });
 });

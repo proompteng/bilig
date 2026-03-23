@@ -3,7 +3,11 @@
 import { readFile } from "node:fs/promises";
 import type { AgentFrame, AgentResponse } from "../packages/agent-api/src/index.ts";
 import { decodeAgentFrame, encodeAgentFrame } from "../packages/agent-api/src/index.ts";
-import type { CellRangeRef, LiteralInput, WorkbookPivotValueSnapshot } from "../packages/protocol/src/index.ts";
+import type {
+  CellRangeRef,
+  LiteralInput,
+  WorkbookPivotValueSnapshot,
+} from "../packages/protocol/src/index.ts";
 
 const [, , command, ...argv] = process.argv;
 
@@ -68,9 +72,12 @@ function parseJson(value: string, label: string): unknown {
   try {
     return JSON.parse(value) as unknown;
   } catch (error) {
-    throw new Error(`Invalid JSON for ${label}: ${error instanceof Error ? error.message : String(error)}`, {
-      cause: error
-    });
+    throw new Error(
+      `Invalid JSON for ${label}: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        cause: error,
+      },
+    );
   }
 }
 
@@ -98,9 +105,7 @@ async function loadJsonArgument(value: string, label: string): Promise<unknown> 
   if (!source) {
     throw new Error(`Missing JSON source for ${label}`);
   }
-  const text = source === "-"
-    ? await readStdinText()
-    : await readFile(source, "utf8");
+  const text = source === "-" ? await readStdinText() : await readFile(source, "utf8");
   return parseJson(text, `${label} (${source === "-" ? "stdin" : source})`);
 }
 
@@ -109,10 +114,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isLiteralInput(value: unknown): value is LiteralInput {
-  return value === null
-    || typeof value === "string"
-    || typeof value === "number"
-    || typeof value === "boolean";
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
 }
 
 function parseLiteralInput(value: unknown, label: string): LiteralInput {
@@ -130,7 +137,9 @@ function parseLiteralMatrix(value: unknown, label: string): LiteralInput[][] {
     if (!Array.isArray(row)) {
       throw new Error(`${label} row ${rowIndex + 1} must be an array`);
     }
-    return row.map((cell, cellIndex) => parseLiteralInput(cell, `${label}[${rowIndex}][${cellIndex}]`));
+    return row.map((cell, cellIndex) =>
+      parseLiteralInput(cell, `${label}[${rowIndex}][${cellIndex}]`),
+    );
   });
 }
 
@@ -168,12 +177,16 @@ function parsePivotValues(value: unknown, label: string): WorkbookPivotValueSnap
     throw new Error(`${label} must be a JSON array`);
   }
   return value.map((entry, index) => {
-    if (!isRecord(entry) || typeof entry.sourceColumn !== "string" || typeof entry.summarizeBy !== "string") {
+    if (
+      !isRecord(entry) ||
+      typeof entry.sourceColumn !== "string" ||
+      typeof entry.summarizeBy !== "string"
+    ) {
       throw new Error(`${label}[${index}] must include string sourceColumn and summarizeBy fields`);
     }
     return {
       sourceColumn: entry.sourceColumn,
-      summarizeBy: entry.summarizeBy
+      summarizeBy: entry.summarizeBy,
     } satisfies WorkbookPivotValueSnapshot;
   });
 }
@@ -185,7 +198,7 @@ function parseRange(value: string, fallbackSheet?: string): CellRangeRef {
     return {
       sheetName: sheetAndStart.slice(0, bangIndex),
       startAddress: sheetAndStart.slice(bangIndex + 1),
-      endAddress
+      endAddress,
     };
   }
   if (!fallbackSheet) {
@@ -194,16 +207,21 @@ function parseRange(value: string, fallbackSheet?: string): CellRangeRef {
   return {
     sheetName: fallbackSheet,
     startAddress: sheetAndStart,
-    endAddress
+    endAddress,
   };
 }
 
-function parseRangeLike(value: string | CellRangeRef | undefined, fallbackSheet?: string): CellRangeRef {
+function parseRangeLike(
+  value: string | CellRangeRef | undefined,
+  fallbackSheet?: string,
+): CellRangeRef {
   if (typeof value === "string") {
     return parseRange(value, fallbackSheet);
   }
   if (!isRecord(value)) {
-    throw new Error("Range must be a string like Sheet1!A1:B2 or an object with sheetName/startAddress/endAddress");
+    throw new Error(
+      "Range must be a string like Sheet1!A1:B2 or an object with sheetName/startAddress/endAddress",
+    );
   }
   const sheetName = typeof value.sheetName === "string" ? value.sheetName : fallbackSheet;
   const startAddress = typeof value.startAddress === "string" ? value.startAddress : null;
@@ -218,9 +236,9 @@ async function sendFrame(serverBaseUrl: string, frame: AgentFrame): Promise<Succ
   const response = await fetch(`${normalizeBaseUrl(serverBaseUrl)}/v1/agent/frames`, {
     method: "POST",
     headers: {
-      "content-type": "application/octet-stream"
+      "content-type": "application/octet-stream",
     },
-    body: Buffer.from(encodeAgentFrame(frame))
+    body: Buffer.from(encodeAgentFrame(frame)),
   });
   if (!response.ok) {
     throw new Error(`Agent request failed with status ${response.status}`);
@@ -235,7 +253,11 @@ async function sendFrame(serverBaseUrl: string, frame: AgentFrame): Promise<Succ
   return nextFrame.response;
 }
 
-async function runCommand(commandName: CommandName, options: CliOptions & { server: string }, sessionId: string): Promise<unknown> {
+async function runCommand(
+  commandName: CommandName,
+  options: CliOptions & { server: string },
+  sessionId: string,
+): Promise<unknown> {
   switch (commandName) {
     case "read-range":
       return sendFrame(options.server, {
@@ -244,8 +266,8 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           kind: "readRange",
           id: `read:${Date.now()}`,
           sessionId,
-          range: parseRange(options.range ?? "", options.sheet)
-        }
+          range: parseRange(options.range ?? "", options.sheet),
+        },
       });
     case "write-cell":
       return sendFrame(options.server, {
@@ -257,10 +279,12 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           range: {
             sheetName: options.sheet ?? "",
             startAddress: options.addr ?? "",
-            endAddress: options.addr ?? ""
+            endAddress: options.addr ?? "",
           },
-          values: [[parseLiteralInput(await loadJsonArgument(options.value ?? "", "--value"), "--value")]]
-        }
+          values: [
+            [parseLiteralInput(await loadJsonArgument(options.value ?? "", "--value"), "--value")],
+          ],
+        },
       });
     case "write-range":
       return sendFrame(options.server, {
@@ -270,8 +294,11 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           id: `write-range:${Date.now()}`,
           sessionId,
           range: parseRange(options.range ?? "", options.sheet),
-          values: parseLiteralMatrix(await loadJsonArgument(options.values ?? "", "--values"), "--values")
-        }
+          values: parseLiteralMatrix(
+            await loadJsonArgument(options.values ?? "", "--values"),
+            "--values",
+          ),
+        },
       });
     case "set-formula":
       return sendFrame(options.server, {
@@ -283,10 +310,10 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           range: {
             sheetName: options.sheet ?? "",
             startAddress: options.addr ?? "",
-            endAddress: options.addr ?? ""
+            endAddress: options.addr ?? "",
           },
-          formulas: [[options.formula ?? ""]]
-        }
+          formulas: [[options.formula ?? ""]],
+        },
       });
     case "set-formulas":
       return sendFrame(options.server, {
@@ -296,8 +323,11 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           id: `set-formulas:${Date.now()}`,
           sessionId,
           range: parseRange(options.range ?? "", options.sheet),
-          formulas: parseFormulaMatrix(await loadJsonArgument(options.formulas ?? "", "--formulas"), "--formulas")
-        }
+          formulas: parseFormulaMatrix(
+            await loadJsonArgument(options.formulas ?? "", "--formulas"),
+            "--formulas",
+          ),
+        },
       });
     case "clear-range":
       return sendFrame(options.server, {
@@ -306,8 +336,8 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           kind: "clearRange",
           id: `clear-range:${Date.now()}`,
           sessionId,
-          range: parseRange(options.range ?? "", options.sheet)
-        }
+          range: parseRange(options.range ?? "", options.sheet),
+        },
       });
     case "get-metrics":
       return sendFrame(options.server, {
@@ -315,8 +345,8 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
         request: {
           kind: "getMetrics",
           id: `get-metrics:${Date.now()}`,
-          sessionId
-        }
+          sessionId,
+        },
       });
     case "export-snapshot":
       return sendFrame(options.server, {
@@ -324,8 +354,8 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
         request: {
           kind: "exportSnapshot",
           id: `export-snapshot:${Date.now()}`,
-          sessionId
-        }
+          sessionId,
+        },
       });
     case "create-pivot":
       return sendFrame(options.server, {
@@ -338,9 +368,15 @@ async function runCommand(commandName: CommandName, options: CliOptions & { serv
           sheetName: options.sheet ?? "",
           address: options.addr ?? "",
           source: parseRange(options.source ?? "", options.sheet),
-          groupBy: parseStringArray(await loadJsonArgument(options.group ?? "", "--group"), "--group"),
-          values: parsePivotValues(await loadJsonArgument(options.values ?? "", "--values"), "--values")
-        }
+          groupBy: parseStringArray(
+            await loadJsonArgument(options.group ?? "", "--group"),
+            "--group",
+          ),
+          values: parsePivotValues(
+            await loadJsonArgument(options.values ?? "", "--values"),
+            "--values",
+          ),
+        },
       });
     case "batch": {
       const requests = await loadJsonArgument(options.requests ?? "", "--requests");
@@ -356,7 +392,7 @@ async function dispatchBatchRequest(
   request: unknown,
   index: number,
   options: CliOptions & { server: string },
-  sessionId: string
+  sessionId: string,
 ): Promise<SuccessAgentResponse> {
   if (!isRecord(request) || typeof request.kind !== "string") {
     throw new Error(`Batch request at index ${index} must be an object with a kind`);
@@ -371,10 +407,12 @@ async function dispatchBatchRequest(
           id,
           sessionId,
           range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range) ? request.range : undefined,
-            options.sheet
-          )
-        }
+            typeof request.range === "string" || isRecord(request.range)
+              ? request.range
+              : undefined,
+            options.sheet,
+          ),
+        },
       });
     case "writeRange":
       return sendFrame(options.server, {
@@ -384,11 +422,13 @@ async function dispatchBatchRequest(
           id,
           sessionId,
           range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range) ? request.range : undefined,
-            options.sheet
+            typeof request.range === "string" || isRecord(request.range)
+              ? request.range
+              : undefined,
+            options.sheet,
           ),
-          values: parseLiteralMatrix(request.values, `--requests[${index}].values`)
-        }
+          values: parseLiteralMatrix(request.values, `--requests[${index}].values`),
+        },
       });
     case "setRangeFormulas":
       return sendFrame(options.server, {
@@ -398,11 +438,13 @@ async function dispatchBatchRequest(
           id,
           sessionId,
           range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range) ? request.range : undefined,
-            options.sheet
+            typeof request.range === "string" || isRecord(request.range)
+              ? request.range
+              : undefined,
+            options.sheet,
           ),
-          formulas: parseFormulaMatrix(request.formulas, `--requests[${index}].formulas`)
-        }
+          formulas: parseFormulaMatrix(request.formulas, `--requests[${index}].formulas`),
+        },
       });
     case "clearRange":
       return sendFrame(options.server, {
@@ -412,10 +454,12 @@ async function dispatchBatchRequest(
           id,
           sessionId,
           range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range) ? request.range : undefined,
-            options.sheet
-          )
-        }
+            typeof request.range === "string" || isRecord(request.range)
+              ? request.range
+              : undefined,
+            options.sheet,
+          ),
+        },
       });
     case "getMetrics":
       return sendFrame(options.server, {
@@ -423,8 +467,8 @@ async function dispatchBatchRequest(
         request: {
           kind: "getMetrics",
           id,
-          sessionId
-        }
+          sessionId,
+        },
       });
     case "exportSnapshot":
       return sendFrame(options.server, {
@@ -432,12 +476,18 @@ async function dispatchBatchRequest(
         request: {
           kind: "exportSnapshot",
           id,
-          sessionId
-        }
+          sessionId,
+        },
       });
     case "createPivotTable":
-      if (typeof request.name !== "string" || typeof request.sheetName !== "string" || typeof request.address !== "string") {
-        throw new Error(`--requests[${index}] createPivotTable requires name, sheetName, and address`);
+      if (
+        typeof request.name !== "string" ||
+        typeof request.sheetName !== "string" ||
+        typeof request.address !== "string"
+      ) {
+        throw new Error(
+          `--requests[${index}] createPivotTable requires name, sheetName, and address`,
+        );
       }
       return sendFrame(options.server, {
         kind: "request",
@@ -449,12 +499,14 @@ async function dispatchBatchRequest(
           sheetName: request.sheetName,
           address: request.address,
           source: parseRangeLike(
-            typeof request.source === "string" || isRecord(request.source) ? request.source : undefined,
-            options.sheet
+            typeof request.source === "string" || isRecord(request.source)
+              ? request.source
+              : undefined,
+            options.sheet,
           ),
           groupBy: parseStringArray(request.groupBy, `--requests[${index}].groupBy`),
-          values: parsePivotValues(request.values, `--requests[${index}].values`)
-        }
+          values: parsePivotValues(request.values, `--requests[${index}].values`),
+        },
       });
     default:
       throw new Error(`Unsupported batch request kind: ${request.kind}`);
@@ -466,7 +518,7 @@ async function runBatchRequests(
   options: CliOptions & { server: string },
   sessionId: string,
   index = 0,
-  responses: SuccessAgentResponse[] = []
+  responses: SuccessAgentResponse[] = [],
 ): Promise<SuccessAgentResponse[]> {
   if (index >= requests.length) {
     return responses;
@@ -486,7 +538,7 @@ function isCommandName(value: string): value is CommandName {
     "create-pivot",
     "batch",
     "get-metrics",
-    "export-snapshot"
+    "export-snapshot",
   ].includes(value);
 }
 
@@ -510,8 +562,8 @@ async function main(): Promise<void> {
       kind: "openWorkbookSession",
       id: `open:${Date.now()}`,
       documentId,
-      replicaId
-    }
+      replicaId,
+    },
   });
   if (open.kind !== "ok" || !open.sessionId) {
     throw new Error("Failed to open workbook session");
@@ -527,8 +579,8 @@ async function main(): Promise<void> {
       request: {
         kind: "closeWorkbookSession",
         id: `close:${Date.now()}`,
-        sessionId
-      }
+        sessionId,
+      },
     }).catch(() => undefined);
   }
 }

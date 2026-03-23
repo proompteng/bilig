@@ -8,11 +8,18 @@ import {
   formatErrorCode,
   type CellValue,
   type CellSnapshot,
-  type LiteralInput
+  type LiteralInput,
 } from "@bilig/protocol";
-import { createWorkerEngineClient, type MessagePortLike, type WorkerEngineClient } from "@bilig/worker-transport";
+import {
+  createWorkerEngineClient,
+  type MessagePortLike,
+  type WorkerEngineClient,
+} from "@bilig/worker-transport";
 import { WorkerViewportCache } from "./viewport-cache.js";
-import type { WorkbookWorkerBootstrapOptions, WorkbookWorkerStateSnapshot } from "./worker-runtime.js";
+import type {
+  WorkbookWorkerBootstrapOptions,
+  WorkbookWorkerStateSnapshot,
+} from "./worker-runtime.js";
 
 type EditingMode = "idle" | "cell" | "formula";
 
@@ -38,21 +45,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isCellSnapshot(value: unknown): value is CellSnapshot {
-  return isRecord(value)
-    && typeof value["sheetName"] === "string"
-    && typeof value["address"] === "string"
-    && typeof value["flags"] === "number"
-    && typeof value["version"] === "number"
-    && isRecord(value["value"])
-    && typeof value["value"]["tag"] === "number";
+  return (
+    isRecord(value) &&
+    typeof value["sheetName"] === "string" &&
+    typeof value["address"] === "string" &&
+    typeof value["flags"] === "number" &&
+    typeof value["version"] === "number" &&
+    isRecord(value["value"]) &&
+    typeof value["value"]["tag"] === "number"
+  );
 }
 
 function isRuntimeStateSnapshot(value: unknown): value is WorkbookWorkerStateSnapshot {
-  return isRecord(value)
-    && typeof value["workbookName"] === "string"
-    && Array.isArray(value["sheetNames"])
-    && isRecord(value["metrics"])
-    && typeof value["syncState"] === "string";
+  return (
+    isRecord(value) &&
+    typeof value["workbookName"] === "string" &&
+    Array.isArray(value["sheetNames"]) &&
+    isRecord(value["metrics"]) &&
+    typeof value["syncState"] === "string"
+  );
 }
 
 function createWorkerPort(worker: Worker): MessagePortLike {
@@ -78,7 +89,7 @@ function createWorkerPort(worker: Worker): MessagePortLike {
       }
       listenerMap.delete(listener);
       worker.removeEventListener(type, wrapped);
-    }
+    },
   };
 }
 
@@ -130,14 +141,21 @@ function parseEditorInput(rawValue: string): ParsedEditorInput {
   return { kind: "value", value: normalized };
 }
 
-function clampSelectionMovement(address: string, sheetName: string, movement: EditMovement): string {
+function clampSelectionMovement(
+  address: string,
+  sheetName: string,
+  movement: EditMovement,
+): string {
   const parsed = parseCellAddress(address, sheetName);
   const nextRow = Math.min(MAX_ROWS - 1, Math.max(0, parsed.row + movement[1]));
   const nextCol = Math.min(MAX_COLS - 1, Math.max(0, parsed.col + movement[0]));
   return formatAddress(nextRow, nextCol);
 }
 
-function parseSelectionTarget(input: string, fallbackSheet: string): { sheetName: string; address: string } | null {
+function parseSelectionTarget(
+  input: string,
+  fallbackSheet: string,
+): { sheetName: string; address: string } | null {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
     return null;
@@ -151,7 +169,7 @@ function parseSelectionTarget(input: string, fallbackSheet: string): { sheetName
     const parsed = parseCellAddress(nextAddress.toUpperCase(), nextSheetName || fallbackSheet);
     return {
       sheetName: nextSheetName || fallbackSheet,
-      address: formatAddress(parsed.row, parsed.col)
+      address: formatAddress(parsed.row, parsed.col),
     };
   } catch {
     return null;
@@ -181,7 +199,7 @@ function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
     address,
     value: { tag: ValueTag.Empty },
     flags: 0,
-    version: 0
+    version: 0,
   };
 }
 
@@ -201,7 +219,7 @@ function toOptimisticCellValue(value: LiteralInput, currentValue: CellValue): Ce
     stringId:
       currentValue.tag === ValueTag.String && currentValue.value === value
         ? currentValue.stringId
-        : 0
+        : 0,
   };
 }
 
@@ -212,37 +230,48 @@ function createSessionDocumentId(defaultDocumentId: string): string {
   return `${defaultDocumentId}:${Math.random().toString(36).slice(2)}`;
 }
 
-function resolveRuntimeConfig(searchParams: URLSearchParams, defaultDocumentId: string, defaultLocalServerUrl: string): RuntimeConfig {
+function resolveRuntimeConfig(
+  searchParams: URLSearchParams,
+  defaultDocumentId: string,
+  defaultLocalServerUrl: string,
+): RuntimeConfig {
   const explicit = searchParams.get("document");
   if (explicit) {
     return {
       documentId: explicit,
       baseUrl: searchParams.get("server") ?? defaultLocalServerUrl,
-      persistState: true
+      persistState: true,
     };
   }
   return {
     documentId: createSessionDocumentId(defaultDocumentId),
     baseUrl: searchParams.get("server") ?? defaultLocalServerUrl,
-    persistState: false
+    persistState: false,
   };
 }
 
 export function WorkerWorkbookApp() {
   const runtimeConfig = useMemo(() => {
     const defaultDocumentId = import.meta.env["VITE_BILIG_DOCUMENT_ID"] ?? "bilig-demo";
-    const defaultLocalServerUrl = import.meta.env["VITE_BILIG_LOCAL_SERVER_URL"] ?? "http://127.0.0.1:4381";
+    const defaultLocalServerUrl =
+      import.meta.env["VITE_BILIG_LOCAL_SERVER_URL"] ?? "http://127.0.0.1:4381";
     const searchParams = new URLSearchParams(window.location.search);
     return resolveRuntimeConfig(searchParams, defaultDocumentId, defaultLocalServerUrl);
   }, []);
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const [workerHandle, setWorkerHandle] = useState<WorkerHandle | null>(null);
   const [runtimeState, setRuntimeState] = useState<WorkbookWorkerStateSnapshot | null>(null);
-  const [selection, setSelection] = useState<{ sheetName: string; address: string }>({ sheetName: "Sheet1", address: "A1" });
-  const [selectedCell, setSelectedCell] = useState<CellSnapshot>(() => emptyCellSnapshot("Sheet1", "A1"));
+  const [selection, setSelection] = useState<{ sheetName: string; address: string }>({
+    sheetName: "Sheet1",
+    address: "A1",
+  });
+  const [selectedCell, setSelectedCell] = useState<CellSnapshot>(() =>
+    emptyCellSnapshot("Sheet1", "A1"),
+  );
   const [selectionLabel, setSelectionLabel] = useState("A1");
   const [editorValue, setEditorValue] = useState("");
-  const [editorSelectionBehavior, setEditorSelectionBehavior] = useState<EditSelectionBehavior>("select-all");
+  const [editorSelectionBehavior, setEditorSelectionBehavior] =
+    useState<EditSelectionBehavior>("select-all");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -267,28 +296,31 @@ export function WorkerWorkbookApp() {
     setRuntimeState(nextState);
   }, []);
 
-  const refreshSelectedCell = useCallback(async (handle?: WorkerHandle, nextSelection?: { sheetName: string; address: string }) => {
-    const active = handle ?? workerHandleRef.current;
-    const target = nextSelection ?? selectionRef.current;
-    if (!active) {
-      return;
-    }
-    const cached = active.cache.peekCell(target.sheetName, target.address);
-    if (cached) {
-      setSelectedCell(cached);
-    }
-    const response = await active.client.invoke("getCell", target.sheetName, target.address);
-    if (!isCellSnapshot(response)) {
-      throw new Error("Worker returned an invalid cell snapshot");
-    }
-    const snapshot = response;
-    if (
-      selectionRef.current.sheetName === target.sheetName
-      && selectionRef.current.address === target.address
-    ) {
-      setSelectedCell(snapshot);
-    }
-  }, []);
+  const refreshSelectedCell = useCallback(
+    async (handle?: WorkerHandle, nextSelection?: { sheetName: string; address: string }) => {
+      const active = handle ?? workerHandleRef.current;
+      const target = nextSelection ?? selectionRef.current;
+      if (!active) {
+        return;
+      }
+      const cached = active.cache.peekCell(target.sheetName, target.address);
+      if (cached) {
+        setSelectedCell(cached);
+      }
+      const response = await active.client.invoke("getCell", target.sheetName, target.address);
+      if (!isCellSnapshot(response)) {
+        throw new Error("Worker returned an invalid cell snapshot");
+      }
+      const snapshot = response;
+      if (
+        selectionRef.current.sheetName === target.sheetName &&
+        selectionRef.current.address === target.address
+      ) {
+        setSelectedCell(snapshot);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -309,7 +341,7 @@ export function WorkerWorkbookApp() {
           documentId: runtimeConfig.documentId,
           replicaId,
           baseUrl: runtimeConfig.baseUrl,
-          persistState: runtimeConfig.persistState
+          persistState: runtimeConfig.persistState,
         } satisfies WorkbookWorkerBootstrapOptions);
         if (!isRuntimeStateSnapshot(response)) {
           throw new Error("Worker returned an invalid bootstrap payload");
@@ -371,7 +403,14 @@ export function WorkerWorkbookApp() {
       worker.terminate();
       workerHandleRef.current = null;
     };
-  }, [refreshRuntimeState, refreshSelectedCell, replicaId, runtimeConfig.baseUrl, runtimeConfig.documentId, runtimeConfig.persistState]);
+  }, [
+    refreshRuntimeState,
+    refreshSelectedCell,
+    replicaId,
+    runtimeConfig.baseUrl,
+    runtimeConfig.documentId,
+    runtimeConfig.persistState,
+  ]);
 
   useEffect(() => {
     if (!runtimeState || runtimeState.sheetNames.length === 0) {
@@ -402,88 +441,121 @@ export function WorkerWorkbookApp() {
     };
   }, [refreshSelectedCell, selection.address, selection.sheetName, workerHandle]);
 
-  const invokeMutation = useCallback(async (method: string, ...args: unknown[]): Promise<unknown> => {
-    const active = workerHandleRef.current;
-    if (!active) {
-      throw new Error("Worker runtime is not ready");
-    }
-    return await active.client.invoke(method, ...args);
-  }, []);
+  const invokeMutation = useCallback(
+    async (method: string, ...args: unknown[]): Promise<unknown> => {
+      const active = workerHandleRef.current;
+      if (!active) {
+        throw new Error("Worker runtime is not ready");
+      }
+      return await active.client.invoke(method, ...args);
+    },
+    [],
+  );
 
-  const applyOptimisticCellEdit = useCallback((sheetName: string, address: string, parsed: ParsedEditorInput) => {
-    const active = workerHandleRef.current;
-    if (!active) {
-      return;
-    }
-    const current = active.cache.getCell(sheetName, address);
-    const nextVersion = current.version + 1;
-    if (parsed.kind === "clear") {
+  const applyOptimisticCellEdit = useCallback(
+    (sheetName: string, address: string, parsed: ParsedEditorInput) => {
+      const active = workerHandleRef.current;
+      if (!active) {
+        return;
+      }
+      const current = active.cache.getCell(sheetName, address);
+      const nextVersion = current.version + 1;
+      if (parsed.kind === "clear") {
+        active.cache.setCellSnapshot({
+          sheetName,
+          address,
+          value: { tag: ValueTag.Empty },
+          flags: current.flags,
+          version: nextVersion,
+          ...(current.format ? { format: current.format } : {}),
+        });
+        return;
+      }
+      if (parsed.kind === "formula") {
+        active.cache.setCellSnapshot({
+          sheetName,
+          address,
+          formula: parsed.formula,
+          value: current.value,
+          flags: current.flags,
+          version: nextVersion,
+          ...(current.format ? { format: current.format } : {}),
+        });
+        return;
+      }
       active.cache.setCellSnapshot({
         sheetName,
         address,
-        value: { tag: ValueTag.Empty },
+        input: parsed.value,
+        value: toOptimisticCellValue(parsed.value, current.value),
         flags: current.flags,
         version: nextVersion,
-        ...(current.format ? { format: current.format } : {})
+        ...(current.format ? { format: current.format } : {}),
       });
-      return;
-    }
-    if (parsed.kind === "formula") {
-      active.cache.setCellSnapshot({
-        sheetName,
-        address,
-        formula: parsed.formula,
-        value: current.value,
-        flags: current.flags,
-        version: nextVersion,
-        ...(current.format ? { format: current.format } : {})
-      });
-      return;
-    }
-    active.cache.setCellSnapshot({
-      sheetName,
-      address,
-      input: parsed.value,
-      value: toOptimisticCellValue(parsed.value, current.value),
-      flags: current.flags,
-      version: nextVersion,
-      ...(current.format ? { format: current.format } : {})
-    });
-  }, []);
+    },
+    [],
+  );
 
-  const beginEditing = useCallback((seed?: string, selectionBehavior: EditSelectionBehavior = "select-all", mode: Exclude<EditingMode, "idle"> = "cell") => {
-    setEditorValue(seed ?? toEditorValue(selectedCell));
-    setEditorSelectionBehavior(selectionBehavior);
-    setEditingMode(mode);
-  }, [selectedCell]);
+  const beginEditing = useCallback(
+    (
+      seed?: string,
+      selectionBehavior: EditSelectionBehavior = "select-all",
+      mode: Exclude<EditingMode, "idle"> = "cell",
+    ) => {
+      setEditorValue(seed ?? toEditorValue(selectedCell));
+      setEditorSelectionBehavior(selectionBehavior);
+      setEditingMode(mode);
+    },
+    [selectedCell],
+  );
 
-  const applyParsedInput = useCallback(async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
-    if (parsed.kind === "formula") {
-      await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
-      return;
-    }
-    if (parsed.kind === "clear") {
-      await invokeMutation("clearCell", sheetName, address);
-      return;
-    }
-    await invokeMutation("setCellValue", sheetName, address, parsed.value);
-  }, [invokeMutation]);
+  const applyParsedInput = useCallback(
+    async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
+      if (parsed.kind === "formula") {
+        await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
+        return;
+      }
+      if (parsed.kind === "clear") {
+        await invokeMutation("clearCell", sheetName, address);
+        return;
+      }
+      await invokeMutation("setCellValue", sheetName, address, parsed.value);
+    },
+    [invokeMutation],
+  );
 
-  const commitEditor = useCallback((movement?: EditMovement) => {
-    const nextValue = editingMode === "idle" ? toEditorValue(selectedCell) : editorValue;
-    const parsed = parseEditorInput(nextValue);
-    applyOptimisticCellEdit(selection.sheetName, selection.address, parsed);
-    setEditingMode("idle");
-    setEditorSelectionBehavior("select-all");
-    if (movement) {
-      const nextAddress = clampSelectionMovement(selection.address, selection.sheetName, movement);
-      setSelection({ sheetName: selection.sheetName, address: nextAddress });
-      selectionRef.current = { sheetName: selection.sheetName, address: nextAddress };
-    }
-    void applyParsedInput(selection.sheetName, selection.address, parsed).catch((error: unknown) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
-    });
-  }, [applyOptimisticCellEdit, applyParsedInput, editorValue, editingMode, selectedCell, selection.address, selection.sheetName]);
+  const commitEditor = useCallback(
+    (movement?: EditMovement) => {
+      const nextValue = editingMode === "idle" ? toEditorValue(selectedCell) : editorValue;
+      const parsed = parseEditorInput(nextValue);
+      applyOptimisticCellEdit(selection.sheetName, selection.address, parsed);
+      setEditingMode("idle");
+      setEditorSelectionBehavior("select-all");
+      if (movement) {
+        const nextAddress = clampSelectionMovement(
+          selection.address,
+          selection.sheetName,
+          movement,
+        );
+        setSelection({ sheetName: selection.sheetName, address: nextAddress });
+        selectionRef.current = { sheetName: selection.sheetName, address: nextAddress };
+      }
+      void applyParsedInput(selection.sheetName, selection.address, parsed).catch(
+        (error: unknown) => {
+          setRuntimeError(error instanceof Error ? error.message : String(error));
+        },
+      );
+    },
+    [
+      applyOptimisticCellEdit,
+      applyParsedInput,
+      editorValue,
+      editingMode,
+      selectedCell,
+      selection.address,
+      selection.sheetName,
+    ],
+  );
 
   const cancelEditor = useCallback(() => {
     setEditorValue(toEditorValue(selectedCell));
@@ -495,107 +567,164 @@ export function WorkerWorkbookApp() {
     applyOptimisticCellEdit(selection.sheetName, selection.address, { kind: "clear" });
     setEditorValue("");
     setEditingMode("idle");
-    void invokeMutation("clearCell", selection.sheetName, selection.address).catch((error: unknown) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
-    });
+    void invokeMutation("clearCell", selection.sheetName, selection.address).catch(
+      (error: unknown) => {
+        setRuntimeError(error instanceof Error ? error.message : String(error));
+      },
+    );
   }, [applyOptimisticCellEdit, invokeMutation, selection.address, selection.sheetName]);
 
-  const pasteIntoSelection = useCallback((startAddr: string, values: readonly (readonly string[])[]) => {
-    const start = parseCellAddress(startAddr, selection.sheetName);
-    const ops: { kind: "upsertCell" | "deleteCell"; sheetName: string; addr: string; formula?: string; value?: LiteralInput }[] = [];
-    values.forEach((rowValues, rowOffset) => {
-      rowValues.forEach((cellValue, colOffset) => {
-        const address = formatAddress(start.row + rowOffset, start.col + colOffset);
-        const parsed = parseEditorInput(cellValue);
-        if (parsed.kind === "formula") {
-          ops.push({ kind: "upsertCell", sheetName: selection.sheetName, addr: address, formula: parsed.formula });
-          return;
-        }
-        if (parsed.kind === "clear") {
-          ops.push({ kind: "deleteCell", sheetName: selection.sheetName, addr: address });
-          return;
-        }
-        ops.push({ kind: "upsertCell", sheetName: selection.sheetName, addr: address, value: parsed.value });
+  const pasteIntoSelection = useCallback(
+    (startAddr: string, values: readonly (readonly string[])[]) => {
+      const start = parseCellAddress(startAddr, selection.sheetName);
+      const ops: {
+        kind: "upsertCell" | "deleteCell";
+        sheetName: string;
+        addr: string;
+        formula?: string;
+        value?: LiteralInput;
+      }[] = [];
+      values.forEach((rowValues, rowOffset) => {
+        rowValues.forEach((cellValue, colOffset) => {
+          const address = formatAddress(start.row + rowOffset, start.col + colOffset);
+          const parsed = parseEditorInput(cellValue);
+          if (parsed.kind === "formula") {
+            ops.push({
+              kind: "upsertCell",
+              sheetName: selection.sheetName,
+              addr: address,
+              formula: parsed.formula,
+            });
+            return;
+          }
+          if (parsed.kind === "clear") {
+            ops.push({ kind: "deleteCell", sheetName: selection.sheetName, addr: address });
+            return;
+          }
+          ops.push({
+            kind: "upsertCell",
+            sheetName: selection.sheetName,
+            addr: address,
+            value: parsed.value,
+          });
+        });
       });
-    });
-    if (ops.length === 0) {
-      return;
-    }
-    void invokeMutation("renderCommit", ops).catch((error: unknown) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
-    });
-    setEditorSelectionBehavior("select-all");
-    setEditingMode("idle");
-  }, [invokeMutation, selection.sheetName]);
-
-  const fillSelectionRange = useCallback((sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => {
-    void invokeMutation(
-      "fillRange",
-      {
-        sheetName: selection.sheetName,
-        startAddress: sourceStartAddr,
-        endAddress: sourceEndAddr
-      },
-      {
-        sheetName: selection.sheetName,
-        startAddress: targetStartAddr,
-        endAddress: targetEndAddr
+      if (ops.length === 0) {
+        return;
       }
-    ).then(() => {
+      void invokeMutation("renderCommit", ops).catch((error: unknown) => {
+        setRuntimeError(error instanceof Error ? error.message : String(error));
+      });
+      setEditorSelectionBehavior("select-all");
       setEditingMode("idle");
-      return undefined;
-    }).catch((error: unknown) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
-    });
-  }, [invokeMutation, selection.sheetName]);
+    },
+    [invokeMutation, selection.sheetName],
+  );
 
-  const copySelectionRange = useCallback((sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => {
-    void invokeMutation(
-      "copyRange",
-      {
-        sheetName: selection.sheetName,
-        startAddress: sourceStartAddr,
-        endAddress: sourceEndAddr
-      },
-      {
-        sheetName: selection.sheetName,
-        startAddress: targetStartAddr,
-        endAddress: targetEndAddr
+  const fillSelectionRange = useCallback(
+    (
+      sourceStartAddr: string,
+      sourceEndAddr: string,
+      targetStartAddr: string,
+      targetEndAddr: string,
+    ) => {
+      void invokeMutation(
+        "fillRange",
+        {
+          sheetName: selection.sheetName,
+          startAddress: sourceStartAddr,
+          endAddress: sourceEndAddr,
+        },
+        {
+          sheetName: selection.sheetName,
+          startAddress: targetStartAddr,
+          endAddress: targetEndAddr,
+        },
+      )
+        .then(() => {
+          setEditingMode("idle");
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          setRuntimeError(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [invokeMutation, selection.sheetName],
+  );
+
+  const copySelectionRange = useCallback(
+    (
+      sourceStartAddr: string,
+      sourceEndAddr: string,
+      targetStartAddr: string,
+      targetEndAddr: string,
+    ) => {
+      void invokeMutation(
+        "copyRange",
+        {
+          sheetName: selection.sheetName,
+          startAddress: sourceStartAddr,
+          endAddress: sourceEndAddr,
+        },
+        {
+          sheetName: selection.sheetName,
+          startAddress: targetStartAddr,
+          endAddress: targetEndAddr,
+        },
+      )
+        .then(() => {
+          setEditingMode("idle");
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          setRuntimeError(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [invokeMutation, selection.sheetName],
+  );
+
+  const selectAddress = useCallback(
+    (sheetName: string, address: string) => {
+      setSelection({ sheetName, address });
+      selectionRef.current = { sheetName, address };
+      if (editingMode === "formula") {
+        setEditingMode("idle");
       }
-    ).then(() => {
-      setEditingMode("idle");
-      return undefined;
-    }).catch((error: unknown) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
-    });
-  }, [invokeMutation, selection.sheetName]);
-
-  const selectAddress = useCallback((sheetName: string, address: string) => {
-    setSelection({ sheetName, address });
-    selectionRef.current = { sheetName, address };
-    if (editingMode === "formula") {
-      setEditingMode("idle");
-    }
-  }, [editingMode]);
+    },
+    [editingMode],
+  );
 
   const isEditing = editingMode !== "idle";
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
   const sheetNames = runtimeState?.sheetNames ?? [];
-  const columnWidths = workerHandle ? workerHandle.cache.getColumnWidths(selection.sheetName) : undefined;
+  const columnWidths = workerHandle
+    ? workerHandle.cache.getColumnWidths(selection.sheetName)
+    : undefined;
 
-  const subscribeViewport = useCallback((sheetName: string, viewport: Parameters<WorkerViewportCache["subscribeViewport"]>[1], listener: Parameters<WorkerViewportCache["subscribeViewport"]>[2]) => {
-    if (!workerHandle) {
-      return () => {};
-    }
-    return workerHandle.cache.subscribeViewport(sheetName, viewport, listener);
-  }, [workerHandle]);
+  const subscribeViewport = useCallback(
+    (
+      sheetName: string,
+      viewport: Parameters<WorkerViewportCache["subscribeViewport"]>[1],
+      listener: Parameters<WorkerViewportCache["subscribeViewport"]>[2],
+    ) => {
+      if (!workerHandle) {
+        return () => {};
+      }
+      return workerHandle.cache.subscribeViewport(sheetName, viewport, listener);
+    },
+    [workerHandle],
+  );
 
   const statusBar = (
     <>
-      <span data-testid="status-mode">{formatSyncStateLabel(runtimeState?.syncState ?? "local-only")}</span>
-      <span data-testid="status-selection">{selection.sheetName}!{selectionLabel}</span>
+      <span data-testid="status-mode">
+        {formatSyncStateLabel(runtimeState?.syncState ?? "local-only")}
+      </span>
+      <span data-testid="status-selection">
+        {selection.sheetName}!{selectionLabel}
+      </span>
       <span data-testid="status-sync">{isEditing ? "Editing" : "Ready"}</span>
     </>
   );
@@ -626,12 +755,14 @@ export function WorkerWorkbookApp() {
           }}
           onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, fallbackWidth);
-            return invokeMutation("autofitColumn", selection.sheetName, columnIndex).then((width) => {
-              if (typeof width === "number") {
-                workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
-              }
-              return undefined;
-            });
+            return invokeMutation("autofitColumn", selection.sheetName, columnIndex).then(
+              (width) => {
+                if (typeof width === "number") {
+                  workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
+                }
+                return undefined;
+              },
+            );
           }}
           onBeginEdit={beginEditing}
           onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "select-all", "formula")}
@@ -639,7 +770,12 @@ export function WorkerWorkbookApp() {
           onClearCell={clearSelectedCell}
           onColumnWidthChange={(columnIndex: number, newSize: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, newSize);
-            void invokeMutation("updateColumnWidth", selection.sheetName, columnIndex, newSize).catch((error: unknown) => {
+            void invokeMutation(
+              "updateColumnWidth",
+              selection.sheetName,
+              columnIndex,
+              newSize,
+            ).catch((error: unknown) => {
               setRuntimeError(error instanceof Error ? error.message : String(error));
             });
           }}
@@ -647,7 +783,7 @@ export function WorkerWorkbookApp() {
           onCopyRange={copySelectionRange}
           onEditorChange={(next) => {
             setEditorValue(next);
-            setEditingMode((current) => current === "idle" ? "cell" : current);
+            setEditingMode((current) => (current === "idle" ? "cell" : current));
           }}
           onFillRange={fillSelectionRange}
           onPaste={pasteIntoSelection}

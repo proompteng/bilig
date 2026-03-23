@@ -5,7 +5,7 @@ export function useMetrics(engine: SpreadsheetEngine) {
   useSyncExternalStore(
     engine.subscribe.bind(engine),
     () => selectors.selectMetrics(engine).batchId,
-    () => selectors.selectMetrics(engine).batchId
+    () => selectors.selectMetrics(engine).batchId,
   );
 
   return { ...selectors.selectMetrics(engine) };

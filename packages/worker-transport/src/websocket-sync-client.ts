@@ -1,20 +1,10 @@
 import type { EngineSyncClient } from "@bilig/core";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 
-interface BrowserWebSocketEventMap {
-  open: Event;
-  message: MessageEvent<unknown>;
-  error: Event;
-  close: Event;
-}
-
 export interface BrowserWebSocketLike {
   binaryType: string;
   readyState: number;
-  addEventListener<K extends keyof BrowserWebSocketEventMap>(
-    type: K,
-    listener: (event: BrowserWebSocketEventMap[K]) => void
-  ): void;
+  addEventListener(type: "open" | "message" | "error" | "close", listener: EventListener): void;
   send(data: ArrayBufferLike | ArrayBufferView): void;
   close(): void;
 }
@@ -55,12 +45,14 @@ async function toBytes(data: unknown): Promise<Uint8Array> {
 export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): EngineSyncClient {
   return {
     async connect(handlers) {
-      const createSocket = options.createSocket ?? ((url: string) => {
-        if (typeof WebSocket === "undefined") {
-          throw new Error("WebSocket is unavailable in this runtime");
-        }
-        return new WebSocket(url);
-      });
+      const createSocket =
+        options.createSocket ??
+        ((url: string) => {
+          if (typeof WebSocket === "undefined") {
+            throw new Error("WebSocket is unavailable in this runtime");
+          }
+          return new WebSocket(url);
+        });
       const socket = createSocket(toWebSocketUrl(options.baseUrl, options.documentId));
       let lastServerCursor = 0;
       let settled = false;
@@ -72,17 +64,19 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
           if (socket.readyState !== 1) {
             throw new Error("WebSocket sync client is not connected");
           }
-          socket.send(encodeFrame({
-            kind: "appendBatch",
-            documentId: options.documentId,
-            cursor: lastServerCursor,
-            batch
-          }));
+          socket.send(
+            encodeFrame({
+              kind: "appendBatch",
+              documentId: options.documentId,
+              cursor: lastServerCursor,
+              batch,
+            }),
+          );
         },
         disconnect() {
           socket.close();
           handlers.setState("local-only");
-        }
+        },
       };
 
       const complete = <T>(callback: () => T, resolve: (value: T) => void) => {
@@ -139,17 +133,23 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
 
         socket.addEventListener("open", () => {
           handlers.setState("syncing");
-          socket.send(encodeFrame({
-            kind: "hello",
-            documentId: options.documentId,
-            replicaId: options.replicaId,
-            sessionId: `${options.documentId}:${options.replicaId}`,
-            protocolVersion: 1,
-            lastServerCursor,
-            capabilities: ["browser-sync"]
-          }));
+          socket.send(
+            encodeFrame({
+              kind: "hello",
+              documentId: options.documentId,
+              replicaId: options.replicaId,
+              sessionId: `${options.documentId}:${options.replicaId}`,
+              protocolVersion: 1,
+              lastServerCursor,
+              capabilities: ["browser-sync"],
+            }),
+          );
         });
         socket.addEventListener("message", (event) => {
+          if (!(event instanceof MessageEvent)) {
+            fail("WebSocket message event did not provide a MessageEvent payload");
+            return;
+          }
           void handleFrame(event.data).catch((error: unknown) => {
             fail(error instanceof Error ? error.message : String(error));
           });
@@ -164,6 +164,6 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
           }
         });
       });
-    }
+    },
   };
 }

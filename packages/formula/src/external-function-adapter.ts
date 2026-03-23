@@ -16,7 +16,9 @@ export interface ExternalRangeFunctionArgument {
 }
 
 export type ExternalLookupFunctionArgument = CellValue | ExternalRangeFunctionArgument;
-export type ExternalLookupFunction = (...args: ExternalLookupFunctionArgument[]) => EvaluationResult;
+export type ExternalLookupFunction = (
+  ...args: ExternalLookupFunctionArgument[]
+) => EvaluationResult;
 
 export type ExternalFunctionBinding =
   | { kind: "scalar"; implementation: ExternalScalarFunction }

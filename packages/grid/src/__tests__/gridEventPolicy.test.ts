@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   resolveBodyDoubleClickIntent,
   resolveHeaderClickIntent,
-  shouldSkipGridSelectionChange
+  shouldSkipGridSelectionChange,
 } from "../gridEventPolicy.js";
 
 describe("gridEventPolicy", () => {
@@ -12,8 +12,8 @@ describe("gridEventPolicy", () => {
         variant: "playground",
         resizeTarget: null,
         bodyCell: [2, 4],
-        lastBodyClickCell: [2, 4]
-      })
+        lastBodyClickCell: [2, 4],
+      }),
     ).toEqual({ kind: "ignore" });
 
     expect(
@@ -21,8 +21,8 @@ describe("gridEventPolicy", () => {
         variant: "product",
         resizeTarget: 3,
         bodyCell: [2, 4],
-        lastBodyClickCell: [2, 4]
-      })
+        lastBodyClickCell: [2, 4],
+      }),
     ).toEqual({ kind: "autofit-column", columnIndex: 3 });
 
     expect(
@@ -30,8 +30,8 @@ describe("gridEventPolicy", () => {
         variant: "product",
         resizeTarget: null,
         bodyCell: [2, 4],
-        lastBodyClickCell: [2, 4]
-      })
+        lastBodyClickCell: [2, 4],
+      }),
     ).toEqual({ kind: "edit-cell", cell: [2, 4] });
 
     expect(
@@ -39,8 +39,8 @@ describe("gridEventPolicy", () => {
         variant: "product",
         resizeTarget: null,
         bodyCell: [2, 4],
-        lastBodyClickCell: [2, 3]
-      })
+        lastBodyClickCell: [2, 3],
+      }),
     ).toEqual({ kind: "ignore" });
   });
 
@@ -52,8 +52,8 @@ describe("gridEventPolicy", () => {
         isDoubleClick: true,
         columnResizeActive: false,
         columnIndex: 4,
-        selectedRow: 7
-      })
+        selectedRow: 7,
+      }),
     ).toEqual({ kind: "autofit-column", columnIndex: 4 });
 
     expect(
@@ -63,8 +63,8 @@ describe("gridEventPolicy", () => {
         isDoubleClick: false,
         columnResizeActive: true,
         columnIndex: 4,
-        selectedRow: 7
-      })
+        selectedRow: 7,
+      }),
     ).toEqual({ kind: "ignore" });
 
     expect(
@@ -74,8 +74,8 @@ describe("gridEventPolicy", () => {
         isDoubleClick: false,
         columnResizeActive: false,
         columnIndex: 4,
-        selectedRow: 7
-      })
+        selectedRow: 7,
+      }),
     ).toEqual({ kind: "select-column", addr: "E8", columnIndex: 4, selectedRow: 7 });
   });
 
@@ -86,9 +86,13 @@ describe("gridEventPolicy", () => {
         postDragSelectionExpiry: 0,
         now: 100,
         ignoreNextPointerSelection: false,
-        hasDragViewport: false
-      })
-    ).toEqual({ skip: true, consumeIgnoreNextPointerSelection: false, clearPostDragSelectionExpiry: false });
+        hasDragViewport: false,
+      }),
+    ).toEqual({
+      skip: true,
+      consumeIgnoreNextPointerSelection: false,
+      clearPostDragSelectionExpiry: false,
+    });
 
     expect(
       shouldSkipGridSelectionChange({
@@ -96,9 +100,13 @@ describe("gridEventPolicy", () => {
         postDragSelectionExpiry: 120,
         now: 100,
         ignoreNextPointerSelection: false,
-        hasDragViewport: false
-      })
-    ).toEqual({ skip: true, consumeIgnoreNextPointerSelection: false, clearPostDragSelectionExpiry: true });
+        hasDragViewport: false,
+      }),
+    ).toEqual({
+      skip: true,
+      consumeIgnoreNextPointerSelection: false,
+      clearPostDragSelectionExpiry: true,
+    });
 
     expect(
       shouldSkipGridSelectionChange({
@@ -106,9 +114,13 @@ describe("gridEventPolicy", () => {
         postDragSelectionExpiry: 0,
         now: 100,
         ignoreNextPointerSelection: true,
-        hasDragViewport: false
-      })
-    ).toEqual({ skip: true, consumeIgnoreNextPointerSelection: true, clearPostDragSelectionExpiry: false });
+        hasDragViewport: false,
+      }),
+    ).toEqual({
+      skip: true,
+      consumeIgnoreNextPointerSelection: true,
+      clearPostDragSelectionExpiry: false,
+    });
 
     expect(
       shouldSkipGridSelectionChange({
@@ -116,8 +128,12 @@ describe("gridEventPolicy", () => {
         postDragSelectionExpiry: 0,
         now: 100,
         ignoreNextPointerSelection: false,
-        hasDragViewport: false
-      })
-    ).toEqual({ skip: false, consumeIgnoreNextPointerSelection: false, clearPostDragSelectionExpiry: false });
+        hasDragViewport: false,
+      }),
+    ).toEqual({
+      skip: false,
+      consumeIgnoreNextPointerSelection: false,
+      clearPostDragSelectionExpiry: false,
+    });
   });
 });

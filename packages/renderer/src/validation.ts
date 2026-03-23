@@ -25,7 +25,7 @@ export function validateDescriptorTree(root: WorkbookDescriptor | null): void {
       assert(Boolean(cell.props.addr), "<Cell> requires an addr prop.");
       assert(
         !(cell.props.value !== undefined && cell.props.formula !== undefined),
-        "<Cell> cannot specify both value and formula."
+        "<Cell> cannot specify both value and formula.",
       );
     });
   });

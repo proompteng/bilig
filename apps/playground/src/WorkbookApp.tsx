@@ -11,7 +11,7 @@ import {
   type EditSelectionBehavior,
   useCell,
   useMetrics,
-  useSelection
+  useSelection,
 } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { LiteralInput, SyncState } from "@bilig/protocol";
@@ -21,7 +21,7 @@ import {
   PLAYGROUND_PRESETS,
   loadPlaygroundPreset,
   type PlaygroundPresetDefinition,
-  type PlaygroundPresetId
+  type PlaygroundPresetId,
 } from "./playgroundPresets.js";
 import { loadPersistedJson, removePersistedJson, savePersistedJson } from "./browserPersistence.js";
 import { useRemoteSpreadsheetSync } from "./useRemoteSpreadsheetSync.js";
@@ -57,20 +57,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isPersistedReplicaState(value: unknown): value is PersistedReplicaState {
-  return isRecord(value)
-    && isRecord(value["snapshot"])
-    && Array.isArray(value["snapshot"]["sheets"])
-    && isRecord(value["replica"])
-    && isRecord(value["replica"]["replica"])
-    && typeof value["replica"]["replica"]["replicaId"] === "string"
-    && Array.isArray(value["replica"]["entityVersions"])
-    && Array.isArray(value["replica"]["sheetDeleteVersions"]);
+  return (
+    isRecord(value) &&
+    isRecord(value["snapshot"]) &&
+    Array.isArray(value["snapshot"]["sheets"]) &&
+    isRecord(value["replica"]) &&
+    isRecord(value["replica"]["replica"]) &&
+    typeof value["replica"]["replica"]["replicaId"] === "string" &&
+    Array.isArray(value["replica"]["entityVersions"]) &&
+    Array.isArray(value["replica"]["sheetDeleteVersions"])
+  );
 }
 
 function isPersistedRelayState(value: unknown): value is PersistedRelayState {
-  return isRecord(value)
-    && typeof value["syncPaused"] === "boolean"
-    && Array.isArray(value["queue"]);
+  return (
+    isRecord(value) && typeof value["syncPaused"] === "boolean" && Array.isArray(value["queue"])
+  );
 }
 
 function parsePersistedReplicaState(value: unknown): PersistedReplicaState | null {
@@ -144,7 +146,12 @@ function formatSyncStateLabel(state: SyncState): string {
   throw new Error(`Unsupported sync state: ${String(exhaustiveState)}`);
 }
 
-function applyParsedInput(engine: SpreadsheetEngine, sheetName: string, address: string, parsed: ParsedEditorInput): void {
+function applyParsedInput(
+  engine: SpreadsheetEngine,
+  sheetName: string,
+  address: string,
+  parsed: ParsedEditorInput,
+): void {
   if (parsed.kind === "formula") {
     engine.setCellFormula(sheetName, address, parsed.formula);
     return;
@@ -167,14 +174,21 @@ function toCommitOp(sheetName: string, address: string, rawValue: string): Commi
   return { kind: "upsertCell", sheetName, addr: address, value: parsed.value };
 }
 
-function clampSelectionMovement(address: string, sheetName: string, movement: EditMovement): string {
+function clampSelectionMovement(
+  address: string,
+  sheetName: string,
+  movement: EditMovement,
+): string {
   const parsed = parseCellAddress(address, sheetName);
   const nextRow = Math.min(MAX_ROWS - 1, Math.max(0, parsed.row + movement[1]));
   const nextCol = Math.min(MAX_COLS - 1, Math.max(0, parsed.col + movement[0]));
   return formatAddress(nextRow, nextCol);
 }
 
-function parseSelectionTarget(input: string, fallbackSheet: string): { sheetName: string; address: string } | null {
+function parseSelectionTarget(
+  input: string,
+  fallbackSheet: string,
+): { sheetName: string; address: string } | null {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
     return null;
@@ -188,7 +202,7 @@ function parseSelectionTarget(input: string, fallbackSheet: string): { sheetName
     const parsed = parseCellAddress(nextAddress.toUpperCase(), nextSheetName || fallbackSheet);
     return {
       sheetName: nextSheetName || fallbackSheet,
-      address: formatAddress(parsed.row, parsed.col)
+      address: formatAddress(parsed.row, parsed.col),
     };
   } catch {
     return null;
@@ -218,7 +232,9 @@ async function settleRendererBoundary(operation: Promise<void>): Promise<void> {
   if (capturedError) {
     throw capturedError instanceof Error
       ? capturedError
-      : new Error(typeof capturedError === "string" ? capturedError : JSON.stringify(capturedError));
+      : new Error(
+          typeof capturedError === "string" ? capturedError : JSON.stringify(capturedError),
+        );
   }
 }
 
@@ -226,27 +242,34 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const isProductShell = variant === "product";
   const runtimeConfig = useMemo(() => {
     const defaultDocumentId = import.meta.env["VITE_BILIG_DOCUMENT_ID"] ?? "bilig-demo";
-    const defaultLocalServerUrl = import.meta.env["VITE_BILIG_LOCAL_SERVER_URL"] ?? "http://127.0.0.1:4381";
+    const defaultLocalServerUrl =
+      import.meta.env["VITE_BILIG_LOCAL_SERVER_URL"] ?? "http://127.0.0.1:4381";
     if (!isProductShell) {
       return {
         documentId: defaultDocumentId,
-        localServerUrl: defaultLocalServerUrl
+        localServerUrl: defaultLocalServerUrl,
       };
     }
     const searchParams = new URLSearchParams(window.location.search);
     return {
       documentId: searchParams.get("document") ?? defaultDocumentId,
-      localServerUrl: searchParams.get("server") ?? defaultLocalServerUrl
+      localServerUrl: searchParams.get("server") ?? defaultLocalServerUrl,
     };
   }, [isProductShell]);
   const documentId = runtimeConfig.documentId;
   const localServerUrl = runtimeConfig.localServerUrl;
   const replicaId = useMemo(
     () => (isProductShell ? `browser:${Math.random().toString(36).slice(2)}` : "playground"),
-    [isProductShell]
+    [isProductShell],
   );
-  const engine = useMemo(() => new SpreadsheetEngine({ workbookName: documentId, replicaId }), [documentId, replicaId]);
-  const mirrorEngine = useMemo(() => new SpreadsheetEngine({ workbookName: documentId, replicaId: "replica-beta" }), [documentId]);
+  const engine = useMemo(
+    () => new SpreadsheetEngine({ workbookName: documentId, replicaId }),
+    [documentId, replicaId],
+  );
+  const mirrorEngine = useMemo(
+    () => new SpreadsheetEngine({ workbookName: documentId, replicaId: "replica-beta" }),
+    [documentId],
+  );
   const rendererRoot = useMemo(() => createWorkbookRendererRoot(engine), [engine]);
   const selection = useSelection(engine);
   const selectCell = selection.select;
@@ -256,7 +279,8 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const metrics = useMetrics(engine);
   const mirrorMetrics = useMetrics(mirrorEngine);
   const [editorValue, setEditorValue] = useState("");
-  const [editorSelectionBehavior, setEditorSelectionBehavior] = useState<EditSelectionBehavior>("select-all");
+  const [editorSelectionBehavior, setEditorSelectionBehavior] =
+    useState<EditSelectionBehavior>("select-all");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
   const [selectionLabel, setSelectionLabel] = useState(selectedAddr);
   const [replicationReady, setReplicationReady] = useState(false);
@@ -276,8 +300,8 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       ...replicaSnapshot,
       replica: {
         ...replicaSnapshot.replica,
-        replicaId: mirrorEngine.replica.replicaId
-      }
+        replicaId: mirrorEngine.replica.replicaId,
+      },
     });
   }, [engine, mirrorEngine]);
   const sheetNames = [...engine.workbook.sheetsByName.values()]
@@ -286,7 +310,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const pendingSyncCount = syncPaused ? 0 : relayQueue.length;
   const queuedSyncCount = syncPaused ? relayQueue.length : 0;
   const selectedPreset = activePresetId
-    ? PLAYGROUND_PRESETS.find((preset) => preset.id === activePresetId) ?? null
+    ? (PLAYGROUND_PRESETS.find((preset) => preset.id === activePresetId) ?? null)
     : null;
 
   const resolvedValue = toResolvedValue(selectedCell);
@@ -299,7 +323,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     engine,
     documentId,
     replicaId,
-    baseUrl: isProductShell ? localServerUrl : null
+    baseUrl: isProductShell ? localServerUrl : null,
   });
 
   const loadPreset = useCallback(
@@ -338,7 +362,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
         setLoadingPresetId(null);
       }
     },
-    [engine, rendererRoot, selectCell, syncMirrorFromPrimary]
+    [engine, rendererRoot, selectCell, syncMirrorFromPrimary],
   );
 
   useEffect(() => {
@@ -364,7 +388,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
         await Promise.all([
           removePersistedJson(PRIMARY_STORAGE_KEY),
           removePersistedJson(MIRROR_STORAGE_KEY),
-          removePersistedJson(RELAY_STORAGE_KEY)
+          removePersistedJson(RELAY_STORAGE_KEY),
         ]);
         window.history.replaceState(null, "", window.location.pathname);
         relayQueueRef.current = [];
@@ -384,7 +408,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       const [primaryPersisted, mirrorPersisted, relayPersisted] = await Promise.all([
         loadPersistedJson(PRIMARY_STORAGE_KEY, parsePersistedReplicaState),
         loadPersistedJson(MIRROR_STORAGE_KEY, parsePersistedReplicaState),
-        loadPersistedJson(RELAY_STORAGE_KEY, parsePersistedRelayState)
+        loadPersistedJson(RELAY_STORAGE_KEY, parsePersistedRelayState),
       ]);
 
       if (primaryPersisted) {
@@ -437,7 +461,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     const persistPrimary = () => {
       const persisted: PersistedReplicaState = {
         snapshot: engine.exportSnapshot(),
-        replica: engine.exportReplicaSnapshot()
+        replica: engine.exportReplicaSnapshot(),
       };
       void savePersistedJson(PRIMARY_STORAGE_KEY, persisted);
     };
@@ -445,7 +469,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     const persistMirror = () => {
       const persisted: PersistedReplicaState = {
         snapshot: mirrorEngine.exportSnapshot(),
-        replica: mirrorEngine.exportReplicaSnapshot()
+        replica: mirrorEngine.exportReplicaSnapshot(),
       };
       void savePersistedJson(MIRROR_STORAGE_KEY, persisted);
     };
@@ -477,14 +501,16 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
           {
             target,
             batch,
-            deliverAt: Date.now() + syncLatencyMs
-          }
-        ])
+            deliverAt: Date.now() + syncLatencyMs,
+          },
+        ]),
       );
     };
 
     const unsubscribeLocal = engine.subscribeBatches((batch) => enqueueBatch("mirror", batch));
-    const unsubscribeMirror = mirrorEngine.subscribeBatches((batch) => enqueueBatch("primary", batch));
+    const unsubscribeMirror = mirrorEngine.subscribeBatches((batch) =>
+      enqueueBatch("primary", batch),
+    );
 
     return () => {
       unsubscribeLocal();
@@ -499,7 +525,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
 
     const persistedRelayState: PersistedRelayState = {
       syncPaused,
-      queue: relayQueue
+      queue: relayQueue,
     };
     void savePersistedJson(RELAY_STORAGE_KEY, persistedRelayState);
   }, [isProductShell, relayQueue, replicationReady, syncPaused]);
@@ -518,7 +544,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       return;
     }
 
-    const nextDeliverAt = relayQueue.reduce((earliest, entry) => Math.min(earliest, entry.deliverAt), Number.POSITIVE_INFINITY);
+    const nextDeliverAt = relayQueue.reduce(
+      (earliest, entry) => Math.min(earliest, entry.deliverAt),
+      Number.POSITIVE_INFINITY,
+    );
     const delay = Math.max(0, nextDeliverAt - Date.now());
 
     relayTimerRef.current = window.setTimeout(() => {
@@ -571,13 +600,13 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     (
       seed?: string,
       selectionBehavior: EditSelectionBehavior = "select-all",
-      mode: Exclude<EditingMode, "idle"> = "cell"
+      mode: Exclude<EditingMode, "idle"> = "cell",
     ) => {
       setEditorValue(seed ?? toEditorValue(engine.getCell(selection.sheetName, selectedAddr)));
       setEditorSelectionBehavior(selectionBehavior);
       setEditingMode(mode);
     },
-    [engine, selectedAddr, selection.sheetName]
+    [engine, selectedAddr, selection.sheetName],
   );
 
   const commitEditor = useCallback(
@@ -587,10 +616,13 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       setEditingMode("idle");
       setEditorSelectionBehavior("select-all");
       if (movement) {
-        selection.select(selection.sheetName, clampSelectionMovement(selectedAddr, selection.sheetName, movement));
+        selection.select(
+          selection.sheetName,
+          clampSelectionMovement(selectedAddr, selection.sheetName, movement),
+        );
       }
     },
-    [editorValue, engine, isEditing, selectedAddr, selectedCell, selection]
+    [editorValue, engine, isEditing, selectedAddr, selectedCell, selection],
   );
 
   const cancelEditor = useCallback(() => {
@@ -621,45 +653,55 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       setEditorSelectionBehavior("select-all");
       setEditingMode("idle");
     },
-    [engine, selection.sheetName]
+    [engine, selection.sheetName],
   );
 
   const fillSelectionRange = useCallback(
-    (sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => {
+    (
+      sourceStartAddr: string,
+      sourceEndAddr: string,
+      targetStartAddr: string,
+      targetEndAddr: string,
+    ) => {
       engine.fillRange(
         {
           sheetName: selection.sheetName,
           startAddress: sourceStartAddr,
-          endAddress: sourceEndAddr
+          endAddress: sourceEndAddr,
         },
         {
           sheetName: selection.sheetName,
           startAddress: targetStartAddr,
-          endAddress: targetEndAddr
-        }
+          endAddress: targetEndAddr,
+        },
       );
       setEditingMode("idle");
     },
-    [engine, selection.sheetName]
+    [engine, selection.sheetName],
   );
 
   const copySelectionRange = useCallback(
-    (sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string) => {
+    (
+      sourceStartAddr: string,
+      sourceEndAddr: string,
+      targetStartAddr: string,
+      targetEndAddr: string,
+    ) => {
       engine.copyRange(
         {
           sheetName: selection.sheetName,
           startAddress: sourceStartAddr,
-          endAddress: sourceEndAddr
+          endAddress: sourceEndAddr,
         },
         {
           sheetName: selection.sheetName,
           startAddress: targetStartAddr,
-          endAddress: targetEndAddr
-        }
+          endAddress: targetEndAddr,
+        },
       );
       setEditingMode("idle");
     },
-    [engine, selection.sheetName]
+    [engine, selection.sheetName],
   );
 
   const selectAddress = useCallback(
@@ -671,14 +713,14 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       }
       selection.select(nextSheetName, nextAddress);
     },
-    [editingMode, editorValue, engine, selectedAddr, selection]
+    [editingMode, editorValue, engine, selectedAddr, selection],
   );
 
   const resetWorkspace = () => {
     void Promise.all([
       removePersistedJson(PRIMARY_STORAGE_KEY),
       removePersistedJson(MIRROR_STORAGE_KEY),
-      removePersistedJson(RELAY_STORAGE_KEY)
+      removePersistedJson(RELAY_STORAGE_KEY),
     ]).finally(() => {
       window.location.reload();
     });
@@ -686,7 +728,9 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
 
   const toggleSync = useCallback(() => {
     if (syncPaused) {
-      const queuedEntries = [...relayQueueRef.current].toSorted((left, right) => left.deliverAt - right.deliverAt);
+      const queuedEntries = [...relayQueueRef.current].toSorted(
+        (left, right) => left.deliverAt - right.deliverAt,
+      );
       queuedEntries.forEach(({ target, batch }) => {
         (target === "mirror" ? mirrorEngine : engine).applyRemoteBatch(batch);
       });
@@ -710,45 +754,45 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     </>
   ) : (
     <>
-      <span data-testid="status-active-preset">{selectedPreset?.label ?? "Restored workspace"}</span>
+      <span data-testid="status-active-preset">
+        {selectedPreset?.label ?? "Restored workspace"}
+      </span>
       <span data-testid="metric-js">Fallback {metrics.jsFormulaCount.toLocaleString()}</span>
       <span data-testid="metric-wasm">WASM {metrics.wasmFormulaCount.toLocaleString()}</span>
       <span data-testid="metric-recalc">Recalc {metrics.recalcMs.toFixed(2)} ms</span>
     </>
   );
 
-  const ribbon = isProductShell
-    ? null
-    : (
-        <div className="ribbon-strip">
-          <div className="ribbon-brand">
-            <p className="eyebrow">bilig playground</p>
-            <strong>Excel-like shell on top of the local-first engine</strong>
-          </div>
-          <div className="preset-strip" data-testid="preset-strip">
-            {PLAYGROUND_PRESETS.map((preset: PlaygroundPresetDefinition) => (
-              <button
-                className={preset.id === activePresetId ? "preset-chip active" : "preset-chip"}
-                data-testid={`preset-${preset.id}`}
-                disabled={loadingPresetId !== null}
-                key={preset.id}
-                onClick={() => void loadPreset(preset.id)}
-                type="button"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <div className="ribbon-actions">
-            <button className="ghost-button" onClick={() => void loadPreset("starter")} type="button">
-              Rebuild starter
-            </button>
-            <button className="ghost-button" onClick={resetWorkspace} type="button">
-              Reset local workspace
-            </button>
-          </div>
-        </div>
-      );
+  const ribbon = isProductShell ? null : (
+    <div className="ribbon-strip">
+      <div className="ribbon-brand">
+        <p className="eyebrow">bilig playground</p>
+        <strong>Excel-like shell on top of the local-first engine</strong>
+      </div>
+      <div className="preset-strip" data-testid="preset-strip">
+        {PLAYGROUND_PRESETS.map((preset: PlaygroundPresetDefinition) => (
+          <button
+            className={preset.id === activePresetId ? "preset-chip active" : "preset-chip"}
+            data-testid={`preset-${preset.id}`}
+            disabled={loadingPresetId !== null}
+            key={preset.id}
+            onClick={() => void loadPreset(preset.id)}
+            type="button"
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      <div className="ribbon-actions">
+        <button className="ghost-button" onClick={() => void loadPreset("starter")} type="button">
+          Rebuild starter
+        </button>
+        <button className="ghost-button" onClick={resetWorkspace} type="button">
+          Reset local workspace
+        </button>
+      </div>
+    </div>
+  );
 
   const sidebar = isProductShell ? null : (
     <>
@@ -773,7 +817,10 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
     <div className={isProductShell ? "app-shell app-shell-product" : "app-shell"}>
       {loadingPresetId ? (
         <div className="loading-banner" data-testid="preset-loading">
-          Loading {PLAYGROUND_PRESETS.find((preset) => preset.id === loadingPresetId)?.label ?? loadingPresetId}...
+          Loading{" "}
+          {PLAYGROUND_PRESETS.find((preset) => preset.id === loadingPresetId)?.label ??
+            loadingPresetId}
+          ...
         </div>
       ) : null}
       {presetError ? (

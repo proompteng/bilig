@@ -23,7 +23,12 @@ interface ResponseMessage {
 type SubscribeMessage =
   | { kind: "subscribe"; id: number; channel: "events"; args?: [] }
   | { kind: "subscribe"; id: number; channel: "batches"; args?: [] }
-  | { kind: "subscribe"; id: number; channel: "viewportPatches"; args: [ViewportPatchSubscription] };
+  | {
+      kind: "subscribe";
+      id: number;
+      channel: "viewportPatches";
+      args: [ViewportPatchSubscription];
+    };
 
 interface UnsubscribeMessage {
   kind: "unsubscribe";
@@ -35,12 +40,23 @@ type EventMessage =
   | { kind: "event"; subscriptionId: number; channel: "batches"; payload: EngineOpBatch }
   | { kind: "event"; subscriptionId: number; channel: "viewportPatches"; payload: Uint8Array };
 
-type TransportMessage = RequestMessage | ResponseMessage | SubscribeMessage | UnsubscribeMessage | EventMessage;
+type TransportMessage =
+  | RequestMessage
+  | ResponseMessage
+  | SubscribeMessage
+  | UnsubscribeMessage
+  | EventMessage;
 
 export interface MessagePortLike {
   postMessage(message: TransportMessage): void;
-  addEventListener?(type: "message", listener: (event: MessageEvent<TransportMessage>) => void): void;
-  removeEventListener?(type: "message", listener: (event: MessageEvent<TransportMessage>) => void): void;
+  addEventListener?(
+    type: "message",
+    listener: (event: MessageEvent<TransportMessage>) => void,
+  ): void;
+  removeEventListener?(
+    type: "message",
+    listener: (event: MessageEvent<TransportMessage>) => void,
+  ): void;
   on?(type: "message", listener: (message: TransportMessage) => void): void;
   off?(type: "message", listener: (message: TransportMessage) => void): void;
   start?: () => void;
@@ -52,7 +68,7 @@ export interface WorkerTransportEngine {
   subscribeBatches?: (listener: (batch: EngineOpBatch) => void) => () => void;
   subscribeViewportPatches?: (
     subscription: ViewportPatchSubscription,
-    listener: (patch: Uint8Array) => void
+    listener: (patch: Uint8Array) => void,
   ) => () => void;
   [method: string]: unknown;
 }
@@ -64,7 +80,7 @@ export interface WorkerEngineClient {
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void;
   subscribeViewportPatches(
     subscription: ViewportPatchSubscription,
-    listener: (patch: Uint8Array) => void
+    listener: (patch: Uint8Array) => void,
   ): () => void;
   dispose(): void;
 }
@@ -73,11 +89,13 @@ function isCallableMethod(value: unknown): value is (...args: unknown[]) => unkn
   return typeof value === "function";
 }
 
-export function createWorkerEngineHost(engine: WorkerTransportEngine, port: MessagePortLike): { dispose(): void } {
+export function createWorkerEngineHost(
+  engine: WorkerTransportEngine,
+  port: MessagePortLike,
+): { dispose(): void } {
   const subscriptions = new Map<number, () => void>();
 
   const listener = (message: TransportMessage) => {
-
     if (message.kind === "request") {
       void handleRequest(engine, port, message);
       return;
@@ -89,7 +107,7 @@ export function createWorkerEngineHost(engine: WorkerTransportEngine, port: Mess
       port.postMessage({
         kind: "response",
         id: message.id,
-        ok: true
+        ok: true,
       });
       return;
     }
@@ -108,14 +126,14 @@ export function createWorkerEngineHost(engine: WorkerTransportEngine, port: Mess
       subscriptions.forEach((unsubscribe) => unsubscribe());
       subscriptions.clear();
       detach();
-    }
+    },
   };
 }
 
 async function handleRequest(
   engine: WorkerTransportEngine,
   port: MessagePortLike,
-  message: RequestMessage
+  message: RequestMessage,
 ): Promise<void> {
   try {
     const method = engine[message.method];
@@ -127,26 +145,32 @@ async function handleRequest(
       kind: "response",
       id: message.id,
       ok: true,
-      value
+      value,
     });
   } catch (error) {
     port.postMessage({
       kind: "response",
       id: message.id,
       ok: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 }
 
-function subscribeEventChannel(engine: WorkerTransportEngine, listener: (payload: EngineEvent) => void): () => void {
+function subscribeEventChannel(
+  engine: WorkerTransportEngine,
+  listener: (payload: EngineEvent) => void,
+): () => void {
   if (!engine.subscribe) {
     throw new Error("Engine does not expose subscribe()");
   }
   return engine.subscribe(listener);
 }
 
-function subscribeBatchChannel(engine: WorkerTransportEngine, listener: (payload: EngineOpBatch) => void): () => void {
+function subscribeBatchChannel(
+  engine: WorkerTransportEngine,
+  listener: (payload: EngineOpBatch) => void,
+): () => void {
   if (!engine.subscribeBatches) {
     throw new Error("Engine does not expose subscribeBatches()");
   }
@@ -156,7 +180,7 @@ function subscribeBatchChannel(engine: WorkerTransportEngine, listener: (payload
 function subscribeViewportPatchChannel(
   engine: WorkerTransportEngine,
   subscription: ViewportPatchSubscription,
-  listener: (payload: Uint8Array) => void
+  listener: (payload: Uint8Array) => void,
 ): () => void {
   if (!engine.subscribeViewportPatches) {
     throw new Error("Engine does not expose subscribeViewportPatches()");
@@ -167,7 +191,7 @@ function subscribeViewportPatchChannel(
 function createChannelSubscription(
   engine: WorkerTransportEngine,
   port: MessagePortLike,
-  message: SubscribeMessage
+  message: SubscribeMessage,
 ): () => void {
   switch (message.channel) {
     case "events":
@@ -176,7 +200,7 @@ function createChannelSubscription(
           kind: "event",
           subscriptionId: message.id,
           channel: "events",
-          payload
+          payload,
         });
       });
     case "batches":
@@ -185,7 +209,7 @@ function createChannelSubscription(
           kind: "event",
           subscriptionId: message.id,
           channel: "batches",
-          payload
+          payload,
         });
       });
     case "viewportPatches":
@@ -194,7 +218,7 @@ function createChannelSubscription(
           kind: "event",
           subscriptionId: message.id,
           channel: "viewportPatches",
-          payload
+          payload,
         });
       });
   }
@@ -203,7 +227,10 @@ function createChannelSubscription(
 export function createWorkerEngineClient(options: { port: MessagePortLike }): WorkerEngineClient {
   const { port } = options;
   let nextId = 1;
-  const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
+  const pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
   const listeners = new Map<
     number,
     | { channel: "events"; callback: (payload: EngineEvent) => void }
@@ -253,13 +280,13 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     return new Promise<unknown>((resolve, reject) => {
       pending.set(id, {
         resolve,
-        reject
+        reject,
       });
       port.postMessage({
         kind: "request",
         id,
         method,
-        args
+        args,
       });
     });
   }
@@ -286,7 +313,7 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
 
   function subscribeViewportPatches(
     subscription: ViewportPatchSubscription,
-    callback: (payload: Uint8Array) => void
+    callback: (payload: Uint8Array) => void,
   ): () => void {
     const id = nextId++;
     listeners.set(id, { channel: "viewportPatches", callback });
@@ -310,15 +337,18 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
       pending.clear();
       listeners.clear();
       detach();
-    }
+    },
   };
 }
 
 function attachMessageListener(
   port: MessagePortLike,
-  listener: (message: TransportMessage) => void
+  listener: (message: TransportMessage) => void,
 ): () => void {
-  if (typeof port.addEventListener === "function" && typeof port.removeEventListener === "function") {
+  if (
+    typeof port.addEventListener === "function" &&
+    typeof port.removeEventListener === "function"
+  ) {
     const wrapped = (event: MessageEvent<TransportMessage>) => {
       listener(event.data);
     };

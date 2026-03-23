@@ -22,9 +22,9 @@ const fakeClient = {
             jsFormulaCount: 0,
             rangeNodeVisits: 0,
             recalcMs: 0,
-            compileMs: 0
+            compileMs: 0,
           },
-          syncState: "local-only"
+          syncState: "local-only",
         };
       case "getCell":
         return {
@@ -32,7 +32,7 @@ const fakeClient = {
           address: "A1",
           value: { tag: ValueTag.Empty },
           flags: 0,
-          version: 0
+          version: 0,
         };
       case "updateColumnWidth":
       case "autofitColumn":
@@ -45,40 +45,42 @@ const fakeClient = {
   subscribe: () => () => {},
   subscribeBatches: () => () => {},
   subscribeViewportPatches: (_subscription: unknown, listener: (bytes: Uint8Array) => void) => {
-    listener(encodeViewportPatch({
-      version: 1,
-      full: true,
-      viewport: {
-        sheetName: "Sheet1",
-        rowStart: 0,
-        rowEnd: 23,
-        colStart: 0,
-        colEnd: 11
-      },
-      metrics: {
-        batchId: 0,
-        changedInputCount: 0,
-        dirtyFormulaCount: 0,
-        wasmFormulaCount: 0,
-        jsFormulaCount: 0,
-        rangeNodeVisits: 0,
-        recalcMs: 0,
-        compileMs: 0
-      },
-      cells: [],
-      columns: [],
-      rows: []
-    }));
+    listener(
+      encodeViewportPatch({
+        version: 1,
+        full: true,
+        viewport: {
+          sheetName: "Sheet1",
+          rowStart: 0,
+          rowEnd: 23,
+          colStart: 0,
+          colEnd: 11,
+        },
+        metrics: {
+          batchId: 0,
+          changedInputCount: 0,
+          dirtyFormulaCount: 0,
+          wasmFormulaCount: 0,
+          jsFormulaCount: 0,
+          rangeNodeVisits: 0,
+          recalcMs: 0,
+          compileMs: 0,
+        },
+        cells: [],
+        columns: [],
+        rows: [],
+      }),
+    );
     return () => {};
   },
-  dispose() {}
+  dispose() {},
 };
 
 vi.mock("@bilig/worker-transport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@bilig/worker-transport")>();
   return {
     ...actual,
-    createWorkerEngineClient: () => fakeClient
+    createWorkerEngineClient: () => fakeClient,
   };
 });
 
@@ -91,7 +93,7 @@ class ResizeObserverMock {
 function ensureCanvasAndResizeMocks() {
   Object.defineProperty(globalThis, "ResizeObserver", {
     configurable: true,
-    value: ResizeObserverMock
+    value: ResizeObserverMock,
   });
 
   Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
@@ -105,7 +107,7 @@ function ensureCanvasAndResizeMocks() {
               return (value: string) => ({
                 width: value.length * 8,
                 actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2
+                actualBoundingBoxDescent: 2,
               });
             }
             if (property === "createLinearGradient" || property === "createPattern") {
@@ -118,9 +120,9 @@ function ensureCanvasAndResizeMocks() {
           },
           set() {
             return true;
-          }
-        }
-      )
+          },
+        },
+      ),
   });
 }
 
@@ -155,11 +157,13 @@ class WorkerMock {
 
 describe("web shell", () => {
   it("renders the minimal product shell without playground chrome", async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     ensureCanvasAndResizeMocks();
     Object.defineProperty(globalThis, "Worker", {
       configurable: true,
-      value: WorkerMock
+      value: WorkerMock,
     });
 
     const host = document.createElement("div");

@@ -46,17 +46,39 @@ let volatileRandomValues = new Float64Array(0);
 let volatileRandomCursor = 0;
 const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff;
 
-export function getOutputStringLengthsPtr(): usize { return outputStringLengths.dataStart; }
-export function getOutputStringOffsetsPtr(): usize { return outputStringOffsets.dataStart; }
-export function getOutputStringDataPtr(): usize { return outputStringData.dataStart; }
-export function getOutputStringCount(): i32 { return outputStringCount; }
-export function getOutputStringDataLength(): i32 { return outputStringDataLength; }
-export function getSpillResultRowsPtr(): usize { return spillRows.dataStart; }
-export function getSpillResultColsPtr(): usize { return spillCols.dataStart; }
-export function getSpillResultOffsetsPtr(): usize { return spillOffsets.dataStart; }
-export function getSpillResultLengthsPtr(): usize { return spillLengths.dataStart; }
-export function getSpillResultNumbersPtr(): usize { return spillNumbers.dataStart; }
-export function getSpillResultValueCount(): i32 { return spillValueCount; }
+export function getOutputStringLengthsPtr(): usize {
+  return outputStringLengths.dataStart;
+}
+export function getOutputStringOffsetsPtr(): usize {
+  return outputStringOffsets.dataStart;
+}
+export function getOutputStringDataPtr(): usize {
+  return outputStringData.dataStart;
+}
+export function getOutputStringCount(): i32 {
+  return outputStringCount;
+}
+export function getOutputStringDataLength(): i32 {
+  return outputStringDataLength;
+}
+export function getSpillResultRowsPtr(): usize {
+  return spillRows.dataStart;
+}
+export function getSpillResultColsPtr(): usize {
+  return spillCols.dataStart;
+}
+export function getSpillResultOffsetsPtr(): usize {
+  return spillOffsets.dataStart;
+}
+export function getSpillResultLengthsPtr(): usize {
+  return spillLengths.dataStart;
+}
+export function getSpillResultNumbersPtr(): usize {
+  return spillNumbers.dataStart;
+}
+export function getSpillResultValueCount(): i32 {
+  return spillValueCount;
+}
 
 export function resetOutputStrings(): void {
   outputStringCount = 0;
@@ -111,13 +133,13 @@ export function allocateOutputString(length: i32): i32 {
   outputStringCount += 1;
   outputStringLengths = ensureU32(outputStringLengths, outputStringCount);
   outputStringOffsets = ensureU32(outputStringOffsets, outputStringCount);
-  
+
   outputStringLengths[index] = length;
   outputStringOffsets[index] = outputStringDataLength;
-  
+
   outputStringDataLength += length;
   outputStringData = ensureU16(outputStringData, outputStringDataLength);
-  
+
   return index;
 }
 
@@ -251,7 +273,13 @@ function compareScalars(leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f
   return leftNumeric < rightNumeric ? -1 : 1;
 }
 
-function writeConcatenatedString(slot: i32, leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f64): void {
+function writeConcatenatedString(
+  slot: i32,
+  leftTag: u8,
+  leftValue: f64,
+  rightTag: u8,
+  rightValue: f64,
+): void {
   const leftText = scalarText(leftTag, leftValue);
   const rightText = scalarText(rightTag, rightValue);
   if (leftText == null || rightText == null) {
@@ -310,7 +338,7 @@ export function init(
   formulaCapacity: i32,
   constantCapacity: i32,
   rangeCapacity: i32,
-  memberCapacity: i32
+  memberCapacity: i32,
 ): void {
   ensureCellCapacity(cellCapacity);
   ensureFormulaCapacity(formulaCapacity);
@@ -367,7 +395,7 @@ export function uploadPrograms(
   programs: Uint32Array,
   offsets: Uint32Array,
   lengths: Uint32Array,
-  targets: Uint32Array
+  targets: Uint32Array,
 ): void {
   programArena = ensureU32(programArena, programs.length);
   programArena.set(programs);
@@ -385,7 +413,11 @@ export function uploadPrograms(
   }
 }
 
-export function uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void {
+export function uploadConstants(
+  constants: Float64Array,
+  offsets: Uint32Array,
+  lengths: Uint32Array,
+): void {
   constantArena = ensureF64(constantArena, constants.length);
   constantArena.set(constants);
   ensureFormulaCapacity(offsets.length);
@@ -395,7 +427,11 @@ export function uploadConstants(constants: Float64Array, offsets: Uint32Array, l
   }
 }
 
-export function uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void {
+export function uploadRangeMembers(
+  members: Uint32Array,
+  offsets: Uint32Array,
+  lengths: Uint32Array,
+): void {
   ensureRangeCapacity(offsets.length);
   ensureMemberCapacity(members.length);
   rangeMembers.set(members);
@@ -436,7 +472,7 @@ export function writeCells(
   nextTags: Uint8Array,
   nextNumbers: Float64Array,
   nextStringIds: Uint32Array,
-  nextErrors: Uint16Array
+  nextErrors: Uint16Array,
 ): void {
   ensureCellCapacity(nextTags.length);
   tags.set(nextTags);
@@ -529,9 +565,18 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     }
 
     if (
-      opcode == Opcode.Add || opcode == Opcode.Sub || opcode == Opcode.Mul || opcode == Opcode.Div ||
-      opcode == Opcode.Pow || opcode == Opcode.Concat || opcode == Opcode.Eq || opcode == Opcode.Neq || opcode == Opcode.Gt ||
-      opcode == Opcode.Gte || opcode == Opcode.Lt || opcode == Opcode.Lte
+      opcode == Opcode.Add ||
+      opcode == Opcode.Sub ||
+      opcode == Opcode.Mul ||
+      opcode == Opcode.Div ||
+      opcode == Opcode.Pow ||
+      opcode == Opcode.Concat ||
+      opcode == Opcode.Eq ||
+      opcode == Opcode.Neq ||
+      opcode == Opcode.Gt ||
+      opcode == Opcode.Gte ||
+      opcode == Opcode.Lt ||
+      opcode == Opcode.Lte
     ) {
       const rightTag = tagStack[sp - 1];
       const leftTag = tagStack[sp - 2];
@@ -543,7 +588,11 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         continue;
       }
       if (rightTag == ValueTag.Error || leftTag == ValueTag.Error) {
-        writeScalar(sp - 2, <u8>ValueTag.Error, rightTag == ValueTag.Error ? valueStack[sp - 1] : valueStack[sp - 2]);
+        writeScalar(
+          sp - 2,
+          <u8>ValueTag.Error,
+          rightTag == ValueTag.Error ? valueStack[sp - 1] : valueStack[sp - 2],
+        );
         sp--;
         continue;
       }
@@ -552,8 +601,20 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         sp--;
         continue;
       }
-      if (opcode == Opcode.Eq || opcode == Opcode.Neq || opcode == Opcode.Gt || opcode == Opcode.Gte || opcode == Opcode.Lt || opcode == Opcode.Lte) {
-        const comparison = compareScalars(leftTag, valueStack[sp - 2], rightTag, valueStack[sp - 1]);
+      if (
+        opcode == Opcode.Eq ||
+        opcode == Opcode.Neq ||
+        opcode == Opcode.Gt ||
+        opcode == Opcode.Gte ||
+        opcode == Opcode.Lt ||
+        opcode == Opcode.Lte
+      ) {
+        const comparison = compareScalars(
+          leftTag,
+          valueStack[sp - 2],
+          rightTag,
+          valueStack[sp - 1],
+        );
         if (comparison == i32.MIN_VALUE) {
           writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
           sp--;
@@ -583,8 +644,12 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       } else {
         writeScalar(
           sp - 2,
-          <u8>(<i32>opcode >= Opcode.Eq && <i32>opcode <= Opcode.Lte ? ValueTag.Boolean : ValueTag.Number),
-          next
+          <u8>(
+            (<i32>opcode >= Opcode.Eq && <i32>opcode <= Opcode.Lte
+              ? ValueTag.Boolean
+              : ValueTag.Number)
+          ),
+          next,
         );
       }
       sp--;
@@ -616,7 +681,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
     if (opcode == Opcode.JumpIfFalse) {
       if (kindStack[sp - 1] == STACK_KIND_SCALAR && tagStack[sp - 1] == ValueTag.Error) {
         const skipInstruction = programArena[start + operand - 1];
-        if ((skipInstruction >>> 24) == Opcode.Jump) {
+        if (skipInstruction >>> 24 == Opcode.Jump) {
           pc = start + (skipInstruction & 0x00ffffff) - 1;
           continue;
         }
@@ -654,7 +719,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         outputStringOffsets,
         outputStringLengths,
         outputStringData,
-        sp
+        sp,
       );
       continue;
     }
@@ -678,9 +743,10 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       tags[cellIndex] = resultTag;
       if (resultTag == ValueTag.String) {
         const stringValue = valueStack[sp - 1];
-        stringIds[cellIndex] = stringValue >= OUTPUT_STRING_BASE
-          ? (0x80000000 | <u32>(stringValue - OUTPUT_STRING_BASE))
-          : <u32>stringValue;
+        stringIds[cellIndex] =
+          stringValue >= OUTPUT_STRING_BASE
+            ? 0x80000000 | <u32>(stringValue - OUTPUT_STRING_BASE)
+            : <u32>stringValue;
       } else {
         stringIds[cellIndex] = 0;
       }

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { createColumnSliceSelection, createGridSelection, createRowSliceSelection } from "../gridSelection.js";
+import {
+  createColumnSliceSelection,
+  createGridSelection,
+  createRowSliceSelection,
+} from "../gridSelection.js";
 import { resolveActivatedCell, resolveSelectionChange } from "../gridSelectionSync.js";
 
 describe("gridSelectionSync", () => {
@@ -15,12 +19,12 @@ describe("gridSelectionSync", () => {
         nextSelection: createColumnSliceSelection(2, 4, 7),
         anchorCell: null,
         pointerCell: null,
-        selectedCell: [5, 7]
-      })
+        selectedCell: [5, 7],
+      }),
     ).toEqual({
       kind: "column",
       selection: createColumnSliceSelection(2, 4, 7),
-      addr: "C8"
+      addr: "C8",
     });
 
     expect(
@@ -28,12 +32,12 @@ describe("gridSelectionSync", () => {
         nextSelection: createRowSliceSelection(5, 1, 3),
         anchorCell: null,
         pointerCell: null,
-        selectedCell: [5, 7]
-      })
+        selectedCell: [5, 7],
+      }),
     ).toEqual({
       kind: "row",
       selection: createRowSliceSelection(5, 1, 3),
-      addr: "F2"
+      addr: "F2",
     });
   });
 
@@ -42,7 +46,7 @@ describe("gridSelectionSync", () => {
     nextSelection.current = {
       ...nextSelection.current,
       cell: [50_000, 2_000_000],
-      range: { x: 50_000, y: 2_000_000, width: 5, height: 8 }
+      range: { x: 50_000, y: 2_000_000, width: 5, height: 8 },
     };
 
     expect(
@@ -50,8 +54,8 @@ describe("gridSelectionSync", () => {
         nextSelection,
         anchorCell: null,
         pointerCell: null,
-        selectedCell: [0, 0]
-      })
+        selectedCell: [0, 0],
+      }),
     ).toEqual({
       kind: "cell",
       selection: {
@@ -59,10 +63,10 @@ describe("gridSelectionSync", () => {
         current: {
           ...nextSelection.current,
           cell: [16_383, 1_048_575],
-          range: { x: 16_383, y: 1_048_575, width: 1, height: 1 }
-        }
+          range: { x: 16_383, y: 1_048_575, width: 1, height: 1 },
+        },
       },
-      addr: "XFD1048576"
+      addr: "XFD1048576",
     });
 
     expect(
@@ -70,8 +74,8 @@ describe("gridSelectionSync", () => {
         nextSelection: createGridSelection(2, 2),
         anchorCell: [2, 2],
         pointerCell: [4, 5],
-        selectedCell: [0, 0]
-      })
+        selectedCell: [0, 0],
+      }),
     ).toEqual({
       kind: "cell",
       selection: {
@@ -79,12 +83,12 @@ describe("gridSelectionSync", () => {
         current: {
           cell: [2, 2],
           range: { x: 2, y: 2, width: 3, height: 4 },
-          rangeStack: []
+          rangeStack: [],
         },
         columns: createGridSelection(2, 2).columns,
-        rows: createGridSelection(2, 2).rows
+        rows: createGridSelection(2, 2).rows,
       },
-      addr: "C3"
+      addr: "C3",
     });
   });
 });

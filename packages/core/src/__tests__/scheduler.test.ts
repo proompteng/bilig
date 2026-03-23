@@ -15,22 +15,24 @@ describe("RecalcScheduler", () => {
     const rangeEntity = makeRangeEntity(0);
     const graph = new Map<number, Uint32Array>([
       [makeCellEntity(0), Uint32Array.from([makeCellEntity(1), rangeEntity])],
-      [rangeEntity, Uint32Array.from([makeCellEntity(3)])]
+      [rangeEntity, Uint32Array.from([makeCellEntity(3)])],
     ]);
 
     const scheduler = new RecalcScheduler();
     const result = scheduler.collectDirty(
       [0],
       {
-        getDependents: (entityId) => graph.get(entityId) ?? new Uint32Array()
+        getDependents: (entityId) => graph.get(entityId) ?? new Uint32Array(),
       },
       store,
       (cellIndex) => cellIndex === 1 || cellIndex === 3,
-      1
+      1,
     );
 
     expect(result.orderedFormulaCount).toBe(2);
-    expect(Array.from(result.orderedFormulaCellIndices.subarray(0, result.orderedFormulaCount))).toEqual([3, 1]);
+    expect(
+      Array.from(result.orderedFormulaCellIndices.subarray(0, result.orderedFormulaCount)),
+    ).toEqual([3, 1]);
     expect(result.rangeNodeVisits).toBe(1);
   });
 
@@ -44,14 +46,14 @@ describe("RecalcScheduler", () => {
       { getDependents: () => new Uint32Array() },
       store,
       () => false,
-      0
+      0,
     );
     const second = scheduler.collectDirty(
       [0],
       { getDependents: () => new Uint32Array() },
       store,
       () => false,
-      0
+      0,
     );
 
     expect(first.orderedFormulaCount).toBe(0);

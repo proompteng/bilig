@@ -3,9 +3,7 @@ import { createBlockedBuiltinMap, logicalPlaceholderBuiltinNames } from "./place
 
 export type LogicalBuiltin = (...args: CellValue[]) => CellValue;
 
-type LogicalCoercion =
-  | { ok: true; value: boolean }
-  | { ok: false; error: CellValue };
+type LogicalCoercion = { ok: true; value: boolean } | { ok: false; error: CellValue };
 
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty };
@@ -36,10 +34,31 @@ function compareScalars(left: CellValue, right: CellValue): number | undefined {
   const leftTextLike = left.tag === ValueTag.String || left.tag === ValueTag.Empty;
   const rightTextLike = right.tag === ValueTag.String || right.tag === ValueTag.Empty;
   if (leftTextLike && rightTextLike) {
-    return compareText(left.tag === ValueTag.String ? left.value : "", right.tag === ValueTag.String ? right.value : "");
+    return compareText(
+      left.tag === ValueTag.String ? left.value : "",
+      right.tag === ValueTag.String ? right.value : "",
+    );
   }
-  const leftNumeric = left.tag === ValueTag.Boolean ? (left.value ? 1 : 0) : left.tag === ValueTag.Empty ? 0 : left.tag === ValueTag.Number ? left.value : undefined;
-  const rightNumeric = right.tag === ValueTag.Boolean ? (right.value ? 1 : 0) : right.tag === ValueTag.Empty ? 0 : right.tag === ValueTag.Number ? right.value : undefined;
+  const leftNumeric =
+    left.tag === ValueTag.Boolean
+      ? left.value
+        ? 1
+        : 0
+      : left.tag === ValueTag.Empty
+        ? 0
+        : left.tag === ValueTag.Number
+          ? left.value
+          : undefined;
+  const rightNumeric =
+    right.tag === ValueTag.Boolean
+      ? right.value
+        ? 1
+        : 0
+      : right.tag === ValueTag.Empty
+        ? 0
+        : right.tag === ValueTag.Number
+          ? right.value
+          : undefined;
   if (leftNumeric === undefined || rightNumeric === undefined) {
     return undefined;
   }
@@ -68,8 +87,8 @@ function coerceLogical(value: CellValue): LogicalCoercion {
 const logicalPlaceholderBuiltins = createBlockedBuiltinMap(logicalPlaceholderBuiltinNames);
 
 export const logicalBuiltins: Record<string, LogicalBuiltin> = {
-  TRUE: (...args) => args.length === 0 ? booleanResult(true) : errorValue(ErrorCode.Value),
-  FALSE: (...args) => args.length === 0 ? booleanResult(false) : errorValue(ErrorCode.Value),
+  TRUE: (...args) => (args.length === 0 ? booleanResult(true) : errorValue(ErrorCode.Value)),
+  FALSE: (...args) => (args.length === 0 ? booleanResult(false) : errorValue(ErrorCode.Value)),
   NA: (...args) => {
     if (args.length > 0) {
       return errorValue(ErrorCode.Value);
@@ -208,7 +227,7 @@ export const logicalBuiltins: Record<string, LogicalBuiltin> = {
   ISBLANK: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Empty),
   ISNUMBER: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Number),
   ISTEXT: (value = emptyValue()) => booleanResult(value.tag === ValueTag.String),
-  ...logicalPlaceholderBuiltins
+  ...logicalPlaceholderBuiltins,
 };
 
 export function getLogicalBuiltin(name: string): LogicalBuiltin | undefined {

@@ -10,7 +10,9 @@ export interface RenderCommitBenchmarkResult {
   memory: MemoryMeasurement;
 }
 
-export async function runRenderCommitBenchmark(declaredCells = 1_000): Promise<RenderCommitBenchmarkResult> {
+export async function runRenderCommitBenchmark(
+  declaredCells = 1_000,
+): Promise<RenderCommitBenchmarkResult> {
   const engine = new SpreadsheetEngine({ workbookName: "benchmark-render-commit" });
   await engine.ready();
 
@@ -24,7 +26,7 @@ export async function runRenderCommitBenchmark(declaredCells = 1_000): Promise<R
     scenario: "render-commit",
     declaredCells,
     elapsedMs: elapsed,
-    memory: measureMemory(memoryBefore, memoryAfter)
+    memory: measureMemory(memoryBefore, memoryAfter),
   };
 }
 

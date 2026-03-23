@@ -1,7 +1,31 @@
 {
   "name": "@bilig/storage-server",
   "version": "0.1.0",
+  "description": "Server-side storage abstractions for bilig snapshots, logs, and sync persistence.",
+  "keywords": [
+    "bilig",
+    "server",
+    "spreadsheet",
+    "storage",
+    "sync"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/storage-server#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/storage-server"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,40 +34,16 @@
       "import": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@bilig/crdt": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
-  "description": "Server-side storage abstractions for bilig snapshots, logs, and sync persistence.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/storage-server"
+  "dependencies": {
+    "@bilig/crdt": "workspace:*"
   },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/storage-server#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "storage",
-    "server",
-    "sync",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

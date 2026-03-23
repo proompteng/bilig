@@ -18,7 +18,10 @@ export interface RangeDescriptor {
 
 export interface RangeMaterializer {
   ensureCell(sheetId: number, row: number, col: number): number;
-  forEachSheetCell(sheetId: number, fn: (cellIndex: number, row: number, col: number) => void): void;
+  forEachSheetCell(
+    sheetId: number,
+    fn: (cellIndex: number, row: number, col: number) => void,
+  ): void;
 }
 
 interface DynamicRangeIndex {
@@ -51,7 +54,11 @@ export class RangeRegistry {
     this.memberSlices.length = 0;
   }
 
-  intern(sheetId: number, range: RangeAddress, materializer: RangeMaterializer): RegisteredCellRange {
+  intern(
+    sheetId: number,
+    range: RangeAddress,
+    materializer: RangeMaterializer,
+  ): RegisteredCellRange {
     const descriptorKey = keyForRange(sheetId, range);
     const existingIndex = this.byKey.get(descriptorKey);
     if (existingIndex !== undefined) {
@@ -60,7 +67,7 @@ export class RangeRegistry {
       return {
         rangeIndex: existingIndex,
         cellRange: toCellRange(range),
-        materialized: false
+        materialized: false,
       };
     }
 
@@ -77,7 +84,7 @@ export class RangeRegistry {
       membersOffset: 0,
       membersLength: 0,
       refCount: 1,
-      dynamic
+      dynamic,
     };
 
     const memberIndices =
@@ -99,7 +106,7 @@ export class RangeRegistry {
     return {
       rangeIndex: descriptor.index,
       cellRange,
-      materialized: true
+      materialized: true,
     };
   }
 
@@ -125,7 +132,7 @@ export class RangeRegistry {
       if (dynamic) {
         this.dynamicBySheet.set(
           descriptor.sheetId,
-          dynamic.filter((entry) => entry.rangeIndex !== rangeIndex)
+          dynamic.filter((entry) => entry.rangeIndex !== rangeIndex),
         );
       }
     }
@@ -182,7 +189,11 @@ export class RangeRegistry {
   }
 }
 
-function materializeBoundedMembers(sheetId: number, range: CellRangeAddress, materializer: RangeMaterializer): Uint32Array {
+function materializeBoundedMembers(
+  sheetId: number,
+  range: CellRangeAddress,
+  materializer: RangeMaterializer,
+): Uint32Array {
   const rowCount = range.end.row - range.start.row + 1;
   const colCount = range.end.col - range.start.col + 1;
   const memberCount = rowCount * colCount;
@@ -204,7 +215,7 @@ function materializeDynamicMembers(
   sheetId: number,
   range: CellRangeAddress,
   kind: RangeAddress["kind"],
-  materializer: RangeMaterializer
+  materializer: RangeMaterializer,
 ): Uint32Array {
   let matchCount = 0;
   materializer.forEachSheetCell(sheetId, (_cellIndex, row, col) => {
@@ -259,7 +270,7 @@ function toCellRange(range: RangeAddress): CellRangeAddress {
     const cellRange: CellRangeAddress = {
       kind: "cells",
       start: toCellLikeAddress(range.sheetName, range.start.row, 0),
-      end: toCellLikeAddress(range.sheetName, range.end.row, MAX_COLS - 1)
+      end: toCellLikeAddress(range.sheetName, range.end.row, MAX_COLS - 1),
     };
     if (range.sheetName !== undefined) {
       cellRange.sheetName = range.sheetName;
@@ -269,7 +280,7 @@ function toCellRange(range: RangeAddress): CellRangeAddress {
   const cellRange: CellRangeAddress = {
     kind: "cells",
     start: toCellLikeAddress(range.sheetName, 0, range.start.col),
-    end: toCellLikeAddress(range.sheetName, MAX_ROWS - 1, range.end.col)
+    end: toCellLikeAddress(range.sheetName, MAX_ROWS - 1, range.end.col),
   };
   if (range.sheetName !== undefined) {
     cellRange.sheetName = range.sheetName;
@@ -281,7 +292,7 @@ function toCellLikeAddress(sheetName: string | undefined, row: number, col: numb
   const address: CellAddress = {
     row,
     col,
-    text: ""
+    text: "",
   };
   if (sheetName !== undefined) {
     address.sheetName = sheetName;

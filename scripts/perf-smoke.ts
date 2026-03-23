@@ -11,7 +11,7 @@ if (elapsed > 250) {
 
 if (metrics.dirtyFormulaCount < downstreamCount) {
   console.error(
-    `perf smoke failed to mark the expected downstream formulas dirty: expected at least ${downstreamCount}, got ${metrics.dirtyFormulaCount}`
+    `perf smoke failed to mark the expected downstream formulas dirty: expected at least ${downstreamCount}, got ${metrics.dirtyFormulaCount}`,
   );
   process.exit(1);
 }

@@ -10,7 +10,7 @@ import type {
   RowRefNode,
   SpillRefNode,
   StructuredRefNode,
-  UnaryExprNode
+  UnaryExprNode,
 } from "./ast.js";
 import { isCellReferenceText, isColumnReferenceText, isRowReferenceText } from "./addressing.js";
 import { lexFormula, type Token } from "./lexer.js";
@@ -28,7 +28,7 @@ const PRECEDENCE: Record<string, number> = {
   star: 4,
   slash: 4,
   caret: 5,
-  colon: 6
+  colon: 6,
 };
 
 function assertNoStandaloneAxisRefs(node: FormulaNode): void {
@@ -80,7 +80,10 @@ export function parseFormula(source: string): FormulaNode {
     return token;
   }
 
-  function maybeParseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode | RowRefNode | undefined {
+  function maybeParseReferenceValue(
+    ref: string,
+    sheetName?: string,
+  ): CellRefNode | ColumnRefNode | RowRefNode | undefined {
     const normalized = ref.startsWith("$") && isRowReferenceText(ref) ? ref : ref.toUpperCase();
     const upper = normalized.toUpperCase();
     if (isCellReferenceText(upper)) {
@@ -107,7 +110,10 @@ export function parseFormula(source: string): FormulaNode {
     return undefined;
   }
 
-  function parseReferenceValue(ref: string, sheetName?: string): CellRefNode | ColumnRefNode | RowRefNode {
+  function parseReferenceValue(
+    ref: string,
+    sheetName?: string,
+  ): CellRefNode | ColumnRefNode | RowRefNode {
     const result = maybeParseReferenceValue(ref, sheetName);
     if (result) {
       return result;
@@ -115,7 +121,9 @@ export function parseFormula(source: string): FormulaNode {
     throw new Error(`Unsupported reference '${ref}'`);
   }
 
-  function parseIdentifierValue(identifier: string): CellRefNode | ColumnRefNode | RowRefNode | NameRefNode {
+  function parseIdentifierValue(
+    identifier: string,
+  ): CellRefNode | ColumnRefNode | RowRefNode | NameRefNode {
     const referenceValue = maybeParseReferenceValue(identifier);
     return referenceValue?.kind === "CellRef"
       ? referenceValue
@@ -126,10 +134,10 @@ export function parseFormula(source: string): FormulaNode {
     eat("lbracket");
     const token = current();
     if (
-      token.kind !== "identifier"
-      && token.kind !== "quotedIdentifier"
-      && token.kind !== "string"
-      && token.kind !== "number"
+      token.kind !== "identifier" &&
+      token.kind !== "quotedIdentifier" &&
+      token.kind !== "string" &&
+      token.kind !== "number"
     ) {
       throw new Error(`Expected a structured reference column, received ${token.kind}`);
     }
@@ -138,7 +146,7 @@ export function parseFormula(source: string): FormulaNode {
     return {
       kind: "StructuredRef",
       tableName,
-      columnName: token.value
+      columnName: token.value,
     };
   }
 
@@ -158,7 +166,9 @@ export function parseFormula(source: string): FormulaNode {
     return args;
   }
 
-  function parseSheetQualifiedReference(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode {
+  function parseSheetQualifiedReference(
+    sheetName: string,
+  ): CellRefNode | ColumnRefNode | RowRefNode {
     const token = current();
     if (token.kind === "identifier") {
       eat("identifier");
@@ -171,7 +181,10 @@ export function parseFormula(source: string): FormulaNode {
     throw new Error(`Expected a sheet-qualified reference, received ${token.kind}`);
   }
 
-  function buildRange(left: CellRefNode | ColumnRefNode | RowRefNode, right: CellRefNode | ColumnRefNode | RowRefNode): RangeRefNode {
+  function buildRange(
+    left: CellRefNode | ColumnRefNode | RowRefNode,
+    right: CellRefNode | ColumnRefNode | RowRefNode,
+  ): RangeRefNode {
     if (left.kind !== right.kind) {
       throw new Error("Range endpoints must use the same reference type");
     }
@@ -185,7 +198,7 @@ export function parseFormula(source: string): FormulaNode {
       kind: "RangeRef",
       refKind: left.kind === "CellRef" ? "cells" : left.kind === "ColumnRef" ? "cols" : "rows",
       start: left.ref,
-      end: right.ref
+      end: right.ref,
     };
     if (sheetName !== undefined) {
       range.sheetName = sheetName;
@@ -193,7 +206,9 @@ export function parseFormula(source: string): FormulaNode {
     return range;
   }
 
-  function toRangeEndpoint(node: FormulaNode): CellRefNode | ColumnRefNode | RowRefNode | undefined {
+  function toRangeEndpoint(
+    node: FormulaNode,
+  ): CellRefNode | ColumnRefNode | RowRefNode | undefined {
     switch (node.kind) {
       case "CellRef":
       case "ColumnRef":
@@ -249,7 +264,7 @@ export function parseFormula(source: string): FormulaNode {
       result = {
         kind: "UnaryExpr",
         operator: token.kind === "plus" ? "+" : "-",
-        argument: parseExpression(PRECEDENCE["caret"])
+        argument: parseExpression(PRECEDENCE["caret"]),
       } satisfies UnaryExprNode;
     } else if (token.kind === "lparen") {
       eat("lparen");
@@ -262,7 +277,11 @@ export function parseFormula(source: string): FormulaNode {
         eat("bang");
         result = parseSheetQualifiedReference(first);
       } else if (current().kind === "lparen") {
-        result = { kind: "CallExpr", callee: first.toUpperCase(), args: parseCallArguments() } satisfies CallExprNode;
+        result = {
+          kind: "CallExpr",
+          callee: first.toUpperCase(),
+          args: parseCallArguments(),
+        } satisfies CallExprNode;
       } else if (current().kind === "lbracket") {
         result = parseStructuredReference(first);
       } else {
@@ -277,9 +296,17 @@ export function parseFormula(source: string): FormulaNode {
       throw new Error(`Unexpected token ${token.kind}`);
     }
 
-    while (current().kind === "lparen" || current().kind === "hash" || current().kind === "percent") {
+    while (
+      current().kind === "lparen" ||
+      current().kind === "hash" ||
+      current().kind === "percent"
+    ) {
       if (current().kind === "lparen") {
-        result = { kind: "InvokeExpr", callee: result, args: parseCallArguments() } satisfies InvokeExprNode;
+        result = {
+          kind: "InvokeExpr",
+          callee: result,
+          args: parseCallArguments(),
+        } satisfies InvokeExprNode;
         continue;
       }
       if (current().kind === "hash") {
@@ -289,7 +316,7 @@ export function parseFormula(source: string): FormulaNode {
         }
         const spill: SpillRefNode = {
           kind: "SpillRef",
-          ref: result.ref
+          ref: result.ref,
         };
         if (result.sheetName !== undefined) {
           spill.sheetName = result.sheetName;
@@ -303,7 +330,7 @@ export function parseFormula(source: string): FormulaNode {
         kind: "BinaryExpr",
         operator: "*",
         left: result,
-        right: { kind: "NumberLiteral", value: 0.01 }
+        right: { kind: "NumberLiteral", value: 0.01 },
       };
     }
 
@@ -349,7 +376,7 @@ export function parseFormula(source: string): FormulaNode {
         gt: ">",
         gte: ">=",
         lt: "<",
-        lte: "<="
+        lte: "<=",
       };
       const operator = operatorMap[token.kind];
       if (!operator) {
@@ -359,7 +386,7 @@ export function parseFormula(source: string): FormulaNode {
         kind: "BinaryExpr",
         operator,
         left,
-        right
+        right,
       };
     }
 

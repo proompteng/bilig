@@ -9,7 +9,7 @@ import { WorkbookWorkerRuntime } from "../worker-runtime";
 
 function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPersistence {
   const store = new Map<string, string>(
-    Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)])
+    Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]),
   );
   return {
     async loadJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
@@ -24,7 +24,7 @@ function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPer
     },
     async remove(key: string): Promise<void> {
       store.delete(key);
-    }
+    },
   };
 }
 
@@ -37,31 +37,43 @@ describe("WorkbookWorkerRuntime", () => {
     const persistence = createMemoryPersistence({
       "bilig:web:phase3-doc:runtime": {
         snapshot: seedEngine.exportSnapshot(),
-        replica: seedEngine.exportReplicaSnapshot()
-      }
+        replica: seedEngine.exportReplicaSnapshot(),
+      },
     });
 
     const runtime = new WorkbookWorkerRuntime({ persistence });
-    await runtime.bootstrap({ documentId: "phase3-doc", replicaId: "browser:test", baseUrl: null, persistState: true });
-
-    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
-    runtime.subscribeViewportPatches({
-      sheetName: "Sheet1",
-      rowStart: 0,
-      rowEnd: 1,
-      colStart: 0,
-      colEnd: 1
-    }, (bytes) => {
-      received.push(decodeViewportPatch(bytes));
+    await runtime.bootstrap({
+      documentId: "phase3-doc",
+      replicaId: "browser:test",
+      baseUrl: null,
+      persistState: true,
     });
 
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
     expect(received[0]?.full).toBe(true);
-    expect(received[0]?.cells.find((cell) => cell.snapshot.address === "A1")?.displayText).toBe("7");
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === "A1")?.displayText).toBe(
+      "7",
+    );
 
     runtime.setCellFormula("Sheet1", "B1", "A1*2");
 
     expect(received).toHaveLength(2);
-    expect(received[1]?.cells.find((cell) => cell.snapshot.address === "B1")?.displayText).toBe("14");
+    expect(received[1]?.cells.find((cell) => cell.snapshot.address === "B1")?.displayText).toBe(
+      "14",
+    );
   });
 
   it("connects sync in the worker runtime and applies remote batches through viewport patches", async () => {
@@ -81,29 +93,37 @@ describe("WorkbookWorkerRuntime", () => {
         };
         return {
           send() {},
-          disconnect: syncHooks.disconnect
+          disconnect: syncHooks.disconnect,
         };
-      }
+      },
     });
 
     const runtime = new WorkbookWorkerRuntime({
       persistence: createMemoryPersistence(),
-      createSyncClient
+      createSyncClient,
     });
 
-    await runtime.bootstrap({ documentId: "sync-doc", replicaId: "browser:test", baseUrl: "http://127.0.0.1:4381", persistState: true });
+    await runtime.bootstrap({
+      documentId: "sync-doc",
+      replicaId: "browser:test",
+      baseUrl: "http://127.0.0.1:4381",
+      persistState: true,
+    });
     expect(runtime.getRuntimeState().syncState).toBe("live");
 
     const received = new Array<ReturnType<typeof decodeViewportPatch>>();
-    runtime.subscribeViewportPatches({
-      sheetName: "Sheet1",
-      rowStart: 0,
-      rowEnd: 0,
-      colStart: 0,
-      colEnd: 0
-    }, (bytes) => {
-      received.push(decodeViewportPatch(bytes));
-    });
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
 
     expect(syncHooks.applyRemoteBatch).toBeDefined();
     if (!syncHooks.applyRemoteBatch) {
@@ -113,11 +133,13 @@ describe("WorkbookWorkerRuntime", () => {
       id: "server-1",
       replicaId: "server",
       clock: { counter: 1 },
-      ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 42 }]
+      ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 42 }],
     });
 
     expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Number, value: 42 });
-    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === "A1")?.displayText).toBe("42");
+    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === "A1")?.displayText).toBe(
+      "42",
+    );
 
     expect(syncHooks.disconnect).toBeDefined();
     if (!syncHooks.disconnect) {
@@ -135,12 +157,17 @@ describe("WorkbookWorkerRuntime", () => {
     const persistence = createMemoryPersistence({
       "bilig:web:phase3-doc:runtime": {
         snapshot: seedEngine.exportSnapshot(),
-        replica: seedEngine.exportReplicaSnapshot()
-      }
+        replica: seedEngine.exportReplicaSnapshot(),
+      },
     });
 
     const runtime = new WorkbookWorkerRuntime({ persistence });
-    await runtime.bootstrap({ documentId: "phase3-doc", replicaId: "browser:test", baseUrl: null, persistState: false });
+    await runtime.bootstrap({
+      documentId: "phase3-doc",
+      replicaId: "browser:test",
+      baseUrl: null,
+      persistState: false,
+    });
 
     expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Empty });
   });

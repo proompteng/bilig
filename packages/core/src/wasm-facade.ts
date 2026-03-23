@@ -54,7 +54,7 @@ export class WasmKernelFacade {
     formulaCapacity: number,
     constantCapacity: number,
     rangeCapacity = this.kernel?.getRangeCapacity() ?? 64,
-    memberCapacity = this.kernel?.getMemberCapacity() ?? 64
+    memberCapacity = this.kernel?.getMemberCapacity() ?? 64,
   ): void {
     this.kernel?.ensureCellCapacity(cellCapacity);
     this.kernel?.ensureFormulaCapacity(formulaCapacity);
@@ -70,9 +70,14 @@ export class WasmKernelFacade {
     this.ensureCapacity(
       this.kernel.getCellCapacity(),
       Math.max(wasmFormulaCount, 1),
-      Math.max(layout.constants.length, 1)
+      Math.max(layout.constants.length, 1),
     );
-    this.kernel.uploadPrograms(layout.programs, layout.programOffsets, layout.programLengths, layout.targets);
+    this.kernel.uploadPrograms(
+      layout.programs,
+      layout.programOffsets,
+      layout.programLengths,
+      layout.targets,
+    );
     this.kernel.uploadConstants(layout.constants, layout.constantOffsets, layout.constantLengths);
   }
 
@@ -86,7 +91,7 @@ export class WasmKernelFacade {
       this.kernel.getFormulaCapacity(),
       this.kernel.getConstantCapacity(),
       rangeCapacity,
-      memberCapacity
+      memberCapacity,
     );
     this.kernel.uploadRangeMembers(layout.members, layout.offsets, layout.lengths);
     this.kernel.uploadRangeShapes(layout.rowCounts, layout.colCounts);
@@ -116,14 +121,14 @@ export class WasmKernelFacade {
       this.kernel.getFormulaCapacity(),
       this.kernel.getConstantCapacity(),
       this.kernel.getRangeCapacity(),
-      this.kernel.getMemberCapacity()
+      this.kernel.getMemberCapacity(),
     );
     if (changedCellIndices === undefined) {
       this.kernel.writeCells(
         store.tags.slice(0, store.size),
         store.numbers.slice(0, store.size),
         store.stringIds.slice(0, store.size),
-        store.errors.slice(0, store.size)
+        store.errors.slice(0, store.size),
       );
       return;
     }
@@ -165,7 +170,7 @@ export class WasmKernelFacade {
     return {
       rows,
       cols,
-      values: this.kernel.readSpillNumbers().subarray(offset, offset + length)
+      values: this.kernel.readSpillNumbers().subarray(offset, offset + length),
     };
   }
 
@@ -174,27 +179,33 @@ export class WasmKernelFacade {
     sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
-    valueAggregations: Uint8Array
-  ): {
-      rows: number;
-      cols: number;
-      tags: Uint8Array;
-    numbers: Float64Array;
-    stringIds: Uint32Array;
-    errors: Uint16Array;
-  } | undefined {
+    valueAggregations: Uint8Array,
+  ):
+    | {
+        rows: number;
+        cols: number;
+        tags: Uint8Array;
+        numbers: Float64Array;
+        stringIds: Uint32Array;
+        errors: Uint16Array;
+      }
+    | undefined {
     return this.kernel?.materializePivotTable(
       sourceRangeIndex,
       sourceWidth,
       groupByColumnIndices,
       valueColumnIndices,
-      valueAggregations
+      valueAggregations,
     );
   }
 
-  syncToStore(store: CellStore, changedCellIndices: Uint32Array, strings: import("./string-pool.js").StringPool): void {
+  syncToStore(
+    store: CellStore,
+    changedCellIndices: Uint32Array,
+    strings: import("./string-pool.js").StringPool,
+  ): void {
     if (!this.kernel) return;
-    
+
     // Read and intern new output strings from WASM before updating cells
     const newStrings = this.kernel.readOutputStrings();
     const outputStringIdMap = new Map<number, number>();
@@ -203,7 +214,7 @@ export class WasmKernelFacade {
       const internedId = strings.intern(str);
       outputStringIdMap.set((index | 0x80000000) >>> 0, internedId);
     }
-    
+
     const tags = this.kernel.readTags();
     const numbers = this.kernel.readNumbers();
     const stringIds = this.kernel.readStringIds();
@@ -216,13 +227,13 @@ export class WasmKernelFacade {
       const previousError = store.errors[cellIndex]!;
       store.tags[cellIndex] = tags[cellIndex]!;
       store.numbers[cellIndex] = numbers[cellIndex]!;
-      
+
       let newStringId = stringIds[cellIndex]!;
       if ((newStringId & 0x80000000) !== 0) {
         newStringId = outputStringIdMap.get(newStringId) ?? 0;
       }
       store.stringIds[cellIndex] = newStringId;
-      
+
       store.errors[cellIndex] = errors[cellIndex]!;
       if (
         previousTag !== store.tags[cellIndex] ||

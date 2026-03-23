@@ -10,13 +10,13 @@ describe("storage-server", () => {
       id: "a:1",
       replicaId: "a",
       clock: { counter: 1 },
-      ops: []
+      ops: [],
     });
     await persistence.batches.append("book-1", {
       id: "a:2",
       replicaId: "a",
       clock: { counter: 2 },
-      ops: []
+      ops: [],
     });
 
     const entries = await persistence.batches.listAfter("book-1", 1);
@@ -26,8 +26,12 @@ describe("storage-server", () => {
   it("tracks owner leases and presence", async () => {
     const persistence = createInMemoryDocumentPersistence();
 
-    await expect(persistence.ownership.claim("book-1", "svc-a", Date.now() + 1000)).resolves.toBe(true);
-    await expect(persistence.ownership.claim("book-1", "svc-b", Date.now() + 1000)).resolves.toBe(false);
+    await expect(persistence.ownership.claim("book-1", "svc-a", Date.now() + 1000)).resolves.toBe(
+      true,
+    );
+    await expect(persistence.ownership.claim("book-1", "svc-b", Date.now() + 1000)).resolves.toBe(
+      false,
+    );
 
     await persistence.presence.join("book-1", "sess-1");
     await persistence.presence.join("book-1", "sess-2");

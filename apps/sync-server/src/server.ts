@@ -13,36 +13,45 @@ export interface SyncServerOptions {
 }
 
 export function createSyncServer(options: SyncServerOptions = {}) {
-  const sessionManager = options.sessionManager ?? new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
+  const sessionManager =
+    options.sessionManager ??
+    new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
   const app = Fastify({ logger: options.logger ?? true });
 
-  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_request, body, done) => {
-    done(null, body);
-  });
+  app.addContentTypeParser(
+    "application/octet-stream",
+    { parseAs: "buffer" },
+    (_request, body, done) => {
+      done(null, body);
+    },
+  );
 
   app.get("/healthz", async () => ({
     ok: true,
-    service: "bilig-sync-server"
+    service: "bilig-sync-server",
   }));
 
-  app.get("/v1/documents/:documentId/state", async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-    return sessionManager.getDocumentState(request.params.documentId);
-  });
+  app.get(
+    "/v1/documents/:documentId/state",
+    async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
+      return sessionManager.getDocumentState(request.params.documentId);
+    },
+  );
 
   app.get(
     "/v1/documents/:documentId/snapshot/latest",
     async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
-    const snapshot = await sessionManager.persistence.snapshots.latest(request.params.documentId);
-    if (!snapshot) {
-      reply.code(404);
-      return {
-        error: "SNAPSHOT_NOT_FOUND"
-      };
-    }
+      const snapshot = await sessionManager.persistence.snapshots.latest(request.params.documentId);
+      if (!snapshot) {
+        reply.code(404);
+        return {
+          error: "SNAPSHOT_NOT_FOUND",
+        };
+      }
 
-    reply.header("content-type", snapshot.contentType);
-    return Buffer.from(snapshot.bytes);
-    }
+      reply.header("content-type", snapshot.contentType);
+      return Buffer.from(snapshot.bytes);
+    },
   );
 
   app.post("/v1/frames", async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
@@ -51,11 +60,14 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     return Buffer.from(encodeFrame(response));
   });
 
-  app.post("/v1/agent/frames", async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
-    const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body));
-    reply.header("content-type", "application/octet-stream");
-    return Buffer.from(encodeAgentFrame(response));
-  });
+  app.post(
+    "/v1/agent/frames",
+    async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
+      const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body));
+      reply.header("content-type", "application/octet-stream");
+      return Buffer.from(encodeAgentFrame(response));
+    },
+  );
 
   return { app, sessionManager };
 }

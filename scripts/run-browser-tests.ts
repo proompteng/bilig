@@ -35,7 +35,7 @@ function getListeningPids(port: number): number[] {
     const result = Bun.spawnSync(["lsof", "-tiTCP:" + String(port), "-sTCP:LISTEN"], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "ignore"
+      stderr: "ignore",
     });
     if (result.exitCode !== 0) {
       return [];
@@ -47,7 +47,7 @@ function getListeningPids(port: number): number[] {
     const result = Bun.spawnSync(["ss", "-ltnp", "sport = :" + String(port)], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "ignore"
+      stderr: "ignore",
     });
     if (result.exitCode !== 0) {
       return [];
@@ -59,7 +59,7 @@ function getListeningPids(port: number): number[] {
     const result = Bun.spawnSync(["netstat", "-ltnp"], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "ignore"
+      stderr: "ignore",
     });
     if (result.exitCode !== 0) {
       return [];
@@ -84,7 +84,7 @@ function getListeningPids(port: number): number[] {
     const result = Bun.spawnSync(["fuser", "-n", "tcp", String(port)], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "ignore"
+      stderr: "ignore",
     });
     if (result.exitCode !== 0) {
       return [];
@@ -92,7 +92,9 @@ function getListeningPids(port: number): number[] {
     return parsePidList(textDecoder.decode(result.stdout).trim());
   }
 
-  console.warn(`No port-inspection command available; skipping preview server cleanup for port ${port}.`);
+  console.warn(
+    `No port-inspection command available; skipping preview server cleanup for port ${port}.`,
+  );
   return [];
 }
 
@@ -127,7 +129,7 @@ function runPlaywright(args: string[]): void {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
-    env: process.env
+    env: process.env,
   });
   if (result.exitCode !== 0) {
     process.exit(result.exitCode ?? 1);

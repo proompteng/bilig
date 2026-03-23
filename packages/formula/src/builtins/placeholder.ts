@@ -361,7 +361,7 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
 
 export const scalarPlaceholderBuiltinNames = [
   ...protocolScalarPlaceholderBuiltinNames,
-  ...additionalExcelScalarPlaceholderBuiltinNames
+  ...additionalExcelScalarPlaceholderBuiltinNames,
 ] as const;
 
 export const logicalPlaceholderBuiltinNames = [] as const;
@@ -374,14 +374,14 @@ export const placeholderBuiltinNames = [
   ...scalarPlaceholderBuiltinNames,
   ...logicalPlaceholderBuiltinNames,
   ...datetimePlaceholderBuiltinNames,
-  ...textPlaceholderBuiltinNames
+  ...textPlaceholderBuiltinNames,
 ] as const;
 
 export const protocolPlaceholderBuiltinNames = [
   ...protocolScalarPlaceholderBuiltinNames,
   ...logicalPlaceholderBuiltinNames,
   ...datetimePlaceholderBuiltinNames,
-  ...textPlaceholderBuiltinNames
+  ...textPlaceholderBuiltinNames,
 ] as const;
 
 export type PlaceholderBuiltin = (...args: CellValue[]) => CellValue;
@@ -394,6 +394,8 @@ export function createBlockedBuiltin(): PlaceholderBuiltin {
   return () => blockedResult();
 }
 
-export function createBlockedBuiltinMap(names: readonly string[]): Record<string, PlaceholderBuiltin> {
+export function createBlockedBuiltinMap(
+  names: readonly string[],
+): Record<string, PlaceholderBuiltin> {
   return Object.fromEntries(names.map((name) => [name, createBlockedBuiltin()]));
 }

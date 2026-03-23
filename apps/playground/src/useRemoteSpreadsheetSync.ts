@@ -22,16 +22,20 @@ export function useRemoteSpreadsheetSync(options: RemoteSpreadsheetSyncOptions):
 
     let disposed = false;
     setState("syncing");
-    void options.engine.connectSyncClient(createWebSocketSyncClient({
-      documentId: options.documentId,
-      replicaId: options.replicaId,
-      baseUrl: options.baseUrl
-    })).catch((error: unknown) => {
-      if (!disposed) {
-        void error;
-        setState("local-only");
-      }
-    });
+    void options.engine
+      .connectSyncClient(
+        createWebSocketSyncClient({
+          documentId: options.documentId,
+          replicaId: options.replicaId,
+          baseUrl: options.baseUrl,
+        }),
+      )
+      .catch((error: unknown) => {
+        if (!disposed) {
+          void error;
+          setState("local-only");
+        }
+      });
 
     const interval = window.setInterval(() => {
       if (!disposed) {

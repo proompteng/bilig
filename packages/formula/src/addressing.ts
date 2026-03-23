@@ -112,7 +112,7 @@ export function parseCellAddress(raw: string, defaultSheetName?: string): CellAd
   const result: CellAddress = {
     col: parsed.col,
     row: parsed.row,
-    text: parsed.text
+    text: parsed.text,
   };
   if (parsed.sheetName !== undefined) {
     result.sheetName = parsed.sheetName;
@@ -152,7 +152,7 @@ export function parseRangeAddress(raw: string, defaultSheetName?: string): Range
       const result: CellRangeAddress = {
         kind: "cells",
         start: { ...start, row: row1, col: col1, text: formatAddress(row1, col1) },
-        end: { ...endCell, row: row2, col: col2, text: formatAddress(row2, col2) }
+        end: { ...endCell, row: row2, col: col2, text: formatAddress(row2, col2) },
       };
       if (sheetName !== undefined) {
         result.sheetName = sheetName;
@@ -169,7 +169,7 @@ export function parseRangeAddress(raw: string, defaultSheetName?: string): Range
       const result: RowRangeAddress = {
         kind: "rows",
         start: { ...start, row: row1, text: `${row1 + 1}` },
-        end: { ...endRow, row: row2, text: `${row2 + 1}` }
+        end: { ...endRow, row: row2, text: `${row2 + 1}` },
       };
       if (sheetName !== undefined) {
         result.sheetName = sheetName;
@@ -186,7 +186,7 @@ export function parseRangeAddress(raw: string, defaultSheetName?: string): Range
       const result: ColumnRangeAddress = {
         kind: "cols",
         start: { ...start, col: col1, text: indexToColumn(col1) },
-        end: { ...endColumn, col: col2, text: indexToColumn(col2) }
+        end: { ...endColumn, col: col2, text: indexToColumn(col2) },
       };
       if (sheetName !== undefined) {
         result.sheetName = sheetName;
@@ -222,7 +222,7 @@ function parseReference(raw: string, defaultSheetName?: string): ParsedReference
       kind: "cell",
       col: columnToIndex(cellMatch[1]!),
       row: Number.parseInt(cellMatch[2]!, 10) - 1,
-      text: `${cellMatch[1]!}${cellMatch[2]!}`
+      text: `${cellMatch[1]!}${cellMatch[2]!}`,
     };
     if (sheetName !== undefined) {
       result.sheetName = sheetName;
@@ -235,7 +235,7 @@ function parseReference(raw: string, defaultSheetName?: string): ParsedReference
     const result: ColumnReference = {
       kind: "col",
       col: columnToIndex(columnMatch[1]!),
-      text: columnMatch[1]!
+      text: columnMatch[1]!,
     };
     if (sheetName !== undefined) {
       result.sheetName = sheetName;
@@ -248,7 +248,7 @@ function parseReference(raw: string, defaultSheetName?: string): ParsedReference
     const result: RowReference = {
       kind: "row",
       row: Number.parseInt(rowMatch[1]!, 10) - 1,
-      text: rowMatch[1]!
+      text: rowMatch[1]!,
     };
     if (sheetName !== undefined) {
       result.sheetName = sheetName;

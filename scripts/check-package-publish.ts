@@ -24,7 +24,9 @@ for (const packageDir of packageDirs) {
 
   validateManifestShape(packageLabel, manifest, failures);
 
-  const tarballName = runTextCommand("pnpm", ["pack", "--pack-destination", packDir], { cwd: packageDir })
+  const tarballName = runTextCommand("pnpm", ["pack", "--pack-destination", packDir], {
+    cwd: packageDir,
+  })
     .trim()
     .split("\n")
     .pop();
@@ -35,13 +37,13 @@ for (const packageDir of packageDirs) {
   }
 
   const tarballPath = isAbsolute(tarballName) ? tarballName : join(packDir, tarballName);
-  const tarEntries = runTextCommand("tar", ["-tf", tarballPath])
-    .split("\n")
-    .filter(Boolean);
+  const tarEntries = runTextCommand("tar", ["-tf", tarballPath]).split("\n").filter(Boolean);
 
   validateTarballContents(packageLabel, manifest, tarEntries, failures);
 
-  const packedManifest = JSON.parse(runTextCommand("tar", ["-xOf", tarballPath, "package/package.json"]));
+  const packedManifest = JSON.parse(
+    runTextCommand("tar", ["-xOf", tarballPath, "package/package.json"]),
+  );
   validatePackedManifest(packageLabel, packedManifest, failures);
 }
 
@@ -53,11 +55,11 @@ console.log(
   JSON.stringify(
     {
       packages: packageDirs.length,
-      packDir
+      packDir,
     },
     null,
-    2
-  )
+    2,
+  ),
 );
 
 function runTextCommand(command, args, options = {}) {
@@ -66,7 +68,7 @@ function runTextCommand(command, args, options = {}) {
     env: process.env,
     stdin: "ignore",
     stdout: "pipe",
-    stderr: "pipe"
+    stderr: "pipe",
   });
   if (result.exitCode !== 0) {
     const stderr = textDecoder.decode(result.stderr).trim();
@@ -76,7 +78,19 @@ function runTextCommand(command, args, options = {}) {
 }
 
 function validateManifestShape(packageLabel, manifest, failureMessages) {
-  const requiredFields = ["name", "version", "description", "license", "repository", "homepage", "bugs", "main", "types", "exports", "files"];
+  const requiredFields = [
+    "name",
+    "version",
+    "description",
+    "license",
+    "repository",
+    "homepage",
+    "bugs",
+    "main",
+    "types",
+    "exports",
+    "files",
+  ];
   for (const field of requiredFields) {
     if (!(field in manifest)) {
       failureMessages.push(`${packageLabel}: missing required manifest field "${field}"`);
@@ -91,7 +105,10 @@ function validateManifestShape(packageLabel, manifest, failureMessages) {
     failureMessages.push(`${packageLabel}: files list must be present and non-empty`);
   }
 
-  if ((packageLabel === "@bilig/grid" || packageLabel === "@bilig/renderer") && !manifest.peerDependencies?.react) {
+  if (
+    (packageLabel === "@bilig/grid" || packageLabel === "@bilig/renderer") &&
+    !manifest.peerDependencies?.react
+  ) {
     failureMessages.push(`${packageLabel}: react must be declared as a peer dependency`);
   }
 }
@@ -106,7 +123,9 @@ function validateTarballContents(packageLabel, manifest, tarEntries, failureMess
     requiredEntries.add(`package/${stripDotSlash(manifest.types)}`);
   }
 
-  collectExportTargets(manifest.exports).forEach((target) => requiredEntries.add(`package/${stripDotSlash(target)}`));
+  collectExportTargets(manifest.exports).forEach((target) =>
+    requiredEntries.add(`package/${stripDotSlash(target)}`),
+  );
   if (packageLabel === "@bilig/wasm-kernel") {
     requiredEntries.add("package/build/release.wasm");
   }
@@ -133,7 +152,9 @@ function validateTarballContents(packageLabel, manifest, tarEntries, failureMess
 function validatePackedManifest(packageLabel, packedManifest, failureMessages) {
   const serialized = JSON.stringify(packedManifest);
   if (serialized.includes("workspace:*")) {
-    failureMessages.push(`${packageLabel}: packed manifest still contains workspace:* dependency ranges`);
+    failureMessages.push(
+      `${packageLabel}: packed manifest still contains workspace:* dependency ranges`,
+    );
   }
 }
 

@@ -15,11 +15,13 @@ const baseBudgets = {
   rangeAggregates10kRecalcP95Ms: 100,
   topologyEdit10kElapsedP95Ms: 80,
   topologyEdit10kRecalcP95Ms: 80,
-  renderCommit10kP95Ms: 50
+  renderCommit10kP95Ms: 50,
 };
-const toleranceMultiplier = Number.parseFloat(process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"));
+const toleranceMultiplier = Number.parseFloat(
+  process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"),
+);
 const budgets = Object.fromEntries(
-  Object.entries(baseBudgets).map(([key, value]) => [key, value * toleranceMultiplier])
+  Object.entries(baseBudgets).map(([key, value]) => [key, value * toleranceMultiplier]),
 );
 
 function assertBudget(label, actual, threshold, formatter = formatMs) {
@@ -48,7 +50,7 @@ function summarizeNumbers(values) {
     median: quantile(samples, 0.5),
     p95: quantile(samples, 0.95),
     max: samples[samples.length - 1],
-    mean
+    mean,
   };
 }
 
@@ -70,11 +72,11 @@ function runBenchmarkScript(scriptRelativePath, arg) {
     env: process.env,
     stdin: "ignore",
     stdout: "pipe",
-    stderr: "pipe"
+    stderr: "pipe",
   });
   if (result.exitCode !== 0) {
     throw new Error(
-      `Benchmark script failed (${scriptRelativePath} ${arg})\nstdout:\n${textDecoder.decode(result.stdout)}\nstderr:\n${textDecoder.decode(result.stderr)}`
+      `Benchmark script failed (${scriptRelativePath} ${arg})\nstdout:\n${textDecoder.decode(result.stdout)}\nstderr:\n${textDecoder.decode(result.stderr)}`,
     );
   }
   return JSON.parse(textDecoder.decode(result.stdout).trim());
@@ -90,13 +92,21 @@ function sampleBenchmark(scriptRelativePath, arg, iterations) {
 
 const loadRuns = sampleBenchmark("packages/benchmarks/src/benchmark-load.ts", 100_000, 3);
 const editRuns = sampleBenchmark("packages/benchmarks/src/benchmark-edit.ts", 10_000, 5);
-const rangeRuns = sampleBenchmark("packages/benchmarks/src/benchmark-range-heavy.ts", [1_024, 10_000], 3);
-const topologyRuns = sampleBenchmark("packages/benchmarks/src/benchmark-topology-edit.ts", 10_000, 3);
+const rangeRuns = sampleBenchmark(
+  "packages/benchmarks/src/benchmark-range-heavy.ts",
+  [1_024, 10_000],
+  3,
+);
+const topologyRuns = sampleBenchmark(
+  "packages/benchmarks/src/benchmark-topology-edit.ts",
+  10_000,
+  3,
+);
 const renderRuns = sampleBenchmark("packages/benchmarks/src/benchmark-renderer.ts", 10_000, 5);
 
 const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
 const loadWorkingSetDelta = summarizeNumbers(
-  loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes)
+  loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
 );
 const loadHeapUsedAfter = summarizeNumbers(loadRuns.map((run) => run.memory.after.heapUsedBytes));
 
@@ -120,13 +130,21 @@ assertBudget(
   "100k snapshot load working-set delta",
   loadWorkingSetDelta.max,
   budgets.load100kWorkingSetDeltaBytes,
-  formatBytes
+  formatBytes,
 );
 assertBudget("10k downstream edit p95", editElapsed.p95, budgets.edit10kElapsedP95Ms);
 assertBudget("10k downstream recalc median", editRecalc.median, budgets.edit10kRecalcMedianMs);
 assertBudget("10k downstream recalc p95", editRecalc.p95, budgets.edit10kRecalcP95Ms);
-assertBudget("10k range aggregate edit p95", rangeElapsed.p95, budgets.rangeAggregates10kElapsedP95Ms);
-assertBudget("10k range aggregate recalc p95", rangeRecalc.p95, budgets.rangeAggregates10kRecalcP95Ms);
+assertBudget(
+  "10k range aggregate edit p95",
+  rangeElapsed.p95,
+  budgets.rangeAggregates10kElapsedP95Ms,
+);
+assertBudget(
+  "10k range aggregate recalc p95",
+  rangeRecalc.p95,
+  budgets.rangeAggregates10kRecalcP95Ms,
+);
 assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
 assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
 assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
@@ -142,7 +160,7 @@ console.log(
         edit10k: editRuns.length,
         rangeAggregates10k: rangeRuns.length,
         topologyEdit10k: topologyRuns.length,
-        renderCommit10k: renderRuns.length
+        renderCommit10k: renderRuns.length,
       },
       results: {
         load100k: {
@@ -151,7 +169,7 @@ console.log(
           elapsedMs: loadElapsed,
           workingSetDeltaBytes: loadWorkingSetDelta,
           heapUsedAfterBytes: loadHeapUsedAfter,
-          runs: loadRuns
+          runs: loadRuns,
         },
         edit10k: {
           scenario: "single-edit",
@@ -159,7 +177,7 @@ console.log(
           elapsedMs: editElapsed,
           recalcMs: editRecalc,
           rssAfterBytes: editRssAfter,
-          runs: editRuns
+          runs: editRuns,
         },
         rangeAggregates10k: {
           scenario: "range-aggregates",
@@ -168,7 +186,7 @@ console.log(
           elapsedMs: rangeElapsed,
           recalcMs: rangeRecalc,
           rssAfterBytes: rangeRssAfter,
-          runs: rangeRuns
+          runs: rangeRuns,
         },
         topologyEdit10k: {
           scenario: "topology-edit",
@@ -176,18 +194,18 @@ console.log(
           elapsedMs: topologyElapsed,
           recalcMs: topologyRecalc,
           rssAfterBytes: topologyRssAfter,
-          runs: topologyRuns
+          runs: topologyRuns,
         },
         renderCommit10k: {
           scenario: "render-commit",
           declaredCells: 10_000,
           elapsedMs: renderElapsed,
           rssAfterBytes: renderRssAfter,
-          runs: renderRuns
-        }
-      }
+          runs: renderRuns,
+        },
+      },
     },
     null,
-    2
-  )
+    2,
+  ),
 );

@@ -1,7 +1,32 @@
 {
   "name": "@bilig/wasm-kernel",
   "version": "0.1.0",
+  "description": "AssemblyScript and WebAssembly acceleration kernel for bilig spreadsheet execution.",
+  "keywords": [
+    "assemblyscript",
+    "bilig",
+    "kernel",
+    "spreadsheet",
+    "wasm"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/wasm-kernel#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/wasm-kernel"
+  },
+  "files": [
+    "dist",
+    "build/release.wasm",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,44 +35,19 @@
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun ./scripts/build.ts && tsc -p tsconfig.json"
+  },
   "dependencies": {
     "@bilig/protocol": "workspace:*"
   },
   "devDependencies": {
     "assemblyscript": "0.28.10"
   },
-  "scripts": {
-    "build": "bun ./scripts/build.ts && tsc -p tsconfig.json"
-  },
-  "description": "AssemblyScript and WebAssembly acceleration kernel for bilig spreadsheet execution.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/wasm-kernel"
-  },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/wasm-kernel#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "wasm",
-    "assemblyscript",
-    "kernel",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "build/release.wasm",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

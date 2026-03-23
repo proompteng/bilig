@@ -4,14 +4,14 @@ import type {
   LiteralInput,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationMode,
-  WorkbookPivotValueSnapshot
+  WorkbookPivotValueSnapshot,
 } from "@bilig/protocol";
 import type {
   EngineOp,
   EngineOpBatch,
   WorkbookSortDirection,
   WorkbookSortKey,
-  WorkbookTableOp
+  WorkbookTableOp,
 } from "@bilig/crdt";
 
 export const PROTOCOL_MAGIC = 0x424c4731;
@@ -110,7 +110,7 @@ const FRAME_TAGS: Record<FrameKind, number> = {
   snapshotChunk: 4,
   cursorWatermark: 5,
   heartbeat: 6,
-  error: 7
+  error: 7,
 };
 
 const FRAME_ENTRIES: ReadonlyArray<readonly [FrameKind, number]> = [
@@ -120,12 +120,10 @@ const FRAME_ENTRIES: ReadonlyArray<readonly [FrameKind, number]> = [
   ["snapshotChunk", 4],
   ["cursorWatermark", 5],
   ["heartbeat", 6],
-  ["error", 7]
+  ["error", 7],
 ];
 
-const FRAME_BY_TAG = new Map<number, FrameKind>(
-  FRAME_ENTRIES.map(([kind, tag]) => [tag, kind])
-);
+const FRAME_BY_TAG = new Map<number, FrameKind>(FRAME_ENTRIES.map(([kind, tag]) => [tag, kind]));
 
 const OP_TAGS: Record<EngineOp["kind"], number> = {
   upsertWorkbook: 1,
@@ -159,7 +157,7 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   moveRows: 29,
   insertColumns: 30,
   deleteColumns: 31,
-  moveColumns: 32
+  moveColumns: 32,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -359,7 +357,7 @@ function decodeCellRangeRef(reader: BinaryReader): CellRangeRef {
   return {
     sheetName: reader.string(),
     startAddress: reader.string(),
-    endAddress: reader.string()
+    endAddress: reader.string(),
   };
 }
 
@@ -382,7 +380,10 @@ function decodeCalculationMode(reader: BinaryReader): WorkbookCalculationMode {
   return reader.u8() === 2 ? "manual" : "automatic";
 }
 
-function encodeAxisEntries(writer: BinaryWriter, entries: readonly WorkbookAxisEntrySnapshot[] | undefined): void {
+function encodeAxisEntries(
+  writer: BinaryWriter,
+  entries: readonly WorkbookAxisEntrySnapshot[] | undefined,
+): void {
   writer.u32(entries?.length ?? 0);
   entries?.forEach((entry) => {
     writer.string(entry.id);
@@ -398,7 +399,7 @@ function decodeAxisEntries(reader: BinaryReader): WorkbookAxisEntrySnapshot[] {
   for (let index = 0; index < count; index += 1) {
     const entry: WorkbookAxisEntrySnapshot = {
       id: reader.string(),
-      index: reader.u32()
+      index: reader.u32(),
     };
     const size = decodeNullableNumber(reader);
     const hidden = decodeNullableBoolean(reader);
@@ -432,7 +433,7 @@ function encodeSortKey(writer: BinaryWriter, key: WorkbookSortKey): void {
 function decodeSortKey(reader: BinaryReader): WorkbookSortKey {
   return {
     keyAddress: reader.string(),
-    direction: decodeSortDirection(reader)
+    direction: decodeSortDirection(reader),
   };
 }
 
@@ -473,7 +474,7 @@ function decodePivotValue(reader: BinaryReader): WorkbookPivotValueSnapshot {
   const hasLabel = reader.bool();
   const result: WorkbookPivotValueSnapshot = {
     sourceColumn,
-    summarizeBy
+    summarizeBy,
   };
   if (hasLabel) {
     result.outputLabel = reader.string();
@@ -499,7 +500,7 @@ function decodeTable(reader: BinaryReader): WorkbookTableOp {
     endAddress: reader.string(),
     columnNames: reader.stringArray(),
     headerRow: reader.bool(),
-    totalsRow: reader.bool()
+    totalsRow: reader.bool(),
   };
 }
 
@@ -662,17 +663,22 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         sheetName: reader.string(),
         start: reader.u32(),
         count: reader.u32(),
-        entries: decodeAxisEntries(reader)
+        entries: decodeAxisEntries(reader),
       };
     case 28:
-      return { kind: "deleteRows", sheetName: reader.string(), start: reader.u32(), count: reader.u32() };
+      return {
+        kind: "deleteRows",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+      };
     case 29:
       return {
         kind: "moveRows",
         sheetName: reader.string(),
         start: reader.u32(),
         count: reader.u32(),
-        target: reader.u32()
+        target: reader.u32(),
       };
     case 30:
       return {
@@ -680,17 +686,22 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         sheetName: reader.string(),
         start: reader.u32(),
         count: reader.u32(),
-        entries: decodeAxisEntries(reader)
+        entries: decodeAxisEntries(reader),
       };
     case 31:
-      return { kind: "deleteColumns", sheetName: reader.string(), start: reader.u32(), count: reader.u32() };
+      return {
+        kind: "deleteColumns",
+        sheetName: reader.string(),
+        start: reader.u32(),
+        count: reader.u32(),
+      };
     case 32:
       return {
         kind: "moveColumns",
         sheetName: reader.string(),
         start: reader.u32(),
         count: reader.u32(),
-        target: reader.u32()
+        target: reader.u32(),
       };
     case 5:
       return {
@@ -699,7 +710,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         start: reader.u32(),
         count: reader.u32(),
         size: decodeNullableNumber(reader),
-        hidden: decodeNullableBoolean(reader)
+        hidden: decodeNullableBoolean(reader),
       };
     case 6:
       return {
@@ -708,14 +719,14 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         start: reader.u32(),
         count: reader.u32(),
         size: decodeNullableNumber(reader),
-        hidden: decodeNullableBoolean(reader)
+        hidden: decodeNullableBoolean(reader),
       };
     case 7:
       return {
         kind: "setFreezePane",
         sheetName: reader.string(),
         rows: reader.u32(),
-        cols: reader.u32()
+        cols: reader.u32(),
       };
     case 8:
       return { kind: "clearFreezePane", sheetName: reader.string() };
@@ -723,13 +734,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       return {
         kind: "setFilter",
         sheetName: reader.string(),
-        range: decodeCellRangeRef(reader)
+        range: decodeCellRangeRef(reader),
       };
     case 10:
       return {
         kind: "clearFilter",
         sheetName: reader.string(),
-        range: decodeCellRangeRef(reader)
+        range: decodeCellRangeRef(reader),
       };
     case 11:
       return {
@@ -743,27 +754,27 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
             keys.push(decodeSortKey(reader));
           }
           return keys;
-        })()
+        })(),
       };
     case 12:
       return {
         kind: "clearSort",
         sheetName: reader.string(),
-        range: decodeCellRangeRef(reader)
+        range: decodeCellRangeRef(reader),
       };
     case 13:
       return {
         kind: "setCellValue",
         sheetName: reader.string(),
         address: reader.string(),
-        value: decodeLiteral(reader)
+        value: decodeLiteral(reader),
       };
     case 14:
       return {
         kind: "setCellFormula",
         sheetName: reader.string(),
         address: reader.string(),
-        formula: reader.string()
+        formula: reader.string(),
       };
     case 15: {
       const sheetName = reader.string();
@@ -773,7 +784,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         kind: "setCellFormat",
         sheetName,
         address,
-        format: hasFormat ? reader.string() : null
+        format: hasFormat ? reader.string() : null,
       };
     }
     case 16:
@@ -782,7 +793,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       return {
         kind: "upsertDefinedName",
         name: reader.string(),
-        value: decodeLiteral(reader)
+        value: decodeLiteral(reader),
       };
     case 18:
       return { kind: "deleteDefinedName", name: reader.string() };
@@ -796,13 +807,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         sheetName: reader.string(),
         address: reader.string(),
         rows: reader.u32(),
-        cols: reader.u32()
+        cols: reader.u32(),
       };
     case 22:
       return {
         kind: "deleteSpillRange",
         sheetName: reader.string(),
-        address: reader.string()
+        address: reader.string(),
       };
     case 23:
       return {
@@ -819,13 +830,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
           return values;
         })(),
         rows: reader.u32(),
-        cols: reader.u32()
+        cols: reader.u32(),
       };
     case 24:
       return {
         kind: "deletePivotTable",
         sheetName: reader.string(),
-        address: reader.string()
+        address: reader.string(),
       };
     default:
       throw new BinaryProtocolError("Unknown engine op tag");
@@ -853,7 +864,7 @@ function decodeBatch(reader: BinaryReader): EngineOpBatch {
     id,
     replicaId,
     clock: { counter },
-    ops
+    ops,
   };
 }
 
@@ -920,14 +931,14 @@ function decodePayload(kind: FrameKind, payload: Uint8Array): ProtocolFrame {
         sessionId: reader.string(),
         protocolVersion: reader.u32(),
         lastServerCursor: reader.u32(),
-        capabilities: reader.stringArray()
+        capabilities: reader.stringArray(),
       };
     case "appendBatch":
       return {
         kind,
         documentId: reader.string(),
         cursor: reader.u32(),
-        batch: decodeBatch(reader)
+        batch: decodeBatch(reader),
       };
     case "ack":
       return {
@@ -935,7 +946,7 @@ function decodePayload(kind: FrameKind, payload: Uint8Array): ProtocolFrame {
         documentId: reader.string(),
         batchId: reader.string(),
         cursor: reader.u32(),
-        acceptedAtUnixMs: reader.f64()
+        acceptedAtUnixMs: reader.f64(),
       };
     case "snapshotChunk":
       return {
@@ -946,21 +957,21 @@ function decodePayload(kind: FrameKind, payload: Uint8Array): ProtocolFrame {
         chunkIndex: reader.u32(),
         chunkCount: reader.u32(),
         contentType: reader.string(),
-        bytes: reader.bytesView()
+        bytes: reader.bytesView(),
       };
     case "cursorWatermark":
       return {
         kind,
         documentId: reader.string(),
         cursor: reader.u32(),
-        compactedCursor: reader.u32()
+        compactedCursor: reader.u32(),
       };
     case "heartbeat":
       return {
         kind,
         documentId: reader.string(),
         cursor: reader.u32(),
-        sentAtUnixMs: reader.f64()
+        sentAtUnixMs: reader.f64(),
       };
     case "error":
       return {
@@ -968,7 +979,7 @@ function decodePayload(kind: FrameKind, payload: Uint8Array): ProtocolFrame {
         documentId: reader.string(),
         code: reader.string(),
         message: reader.string(),
-        retryable: reader.bool()
+        retryable: reader.bool(),
       };
     default:
       assertNever(kind);

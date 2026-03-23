@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { compileFormula, evaluateAst, evaluatePlan, parseCellAddress, parseFormula, parseRangeAddress } from "../index.js";
+import {
+  compileFormula,
+  evaluateAst,
+  evaluatePlan,
+  parseCellAddress,
+  parseFormula,
+  parseRangeAddress,
+} from "../index.js";
 import { ValueTag, type CellValue } from "@bilig/protocol";
 
 describe("formula", () => {
@@ -8,14 +15,19 @@ describe("formula", () => {
   });
 
   it("parses quoted sheet addresses", () => {
-    expect(parseCellAddress("'My Sheet'!B12")).toMatchObject({ sheetName: "My Sheet", row: 11, col: 1, text: "B12" });
+    expect(parseCellAddress("'My Sheet'!B12")).toMatchObject({
+      sheetName: "My Sheet",
+      row: 11,
+      col: 1,
+      text: "B12",
+    });
   });
 
   it("normalizes ranges", () => {
     expect(parseRangeAddress("B2:A1")).toMatchObject({
       kind: "cells",
       start: { text: "A1" },
-      end: { text: "B2" }
+      end: { text: "B2" },
     });
   });
 
@@ -23,12 +35,12 @@ describe("formula", () => {
     expect(parseRangeAddress("10:1")).toMatchObject({
       kind: "rows",
       start: { text: "1" },
-      end: { text: "10" }
+      end: { text: "10" },
     });
     expect(parseRangeAddress("C:A")).toMatchObject({
       kind: "cols",
       start: { text: "A" },
-      end: { text: "C" }
+      end: { text: "C" },
     });
   });
 
@@ -102,7 +114,7 @@ describe("formula", () => {
     expect(compileFormula("EDATE(A1,1)").mode).toBe(1);
     expect(compileFormula("EOMONTH(A1,1)").mode).toBe(1);
     expect(compileFormula("EXACT(A1,A2)").mode).toBe(1);
-    expect(compileFormula("VALUE(\"42\")").mode).toBe(1);
+    expect(compileFormula('VALUE("42")').mode).toBe(1);
     expect(compileFormula("INT(A1)").mode).toBe(1);
     expect(compileFormula("ROUNDUP(A1,2)").mode).toBe(1);
     expect(compileFormula("ROUNDDOWN(A1,2)").mode).toBe(1);
@@ -112,10 +124,10 @@ describe("formula", () => {
     expect(compileFormula("TRIM(A1)").mode).toBe(1);
     expect(compileFormula("UPPER(A1)").mode).toBe(1);
     expect(compileFormula("LOWER(A1)").mode).toBe(1);
-    expect(compileFormula("FIND(\"a\",A1)").mode).toBe(1);
-    expect(compileFormula("SEARCH(\"a\",A1)").mode).toBe(1);
-    expect(compileFormula("REPLACE(A1,2,3,\"x\")").mode).toBe(1);
-    expect(compileFormula("SUBSTITUTE(A1,\"a\",\"b\")").mode).toBe(1);
+    expect(compileFormula('FIND("a",A1)').mode).toBe(1);
+    expect(compileFormula('SEARCH("a",A1)').mode).toBe(1);
+    expect(compileFormula('REPLACE(A1,2,3,"x")').mode).toBe(1);
+    expect(compileFormula('SUBSTITUTE(A1,"a","b")').mode).toBe(1);
     expect(compileFormula("REPT(A1,3)").mode).toBe(1);
   });
 
@@ -148,22 +160,22 @@ describe("formula", () => {
   it("compiles IF, IFERROR, IFNA, and NA onto the wasm-safe path alongside exact-parity logical formulas", () => {
     const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
     expect(compiled.mode).toBe(1);
-    expect(compileFormula("IFERROR(A1,\"missing\")").mode).toBe(1);
-    expect(compileFormula("IFNA(NA(),\"missing\")").mode).toBe(1);
+    expect(compileFormula('IFERROR(A1,"missing")').mode).toBe(1);
+    expect(compileFormula('IFNA(NA(),"missing")').mode).toBe(1);
     expect(compileFormula("NA()").mode).toBe(1);
-    expect(compileFormula("COUNTIF(A1:A4,\">0\")").mode).toBe(1);
-    expect(compileFormula("COUNTIFS(A1:A4,\">0\",B1:B4,\"x\")").mode).toBe(1);
-    expect(compileFormula("SUMIF(A1:A4,\">0\",B1:B4)").mode).toBe(1);
-    expect(compileFormula("SUMIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")").mode).toBe(1);
-    expect(compileFormula("AVERAGEIF(A1:A4,\">0\")").mode).toBe(1);
-    expect(compileFormula("AVERAGEIFS(C1:C4,A1:A4,\">0\",B1:B4,\"x\")").mode).toBe(1);
+    expect(compileFormula('COUNTIF(A1:A4,">0")').mode).toBe(1);
+    expect(compileFormula('COUNTIFS(A1:A4,">0",B1:B4,"x")').mode).toBe(1);
+    expect(compileFormula('SUMIF(A1:A4,">0",B1:B4)').mode).toBe(1);
+    expect(compileFormula('SUMIFS(C1:C4,A1:A4,">0",B1:B4,"x")').mode).toBe(1);
+    expect(compileFormula('AVERAGEIF(A1:A4,">0")').mode).toBe(1);
+    expect(compileFormula('AVERAGEIFS(C1:C4,A1:A4,">0",B1:B4,"x")').mode).toBe(1);
     expect(compileFormula("SUMPRODUCT(A1:A3,B1:B3)").mode).toBe(1);
-    expect(compileFormula("MATCH(\"pear\",A1:A3,0)").mode).toBe(1);
-    expect(compileFormula("XMATCH(\"pear\",A1:A3)").mode).toBe(1);
-    expect(compileFormula("XLOOKUP(\"pear\",A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula('MATCH("pear",A1:A3,0)').mode).toBe(1);
+    expect(compileFormula('XMATCH("pear",A1:A3)').mode).toBe(1);
+    expect(compileFormula('XLOOKUP("pear",A1:A3,B1:B3)').mode).toBe(1);
     expect(compileFormula("INDEX(A1:B3,2,2)").mode).toBe(1);
-    expect(compileFormula("VLOOKUP(\"pear\",A1:B3,2,FALSE)").mode).toBe(1);
-    expect(compileFormula("HLOOKUP(\"pear\",A1:C2,2,FALSE)").mode).toBe(1);
+    expect(compileFormula('VLOOKUP("pear",A1:B3,2,FALSE)').mode).toBe(1);
+    expect(compileFormula('HLOOKUP("pear",A1:C2,2,FALSE)').mode).toBe(1);
 
     expect(compileFormula("AND(A1,TRUE)").mode).toBe(1);
     expect(compileFormula("OR(A1,FALSE)").mode).toBe(1);
@@ -176,26 +188,26 @@ describe("formula", () => {
   it("keeps unsupported candidate builtin arities on the JS path", () => {
     expect(compileFormula("IF(A1,1)").mode).toBe(0);
     expect(compileFormula("NOT(A1,A2)").mode).toBe(0);
-    expect(compileFormula("COUNTIF(A:A,\">0\")").mode).toBe(0);
+    expect(compileFormula('COUNTIF(A:A,">0")').mode).toBe(0);
     expect(compileFormula("SUMIF(A1:A4,B1:B4,C1:C4,D1:D4)").mode).toBe(0);
-    expect(compileFormula("SUMIFS(A1:A4,\">0\")").mode).toBe(0);
-    expect(compileFormula("MATCH(\"pear\",A1:B3,0)").mode).toBe(0);
-    expect(compileFormula("XLOOKUP(\"pear\",A1:B3,C1:D4)").mode).toBe(0);
-    expect(compileFormula("VLOOKUP(\"pear\",A1:B3,2,FALSE,1)").mode).toBe(0);
+    expect(compileFormula('SUMIFS(A1:A4,">0")').mode).toBe(0);
+    expect(compileFormula('MATCH("pear",A1:B3,0)').mode).toBe(0);
+    expect(compileFormula('XLOOKUP("pear",A1:B3,C1:D4)').mode).toBe(0);
+    expect(compileFormula('VLOOKUP("pear",A1:B3,2,FALSE,1)').mode).toBe(0);
     expect(compileFormula("ROUND(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("FLOOR(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("CEILING(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("TIME(A1,A2)").mode).toBe(0);
     expect(compileFormula("WEEKDAY(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("SIN(A1,A2)").mode).toBe(0);
-    expect(compileFormula("SWITCH(A1,1,\"yes\")").mode).toBe(1);
+    expect(compileFormula('SWITCH(A1,1,"yes")').mode).toBe(1);
     expect(compileFormula("WORKDAY(A1,1,B1:B3)").mode).toBe(0);
     expect(compileFormula("NETWORKDAYS(A1,A2,B1:B3)").mode).toBe(0);
     expect(compileFormula("T.DIST(A1,2,TRUE)").mode).toBe(0);
-    expect(compileFormula("TEXTJOIN(\",\",TRUE,A1,A2)").mode).toBe(0);
+    expect(compileFormula('TEXTJOIN(",",TRUE,A1,A2)').mode).toBe(0);
     expect(compileFormula("WORKDAY.INTL(A1,1)").mode).toBe(0);
     expect(compileFormula("LET(x,2,x+3)").mode).toBe(0);
-    expect(compileFormula("TEXTBEFORE(A1,\"-\")").mode).toBe(0);
+    expect(compileFormula('TEXTBEFORE(A1,"-")').mode).toBe(0);
     expect(compileFormula("FILTER(A1:A4,A1:A4>2)")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("UNIQUE(A1:A4)")).toMatchObject({ mode: 0, producesSpill: true });
   });
@@ -204,16 +216,31 @@ describe("formula", () => {
     expect(compileFormula("TRUE()").mode).toBe(1);
     expect(compileFormula("FALSE()").mode).toBe(1);
     expect(compileFormula("IFS(A1>0,1,TRUE(),2)").mode).toBe(1);
-    expect(compileFormula("SWITCH(A1,1,\"yes\",\"no\")").mode).toBe(1);
+    expect(compileFormula('SWITCH(A1,1,"yes","no")').mode).toBe(1);
     expect(compileFormula("XOR(A1>0,B1>0)").mode).toBe(1);
 
     expect(compileFormula("LAMBDA(x,x+1)(4)").mode).toBe(0);
     expect(compileFormula("LET(fn,LAMBDA(x,x+1),fn(4))").mode).toBe(0);
-    expect(compileFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")).toMatchObject({ mode: 0, producesSpill: true });
-    expect(compileFormula("MAP(A1:A3,LAMBDA(x,x*2))")).toMatchObject({ mode: 0, producesSpill: true });
-    expect(compileFormula("SCAN(0,A1:A3,LAMBDA(acc,x,acc+x))")).toMatchObject({ mode: 0, producesSpill: true });
-    expect(compileFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")).toMatchObject({ mode: 0, producesSpill: true });
-    expect(compileFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")).toMatchObject({
+      mode: 0,
+      producesSpill: true,
+    });
+    expect(compileFormula("MAP(A1:A3,LAMBDA(x,x*2))")).toMatchObject({
+      mode: 0,
+      producesSpill: true,
+    });
+    expect(compileFormula("SCAN(0,A1:A3,LAMBDA(acc,x,acc+x))")).toMatchObject({
+      mode: 0,
+      producesSpill: true,
+    });
+    expect(compileFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")).toMatchObject({
+      mode: 0,
+      producesSpill: true,
+    });
+    expect(compileFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")).toMatchObject({
+      mode: 0,
+      producesSpill: true,
+    });
     expect(compileFormula("REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))").mode).toBe(0);
   });
 
@@ -226,7 +253,11 @@ describe("formula", () => {
     expect(compileFormula("MMULT(A1:B2,C1:D2)")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("MINVERSE(A1:B2)")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("MUNIT(3)")).toMatchObject({ mode: 0, producesSpill: true });
-    expect(compileFormula("RANDARRAY(2,2)")).toMatchObject({ mode: 0, producesSpill: true, volatile: true });
+    expect(compileFormula("RANDARRAY(2,2)")).toMatchObject({
+      mode: 0,
+      producesSpill: true,
+      volatile: true,
+    });
     expect(compileFormula("RANDBETWEEN(1,10)").volatile).toBe(true);
   });
 
@@ -238,21 +269,30 @@ describe("formula", () => {
         if (address === "A1") return { tag: ValueTag.Number, value: 2 };
         return { tag: ValueTag.Number, value: 3 };
       },
-      resolveRange: (): CellValue[] => []
+      resolveRange: (): CellValue[] => [],
     };
     const value = evaluateAst(ast, context);
     expect(value).toEqual({ tag: ValueTag.Number, value: 5 });
-    expect(evaluatePlan(compileFormula("A1+A2").jsPlan, context)).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(evaluatePlan(compileFormula("A1+A2").jsPlan, context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    });
     expect(evaluateAst(parseFormula("10%"), context)).toEqual({ tag: ValueTag.Number, value: 0.1 });
-    expect(evaluateAst(parseFormula("(A1+A2)%"), context)).toEqual({ tag: ValueTag.Number, value: 0.05 });
-    expect(evaluatePlan(compileFormula("A1*10%").jsPlan, context)).toEqual({ tag: ValueTag.Number, value: 0.2 });
+    expect(evaluateAst(parseFormula("(A1+A2)%"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 0.05,
+    });
+    expect(evaluatePlan(compileFormula("A1*10%").jsPlan, context)).toEqual({
+      tag: ValueTag.Number,
+      value: 0.2,
+    });
   });
 
   it("parses quoted sheet references inside formulas", () => {
     const ast = parseFormula("'My Sheet'!A1+1");
     expect(ast).toMatchObject({
       kind: "BinaryExpr",
-      left: { kind: "CellRef", sheetName: "My Sheet", ref: "A1" }
+      left: { kind: "CellRef", sheetName: "My Sheet", ref: "A1" },
     });
   });
 
@@ -266,7 +306,7 @@ describe("formula", () => {
     const ast = parseFormula("SUM('My Sheet'!A:A)");
     expect(ast).toMatchObject({
       kind: "CallExpr",
-      args: [{ kind: "RangeRef", refKind: "cols", sheetName: "My Sheet", start: "A", end: "A" }]
+      args: [{ kind: "RangeRef", refKind: "cols", sheetName: "My Sheet", start: "A", end: "A" }],
     });
   });
 
@@ -280,8 +320,8 @@ describe("formula", () => {
         { kind: "CellRef", ref: "B$2" },
         { kind: "CellRef", ref: "$C$3" },
         { kind: "RangeRef", refKind: "rows", start: "$4", end: "5" },
-        { kind: "RangeRef", refKind: "cols", start: "$D", end: "$F" }
-      ]
+        { kind: "RangeRef", refKind: "cols", start: "$D", end: "$F" },
+      ],
     });
   });
 
@@ -289,10 +329,7 @@ describe("formula", () => {
     const compiled = compileFormula("IF(TRUE, 1+2*3, A1)");
     expect(compiled.optimizedAst).toEqual({ kind: "NumberLiteral", value: 7 });
     expect(compiled.deps).toEqual([]);
-    expect(compiled.jsPlan).toEqual([
-      { opcode: "push-number", value: 7 },
-      { opcode: "return" }
-    ]);
+    expect(compiled.jsPlan).toEqual([{ opcode: "push-number", value: 7 }, { opcode: "return" }]);
   });
 
   it("flattens concat calls in the optimized AST", () => {
@@ -303,8 +340,8 @@ describe("formula", () => {
       args: [
         { kind: "CellRef", ref: "A1" },
         { kind: "CellRef", ref: "B1" },
-        { kind: "CellRef", ref: "C1" }
-      ]
+        { kind: "CellRef", ref: "C1" },
+      ],
     });
   });
 });

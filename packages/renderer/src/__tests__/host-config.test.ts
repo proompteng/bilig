@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { CellProps, SheetProps, WorkbookDescriptor, WorkbookProps } from "../descriptors.js";
-import {
-  workbookHostConfig,
-  type WorkbookContainer
-} from "../host-config.js";
+import { workbookHostConfig, type WorkbookContainer } from "../host-config.js";
 
 function createContainer(engine: SpreadsheetEngine): WorkbookContainer {
   return {
@@ -12,12 +9,17 @@ function createContainer(engine: SpreadsheetEngine): WorkbookContainer {
     root: null,
     pendingOps: [],
     shouldSyncSheetOrders: false,
-    lastError: null
+    lastError: null,
   };
 }
 
 function isWorkbookDescriptor(descriptor: unknown): descriptor is WorkbookDescriptor {
-  return typeof descriptor === "object" && descriptor !== null && "kind" in descriptor && descriptor.kind === "Workbook";
+  return (
+    typeof descriptor === "object" &&
+    descriptor !== null &&
+    "kind" in descriptor &&
+    descriptor.kind === "Workbook"
+  );
 }
 
 function expectWorkbookDescriptor(descriptor: unknown): WorkbookDescriptor {
@@ -44,7 +46,9 @@ describe("workbook host config", () => {
     expect(workbookHostConfig.now()).toBeTypeOf("number");
     expect(workbookHostConfig.noTimeout).toBe(-1);
     expect(workbookHostConfig.shouldSetTextContent()).toBe(false);
-    expect(workbookHostConfig.getCurrentEventPriority()).toBe(workbookHostConfig.resolveUpdatePriority());
+    expect(workbookHostConfig.getCurrentEventPriority()).toBe(
+      workbookHostConfig.resolveUpdatePriority(),
+    );
     workbookHostConfig.setCurrentUpdatePriority(42);
     expect(workbookHostConfig.getCurrentUpdatePriority()).toBe(42);
     expect(workbookHostConfig.resolveUpdatePriority()).toBe(42);
@@ -56,13 +60,19 @@ describe("workbook host config", () => {
     expect(workbookHostConfig.maySuspendCommitInSyncRender()).toBe(false);
     expect(workbookHostConfig.waitForCommitToBeReady()).toBeNull();
     expect(workbookHostConfig.NotPendingTransition).toBeNull();
-    const workbook = workbookHostConfig.createInstance("Workbook", { name: "Public" } satisfies WorkbookProps, container);
+    const workbook = workbookHostConfig.createInstance(
+      "Workbook",
+      { name: "Public" } satisfies WorkbookProps,
+      container,
+    );
     expect(workbookHostConfig.getPublicInstance(workbook)).toBe(workbook);
 
     const logger = workbookHostConfig.bindToConsole();
     expect(logger).toBeTypeOf("function");
 
-    expect(() => workbookHostConfig.createTextInstance()).toThrow("Workbook DSL does not support text nodes.");
+    expect(() => workbookHostConfig.createTextInstance()).toThrow(
+      "Workbook DSL does not support text nodes.",
+    );
 
     workbookHostConfig.preparePortalMount();
     workbookHostConfig.preloadInstance();
@@ -88,10 +98,26 @@ describe("workbook host config", () => {
     await engine.ready();
     const container = createContainer(engine);
 
-    const workbook = workbookHostConfig.createInstance("Workbook", { name: "Book" } satisfies WorkbookProps, container);
-    const sheet = workbookHostConfig.createInstance("Sheet", { name: "Sheet1" } satisfies SheetProps, container);
-    const cell = workbookHostConfig.createInstance("Cell", { addr: "A1", value: 10 } satisfies CellProps, container);
-    const movedCell = workbookHostConfig.createInstance("Cell", { addr: "B1", formula: "A1*2" } satisfies CellProps, container);
+    const workbook = workbookHostConfig.createInstance(
+      "Workbook",
+      { name: "Book" } satisfies WorkbookProps,
+      container,
+    );
+    const sheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet1" } satisfies SheetProps,
+      container,
+    );
+    const cell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "A1", value: 10 } satisfies CellProps,
+      container,
+    );
+    const movedCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "B1", formula: "A1*2" } satisfies CellProps,
+      container,
+    );
 
     workbookHostConfig.appendInitialChild(workbook, sheet);
     workbookHostConfig.appendInitialChild(sheet, cell);
@@ -108,23 +134,30 @@ describe("workbook host config", () => {
       movedCell,
       "Cell",
       { addr: "B1", formula: "A1*2" } satisfies CellProps,
-      { addr: "B2", formula: "A1*3", format: "currency-usd" } satisfies CellProps
+      { addr: "B2", formula: "A1*3", format: "currency-usd" } satisfies CellProps,
     );
     workbookHostConfig.commitUpdate(
       sheet,
       "Sheet",
       { name: "Sheet1" } satisfies SheetProps,
-      { name: "Renamed" } satisfies SheetProps
+      { name: "Renamed" } satisfies SheetProps,
     );
     workbookHostConfig.resetAfterCommit(container);
     expect(engine.getCell("Renamed", "B2").format).toBe("currency-usd");
     expect(engine.getCellValue("Renamed", "B2")).toEqual({ tag: 1, value: 30 });
 
-    const secondSheet = workbookHostConfig.createInstance("Sheet", { name: "Sheet2" } satisfies SheetProps, container);
+    const secondSheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet2" } satisfies SheetProps,
+      container,
+    );
     workbookHostConfig.prepareForCommit(container);
     workbookHostConfig.insertBefore(workbook, secondSheet, sheet);
     workbookHostConfig.resetAfterCommit(container);
-    expect(engine.exportSnapshot().sheets.map((entry) => `${entry.order}:${entry.name}`)).toEqual(["0:Sheet2", "1:Renamed"]);
+    expect(engine.exportSnapshot().sheets.map((entry) => `${entry.order}:${entry.name}`)).toEqual([
+      "0:Sheet2",
+      "1:Renamed",
+    ]);
 
     workbookHostConfig.prepareForCommit(container);
     workbookHostConfig.removeChild(sheet, cell);
@@ -144,12 +177,20 @@ describe("workbook host config", () => {
     const engine = new SpreadsheetEngine({ workbookName: "host-config-errors" });
     await engine.ready();
     const container = createContainer(engine);
-    const workbook = workbookHostConfig.createInstance("Workbook", { name: "BadBook" } satisfies WorkbookProps, container);
-    const badSheet = workbookHostConfig.createInstance("Sheet", { name: "Sheet1" } satisfies SheetProps, container);
+    const workbook = workbookHostConfig.createInstance(
+      "Workbook",
+      { name: "BadBook" } satisfies WorkbookProps,
+      container,
+    );
+    const badSheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet1" } satisfies SheetProps,
+      container,
+    );
     const badCell = workbookHostConfig.createInstance(
       "Cell",
       { addr: "A1", value: 1, formula: "B1" } satisfies CellProps,
-      container
+      container,
     );
     workbookHostConfig.appendInitialChild(workbook, badSheet);
     workbookHostConfig.appendInitialChild(badSheet, badCell);
@@ -161,15 +202,23 @@ describe("workbook host config", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       workbookHostConfig.resetAfterCommit(container);
-      expect(container.lastError?.message).toContain("<Cell> cannot specify both value and formula.");
+      expect(container.lastError?.message).toContain(
+        "<Cell> cannot specify both value and formula.",
+      );
     } finally {
       consoleError.mockRestore();
     }
 
-    expect(workbookHostConfig.prepareUpdate(workbook, "Workbook", workbook.props, workbook.props)).toBeNull();
     expect(
-      workbookHostConfig.prepareUpdate(workbook, "Workbook", workbook.props, { name: "Changed" } satisfies WorkbookProps)
+      workbookHostConfig.prepareUpdate(workbook, "Workbook", workbook.props, workbook.props),
+    ).toBeNull();
+    expect(
+      workbookHostConfig.prepareUpdate(workbook, "Workbook", workbook.props, {
+        name: "Changed",
+      } satisfies WorkbookProps),
     ).toBe(true);
-    expect(() => workbookHostConfig.createInstance("Unknown", {}, container)).toThrow("Unknown workbook host type");
+    expect(() => workbookHostConfig.createInstance("Unknown", {}, container)).toThrow(
+      "Unknown workbook host type",
+    );
   });
 });

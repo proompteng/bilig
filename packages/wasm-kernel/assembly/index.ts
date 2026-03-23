@@ -42,7 +42,7 @@ export {
   getFormulaCapacity,
   getConstantCapacity,
   getRangeCapacity,
-  getMemberCapacity
+  getMemberCapacity,
 } from "./vm";
 
 export {
@@ -52,5 +52,5 @@ export {
   getPivotResultStringIdsPtr,
   getPivotResultErrorsPtr,
   pivotResultRows,
-  pivotResultCols
+  pivotResultCols,
 } from "./pivot";

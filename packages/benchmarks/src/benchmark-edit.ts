@@ -28,7 +28,7 @@ export async function runEditBenchmark(downstreamCount = 10_000): Promise<EditBe
     downstreamCount,
     elapsedMs: elapsed,
     metrics: engine.getLastMetrics(),
-    memory: measureMemory(memoryBefore, memoryAfter)
+    memory: measureMemory(memoryBefore, memoryAfter),
   };
 }
 

@@ -23,14 +23,17 @@ export function compactRelayEntries(entries: RelayEntry[]): RelayEntry[] {
   byTarget.forEach((group, target) => {
     const deliverAtByBatchId = new Map<string, number>();
     group.forEach((entry) => {
-      deliverAtByBatchId.set(entry.batch.id, Math.max(deliverAtByBatchId.get(entry.batch.id) ?? 0, entry.deliverAt));
+      deliverAtByBatchId.set(
+        entry.batch.id,
+        Math.max(deliverAtByBatchId.get(entry.batch.id) ?? 0, entry.deliverAt),
+      );
     });
 
     compactLog(group.map((entry) => entry.batch)).forEach((batch) => {
       compacted.push({
         target,
         batch,
-        deliverAt: deliverAtByBatchId.get(batch.id) ?? Date.now()
+        deliverAt: deliverAtByBatchId.get(batch.id) ?? Date.now(),
       });
     });
   });
@@ -39,6 +42,6 @@ export function compactRelayEntries(entries: RelayEntry[]): RelayEntry[] {
     (left, right) =>
       left.deliverAt - right.deliverAt ||
       left.target.localeCompare(right.target) ||
-      compareBatches(left.batch, right.batch)
+      compareBatches(left.batch, right.batch),
   );
 }

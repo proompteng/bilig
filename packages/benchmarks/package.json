@@ -1,7 +1,30 @@
 {
   "name": "@bilig/benchmarks",
   "version": "0.1.0",
+  "description": "Benchmark scenarios, metrics helpers, and workbook generators for bilig.",
+  "keywords": [
+    "benchmark",
+    "bilig",
+    "performance",
+    "spreadsheet"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/benchmarks#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/benchmarks"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,41 +37,18 @@
       "import": "./dist/generate-workbook.js"
     }
   },
-  "dependencies": {
-    "@bilig/core": "workspace:*",
-    "@bilig/protocol": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "bench": "tsx src/index.ts"
   },
-  "description": "Benchmark scenarios, metrics helpers, and workbook generators for bilig.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/benchmarks"
+  "dependencies": {
+    "@bilig/core": "workspace:*",
+    "@bilig/protocol": "workspace:*"
   },
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/benchmarks#readme",
-  "bugs": {
-    "url": "https://github.com/proompteng/bilig/issues"
-  },
-  "keywords": [
-    "bilig",
-    "benchmark",
-    "performance",
-    "spreadsheet"
-  ],
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  }
 }

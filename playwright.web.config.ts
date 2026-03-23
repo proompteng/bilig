@@ -8,20 +8,20 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:4180",
-    trace: "retain-on-failure"
+    trace: "retain-on-failure",
   },
   projects: [
     {
       name: "chromium",
       use: {
-        ...devices["Desktop Chrome"]
-      }
-    }
+        ...devices["Desktop Chrome"],
+      },
+    },
   ],
   webServer: {
     command: "pnpm --filter @bilig/web preview:ci",
     port: 4180,
     reuseExistingServer: false,
-    timeout: 120_000
-  }
+    timeout: 120_000,
+  },
 });

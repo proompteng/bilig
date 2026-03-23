@@ -14,13 +14,17 @@ function cellRange(values: CellValue[], rows: number, cols: number): RangeBuilti
 describe("lookup builtins", () => {
   it("supports MATCH across one-dimensional cell ranges", () => {
     const MATCH = getLookupBuiltin("MATCH")!;
-    expect(MATCH(text("b"), cellRange([text("a"), text("b"), text("c")], 3, 1), num(0))).toEqual(num(2));
+    expect(MATCH(text("b"), cellRange([text("a"), text("b"), text("c")], 3, 1), num(0))).toEqual(
+      num(2),
+    );
     expect(MATCH(num(4), cellRange([num(1), num(3), num(5)], 3, 1), num(1))).toEqual(num(2));
     expect(MATCH(num(3), cellRange([num(5), num(3), num(1)], 3, 1), num(-1))).toEqual(num(2));
-    expect(MATCH(text("z"), cellRange([text("a"), text("b")], 2, 1), num(0))).toEqual(err(ErrorCode.NA));
-    expect(MATCH(text("x"), cellRange([text("a"), text("b"), text("c"), text("d")], 2, 2), num(0))).toEqual(
-      err(ErrorCode.NA)
+    expect(MATCH(text("z"), cellRange([text("a"), text("b")], 2, 1), num(0))).toEqual(
+      err(ErrorCode.NA),
     );
+    expect(
+      MATCH(text("x"), cellRange([text("a"), text("b"), text("c"), text("d")], 2, 2), num(0)),
+    ).toEqual(err(ErrorCode.NA));
   });
 
   it("supports INDEX over cell ranges", () => {
@@ -58,8 +62,8 @@ describe("lookup builtins", () => {
       XLOOKUP(
         text("pear"),
         cellRange([text("apple"), text("pear"), text("plum")], 3, 1),
-        cellRange([num(10), num(20), num(30)], 3, 1)
-      )
+        cellRange([num(10), num(20), num(30)], 3, 1),
+      ),
     ).toEqual(num(20));
 
     expect(
@@ -67,32 +71,22 @@ describe("lookup builtins", () => {
         text("missing"),
         cellRange([text("apple"), text("pear"), text("plum")], 3, 1),
         cellRange([num(10), num(20), num(30)], 3, 1),
-        text("fallback")
-      )
+        text("fallback"),
+      ),
     ).toEqual(text("fallback"));
 
-    expect(
-      COUNTIF(
-        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
-        text(">0")
-      )
-    ).toEqual(num(3));
+    expect(COUNTIF(cellRange([num(2), num(4), num(-1), num(6)], 4, 1), text(">0"))).toEqual(num(3));
 
     expect(
       COUNTIFS(
         cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
         text(">0"),
         cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
-        text("a")
-      )
+        text("a"),
+      ),
     ).toEqual(num(3));
 
-    expect(
-      SUMIF(
-        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
-        text(">0")
-      )
-    ).toEqual(num(12));
+    expect(SUMIF(cellRange([num(2), num(4), num(-1), num(6)], 4, 1), text(">0"))).toEqual(num(12));
 
     expect(
       SUMIFS(
@@ -100,16 +94,13 @@ describe("lookup builtins", () => {
         cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
         text(">0"),
         cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
-        text("a")
-      )
+        text("a"),
+      ),
     ).toEqual(num(70));
 
-    expect(
-      AVERAGEIF(
-        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
-        text(">0")
-      )
-    ).toEqual(num(4));
+    expect(AVERAGEIF(cellRange([num(2), num(4), num(-1), num(6)], 4, 1), text(">0"))).toEqual(
+      num(4),
+    );
 
     expect(
       AVERAGEIFS(
@@ -117,22 +108,19 @@ describe("lookup builtins", () => {
         cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
         text(">0"),
         cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
-        text("a")
-      )
+        text("a"),
+      ),
     ).toEqual(num((10 + 20 + 40) / 3));
 
     expect(
       SUMPRODUCT(
         cellRange([num(1), num(2), num(3)], 3, 1),
-        cellRange([num(4), num(5), num(6)], 3, 1)
-      )
+        cellRange([num(4), num(5), num(6)], 3, 1),
+      ),
     ).toEqual(num(32));
 
     expect(
-      XMATCH(
-        text("pear"),
-        cellRange([text("apple"), text("pear"), text("plum")], 3, 1)
-      )
+      XMATCH(text("pear"), cellRange([text("apple"), text("pear"), text("plum")], 3, 1)),
     ).toEqual(num(2));
 
     expect(
@@ -140,8 +128,8 @@ describe("lookup builtins", () => {
         text("pear"),
         cellRange([text("apple"), text("pear"), text("plum"), num(10), num(20), num(30)], 2, 3),
         num(2),
-        bool(false)
-      )
+        bool(false),
+      ),
     ).toEqual(num(20));
   });
 
@@ -151,23 +139,21 @@ describe("lookup builtins", () => {
 
     const filtered = FILTER(
       cellRange([num(1), num(3), num(2), num(4)], 4, 1),
-      cellRange([bool(false), bool(true), bool(false), bool(true)], 4, 1)
+      cellRange([bool(false), bool(true), bool(false), bool(true)], 4, 1),
     );
     expect(filtered).toEqual({
       kind: "array",
       rows: 2,
       cols: 1,
-      values: [num(3), num(4)]
+      values: [num(3), num(4)],
     });
 
-    const unique = UNIQUE(
-      cellRange([text("A"), text("B"), text("A"), text("C")], 4, 1)
-    );
+    const unique = UNIQUE(cellRange([text("A"), text("B"), text("A"), text("C")], 4, 1));
     expect(unique).toEqual({
       kind: "array",
       rows: 3,
       cols: 1,
-      values: [text("A"), text("B"), text("C")]
+      values: [text("A"), text("B"), text("C")],
     });
   });
 
@@ -178,113 +164,91 @@ describe("lookup builtins", () => {
     expect(
       FILTER(
         cellRange([num(1), num(2), num(3), num(4), num(5), num(6)], 2, 3),
-        cellRange([bool(true), bool(false), bool(true)], 1, 3)
-      )
+        cellRange([bool(true), bool(false), bool(true)], 1, 3),
+      ),
     ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
-      values: [num(1), num(3), num(4), num(6)]
+      values: [num(1), num(3), num(4), num(6)],
     });
 
     expect(
       FILTER(
         cellRange([num(1), num(2)], 2, 1),
         cellRange([bool(false), bool(false)], 2, 1),
-        text("empty")
-      )
+        text("empty"),
+      ),
     ).toEqual(text("empty"));
 
     expect(
-      FILTER(
-        cellRange([num(1), num(2)], 2, 1),
-        cellRange([text("bad"), bool(true)], 2, 1)
-      )
+      FILTER(cellRange([num(1), num(2)], 2, 1), cellRange([text("bad"), bool(true)], 2, 1)),
     ).toEqual(err(ErrorCode.Value));
 
     expect(
       FILTER(
         cellRange([num(1), num(2)], 2, 1),
-        cellRange([bool(true), bool(false), bool(true)], 3, 1)
-      )
+        cellRange([bool(true), bool(false), bool(true)], 3, 1),
+      ),
     ).toEqual(err(ErrorCode.Value));
 
     expect(
-      FILTER(
-        cellRange([num(1), num(2)], 2, 1),
-        cellRange([err(ErrorCode.Ref), bool(true)], 2, 1)
-      )
+      FILTER(cellRange([num(1), num(2)], 2, 1), cellRange([err(ErrorCode.Ref), bool(true)], 2, 1)),
     ).toEqual(err(ErrorCode.Ref));
 
     expect(
       UNIQUE(
         cellRange([text("A"), text("b"), text("a"), text("C"), text("c")], 5, 1),
         bool(false),
-        bool(true)
-      )
+        bool(true),
+      ),
     ).toEqual({
       kind: "array",
       rows: 1,
       cols: 1,
-      values: [text("b")]
+      values: [text("b")],
     });
 
     expect(
       UNIQUE(
         cellRange(
-          [
-            text("A"), text("B"), text("A"), text("C"),
-            num(1), num(2), num(1), num(3)
-          ],
+          [text("A"), text("B"), text("A"), text("C"), num(1), num(2), num(1), num(3)],
           2,
-          4
+          4,
         ),
-        bool(true)
-      )
+        bool(true),
+      ),
     ).toEqual({
       kind: "array",
       rows: 2,
       cols: 3,
-      values: [text("A"), text("B"), text("C"), num(1), num(2), num(3)]
+      values: [text("A"), text("B"), text("C"), num(1), num(2), num(3)],
     });
 
     expect(
       UNIQUE(
         cellRange(
-          [
-            text("A"), text("B"), text("A"), text("C"),
-            num(1), num(2), num(1), num(3)
-          ],
+          [text("A"), text("B"), text("A"), text("C"), num(1), num(2), num(1), num(3)],
           2,
-          4
+          4,
         ),
         bool(true),
-        bool(true)
-      )
+        bool(true),
+      ),
     ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
-      values: [text("B"), text("C"), num(2), num(3)]
+      values: [text("B"), text("C"), num(2), num(3)],
     });
 
     expect(
-      UNIQUE(
-        cellRange(
-          [
-            text("A"), num(1),
-            text("a"), num(1),
-            text("B"), num(2)
-          ],
-          3,
-          2
-        )
-      )
+      UNIQUE(cellRange([text("A"), num(1), text("a"), num(1), text("B"), num(2)], 3, 2)),
     ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
-      values: [text("A"), num(1), text("B"), num(2)]
+      values: [text("A"), num(1), text("B"), num(2)],
     });
 
     expect(UNIQUE(cellRange([err(ErrorCode.Name)], 1, 1))).toEqual(err(ErrorCode.Name));
@@ -300,9 +264,15 @@ describe("lookup builtins", () => {
     const MMULT = getLookupBuiltin("MMULT")!;
     const PERCENTOF = getLookupBuiltin("PERCENTOF")!;
 
-    expect(SUMX2MY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(num(11));
-    expect(SUMX2PY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(num(15));
-    expect(SUMXMY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(num(5));
+    expect(SUMX2MY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(
+      num(11),
+    );
+    expect(SUMX2PY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(
+      num(15),
+    );
+    expect(SUMXMY2(cellRange([num(2), num(3)], 2, 1), cellRange([num(1), num(1)], 2, 1))).toEqual(
+      num(5),
+    );
 
     expect(MDETERM(cellRange([num(1), num(2), num(3), num(4)], 2, 2))).toEqual(num(-2));
     expect(MDETERM(cellRange([num(1), num(2), num(3)], 3, 1))).toEqual(err(ErrorCode.Value));
@@ -316,32 +286,42 @@ describe("lookup builtins", () => {
       ValueTag.Number,
       ValueTag.Number,
       ValueTag.Number,
-      ValueTag.Number
+      ValueTag.Number,
     ]);
     expect(inverse.values.map((value) => value.value)).toEqual([
       expect.closeTo(0.6, 12),
       expect.closeTo(-0.7, 12),
       expect.closeTo(-0.2, 12),
-      expect.closeTo(0.4, 12)
+      expect.closeTo(0.4, 12),
     ]);
-    expect(MINVERSE(cellRange([num(1), num(2), num(2), num(4)], 2, 2))).toEqual(err(ErrorCode.Value));
+    expect(MINVERSE(cellRange([num(1), num(2), num(2), num(4)], 2, 2))).toEqual(
+      err(ErrorCode.Value),
+    );
 
-    expect(MMULT(
-      cellRange([num(1), num(2), num(3), num(4)], 2, 2),
-      cellRange([num(5), num(6), num(7), num(8)], 2, 2)
-    )).toEqual({
+    expect(
+      MMULT(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([num(5), num(6), num(7), num(8)], 2, 2),
+      ),
+    ).toEqual({
       kind: "array",
       rows: 2,
       cols: 2,
-      values: [num(19), num(22), num(43), num(50)]
+      values: [num(19), num(22), num(43), num(50)],
     });
-    expect(MMULT(
-      cellRange([num(1), num(2), num(3), num(4)], 2, 2),
-      cellRange([num(5), num(6), num(7)], 3, 1)
-    )).toEqual(err(ErrorCode.Value));
+    expect(
+      MMULT(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([num(5), num(6), num(7)], 3, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
 
-    expect(PERCENTOF(cellRange([num(2), num(3)], 2, 1), cellRange([num(10), num(10)], 2, 1))).toEqual(num(0.25));
-    expect(PERCENTOF(cellRange([num(2)], 1, 1), cellRange([num(0)], 1, 1))).toEqual(err(ErrorCode.Div0));
+    expect(
+      PERCENTOF(cellRange([num(2), num(3)], 2, 1), cellRange([num(10), num(10)], 2, 1)),
+    ).toEqual(num(0.25));
+    expect(PERCENTOF(cellRange([num(2)], 1, 1), cellRange([num(0)], 1, 1))).toEqual(
+      err(ErrorCode.Div0),
+    );
     expect(SUMXMY2(err(ErrorCode.Ref), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
   });
 
@@ -353,12 +333,16 @@ describe("lookup builtins", () => {
     expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text("<>2"))).toEqual(num(2));
     expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text(">=2"))).toEqual(num(2));
     expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text("<=2"))).toEqual(num(2));
-    expect(COUNTIF(cellRange([bool(true), bool(false), bool(true)], 3, 1), text("=TRUE"))).toEqual(num(2));
+    expect(COUNTIF(cellRange([bool(true), bool(false), bool(true)], 3, 1), text("=TRUE"))).toEqual(
+      num(2),
+    );
     expect(COUNTIF(cellRange([text(""), text("x"), text("")], 3, 1), text("="))).toEqual(num(2));
-    expect(SUMIF(
-      cellRange([text("a"), text("b"), text("c")], 3, 1),
-      text("<>b"),
-      cellRange([num(1), num(2), num(3)], 3, 1)
-    )).toEqual(num(4));
+    expect(
+      SUMIF(
+        cellRange([text("a"), text("b"), text("c")], 3, 1),
+        text("<>b"),
+        cellRange([num(1), num(2), num(3)], 3, 1),
+      ),
+    ).toEqual(num(4));
   });
 });

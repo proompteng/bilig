@@ -1,11 +1,7 @@
 :root {
   color: #101828;
   background: #f3f4f6;
-  font-family:
-    "Aptos",
-    "Segoe UI",
-    "IBM Plex Sans",
-    sans-serif;
+  font-family: "Aptos", "Segoe UI", "IBM Plex Sans", sans-serif;
   --excel-green: #1f7a43;
   --excel-green-strong: #166534;
   --ink-900: #101828;
@@ -42,8 +38,7 @@ input {
 .app-shell {
   min-height: 100vh;
   padding: 18px;
-  background:
-    linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
 }
 
 .app-shell-product {

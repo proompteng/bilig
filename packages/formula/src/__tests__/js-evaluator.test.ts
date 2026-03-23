@@ -21,11 +21,11 @@ const context = {
         { tag: ValueTag.Number, value: 2 },
         { tag: ValueTag.Number, value: 3 },
         { tag: ValueTag.Boolean, value: true },
-        { tag: ValueTag.Empty }
+        { tag: ValueTag.Empty },
       ];
     }
     return [];
-  }
+  },
 };
 
 describe("js evaluator", () => {
@@ -35,20 +35,17 @@ describe("js evaluator", () => {
         [
           { opcode: "push-range", start: "A1", end: "B2", refKind: "cells" },
           { opcode: "call", callee: "SUM", argc: 1 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 6 });
 
     expect(
       evaluatePlan(
-        [
-          { opcode: "push-range", start: "A1", end: "B2", refKind: "cells" },
-          { opcode: "return" }
-        ],
-        context
-      )
+        [{ opcode: "push-range", start: "A1", end: "B2", refKind: "cells" }, { opcode: "return" }],
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 2 });
 
     expect(
@@ -59,40 +56,27 @@ describe("js evaluator", () => {
           { opcode: "push-number", value: 1 },
           { opcode: "jump", target: 5 },
           { opcode: "push-number", value: 2 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 2 });
 
     expect(
-      evaluatePlan(
-        [
-          { opcode: "call", callee: "SUM", argc: 1 },
-          { opcode: "return" }
-        ],
-        context
-      )
+      evaluatePlan([{ opcode: "call", callee: "SUM", argc: 1 }, { opcode: "return" }], context),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
 
     expect(
       evaluatePlan(
-        [
-          { opcode: "call", callee: "DOES_NOT_EXIST", argc: 0 },
-          { opcode: "return" }
-        ],
-        context
-      )
+        [{ opcode: "call", callee: "DOES_NOT_EXIST", argc: 0 }, { opcode: "return" }],
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
 
-    expect(
-      evaluatePlan(
-        [
-          { opcode: "push-number", value: 9 }
-        ],
-        context
-      )
-    ).toEqual({ tag: ValueTag.Number, value: 9 });
+    expect(evaluatePlan([{ opcode: "push-number", value: 9 }], context)).toEqual({
+      tag: ValueTag.Number,
+      value: 9,
+    });
   });
 
   it("keeps range shape for lookup/reference builtins", () => {
@@ -103,7 +87,7 @@ describe("js evaluator", () => {
           { opcode: "push-range", start: "A1", end: "A4", refKind: "cells" },
           { opcode: "push-number", value: 0 },
           { opcode: "call", callee: "MATCH", argc: 3 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
         {
           ...context,
@@ -112,9 +96,9 @@ describe("js evaluator", () => {
               return [num(2), num(3), num(4), num(5)];
             }
             return [];
-          }
-        }
-      )
+          },
+        },
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 2 });
 
     expect(
@@ -124,21 +108,21 @@ describe("js evaluator", () => {
           { opcode: "push-number", value: 2 },
           { opcode: "push-number", value: 2 },
           { opcode: "call", callee: "INDEX", argc: 3 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Empty });
   });
 
   it("lowers row and column refs into NaN sentinels for the JS path", () => {
     expect(lowerToPlan({ kind: "RowRef", ref: "3" } as FormulaNode)).toEqual([
       { opcode: "push-number", value: Number.NaN },
-      { opcode: "return" }
+      { opcode: "return" },
     ]);
     expect(lowerToPlan({ kind: "ColumnRef", ref: "C" } as FormulaNode)).toEqual([
       { opcode: "push-number", value: Number.NaN },
-      { opcode: "return" }
+      { opcode: "return" },
     ]);
   });
 
@@ -149,58 +133,64 @@ describe("js evaluator", () => {
           { opcode: "push-name", name: "TaxRate" },
           { opcode: "push-number", value: 1 },
           { opcode: "binary", operator: "+" },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
         {
           ...context,
           resolveName: (name: string): CellValue =>
-            name === "TaxRate" ? { tag: ValueTag.Number, value: 0.5 } : { tag: ValueTag.Error, code: ErrorCode.Name }
-        }
-      )
+            name === "TaxRate"
+              ? { tag: ValueTag.Number, value: 0.5 }
+              : { tag: ValueTag.Error, code: ErrorCode.Name },
+        },
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 1.5 });
 
-    expect(evaluatePlan([{ opcode: "push-name", name: "MissingName" }, { opcode: "return" }], context)).toEqual({
+    expect(
+      evaluatePlan([{ opcode: "push-name", name: "MissingName" }, { opcode: "return" }], context),
+    ).toEqual({
       tag: ValueTag.Error,
-      code: ErrorCode.Name
+      code: ErrorCode.Name,
     });
   });
 
   it("supports LET scopes in lowered plans", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("LET(x,2,x+3)")), context)).toEqual({
       tag: ValueTag.Number,
-      value: 5
+      value: 5,
     });
   });
 
   it("supports lambda invocation and lambda-array helpers in lowered plans", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,x+1)(4)")), context)).toEqual({
       tag: ValueTag.Number,
-      value: 5
+      value: 5,
     });
 
-    expect(evaluatePlan(lowerToPlan(parseFormula("LET(fn,LAMBDA(x,x+1),fn(4))")), context)).toEqual({
-      tag: ValueTag.Number,
-      value: 5
-    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("LET(fn,LAMBDA(x,x+1),fn(4))")), context)).toEqual(
+      {
+        tag: ValueTag.Number,
+        value: 5,
+      },
+    );
   });
 
   it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
     expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
-    expect(optimizeFormula(parseFormula("-\"text\""))).toEqual({
+    expect(optimizeFormula(parseFormula('-"text"'))).toEqual({
       kind: "ErrorLiteral",
-      code: ErrorCode.Value
+      code: ErrorCode.Value,
     });
     expect(optimizeFormula(parseFormula("IF(FALSE, A1, 1+2)"))).toEqual({
       kind: "NumberLiteral",
-      value: 3
+      value: 3,
     });
-    expect(optimizeFormula(parseFormula("IF(\"\", 1, 2)"))).toEqual({
+    expect(optimizeFormula(parseFormula('IF("", 1, 2)'))).toEqual({
       kind: "NumberLiteral",
-      value: 2
+      value: 2,
     });
-    expect(optimizeFormula(parseFormula("\"a\"&\"b\""))).toEqual({
+    expect(optimizeFormula(parseFormula('"a"&"b"'))).toEqual({
       kind: "StringLiteral",
-      value: "ab"
+      value: "ab",
     });
     expect(optimizeFormula(parseFormula("IF(A1, 1+2, B1)"))).toEqual({
       kind: "CallExpr",
@@ -208,8 +198,8 @@ describe("js evaluator", () => {
       args: [
         { kind: "CellRef", ref: "A1" },
         { kind: "NumberLiteral", value: 3 },
-        { kind: "CellRef", ref: "B1" }
-      ]
+        { kind: "CellRef", ref: "B1" },
+      ],
     });
   });
 });

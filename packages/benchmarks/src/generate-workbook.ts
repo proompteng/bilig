@@ -23,15 +23,15 @@ export function buildWorkbookSnapshot(materializedCells = 1000): WorkbookSnapsho
         cells: [
           ...Array.from({ length: literalCount }, (_, index) => ({
             address: `A${index + 1}`,
-            value: index + 1
+            value: index + 1,
           })),
           ...Array.from({ length: formulaCount }, (_, index) => ({
             address: `B${index + 1}`,
-            formula: `A${index + 1}*2`
-          }))
-        ]
-      }
-    ]
+            formula: `A${index + 1}*2`,
+          })),
+        ],
+      },
+    ],
   };
 }
 
@@ -51,18 +51,18 @@ export function buildDownstreamSnapshot(downstreamCount = 1000): WorkbookSnapsho
           { address: "A1", value: 1 },
           ...Array.from({ length: downstreamCount }, (_, index) => ({
             address: `B${index + 1}`,
-            formula: `A1*2+${index + 1}`
-          }))
-        ]
-      }
-    ]
+            formula: `A1*2+${index + 1}`,
+          })),
+        ],
+      },
+    ],
   };
 }
 
 export function buildRenderCommitOps(cellCount = 1000): CommitOp[] {
   const ops: CommitOp[] = [
     { kind: "upsertWorkbook", name: "benchmark-renderer" },
-    { kind: "upsertSheet", name: "Sheet1", order: 0 }
+    { kind: "upsertSheet", name: "Sheet1", order: 0 },
   ];
 
   for (let index = 1; index <= cellCount; index += 1) {
@@ -75,12 +75,15 @@ export function buildRenderCommitOps(cellCount = 1000): CommitOp[] {
 export function seedRangeAggregateWorkbook(
   engine: SpreadsheetEngine,
   sourceCount = 1_024,
-  aggregateCount = 10_000
+  aggregateCount = 10_000,
 ): void {
   engine.importSnapshot(buildRangeAggregateSnapshot(sourceCount, aggregateCount));
 }
 
-export function buildRangeAggregateSnapshot(sourceCount = 1_024, aggregateCount = 10_000): WorkbookSnapshot {
+export function buildRangeAggregateSnapshot(
+  sourceCount = 1_024,
+  aggregateCount = 10_000,
+): WorkbookSnapshot {
   return {
     version: 1,
     workbook: { name: "benchmark-range-aggregates" },
@@ -91,15 +94,15 @@ export function buildRangeAggregateSnapshot(sourceCount = 1_024, aggregateCount 
         cells: [
           ...Array.from({ length: sourceCount }, (_, index) => ({
             address: `A${index + 1}`,
-            value: index + 1
+            value: index + 1,
           })),
           ...Array.from({ length: aggregateCount }, (_, index) => ({
             address: `B${index + 1}`,
-            formula: `SUM(A1:A${sourceCount})+${index + 1}`
-          }))
-        ]
-      }
-    ]
+            formula: `SUM(A1:A${sourceCount})+${index + 1}`,
+          })),
+        ],
+      },
+    ],
   };
 }
 
@@ -111,13 +114,13 @@ export function buildTopologyEditSnapshot(chainLength = 10_000): WorkbookSnapsho
   const cells: WorkbookSnapshot["sheets"][number]["cells"] = [
     { address: "A1", value: 1 },
     { address: "A2", value: 2 },
-    { address: "B1", formula: "A1*2" }
+    { address: "B1", formula: "A1*2" },
   ];
 
   for (let index = 2; index <= chainLength; index += 1) {
     cells.push({
       address: `B${index}`,
-      formula: `B${index - 1}+1`
+      formula: `B${index - 1}+1`,
     });
   }
 
@@ -128,8 +131,8 @@ export function buildTopologyEditSnapshot(chainLength = 10_000): WorkbookSnapsho
       {
         name: "Sheet1",
         order: 0,
-        cells
-      }
-    ]
+        cells,
+      },
+    ],
   };
 }

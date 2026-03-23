@@ -3,7 +3,7 @@ import {
   collectDeleteOps,
   collectMountOps,
   collectSheetOrderOps,
-  normalizeCommitOps
+  normalizeCommitOps,
 } from "../commit-log.js";
 import type { CellDescriptor, SheetDescriptor, WorkbookDescriptor } from "../descriptors.js";
 
@@ -12,7 +12,7 @@ function cell(props: CellDescriptor["props"]): CellDescriptor {
     kind: "Cell",
     props,
     parent: null,
-    container: null
+    container: null,
   };
 }
 
@@ -22,7 +22,7 @@ function sheet(name: string, children: CellDescriptor[]): SheetDescriptor {
     props: { name },
     children,
     parent: null,
-    container: null
+    container: null,
   };
   children.forEach((child) => {
     child.parent = descriptor;
@@ -36,7 +36,7 @@ function workbook(name: string, children: SheetDescriptor[]): WorkbookDescriptor
     props: { name },
     children,
     parent: null,
-    container: null
+    container: null,
   };
   children.forEach((child) => {
     child.parent = descriptor;
@@ -49,9 +49,9 @@ describe("renderer commit log", () => {
     const root = workbook("book", [
       sheet("Sheet1", [
         cell({ addr: "A1", value: 10, format: "currency-usd" }),
-        cell({ addr: "B1", formula: "A1*2" })
+        cell({ addr: "B1", formula: "A1*2" }),
       ]),
-      sheet("Sheet2", [cell({ addr: "C3", value: true })])
+      sheet("Sheet2", [cell({ addr: "C3", value: true })]),
     ]);
 
     expect(collectMountOps(root)).toEqual([
@@ -60,21 +60,21 @@ describe("renderer commit log", () => {
       { kind: "upsertCell", sheetName: "Sheet1", addr: "A1", value: 10, format: "currency-usd" },
       { kind: "upsertCell", sheetName: "Sheet1", addr: "B1", formula: "A1*2" },
       { kind: "upsertSheet", name: "Sheet2", order: 1 },
-      { kind: "upsertCell", sheetName: "Sheet2", addr: "C3", value: true }
+      { kind: "upsertCell", sheetName: "Sheet2", addr: "C3", value: true },
     ]);
 
     expect(collectDeleteOps(root)).toEqual([
       { kind: "deleteSheet", name: "Sheet2" },
-      { kind: "deleteSheet", name: "Sheet1" }
+      { kind: "deleteSheet", name: "Sheet1" },
     ]);
     const firstSheet = root.children[0];
     expect(collectDeleteOps(firstSheet)).toEqual([{ kind: "deleteSheet", name: "Sheet1" }]);
     expect(collectDeleteOps(firstSheet.children[0])).toEqual([
-      { kind: "deleteCell", sheetName: "Sheet1", addr: "A1" }
+      { kind: "deleteCell", sheetName: "Sheet1", addr: "A1" },
     ]);
     expect(collectSheetOrderOps(root)).toEqual([
       { kind: "upsertSheet", name: "Sheet1", order: 0 },
-      { kind: "upsertSheet", name: "Sheet2", order: 1 }
+      { kind: "upsertSheet", name: "Sheet2", order: 1 },
     ]);
   });
 
@@ -86,13 +86,13 @@ describe("renderer commit log", () => {
         { kind: "upsertSheet", name: "Sheet1", order: 0 },
         { kind: "deleteCell", sheetName: "Sheet1", addr: "A1" },
         { kind: "upsertCell", sheetName: "Sheet1", addr: "A1", value: 42 },
-        { kind: "deleteSheet", name: "Sheet2" }
-      ])
+        { kind: "deleteSheet", name: "Sheet2" },
+      ]),
     ).toEqual([
       { kind: "upsertWorkbook", name: "new-book" },
       { kind: "upsertSheet", name: "Sheet1", order: 0 },
       { kind: "upsertCell", sheetName: "Sheet1", addr: "A1", value: 42 },
-      { kind: "deleteSheet", name: "Sheet2" }
+      { kind: "deleteSheet", name: "Sheet2" },
     ]);
   });
 });

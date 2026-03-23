@@ -48,7 +48,7 @@ export function CellEditorOverlay({
   onChange,
   onCommit,
   onCancel,
-  style
+  style,
 }: CellEditorOverlayProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const completionRef = useRef<"idle" | "commit" | "cancel">("idle");

@@ -4,7 +4,7 @@ import {
   type CellValue,
   type PivotAggregation,
   type WorkbookPivotSnapshot,
-  type WorkbookPivotValueSnapshot
+  type WorkbookPivotValueSnapshot,
 } from "@bilig/protocol";
 
 export type PivotDefinitionInput = Pick<WorkbookPivotSnapshot, "groupBy" | "values">;
@@ -36,7 +36,7 @@ interface GroupBucket {
 
 export function materializePivotTable(
   definition: PivotDefinitionInput,
-  sourceRows: readonly (readonly CellValue[])[]
+  sourceRows: readonly (readonly CellValue[])[],
 ): PivotMaterializationResult {
   if (definition.values.length === 0) {
     return pivotConfigError();
@@ -64,18 +64,24 @@ export function materializePivotTable(
   if (groupFields.some((field) => field === undefined)) {
     return pivotConfigError();
   }
-  const materializedGroupFields = groupFields.filter((field): field is { columnIndex: number; headerLabel: string } => field !== undefined);
+  const materializedGroupFields = groupFields.filter(
+    (field): field is { columnIndex: number; headerLabel: string } => field !== undefined,
+  );
 
   const valueFields = definition.values.map((field) => resolveValueField(field, headerLookup));
   if (valueFields.some((field) => field === undefined)) {
     return pivotConfigError();
   }
-  const materializedValueFields = valueFields.filter((field): field is MaterializedPivotField => field !== undefined);
+  const materializedValueFields = valueFields.filter(
+    (field): field is MaterializedPivotField => field !== undefined,
+  );
 
   const buckets = new Map<string, GroupBucket>();
   for (let rowIndex = 1; rowIndex < sourceRows.length; rowIndex += 1) {
     const row = sourceRows[rowIndex] ?? [];
-    const keyValues = materializedGroupFields.map((field) => cloneOutputCell(row[field.columnIndex] ?? emptyValue()));
+    const keyValues = materializedGroupFields.map((field) =>
+      cloneOutputCell(row[field.columnIndex] ?? emptyValue()),
+    );
     const hasObservedValue = hasMeaningfulRowValue(keyValues, materializedValueFields, row);
     if (!hasObservedValue) {
       continue;
@@ -85,14 +91,15 @@ export function materializePivotTable(
     if (!bucket) {
       bucket = {
         keyValues,
-        aggregates: Array.from({ length: materializedValueFields.length }, () => 0)
+        aggregates: Array.from({ length: materializedValueFields.length }, () => 0),
       };
       buckets.set(key, bucket);
     }
     for (let valueIndex = 0; valueIndex < materializedValueFields.length; valueIndex += 1) {
       const field = materializedValueFields[valueIndex]!;
       const cell = row[field.columnIndex] ?? emptyValue();
-      bucket.aggregates[valueIndex] = (bucket.aggregates[valueIndex] ?? 0) + accumulateValue(field.summarizeBy, cell);
+      bucket.aggregates[valueIndex] =
+        (bucket.aggregates[valueIndex] ?? 0) + accumulateValue(field.summarizeBy, cell);
     }
   }
 
@@ -117,13 +124,13 @@ export function materializePivotTable(
     kind: "ok",
     rows: buckets.size + 1,
     cols,
-    values
+    values,
   };
 }
 
 function resolveValueField(
   field: WorkbookPivotValueSnapshot,
-  headerLookup: Map<string, { index: number; label: string }>
+  headerLookup: Map<string, { index: number; label: string }>,
 ): MaterializedPivotField | undefined {
   const resolved = headerLookup.get(normalizeHeader(field.sourceColumn));
   if (!resolved) {
@@ -132,7 +139,7 @@ function resolveValueField(
   return {
     ...field,
     columnIndex: resolved.index,
-    headerLabel: resolved.label
+    headerLabel: resolved.label,
   };
 }
 
@@ -154,7 +161,7 @@ function outputLabel(field: MaterializedPivotField): string {
 function hasMeaningfulRowValue(
   keyValues: readonly CellValue[],
   valueFields: readonly MaterializedPivotField[],
-  row: readonly CellValue[]
+  row: readonly CellValue[],
 ): boolean {
   if (keyValues.some((value) => !isEmptyValue(value))) {
     return true;
@@ -221,7 +228,7 @@ function pivotConfigError(): PivotMaterializationResult {
     code: ErrorCode.Value,
     rows: 1,
     cols: 1,
-    values: [{ tag: ValueTag.Error, code: ErrorCode.Value }]
+    values: [{ tag: ValueTag.Error, code: ErrorCode.Value }],
   };
 }
 

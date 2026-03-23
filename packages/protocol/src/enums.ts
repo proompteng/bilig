@@ -6,7 +6,7 @@ export enum ValueTag {
   Number = 1,
   Boolean = 2,
   String = 3,
-  Error = 4
+  Error = 4,
 }
 
 export enum ErrorCode {
@@ -18,12 +18,12 @@ export enum ErrorCode {
   NA = 5,
   Cycle = 6,
   Spill = 7,
-  Blocked = 8
+  Blocked = 8,
 }
 
 export enum FormulaMode {
   JsOnly = 0,
-  WasmFastPath = 1
+  WasmFastPath = 1,
 }
 
 export enum Opcode {
@@ -49,7 +49,7 @@ export enum Opcode {
   CallBuiltin = 20,
   PushString = 21,
   PushError = 22,
-  Ret = 255
+  Ret = 255,
 }
 
 export enum BuiltinId {
@@ -142,5 +142,5 @@ export enum BuiltinId {
   Today = 87,
   Now = 88,
   Rand = 89,
-  Sequence = 90
+  Sequence = 90,
 }

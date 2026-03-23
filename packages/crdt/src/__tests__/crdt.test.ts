@@ -6,7 +6,7 @@ import {
   createReplicaState,
   exportReplicaSnapshot,
   importReplicaSnapshot,
-  mergeBatches
+  mergeBatches,
 } from "../index.js";
 
 describe("crdt", () => {
@@ -15,7 +15,7 @@ describe("crdt", () => {
     const b = createReplicaState("b");
     const merged = mergeBatches([
       createBatch(b, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]),
-      createBatch(a, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }])
+      createBatch(a, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]),
     ]);
     expect(merged.map((batch) => batch.replicaId)).toEqual(["a", "b"]);
   });
@@ -29,37 +29,42 @@ describe("crdt", () => {
   it("compacts stale entity writes down to the latest op", () => {
     const state = createReplicaState("replica");
     const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
-    const firstWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }]);
-    const secondWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 2 }]);
-
-    expect(compactLog([createSheet, firstWrite, secondWrite])).toEqual([
-      createSheet,
-      secondWrite
+    const firstWrite = createBatch(state, [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 },
     ]);
+    const secondWrite = createBatch(state, [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 2 },
+    ]);
+
+    expect(compactLog([createSheet, firstWrite, secondWrite])).toEqual([createSheet, secondWrite]);
   });
 
   it("drops stale cell writes that sit behind a later sheet tombstone", () => {
     const state = createReplicaState("replica");
     const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
-    const firstWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }]);
+    const firstWrite = createBatch(state, [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 },
+    ]);
     const deleteSheet = createBatch(state, [{ kind: "deleteSheet", name: "Sheet1" }]);
 
-    expect(compactLog([createSheet, firstWrite, deleteSheet])).toEqual([
-      deleteSheet
-    ]);
+    expect(compactLog([createSheet, firstWrite, deleteSheet])).toEqual([deleteSheet]);
   });
 
   it("retains recreated sheets and newer cell writes after tombstones", () => {
     const state = createReplicaState("replica");
     const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
-    const firstWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }]);
+    const firstWrite = createBatch(state, [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 },
+    ]);
     const deleteSheet = createBatch(state, [{ kind: "deleteSheet", name: "Sheet1" }]);
     const recreateSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
-    const secondWrite = createBatch(state, [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 }]);
+    const secondWrite = createBatch(state, [
+      { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 },
+    ]);
 
     expect(compactLog([createSheet, firstWrite, deleteSheet, recreateSheet, secondWrite])).toEqual([
       recreateSheet,
-      secondWrite
+      secondWrite,
     ]);
   });
 
@@ -79,13 +84,13 @@ describe("crdt", () => {
       counter: 4,
       replicaId: "a",
       batchId: "a:4",
-      opIndex: 0
+      opIndex: 0,
     };
     const right = {
       counter: 4,
       replicaId: "b",
       batchId: "b:4",
-      opIndex: 0
+      opIndex: 0,
     };
 
     expect(compareOpOrder(left, right)).toBeLessThan(0);
@@ -94,24 +99,32 @@ describe("crdt", () => {
 
   it("compacts workbook metadata entities by logical key", () => {
     const state = createReplicaState("replica");
-    const define = createBatch(state, [{ kind: "upsertDefinedName", name: "TaxRate", value: 0.08 }]);
-    const redefine = createBatch(state, [{ kind: "upsertDefinedName", name: "taxrate", value: 0.09 }]);
-    const pivotCreate = createBatch(state, [{
-      kind: "upsertPivotTable",
-      name: "SalesByRegion",
-      sheetName: "Pivot",
-      address: "B2",
-      source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
-      groupBy: ["Region"],
-      values: [{ sourceColumn: "Amount", summarizeBy: "sum" }],
-      rows: 3,
-      cols: 2
-    }]);
-    const pivotDelete = createBatch(state, [{ kind: "deletePivotTable", sheetName: "Pivot", address: "B2" }]);
+    const define = createBatch(state, [
+      { kind: "upsertDefinedName", name: "TaxRate", value: 0.08 },
+    ]);
+    const redefine = createBatch(state, [
+      { kind: "upsertDefinedName", name: "taxrate", value: 0.09 },
+    ]);
+    const pivotCreate = createBatch(state, [
+      {
+        kind: "upsertPivotTable",
+        name: "SalesByRegion",
+        sheetName: "Pivot",
+        address: "B2",
+        source: { sheetName: "Data", startAddress: "A1", endAddress: "C4" },
+        groupBy: ["Region"],
+        values: [{ sourceColumn: "Amount", summarizeBy: "sum" }],
+        rows: 3,
+        cols: 2,
+      },
+    ]);
+    const pivotDelete = createBatch(state, [
+      { kind: "deletePivotTable", sheetName: "Pivot", address: "B2" },
+    ]);
 
     expect(compactLog([define, redefine, pivotCreate, pivotDelete])).toEqual([
       redefine,
-      pivotDelete
+      pivotDelete,
     ]);
   });
 });

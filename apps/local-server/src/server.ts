@@ -18,36 +18,46 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   const app = Fastify({ logger: options.logger ?? true });
   app.register(websocket);
 
-  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_request, body, done) => {
-    done(null, body);
-  });
+  app.addContentTypeParser(
+    "application/octet-stream",
+    { parseAs: "buffer" },
+    (_request, body, done) => {
+      done(null, body);
+    },
+  );
 
   app.get("/healthz", async () => ({
     ok: true,
-    service: "bilig-local-server"
+    service: "bilig-local-server",
   }));
 
-  app.get("/v1/documents/:documentId/state", async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-    return sessionManager.getDocumentState(request.params.documentId);
-  });
+  app.get(
+    "/v1/documents/:documentId/state",
+    async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
+      return sessionManager.getDocumentState(request.params.documentId);
+    },
+  );
 
-  app.post("/v1/agent/frames", async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
-    const frame = decodeAgentFrame(request.body);
-    const response = isStreamingAgentRequest(frame)
-      ? {
-          kind: "response" as const,
-          response: {
-            kind: "error" as const,
-            id: frame.request.id,
-            code: "AGENT_STREAM_REQUIRES_STREAMING_TRANSPORT",
-            message: `${frame.request.kind} requires a streaming agent transport such as stdio`,
-            retryable: false
+  app.post(
+    "/v1/agent/frames",
+    async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
+      const frame = decodeAgentFrame(request.body);
+      const response = isStreamingAgentRequest(frame)
+        ? {
+            kind: "response" as const,
+            response: {
+              kind: "error" as const,
+              id: frame.request.id,
+              code: "AGENT_STREAM_REQUIRES_STREAMING_TRANSPORT",
+              message: `${frame.request.kind} requires a streaming agent transport such as stdio`,
+              retryable: false,
+            },
           }
-        }
-      : await sessionManager.handleAgentFrame(frame);
-    reply.header("content-type", "application/octet-stream");
-    return Buffer.from(encodeAgentFrame(response));
-  });
+        : await sessionManager.handleAgentFrame(frame);
+      reply.header("content-type", "application/octet-stream");
+      return Buffer.from(encodeAgentFrame(response));
+    },
+  );
 
   app.register(async (wsApp) => {
     wsApp.get("/v1/documents/:documentId/ws", { websocket: true }, (socket) => {
@@ -75,8 +85,8 @@ export function createLocalServer(options: LocalServerOptions = {}) {
               documentId: documentId ?? "unknown",
               code: "LOCAL_SERVER_MESSAGE_FAILURE",
               message: error instanceof Error ? error.message : String(error),
-              retryable: false
-            })
+              retryable: false,
+            }),
           );
         }
       });
@@ -109,12 +119,14 @@ type NormalizedWebSocket = {
 };
 
 function isNormalizedWebSocket(value: unknown): value is NormalizedWebSocket {
-  return typeof value === "object"
-    && value !== null
-    && "on" in value
-    && typeof value.on === "function"
-    && "send" in value
-    && typeof value.send === "function";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "on" in value &&
+    typeof value.on === "function" &&
+    "send" in value &&
+    typeof value.send === "function"
+  );
 }
 
 function hasSocket(value: unknown): value is { socket: unknown } {
@@ -131,19 +143,26 @@ type EventTargetWebSocket = {
 };
 
 function isEventTargetWebSocket(value: unknown): value is EventTargetWebSocket {
-  return typeof value === "object"
-    && value !== null
-    && "addEventListener" in value
-    && typeof value.addEventListener === "function"
-    && "send" in value
-    && typeof value.send === "function";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "addEventListener" in value &&
+    typeof value.addEventListener === "function" &&
+    "send" in value &&
+    typeof value.send === "function"
+  );
 }
 
 function asNormalizedEventTargetSocket(socket: EventTargetWebSocket): NormalizedWebSocket {
   return {
     on(event, listener) {
       socket.addEventListener(event, (payload) => {
-        if (event === "message" && typeof payload === "object" && payload !== null && "data" in payload) {
+        if (
+          event === "message" &&
+          typeof payload === "object" &&
+          payload !== null &&
+          "data" in payload
+        ) {
           listener(payload.data);
           return;
         }
@@ -152,7 +171,7 @@ function asNormalizedEventTargetSocket(socket: EventTargetWebSocket): Normalized
     },
     send(data) {
       socket.send(data);
-    }
+    },
   };
 }
 
@@ -175,10 +194,11 @@ function normalizeWebSocket(candidate: unknown): NormalizedWebSocket {
   throw new Error("Unsupported websocket connection shape");
 }
 
-function isStreamingAgentRequest(frame: ReturnType<typeof decodeAgentFrame>): frame is Extract<
-  ReturnType<typeof decodeAgentFrame>,
-  { kind: "request" }
-> {
-  return frame.kind === "request"
-    && (frame.request.kind === "subscribeRange" || frame.request.kind === "unsubscribe");
+function isStreamingAgentRequest(
+  frame: ReturnType<typeof decodeAgentFrame>,
+): frame is Extract<ReturnType<typeof decodeAgentFrame>, { kind: "request" }> {
+  return (
+    frame.kind === "request" &&
+    (frame.request.kind === "subscribeRange" || frame.request.kind === "unsubscribe")
+  );
 }

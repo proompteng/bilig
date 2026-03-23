@@ -6,7 +6,7 @@ import {
   SheetGridView,
   type EditMovement,
   type EditSelectionBehavior,
-  type SheetGridViewportSubscription
+  type SheetGridViewportSubscription,
 } from "./SheetGridView.js";
 
 interface WorkbookViewProps {
@@ -30,8 +30,20 @@ interface WorkbookViewProps {
   onCommitEdit(this: void, movement?: EditMovement): void;
   onCancelEdit(this: void): void;
   onClearCell(this: void): void;
-  onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
-  onCopyRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
+  onFillRange(
+    this: void,
+    sourceStartAddr: string,
+    sourceEndAddr: string,
+    targetStartAddr: string,
+    targetEndAddr: string,
+  ): void;
+  onCopyRange(
+    this: void,
+    sourceStartAddr: string,
+    sourceEndAddr: string,
+    targetStartAddr: string,
+    targetEndAddr: string,
+  ): void;
   onPaste(this: void, addr: string, values: readonly (readonly string[])[]): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
   ribbon?: React.ReactNode;
@@ -40,7 +52,9 @@ interface WorkbookViewProps {
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
-  onAutofitColumn?: ((columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined;
+  onAutofitColumn?:
+    | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
+    | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
 }
 
@@ -76,11 +90,13 @@ export function WorkbookView({
   columnWidths,
   onColumnWidthChange,
   onAutofitColumn,
-  onVisibleViewportChange
+  onVisibleViewportChange,
 }: WorkbookViewProps) {
   const showWorkbookHeader = variant !== "product";
   return (
-    <section className={variant === "product" ? "workbook-shell workbook-shell-product" : "workbook-shell"}>
+    <section
+      className={variant === "product" ? "workbook-shell workbook-shell-product" : "workbook-shell"}
+    >
       {ribbon ? <div className="workbook-ribbon">{ribbon}</div> : null}
       <div className="workbook-content">
         <div className="workbook-main">

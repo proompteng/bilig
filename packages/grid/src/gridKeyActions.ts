@@ -14,7 +14,12 @@ export interface GridKeyActionEvent {
 export type GridKeyAction =
   | { kind: "none" }
   | { kind: "edit-append"; value: string }
-  | { kind: "begin-edit"; seed?: string; selectionBehavior: GridEditSelectionBehavior; pendingTypeSeed: string | null }
+  | {
+      kind: "begin-edit";
+      seed?: string;
+      selectionBehavior: GridEditSelectionBehavior;
+      pendingTypeSeed: string | null;
+    }
   | { kind: "move-selection"; cell: Item }
   | { kind: "extend-selection"; anchor: Item; target: Item }
   | { kind: "clear-cell"; pendingTypeSeed: null }
@@ -42,16 +47,16 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     pendingTypeSeed,
     selectedCell,
     currentSelectionCell,
-    currentRangeAnchor
+    currentRangeAnchor,
   } = options;
 
   if (isEditingCell) {
     if (
-      event.key.length === 1
-      && !event.ctrlKey
-      && !event.metaKey
-      && !event.altKey
-      && !editorInputFocused
+      event.key.length === 1 &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !editorInputFocused
     ) {
       return { kind: "edit-append", value: `${editorValue}${event.key}` };
     }
@@ -65,18 +70,23 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   if (event.key === "Enter") {
     return {
       kind: "move-selection",
-      cell: clampCell([selectedCell[0], selectedCell[1] + (event.shiftKey ? -1 : 1)])
+      cell: clampCell([selectedCell[0], selectedCell[1] + (event.shiftKey ? -1 : 1)]),
     };
   }
 
   if (event.key === "Tab") {
     return {
       kind: "move-selection",
-      cell: clampCell([selectedCell[0] + (event.shiftKey ? -1 : 1), selectedCell[1]])
+      cell: clampCell([selectedCell[0] + (event.shiftKey ? -1 : 1), selectedCell[1]]),
     };
   }
 
-  if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
+  if (
+    event.key === "ArrowUp" ||
+    event.key === "ArrowDown" ||
+    event.key === "ArrowLeft" ||
+    event.key === "ArrowRight"
+  ) {
     const delta: Item =
       event.key === "ArrowUp"
         ? [0, -1]
@@ -91,7 +101,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
       return {
         kind: "extend-selection",
         anchor: currentRangeAnchor ?? selectedCell,
-        target: nextCell
+        target: nextCell,
       };
     }
 
@@ -121,7 +131,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
       kind: "begin-edit",
       seed,
       selectionBehavior: "caret-end",
-      pendingTypeSeed: seed
+      pendingTypeSeed: seed,
     };
   }
 

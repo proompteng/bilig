@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeAgentFrame, decodeStdioMessages, encodeAgentFrame, encodeStdioMessage } from "../index.js";
+import {
+  decodeAgentFrame,
+  decodeStdioMessages,
+  encodeAgentFrame,
+  encodeStdioMessage,
+} from "../index.js";
 
 describe("agent api", () => {
   it("roundtrips request and response envelopes", () => {
@@ -10,8 +15,8 @@ describe("agent api", () => {
         kind: "openWorkbookSession" as const,
         id: "req-1",
         documentId: "book-1",
-        replicaId: "agent-local"
-      }
+        replicaId: "agent-local",
+      },
     };
 
     expect(decodeAgentFrame(encodeAgentFrame(frame))).toEqual(frame);
@@ -24,17 +29,17 @@ describe("agent api", () => {
         request: {
           kind: "getMetrics",
           id: "req-1",
-          sessionId: "sess-1"
-        }
+          sessionId: "sess-1",
+        },
       }),
       ...encodeStdioMessage({
         kind: "response",
         response: {
           kind: "ok",
           id: "req-1",
-          value: { ok: true }
-        }
-      })
+          value: { ok: true },
+        },
+      }),
     ]);
 
     const decoded = decodeStdioMessages(encoded);

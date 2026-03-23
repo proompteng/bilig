@@ -66,17 +66,25 @@ export class EngineEventBus {
     };
   }
 
-  subscribeCells(cellIndices: readonly number[], qualifiedAddresses: readonly string[], listener: () => void): () => void {
+  subscribeCells(
+    cellIndices: readonly number[],
+    qualifiedAddresses: readonly string[],
+    listener: () => void,
+  ): () => void {
     const unsubscribers = [
       ...cellIndices.map((cellIndex) => this.subscribeCellIndex(cellIndex, listener)),
-      ...qualifiedAddresses.map((address) => this.subscribeCellAddress(address, listener))
+      ...qualifiedAddresses.map((address) => this.subscribeCellAddress(address, listener)),
     ];
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }
 
-  emit(event: EngineEvent, changedCellIndices: readonly number[] | Uint32Array, resolveAddress?: (cellIndex: number) => string): void {
+  emit(
+    event: EngineEvent,
+    changedCellIndices: readonly number[] | Uint32Array,
+    resolveAddress?: (cellIndex: number) => string,
+  ): void {
     for (const listener of this.listeners) {
       listener(event);
     }

@@ -55,7 +55,7 @@ export class EdgeArena {
     return {
       ptr: target.ptr,
       len: values.length,
-      cap: target.cap
+      cap: target.cap,
     };
   }
 
@@ -122,7 +122,7 @@ export class EdgeArena {
     this.freeList.push({
       ptr: slice.ptr,
       len: 0,
-      cap: slice.cap
+      cap: slice.cap,
     });
   }
 

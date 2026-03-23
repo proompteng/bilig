@@ -34,19 +34,19 @@ function ensureResultCapacity(size: i32): void {
   if (pivotResultTags.length >= size) return;
   let nextLength = pivotResultTags.length;
   while (nextLength < size) nextLength *= 2;
-  
+
   const nextTags = new Uint8Array(nextLength);
   nextTags.set(pivotResultTags);
   pivotResultTags = nextTags;
-  
+
   const nextNumbers = new Float64Array(nextLength);
   nextNumbers.set(pivotResultNumbers);
   pivotResultNumbers = nextNumbers;
-  
+
   const nextStringIds = new Uint32Array(nextLength);
   nextStringIds.set(pivotResultStringIds);
   pivotResultStringIds = nextStringIds;
-  
+
   const nextErrors = new Uint16Array(nextLength);
   nextErrors.set(pivotResultErrors);
   pivotResultErrors = nextErrors;
@@ -59,7 +59,7 @@ export function materializePivotTable(
   groupByColumnIndices: Uint32Array,
   valueCount: i32,
   valueColumnIndices: Uint32Array,
-  valueAggregations: Uint8Array
+  valueAggregations: Uint8Array,
 ): void {
   const rangeStart = rangeOffsets[sourceRangeIndex];
   const rangeLength = <i32>rangeLengths[sourceRangeIndex];
@@ -104,7 +104,15 @@ export function materializePivotTable(
 
   for (let rowIndex = 1; rowIndex < rowCount; rowIndex++) {
     const rowBase = rangeStart + rowIndex * sourceWidth;
-    if (!hasMeaningfulRowValue(rowBase, groupByCount, groupByColumnIndices, valueCount, valueColumnIndices)) {
+    if (
+      !hasMeaningfulRowValue(
+        rowBase,
+        groupByCount,
+        groupByColumnIndices,
+        valueCount,
+        valueColumnIndices,
+      )
+    ) {
       continue;
     }
 
@@ -189,7 +197,7 @@ function hasMeaningfulRowValue(
   groupByCount: i32,
   groupByColumnIndices: Uint32Array,
   valueCount: i32,
-  valueColumnIndices: Uint32Array
+  valueColumnIndices: Uint32Array,
 ): bool {
   for (let i = 0; i < groupByCount; i++) {
     if (tags[rangeMembers[rowBase + groupByColumnIndices[i]]] != ValueTag.Empty) {

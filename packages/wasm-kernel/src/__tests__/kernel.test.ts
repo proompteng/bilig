@@ -57,7 +57,7 @@ const BUILTIN = {
   VLOOKUP: BuiltinId.Vlookup,
   HLOOKUP: BuiltinId.Hlookup,
   XMATCH: BuiltinId.Xmatch,
-  XLOOKUP: BuiltinId.Xlookup
+  XLOOKUP: BuiltinId.Xlookup,
 } as const;
 
 function asciiCodes(text: string): Uint16Array {
@@ -112,7 +112,7 @@ function packPrograms(programs: number[][]): {
   return {
     programs: Uint32Array.from(flat),
     offsets: Uint32Array.from(offsets),
-    lengths: Uint32Array.from(lengths)
+    lengths: Uint32Array.from(lengths),
   };
 }
 
@@ -124,17 +124,17 @@ describe("wasm kernel", () => {
   it("evaluates a simple program batch", async () => {
     const kernel = await createKernel();
     kernel.init(4, 4, 4, 4, 4);
-    kernel.writeCells(new Uint8Array([1, 0, 0, 0]), new Float64Array([10, 0, 0, 0]), new Uint32Array(4), new Uint16Array(4));
+    kernel.writeCells(
+      new Uint8Array([1, 0, 0, 0]),
+      new Float64Array([10, 0, 0, 0]),
+      new Uint32Array(4),
+      new Uint16Array(4),
+    );
     kernel.uploadPrograms(
-      new Uint32Array([
-        (3 << 24) | 0,
-        (1 << 24) | 0,
-        7 << 24,
-        255 << 24
-      ]),
+      new Uint32Array([(3 << 24) | 0, (1 << 24) | 0, 7 << 24, 255 << 24]),
       new Uint32Array([0]),
       new Uint32Array([4]),
-      new Uint32Array([1])
+      new Uint32Array([1]),
     );
     kernel.uploadConstants(new Float64Array([2]), new Uint32Array([0]), new Uint32Array([1]));
     kernel.evalBatch(new Uint32Array([1]));
@@ -151,7 +151,7 @@ describe("wasm kernel", () => {
       new Uint8Array([1, 1, 0, 0, 0, 0]),
       new Float64Array([2, 3, 0, 0, 0, 0]),
       new Uint32Array(6),
-      new Uint16Array(6)
+      new Uint16Array(6),
     );
     kernel.uploadPrograms(
       new Uint32Array([
@@ -160,11 +160,11 @@ describe("wasm kernel", () => {
         (20 << 24) | (1 << 8) | 2,
         (1 << 24) | 0,
         5 << 24,
-        255 << 24
+        255 << 24,
       ]),
       new Uint32Array([0]),
       new Uint32Array([6]),
-      new Uint32Array([2])
+      new Uint32Array([2]),
     );
     kernel.uploadConstants(new Float64Array([4]), new Uint32Array([0]), new Uint32Array([1]));
 
@@ -179,7 +179,7 @@ describe("wasm kernel", () => {
       new Uint8Array([2, 0, 0, 0]),
       new Float64Array([1, 0, 0, 0]),
       new Uint32Array(4),
-      new Uint16Array(4)
+      new Uint16Array(4),
     );
     kernel.uploadPrograms(
       new Uint32Array([
@@ -188,11 +188,11 @@ describe("wasm kernel", () => {
         (1 << 24) | 0,
         (18 << 24) | 5,
         (1 << 24) | 1,
-        255 << 24
+        255 << 24,
       ]),
       new Uint32Array([0]),
       new Uint32Array([6]),
-      new Uint32Array([1])
+      new Uint32Array([1]),
     );
     kernel.uploadConstants(new Float64Array([10, 20]), new Uint32Array([0]), new Uint32Array([2]));
 
@@ -206,7 +206,7 @@ describe("wasm kernel", () => {
       new Uint8Array([2, tags[1], 0, 0]),
       new Float64Array([0, numbers[1], 0, 0]),
       new Uint32Array(4),
-      new Uint16Array([0, errors[1], 0, 0])
+      new Uint16Array([0, errors[1], 0, 0]),
     );
     kernel.evalBatch(new Uint32Array([1]));
     expect(kernel.readNumbers()[1]).toBe(20);
@@ -219,17 +219,13 @@ describe("wasm kernel", () => {
       new Uint8Array([1, 1, 0, 0, 0, 0]),
       new Float64Array([2, 3, 0, 0, 0, 0]),
       new Uint32Array(6),
-      new Uint16Array(6)
+      new Uint16Array(6),
     );
     kernel.uploadPrograms(
-      new Uint32Array([
-        (4 << 24) | 0,
-        (20 << 24) | (1 << 8) | 1,
-        255 << 24
-      ]),
+      new Uint32Array([(4 << 24) | 0, (20 << 24) | (1 << 8) | 1, 255 << 24]),
       new Uint32Array([0]),
       new Uint32Array([3]),
-      new Uint32Array([2])
+      new Uint32Array([2]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0]), new Uint32Array([0]));
     kernel.uploadRangeMembers(new Uint32Array([0, 1]), new Uint32Array([0]), new Uint32Array([2]));
@@ -250,7 +246,7 @@ describe("wasm kernel", () => {
       new Uint8Array([0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Float64Array([0, 42, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Uint32Array([0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array(16)
+      new Uint16Array(16),
     );
     kernel.uploadRangeMembers(new Uint32Array([0, 1]), new Uint32Array([0]), new Uint32Array([2]));
 
@@ -261,7 +257,7 @@ describe("wasm kernel", () => {
       [encodePushCell(0), encodeCall(BUILTIN.ISBLANK, 1), encodeRet()],
       [encodePushCell(1), encodeCall(BUILTIN.ISNUMBER, 1), encodeRet()],
       [encodePushCell(3), encodeCall(BUILTIN.ISTEXT, 1), encodeRet()],
-      [encodePushRange(0), encodeCall(BUILTIN.ISNUMBER, 1), encodeRet()]
+      [encodePushRange(0), encodeCall(BUILTIN.ISNUMBER, 1), encodeRet()],
     ]);
 
     kernel.uploadPrograms(
@@ -275,8 +271,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
         cellIndex(1, 6, width),
-        cellIndex(1, 7, width)
-      ])
+        cellIndex(1, 7, width),
+      ]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0]), new Uint32Array([0]));
     kernel.evalBatch(
@@ -287,8 +283,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
         cellIndex(1, 6, width),
-        cellIndex(1, 7, width)
-      ])
+        cellIndex(1, 7, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Boolean);
@@ -316,7 +312,7 @@ describe("wasm kernel", () => {
       new Uint8Array([0, 2, 1, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Float64Array([0, 1, 123.45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Uint32Array([0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array([0, 0, 0, 0, ErrorCode.Ref, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      new Uint16Array([0, 0, 0, 0, ErrorCode.Ref, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
     );
     kernel.uploadRangeMembers(new Uint32Array([0, 1]), new Uint32Array([0]), new Uint32Array([2]));
 
@@ -326,7 +322,7 @@ describe("wasm kernel", () => {
       [encodePushCell(2), encodeCall(BUILTIN.LEN, 1), encodeRet()],
       [encodePushCell(3), encodeCall(BUILTIN.LEN, 1), encodeRet()],
       [encodePushCell(4), encodeCall(BUILTIN.LEN, 1), encodeRet()],
-      [encodePushRange(0), encodeCall(BUILTIN.LEN, 1), encodeRet()]
+      [encodePushRange(0), encodeCall(BUILTIN.LEN, 1), encodeRet()],
     ]);
 
     kernel.uploadPrograms(
@@ -339,8 +335,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 3, width),
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
-        cellIndex(1, 6, width)
-      ])
+        cellIndex(1, 6, width),
+      ]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0]), new Uint32Array([0]));
     kernel.evalBatch(
@@ -350,8 +346,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 3, width),
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
-        cellIndex(1, 6, width)
-      ])
+        cellIndex(1, 6, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Number);
@@ -375,19 +371,21 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 5, 10]),
       Uint32Array.from([0, 5, 5, 5]),
-      asciiCodes("AlphaAlphaalpha")
+      asciiCodes("AlphaAlphaalpha"),
     );
     kernel.writeCells(
       new Uint8Array([3, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Float64Array([0, 0, -3.145, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([
+        0, 0, -3.145, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
       new Uint32Array([1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array(24)
+      new Uint16Array(24),
     );
     const packed = packPrograms([
       [encodePushCell(0), encodePushCell(1), encodeCall(BUILTIN.EXACT, 2), encodeRet()],
       [encodePushCell(2), encodeCall(BUILTIN.INT, 1), encodeRet()],
       [encodePushCell(2), encodePushNumber(0), encodeCall(BUILTIN.ROUNDUP, 2), encodeRet()],
-      [encodePushCell(2), encodePushNumber(0), encodeCall(BUILTIN.ROUNDDOWN, 2), encodeRet()]
+      [encodePushCell(2), encodePushNumber(0), encodeCall(BUILTIN.ROUNDDOWN, 2), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -397,17 +395,21 @@ describe("wasm kernel", () => {
         cellIndex(1, 1, width),
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
-        cellIndex(1, 4, width)
-      ])
+        cellIndex(1, 4, width),
+      ]),
     );
-    kernel.uploadConstants(new Float64Array([2]), new Uint32Array([0, 0, 0, 0]), new Uint32Array([0, 0, 1, 1]));
+    kernel.uploadConstants(
+      new Float64Array([2]),
+      new Uint32Array([0, 0, 0, 0]),
+      new Uint32Array([0, 0, 1, 1]),
+    );
     kernel.evalBatch(
       Uint32Array.from([
         cellIndex(1, 1, width),
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
-        cellIndex(1, 4, width)
-      ])
+        cellIndex(1, 4, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Boolean);
@@ -424,23 +426,23 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 2]),
       Uint32Array.from([0, 2, 3]),
-      asciiCodes("xyfoo")
+      asciiCodes("xyfoo"),
     );
     kernel.writeCells(
       new Uint8Array([ValueTag.String, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Float64Array(16),
       new Uint32Array([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array(16)
+      new Uint16Array(16),
     );
     const packed = packPrograms([
       [encodePushString(1), encodeRet()],
-      [encodePushString(1), encodePushCell(0), encodeCall(BUILTIN.CONCAT, 2), encodeRet()]
+      [encodePushString(1), encodePushCell(0), encodeCall(BUILTIN.CONCAT, 2), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
       packed.offsets,
       packed.lengths,
-      Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width)])
+      Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width)]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0, 0]), new Uint32Array([0, 0]));
     kernel.evalBatch(Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width)]));
@@ -458,27 +460,58 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 5, 10, 11]),
       Uint32Array.from([0, 5, 5, 1, 1]),
-      asciiCodes("helloHELLObA")
+      asciiCodes("helloHELLObA"),
     );
     kernel.writeCells(
-      new Uint8Array([ValueTag.String, ValueTag.String, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint8Array([
+        ValueTag.String,
+        ValueTag.String,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
       new Float64Array(24),
       new Uint32Array([1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array(24)
+      new Uint16Array(24),
     );
     const packed = packPrograms([
       [encodePushCell(0), encodePushCell(1), encodeBinary(Opcode.Eq), encodeRet()],
       [encodePushString(3), encodePushString(4), encodeBinary(Opcode.Gt), encodeRet()],
-      [encodePushCell(0), encodePushString(4), encodeBinary(Opcode.Concat), encodeRet()]
+      [encodePushCell(0), encodePushString(4), encodeBinary(Opcode.Concat), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
       packed.offsets,
       packed.lengths,
-      Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width), cellIndex(1, 3, width)])
+      Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width), cellIndex(1, 3, width)]),
     );
-    kernel.uploadConstants(new Float64Array(), new Uint32Array([0, 0, 0]), new Uint32Array([0, 0, 0]));
-    kernel.evalBatch(Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width), cellIndex(1, 3, width)]));
+    kernel.uploadConstants(
+      new Float64Array(),
+      new Uint32Array([0, 0, 0]),
+      new Uint32Array([0, 0, 0]),
+    );
+    kernel.evalBatch(
+      Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width), cellIndex(1, 3, width)]),
+    );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Boolean);
     expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(1);
@@ -495,23 +528,73 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 5, 21, 26, 30, 38, 40]),
       Uint32Array.from([0, 5, 16, 5, 4, 8, 2, 2]),
-      asciiCodes("Alpha  alpha   beta  alphaBETAalphabetphP*")
+      asciiCodes("Alpha  alpha   beta  alphaBETAalphabetphP*"),
     );
     kernel.writeCells(
-      new Uint8Array([ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.String, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint8Array([
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
       new Float64Array(40),
-      new Uint32Array([1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array(40)
+      new Uint32Array([
+        1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
+      new Uint16Array(40),
     );
     const packed = packPrograms([
       [encodePushCell(0), encodePushNumber(0), encodeCall(BUILTIN.LEFT, 2), encodeRet()],
       [encodePushCell(0), encodeCall(BUILTIN.RIGHT, 1), encodeRet()],
-      [encodePushCell(0), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.MID, 3), encodeRet()],
+      [
+        encodePushCell(0),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.MID, 3),
+        encodeRet(),
+      ],
       [encodePushCell(1), encodeCall(BUILTIN.TRIM, 1), encodeRet()],
       [encodePushCell(2), encodeCall(BUILTIN.UPPER, 1), encodeRet()],
       [encodePushCell(3), encodeCall(BUILTIN.LOWER, 1), encodeRet()],
       [encodePushString(6), encodePushCell(4), encodeCall(BUILTIN.FIND, 2), encodeRet()],
-      [encodePushString(7), encodePushCell(4), encodeCall(BUILTIN.SEARCH, 2), encodeRet()]
+      [encodePushString(7), encodePushCell(4), encodeCall(BUILTIN.SEARCH, 2), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -525,13 +608,13 @@ describe("wasm kernel", () => {
         cellIndex(1, 5, width),
         cellIndex(1, 6, width),
         cellIndex(1, 7, width),
-        cellIndex(1, 8, width)
-      ])
+        cellIndex(1, 8, width),
+      ]),
     );
     kernel.uploadConstants(
       new Float64Array([2, 2, 3]),
       new Uint32Array([0, 1, 1, 3, 3, 3, 3]),
-      new Uint32Array([1, 0, 2, 0, 0, 0, 0])
+      new Uint32Array([1, 0, 2, 0, 0, 0, 0]),
     );
     kernel.evalBatch(
       Uint32Array.from([
@@ -542,8 +625,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 5, width),
         cellIndex(1, 6, width),
         cellIndex(1, 7, width),
-        cellIndex(1, 8, width)
-      ])
+        cellIndex(1, 8, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.String);
@@ -566,19 +649,64 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 8, 9, 15, 17, 19]),
       Uint32Array.from([0, 8, 1, 6, 2, 2, 2]),
-      asciiCodes("alphabetZbananaanooxo")
+      asciiCodes("alphabetZbananaanooxo"),
     );
     kernel.writeCells(
-      new Uint8Array([ValueTag.String, ValueTag.String, ValueTag.String, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint8Array([
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
       new Float64Array(24),
       new Uint32Array([1, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array(24)
+      new Uint16Array(24),
     );
     const packed = packPrograms([
-      [encodePushCell(0), encodePushNumber(0), encodePushNumber(1), encodePushString(2), encodeCall(BUILTIN.REPLACE, 4), encodeRet()],
-      [encodePushCell(1), encodePushString(4), encodePushString(5), encodeCall(BUILTIN.SUBSTITUTE, 3), encodeRet()],
-      [encodePushCell(1), encodePushString(4), encodePushString(5), encodePushNumber(0), encodeCall(BUILTIN.SUBSTITUTE, 4), encodeRet()],
-      [encodePushCell(2), encodePushNumber(0), encodeCall(BUILTIN.REPT, 2), encodeRet()]
+      [
+        encodePushCell(0),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushString(2),
+        encodeCall(BUILTIN.REPLACE, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushCell(1),
+        encodePushString(4),
+        encodePushString(5),
+        encodeCall(BUILTIN.SUBSTITUTE, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushCell(1),
+        encodePushString(4),
+        encodePushString(5),
+        encodePushNumber(0),
+        encodeCall(BUILTIN.SUBSTITUTE, 4),
+        encodeRet(),
+      ],
+      [encodePushCell(2), encodePushNumber(0), encodeCall(BUILTIN.REPT, 2), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -588,21 +716,21 @@ describe("wasm kernel", () => {
         cellIndex(1, 1, width),
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
-        cellIndex(1, 4, width)
-      ])
+        cellIndex(1, 4, width),
+      ]),
     );
     kernel.uploadConstants(
       new Float64Array([3, 2, 2, 3]),
       new Uint32Array([0, 0, 2, 3]),
-      new Uint32Array([2, 0, 1, 1])
+      new Uint32Array([2, 0, 1, 1]),
     );
     kernel.evalBatch(
       Uint32Array.from([
         cellIndex(1, 1, width),
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
-        cellIndex(1, 4, width)
-      ])
+        cellIndex(1, 4, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.String);
@@ -619,27 +747,45 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 4, 16]),
       Uint32Array.from([0, 4, 12, 3]),
-      asciiCodes("42.5  -17.25e1  not")
+      asciiCodes("42.5  -17.25e1  not"),
     );
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.Boolean, ValueTag.Empty, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Boolean,
+        ValueTag.Empty,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
       ]),
-      new Float64Array([
-        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-      ]),
-      new Uint32Array([
-        1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-      ]),
-      new Uint16Array(24)
+      new Float64Array([0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array([1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint16Array(24),
     );
     const packed = packPrograms([
       [encodePushCell(0), encodeCall(BUILTIN.VALUE, 1), encodeRet()],
       [encodePushCell(1), encodeCall(BUILTIN.VALUE, 1), encodeRet()],
       [encodePushCell(2), encodeCall(BUILTIN.VALUE, 1), encodeRet()],
       [encodePushCell(3), encodeCall(BUILTIN.VALUE, 1), encodeRet()],
-      [encodePushCell(4), encodeCall(BUILTIN.VALUE, 1), encodeRet()]
+      [encodePushCell(4), encodeCall(BUILTIN.VALUE, 1), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -650,18 +796,22 @@ describe("wasm kernel", () => {
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
         cellIndex(1, 4, width),
-        cellIndex(1, 5, width)
-      ])
+        cellIndex(1, 5, width),
+      ]),
     );
-    kernel.uploadConstants(new Float64Array(), new Uint32Array([0, 0, 0, 0, 0]), new Uint32Array([0, 0, 0, 0, 0]));
+    kernel.uploadConstants(
+      new Float64Array(),
+      new Uint32Array([0, 0, 0, 0, 0]),
+      new Uint32Array([0, 0, 0, 0, 0]),
+    );
     kernel.evalBatch(
       Uint32Array.from([
         cellIndex(1, 1, width),
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
         cellIndex(1, 4, width),
-        cellIndex(1, 5, width)
-      ])
+        cellIndex(1, 5, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Number);
@@ -683,24 +833,94 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 8]),
       Uint32Array.from([0, 8, 7]),
-      asciiCodes("fallbackmissing")
+      asciiCodes("fallbackmissing"),
     );
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.Error, ValueTag.Error, ValueTag.Number, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ValueTag.Error,
+        ValueTag.Error,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
       ]),
       new Float64Array([
-        ErrorCode.Div0, ErrorCode.Ref, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ErrorCode.Div0,
+        ErrorCode.Ref,
+        7,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
       ]),
       new Uint32Array(24),
-      new Uint16Array([ErrorCode.Div0, ErrorCode.Ref, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      new Uint16Array([
+        ErrorCode.Div0,
+        ErrorCode.Ref,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
     );
     const packed = packPrograms([
       [encodePushCell(0), encodePushString(1), encodeCall(BUILTIN.IFERROR, 2), encodeRet()],
       [encodeCall(BUILTIN.NA, 0), encodePushString(2), encodeCall(BUILTIN.IFNA, 2), encodeRet()],
       [encodePushCell(1), encodePushString(2), encodeCall(BUILTIN.IFNA, 2), encodeRet()],
-      [encodePushCell(2), encodePushString(1), encodeCall(BUILTIN.IFERROR, 2), encodeRet()]
+      [encodePushCell(2), encodePushString(1), encodeCall(BUILTIN.IFERROR, 2), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -710,11 +930,22 @@ describe("wasm kernel", () => {
         cellIndex(1, 1, width),
         cellIndex(1, 2, width),
         cellIndex(1, 3, width),
-        cellIndex(1, 4, width)
-      ])
+        cellIndex(1, 4, width),
+      ]),
     );
-    kernel.uploadConstants(new Float64Array(), new Uint32Array([0, 0, 0, 0]), new Uint32Array([0, 0, 0, 0]));
-    kernel.evalBatch(Uint32Array.from([cellIndex(1, 1, width), cellIndex(1, 2, width), cellIndex(1, 3, width), cellIndex(1, 4, width)]));
+    kernel.uploadConstants(
+      new Float64Array(),
+      new Uint32Array([0, 0, 0, 0]),
+      new Uint32Array([0, 0, 0, 0]),
+    );
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+      ]),
+    );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.String);
     expect(kernel.readStringIds()[cellIndex(1, 1, width)]).toBe(1);
@@ -733,56 +964,97 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 2, 3]),
       Uint32Array.from([0, 2, 1, 1]),
-      asciiCodes(">0xy")
+      asciiCodes(">0xy"),
     );
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number,
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.String,
-        ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number,
-        ValueTag.Number, ValueTag.Number, ValueTag.Number,
-        ValueTag.Number, ValueTag.Number, ValueTag.Number,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
       ]),
       new Float64Array([
-        2, 4, -1, 6,
-        0, 0, 0, 0,
-        10, 20, 30, 40,
-        1, 2, 3,
-        4, 5, 6,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        2, 4, -1, 6, 0, 0, 0, 0, 10, 20, 30, 40, 1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0,
       ]),
       new Uint32Array([
-        0, 0, 0, 0,
-        2, 2, 3, 2,
-        0, 0, 0, 0,
-        0, 0, 0,
-        0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        0, 0, 0, 0, 2, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0,
       ]),
-      new Uint16Array(32)
+      new Uint16Array(32),
     );
     kernel.uploadRangeMembers(
-      new Uint32Array([
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10, 11,
-        12, 13, 14,
-        15, 16, 17
-      ]),
+      new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]),
       Uint32Array.from([0, 4, 8, 12, 15]),
-      Uint32Array.from([4, 4, 4, 3, 3])
+      Uint32Array.from([4, 4, 4, 3, 3]),
     );
     kernel.uploadRangeShapes(Uint32Array.from([4, 4, 4, 3, 3]), Uint32Array.from([1, 1, 1, 1, 1]));
 
     const packed = packPrograms([
       [encodePushRange(0), encodePushString(1), encodeCall(BUILTIN.COUNTIF, 2), encodeRet()],
-      [encodePushRange(0), encodePushString(1), encodePushRange(1), encodePushString(2), encodeCall(BUILTIN.COUNTIFS, 4), encodeRet()],
-      [encodePushRange(0), encodePushString(1), encodePushRange(2), encodeCall(BUILTIN.SUMIF, 3), encodeRet()],
-      [encodePushRange(2), encodePushRange(0), encodePushString(1), encodePushRange(1), encodePushString(2), encodeCall(BUILTIN.SUMIFS, 5), encodeRet()],
+      [
+        encodePushRange(0),
+        encodePushString(1),
+        encodePushRange(1),
+        encodePushString(2),
+        encodeCall(BUILTIN.COUNTIFS, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(0),
+        encodePushString(1),
+        encodePushRange(2),
+        encodeCall(BUILTIN.SUMIF, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(2),
+        encodePushRange(0),
+        encodePushString(1),
+        encodePushRange(1),
+        encodePushString(2),
+        encodeCall(BUILTIN.SUMIFS, 5),
+        encodeRet(),
+      ],
       [encodePushRange(0), encodePushString(1), encodeCall(BUILTIN.AVERAGEIF, 2), encodeRet()],
-      [encodePushRange(2), encodePushRange(0), encodePushString(1), encodePushRange(1), encodePushString(2), encodeCall(BUILTIN.AVERAGEIFS, 5), encodeRet()],
-      [encodePushRange(3), encodePushRange(4), encodeCall(BUILTIN.SUMPRODUCT, 2), encodeRet()]
+      [
+        encodePushRange(2),
+        encodePushRange(0),
+        encodePushString(1),
+        encodePushRange(1),
+        encodePushString(2),
+        encodeCall(BUILTIN.AVERAGEIFS, 5),
+        encodeRet(),
+      ],
+      [encodePushRange(3), encodePushRange(4), encodeCall(BUILTIN.SUMPRODUCT, 2), encodeRet()],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -795,19 +1067,21 @@ describe("wasm kernel", () => {
         cellIndex(3, 4, width),
         cellIndex(3, 5, width),
         cellIndex(3, 6, width),
-        cellIndex(3, 7, width)
-      ])
+        cellIndex(3, 7, width),
+      ]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0]), new Uint32Array([0]));
-    kernel.evalBatch(Uint32Array.from([
-      cellIndex(3, 1, width),
-      cellIndex(3, 2, width),
-      cellIndex(3, 3, width),
-      cellIndex(3, 4, width),
-      cellIndex(3, 5, width),
-      cellIndex(3, 6, width),
-      cellIndex(3, 7, width)
-    ]));
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+        cellIndex(3, 5, width),
+        cellIndex(3, 6, width),
+        cellIndex(3, 7, width),
+      ]),
+    );
 
     expect(kernel.readTags()[cellIndex(3, 1, width)]).toBe(ValueTag.Number);
     expect(kernel.readNumbers()[cellIndex(3, 1, width)]).toBe(3);
@@ -832,57 +1106,100 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 4, 9, 11, 13]),
       Uint32Array.from([4, 5, 2, 2, 2]),
-      asciiCodes("pearappleQ1Q2Q3")
+      asciiCodes("pearappleQ1Q2Q3"),
     );
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.String, ValueTag.Number, 0, 0,
-        ValueTag.String, ValueTag.Number, 0, 0,
-        ValueTag.String, ValueTag.String, ValueTag.String, 0,
-        ValueTag.Number, ValueTag.Number, ValueTag.Number, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ValueTag.String,
+        ValueTag.Number,
+        0,
+        0,
+        ValueTag.String,
+        ValueTag.Number,
+        0,
+        0,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        0,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
       ]),
       new Float64Array([
-        0, 10, 0, 0,
-        0, 20, 0, 0,
+        0, 10, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 100, 200, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0,
-        100, 200, 300, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
       ]),
       new Uint32Array([
-        0, 0, 0, 0,
-        1, 0, 0, 0,
-        2, 3, 4, 0,
-        0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        0, 0, 0, 0, 1, 0, 0, 0, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0,
       ]),
-      new Uint16Array(32)
+      new Uint16Array(32),
     );
     kernel.uploadRangeMembers(
       Uint32Array.from([0, 1, 4, 5, 0, 1, 4, 5, 8, 9, 10, 12, 13, 14]),
       Uint32Array.from([0, 4, 8]),
-      Uint32Array.from([4, 4, 6])
+      Uint32Array.from([4, 4, 6]),
     );
     kernel.uploadRangeShapes(Uint32Array.from([2, 2, 2]), Uint32Array.from([2, 2, 3]));
 
     const packed = packPrograms([
-      [encodePushRange(0), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.INDEX, 3), encodeRet()],
-      [encodePushString(1), encodePushRange(1), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.VLOOKUP, 4), encodeRet()],
-      [encodePushString(4), encodePushRange(2), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.HLOOKUP, 4), encodeRet()]
+      [
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.INDEX, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushString(1),
+        encodePushRange(1),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.VLOOKUP, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushString(4),
+        encodePushRange(2),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.HLOOKUP, 4),
+        encodeRet(),
+      ],
     ]);
     kernel.uploadPrograms(
       packed.programs,
       packed.offsets,
       packed.lengths,
-      Uint32Array.from([
-        cellIndex(2, 0, width),
-        cellIndex(2, 1, width),
-        cellIndex(2, 2, width)
-      ])
+      Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]),
     );
-    kernel.uploadConstants(new Float64Array([2, 2, 2, 0, 2, 0]), new Uint32Array([0, 2, 4]), new Uint32Array([2, 2, 2]));
+    kernel.uploadConstants(
+      new Float64Array([2, 2, 2, 0, 2, 0]),
+      new Uint32Array([0, 2, 4]),
+      new Uint32Array([2, 2, 2]),
+    );
 
-    kernel.evalBatch(Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]));
+    kernel.evalBatch(
+      Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]),
+    );
 
     expect(kernel.readNumbers()[cellIndex(2, 0, width)]).toBe(20);
     expect(kernel.readNumbers()[cellIndex(2, 1, width)]).toBe(20);
@@ -896,46 +1213,106 @@ describe("wasm kernel", () => {
     kernel.uploadStrings(
       Uint32Array.from([0, 0, 5, 9, 14, 18, 26]),
       Uint32Array.from([0, 5, 4, 5, 4, 8, 8]),
-      asciiCodes("applepearpearplumfallbacknotfound")
+      asciiCodes("applepearpearplumfallbacknotfound"),
     );
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.String,
-        ValueTag.Number, ValueTag.Number, ValueTag.Number, ValueTag.Number,
-        ValueTag.Number, ValueTag.Number, ValueTag.Number,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
       ]),
       new Float64Array([
-        0, 0, 0, 0,
-        10, 20, 30, 40,
-        1, 3, 5,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        0, 0, 0, 0, 10, 20, 30, 40, 1, 3, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       ]),
       new Uint32Array([
-        1, 2, 2, 3,
-        0, 0, 0, 0,
-        0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        1, 2, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
       ]),
-      new Uint16Array(40)
+      new Uint16Array(40),
     );
     kernel.uploadRangeMembers(
-      new Uint32Array([
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10
-      ]),
+      new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
       Uint32Array.from([0, 4, 8]),
-      Uint32Array.from([4, 4, 3])
+      Uint32Array.from([4, 4, 3]),
     );
     kernel.uploadRangeShapes(Uint32Array.from([4, 4, 3]), Uint32Array.from([1, 1, 1]));
 
     const packed = packPrograms([
-      [encodePushString(2), encodePushRange(0), encodePushNumber(0), encodeCall(BUILTIN.MATCH, 3), encodeRet()],
-      [encodePushNumber(1), encodePushRange(2), encodePushNumber(2), encodeCall(BUILTIN.MATCH, 3), encodeRet()],
-      [encodePushString(2), encodePushRange(0), encodePushNumber(0), encodePushNumber(3), encodeCall(BUILTIN.XMATCH, 4), encodeRet()],
-      [encodePushString(2), encodePushRange(0), encodePushRange(1), encodeCall(BUILTIN.XLOOKUP, 3), encodeRet()],
-      [encodePushString(6), encodePushRange(0), encodePushRange(1), encodePushString(5), encodeCall(BUILTIN.XLOOKUP, 4), encodeRet()]
+      [
+        encodePushString(2),
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodeCall(BUILTIN.MATCH, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(1),
+        encodePushRange(2),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.MATCH, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushString(2),
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.XMATCH, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushString(2),
+        encodePushRange(0),
+        encodePushRange(1),
+        encodeCall(BUILTIN.XLOOKUP, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushString(6),
+        encodePushRange(0),
+        encodePushRange(1),
+        encodePushString(5),
+        encodeCall(BUILTIN.XLOOKUP, 4),
+        encodeRet(),
+      ],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -946,17 +1323,23 @@ describe("wasm kernel", () => {
         cellIndex(4, 2, width),
         cellIndex(4, 3, width),
         cellIndex(4, 4, width),
-        cellIndex(4, 5, width)
-      ])
+        cellIndex(4, 5, width),
+      ]),
     );
-    kernel.uploadConstants(new Float64Array([0, 4, 1, -1]), new Uint32Array([0, 0, 0, 0, 0]), new Uint32Array([1, 2, 2, 0, 0]));
-    kernel.evalBatch(Uint32Array.from([
-      cellIndex(4, 1, width),
-      cellIndex(4, 2, width),
-      cellIndex(4, 3, width),
-      cellIndex(4, 4, width),
-      cellIndex(4, 5, width)
-    ]));
+    kernel.uploadConstants(
+      new Float64Array([0, 4, 1, -1]),
+      new Uint32Array([0, 0, 0, 0, 0]),
+      new Uint32Array([1, 2, 2, 0, 0]),
+    );
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(4, 1, width),
+        cellIndex(4, 2, width),
+        cellIndex(4, 3, width),
+        cellIndex(4, 4, width),
+        cellIndex(4, 5, width),
+      ]),
+    );
 
     expect(kernel.readTags()[cellIndex(4, 1, width)]).toBe(ValueTag.Number);
     expect(kernel.readNumbers()[cellIndex(4, 1, width)]).toBe(2);
@@ -976,21 +1359,35 @@ describe("wasm kernel", () => {
     kernel.init(20, 10, 5, 2, 2);
     kernel.writeCells(
       new Uint8Array([3, 2, 4, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Float64Array([0, 1, 0, 45351, 45351.75, 60, 45322, 45337, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([
+        0, 1, 0, 45351, 45351.75, 60, 45322, 45337, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
       new Uint32Array([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint16Array([0, 0, ErrorCode.Ref, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      new Uint16Array([0, 0, ErrorCode.Ref, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
     );
 
     const packed = packPrograms([
-      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.DATE, 3), encodeRet()],
-      [encodePushCell(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.DATE, 3), encodeRet()],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.DATE, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushCell(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.DATE, 3),
+        encodeRet(),
+      ],
       [encodePushCell(3), encodeCall(BUILTIN.YEAR, 1), encodeRet()],
       [encodePushCell(4), encodeCall(BUILTIN.MONTH, 1), encodeRet()],
       [encodePushCell(5), encodeCall(BUILTIN.DAY, 1), encodeRet()],
       [encodePushCell(6), encodePushNumber(3), encodeCall(BUILTIN.EDATE, 2), encodeRet()],
       [encodePushCell(0), encodePushNumber(4), encodeCall(BUILTIN.EDATE, 2), encodeRet()],
       [encodePushCell(7), encodePushCell(1), encodeCall(BUILTIN.EOMONTH, 2), encodeRet()],
-      [encodePushCell(2), encodePushNumber(4), encodeCall(BUILTIN.EOMONTH, 2), encodeRet()]
+      [encodePushCell(2), encodePushNumber(4), encodeCall(BUILTIN.EOMONTH, 2), encodeRet()],
     ]);
 
     kernel.uploadPrograms(
@@ -1006,10 +1403,14 @@ describe("wasm kernel", () => {
         cellIndex(1, 6, width),
         cellIndex(1, 7, width),
         cellIndex(1, 8, width),
-        cellIndex(1, 9, width)
-      ])
+        cellIndex(1, 9, width),
+      ]),
     );
-    kernel.uploadConstants(new Float64Array([2024, 2, 29, 1.9, 1]), new Uint32Array([0]), new Uint32Array([5]));
+    kernel.uploadConstants(
+      new Float64Array([2024, 2, 29, 1.9, 1]),
+      new Uint32Array([0]),
+      new Uint32Array([5]),
+    );
     kernel.evalBatch(
       Uint32Array.from([
         cellIndex(1, 1, width),
@@ -1020,8 +1421,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 6, width),
         cellIndex(1, 7, width),
         cellIndex(1, 8, width),
-        cellIndex(1, 9, width)
-      ])
+        cellIndex(1, 9, width),
+      ]),
     );
 
     expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Number);
@@ -1042,15 +1443,24 @@ describe("wasm kernel", () => {
   it("evaluates RAND from the uploaded recalc random sequence on the wasm path", async () => {
     const kernel = await createKernel();
     kernel.init(4, 4, 1, 1, 1);
-    kernel.writeCells(new Uint8Array(4), new Float64Array(4), new Uint32Array(4), new Uint16Array(4));
+    kernel.writeCells(
+      new Uint8Array(4),
+      new Float64Array(4),
+      new Uint32Array(4),
+      new Uint16Array(4),
+    );
     kernel.uploadPrograms(
       new Uint32Array([
-        encodeCall(BUILTIN.RAND, 0), encodeRet(),
-        encodeCall(BUILTIN.RAND, 0), encodeCall(BUILTIN.RAND, 0), encodeBinary(Opcode.Add), encodeRet()
+        encodeCall(BUILTIN.RAND, 0),
+        encodeRet(),
+        encodeCall(BUILTIN.RAND, 0),
+        encodeCall(BUILTIN.RAND, 0),
+        encodeBinary(Opcode.Add),
+        encodeRet(),
       ]),
       new Uint32Array([0, 2]),
       new Uint32Array([2, 4]),
-      new Uint32Array([0, 1])
+      new Uint32Array([0, 1]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0, 0]), new Uint32Array([0, 0]));
     kernel.uploadVolatileRandomValues(new Float64Array([0.625, 0.125, 0.875]));
@@ -1066,7 +1476,12 @@ describe("wasm kernel", () => {
   it("returns numeric spill descriptors for SEQUENCE on the wasm path", async () => {
     const kernel = await createKernel();
     kernel.init(4, 4, 4, 1, 1);
-    kernel.writeCells(new Uint8Array(4), new Float64Array(4), new Uint32Array(4), new Uint16Array(4));
+    kernel.writeCells(
+      new Uint8Array(4),
+      new Float64Array(4),
+      new Uint32Array(4),
+      new Uint16Array(4),
+    );
     kernel.uploadPrograms(
       new Uint32Array([
         encodePushNumber(0),
@@ -1074,13 +1489,17 @@ describe("wasm kernel", () => {
         encodePushNumber(2),
         encodePushNumber(3),
         encodeCall(BuiltinId.Sequence, 4),
-        encodeRet()
+        encodeRet(),
       ]),
       new Uint32Array([0]),
       new Uint32Array([6]),
-      new Uint32Array([0])
+      new Uint32Array([0]),
     );
-    kernel.uploadConstants(new Float64Array([3, 1, 1, 1]), new Uint32Array([0]), new Uint32Array([4]));
+    kernel.uploadConstants(
+      new Float64Array([3, 1, 1, 1]),
+      new Uint32Array([0]),
+      new Uint32Array([4]),
+    );
 
     kernel.evalBatch(new Uint32Array([0]));
 
@@ -1090,7 +1509,9 @@ describe("wasm kernel", () => {
     expect(kernel.readSpillCols()[0]).toBe(1);
     expect(kernel.readSpillOffsets()[0]).toBe(0);
     expect(kernel.readSpillLengths()[0]).toBe(3);
-    expect(Array.from(kernel.readSpillNumbers().slice(0, kernel.getSpillValueCount()))).toEqual([1, 2, 3]);
+    expect(Array.from(kernel.readSpillNumbers().slice(0, kernel.getSpillValueCount()))).toEqual([
+      1, 2, 3,
+    ]);
   });
 
   it("evaluates numeric aggregate builtins over native SEQUENCE arrays on the wasm path", async () => {
@@ -1098,13 +1519,22 @@ describe("wasm kernel", () => {
     kernel.init(12, 4, 24, 1, 1);
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.Number, ValueTag.Empty, ValueTag.Empty, ValueTag.Empty,
-        ValueTag.Empty, ValueTag.Empty, ValueTag.Empty, ValueTag.Empty,
-        ValueTag.Empty, ValueTag.Empty, ValueTag.Empty, ValueTag.Empty
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
       ]),
       new Float64Array([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
       new Uint32Array(12),
-      new Uint16Array(12)
+      new Uint16Array(12),
     );
     kernel.uploadPrograms(
       new Uint32Array([
@@ -1149,16 +1579,16 @@ describe("wasm kernel", () => {
         encodePushNumber(2),
         encodeCall(BuiltinId.Sequence, 4),
         encodeCall(BuiltinId.CountA, 1),
-        encodeRet()
+        encodeRet(),
       ]),
       new Uint32Array([0, 7, 14, 21, 28, 35]),
       new Uint32Array([7, 7, 7, 7, 7, 7]),
-      new Uint32Array([1, 2, 3, 4, 5, 6])
+      new Uint32Array([1, 2, 3, 4, 5, 6]),
     );
     kernel.uploadConstants(
       new Float64Array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
       new Uint32Array([0, 3, 6, 9, 12, 15]),
-      new Uint32Array([3, 3, 3, 3, 3, 3])
+      new Uint32Array([3, 3, 3, 3, 3, 3]),
     );
 
     kernel.evalBatch(new Uint32Array([1, 2, 3, 4, 5, 6]));
@@ -1175,15 +1605,22 @@ describe("wasm kernel", () => {
   it("evaluates TODAY and NOW from the uploaded recalc timestamp on the wasm path", async () => {
     const kernel = await createKernel();
     kernel.init(4, 4, 1, 1, 1);
-    kernel.writeCells(new Uint8Array(4), new Float64Array(4), new Uint32Array(4), new Uint16Array(4));
+    kernel.writeCells(
+      new Uint8Array(4),
+      new Float64Array(4),
+      new Uint32Array(4),
+      new Uint16Array(4),
+    );
     kernel.uploadPrograms(
       new Uint32Array([
-        encodeCall(BUILTIN.TODAY, 0), encodeRet(),
-        encodeCall(BUILTIN.NOW, 0), encodeRet()
+        encodeCall(BUILTIN.TODAY, 0),
+        encodeRet(),
+        encodeCall(BUILTIN.NOW, 0),
+        encodeRet(),
       ]),
       new Uint32Array([0, 2]),
       new Uint32Array([2, 2]),
-      new Uint32Array([0, 1])
+      new Uint32Array([0, 1]),
     );
     kernel.uploadConstants(new Float64Array(), new Uint32Array([0, 0]), new Uint32Array([0, 0]));
     kernel.uploadVolatileNowSerial(46100.65659722222);
@@ -1202,18 +1639,42 @@ describe("wasm kernel", () => {
     kernel.init(24, 8, 5, 1, 1);
     kernel.writeCells(
       new Uint8Array([1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Float64Array([0.5208333333333334, 0.5208449074074074, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([
+        0.5208333333333334, 0.5208449074074074, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+      ]),
       new Uint32Array(24),
-      new Uint16Array(24)
+      new Uint16Array(24),
     );
 
     const packed = packPrograms([
-      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.TIME, 3), encodeRet()],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.TIME, 3),
+        encodeRet(),
+      ],
       [encodePushCell(0), encodeCall(BUILTIN.HOUR, 1), encodeRet()],
       [encodePushCell(0), encodeCall(BUILTIN.MINUTE, 1), encodeRet()],
       [encodePushCell(1), encodeCall(BUILTIN.SECOND, 1), encodeRet()],
-      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.DATE, 3), encodeCall(BUILTIN.WEEKDAY, 1), encodeRet()],
-      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BUILTIN.DATE, 3), encodePushNumber(3), encodeCall(BUILTIN.WEEKDAY, 2), encodeRet()]
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.DATE, 3),
+        encodeCall(BUILTIN.WEEKDAY, 1),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.DATE, 3),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.WEEKDAY, 2),
+        encodeRet(),
+      ],
     ]);
 
     kernel.uploadPrograms(
@@ -1226,13 +1687,13 @@ describe("wasm kernel", () => {
         cellIndex(1, 3, width),
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
-        cellIndex(1, 6, width)
-      ])
+        cellIndex(1, 6, width),
+      ]),
     );
     kernel.uploadConstants(
       new Float64Array([12, 30, 0, 2026, 3, 15, 2]),
       new Uint32Array([0, 0, 0, 0, 3, 3]),
-      new Uint32Array([3, 0, 0, 0, 3, 4])
+      new Uint32Array([3, 0, 0, 0, 3, 4]),
     );
     kernel.evalBatch(
       Uint32Array.from([
@@ -1241,8 +1702,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 3, width),
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
-        cellIndex(1, 6, width)
-      ])
+        cellIndex(1, 6, width),
+      ]),
     );
 
     expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(0.5208333333333334);
@@ -1258,10 +1719,44 @@ describe("wasm kernel", () => {
     const width = 10;
     kernel.init(30, 8, 1, 1, 1);
     kernel.writeCells(
-      new Uint8Array([ValueTag.Number, ValueTag.Number, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Float64Array([46097, 46101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
+      new Float64Array([
+        46097, 46101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0,
+      ]),
       new Uint32Array(30),
-      new Uint16Array(30)
+      new Uint16Array(30),
     );
     kernel.uploadRangeMembers(new Uint32Array([0, 1]), new Uint32Array([0]), new Uint32Array([2]));
     kernel.uploadRangeShapes(Uint32Array.from([2]), Uint32Array.from([1]));
@@ -1271,9 +1766,21 @@ describe("wasm kernel", () => {
       [encodePushNumber(0), encodeCall(BUILTIN.WEEKNUM, 1), encodeRet()],
       [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.WEEKNUM, 2), encodeRet()],
       [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.WORKDAY, 2), encodeRet()],
-      [encodePushNumber(0), encodePushNumber(1), encodePushCell(0), encodeCall(BUILTIN.WORKDAY, 3), encodeRet()],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushCell(0),
+        encodeCall(BUILTIN.WORKDAY, 3),
+        encodeRet(),
+      ],
       [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.NETWORKDAYS, 2), encodeRet()],
-      [encodePushNumber(0), encodePushNumber(1), encodePushCell(0), encodeCall(BUILTIN.NETWORKDAYS, 3), encodeRet()]
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushCell(0),
+        encodeCall(BUILTIN.NETWORKDAYS, 3),
+        encodeRet(),
+      ],
     ]);
     kernel.uploadPrograms(
       packed.programs,
@@ -1286,21 +1793,15 @@ describe("wasm kernel", () => {
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
         cellIndex(1, 6, width),
-        cellIndex(1, 7, width)
-      ])
+        cellIndex(1, 7, width),
+      ]),
     );
     kernel.uploadConstants(
       new Float64Array([
-        46101, 46094,
-        46096,
-        46096, 2,
-        46094, 1,
-        46094, 1,
-        46094, 46101,
-        46094, 46101
+        46101, 46094, 46096, 46096, 2, 46094, 1, 46094, 1, 46094, 46101, 46094, 46101,
       ]),
       new Uint32Array([0, 2, 3, 5, 7, 9, 11]),
-      new Uint32Array([2, 1, 2, 2, 2, 2, 2])
+      new Uint32Array([2, 1, 2, 2, 2, 2, 2]),
     );
     kernel.evalBatch(
       Uint32Array.from([
@@ -1310,8 +1811,8 @@ describe("wasm kernel", () => {
         cellIndex(1, 4, width),
         cellIndex(1, 5, width),
         cellIndex(1, 6, width),
-        cellIndex(1, 7, width)
-      ])
+        cellIndex(1, 7, width),
+      ]),
     );
 
     expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(7);
@@ -1330,7 +1831,7 @@ describe("wasm kernel", () => {
       new Uint8Array([1, 1, 4, 0, 0, 0, 0, 0]),
       new Float64Array([123.4, 1, 0, 0, 0, 0, 0, 0]),
       new Uint32Array(8),
-      new Uint16Array([0, 0, ErrorCode.Value, 0, 0, 0, 0, 0])
+      new Uint16Array([0, 0, ErrorCode.Value, 0, 0, 0, 0, 0]),
     );
     kernel.uploadPrograms(
       new Uint32Array([
@@ -1351,16 +1852,16 @@ describe("wasm kernel", () => {
         (3 << 24) | 2,
         (2 << 24) | 2,
         (20 << 24) | (13 << 8) | 2,
-        255 << 24
+        255 << 24,
       ]),
       new Uint32Array([0, 4, 8, 11]),
       new Uint32Array([4, 4, 3, 4]),
-      new Uint32Array([3, 4, 5, 6])
+      new Uint32Array([3, 4, 5, 6]),
     );
     kernel.uploadConstants(
       new Float64Array([-1, 0.5, 1]),
       new Uint32Array([0, 0, 0, 0]),
-      new Uint32Array([2, 2, 0, 1])
+      new Uint32Array([2, 2, 0, 1]),
     );
 
     kernel.evalBatch(new Uint32Array([3, 4, 5, 6]));
@@ -1377,7 +1878,18 @@ describe("wasm kernel", () => {
     const kernel = await createKernel();
     kernel.init(16, 1, 1, 1, 16);
 
-    const strings = ["", "Region", "Notes", "Product", "Sales", "East", "Widget", "West", "Gizmo", "priority"];
+    const strings = [
+      "",
+      "Region",
+      "Notes",
+      "Product",
+      "Sales",
+      "East",
+      "Widget",
+      "West",
+      "Gizmo",
+      "priority",
+    ];
     const offsets = new Uint32Array(strings.length);
     const lengths = new Uint32Array(strings.length);
     const data: number[] = [];
@@ -1394,29 +1906,31 @@ describe("wasm kernel", () => {
 
     kernel.writeCells(
       new Uint8Array([
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.String,
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.Number,
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.Number,
-        ValueTag.String, ValueTag.String, ValueTag.String, ValueTag.Number
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
       ]),
-      new Float64Array([
-        0, 0, 0, 0,
-        0, 0, 0, 10,
-        0, 0, 0, 7,
-        0, 0, 0, 5
-      ]),
-      new Uint32Array([
-        1, 2, 3, 4,
-        5, 9, 6, 0,
-        7, 9, 6, 0,
-        5, 9, 8, 0
-      ]),
-      new Uint16Array(16)
+      new Float64Array([0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 7, 0, 0, 0, 5]),
+      new Uint32Array([1, 2, 3, 4, 5, 9, 6, 0, 7, 9, 6, 0, 5, 9, 8, 0]),
+      new Uint16Array(16),
     );
     kernel.uploadRangeMembers(
       Uint32Array.from(Array.from({ length: 16 }, (_, index) => index)),
       new Uint32Array([0]),
-      new Uint32Array([16])
+      new Uint32Array([16]),
     );
     kernel.uploadRangeShapes(new Uint32Array([4]), new Uint32Array([4]));
 
@@ -1425,7 +1939,7 @@ describe("wasm kernel", () => {
       4,
       Uint32Array.from([0]),
       Uint32Array.from([3, 2]),
-      Uint8Array.from([1, 2])
+      Uint8Array.from([1, 2]),
     );
 
     expect(materialized.rows).toBe(3);

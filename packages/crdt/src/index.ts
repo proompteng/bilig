@@ -4,7 +4,7 @@ import type {
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookPivotValueSnapshot,
-  WorkbookVolatileContextSnapshot
+  WorkbookVolatileContextSnapshot,
 } from "@bilig/protocol";
 
 export type ReplicaId = string;
@@ -41,10 +41,22 @@ export type WorkbookOp =
   | { kind: "setVolatileContext"; context: WorkbookVolatileContextSnapshot }
   | { kind: "upsertSheet"; name: string; order: number }
   | { kind: "deleteSheet"; name: string }
-  | { kind: "insertRows"; sheetName: string; start: number; count: number; entries?: WorkbookAxisEntryOp[] }
+  | {
+      kind: "insertRows";
+      sheetName: string;
+      start: number;
+      count: number;
+      entries?: WorkbookAxisEntryOp[];
+    }
   | { kind: "deleteRows"; sheetName: string; start: number; count: number }
   | { kind: "moveRows"; sheetName: string; start: number; count: number; target: number }
-  | { kind: "insertColumns"; sheetName: string; start: number; count: number; entries?: WorkbookAxisEntryOp[] }
+  | {
+      kind: "insertColumns";
+      sheetName: string;
+      start: number;
+      count: number;
+      entries?: WorkbookAxisEntryOp[];
+    }
   | { kind: "deleteColumns"; sheetName: string; start: number; count: number }
   | { kind: "moveColumns"; sheetName: string; start: number; count: number; target: number }
   | {
@@ -139,7 +151,7 @@ export function createReplicaState(replicaId: ReplicaId): ReplicaState {
   return {
     replicaId,
     clock: { counter: 0 },
-    appliedBatchIds: new Set<OpId>()
+    appliedBatchIds: new Set<OpId>(),
   };
 }
 
@@ -156,7 +168,7 @@ export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): Replic
   return {
     replicaId: state.replicaId,
     counter: state.clock.counter,
-    appliedBatchIds: trimmed
+    appliedBatchIds: trimmed,
   };
 }
 
@@ -177,7 +189,7 @@ export function createBatch(state: ReplicaState, ops: EngineOp[]): EngineOpBatch
     id: `${state.replicaId}:${clock.counter}`,
     replicaId: state.replicaId,
     clock,
-    ops
+    ops,
   };
   markBatchApplied(state, batch);
   return batch;
@@ -205,7 +217,7 @@ export function batchOpOrder(batch: EngineOpBatch, opIndex: number): OpOrder {
     counter: batch.clock.counter,
     replicaId: batch.replicaId,
     batchId: batch.id,
-    opIndex
+    opIndex,
   };
 }
 
@@ -275,7 +287,10 @@ function entityKeyForOp(op: EngineOp): string {
   }
 }
 
-function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, OpOrder>): OpOrder | undefined {
+function sheetDeleteBarrierForOp(
+  op: EngineOp,
+  latestSheetDeletes: Map<string, OpOrder>,
+): OpOrder | undefined {
   switch (op.kind) {
     case "upsertWorkbook":
     case "setWorkbookMetadata":
@@ -352,7 +367,7 @@ export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {
         id: batch.id,
         replicaId: batch.replicaId,
         clock: batch.clock,
-        ops
+        ops,
       };
     })
     .filter((batch) => batch.ops.length > 0);

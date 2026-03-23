@@ -12,7 +12,7 @@ import {
   type EngineEvent,
   type RecalcMetrics,
   type SyncState,
-  type WorkbookAxisEntrySnapshot
+  type WorkbookAxisEntrySnapshot,
 } from "@bilig/protocol";
 import {
   createWebSocketSyncClient,
@@ -21,7 +21,7 @@ import {
   type ViewportPatch,
   type ViewportPatchedCell,
   type ViewportPatchSubscription,
-  type WebSocketSyncClientOptions
+  type WebSocketSyncClientOptions,
 } from "@bilig/worker-transport";
 
 type WorkbookEngine = InstanceType<typeof SpreadsheetEngine>;
@@ -71,7 +71,11 @@ function isPersistedWorkbookState(value: unknown): value is PersistedWorkbookSta
   }
   const snapshot = value["snapshot"];
   const replica = value["replica"];
-  return Array.isArray(snapshot["sheets"]) && isRecord(replica["replica"]) && Array.isArray(replica["entityVersions"]);
+  return (
+    Array.isArray(snapshot["sheets"]) &&
+    isRecord(replica["replica"]) &&
+    Array.isArray(replica["entityVersions"])
+  );
 }
 
 function parsePersistedWorkbookState(value: unknown): PersistedWorkbookState | null {
@@ -89,10 +93,12 @@ export class WorkbookWorkerRuntime {
   private readonly formatIds = new Map<string, number>([["", 0]]);
   private nextFormatId = 1;
 
-  constructor(options: {
-    persistence?: BrowserPersistence;
-    createSyncClient?: (options: WebSocketSyncClientOptions) => EngineSyncClient;
-  } = {}) {
+  constructor(
+    options: {
+      persistence?: BrowserPersistence;
+      createSyncClient?: (options: WebSocketSyncClientOptions) => EngineSyncClient;
+    } = {},
+  ) {
     this.persistence = options.persistence ?? createBrowserPersistence();
     this.createSyncClient = options.createSyncClient ?? createWebSocketSyncClient;
   }
@@ -104,11 +110,17 @@ export class WorkbookWorkerRuntime {
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerStateSnapshot> {
     this.cleanup();
     this.bootstrapOptions = options;
-    this.engine = new SpreadsheetEngine({ workbookName: options.documentId, replicaId: options.replicaId });
+    this.engine = new SpreadsheetEngine({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
+    });
     await this.engine.ready();
 
     if (options.persistState) {
-      const persisted = await this.persistence.loadJson(this.persistenceKey(options.documentId), parsePersistedWorkbookState);
+      const persisted = await this.persistence.loadJson(
+        this.persistenceKey(options.documentId),
+        parsePersistedWorkbookState,
+      );
       if (persisted) {
         this.engine.importSnapshot(persisted.snapshot);
         this.engine.importReplicaSnapshot(persisted.replica);
@@ -126,11 +138,13 @@ export class WorkbookWorkerRuntime {
 
     if (options.baseUrl) {
       try {
-        await this.engine.connectSyncClient(this.createSyncClient({
-          documentId: options.documentId,
-          replicaId: options.replicaId,
-          baseUrl: options.baseUrl
-        }));
+        await this.engine.connectSyncClient(
+          this.createSyncClient({
+            documentId: options.documentId,
+            replicaId: options.replicaId,
+            baseUrl: options.baseUrl,
+          }),
+        );
       } catch {
         await this.engine.disconnectSyncClient();
       }
@@ -145,7 +159,7 @@ export class WorkbookWorkerRuntime {
       workbookName: engine.workbook.workbookName,
       sheetNames: this.listSheetNames(),
       metrics: { ...engine.getLastMetrics() },
-      syncState: engine.getSyncState()
+      syncState: engine.getSyncState(),
     };
   }
 
@@ -178,14 +192,14 @@ export class WorkbookWorkerRuntime {
 
   fillRange(
     source: Parameters<WorkbookEngine["fillRange"]>[0],
-    target: Parameters<WorkbookEngine["fillRange"]>[1]
+    target: Parameters<WorkbookEngine["fillRange"]>[1],
   ): void {
     this.requireEngine().fillRange(source, target);
   }
 
   copyRange(
     source: Parameters<WorkbookEngine["copyRange"]>[0],
-    target: Parameters<WorkbookEngine["copyRange"]>[1]
+    target: Parameters<WorkbookEngine["copyRange"]>[1],
   ): void {
     this.requireEngine().copyRange(source, target);
   }
@@ -222,7 +236,7 @@ export class WorkbookWorkerRuntime {
 
   subscribeViewportPatches(
     subscription: ViewportPatchSubscription,
-    listener: (patch: Uint8Array) => void
+    listener: (patch: Uint8Array) => void,
   ): () => void {
     const state: ViewportSubscriptionState = {
       subscription: this.normalizeViewport(subscription),
@@ -230,7 +244,7 @@ export class WorkbookWorkerRuntime {
       nextVersion: 1,
       lastCellSignatures: new Map<string, string>(),
       lastColumnSignatures: new Map<number, string>(),
-      lastRowSignatures: new Map<number, string>()
+      lastRowSignatures: new Map<number, string>(),
     };
     listener(encodeViewportPatch(this.buildViewportPatch(state, true)));
     this.viewportSubscriptions.add(state);
@@ -273,9 +287,12 @@ export class WorkbookWorkerRuntime {
     const engine = this.requireEngine();
     const persisted: PersistedWorkbookState = {
       snapshot: engine.exportSnapshot(),
-      replica: engine.exportReplicaSnapshot()
+      replica: engine.exportReplicaSnapshot(),
     };
-    await this.persistence.saveJson(this.persistenceKey(this.bootstrapOptions.documentId), persisted);
+    await this.persistence.saveJson(
+      this.persistenceKey(this.bootstrapOptions.documentId),
+      persisted,
+    );
   }
 
   private broadcastViewportPatches(metrics: RecalcMetrics): void {
@@ -291,7 +308,7 @@ export class WorkbookWorkerRuntime {
   private buildViewportPatch(
     state: ViewportSubscriptionState,
     full: boolean,
-    metrics: RecalcMetrics = this.requireEngine().getLastMetrics()
+    metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
   ): ViewportPatch {
     const engine = this.requireEngine();
     const viewport = state.subscription;
@@ -317,7 +334,7 @@ export class WorkbookWorkerRuntime {
           patchedCell.copyText,
           patchedCell.editorText,
           patchedCell.formatId,
-          patchedCell.styleId
+          patchedCell.styleId,
         ]);
         nextCellSignatures.set(key, signature);
         if (full || state.lastCellSignatures.get(key) !== signature) {
@@ -335,7 +352,7 @@ export class WorkbookWorkerRuntime {
       columnEntries,
       PRODUCT_COLUMN_WIDTH,
       state.lastColumnSignatures,
-      full
+      full,
     );
     const { patches: rows, signatures: rowSignatures } = this.buildAxisPatches(
       viewport.rowStart,
@@ -343,7 +360,7 @@ export class WorkbookWorkerRuntime {
       rowEntries,
       PRODUCT_ROW_HEIGHT,
       state.lastRowSignatures,
-      full
+      full,
     );
     state.lastColumnSignatures = columnSignatures;
     state.lastRowSignatures = rowSignatures;
@@ -355,11 +372,16 @@ export class WorkbookWorkerRuntime {
       metrics: { ...metrics },
       cells,
       columns,
-      rows
+      rows,
     };
   }
 
-  private buildPatchedCell(snapshot: CellSnapshot, row: number, col: number, formatId: number): ViewportPatchedCell {
+  private buildPatchedCell(
+    snapshot: CellSnapshot,
+    row: number,
+    col: number,
+    formatId: number,
+  ): ViewportPatchedCell {
     const editorText = this.toEditorText(snapshot);
     const displayText = this.toDisplayText(snapshot);
     return {
@@ -370,7 +392,7 @@ export class WorkbookWorkerRuntime {
       copyText: snapshot.formula ? editorText : displayText,
       editorText,
       formatId,
-      styleId: formatId
+      styleId: formatId,
     };
   }
 
@@ -380,7 +402,7 @@ export class WorkbookWorkerRuntime {
     entries: Map<number, WorkbookAxisEntrySnapshot>,
     defaultSize: number,
     previous: Map<number, string>,
-    full: boolean
+    full: boolean,
   ): { patches: ViewportAxisPatch[]; signatures: Map<number, string> } {
     const signatures = new Map<number, string>();
     const patches: ViewportAxisPatch[] = [];
@@ -397,7 +419,9 @@ export class WorkbookWorkerRuntime {
     return { patches, signatures };
   }
 
-  private indexAxisEntries(entries: readonly WorkbookAxisEntrySnapshot[]): Map<number, WorkbookAxisEntrySnapshot> {
+  private indexAxisEntries(
+    entries: readonly WorkbookAxisEntrySnapshot[],
+  ): Map<number, WorkbookAxisEntrySnapshot> {
     return new Map(entries.map((entry) => [entry.index, entry]));
   }
 
@@ -411,7 +435,7 @@ export class WorkbookWorkerRuntime {
       rowStart,
       rowEnd,
       colStart,
-      colEnd
+      colEnd,
     };
   }
 
@@ -462,7 +486,7 @@ export class WorkbookWorkerRuntime {
       address,
       value: { tag: ValueTag.Empty },
       flags: 0,
-      version: 0
+      version: 0,
     };
   }
 }

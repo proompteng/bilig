@@ -49,70 +49,82 @@ describe("stdio handler", () => {
     const handler = attachStdioAgentLoop({
       handler: new LocalWorkbookSessionManager(),
       input,
-      output
+      output,
     });
 
     try {
-      input.write(Buffer.from(encodeStdioMessage({
-        kind: "request",
-        request: {
-          kind: "openWorkbookSession",
-          id: "open-stdio",
-          documentId: "stdio-doc",
-          replicaId: "stdio-agent"
-        }
-      })));
+      input.write(
+        Buffer.from(
+          encodeStdioMessage({
+            kind: "request",
+            request: {
+              kind: "openWorkbookSession",
+              id: "open-stdio",
+              documentId: "stdio-doc",
+              replicaId: "stdio-agent",
+            },
+          }),
+        ),
+      );
       const openFrame = await readSingleFrame();
       expect(openFrame).toMatchObject({
         kind: "response",
         response: {
           kind: "ok",
-          sessionId: "stdio-doc:stdio-agent"
-        }
+          sessionId: "stdio-doc:stdio-agent",
+        },
       });
 
-      input.write(Buffer.from(encodeStdioMessage({
-        kind: "request",
-        request: {
-          kind: "writeRange",
-          id: "write-stdio",
-          sessionId: "stdio-doc:stdio-agent",
-          range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "A1"
-          },
-          values: [[42]]
-        }
-      })));
+      input.write(
+        Buffer.from(
+          encodeStdioMessage({
+            kind: "request",
+            request: {
+              kind: "writeRange",
+              id: "write-stdio",
+              sessionId: "stdio-doc:stdio-agent",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A1",
+              },
+              values: [[42]],
+            },
+          }),
+        ),
+      );
       await readSingleFrame();
 
-      input.write(Buffer.from(encodeStdioMessage({
-        kind: "request",
-        request: {
-          kind: "readRange",
-          id: "read-stdio",
-          sessionId: "stdio-doc:stdio-agent",
-          range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "A1"
-          }
-        }
-      })));
+      input.write(
+        Buffer.from(
+          encodeStdioMessage({
+            kind: "request",
+            request: {
+              kind: "readRange",
+              id: "read-stdio",
+              sessionId: "stdio-doc:stdio-agent",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A1",
+              },
+            },
+          }),
+        ),
+      );
       const readFrame = await readSingleFrame();
       expect(readFrame).toMatchObject({
         kind: "response",
         response: {
-          kind: "rangeValues"
-        }
+          kind: "rangeValues",
+        },
       });
       if (readFrame.kind !== "response" || readFrame.response.kind !== "rangeValues") {
         throw new Error("Expected rangeValues response");
       }
       expect(readFrame.response.values[0]?.[0]).toEqual({
         tag: ValueTag.Number,
-        value: 42
+        value: 42,
       });
     } finally {
       handler.dispose();
@@ -129,44 +141,52 @@ describe("stdio handler", () => {
     const handler = attachStdioAgentLoop({
       handler: manager,
       input,
-      output
+      output,
     });
 
     try {
-      input.write(Buffer.from(encodeStdioMessage({
-        kind: "request",
-        request: {
-          kind: "openWorkbookSession",
-          id: "open-stream",
-          documentId: "stream-doc",
-          replicaId: "stream-agent"
-        }
-      })));
+      input.write(
+        Buffer.from(
+          encodeStdioMessage({
+            kind: "request",
+            request: {
+              kind: "openWorkbookSession",
+              id: "open-stream",
+              documentId: "stream-doc",
+              replicaId: "stream-agent",
+            },
+          }),
+        ),
+      );
       await readSingleFrame();
 
-      input.write(Buffer.from(encodeStdioMessage({
-        kind: "request",
-        request: {
-          kind: "subscribeRange",
-          id: "sub-stream",
-          sessionId: "stream-doc:stream-agent",
-          subscriptionId: "sub-1",
-          range: {
-            sheetName: "Sheet1",
-            startAddress: "A1",
-            endAddress: "B2"
-          }
-        }
-      })));
+      input.write(
+        Buffer.from(
+          encodeStdioMessage({
+            kind: "request",
+            request: {
+              kind: "subscribeRange",
+              id: "sub-stream",
+              sessionId: "stream-doc:stream-agent",
+              subscriptionId: "sub-1",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "B2",
+              },
+            },
+          }),
+        ),
+      );
       const subscribeFrame = await readSingleFrame();
       expect(subscribeFrame).toMatchObject({
         kind: "response",
         response: {
           kind: "ok",
           value: {
-            subscriptionId: "sub-1"
-          }
-        }
+            subscriptionId: "sub-1",
+          },
+        },
       });
 
       await manager.handleSyncFrame({
@@ -177,8 +197,8 @@ describe("stdio handler", () => {
           id: "browser-stream:1",
           replicaId: "browser-stream",
           clock: { counter: 1 },
-          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 }]
-        }
+          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 9 }],
+        },
       });
 
       const eventFrame = await readSingleFrame();
@@ -190,28 +210,32 @@ describe("stdio handler", () => {
           range: {
             sheetName: "Sheet1",
             startAddress: "A1",
-            endAddress: "B2"
+            endAddress: "B2",
           },
-          changedAddresses: ["A1", "B1", "A2", "B2"]
-        }
+          changedAddresses: ["A1", "B1", "A2", "B2"],
+        },
       });
 
-      input.write(Buffer.from(encodeStdioMessage({
-        kind: "request",
-        request: {
-          kind: "unsubscribe",
-          id: "unsub-stream",
-          sessionId: "stream-doc:stream-agent",
-          subscriptionId: "sub-1"
-        }
-      })));
+      input.write(
+        Buffer.from(
+          encodeStdioMessage({
+            kind: "request",
+            request: {
+              kind: "unsubscribe",
+              id: "unsub-stream",
+              sessionId: "stream-doc:stream-agent",
+              subscriptionId: "sub-1",
+            },
+          }),
+        ),
+      );
       const unsubscribeFrame = await readSingleFrame();
       expect(unsubscribeFrame).toMatchObject({
         kind: "response",
         response: {
           kind: "ok",
-          id: "unsub-stream"
-        }
+          id: "unsub-stream",
+        },
       });
 
       await manager.handleSyncFrame({
@@ -222,8 +246,8 @@ describe("stdio handler", () => {
           id: "browser-stream:2",
           replicaId: "browser-stream",
           clock: { counter: 2 },
-          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 10 }]
-        }
+          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 10 }],
+        },
       });
 
       const pendingFrames = decodeStdioMessages(output.read() ?? Buffer.alloc(0)).frames;

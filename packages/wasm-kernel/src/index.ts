@@ -11,7 +11,13 @@ interface RawKernelExports {
   __new(size: number, id: number): number;
   __pin(pointer: number): number;
   __unpin(pointer: number): void;
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void;
+  init(
+    cellCapacity: number,
+    formulaCapacity: number,
+    constantCapacity: number,
+    rangeCapacity: number,
+    memberCapacity: number,
+  ): void;
   ensureCellCapacity(nextCapacity: number): void;
   ensureFormulaCapacity(nextCapacity: number): void;
   ensureConstantCapacity(nextCapacity: number): void;
@@ -34,7 +40,7 @@ interface RawKernelExports {
     groupByColumnIndices: number,
     valueCount: number,
     valueColumnIndices: number,
-    valueAggregations: number
+    valueAggregations: number,
   ): void;
   getPivotResultTagsPtr(): number;
   getPivotResultNumbersPtr(): number;
@@ -131,7 +137,7 @@ function isRawKernelExports(value: unknown): value is RawKernelExports {
     "getFormulaCapacity",
     "getConstantCapacity",
     "getRangeCapacity",
-    "getMemberCapacity"
+    "getMemberCapacity",
   ] as const;
   return requiredKeys.every((key) => key in value);
 }
@@ -145,7 +151,13 @@ interface LoweredArraySpec<T extends TypedArrayValue> {
 }
 
 export interface SpreadsheetKernel {
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void;
+  init(
+    cellCapacity: number,
+    formulaCapacity: number,
+    constantCapacity: number,
+    rangeCapacity: number,
+    memberCapacity: number,
+  ): void;
   ensureCellCapacity(nextCapacity: number): void;
   ensureFormulaCapacity(nextCapacity: number): void;
   ensureConstantCapacity(nextCapacity: number): void;
@@ -155,7 +167,7 @@ export interface SpreadsheetKernel {
     programs: Uint32Array,
     offsets: Uint32Array,
     lengths: Uint32Array,
-    targets: Uint32Array
+    targets: Uint32Array,
   ): void;
   uploadConstants(constants: Float64Array, offsets: Uint32Array, lengths: Uint32Array): void;
   uploadRangeMembers(members: Uint32Array, offsets: Uint32Array, lengths: Uint32Array): void;
@@ -164,14 +176,19 @@ export interface SpreadsheetKernel {
   uploadVolatileRandomValues(values: Float64Array): void;
   uploadStringLengths(lengths: Uint32Array): void;
   uploadStrings(offsets: Uint32Array, lengths: Uint32Array, data: Uint16Array): void;
-  writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void;
+  writeCells(
+    tags: Uint8Array,
+    numbers: Float64Array,
+    stringIds: Uint32Array,
+    errors: Uint16Array,
+  ): void;
   evalBatch(cellIndices: Uint32Array): void;
   materializePivotTable(
     sourceRangeIndex: number,
     sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
-    valueAggregations: Uint8Array
+    valueAggregations: Uint8Array,
   ): {
     rows: number;
     cols: number;
@@ -209,25 +226,25 @@ export interface SpreadsheetKernel {
 const uint8Spec: LoweredArraySpec<Uint8Array> = {
   align: 0,
   classId: UINT8_ARRAY_CLASS_ID,
-  ctor: Uint8Array
+  ctor: Uint8Array,
 };
 
 const uint16Spec: LoweredArraySpec<Uint16Array> = {
   align: 1,
   classId: UINT16_ARRAY_CLASS_ID,
-  ctor: Uint16Array
+  ctor: Uint16Array,
 };
 
 const uint32Spec: LoweredArraySpec<Uint32Array> = {
   align: 2,
   classId: UINT32_ARRAY_CLASS_ID,
-  ctor: Uint32Array
+  ctor: Uint32Array,
 };
 
 const float64Spec: LoweredArraySpec<Float64Array> = {
   align: 3,
   classId: FLOAT64_ARRAY_CLASS_ID,
-  ctor: Float64Array
+  ctor: Float64Array,
 };
 
 class RawKernelBridge {
@@ -237,7 +254,13 @@ class RawKernelBridge {
     this.dataView = new DataView(raw.memory.buffer);
   }
 
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void {
+  init(
+    cellCapacity: number,
+    formulaCapacity: number,
+    constantCapacity: number,
+    rangeCapacity: number,
+    memberCapacity: number,
+  ): void {
     this.raw.init(cellCapacity, formulaCapacity, constantCapacity, rangeCapacity, memberCapacity);
   }
 
@@ -265,7 +288,7 @@ class RawKernelBridge {
     programs: Uint32Array,
     offsets: Uint32Array,
     lengths: Uint32Array,
-    targets: Uint32Array
+    targets: Uint32Array,
   ): void {
     const programsPtr = this.lowerTypedArray(programs, uint32Spec);
     const offsetsPtr = this.lowerTypedArray(offsets, uint32Spec);
@@ -353,7 +376,12 @@ class RawKernelBridge {
     }
   }
 
-  writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
+  writeCells(
+    tags: Uint8Array,
+    numbers: Float64Array,
+    stringIds: Uint32Array,
+    errors: Uint16Array,
+  ): void {
     const tagsPtr = this.lowerTypedArray(tags, uint8Spec);
     const numbersPtr = this.lowerTypedArray(numbers, float64Spec);
     const stringIdsPtr = this.lowerTypedArray(stringIds, uint32Spec);
@@ -382,7 +410,7 @@ class RawKernelBridge {
     sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
-    valueAggregations: Uint8Array
+    valueAggregations: Uint8Array,
   ): void {
     const groupByPtr = this.lowerTypedArray(groupByColumnIndices, uint32Spec);
     const valueColsPtr = this.lowerTypedArray(valueColumnIndices, uint32Spec);
@@ -395,7 +423,7 @@ class RawKernelBridge {
         groupByPtr,
         valueColumnIndices.length,
         valueColsPtr,
-        valueAggsPtr
+        valueAggsPtr,
       );
     } finally {
       this.raw.__unpin(groupByPtr);
@@ -454,8 +482,20 @@ class KernelHandle implements SpreadsheetKernel {
     this.refreshViews();
   }
 
-  init(cellCapacity: number, formulaCapacity: number, constantCapacity: number, rangeCapacity: number, memberCapacity: number): void {
-    this.bridge.init(cellCapacity, formulaCapacity, constantCapacity, rangeCapacity, memberCapacity);
+  init(
+    cellCapacity: number,
+    formulaCapacity: number,
+    constantCapacity: number,
+    rangeCapacity: number,
+    memberCapacity: number,
+  ): void {
+    this.bridge.init(
+      cellCapacity,
+      formulaCapacity,
+      constantCapacity,
+      rangeCapacity,
+      memberCapacity,
+    );
     this.refreshViews();
   }
 
@@ -488,7 +528,7 @@ class KernelHandle implements SpreadsheetKernel {
     programs: Uint32Array,
     offsets: Uint32Array,
     lengths: Uint32Array,
-    targets: Uint32Array
+    targets: Uint32Array,
   ): void {
     this.bridge.uploadPrograms(programs, offsets, lengths, targets);
     this.refreshViews();
@@ -527,7 +567,12 @@ class KernelHandle implements SpreadsheetKernel {
     this.refreshViews();
   }
 
-  writeCells(tags: Uint8Array, numbers: Float64Array, stringIds: Uint32Array, errors: Uint16Array): void {
+  writeCells(
+    tags: Uint8Array,
+    numbers: Float64Array,
+    stringIds: Uint32Array,
+    errors: Uint16Array,
+  ): void {
     this.bridge.writeCells(tags, numbers, stringIds, errors);
     this.refreshViews();
   }
@@ -542,7 +587,7 @@ class KernelHandle implements SpreadsheetKernel {
     sourceWidth: number,
     groupByColumnIndices: Uint32Array,
     valueColumnIndices: Uint32Array,
-    valueAggregations: Uint8Array
+    valueAggregations: Uint8Array,
   ): {
     rows: number;
     cols: number;
@@ -556,7 +601,7 @@ class KernelHandle implements SpreadsheetKernel {
       sourceWidth,
       groupByColumnIndices,
       valueColumnIndices,
-      valueAggregations
+      valueAggregations,
     );
     const rows = this.raw.pivotResultRows.value;
     const cols = this.raw.pivotResultCols.value;
@@ -568,7 +613,7 @@ class KernelHandle implements SpreadsheetKernel {
       tags: new Uint8Array(memory, this.raw.getPivotResultTagsPtr(), size),
       numbers: new Float64Array(memory, this.raw.getPivotResultNumbersPtr(), size),
       stringIds: new Uint32Array(memory, this.raw.getPivotResultStringIdsPtr(), size),
-      errors: new Uint16Array(memory, this.raw.getPivotResultErrorsPtr(), size)
+      errors: new Uint16Array(memory, this.raw.getPivotResultErrorsPtr(), size),
     };
   }
 
@@ -624,11 +669,15 @@ class KernelHandle implements SpreadsheetKernel {
     const memory = this.raw.memory.buffer;
     const count = this.raw.getOutputStringCount();
     if (count === 0) return [];
-    
+
     const lengths = new Uint32Array(memory, this.raw.getOutputStringLengthsPtr(), count);
     const offsets = new Uint32Array(memory, this.raw.getOutputStringOffsetsPtr(), count);
-    const data = new Uint16Array(memory, this.raw.getOutputStringDataPtr(), this.raw.getOutputStringDataLength());
-    
+    const data = new Uint16Array(
+      memory,
+      this.raw.getOutputStringDataPtr(),
+      this.raw.getOutputStringDataLength(),
+    );
+
     const strings: string[] = [];
     for (let index = 0; index < count; index += 1) {
       const length = lengths[index]!;
@@ -690,26 +739,84 @@ class KernelHandle implements SpreadsheetKernel {
     const memory = this.raw.memory.buffer;
     this.tags = new Uint8Array(memory, this.raw.getTagsPtr(), this.raw.getCellCapacity());
     this.numbers = new Float64Array(memory, this.raw.getNumbersPtr(), this.raw.getCellCapacity());
-    this.stringIds = new Uint32Array(memory, this.raw.getStringIdsPtr(), this.raw.getCellCapacity());
+    this.stringIds = new Uint32Array(
+      memory,
+      this.raw.getStringIdsPtr(),
+      this.raw.getCellCapacity(),
+    );
     this.errors = new Uint16Array(memory, this.raw.getErrorsPtr(), this.raw.getCellCapacity());
-    this.programOffsets = new Uint32Array(memory, this.raw.getProgramOffsetsPtr(), this.raw.getFormulaCapacity());
-    this.programLengths = new Uint32Array(memory, this.raw.getProgramLengthsPtr(), this.raw.getFormulaCapacity());
-    this.constantOffsets = new Uint32Array(memory, this.raw.getConstantOffsetsPtr(), this.raw.getFormulaCapacity());
-    this.constantLengths = new Uint32Array(memory, this.raw.getConstantLengthsPtr(), this.raw.getFormulaCapacity());
-    this.constants = new Float64Array(memory, this.raw.getConstantArenaPtr(), this.raw.getConstantCapacity());
-    this.rangeOffsets = new Uint32Array(memory, this.raw.getRangeOffsetsPtr(), this.raw.getRangeCapacity());
-    this.rangeLengths = new Uint32Array(memory, this.raw.getRangeLengthsPtr(), this.raw.getRangeCapacity());
-    this.rangeMembers = new Uint32Array(memory, this.raw.getRangeMembersPtr(), this.raw.getMemberCapacity());
-    this.spillRows = new Uint32Array(memory, this.raw.getSpillResultRowsPtr(), this.raw.getCellCapacity());
-    this.spillCols = new Uint32Array(memory, this.raw.getSpillResultColsPtr(), this.raw.getCellCapacity());
-    this.spillOffsets = new Uint32Array(memory, this.raw.getSpillResultOffsetsPtr(), this.raw.getCellCapacity());
-    this.spillLengths = new Uint32Array(memory, this.raw.getSpillResultLengthsPtr(), this.raw.getCellCapacity());
-    this.spillNumbers = new Float64Array(memory, this.raw.getSpillResultNumbersPtr(), this.raw.getSpillResultValueCount());
+    this.programOffsets = new Uint32Array(
+      memory,
+      this.raw.getProgramOffsetsPtr(),
+      this.raw.getFormulaCapacity(),
+    );
+    this.programLengths = new Uint32Array(
+      memory,
+      this.raw.getProgramLengthsPtr(),
+      this.raw.getFormulaCapacity(),
+    );
+    this.constantOffsets = new Uint32Array(
+      memory,
+      this.raw.getConstantOffsetsPtr(),
+      this.raw.getFormulaCapacity(),
+    );
+    this.constantLengths = new Uint32Array(
+      memory,
+      this.raw.getConstantLengthsPtr(),
+      this.raw.getFormulaCapacity(),
+    );
+    this.constants = new Float64Array(
+      memory,
+      this.raw.getConstantArenaPtr(),
+      this.raw.getConstantCapacity(),
+    );
+    this.rangeOffsets = new Uint32Array(
+      memory,
+      this.raw.getRangeOffsetsPtr(),
+      this.raw.getRangeCapacity(),
+    );
+    this.rangeLengths = new Uint32Array(
+      memory,
+      this.raw.getRangeLengthsPtr(),
+      this.raw.getRangeCapacity(),
+    );
+    this.rangeMembers = new Uint32Array(
+      memory,
+      this.raw.getRangeMembersPtr(),
+      this.raw.getMemberCapacity(),
+    );
+    this.spillRows = new Uint32Array(
+      memory,
+      this.raw.getSpillResultRowsPtr(),
+      this.raw.getCellCapacity(),
+    );
+    this.spillCols = new Uint32Array(
+      memory,
+      this.raw.getSpillResultColsPtr(),
+      this.raw.getCellCapacity(),
+    );
+    this.spillOffsets = new Uint32Array(
+      memory,
+      this.raw.getSpillResultOffsetsPtr(),
+      this.raw.getCellCapacity(),
+    );
+    this.spillLengths = new Uint32Array(
+      memory,
+      this.raw.getSpillResultLengthsPtr(),
+      this.raw.getCellCapacity(),
+    );
+    this.spillNumbers = new Float64Array(
+      memory,
+      this.raw.getSpillResultNumbersPtr(),
+      this.raw.getSpillResultValueCount(),
+    );
   }
 }
 
 function isNodeLike(): boolean {
-  return typeof process !== "undefined" && process.versions != null && process.versions.node != null;
+  return (
+    typeof process !== "undefined" && process.versions != null && process.versions.node != null
+  );
 }
 
 async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
@@ -718,12 +825,14 @@ async function loadWasmModule(): Promise<WebAssembly.WebAssemblyInstantiatedSour
     env: {
       abort(_message: number, _fileName: number, lineNumber: number, columnNumber: number) {
         throw new Error(`AssemblyScript abort at ${lineNumber}:${columnNumber}`);
-      }
-    }
+      },
+    },
   };
 
   if (isNodeLike()) {
-    const fsPromises = process.getBuiltinModule("fs/promises") as typeof import("node:fs/promises") | undefined;
+    const fsPromises = process.getBuiltinModule("fs/promises") as
+      | typeof import("node:fs/promises")
+      | undefined;
     if (!fsPromises) {
       throw new Error("Node fs/promises module is unavailable");
     }

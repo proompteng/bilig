@@ -6,9 +6,15 @@ import {
   collectDeleteOps,
   collectMountOps,
   collectSheetOrderOps,
-  normalizeCommitOps
+  normalizeCommitOps,
 } from "./commit-log.js";
-import type { CellProps, Descriptor, SheetProps, WorkbookDescriptor, WorkbookProps } from "./descriptors.js";
+import type {
+  CellProps,
+  Descriptor,
+  SheetProps,
+  WorkbookDescriptor,
+  WorkbookProps,
+} from "./descriptors.js";
 import { validateDescriptorTree } from "./validation.js";
 
 export interface WorkbookContainer {
@@ -41,12 +47,14 @@ function isCellProps(props: WorkbookHostProps): props is CellProps {
 }
 
 function isWorkbookContainer(value: unknown): value is WorkbookContainer {
-  return typeof value === "object"
-    && value !== null
-    && "engine" in value
-    && "pendingOps" in value
-    && "shouldSyncSheetOrders" in value
-    && "lastError" in value;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "engine" in value &&
+    "pendingOps" in value &&
+    "shouldSyncSheetOrders" in value &&
+    "lastError" in value
+  );
 }
 
 function insertChild(parent: Descriptor, child: Descriptor, before?: Descriptor): void {
@@ -119,12 +127,12 @@ function pushCollectedOps(container: WorkbookContainer, collector: () => CommitO
 function pushCellUpsert(
   ops: CommitOp[],
   sheetName: string,
-  props: { addr: string; value?: CellProps["value"]; formula?: string; format?: string }
+  props: { addr: string; value?: CellProps["value"]; formula?: string; format?: string },
 ): void {
   const op: CommitOp = {
     kind: "upsertCell",
     sheetName,
-    addr: props.addr
+    addr: props.addr,
   };
   if (props.value !== undefined) op.value = props.value;
   if (props.formula !== undefined) op.formula = props.formula;
@@ -176,7 +184,11 @@ export const workbookHostConfig = {
     }
   },
   preparePortalMount() {},
-  createInstance(type: Descriptor["kind"], props: WorkbookHostProps, container: WorkbookContainer): Descriptor {
+  createInstance(
+    type: Descriptor["kind"],
+    props: WorkbookHostProps,
+    container: WorkbookContainer,
+  ): Descriptor {
     switch (type) {
       case "Workbook":
         if (!isWorkbookProps(props)) {
@@ -319,7 +331,7 @@ export const workbookHostConfig = {
     instance: Descriptor,
     _type: string,
     previousProps: WorkbookProps | SheetProps | CellProps,
-    newProps: WorkbookProps | SheetProps | CellProps
+    newProps: WorkbookProps | SheetProps | CellProps,
   ) {
     const container = containerFor(instance);
 
@@ -331,7 +343,7 @@ export const workbookHostConfig = {
       if (previousProps.name !== instance.props.name) {
         container.pendingOps.push({
           kind: "upsertWorkbook",
-          name: instance.props.name ?? "Workbook"
+          name: instance.props.name ?? "Workbook",
         });
       }
       return;
@@ -350,7 +362,7 @@ export const workbookHostConfig = {
         container.pendingOps.push({
           kind: "upsertSheet",
           name: instance.props.name,
-          order: Math.max(order, 0)
+          order: Math.max(order, 0),
         });
         instance.children.forEach((cell) => {
           pushCellUpsert(container.pendingOps, instance.props.name, cell.props);
@@ -372,7 +384,7 @@ export const workbookHostConfig = {
       container.pendingOps.push({
         kind: "deleteCell",
         sheetName: sheet.props.name,
-        addr: previousProps.addr
+        addr: previousProps.addr,
       });
     }
     if (
@@ -396,7 +408,7 @@ export const workbookHostConfig = {
       pushCollectedOps(container, () => collectDeleteOps(container.root!));
     }
     container.root = null;
-  }
+  },
 };
 
 export const WorkbookReconciler: WorkbookReconcilerInstance = Reconciler(workbookHostConfig);

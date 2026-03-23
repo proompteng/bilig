@@ -36,48 +36,50 @@ export const PLAYGROUND_PRESETS: readonly PlaygroundPresetDefinition[] = [
     id: "starter",
     label: "Starter Demo",
     description: "Small workbook mounted through the custom reconciler.",
-    kind: "renderer"
+    kind: "renderer",
   },
   {
     id: "load-100k",
     label: "100k Materialized",
     description: "Large load fixture with 100,000 materialized cells.",
-    kind: "snapshot"
+    kind: "snapshot",
   },
   {
     id: "load-250k",
     label: "250k Materialized",
     description: "Stress fixture with 250,000 materialized cells.",
-    kind: "snapshot"
+    kind: "snapshot",
   },
   {
     id: "downstream-10k",
     label: "10k Downstream Recalc",
     description: "One edit fans out into 10,000 dependent formulas.",
-    kind: "snapshot"
+    kind: "snapshot",
   },
   {
     id: "range-aggregates",
     label: "Range Aggregates",
     description: "Repeated bounded aggregate formulas against shared ranges.",
-    kind: "snapshot"
+    kind: "snapshot",
   },
   {
     id: "million-surface",
     label: "Million-Row Surface",
     description: "Excel-scale surface with landmarks at the far row and far column edges.",
-    kind: "snapshot"
-  }
+    kind: "snapshot",
+  },
 ] as const;
 
-export async function loadPlaygroundPreset(id: PlaygroundPresetId): Promise<PlaygroundPresetPayload> {
+export async function loadPlaygroundPreset(
+  id: PlaygroundPresetId,
+): Promise<PlaygroundPresetPayload> {
   switch (id) {
     case "starter":
       return {
         kind: "renderer",
         element: buildDemoWorkbook(),
         defaultSheet: "Sheet1",
-        defaultAddress: "A1"
+        defaultAddress: "A1",
       };
     case "load-100k": {
       const { buildWorkbookSnapshot } = await import("@bilig/benchmarks/generate-workbook");
@@ -85,7 +87,7 @@ export async function loadPlaygroundPreset(id: PlaygroundPresetId): Promise<Play
         kind: "snapshot",
         snapshot: buildWorkbookSnapshot(100_000),
         defaultSheet: "Sheet1",
-        defaultAddress: "A1"
+        defaultAddress: "A1",
       };
     }
     case "load-250k": {
@@ -94,7 +96,7 @@ export async function loadPlaygroundPreset(id: PlaygroundPresetId): Promise<Play
         kind: "snapshot",
         snapshot: buildWorkbookSnapshot(250_000),
         defaultSheet: "Sheet1",
-        defaultAddress: "A1"
+        defaultAddress: "A1",
       };
     }
     case "downstream-10k": {
@@ -103,7 +105,7 @@ export async function loadPlaygroundPreset(id: PlaygroundPresetId): Promise<Play
         kind: "snapshot",
         snapshot: buildDownstreamSnapshot(10_000),
         defaultSheet: "Sheet1",
-        defaultAddress: "A1"
+        defaultAddress: "A1",
       };
     }
     case "range-aggregates": {
@@ -112,7 +114,7 @@ export async function loadPlaygroundPreset(id: PlaygroundPresetId): Promise<Play
         kind: "snapshot",
         snapshot: buildRangeAggregateSnapshot(2_048, 10_000),
         defaultSheet: "Sheet1",
-        defaultAddress: "B1"
+        defaultAddress: "B1",
       };
     }
     case "million-surface":
@@ -120,7 +122,7 @@ export async function loadPlaygroundPreset(id: PlaygroundPresetId): Promise<Play
         kind: "snapshot",
         snapshot: buildMillionSurfaceSnapshot(),
         defaultSheet: "Sheet1",
-        defaultAddress: "A1"
+        defaultAddress: "A1",
       };
   }
 }
@@ -139,8 +141,8 @@ function buildMillionSurfaceSnapshot(): WorkbookSnapshot {
           { address: "A1048576", value: 1048576 },
           { address: "B1048576", formula: "A1048576*2" },
           { address: "XFD1", value: "Far column" },
-          { address: "XFD1048576", formula: "B1048576+1" }
-        ]
+          { address: "XFD1048576", formula: "B1048576+1" },
+        ],
       },
       {
         name: "Landmarks",
@@ -151,9 +153,9 @@ function buildMillionSurfaceSnapshot(): WorkbookSnapshot {
           { address: "A3", value: "XFD1" },
           { address: "A4", value: "XFD1048576" },
           { address: "B2", formula: "Sheet1!A1048576" },
-          { address: "B4", formula: "Sheet1!XFD1048576" }
-        ]
-      }
-    ]
+          { address: "B4", formula: "Sheet1!XFD1048576" },
+        ],
+      },
+    ],
   };
 }

@@ -5,7 +5,7 @@ const coveragePath = new URL("../coverage/coverage-final.json", import.meta.url)
 const thresholds = [
   { label: "packages/core/src", prefix: "/packages/core/src/", lines: 90 },
   { label: "packages/formula/src", prefix: "/packages/formula/src/", lines: 90 },
-  { label: "packages/renderer/src", prefix: "/packages/renderer/src/", lines: 90 }
+  { label: "packages/renderer/src", prefix: "/packages/renderer/src/", lines: 90 },
 ];
 
 const ignoredSuffixes = ["/index.ts", "/snapshot.ts", "/ast.ts"];
@@ -27,7 +27,7 @@ function lineStatsForFile(fileCoverage) {
 
   return {
     total: totalLines.size,
-    covered: coveredLines.size
+    covered: coveredLines.size,
   };
 }
 
@@ -57,13 +57,13 @@ function aggregatePrefix(prefix) {
 const results = thresholds.map((threshold) => ({
   label: threshold.label,
   linesPct: aggregatePrefix(threshold.prefix),
-  requiredLinesPct: threshold.lines
+  requiredLinesPct: threshold.lines,
 }));
 
 for (const result of results) {
   if (result.linesPct < result.requiredLinesPct) {
     throw new Error(
-      `${result.label} line coverage is below target: ${result.linesPct.toFixed(2)}% < ${result.requiredLinesPct}%`
+      `${result.label} line coverage is below target: ${result.linesPct.toFixed(2)}% < ${result.requiredLinesPct}%`,
     );
   }
 }

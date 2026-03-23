@@ -127,7 +127,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
     root: null,
     pendingOps: [],
     shouldSyncSheetOrders: false,
-    lastError: null
+    lastError: null,
   };
 
   const fiberRoot = createFiberRoot(container);
@@ -201,6 +201,6 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
           reject(error);
         }
       });
-    }
+    },
   };
 }

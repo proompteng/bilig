@@ -42,7 +42,9 @@ function isViewportPatch(value: unknown): value is ViewportPatch {
   if (!isRecord(value) || !isRecord(value["viewport"]) || !isRecord(value["metrics"])) {
     return false;
   }
-  return Array.isArray(value["cells"]) && Array.isArray(value["columns"]) && Array.isArray(value["rows"]);
+  return (
+    Array.isArray(value["cells"]) && Array.isArray(value["columns"]) && Array.isArray(value["rows"])
+  );
 }
 
 export function encodeViewportPatch(patch: ViewportPatch): Uint8Array {

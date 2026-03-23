@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 
 const require = createRequire(import.meta.url);
 const glideEntry = require.resolve("@glideapps/glide-data-grid", {
-  paths: [fileURLToPath(new URL("../../packages/grid", import.meta.url))]
+  paths: [fileURLToPath(new URL("../../packages/grid", import.meta.url))],
 });
 const glidePackageRoot = resolve(dirname(glideEntry), "..", "..");
 
@@ -15,13 +15,23 @@ export default defineConfig({
   resolve: {
     alias: {
       "@glideapps/glide-data-grid/index.css": resolve(glidePackageRoot, "dist/index.css"),
-      "@bilig/binary-protocol": fileURLToPath(new URL("../../packages/binary-protocol/src/index.ts", import.meta.url)),
-      "@bilig/formula/program-arena": fileURLToPath(new URL("../../packages/formula/src/program-arena.ts", import.meta.url)),
+      "@bilig/binary-protocol": fileURLToPath(
+        new URL("../../packages/binary-protocol/src/index.ts", import.meta.url),
+      ),
+      "@bilig/formula/program-arena": fileURLToPath(
+        new URL("../../packages/formula/src/program-arena.ts", import.meta.url),
+      ),
       "@bilig/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)),
       "@bilig/crdt": fileURLToPath(new URL("../../packages/crdt/src/index.ts", import.meta.url)),
-      "@bilig/formula": fileURLToPath(new URL("../../packages/formula/src/index.ts", import.meta.url)),
-      "@bilig/protocol": fileURLToPath(new URL("../../packages/protocol/src/index.ts", import.meta.url)),
-      "@bilig/wasm-kernel": fileURLToPath(new URL("../../packages/wasm-kernel/src/index.ts", import.meta.url))
-    }
-  }
+      "@bilig/formula": fileURLToPath(
+        new URL("../../packages/formula/src/index.ts", import.meta.url),
+      ),
+      "@bilig/protocol": fileURLToPath(
+        new URL("../../packages/protocol/src/index.ts", import.meta.url),
+      ),
+      "@bilig/wasm-kernel": fileURLToPath(
+        new URL("../../packages/wasm-kernel/src/index.ts", import.meta.url),
+      ),
+    },
+  },
 });

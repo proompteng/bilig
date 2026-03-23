@@ -8,7 +8,7 @@ import {
   isBuiltinAvailable,
   lexFormula,
   lowerToPlan,
-  parseFormula
+  parseFormula,
 } from "../index.js";
 
 const context = {
@@ -23,15 +23,20 @@ const context = {
         return { tag: ValueTag.Empty };
     }
   },
-  resolveRange: (_sheetName: string, start: string, end: string, refKind: "cells" | "rows" | "cols"): CellValue[] => {
+  resolveRange: (
+    _sheetName: string,
+    start: string,
+    end: string,
+    refKind: "cells" | "rows" | "cols",
+  ): CellValue[] => {
     if (refKind === "cells" && start === "A1" && end === "A2") {
       return [
         { tag: ValueTag.Number, value: 4 },
-        { tag: ValueTag.Number, value: 6 }
+        { tag: ValueTag.Number, value: 6 },
       ];
     }
     return [];
-  }
+  },
 };
 
 describe("formula parser/compiler edges", () => {
@@ -39,21 +44,25 @@ describe("formula parser/compiler edges", () => {
     expect(lexFormula("'O''Brien'!A1").slice(0, 3)).toEqual([
       { kind: "quotedIdentifier", value: "O'Brien" },
       { kind: "bang", value: "!" },
-      { kind: "identifier", value: "A1" }
+      { kind: "identifier", value: "A1" },
     ]);
     expect(lexFormula("10%").slice(0, 2)).toEqual([
       { kind: "number", value: "10" },
-      { kind: "percent", value: "%" }
+      { kind: "percent", value: "%" },
     ]);
-    expect(lexFormula("\"he said \"\"hi\"\"\"").slice(0, 1)).toEqual([
-      { kind: "string", value: "he said \"hi\"" }
+    expect(lexFormula('"he said ""hi"""').slice(0, 1)).toEqual([
+      { kind: "string", value: 'he said "hi"' },
     ]);
     expect(() => lexFormula("@oops")).toThrow("Unexpected token '@'");
   });
 
   it("rejects standalone axis refs and malformed ranges", () => {
-    expect(() => parseFormula("'Sheet 1'!1")).toThrow("Row and column references must appear inside a range");
-    expect(() => parseFormula("'Sheet 1'!$1")).toThrow("Row and column references must appear inside a range");
+    expect(() => parseFormula("'Sheet 1'!1")).toThrow(
+      "Row and column references must appear inside a range",
+    );
+    expect(() => parseFormula("'Sheet 1'!$1")).toThrow(
+      "Row and column references must appear inside a range",
+    );
     expect(() => parseFormula("A1:B")).toThrow("Range endpoints must use the same reference type");
     expect(() => parseFormula("A1:2")).toThrow("Range endpoints must use the same reference type");
   });
@@ -67,7 +76,7 @@ describe("formula parser/compiler edges", () => {
     expect(anchoredRange.deps).toEqual(["'My Sheet'!A:B"]);
     expect(anchoredRange.mode).toBe(FormulaMode.WasmFastPath);
 
-    expect(bindFormula(parseFormula("\"hello\"")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula('"hello"')).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("A1")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("LEN(A1)")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("LEN(A1:A2)")).mode).toBe(FormulaMode.JsOnly);
@@ -79,7 +88,7 @@ describe("formula parser/compiler edges", () => {
       kind: "BinaryExpr",
       operator: "*",
       left: { kind: "NameRef", name: "TaxRate" },
-      right: { kind: "CellRef", ref: "A1" }
+      right: { kind: "CellRef", ref: "A1" },
     });
 
     const bound = bindFormula(ast);
@@ -93,7 +102,7 @@ describe("formula parser/compiler edges", () => {
       { opcode: "push-name", name: "TaxRate" },
       { opcode: "push-cell", address: "A1" },
       { opcode: "binary", operator: "*" },
-      { opcode: "return" }
+      { opcode: "return" },
     ]);
   });
 
@@ -102,7 +111,7 @@ describe("formula parser/compiler edges", () => {
     expect(structured).toEqual({
       kind: "CallExpr",
       callee: "SUM",
-      args: [{ kind: "StructuredRef", tableName: "Sales", columnName: "Amount" }]
+      args: [{ kind: "StructuredRef", tableName: "Sales", columnName: "Amount" }],
     });
 
     const structuredBound = bindFormula(structured);
@@ -124,29 +133,33 @@ describe("formula parser/compiler edges", () => {
     expect(isBuiltinAvailable("VLOOKUP")).toBe(true);
     expect(isBuiltinAvailable("DOES_NOT_EXIST")).toBe(false);
     expect(encodeBuiltin("LEN")).toBeDefined();
-    expect(() => compileFormula("Sheet1!A")).toThrow("Row and column references must appear inside a range");
+    expect(() => compileFormula("Sheet1!A")).toThrow(
+      "Row and column references must appear inside a range",
+    );
   });
 
   it("compiles literal text, CONCAT, and IF text branches onto the wasm path", () => {
-    const textIf = compileFormula("IF(A1, CONCAT(\"x\", \"y\"), \"z\")");
+    const textIf = compileFormula('IF(A1, CONCAT("x", "y"), "z")');
     expect(textIf.mode).toBe(FormulaMode.WasmFastPath);
     expect(textIf.program[0] >>> 24).toBe(Opcode.PushCell);
     expect(textIf.symbolicStrings).toEqual(["xy", "z"]);
 
-    const plainString = compileFormula("\"hello\"");
+    const plainString = compileFormula('"hello"');
     expect(plainString.mode).toBe(FormulaMode.WasmFastPath);
     expect(plainString.symbolicStrings).toEqual(["hello"]);
-    expect(plainString.program).toEqual(Uint32Array.from([(Opcode.PushString << 24) | 0, 255 << 24]));
+    expect(plainString.program).toEqual(
+      Uint32Array.from([(Opcode.PushString << 24) | 0, 255 << 24]),
+    );
     expect(plainString.jsPlan).toEqual([
       { opcode: "push-string", value: "hello" },
-      { opcode: "return" }
+      { opcode: "return" },
     ]);
 
-    const concat = compileFormula("CONCAT(\"x\", \"y\")");
+    const concat = compileFormula('CONCAT("x", "y")');
     expect(concat.mode).toBe(FormulaMode.WasmFastPath);
     expect(concat.symbolicStrings).toEqual(["xy"]);
 
-    const compared = compileFormula("A1=\"HELLO\"");
+    const compared = compileFormula('A1="HELLO"');
     expect(compared.mode).toBe(FormulaMode.WasmFastPath);
   });
 
@@ -155,7 +168,7 @@ describe("formula parser/compiler edges", () => {
       kind: "BinaryExpr",
       operator: "*",
       left: { kind: "NumberLiteral", value: 10 },
-      right: { kind: "NumberLiteral", value: 0.01 }
+      right: { kind: "NumberLiteral", value: 0.01 },
     });
 
     expect(parseFormula("(A1+A2)%")).toEqual({
@@ -165,9 +178,9 @@ describe("formula parser/compiler edges", () => {
         kind: "BinaryExpr",
         operator: "+",
         left: { kind: "CellRef", ref: "A1" },
-        right: { kind: "CellRef", ref: "A2" }
+        right: { kind: "CellRef", ref: "A2" },
       },
-      right: { kind: "NumberLiteral", value: 0.01 }
+      right: { kind: "NumberLiteral", value: 0.01 },
     });
   });
 
@@ -178,10 +191,10 @@ describe("formula parser/compiler edges", () => {
           { opcode: "push-cell", address: "A1" },
           { opcode: "push-number", value: 4 },
           { opcode: "binary", operator: "=" },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Boolean, value: true });
 
     expect(
@@ -189,10 +202,10 @@ describe("formula parser/compiler edges", () => {
         [
           { opcode: "push-string", value: "x" },
           { opcode: "unary", operator: "-" },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
 
     expect(
@@ -203,10 +216,10 @@ describe("formula parser/compiler edges", () => {
           { opcode: "push-number", value: 1 },
           { opcode: "jump", target: 5 },
           { opcode: "push-number", value: 2 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 2 });
 
     expect(
@@ -214,10 +227,10 @@ describe("formula parser/compiler edges", () => {
         [
           { opcode: "push-range", start: "A1", end: "A2", refKind: "cells" },
           { opcode: "call", callee: "SUM", argc: 1 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Number, value: 10 });
 
     expect(
@@ -225,10 +238,10 @@ describe("formula parser/compiler edges", () => {
         [
           { opcode: "push-number", value: 1 },
           { opcode: "call", callee: "UNKNOWN", argc: 1 },
-          { opcode: "return" }
+          { opcode: "return" },
         ],
-        context
-      )
+        context,
+      ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
   });
 
@@ -239,7 +252,7 @@ describe("formula parser/compiler edges", () => {
       { opcode: "push-cell", address: "B1" },
       { opcode: "jump", target: 5 },
       { opcode: "push-number", value: 0 },
-      { opcode: "return" }
+      { opcode: "return" },
     ]);
   });
 
@@ -255,11 +268,11 @@ describe("formula parser/compiler edges", () => {
             kind: "BinaryExpr",
             operator: "+",
             left: { kind: "NameRef", name: "x" },
-            right: { kind: "NumberLiteral", value: 1 }
-          }
-        ]
+            right: { kind: "NumberLiteral", value: 1 },
+          },
+        ],
       },
-      args: [{ kind: "NumberLiteral", value: 4 }]
+      args: [{ kind: "NumberLiteral", value: 4 }],
     });
 
     expect(lowerToPlan(parseFormula("LAMBDA(x,x+1)(4)"))).toEqual([
@@ -270,12 +283,12 @@ describe("formula parser/compiler edges", () => {
           { opcode: "push-name", name: "x" },
           { opcode: "push-number", value: 1 },
           { opcode: "binary", operator: "+" },
-          { opcode: "return" }
-        ]
+          { opcode: "return" },
+        ],
       },
       { opcode: "push-number", value: 4 },
       { opcode: "invoke", argc: 1 },
-      { opcode: "return" }
+      { opcode: "return" },
     ]);
   });
 });

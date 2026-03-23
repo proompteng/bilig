@@ -52,18 +52,18 @@ export function lexFormula(input: string): Token[] {
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       let end = index + 1;
       let value = "";
       while (end < source.length) {
         const current = source[end]!;
         const next = source[end + 1];
-        if (current === "\"" && next === "\"") {
-          value += "\"";
+        if (current === '"' && next === '"') {
+          value += '"';
           end += 2;
           continue;
         }
-        if (current === "\"") {
+        if (current === '"') {
           break;
         }
         value += current;
@@ -139,7 +139,7 @@ export function lexFormula(input: string): Token[] {
       "&": "ampersand",
       "=": "eq",
       ">": "gt",
-      "<": "lt"
+      "<": "lt",
     };
 
     const kind = singleMap[char];

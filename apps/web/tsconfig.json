@@ -9,9 +9,12 @@
       "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"]
     }
   },
-  "references": [
-    { "path": "../../packages/binary-protocol" }
+  "references": [{ "path": "../../packages/binary-protocol" }],
+  "include": [
+    "src/**/*",
+    "vite.config.ts",
+    "../playground/src/**/*.ts",
+    "../playground/src/**/*.tsx"
   ],
-  "include": ["src/**/*", "vite.config.ts", "../playground/src/**/*.ts", "../playground/src/**/*.tsx"],
   "exclude": ["../playground/src/**/*.test.ts", "../playground/src/**/*.test.tsx"]
 }

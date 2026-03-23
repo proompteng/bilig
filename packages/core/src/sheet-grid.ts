@@ -39,7 +39,7 @@ export class SheetGrid {
     colStart: number,
     rowEnd: number,
     colEnd: number,
-    fn: (cellIndex: number) => void
+    fn: (cellIndex: number) => void,
   ): void {
     for (let row = rowStart; row <= rowEnd; row += 1) {
       for (let col = colStart; col <= colEnd; col += 1) {

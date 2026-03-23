@@ -13,7 +13,11 @@ function callNode(callee: string, args: FormulaNode[]): CallExprNode {
   return { kind: "CallExpr", callee: callee.toUpperCase(), args };
 }
 
-function binaryNode(operator: BinaryExprNode["operator"], left: FormulaNode, right: FormulaNode): FormulaNode {
+function binaryNode(
+  operator: BinaryExprNode["operator"],
+  left: FormulaNode,
+  right: FormulaNode,
+): FormulaNode {
   return { kind: "BinaryExpr", operator, left, right };
 }
 
@@ -51,7 +55,7 @@ function rewriteSwitch(args: readonly FormulaNode[]): FormulaNode {
     fallback = callNode("IF", [
       binaryNode("=", expression, entries[index]!),
       entries[index + 1]!,
-      fallback
+      fallback,
     ]);
   }
   return fallback;

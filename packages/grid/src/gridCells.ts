@@ -2,7 +2,9 @@ import { ValueTag, formatErrorCode, type CellSnapshot } from "@bilig/protocol";
 import { GridCellKind, type GridCell } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
 
-export function cellToEditorSeed(snapshot: Pick<CellSnapshot, "formula" | "input" | "value">): string {
+export function cellToEditorSeed(
+  snapshot: Pick<CellSnapshot, "formula" | "input" | "value">,
+): string {
   if (snapshot.formula) {
     return `=${snapshot.formula}`;
   }
@@ -26,7 +28,9 @@ export function cellToEditorSeed(snapshot: Pick<CellSnapshot, "formula" | "input
   return String(snapshot.input);
 }
 
-export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "input" | "value">): GridCell {
+export function snapshotToGridCell(
+  snapshot: Pick<CellSnapshot, "formula" | "input" | "value">,
+): GridCell {
   const rawValue = cellToEditorSeed(snapshot);
 
   switch (snapshot.value.tag) {
@@ -38,7 +42,7 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
         displayData: String(snapshot.value.value),
         readonly: false,
         copyData: snapshot.formula ? rawValue : String(snapshot.value.value),
-        contentAlign: "right"
+        contentAlign: "right",
       };
     case ValueTag.Boolean:
       return {
@@ -46,7 +50,7 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
         allowOverlay: false,
         data: snapshot.value.value,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE"
+        copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE",
       };
     case ValueTag.Error:
       return {
@@ -55,7 +59,7 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
         data: formatErrorCode(snapshot.value.code),
         displayData: formatErrorCode(snapshot.value.code),
         readonly: false,
-        copyData: snapshot.formula ? rawValue : formatErrorCode(snapshot.value.code)
+        copyData: snapshot.formula ? rawValue : formatErrorCode(snapshot.value.code),
       };
     case ValueTag.String:
       return {
@@ -64,7 +68,7 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
         data: snapshot.value.value,
         displayData: snapshot.value.value,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : snapshot.value.value
+        copyData: snapshot.formula ? rawValue : snapshot.value.value,
       };
     case ValueTag.Empty:
       return {
@@ -73,7 +77,7 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
         data: "",
         displayData: "",
         readonly: false,
-        copyData: snapshot.formula ? rawValue : ""
+        copyData: snapshot.formula ? rawValue : "",
       };
   }
 }

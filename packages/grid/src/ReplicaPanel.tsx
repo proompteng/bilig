@@ -23,25 +23,42 @@ export function ReplicaPanel({
   queuedSyncCount,
   latencyMs,
   remoteMetrics,
-  onToggleSync
+  onToggleSync,
 }: ReplicaPanelProps) {
   return (
     <div className="panel replica-panel" data-testid="replica-panel">
       <div className="replica-panel-header">
         <div>
           <p className="panel-eyebrow">Local-First Mirror</p>
-          <h3>{localReplicaId} → {remoteReplicaId}</h3>
+          <h3>
+            {localReplicaId} → {remoteReplicaId}
+          </h3>
         </div>
         <button className={syncPaused ? "ghost-button" : ""} onClick={onToggleSync} type="button">
           {syncPaused ? "Resume sync" : "Pause sync"}
         </button>
       </div>
       <dl className="replica-stats">
-        <div><dt>Status</dt><dd data-testid="replica-status">{syncPaused ? "Paused" : "Live"}</dd></div>
-        <div><dt>Latency</dt><dd>{latencyMs} ms</dd></div>
-        <div><dt>In flight</dt><dd data-testid="replica-pending">{pendingSyncCount}</dd></div>
-        <div><dt>Queued</dt><dd data-testid="replica-queued">{queuedSyncCount}</dd></div>
-        <div><dt>Replica batch</dt><dd>{remoteMetrics.batchId}</dd></div>
+        <div>
+          <dt>Status</dt>
+          <dd data-testid="replica-status">{syncPaused ? "Paused" : "Live"}</dd>
+        </div>
+        <div>
+          <dt>Latency</dt>
+          <dd>{latencyMs} ms</dd>
+        </div>
+        <div>
+          <dt>In flight</dt>
+          <dd data-testid="replica-pending">{pendingSyncCount}</dd>
+        </div>
+        <div>
+          <dt>Queued</dt>
+          <dd data-testid="replica-queued">{queuedSyncCount}</dd>
+        </div>
+        <div>
+          <dt>Replica batch</dt>
+          <dd>{remoteMetrics.batchId}</dd>
+        </div>
       </dl>
       <div className="replica-selected">
         <strong>{selectedLabel}</strong>

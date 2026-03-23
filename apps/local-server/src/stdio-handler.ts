@@ -1,6 +1,11 @@
 import type { Writable } from "node:stream";
 
-import { decodeStdioMessages, encodeStdioMessage, type AgentEvent, type AgentFrame } from "@bilig/agent-api";
+import {
+  decodeStdioMessages,
+  encodeStdioMessage,
+  type AgentEvent,
+  type AgentFrame,
+} from "@bilig/agent-api";
 
 export interface AgentFrameHandler {
   handleAgentFrame(frame: AgentFrame): Promise<AgentFrame>;
@@ -35,9 +40,11 @@ function isAgentEventStreamHandler(handler: AgentFrameHandler): handler is Agent
 export function attachStdioAgentLoop(options: StdioAgentLoopOptions): { dispose(): void } {
   const input = options.input ?? process.stdin;
   const output = options.output ?? process.stdout;
-  const onError = options.onError ?? ((error) => {
-    console.error(error);
-  });
+  const onError =
+    options.onError ??
+    ((error) => {
+      console.error(error);
+    });
   let buffer: Uint8Array = new Uint8Array(0);
   let queue = Promise.resolve();
   let disposed = false;
@@ -82,8 +89,8 @@ export function attachStdioAgentLoop(options: StdioAgentLoopOptions): { dispose(
                 output.write(Buffer.from(encodeStdioMessage(response)));
                 return undefined;
               }),
-            Promise.resolve(undefined)
-          )
+            Promise.resolve(undefined),
+          ),
         )
         .catch((error: unknown) => {
           onError(error instanceof Error ? error : new Error(String(error)));
@@ -101,6 +108,6 @@ export function attachStdioAgentLoop(options: StdioAgentLoopOptions): { dispose(
       disposed = true;
       input.off("data", handleData);
       detachEvents();
-    }
+    },
   };
 }

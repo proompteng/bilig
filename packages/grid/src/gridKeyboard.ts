@@ -1,6 +1,8 @@
 import type { GridKeyEventArgs } from "@glideapps/glide-data-grid";
 
-export function isPrintableKey(event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">): boolean {
+export function isPrintableKey(
+  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">,
+): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey) {
     return false;
   }
@@ -44,7 +46,9 @@ export function isNavigationKey(key: string): boolean {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
 }
 
-export function isClipboardShortcut(event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">): boolean {
+export function isClipboardShortcut(
+  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">,
+): boolean {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) {
     return false;
   }
@@ -52,15 +56,17 @@ export function isClipboardShortcut(event: Pick<GridKeyEventArgs, "altKey" | "ct
   return normalizedKey === "c" || normalizedKey === "x" || normalizedKey === "v";
 }
 
-export function isHandledGridKey(event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">): boolean {
+export function isHandledGridKey(
+  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">,
+): boolean {
   return (
-    isPrintableKey(event)
-    || isClipboardShortcut(event)
-    || isNavigationKey(event.key)
-    || event.key === "Enter"
-    || event.key === "Tab"
-    || event.key === "F2"
-    || event.key === "Backspace"
-    || event.key === "Delete"
+    isPrintableKey(event) ||
+    isClipboardShortcut(event) ||
+    isNavigationKey(event.key) ||
+    event.key === "Enter" ||
+    event.key === "Tab" ||
+    event.key === "F2" ||
+    event.key === "Backspace" ||
+    event.key === "Delete"
   );
 }

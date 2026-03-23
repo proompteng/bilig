@@ -1,5 +1,5 @@
 export {
   createWebSocketSyncClient,
   type BrowserWebSocketLike,
-  type WebSocketSyncClientOptions
+  type WebSocketSyncClientOptions,
 } from "@bilig/worker-transport";

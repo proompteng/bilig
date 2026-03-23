@@ -4,7 +4,7 @@ import type {
   LiteralInput,
   SyncState,
   WorkbookPivotValueSnapshot,
-  WorkbookSnapshot
+  WorkbookSnapshot,
 } from "@bilig/protocol";
 
 export const AGENT_PROTOCOL_VERSION = 1;
@@ -17,15 +17,39 @@ export type AgentRequest =
   | { kind: "openWorkbookSession"; id: string; documentId: string; replicaId: string }
   | { kind: "closeWorkbookSession"; id: string; sessionId: string }
   | { kind: "readRange"; id: string; sessionId: string; range: CellRangeRef }
-  | { kind: "writeRange"; id: string; sessionId: string; range: CellRangeRef; values: LiteralInput[][] }
-  | { kind: "setRangeFormulas"; id: string; sessionId: string; range: CellRangeRef; formulas: string[][] }
+  | {
+      kind: "writeRange";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
+      values: LiteralInput[][];
+    }
+  | {
+      kind: "setRangeFormulas";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
+      formulas: string[][];
+    }
   | { kind: "clearRange"; id: string; sessionId: string; range: CellRangeRef }
   | { kind: "fillRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }
   | { kind: "copyRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }
-  | { kind: "pasteRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }
+  | {
+      kind: "pasteRange";
+      id: string;
+      sessionId: string;
+      source: CellRangeRef;
+      target: CellRangeRef;
+    }
   | { kind: "getDependents"; id: string; sessionId: string; sheetName: string; address: string }
   | { kind: "getPrecedents"; id: string; sessionId: string; sheetName: string; address: string }
-  | { kind: "subscribeRange"; id: string; sessionId: string; range: CellRangeRef; subscriptionId: string }
+  | {
+      kind: "subscribeRange";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
+      subscriptionId: string;
+    }
   | { kind: "unsubscribe"; id: string; sessionId: string; subscriptionId: string }
   | { kind: "exportSnapshot"; id: string; sessionId: string }
   | { kind: "importSnapshot"; id: string; sessionId: string; snapshot: WorkbookSnapshot }
@@ -51,7 +75,12 @@ export type AgentResponse =
   | { kind: "error"; id: string; code: string; message: string; retryable: boolean };
 
 export type AgentEvent =
-  | { kind: "rangeChanged"; subscriptionId: string; range: CellRangeRef; changedAddresses: string[] }
+  | {
+      kind: "rangeChanged";
+      subscriptionId: string;
+      range: CellRangeRef;
+      changedAddresses: string[];
+    }
   | { kind: "syncState"; sessionId: string; state: SyncState };
 
 export type AgentFrame =
@@ -123,7 +152,10 @@ export function encodeStdioMessage(frame: AgentFrame): Uint8Array {
   return output;
 }
 
-export function decodeStdioMessages(buffer: Uint8Array): { frames: AgentFrame[]; remainder: Uint8Array } {
+export function decodeStdioMessages(buffer: Uint8Array): {
+  frames: AgentFrame[];
+  remainder: Uint8Array;
+} {
   const frames: AgentFrame[] = [];
   let offset = 0;
 
@@ -138,6 +170,6 @@ export function decodeStdioMessages(buffer: Uint8Array): { frames: AgentFrame[];
 
   return {
     frames,
-    remainder: buffer.subarray(offset)
+    remainder: buffer.subarray(offset),
   };
 }

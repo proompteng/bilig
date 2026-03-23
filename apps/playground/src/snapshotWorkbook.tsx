@@ -24,7 +24,7 @@ export function renderSnapshotWorkbook(snapshot: WorkbookSnapshot): React.ReactN
                   key={`${sheet.name}:${cell.address}`}
                   value={cell.value ?? null}
                 />
-              )
+              ),
             )}
           </Sheet>
         ))}

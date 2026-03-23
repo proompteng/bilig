@@ -48,7 +48,7 @@ export function resolveHeaderClickIntent(options: {
     kind: "select-column",
     columnIndex,
     selectedRow,
-    addr: formatAddress(selectedRow, columnIndex)
+    addr: formatAddress(selectedRow, columnIndex),
   };
 }
 
@@ -68,20 +68,40 @@ export function shouldSkipGridSelectionChange(options: {
     postDragSelectionExpiry,
     now,
     ignoreNextPointerSelection,
-    hasDragViewport
+    hasDragViewport,
   } = options;
 
   if (columnResizeActive) {
-    return { skip: true, clearPostDragSelectionExpiry: false, consumeIgnoreNextPointerSelection: false };
+    return {
+      skip: true,
+      clearPostDragSelectionExpiry: false,
+      consumeIgnoreNextPointerSelection: false,
+    };
   }
   if (postDragSelectionExpiry > 0 && now <= postDragSelectionExpiry) {
-    return { skip: true, clearPostDragSelectionExpiry: true, consumeIgnoreNextPointerSelection: false };
+    return {
+      skip: true,
+      clearPostDragSelectionExpiry: true,
+      consumeIgnoreNextPointerSelection: false,
+    };
   }
   if (ignoreNextPointerSelection) {
-    return { skip: true, clearPostDragSelectionExpiry: false, consumeIgnoreNextPointerSelection: true };
+    return {
+      skip: true,
+      clearPostDragSelectionExpiry: false,
+      consumeIgnoreNextPointerSelection: true,
+    };
   }
   if (hasDragViewport) {
-    return { skip: true, clearPostDragSelectionExpiry: false, consumeIgnoreNextPointerSelection: false };
+    return {
+      skip: true,
+      clearPostDragSelectionExpiry: false,
+      consumeIgnoreNextPointerSelection: false,
+    };
   }
-  return { skip: false, clearPostDragSelectionExpiry: false, consumeIgnoreNextPointerSelection: false };
+  return {
+    skip: false,
+    clearPostDragSelectionExpiry: false,
+    consumeIgnoreNextPointerSelection: false,
+  };
 }
