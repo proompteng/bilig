@@ -1,6 +1,6 @@
 import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
-import { datetimeBuiltins } from "./builtins/datetime.js";
+import { datetimeBuiltins, excelSerialToDateParts } from "./builtins/datetime.js";
 import { logicalBuiltins } from "./builtins/logical.js";
 import { lookupBuiltins } from "./builtins/lookup.js";
 import { createBlockedBuiltinMap, scalarPlaceholderBuiltinNames } from "./builtins/placeholder.js";
@@ -102,6 +102,234 @@ function sequenceResult(rowsArg: CellValue | undefined, colsArg: CellValue | und
     cols,
     values
   };
+}
+
+function coerceDateSerial(value: CellValue | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const serial = toNumber(value);
+  return serial !== undefined && Number.isFinite(serial) ? Math.trunc(serial) : undefined;
+}
+
+function coerceBoolean(value: CellValue | undefined, fallback: boolean): boolean | undefined {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value.tag === ValueTag.Boolean) {
+    return value.value;
+  }
+  const numeric = toNumber(value);
+  return numeric === undefined ? undefined : numeric !== 0;
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function isValidBasis(basis: number): boolean {
+  return basis === 0 || basis === 1 || basis === 2 || basis === 3 || basis === 4;
+}
+
+function isValidFrequency(frequency: number): boolean {
+  return frequency === 1 || frequency === 2 || frequency === 4;
+}
+
+function yearsDaysInYear(year: number): number {
+  return isLeapYear(year) ? 366 : 365;
+}
+
+function yearFracByBasis(startSerial: number, endSerial: number, basis: number): number | undefined {
+  if (!isValidBasis(basis)) {
+    return undefined;
+  }
+
+  let start = startSerial;
+  let end = endSerial;
+  if (start > end) {
+    [start, end] = [end, start];
+  }
+
+  const startParts = excelSerialToDateParts(start);
+  const endParts = excelSerialToDateParts(end);
+  if (startParts === undefined || endParts === undefined) {
+    return undefined;
+  }
+
+  let startDay = startParts.day;
+  let startMonth = startParts.month;
+  let startYear = startParts.year;
+  let endDay = endParts.day;
+  let endMonth = endParts.month;
+  let endYear = endParts.year;
+
+  let totalDays: number;
+  switch (basis) {
+    case 0:
+      if (startDay === 31) {
+        startDay -= 1;
+      }
+      if (startDay === 30 && endDay === 31) {
+        endDay -= 1;
+      } else if (startMonth === 2 && startDay === (isLeapYear(startYear) ? 29 : 28)) {
+        startDay = 30;
+        if (endMonth === 2 && endDay === (isLeapYear(endYear) ? 29 : 28)) {
+          endDay = 30;
+        }
+      }
+      totalDays = (endYear - startYear) * 360 + (endMonth - startMonth) * 30 + (endDay - startDay);
+      break;
+    case 1:
+    case 2:
+    case 3:
+      totalDays = end - start;
+      break;
+    case 4:
+      if (startDay === 31) {
+        startDay -= 1;
+      }
+      if (endDay === 31) {
+        endDay -= 1;
+      }
+      totalDays = (endYear - startYear) * 360 + (endMonth - startMonth) * 30 + (endDay - startDay);
+      break;
+    default:
+      return undefined;
+  }
+
+  let daysInYear: number;
+  switch (basis) {
+    case 1: {
+      const isYearDifferent = startYear !== endYear;
+      if (
+        isYearDifferent && (
+          (endYear !== startYear + 1) ||
+          (endMonth < startMonth) ||
+          (endMonth === startMonth && endDay > startDay)
+        )
+      ) {
+        let dayCount = 0;
+        for (let year = startYear; year <= endYear; year += 1) {
+          dayCount += yearsDaysInYear(year);
+        }
+        daysInYear = dayCount / (endYear - startYear + 1);
+      } else if (isYearDifferent) {
+        const crossesLeap = (isLeapYear(startYear) && (startMonth < 2 || (startMonth === 2 && startDay <= 29)))
+          || (isLeapYear(endYear) && (endMonth > 2 || (endMonth === 2 && endDay === 29)));
+        daysInYear = crossesLeap ? 366 : 365;
+      } else {
+        daysInYear = yearsDaysInYear(startYear);
+      }
+      break;
+    }
+    case 3:
+      daysInYear = 365;
+      break;
+    case 0:
+    case 2:
+    case 4:
+      daysInYear = 360;
+      break;
+    default:
+      return undefined;
+  }
+
+  return totalDays / daysInYear;
+}
+
+function getAmordegrc(
+  cost: number,
+  datePurchased: number,
+  firstPeriod: number,
+  salvage: number,
+  period: number,
+  rate: number,
+  basis: number
+): number | undefined {
+  if (datePurchased > firstPeriod || rate <= 0 || salvage > cost || cost <= 0 || salvage < 0 || period < 0) {
+    return undefined;
+  }
+
+  const serialPer = Math.trunc(period);
+  if (!Number.isFinite(serialPer) || serialPer < 0) {
+    return undefined;
+  }
+
+  const fractionalRate = yearFracByBasis(datePurchased, firstPeriod, basis);
+  if (fractionalRate === undefined) {
+    return undefined;
+  }
+
+  const useRate = 1 / rate;
+  let amortizationCoefficient = 1.0;
+  if (useRate < 3.0) {
+    amortizationCoefficient = 1.0;
+  } else if (useRate < 5.0) {
+    amortizationCoefficient = 1.5;
+  } else if (useRate <= 6.0) {
+    amortizationCoefficient = 2.0;
+  } else {
+    amortizationCoefficient = 2.5;
+  }
+
+  const adjustedRate = rate * amortizationCoefficient;
+  let currentRate = Math.round(fractionalRate * adjustedRate * cost);
+  let currentCost = cost - currentRate;
+  let remaining = currentCost - salvage;
+
+  for (let step = 0; step < serialPer; step += 1) {
+    currentRate = Math.round(adjustedRate * currentCost);
+    remaining -= currentRate;
+    if (remaining < 0.0) {
+      if (serialPer - step === 0 || serialPer - step === 1) {
+        return Math.round(currentCost * 0.5);
+      }
+      return 0.0;
+    }
+    currentCost -= currentRate;
+  }
+
+  return currentRate;
+}
+
+function getAmorlinc(
+  cost: number,
+  datePurchased: number,
+  firstPeriod: number,
+  salvage: number,
+  period: number,
+  rate: number,
+  basis: number
+): number | undefined {
+  if (datePurchased > firstPeriod || rate <= 0 || salvage > cost || cost <= 0 || salvage < 0 || period < 0) {
+    return undefined;
+  }
+
+  const serialPer = Math.trunc(period);
+  if (!Number.isFinite(serialPer) || serialPer < 0) {
+    return undefined;
+  }
+
+  const fractionalRate = yearFracByBasis(datePurchased, firstPeriod, basis);
+  if (fractionalRate === undefined) {
+    return undefined;
+  }
+
+  const fullRate = cost * rate;
+  const remainingCost = cost - salvage;
+  const firstRate = fractionalRate * rate * cost;
+  const fullPeriods = Math.trunc((cost - salvage - firstRate) / fullRate);
+
+  let result = 0.0;
+  if (serialPer === 0) {
+    result = firstRate;
+  } else if (serialPer <= fullPeriods) {
+    result = fullRate;
+  } else if (serialPer === fullPeriods + 1) {
+    result = remainingCost - fullRate * fullPeriods - firstRate;
+  }
+
+  return result > 0.0 ? result : 0.0;
 }
 
 function roundToDigits(value: number, digits: number): number {
@@ -678,6 +906,106 @@ const scalarBuiltins: Record<string, Builtin> = {
       return { tag: ValueTag.Error, code: ErrorCode.Div0 };
     }
     return numberResult(Math.trunc(numerator / denominator));
+  },
+  ACCRINT: (issueArg, firstInterestArg, settlementArg, rateArg, parArg, frequencyArg, basisArg, calcMethodArg) => {
+    const issue = coerceDateSerial(issueArg);
+    const firstInterest = coerceDateSerial(firstInterestArg);
+    const settlement = coerceDateSerial(settlementArg);
+    const rate = toNumber(rateArg);
+    const par = coerceNumber(parArg, 1000);
+    const frequency = integerValue(frequencyArg);
+    const basis = integerValue(basisArg, 0);
+    const calcMethod = coerceBoolean(calcMethodArg, true);
+    if (
+      issue === undefined
+      || firstInterest === undefined
+      || settlement === undefined
+      || rate === undefined
+      || frequency === undefined
+      || basis === undefined
+      || calcMethod === undefined
+      || par === undefined
+      || rate <= 0
+      || par <= 0
+      || issue >= settlement
+      || firstInterest <= issue
+      || firstInterest >= settlement
+      || !isValidFrequency(frequency)
+      || !isValidBasis(basis)
+    ) {
+      return valueError();
+    }
+    const accrualStart = settlement > firstInterest && !calcMethod ? firstInterest : issue;
+    const years = yearFracByBasis(accrualStart, settlement, basis);
+    return years === undefined ? valueError() : numberResult(par * rate * years);
+  },
+  ACCRINTM: (issueArg, settlementArg, rateArg, parArg, basisArg) => {
+    const issue = coerceDateSerial(issueArg);
+    const settlement = coerceDateSerial(settlementArg);
+    const rate = toNumber(rateArg);
+    const par = coerceNumber(parArg, 1000);
+    const basis = integerValue(basisArg, 0);
+    if (
+      issue === undefined
+      || settlement === undefined
+      || rate === undefined
+      || basis === undefined
+      || par === undefined
+      || rate <= 0
+      || par <= 0
+      || issue >= settlement
+      || !isValidBasis(basis)
+    ) {
+      return valueError();
+    }
+    const years = yearFracByBasis(issue, settlement, basis);
+    return years === undefined ? valueError() : numberResult(par * rate * years);
+  },
+  AMORDEGRC: (costArg, datePurchasedArg, firstPeriodArg, salvageArg, periodArg, rateArg, basisArg) => {
+    const cost = toNumber(costArg);
+    const datePurchased = coerceDateSerial(datePurchasedArg);
+    const firstPeriod = coerceDateSerial(firstPeriodArg);
+    const salvage = toNumber(salvageArg);
+    const period = toNumber(periodArg);
+    const rate = toNumber(rateArg);
+    const basis = integerValue(basisArg, 0);
+    if (
+      cost === undefined
+      || datePurchased === undefined
+      || firstPeriod === undefined
+      || salvage === undefined
+      || period === undefined
+      || rate === undefined
+      || basis === undefined
+      || !isValidBasis(basis)
+    ) {
+      return valueError();
+    }
+    const depreciation = getAmordegrc(cost, datePurchased, firstPeriod, salvage, period, rate, basis);
+    return depreciation === undefined ? valueError() : numberResult(depreciation);
+  },
+  AMORLINC: (costArg, datePurchasedArg, firstPeriodArg, salvageArg, periodArg, rateArg, basisArg) => {
+    const cost = toNumber(costArg);
+    const datePurchased = coerceDateSerial(datePurchasedArg);
+    const firstPeriod = coerceDateSerial(firstPeriodArg);
+    const salvage = toNumber(salvageArg);
+    const period = toNumber(periodArg);
+    const rate = toNumber(rateArg);
+    const basis = integerValue(basisArg, 0);
+    if (
+      cost === undefined
+      || datePurchased === undefined
+      || firstPeriod === undefined
+      || salvage === undefined
+      || period === undefined
+      || rate === undefined
+      || basis === undefined
+      || !isValidBasis(basis)
+    ) {
+      return valueError();
+    }
+    const depreciation = getAmorlinc(cost, datePurchased, firstPeriod, salvage, period, rate, basis);
+    return depreciation === undefined ? valueError() : numberResult(depreciation);
   },
   RANDBETWEEN: (bottomArg, topArg) => {
     const bottom = integerValue(bottomArg);

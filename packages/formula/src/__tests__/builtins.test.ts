@@ -405,6 +405,114 @@ describe("formula builtins", () => {
     expect(getBuiltin("ARABIC")?.({ tag: ValueTag.Number, value: 1 })).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
+  it("supports ACCRINT, ACCRINTM, AMORDEGRC, and AMORLINC", () => {
+    const issue = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2020 }, { tag: ValueTag.Number, value: 2 }, { tag: ValueTag.Number, value: 1 });
+    const firstInterest = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2020 }, { tag: ValueTag.Number, value: 11 }, { tag: ValueTag.Number, value: 30 });
+    const settlement = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2020 }, { tag: ValueTag.Number, value: 12 }, { tag: ValueTag.Number, value: 31 });
+    const cost = { tag: ValueTag.Number, value: 2000 };
+    const salvage = { tag: ValueTag.Number, value: 10 };
+    const period = { tag: ValueTag.Number, value: 4 };
+    const rate = { tag: ValueTag.Number, value: 0.1 };
+    const basis = { tag: ValueTag.Number, value: 0 };
+
+    expect(issue?.tag).toBe(ValueTag.Number);
+    expect(firstInterest?.tag).toBe(ValueTag.Number);
+    expect(settlement?.tag).toBe(ValueTag.Number);
+
+    const firstAccrual = getBuiltin("ACCRINT")?.(
+      issue!,
+      firstInterest!,
+      settlement!,
+      rate,
+      { tag: ValueTag.Number, value: 1000 },
+      { tag: ValueTag.Number, value: 2 },
+      basis
+    );
+    expect(firstAccrual).toMatchObject({ tag: ValueTag.Number });
+    expect(firstAccrual?.tag === ValueTag.Number ? firstAccrual.value : Number.NaN).toBeCloseTo(91.66666666666667, 12);
+
+    const omittedBasisAccrual = getBuiltin("ACCRINT")?.(
+      issue!,
+      firstInterest!,
+      settlement!,
+      rate,
+      { tag: ValueTag.Number, value: 1000 },
+      { tag: ValueTag.Number, value: 2 }
+    );
+    expect(omittedBasisAccrual).toMatchObject({ tag: ValueTag.Number });
+    expect(omittedBasisAccrual?.tag === ValueTag.Number ? omittedBasisAccrual.value : Number.NaN).toBeCloseTo(
+      91.66666666666667,
+      12
+    );
+
+    const fullAccrual = getBuiltin("ACCRINT")?.(
+      issue!,
+      firstInterest!,
+      settlement!,
+      rate,
+      { tag: ValueTag.Number, value: 1000 },
+      { tag: ValueTag.Number, value: 2 },
+      basis
+    );
+    const shortAccrual = getBuiltin("ACCRINT")?.(
+      issue!,
+      firstInterest!,
+      settlement!,
+      rate,
+      { tag: ValueTag.Number, value: 1000 },
+      { tag: ValueTag.Number, value: 2 },
+      basis,
+      { tag: ValueTag.Boolean, value: false }
+    );
+    expect(fullAccrual).toMatchObject({ tag: ValueTag.Number });
+    expect(shortAccrual).toMatchObject({ tag: ValueTag.Number });
+    const shortAccrualValue = shortAccrual?.tag === ValueTag.Number ? shortAccrual.value : Number.NaN;
+    const fullAccrualValue = fullAccrual?.tag === ValueTag.Number ? fullAccrual.value : Number.NaN;
+    expect(shortAccrualValue).toBeLessThan(fullAccrualValue);
+
+    const maturityAccrual = getBuiltin("ACCRINTM")?.(issue!, settlement!, rate, undefined, basis);
+    expect(maturityAccrual).toMatchObject({ tag: ValueTag.Number });
+    expect(maturityAccrual?.tag === ValueTag.Number ? maturityAccrual.value : Number.NaN).toBeCloseTo(91.66666666666667, 12);
+
+    expect(getBuiltin("AMORLINC")?.(
+      cost,
+      issue!,
+      settlement!,
+      salvage,
+      period,
+      rate,
+      basis
+    )).toEqual({ tag: ValueTag.Number, value: 200 });
+
+    expect(getBuiltin("AMORDEGRC")?.(
+      cost,
+      issue!,
+      settlement!,
+      salvage,
+      period,
+      rate,
+      basis
+    )).toEqual({ tag: ValueTag.Number, value: 163 });
+
+    expect(getBuiltin("ACCRINT")?.(
+      issue!,
+      settlement!,
+      issue!,
+      rate,
+      { tag: ValueTag.Number, value: 1000 },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(getBuiltin("ACCRINT")?.(
+      issue!,
+      settlement!,
+      settlement!,
+      rate,
+      { tag: ValueTag.Number, value: 1000 },
+      { tag: ValueTag.Number, value: 3 }
+    )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("registers protocol-declared placeholder builtins as blocked", () => {
     for (const name of placeholderBuiltinNames) {
       expect(getBuiltin(name)?.()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });

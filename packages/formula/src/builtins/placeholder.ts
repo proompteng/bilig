@@ -3,11 +3,7 @@ import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 const protocolScalarPlaceholderBuiltinNames = [] as const;
 
 const additionalExcelScalarPlaceholderBuiltinNames = [
-  "ACCRINT",
-  "ACCRINTM",
   "ADDRESS",
-  "AMORDEGRC",
-  "AMORLINC",
   "AREAS",
   "ARRAYTOTEXT",
   "ASC",
