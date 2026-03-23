@@ -31,6 +31,17 @@ function producesSpillResult(node: FormulaNode): boolean {
     node.kind === "CallExpr" &&
     [
       "SEQUENCE",
+      "OFFSET",
+      "TAKE",
+      "DROP",
+      "CHOOSECOLS",
+      "CHOOSEROWS",
+      "SORT",
+      "SORTBY",
+      "TOCOL",
+      "TOROW",
+      "WRAPROWS",
+      "WRAPCOLS",
       "FILTER",
       "UNIQUE",
       "MAKEARRAY",

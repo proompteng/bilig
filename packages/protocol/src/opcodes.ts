@@ -125,5 +125,16 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Today, name: "TODAY", supportsWasm: true },
   { id: BuiltinId.Now, name: "NOW", supportsWasm: true },
   { id: BuiltinId.Rand, name: "RAND", supportsWasm: true },
-  { id: BuiltinId.Sequence, name: "SEQUENCE", supportsWasm: true }
+  { id: BuiltinId.Sequence, name: "SEQUENCE", supportsWasm: true },
+  { id: BuiltinId.Offset, name: "OFFSET", supportsWasm: true },
+  { id: BuiltinId.Take, name: "TAKE", supportsWasm: true },
+  { id: BuiltinId.Drop, name: "DROP", supportsWasm: true },
+  { id: BuiltinId.Choosecols, name: "CHOOSECOLS", supportsWasm: true },
+  { id: BuiltinId.Chooserows, name: "CHOOSEROWS", supportsWasm: true },
+  { id: BuiltinId.Sort, name: "SORT", supportsWasm: true },
+  { id: BuiltinId.Sortby, name: "SORTBY", supportsWasm: true },
+  { id: BuiltinId.Tocol, name: "TOCOL", supportsWasm: true },
+  { id: BuiltinId.Torow, name: "TOROW", supportsWasm: true },
+  { id: BuiltinId.Wraprows, name: "WRAPROWS", supportsWasm: true },
+  { id: BuiltinId.Wrapcols, name: "WRAPCOLS", supportsWasm: true }
 ];

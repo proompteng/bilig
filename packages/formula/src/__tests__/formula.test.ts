@@ -152,6 +152,20 @@ describe("formula", () => {
     expect(compileFormula("COUNTA(SEQUENCE(A1,1,1,1))").mode).toBe(1);
   });
 
+  it("routes dynamic-array family builtins to the wasm path for numeric-compatible inputs", () => {
+    expect(compileFormula("OFFSET(A1:B4,0,0,2,2)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("TAKE(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("DROP(A1:B4,1)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("CHOOSECOLS(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("CHOOSEROWS(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("SORT(A1:B4)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("SORTBY(A1:A4,A1:A4)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("TOCOL(A1:B4)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("TOROW(A1:B4)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("WRAPROWS(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("WRAPCOLS(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
+  });
+
   it("keeps row and column aggregate formulas on the JS path", () => {
     expect(compileFormula("SUM(A:A)").mode).toBe(1);
     expect(compileFormula("SUM(1:10)").mode).toBe(1);

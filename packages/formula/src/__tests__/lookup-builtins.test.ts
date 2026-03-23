@@ -133,6 +133,210 @@ describe("lookup builtins", () => {
     ).toEqual(num(20));
   });
 
+  it("supports OFFSET, TAKE, and DROP shape transformations", () => {
+    const OFFSET = getLookupBuiltin("OFFSET")!;
+    const TAKE = getLookupBuiltin("TAKE")!;
+    const DROP = getLookupBuiltin("DROP")!;
+
+    const matrix = cellRange([num(1), num(2), num(3), num(4), num(5), num(6)], 3, 2);
+
+    expect(OFFSET(matrix, num(1), num(0), num(1), num(1))).toEqual(num(3));
+    expect(OFFSET(matrix, num(-1), num(-1), num(1), num(1))).toEqual(num(6));
+    expect(TAKE(matrix, num(2), num(1))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(1), num(3)],
+    });
+    expect(TAKE(matrix, num(-2), num(2))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(3), num(4), num(5), num(6)],
+    });
+    expect(DROP(cellRange([num(1), num(2), num(3), num(4)], 4, 1), num(2))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(3), num(4)],
+    });
+    expect(DROP(cellRange([num(1), num(2), num(3), num(4)], 1, 4), num(0), num(2))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [num(3), num(4)],
+    });
+    expect(DROP(cellRange([num(1), num(2), num(3), num(4)], 1, 4), num(4))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(DROP(cellRange([num(1), num(2), num(3), num(4)], 4, 1), num(4))).toEqual(
+      err(ErrorCode.Value),
+    );
+  });
+
+  it("supports CHOOSECOLS and CHOOSEROWS extraction", () => {
+    const CHOOSECOLS = getLookupBuiltin("CHOOSECOLS")!;
+    const CHOOSEROWS = getLookupBuiltin("CHOOSEROWS")!;
+    const matrix = cellRange([num(1), num(2), num(3), num(4), num(5), num(6)], 3, 2);
+
+    expect(CHOOSECOLS(matrix, num(2))).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [num(2), num(4), num(6)],
+    });
+    expect(CHOOSECOLS(matrix, num(2), num(1))).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 2,
+      values: [num(2), num(1), num(4), num(3), num(6), num(5)],
+    });
+    expect(CHOOSEROWS(matrix, num(3), num(1))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(5), num(6), num(1), num(2)],
+    });
+  });
+
+  it("supports SORT and SORTBY ordering", () => {
+    const SORT = getLookupBuiltin("SORT")!;
+    const SORTBY = getLookupBuiltin("SORTBY")!;
+
+    expect(SORT(cellRange([num(3), num(1), num(2)], 3, 1))).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [num(1), num(2), num(3)],
+    });
+    expect(SORT(cellRange([num(3), num(1), num(2), num(4)], 2, 2), num(1))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(3), num(4), num(2)],
+    });
+
+    expect(
+      SORT(
+        cellRange([num(9), num(2), num(8), num(1), num(5), num(7)], 2, 3),
+        num(2),
+        num(1),
+        bool(true),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 3,
+      values: [num(9), num(2), num(8), num(1), num(5), num(7)],
+    });
+
+    expect(
+      SORTBY(
+        cellRange([text("pear"), text("apple"), text("plum")], 3, 1),
+        cellRange([num(2), num(1), num(3)], 3, 1),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [text("apple"), text("pear"), text("plum")],
+    });
+    expect(
+      SORTBY(
+        cellRange([num(2), num(1), num(3)], 3, 1),
+        cellRange([num(5), num(1), num(3)], 3, 1),
+        num(-1),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [num(2), num(3), num(1)],
+    });
+  });
+
+  it("supports TOCOL and TOROW flattening modes", () => {
+    const TOCOL = getLookupBuiltin("TOCOL")!;
+    const TOROW = getLookupBuiltin("TOROW")!;
+    const matrix = cellRange([num(1), num(2), num(3), num(4)], 2, 2);
+
+    expect(TOCOL(matrix)).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 1,
+      values: [num(1), num(3), num(2), num(4)],
+    });
+    expect(TOROW(matrix)).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 4,
+      values: [num(1), num(2), num(3), num(4)],
+    });
+  });
+
+  it("supports WRAPROWS and WRAPCOLS packing", () => {
+    const WRAPROWS = getLookupBuiltin("WRAPROWS")!;
+    const WRAPCOLS = getLookupBuiltin("WRAPCOLS")!;
+    const vector = cellRange([num(1), num(2), num(3), num(4), num(5)], 5, 1);
+
+    expect(WRAPROWS(vector, num(2))).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 2,
+      values: [num(1), num(2), num(3), num(4), num(5), err(ErrorCode.NA)],
+    });
+    expect(WRAPCOLS(vector, num(2))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 3,
+      values: [num(1), num(3), num(5), num(2), num(4), err(ErrorCode.NA)],
+    });
+    expect(WRAPCOLS(vector, num(2), text("pad"), bool(true))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 3,
+      values: [num(1), num(3), num(5), num(2), num(4), text("pad")],
+    });
+  });
+
+  it("covers boundary behavior for lookup reshaping helpers", () => {
+    const OFFSET = getLookupBuiltin("OFFSET")!;
+    const TAKE = getLookupBuiltin("TAKE")!;
+    const DROP = getLookupBuiltin("DROP")!;
+    const CHOOSECOLS = getLookupBuiltin("CHOOSECOLS")!;
+    const CHOOSEROWS = getLookupBuiltin("CHOOSEROWS")!;
+
+    const matrix = cellRange([num(1), num(2), num(3), num(4)], 2, 2);
+    const column = cellRange([num(1), num(2), num(3)], 3, 1);
+
+    expect(OFFSET(matrix, num(0), num(0))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: matrix.values,
+    });
+    expect(OFFSET(matrix, num(0), num(0), num(1), num(1), num(2))).toEqual(err(ErrorCode.Value));
+
+    expect(TAKE(column)).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: column.values,
+    });
+    expect(TAKE(column, num(0))).toEqual(err(ErrorCode.Value));
+
+    expect(DROP(matrix, num(0), num(0))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: matrix.values,
+    });
+    expect(DROP(matrix, num(5))).toEqual(err(ErrorCode.Value));
+
+    expect(CHOOSECOLS(matrix, num(3))).toEqual(err(ErrorCode.Value));
+    expect(CHOOSEROWS(matrix, num(3))).toEqual(err(ErrorCode.Value));
+  });
+
   it("supports FILTER and UNIQUE dynamic-array results", () => {
     const FILTER = getLookupBuiltin("FILTER")!;
     const UNIQUE = getLookupBuiltin("UNIQUE")!;

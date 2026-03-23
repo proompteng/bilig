@@ -17,8 +17,10 @@ function errorValue(code: ErrorCode): CellValue {
   return { tag: ValueTag.Error, code };
 }
 
-function isError(value: CellValue): value is Extract<CellValue, { tag: ValueTag.Error }> {
-  return value.tag === ValueTag.Error;
+function isError(
+  value: CellValue | undefined,
+): value is Extract<CellValue, { tag: ValueTag.Error }> {
+  return value !== undefined && value.tag === ValueTag.Error;
 }
 
 function isRangeArg(value: LookupBuiltinArgument): value is RangeBuiltinArgument {
@@ -321,6 +323,63 @@ function rowKey(range: RangeBuiltinArgument, row: number): string | undefined {
     return undefined;
   }
   return JSON.stringify(values.map(normalizeKeyValue));
+}
+
+function clipIndex(value: number, length: number): number | undefined {
+  if (!Number.isFinite(value) || length <= 0) {
+    return undefined;
+  }
+  const index = Math.trunc(value);
+  if (index === 0) {
+    return undefined;
+  }
+  return index < 0 ? Math.max(index, -length) : Math.min(index, length);
+}
+
+function flattenValues(
+  range: RangeBuiltinArgument,
+  scanByCol: boolean,
+  ignoreEmpty = false,
+): CellValue[] {
+  const values: CellValue[] = [];
+  if (scanByCol) {
+    for (let col = 0; col < range.cols; col += 1) {
+      for (let row = 0; row < range.rows; row += 1) {
+        const value = getRangeValue(range, row, col);
+        if (ignoreEmpty && value.tag === ValueTag.Empty) {
+          continue;
+        }
+        values.push(value);
+      }
+    }
+    return values;
+  }
+  for (let row = 0; row < range.rows; row += 1) {
+    for (let col = 0; col < range.cols; col += 1) {
+      const value = getRangeValue(range, row, col);
+      if (ignoreEmpty && value.tag === ValueTag.Empty) {
+        continue;
+      }
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+function getRangeWindowValues(
+  range: RangeBuiltinArgument,
+  rowStart: number,
+  colStart: number,
+  rowCount: number,
+  colCount: number,
+): CellValue[] {
+  const values: CellValue[] = [];
+  for (let row = 0; row < rowCount; row += 1) {
+    for (let col = 0; col < colCount; col += 1) {
+      values.push(getRangeValue(range, rowStart + row, colStart + col));
+    }
+  }
+  return values;
 }
 
 function colKey(range: RangeBuiltinArgument, col: number): string | undefined {
@@ -664,6 +723,512 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     const normalizedPosition =
       searchMode === -1 ? rangeOrError.values.length - position + 1 : position;
     return { tag: ValueTag.Number, value: normalizedPosition };
+  },
+  OFFSET: (referenceArg, rowsArg, colsArg, heightArg, widthArg, areaNumberArg) => {
+    if (
+      isRangeArg(rowsArg) ||
+      isRangeArg(colsArg) ||
+      isRangeArg(heightArg) ||
+      isRangeArg(widthArg) ||
+      isRangeArg(areaNumberArg)
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (
+      isError(rowsArg) ||
+      isError(colsArg) ||
+      isError(heightArg) ||
+      isError(widthArg) ||
+      isError(areaNumberArg)
+    ) {
+      return isError(rowsArg)
+        ? rowsArg
+        : isError(colsArg)
+          ? colsArg
+          : isError(heightArg)
+            ? heightArg
+            : isError(widthArg)
+              ? widthArg
+              : areaNumberArg;
+    }
+    const reference = toCellRange(referenceArg);
+    if (!isRangeArg(reference)) {
+      return reference;
+    }
+    const rows = toInteger(rowsArg);
+    const cols = toInteger(colsArg);
+    const height = heightArg === undefined ? reference.rows : toInteger(heightArg);
+    const width = widthArg === undefined ? reference.cols : toInteger(widthArg);
+    const areaNumber = areaNumberArg === undefined ? 1 : toInteger(areaNumberArg);
+    if (
+      rows === undefined ||
+      cols === undefined ||
+      height === undefined ||
+      width === undefined ||
+      areaNumber === undefined
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (areaNumber !== 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (height < 1 || width < 1) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const rowStart = rows < 0 ? reference.rows + rows : rows;
+    const colStart = cols < 0 ? reference.cols + cols : cols;
+    if (
+      rowStart < 0 ||
+      colStart < 0 ||
+      rowStart + height > reference.rows ||
+      colStart + width > reference.cols
+    ) {
+      return errorValue(ErrorCode.Ref);
+    }
+    if (height === 1 && width === 1) {
+      return getRangeValue(reference, rowStart, colStart);
+    }
+    return arrayResult(
+      getRangeWindowValues(reference, rowStart, colStart, height, width),
+      height,
+      width,
+    );
+  },
+  TAKE: (arrayArg, rowsArg, colsArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(rowsArg) || isRangeArg(colsArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(rowsArg) || isError(colsArg)) {
+      return rowsArg.tag === ValueTag.Error ? rowsArg : colsArg;
+    }
+
+    const requestedRows = rowsArg === undefined ? array.rows : toInteger(rowsArg);
+    const requestedCols = colsArg === undefined ? array.cols : toInteger(colsArg);
+    if (requestedRows === undefined || requestedCols === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const clippedRows = clipIndex(requestedRows, array.rows);
+    const clippedCols = clipIndex(requestedCols, array.cols);
+    if (clippedRows === undefined || clippedCols === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const rowCount =
+      clippedRows > 0 ? Math.min(clippedRows, array.rows) : Math.min(-clippedRows, array.rows);
+    const colCount =
+      clippedCols > 0 ? Math.min(clippedCols, array.cols) : Math.min(-clippedCols, array.cols);
+    const rowOffset = clippedRows > 0 ? 0 : Math.max(array.rows - rowCount, 0);
+    const colOffset = clippedCols > 0 ? 0 : Math.max(array.cols - colCount, 0);
+    if (rowCount === 0 || colCount === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const values: CellValue[] = [];
+    for (let row = 0; row < rowCount; row += 1) {
+      for (let col = 0; col < colCount; col += 1) {
+        values.push(getRangeValue(array, row + rowOffset, col + colOffset));
+      }
+    }
+    return arrayResult(values, rowCount, colCount);
+  },
+  DROP: (arrayArg, rowsArg, colsArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(rowsArg) || isRangeArg(colsArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(rowsArg) || isError(colsArg)) {
+      return rowsArg.tag === ValueTag.Error ? rowsArg : colsArg;
+    }
+
+    const requestedRows = rowsArg === undefined ? 0 : toInteger(rowsArg);
+    const requestedCols = colsArg === undefined ? 0 : toInteger(colsArg);
+    if (requestedRows === undefined || requestedCols === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const clippedRows = requestedRows === 0 ? 0 : clipIndex(requestedRows, array.rows);
+    const clippedCols = requestedCols === 0 ? 0 : clipIndex(requestedCols, array.cols);
+    if (clippedRows === undefined || clippedCols === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const dropRows =
+      clippedRows >= 0 ? Math.min(clippedRows, array.rows) : Math.min(-clippedRows, array.rows);
+    const dropCols =
+      clippedCols >= 0 ? Math.min(clippedCols, array.cols) : Math.min(-clippedCols, array.cols);
+    const rowCount = array.rows - dropRows;
+    const colCount = array.cols - dropCols;
+    const rowOffset = clippedRows > 0 ? dropRows : 0;
+    const colOffset = clippedCols > 0 ? dropCols : 0;
+    if (rowCount <= 0 || colCount <= 0) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const values: CellValue[] = [];
+    for (let row = 0; row < rowCount; row += 1) {
+      for (let col = 0; col < colCount; col += 1) {
+        values.push(getRangeValue(array, row + rowOffset, col + colOffset));
+      }
+    }
+    return arrayResult(values, rowCount, colCount);
+  },
+  CHOOSECOLS: (arrayArg, ...columnArgs) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (columnArgs.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const selectedCols: number[] = [];
+    for (const arg of columnArgs) {
+      if (isRangeArg(arg)) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (isError(arg)) {
+        return arg;
+      }
+      const selected = toInteger(arg);
+      if (selected === undefined || selected < 1 || selected > array.cols) {
+        return errorValue(ErrorCode.Value);
+      }
+      selectedCols.push(selected - 1);
+    }
+
+    const values: CellValue[] = [];
+    for (let row = 0; row < array.rows; row += 1) {
+      for (const col of selectedCols) {
+        values.push(getRangeValue(array, row, col));
+      }
+    }
+    return arrayResult(values, array.rows, selectedCols.length);
+  },
+  CHOOSEROWS: (arrayArg, ...rowArgs) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (rowArgs.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const selectedRows: number[] = [];
+    for (const arg of rowArgs) {
+      if (isRangeArg(arg)) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (isError(arg)) {
+        return arg;
+      }
+      const selected = toInteger(arg);
+      if (selected === undefined || selected < 1 || selected > array.rows) {
+        return errorValue(ErrorCode.Value);
+      }
+      selectedRows.push(selected - 1);
+    }
+
+    const values: CellValue[] = [];
+    for (const row of selectedRows) {
+      values.push(...pickRangeRow(array, row));
+    }
+    return arrayResult(values, selectedRows.length, array.cols);
+  },
+  SORT: (arrayArg, sortIndexArg, sortOrderArg = { tag: ValueTag.Number, value: 1 }, byColArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(sortIndexArg) || isRangeArg(sortOrderArg) || isRangeArg(byColArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(sortOrderArg)) {
+      return sortOrderArg;
+    }
+    if (isError(byColArg)) {
+      return byColArg;
+    }
+
+    const sortByCol = byColArg === undefined ? false : toBoolean(byColArg);
+    const sortOrder = sortOrderArg ? toInteger(sortOrderArg) : 1;
+    const sortIndex = sortIndexArg === undefined ? 1 : toInteger(sortIndexArg);
+    if (sortOrder === undefined || ![1, -1].includes(sortOrder)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (sortIndex === undefined || sortIndex < 1) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    let sortError: CellValue | undefined;
+    if (array.rows === 1 || array.cols === 1) {
+      const values = [...array.values];
+      const order: number[] = Array.from({ length: values.length }, (_, index) => index);
+      order.sort((left, right) => {
+        const cmp = compareScalars(values[left]!, values[right]!);
+        if (cmp === undefined) {
+          sortError = errorValue(ErrorCode.Value);
+          return 0;
+        }
+        return cmp * sortOrder || left - right;
+      });
+      if (sortError) {
+        return sortError;
+      }
+      const sortedValues = order.map((index) => values[index]!);
+      return arrayResult(sortedValues, array.rows, array.cols);
+    }
+    if (sortByCol) {
+      if (sortIndex > array.rows) {
+        return errorValue(ErrorCode.Value);
+      }
+      const colIndex = sortIndex - 1;
+      const rowOrder = Array.from({ length: array.rows }, (_, row) => row);
+      rowOrder.sort((left, right) => {
+        const cmp = compareScalars(
+          getRangeValue(array, left, colIndex),
+          getRangeValue(array, right, colIndex),
+        );
+        if (cmp === undefined) {
+          sortError = errorValue(ErrorCode.Value);
+          return 0;
+        }
+        return cmp * sortOrder || left - right;
+      });
+      if (sortError) {
+        return sortError;
+      }
+      const values: CellValue[] = [];
+      for (const row of rowOrder) {
+        values.push(...pickRangeRow(array, row));
+      }
+      return arrayResult(values, array.rows, array.cols);
+    }
+    if (sortIndex > array.cols) {
+      return errorValue(ErrorCode.Value);
+    }
+    const columnIndex = sortIndex - 1;
+    const colOrder = Array.from({ length: array.cols }, (_, col) => col);
+    colOrder.sort((left, right) => {
+      const cmp = compareScalars(
+        getRangeValue(array, left, columnIndex),
+        getRangeValue(array, right, columnIndex),
+      );
+      if (cmp === undefined) {
+        sortError = errorValue(ErrorCode.Value);
+        return 0;
+      }
+      return cmp * sortOrder || left - right;
+    });
+    if (sortError) {
+      return sortError;
+    }
+    const values: CellValue[] = [];
+    for (let row = 0; row < array.rows; row += 1) {
+      for (const col of colOrder) {
+        values.push(getRangeValue(array, row, col));
+      }
+    }
+    return arrayResult(values, array.rows, array.cols);
+  },
+  SORTBY: (arrayArg, ...criteriaArgs) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (array.rows > 1 && array.cols > 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (criteriaArgs.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const source = array.values;
+    const indexes = Array.from({ length: source.length }, (_, index) => index);
+    const criteria: { values: CellValue[]; order: number }[] = [];
+    for (let index = 0; index < criteriaArgs.length; index += 1) {
+      const criteriaArg = criteriaArgs[index]!;
+      const byRange = toCellRange(criteriaArg);
+      if (!isRangeArg(byRange)) {
+        return byRange;
+      }
+      const nextArg = criteriaArgs[index + 1];
+      if (nextArg !== undefined && !isRangeArg(nextArg) && !isError(nextArg)) {
+        const orderValue = toInteger(nextArg);
+        if (orderValue === undefined || ![1, -1].includes(orderValue)) {
+          return errorValue(ErrorCode.Value);
+        }
+        criteria.push({ values: byRange.values, order: orderValue });
+        index += 1;
+        continue;
+      }
+      criteria.push({ values: byRange.values, order: 1 });
+    }
+    const expectedLength = source.length;
+    if (
+      criteria.some(
+        (criterion) => criterion.values.length !== 1 && criterion.values.length !== expectedLength,
+      )
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    let sortError: CellValue | undefined;
+    indexes.sort((left, right) => {
+      if (left === right) {
+        return 0;
+      }
+      for (const criterion of criteria) {
+        const leftValue =
+          criterion.values.length === 1
+            ? (criterion.values[0] ?? array.values[0]!)
+            : criterion.values[left]!;
+        const rightValue =
+          criterion.values.length === 1
+            ? (criterion.values[0] ?? array.values[0]!)
+            : criterion.values[right]!;
+        const cmp = compareScalars(leftValue, rightValue);
+        if (cmp === undefined) {
+          sortError = errorValue(ErrorCode.Value);
+          return 0;
+        }
+        if (cmp !== 0) {
+          return cmp * criterion.order;
+        }
+      }
+      return left - right;
+    });
+    if (sortError) {
+      return sortError;
+    }
+    return arrayResult(
+      indexes.map((index) => array.values[index] ?? { tag: ValueTag.Empty }),
+      array.rows,
+      array.cols,
+    );
+  },
+  TOCOL: (arrayArg, ignoreArg = { tag: ValueTag.Number, value: 0 }, scanByColArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(ignoreArg) || isRangeArg(scanByColArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(ignoreArg) || isError(scanByColArg)) {
+      return isError(ignoreArg) ? ignoreArg : scanByColArg;
+    }
+    const ignoreValue = ignoreArg === undefined ? 0 : toInteger(ignoreArg);
+    if (ignoreValue === undefined || ![0, 1].includes(ignoreValue)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const scanByCol = scanByColArg === undefined ? true : toBoolean(scanByColArg);
+    if (scanByCol === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    const values = flattenValues(array, scanByCol, ignoreValue === 1);
+    return arrayResult(values, values.length, 1);
+  },
+  TOROW: (arrayArg, ignoreArg = { tag: ValueTag.Number, value: 0 }, scanByColArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(ignoreArg) || isRangeArg(scanByColArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(ignoreArg) || isError(scanByColArg)) {
+      return isError(ignoreArg) ? ignoreArg : scanByColArg;
+    }
+    const ignoreValue = ignoreArg === undefined ? 0 : toInteger(ignoreArg);
+    if (ignoreValue === undefined || ![0, 1].includes(ignoreValue)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const scanByCol = scanByColArg === undefined ? false : toBoolean(scanByColArg);
+    if (scanByCol === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    const values = flattenValues(array, scanByCol, ignoreValue === 1);
+    return arrayResult(values, 1, values.length);
+  },
+  WRAPROWS: (arrayArg, wrapCountArg, padWithArg, padByColArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(wrapCountArg) || isRangeArg(padWithArg) || isRangeArg(padByColArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(wrapCountArg) || isError(padByColArg)) {
+      return isError(wrapCountArg) ? wrapCountArg : padByColArg;
+    }
+    if (padWithArg !== undefined && isError(padWithArg)) {
+      return padWithArg;
+    }
+    const wrapCount = toInteger(wrapCountArg);
+    if (wrapCount === undefined || wrapCount < 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (padByColArg !== undefined && toBoolean(padByColArg) === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const values = array.values.slice();
+    const rows = Math.ceil(values.length / wrapCount);
+    const cols = wrapCount;
+    const padValue =
+      padWithArg === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : padWithArg;
+    while (values.length < rows * cols) {
+      values.push(padValue);
+    }
+    return arrayResult(values, rows, cols);
+  },
+  WRAPCOLS: (arrayArg, wrapCountArg, padWithArg, padByColArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(wrapCountArg) || isRangeArg(padWithArg) || isRangeArg(padByColArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(wrapCountArg) || isError(padByColArg)) {
+      return isError(wrapCountArg) ? wrapCountArg : padByColArg;
+    }
+    if (padWithArg !== undefined && isError(padWithArg)) {
+      return padWithArg;
+    }
+    const wrapCount = toInteger(wrapCountArg);
+    if (wrapCount === undefined || wrapCount < 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (padByColArg !== undefined && toBoolean(padByColArg) === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const values = array.values.slice();
+    const rows = wrapCount;
+    const cols = Math.ceil(values.length / rows);
+    const padValue =
+      padWithArg === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : padWithArg;
+    const paddedValues = Array.from(
+      { length: rows * cols },
+      (_, index) => values[index] ?? padValue,
+    );
+    const wrappedValues: CellValue[] = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        wrappedValues.push(paddedValues[col * rows + row] ?? padValue);
+      }
+    }
+    return arrayResult(wrappedValues, rows, cols);
   },
   COUNTIF: (rangeArg, criteriaArg) => {
     const range = requireCellRange(rangeArg);
