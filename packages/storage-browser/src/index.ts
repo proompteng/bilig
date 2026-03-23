@@ -4,20 +4,22 @@ const WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES = 128 * 1024;
 
 function getLocalStorage(): Storage | null {
   try {
-    return window.localStorage;
+    const scope = globalThis as typeof globalThis & { localStorage?: Storage };
+    return scope.localStorage ?? null;
   } catch {
     return null;
   }
 }
 
 async function openDatabase(databaseName: string, storeName: string): Promise<IDBDatabase | null> {
-  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
+  const scope = globalThis as typeof globalThis & { indexedDB?: IDBFactory };
+  if (typeof scope.indexedDB === "undefined") {
     return null;
   }
 
   return await new Promise<IDBDatabase | null>((resolve) => {
     try {
-      const request = window.indexedDB.open(databaseName, 1);
+      const request = scope.indexedDB.open(databaseName, 1);
       request.onupgradeneeded = () => {
         const database = request.result;
         if (!database.objectStoreNames.contains(storeName)) {

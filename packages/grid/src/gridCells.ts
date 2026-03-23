@@ -1,6 +1,6 @@
-import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { ValueTag, formatErrorCode, type CellSnapshot } from "@bilig/protocol";
 import { GridCellKind, type GridCell } from "@glideapps/glide-data-grid";
+import type { GridEngineLike } from "./grid-engine.js";
 
 export function cellToEditorSeed(snapshot: Pick<CellSnapshot, "formula" | "input" | "value">): string {
   if (snapshot.formula) {
@@ -78,6 +78,6 @@ export function snapshotToGridCell(snapshot: Pick<CellSnapshot, "formula" | "inp
   }
 }
 
-export function cellToGridCell(engine: SpreadsheetEngine, sheetName: string, addr: string): GridCell {
-  return snapshotToGridCell(selectors.selectCellSnapshot(engine, sheetName, addr));
+export function cellToGridCell(engine: GridEngineLike, sheetName: string, addr: string): GridCell {
+  return snapshotToGridCell(engine.getCell(sheetName, addr));
 }

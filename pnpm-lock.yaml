@@ -104,6 +104,9 @@ importers:
       '@bilig/storage-browser':
         specifier: workspace:*
         version: link:../../packages/storage-browser
+      '@bilig/worker-transport':
+        specifier: workspace:*
+        version: link:../../packages/worker-transport
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -150,15 +153,24 @@ importers:
       '@bilig/crdt':
         specifier: workspace:*
         version: link:../../packages/crdt
+      '@bilig/formula':
+        specifier: workspace:*
+        version: link:../../packages/formula
       '@bilig/grid':
         specifier: workspace:*
         version: link:../../packages/grid
+      '@bilig/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@bilig/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
       '@bilig/storage-browser':
         specifier: workspace:*
         version: link:../../packages/storage-browser
+      '@bilig/worker-transport':
+        specifier: workspace:*
+        version: link:../../packages/worker-transport
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -291,6 +303,9 @@ importers:
 
   packages/worker-transport:
     dependencies:
+      '@bilig/binary-protocol':
+        specifier: workspace:*
+        version: link:../binary-protocol
       '@bilig/core':
         specifier: workspace:*
         version: link:../core

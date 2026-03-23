@@ -1,10 +1,16 @@
 import React from "react";
-import type { SpreadsheetEngine } from "@bilig/core";
+import type { Viewport } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
-import { SheetGridView, type EditMovement, type EditSelectionBehavior } from "./SheetGridView.js";
+import type { GridEngineLike } from "./grid-engine.js";
+import {
+  SheetGridView,
+  type EditMovement,
+  type EditSelectionBehavior,
+  type SheetGridViewportSubscription
+} from "./SheetGridView.js";
 
 interface WorkbookViewProps {
-  engine: SpreadsheetEngine;
+  engine: GridEngineLike;
   workbookName: string;
   variant?: "playground" | "product";
   sheetNames: string[];
@@ -31,6 +37,11 @@ interface WorkbookViewProps {
   ribbon?: React.ReactNode;
   sidebar?: React.ReactNode;
   statusBar?: React.ReactNode;
+  subscribeViewport?: SheetGridViewportSubscription | undefined;
+  columnWidths?: Readonly<Record<number, number>> | undefined;
+  onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
+  onAutofitColumn?: ((columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined;
+  onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
 }
 
 export function WorkbookView({
@@ -60,7 +71,12 @@ export function WorkbookView({
   onSelectionLabelChange,
   ribbon,
   sidebar,
-  statusBar
+  statusBar,
+  subscribeViewport,
+  columnWidths,
+  onColumnWidthChange,
+  onAutofitColumn,
+  onVisibleViewportChange
 }: WorkbookViewProps) {
   const showWorkbookHeader = variant !== "product";
   return (
@@ -113,6 +129,11 @@ export function WorkbookView({
             onPaste={onPaste}
             onSelectionLabelChange={onSelectionLabelChange}
             onSelect={onSelect}
+            subscribeViewport={subscribeViewport}
+            columnWidths={columnWidths}
+            onColumnWidthChange={onColumnWidthChange}
+            onAutofitColumn={onAutofitColumn}
+            onVisibleViewportChange={onVisibleViewportChange}
             resolvedValue={resolvedValue}
             selectedAddr={selectedAddr}
             sheetName={sheetName}

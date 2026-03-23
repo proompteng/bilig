@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { selectors, type SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
+import type { Viewport } from "@bilig/protocol";
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
 import {
   DataEditor,
@@ -56,12 +56,18 @@ import { resolveGridKeyAction } from "./gridKeyActions.js";
 import { getEditorTextAlign, getGridTheme, getOverlayStyle } from "./gridPresentation.js";
 import { resolveBodyDoubleClickIntent, resolveHeaderClickIntent, shouldSkipGridSelectionChange } from "./gridEventPolicy.js";
 import { buildInternalClipboardRange, matchesInternalClipboardPaste, type InternalClipboardRange } from "./gridInternalClipboard.js";
+import type { GridEngineLike } from "./grid-engine.js";
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
 export type EditSelectionBehavior = "select-all" | "caret-end";
+export type SheetGridViewportSubscription = (
+  sheetName: string,
+  viewport: Viewport,
+  listener: (damage?: readonly { cell: Item }[]) => void
+) => () => void;
 
 interface SheetGridViewProps {
-  engine: SpreadsheetEngine;
+  engine: GridEngineLike;
   sheetName: string;
   variant?: "playground" | "product";
   selectedAddr: string;
@@ -79,6 +85,11 @@ interface SheetGridViewProps {
   onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onCopyRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void;
   onPaste(this: void, addr: string, values: readonly (readonly string[])[]): void;
+  subscribeViewport?: SheetGridViewportSubscription | undefined;
+  columnWidths?: Readonly<Record<number, number>> | undefined;
+  onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
+  onAutofitColumn?: ((columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined;
+  onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
 }
 
 function isCellEditorInputFocused(): boolean {
@@ -121,7 +132,12 @@ export function SheetGridView({
   onClearCell,
   onFillRange,
   onCopyRange,
-  onPaste
+  onPaste,
+  subscribeViewport,
+  columnWidths: controlledColumnWidths,
+  onColumnWidthChange,
+  onAutofitColumn,
+  onVisibleViewportChange
 }: SheetGridViewProps) {
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -151,7 +167,7 @@ export function SheetGridView({
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName]);
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row));
   const gridMetrics = useMemo(() => getGridMetrics(variant), [variant]);
-  const columnWidths = columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
+  const columnWidths = controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
 
   const columns = useMemo<readonly GridColumn[]>(
     () =>
@@ -185,12 +201,27 @@ export function SheetGridView({
     [visibleItems]
   );
   const visibleDamage = useMemo(() => visibleItems.map((cell) => ({ cell })), [visibleItems]);
+  const viewport = useMemo<Viewport>(() => ({
+    rowStart: visibleRegion.range.y,
+    rowEnd: Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1),
+    colStart: visibleRegion.range.x,
+    colEnd: Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1)
+  }), [visibleRegion.range.height, visibleRegion.range.width, visibleRegion.range.x, visibleRegion.range.y]);
 
   useEffect(() => {
+    onVisibleViewportChange?.(viewport);
+  }, [onVisibleViewportChange, viewport]);
+
+  useEffect(() => {
+    if (subscribeViewport) {
+      return subscribeViewport(sheetName, viewport, (damage) => {
+        editorRef.current?.updateCells(damage ? [...damage] : visibleDamage);
+      });
+    }
     return engine.subscribeCells(sheetName, visibleAddresses, () => {
       editorRef.current?.updateCells(visibleDamage);
     });
-  }, [engine, sheetName, visibleAddresses, visibleDamage]);
+  }, [engine, sheetName, subscribeViewport, viewport, visibleAddresses, visibleDamage]);
 
   useLayoutEffect(() => {
     editorRef.current?.scrollTo(selectedCell.col, selectedCell.row);
@@ -254,7 +285,7 @@ export function SheetGridView({
   const beginSelectedEdit = useCallback(
     (seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
       onBeginEdit(
-        seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, selectedAddr)),
+        seed ?? cellToEditorSeed(engine.getCell(sheetName, selectedAddr)),
         selectionBehavior
       );
     },
@@ -264,7 +295,7 @@ export function SheetGridView({
   const beginEditAt = useCallback(
     (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
       onBeginEdit(
-        seed ?? cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, addr)),
+        seed ?? cellToEditorSeed(engine.getCell(sheetName, addr)),
         selectionBehavior
       );
     },
@@ -391,10 +422,10 @@ export function SheetGridView({
     }
 
     const values = Array.from({ length: range.height }, (_rowEntry, rowOffset) =>
-      Array.from({ length: range.width }, (_colEntry, colOffset) =>
-        cellToEditorSeed(selectors.selectCellSnapshot(engine, sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)))
-      )
-    );
+        Array.from({ length: range.width }, (_colEntry, colOffset) =>
+          cellToEditorSeed(engine.getCell(sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)))
+        )
+      );
 
     internalClipboardRef.current = buildInternalClipboardRange(range, values);
   }, [engine, gridSelection, sheetName]);
@@ -551,6 +582,10 @@ export function SheetGridView({
   const applyColumnWidth = useCallback(
     (columnIndex: number, newSize: number) => {
       const clampedSize = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)));
+      if (onColumnWidthChange) {
+        onColumnWidthChange(columnIndex, clampedSize);
+        return;
+      }
       setColumnWidthsBySheet((current) => {
         const nextSheetWidths = current[sheetName] ?? EMPTY_COLUMN_WIDTHS;
         if (nextSheetWidths[columnIndex] === clampedSize) {
@@ -565,7 +600,7 @@ export function SheetGridView({
         };
       });
     },
-    [sheetName]
+    [onColumnWidthChange, sheetName]
   );
 
   const computeAutofitColumnWidth = useCallback(
@@ -730,6 +765,10 @@ export function SheetGridView({
           dragDidMoveRef.current = false;
           dragViewportRef.current = null;
           postDragSelectionExpiryRef.current = 0;
+          if (onAutofitColumn) {
+            void Promise.resolve(onAutofitColumn(doubleClickIntent.columnIndex, computeAutofitColumnWidth(doubleClickIntent.columnIndex)));
+            return;
+          }
           applyColumnWidth(doubleClickIntent.columnIndex, computeAutofitColumnWidth(doubleClickIntent.columnIndex));
         }}
         onPointerMoveCapture={(event) => {
@@ -953,9 +992,9 @@ export function SheetGridView({
                   dragViewportRef.current = null;
                   postDragSelectionExpiryRef.current = 0;
                 },
-                onColumnResize: (_column: GridColumn, newSize: number, columnIndex: number) => {
-                  applyColumnWidth(columnIndex, newSize);
-                },
+              onColumnResize: (_column: GridColumn, newSize: number, columnIndex: number) => {
+                applyColumnWidth(columnIndex, newSize);
+              },
                 onColumnResizeEnd: (_column: GridColumn, newSize: number, columnIndex: number) => {
                   applyColumnWidth(columnIndex, newSize);
                   window.requestAnimationFrame(() => {

@@ -1,5 +1,5 @@
-import { WorkbookApp } from "../../playground/src/WorkbookApp.js";
+import { WorkerWorkbookApp } from "./WorkerWorkbookApp";
 
 export function App() {
-  return <WorkbookApp variant="product" />;
+  return <WorkerWorkbookApp />;
 }

@@ -1,6 +1,7 @@
 export * from "./CellEditorOverlay.js";
 export * from "./DependencyInspector.js";
 export * from "./FormulaBar.js";
+export * from "./grid-engine.js";
 export * from "./MetricsPanel.js";
 export * from "./ReplicaPanel.js";
 export * from "./SheetGridView.js";

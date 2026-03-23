@@ -1,8 +1,9 @@
 import type { EngineEvent } from "@bilig/protocol";
 
 import type { EngineOpBatch } from "@bilig/crdt";
+import type { ViewportPatchSubscription } from "./viewport-patch.js";
 
-export type WorkerTransportChannel = "events" | "batches";
+export type WorkerTransportChannel = "events" | "batches" | "viewportPatches";
 
 interface RequestMessage {
   kind: "request";
@@ -20,8 +21,9 @@ interface ResponseMessage {
 }
 
 type SubscribeMessage =
-  | { kind: "subscribe"; id: number; channel: "events" }
-  | { kind: "subscribe"; id: number; channel: "batches" };
+  | { kind: "subscribe"; id: number; channel: "events"; args?: [] }
+  | { kind: "subscribe"; id: number; channel: "batches"; args?: [] }
+  | { kind: "subscribe"; id: number; channel: "viewportPatches"; args: [ViewportPatchSubscription] };
 
 interface UnsubscribeMessage {
   kind: "unsubscribe";
@@ -30,7 +32,8 @@ interface UnsubscribeMessage {
 
 type EventMessage =
   | { kind: "event"; subscriptionId: number; channel: "events"; payload: EngineEvent }
-  | { kind: "event"; subscriptionId: number; channel: "batches"; payload: EngineOpBatch };
+  | { kind: "event"; subscriptionId: number; channel: "batches"; payload: EngineOpBatch }
+  | { kind: "event"; subscriptionId: number; channel: "viewportPatches"; payload: Uint8Array };
 
 type TransportMessage = RequestMessage | ResponseMessage | SubscribeMessage | UnsubscribeMessage | EventMessage;
 
@@ -47,6 +50,10 @@ export interface WorkerTransportEngine {
   ready?: () => Promise<void>;
   subscribe?: (listener: (event: EngineEvent) => void) => () => void;
   subscribeBatches?: (listener: (batch: EngineOpBatch) => void) => () => void;
+  subscribeViewportPatches?: (
+    subscription: ViewportPatchSubscription,
+    listener: (patch: Uint8Array) => void
+  ) => () => void;
   [method: string]: unknown;
 }
 
@@ -55,6 +62,10 @@ export interface WorkerEngineClient {
   ready(): Promise<void>;
   subscribe(listener: (event: EngineEvent) => void): () => void;
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void;
+  subscribeViewportPatches(
+    subscription: ViewportPatchSubscription,
+    listener: (patch: Uint8Array) => void
+  ): () => void;
   dispose(): void;
 }
 
@@ -73,23 +84,7 @@ export function createWorkerEngineHost(engine: WorkerTransportEngine, port: Mess
     }
 
     if (message.kind === "subscribe") {
-      const unsubscribe = message.channel === "events"
-        ? subscribeEventChannel(engine, (payload: EngineEvent) => {
-          port.postMessage({
-            kind: "event",
-            subscriptionId: message.id,
-            channel: message.channel,
-            payload
-          });
-        })
-        : subscribeBatchChannel(engine, (payload: EngineOpBatch) => {
-          port.postMessage({
-            kind: "event",
-            subscriptionId: message.id,
-            channel: message.channel,
-            payload
-          });
-        });
+      const unsubscribe = createChannelSubscription(engine, port, message);
       subscriptions.set(message.id, unsubscribe);
       port.postMessage({
         kind: "response",
@@ -127,7 +122,7 @@ async function handleRequest(
     if (!isCallableMethod(method)) {
       throw new Error(`Unknown worker engine method: ${message.method}`);
     }
-    const value = await method(...message.args);
+    const value = await Reflect.apply(method, engine, message.args);
     port.postMessage({
       kind: "response",
       id: message.id,
@@ -158,6 +153,53 @@ function subscribeBatchChannel(engine: WorkerTransportEngine, listener: (payload
   return engine.subscribeBatches(listener);
 }
 
+function subscribeViewportPatchChannel(
+  engine: WorkerTransportEngine,
+  subscription: ViewportPatchSubscription,
+  listener: (payload: Uint8Array) => void
+): () => void {
+  if (!engine.subscribeViewportPatches) {
+    throw new Error("Engine does not expose subscribeViewportPatches()");
+  }
+  return engine.subscribeViewportPatches(subscription, listener);
+}
+
+function createChannelSubscription(
+  engine: WorkerTransportEngine,
+  port: MessagePortLike,
+  message: SubscribeMessage
+): () => void {
+  switch (message.channel) {
+    case "events":
+      return subscribeEventChannel(engine, (payload: EngineEvent) => {
+        port.postMessage({
+          kind: "event",
+          subscriptionId: message.id,
+          channel: "events",
+          payload
+        });
+      });
+    case "batches":
+      return subscribeBatchChannel(engine, (payload: EngineOpBatch) => {
+        port.postMessage({
+          kind: "event",
+          subscriptionId: message.id,
+          channel: "batches",
+          payload
+        });
+      });
+    case "viewportPatches":
+      return subscribeViewportPatchChannel(engine, message.args[0], (payload: Uint8Array) => {
+        port.postMessage({
+          kind: "event",
+          subscriptionId: message.id,
+          channel: "viewportPatches",
+          payload
+        });
+      });
+  }
+}
+
 export function createWorkerEngineClient(options: { port: MessagePortLike }): WorkerEngineClient {
   const { port } = options;
   let nextId = 1;
@@ -166,6 +208,7 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     number,
     | { channel: "events"; callback: (payload: EngineEvent) => void }
     | { channel: "batches"; callback: (payload: EngineOpBatch) => void }
+    | { channel: "viewportPatches"; callback: (payload: Uint8Array) => void }
   >();
 
   const onMessage = (message: TransportMessage) => {
@@ -193,6 +236,10 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
         return;
       }
       if (message.channel === "batches" && listener.channel === "batches") {
+        listener.callback(message.payload);
+        return;
+      }
+      if (message.channel === "viewportPatches" && listener.channel === "viewportPatches") {
         listener.callback(message.payload);
       }
     }
@@ -230,7 +277,20 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
   function subscribeBatches(callback: (payload: EngineOpBatch) => void): () => void {
     const id = nextId++;
     listeners.set(id, { channel: "batches", callback });
-    port.postMessage({ kind: "subscribe", id, channel: "batches" });
+    port.postMessage({ kind: "subscribe", id, channel: "batches", args: [] });
+    return () => {
+      listeners.delete(id);
+      port.postMessage({ kind: "unsubscribe", subscriptionId: id });
+    };
+  }
+
+  function subscribeViewportPatches(
+    subscription: ViewportPatchSubscription,
+    callback: (payload: Uint8Array) => void
+  ): () => void {
+    const id = nextId++;
+    listeners.set(id, { channel: "viewportPatches", callback });
+    port.postMessage({ kind: "subscribe", id, channel: "viewportPatches", args: [subscription] });
     return () => {
       listeners.delete(id);
       port.postMessage({ kind: "unsubscribe", subscriptionId: id });
@@ -244,6 +304,7 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     },
     subscribe: subscribeEvents,
     subscribeBatches,
+    subscribeViewportPatches,
     dispose() {
       pending.forEach((entry) => entry.reject(new Error("Worker engine client disposed")));
       pending.clear();
@@ -272,3 +333,6 @@ function attachMessageListener(
 
   throw new Error("Unsupported message port implementation");
 }
+
+export * from "./viewport-patch.js";
+export * from "./websocket-sync-client.js";
