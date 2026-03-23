@@ -24,7 +24,8 @@ import {
   type WebSocketSyncClientOptions,
 } from "@bilig/worker-transport";
 
-type WorkbookEngine = InstanceType<typeof SpreadsheetEngine>;
+const SpreadsheetEngineCtor = SpreadsheetEngine;
+type WorkbookEngine = SpreadsheetEngine;
 
 const PRODUCT_COLUMN_WIDTH = 104;
 const PRODUCT_ROW_HEIGHT = 22;
@@ -110,7 +111,7 @@ export class WorkbookWorkerRuntime {
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerStateSnapshot> {
     this.cleanup();
     this.bootstrapOptions = options;
-    this.engine = new SpreadsheetEngine({
+    this.engine = new SpreadsheetEngineCtor({
       workbookName: options.documentId,
       replicaId: options.replicaId,
     });
