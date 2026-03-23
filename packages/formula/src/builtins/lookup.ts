@@ -1184,8 +1184,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     const values = array.values.slice();
     const rows = Math.ceil(values.length / wrapCount);
     const cols = wrapCount;
-    const padValue =
-      padWithArg === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : padWithArg;
+    const padValue: CellValue = padWithArg === undefined ? errorValue(ErrorCode.NA) : padWithArg;
     while (values.length < rows * cols) {
       values.push(padValue);
     }
@@ -1216,8 +1215,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     const values = array.values.slice();
     const rows = wrapCount;
     const cols = Math.ceil(values.length / rows);
-    const padValue =
-      padWithArg === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : padWithArg;
+    const padValue: CellValue = padWithArg === undefined ? errorValue(ErrorCode.NA) : padWithArg;
     const paddedValues = Array.from(
       { length: rows * cols },
       (_, index) => values[index] ?? padValue,
