@@ -185,8 +185,8 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("dynamic-array:sequence-aggregate", "dynamic-array", "=SUM(SEQUENCE(A1,1,1,1))", "implemented-wasm-production", {
     notes: "Numeric aggregate consumers can now read transient native SEQUENCE arrays directly on the AssemblyScript path without reviving the removed JS runtime fallback."
   }),
-  entry("dynamic-array:filter-basic", "dynamic-array", "=FILTER(A1:A4,A1:A4>2)", "blocked"),
-  entry("dynamic-array:unique-basic", "dynamic-array", "=UNIQUE(A1:A4)", "blocked"),
+  entry("dynamic-array:filter-basic", "dynamic-array", "=FILTER(A1:A4,A1:A4>2)", "implemented-js"),
+  entry("dynamic-array:unique-basic", "dynamic-array", "=UNIQUE(A1:A4)", "implemented-js"),
   entry("names:defined-name-scalar", "names", "=TaxRate*A1", "implemented-wasm-production", {
     notes: "Scalar workbook names rebind onto the AssemblyScript path once the engine has concrete scalar metadata; reference-valued names remain blocked."
   }),
@@ -207,7 +207,7 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("volatile:rand-basic", "volatile", "=RAND()", "implemented-wasm-production", {
     prerequisites: ["core:volatile-context", "core:value-model"]
   }),
-  entry("lambda:let-basic", "lambda", "=LET(x,2,x+3)", "blocked"),
+  entry("lambda:let-basic", "lambda", "=LET(x,2,x+3)", "implemented-js"),
   entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "blocked"),
   entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "blocked"),
   entry("logical:if-true-branch", "logical", "=IF(A1,A2,A3)", "implemented-wasm-production"),

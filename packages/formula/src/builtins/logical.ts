@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import { createBlockedBuiltinMap, logicalPlaceholderBuiltinNames } from "./placeholder.js";
 
 export type LogicalBuiltin = (...args: CellValue[]) => CellValue;
 
@@ -37,6 +38,8 @@ function coerceLogical(value: CellValue): LogicalCoercion {
       return { ok: false, error: errorValue(ErrorCode.Value) };
   }
 }
+
+const logicalPlaceholderBuiltins = createBlockedBuiltinMap(logicalPlaceholderBuiltinNames);
 
 export const logicalBuiltins: Record<string, LogicalBuiltin> = {
   NA: (...args) => {
@@ -117,7 +120,8 @@ export const logicalBuiltins: Record<string, LogicalBuiltin> = {
   },
   ISBLANK: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Empty),
   ISNUMBER: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Number),
-  ISTEXT: (value = emptyValue()) => booleanResult(value.tag === ValueTag.String)
+  ISTEXT: (value = emptyValue()) => booleanResult(value.tag === ValueTag.String),
+  ...logicalPlaceholderBuiltins
 };
 
 export function getLogicalBuiltin(name: string): LogicalBuiltin | undefined {

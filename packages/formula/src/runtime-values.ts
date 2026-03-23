@@ -7,6 +7,14 @@ export interface ArrayValue {
   cols: number;
 }
 
+export interface RangeLikeValue {
+  kind: "range";
+  values: CellValue[];
+  rows: number;
+  cols: number;
+  refKind: "cells" | "rows" | "cols";
+}
+
 export type EvaluationResult = CellValue | ArrayValue;
 
 export function isArrayValue(value: EvaluationResult): value is ArrayValue {

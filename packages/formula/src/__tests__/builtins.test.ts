@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import { getBuiltin, getBuiltinId } from "../builtins.js";
+import { placeholderBuiltinNames, protocolPlaceholderBuiltinNames } from "../builtins/placeholder.js";
 
 describe("formula builtins", () => {
   it("supports numeric aggregates and error propagation", () => {
@@ -72,6 +73,11 @@ describe("formula builtins", () => {
       { tag: ValueTag.String, value: "alpha", stringId: 1 },
       { tag: ValueTag.Number, value: 3 }
     )).toEqual({ tag: ValueTag.String, value: "alp", stringId: 0 });
+
+    expect(getBuiltin("TEXTBEFORE")?.(
+      { tag: ValueTag.String, value: "alpha-beta", stringId: 1 },
+      { tag: ValueTag.String, value: "-", stringId: 2 }
+    )).toEqual({ tag: ValueTag.String, value: "alpha", stringId: 0 });
 
     expect(getBuiltin("IFERROR")?.(
       { tag: ValueTag.Error, code: ErrorCode.Div0 },
@@ -171,5 +177,22 @@ describe("formula builtins", () => {
       { tag: ValueTag.Empty },
       { tag: ValueTag.Number, value: 1 }
     )).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("registers protocol-declared placeholder builtins as blocked", () => {
+    for (const name of placeholderBuiltinNames) {
+      expect(getBuiltin(name)?.()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    }
+
+    for (const name of protocolPlaceholderBuiltinNames) {
+      expect(getBuiltinId(name.toLowerCase())).toBeDefined();
+    }
+
+    expect(getBuiltinId("sin")).toBe(BuiltinId.Sin);
+    expect(getBuiltinId("weeknum")).toBe(BuiltinId.Weeknum);
+    expect(getBuiltinId("rept")).toBe(BuiltinId.Rept);
+    expect(getBuiltinId("filter")).toBeUndefined();
+    expect(getBuiltinId("let")).toBeUndefined();
+    expect(getBuiltinId("textjoin")).toBeUndefined();
   });
 });

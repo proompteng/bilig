@@ -1,5 +1,6 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { getExternalLookupFunction } from "../external-function-adapter.js";
+import type { ArrayValue, EvaluationResult } from "../runtime-values.js";
 
 export interface RangeBuiltinArgument {
   kind: "range";
@@ -10,7 +11,7 @@ export interface RangeBuiltinArgument {
 }
 
 export type LookupBuiltinArgument = CellValue | RangeBuiltinArgument;
-export type LookupBuiltin = (...args: LookupBuiltinArgument[]) => CellValue;
+export type LookupBuiltin = (...args: LookupBuiltinArgument[]) => EvaluationResult;
 
 function errorValue(code: ErrorCode): CellValue {
   return { tag: ValueTag.Error, code };
@@ -145,6 +146,53 @@ function requireCellRange(arg: LookupBuiltinArgument): RangeBuiltinArgument | Ce
 function getRangeValue(range: RangeBuiltinArgument, row: number, col: number): CellValue {
   const index = row * range.cols + col;
   return range.values[index] ?? { tag: ValueTag.Empty };
+}
+
+function arrayResult(values: CellValue[], rows: number, cols: number): ArrayValue {
+  return { kind: "array", values, rows, cols };
+}
+
+function pickRangeRow(range: RangeBuiltinArgument, row: number): CellValue[] {
+  const values: CellValue[] = [];
+  for (let col = 0; col < range.cols; col += 1) {
+    values.push(getRangeValue(range, row, col));
+  }
+  return values;
+}
+
+function pickRangeCol(range: RangeBuiltinArgument, col: number): CellValue[] {
+  const values: CellValue[] = [];
+  for (let row = 0; row < range.rows; row += 1) {
+    values.push(getRangeValue(range, row, col));
+  }
+  return values;
+}
+
+function normalizeKeyValue(value: CellValue): CellValue {
+  if (value.tag !== ValueTag.String) {
+    return value;
+  }
+  return {
+    tag: ValueTag.String,
+    value: value.value.toUpperCase(),
+    stringId: value.stringId
+  };
+}
+
+function rowKey(range: RangeBuiltinArgument, row: number): string | undefined {
+  const values = pickRangeRow(range, row);
+  if (values.some(isError)) {
+    return undefined;
+  }
+  return JSON.stringify(values.map(normalizeKeyValue));
+}
+
+function colKey(range: RangeBuiltinArgument, col: number): string | undefined {
+  const values = pickRangeCol(range, col);
+  if (values.some(isError)) {
+    return undefined;
+  }
+  return JSON.stringify(values.map(normalizeKeyValue));
 }
 
 function exactMatch(lookupValue: CellValue, range: RangeBuiltinArgument): number {
@@ -686,6 +734,183 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       sum += product;
     }
     return { tag: ValueTag.Number, value: sum };
+  },
+  FILTER: (arrayArg, includeArg, ifEmptyArg = { tag: ValueTag.Error, code: ErrorCode.Value }) => {
+    const array = requireCellRange(arrayArg);
+    const include = requireCellRange(includeArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (!isRangeArg(include)) {
+      return include;
+    }
+    if (include.rows === array.rows && include.cols === 1) {
+      const values: CellValue[] = [];
+      let keptRows = 0;
+      for (let row = 0; row < array.rows; row += 1) {
+        const includeValue = getRangeValue(include, row, 0);
+        if (isError(includeValue)) {
+          return includeValue;
+        }
+        const keep = toBoolean(includeValue);
+        if (keep === undefined) {
+          return errorValue(ErrorCode.Value);
+        }
+        if (!keep) {
+          continue;
+        }
+        values.push(...pickRangeRow(array, row));
+        keptRows += 1;
+      }
+      if (keptRows === 0) {
+        return isRangeArg(ifEmptyArg) ? errorValue(ErrorCode.Value) : ifEmptyArg;
+      }
+      return arrayResult(values, keptRows, array.cols);
+    }
+
+    if (include.cols === array.cols && include.rows === 1) {
+      const keptCols: number[] = [];
+      for (let col = 0; col < array.cols; col += 1) {
+        const includeValue = getRangeValue(include, 0, col);
+        if (isError(includeValue)) {
+          return includeValue;
+        }
+        const keep = toBoolean(includeValue);
+        if (keep === undefined) {
+          return errorValue(ErrorCode.Value);
+        }
+        if (keep) {
+          keptCols.push(col);
+        }
+      }
+      if (keptCols.length === 0) {
+        return isRangeArg(ifEmptyArg) ? errorValue(ErrorCode.Value) : ifEmptyArg;
+      }
+      const values: CellValue[] = [];
+      for (let row = 0; row < array.rows; row += 1) {
+        for (const col of keptCols) {
+          values.push(getRangeValue(array, row, col));
+        }
+      }
+      return arrayResult(values, array.rows, keptCols.length);
+    }
+
+    return errorValue(ErrorCode.Value);
+  },
+  UNIQUE: (
+    arrayArg,
+    byColArg = { tag: ValueTag.Boolean, value: false },
+    exactlyOnceArg = { tag: ValueTag.Boolean, value: false }
+  ) => {
+    const array = requireCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(byColArg) || isRangeArg(exactlyOnceArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(byColArg)) {
+      return byColArg;
+    }
+    if (isError(exactlyOnceArg)) {
+      return exactlyOnceArg;
+    }
+    const byCol = toBoolean(byColArg);
+    const exactlyOnce = toBoolean(exactlyOnceArg);
+    if (byCol === undefined || exactlyOnce === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    if (array.rows === 1 || array.cols === 1) {
+      const counts = new Map<string, number>();
+      const keys: string[] = [];
+      for (const value of array.values) {
+        if (isError(value)) {
+          return value;
+        }
+        const key = JSON.stringify(value.tag === ValueTag.String ? { ...value, value: value.value.toUpperCase() } : value);
+        keys.push(key);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const values: CellValue[] = [];
+      const seen = new Set<string>();
+      for (let index = 0; index < array.values.length; index += 1) {
+        const key = keys[index]!;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        if (exactlyOnce && counts.get(key) !== 1) {
+          continue;
+        }
+        values.push(array.values[index]!);
+      }
+      return array.rows === 1
+        ? arrayResult(values, 1, values.length)
+        : arrayResult(values, values.length, 1);
+    }
+
+    if (byCol) {
+      const counts = new Map<string, number>();
+      const keys: string[] = [];
+      for (let col = 0; col < array.cols; col += 1) {
+        const key = colKey(array, col);
+        if (key === undefined) {
+          return errorValue(ErrorCode.Value);
+        }
+        keys.push(key);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const keptCols: number[] = [];
+      const seen = new Set<string>();
+      for (let col = 0; col < array.cols; col += 1) {
+        const key = keys[col]!;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        if (exactlyOnce && counts.get(key) !== 1) {
+          continue;
+        }
+        keptCols.push(col);
+      }
+      const values: CellValue[] = [];
+      for (let row = 0; row < array.rows; row += 1) {
+        for (const col of keptCols) {
+          values.push(getRangeValue(array, row, col));
+        }
+      }
+      return arrayResult(values, array.rows, keptCols.length);
+    }
+
+    const counts = new Map<string, number>();
+    const keys: string[] = [];
+    for (let row = 0; row < array.rows; row += 1) {
+      const key = rowKey(array, row);
+      if (key === undefined) {
+        return errorValue(ErrorCode.Value);
+      }
+      keys.push(key);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const keptRows: number[] = [];
+    const seen = new Set<string>();
+    for (let row = 0; row < array.rows; row += 1) {
+      const key = keys[row]!;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      if (exactlyOnce && counts.get(key) !== 1) {
+        continue;
+      }
+      keptRows.push(row);
+    }
+    const values: CellValue[] = [];
+    for (const row of keptRows) {
+      values.push(...pickRangeRow(array, row));
+    }
+    return arrayResult(values, keptRows.length, array.cols);
   }
 };
 

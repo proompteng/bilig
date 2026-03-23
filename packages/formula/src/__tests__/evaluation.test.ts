@@ -100,6 +100,17 @@ describe("formula builtins and JS evaluator", () => {
     expect(evaluateAst(parseFormula("SUM(1:1)"), context)).toEqual({ tag: ValueTag.Number, value: 6 });
     expect(evaluateAst(parseFormula("A1/0"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 });
     expect(evaluateAst(parseFormula("A2+1"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(evaluateAst(parseFormula("SIN(A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("NETWORKDAYS(A1,A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("REPT(\"x\",3)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("T.DIST(0.1,2,TRUE)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("TEXTJOIN(\",\",TRUE,\"a\",\"b\")"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("LET(x,2,x+3)"), context)).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(evaluateAst(parseFormula("TEXTBEFORE(\"alpha-beta\",\"-\")"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "alpha",
+      stringId: 0
+    });
     expect(evaluateAst(parseFormula("MissingFn(A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
     expect(evaluateAst(parseFormula("A:A"), context)).toEqual({ tag: ValueTag.Empty });
   });
@@ -135,5 +146,42 @@ describe("formula builtins and JS evaluator", () => {
       ]
     });
     expect(evaluateAst(parseFormula("SUM(SEQUENCE(3,1,1,1))"), context)).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    expect(evaluateAstResult(parseFormula("FILTER(A1:A4,A1:A4>2)"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 }
+      ]
+    })).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 }
+      ]
+    });
+
+    expect(evaluateAstResult(parseFormula("UNIQUE(A1:A4)"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.String, value: "A", stringId: 0 },
+        { tag: ValueTag.String, value: "B", stringId: 0 },
+        { tag: ValueTag.String, value: "A", stringId: 0 },
+        { tag: ValueTag.String, value: "C", stringId: 0 }
+      ]
+    })).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [
+        { tag: ValueTag.String, value: "A", stringId: 0 },
+        { tag: ValueTag.String, value: "B", stringId: 0 },
+        { tag: ValueTag.String, value: "C", stringId: 0 }
+      ]
+    });
   });
 });

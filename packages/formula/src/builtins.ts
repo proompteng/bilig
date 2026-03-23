@@ -3,6 +3,7 @@ import type { CellValue } from "@bilig/protocol";
 import { datetimeBuiltins } from "./builtins/datetime.js";
 import { logicalBuiltins } from "./builtins/logical.js";
 import { lookupBuiltins } from "./builtins/lookup.js";
+import { createBlockedBuiltinMap, scalarPlaceholderBuiltinNames } from "./builtins/placeholder.js";
 import { getExternalScalarFunction, hasExternalFunction } from "./external-function-adapter.js";
 import type { ArrayValue, EvaluationResult } from "./runtime-values.js";
 import { textBuiltins } from "./builtins/text.js";
@@ -138,6 +139,8 @@ function ceilingWith(value: CellValue, significance?: CellValue): CellValue {
   return numberResult(Math.ceil(numberValue / significanceValue) * significanceValue);
 }
 
+const scalarPlaceholderBuiltins = createBlockedBuiltinMap(scalarPlaceholderBuiltinNames);
+
 const scalarBuiltins: Record<string, Builtin> = {
   SUM: (...args) => {
     const error = firstError(args);
@@ -194,7 +197,8 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     return numberResult(roundDownToDigits(numberValue, Math.trunc(digitValue)));
   },
-  SEQUENCE: (...args) => sequenceResult(args[0], args[1], args[2], args[3])
+  SEQUENCE: (...args) => sequenceResult(args[0], args[1], args[2], args[3]),
+  ...scalarPlaceholderBuiltins
 };
 
 const builtins: Record<string, Builtin> = {
@@ -203,6 +207,8 @@ const builtins: Record<string, Builtin> = {
   ...textBuiltins,
   ...datetimeBuiltins
 };
+
+const jsSpecialBuiltins = new Set(["LET"]);
 
 function isBuiltinIdKey(value: string): value is keyof typeof BuiltinId {
   return value in BuiltinId;
@@ -214,7 +220,7 @@ export function getBuiltin(name: string): Builtin | undefined {
 
 export function hasBuiltin(name: string): boolean {
   const upper = name.toUpperCase();
-  return builtins[upper] !== undefined || lookupBuiltins[upper] !== undefined || hasExternalFunction(upper);
+  return builtins[upper] !== undefined || lookupBuiltins[upper] !== undefined || jsSpecialBuiltins.has(upper) || hasExternalFunction(upper);
 }
 
 export function getBuiltinId(name: string): BuiltinId | undefined {

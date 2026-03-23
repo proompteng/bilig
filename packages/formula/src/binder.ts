@@ -192,7 +192,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
   const symbolicTables = new Set<string>();
   const symbolicSpills = new Set<string>();
 
-  function collectDeps(node: FormulaNode): void {
+  function collectDeps(node: FormulaNode, localNames: ReadonlySet<string> = new Set()): void {
     switch (node.kind) {
       case "NumberLiteral":
       case "BooleanLiteral":
@@ -200,7 +200,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "ErrorLiteral":
         break;
       case "NameRef":
-        symbolicNames.add(node.name);
+        if (!localNames.has(node.name)) {
+          symbolicNames.add(node.name);
+        }
         break;
       case "StructuredRef":
         symbolicTables.add(node.tableName);
@@ -218,15 +220,29 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         deps.add(formatRangeAddress(parseRangeAddress(node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`)));
         break;
       case "UnaryExpr":
-        collectDeps(node.argument);
+        collectDeps(node.argument, localNames);
         break;
       case "BinaryExpr":
-        collectDeps(node.left);
-        collectDeps(node.right);
+        collectDeps(node.left, localNames);
+        collectDeps(node.right, localNames);
         break;
-      case "CallExpr":
-        node.args.forEach(collectDeps);
+      case "CallExpr": {
+        const callee = node.callee.toUpperCase();
+        if (callee === "LET" && node.args.length >= 3 && node.args.length % 2 === 1) {
+          const scopedNames = new Set(localNames);
+          for (let index = 0; index < node.args.length - 1; index += 2) {
+            const nameNode = node.args[index]!;
+            collectDeps(node.args[index + 1]!, scopedNames);
+            if (nameNode.kind === "NameRef") {
+              scopedNames.add(nameNode.name);
+            }
+          }
+          collectDeps(node.args[node.args.length - 1]!, scopedNames);
+          break;
+        }
+        node.args.forEach((arg) => collectDeps(arg, localNames));
         break;
+      }
       default:
         assertNever(node);
     }
@@ -269,6 +285,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           && isWasmSafe(node.right);
       case "CallExpr": {
         const callee = node.callee.toUpperCase();
+        if (callee === "LET") {
+          return false;
+        }
         if (!hasBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
           return false;
         }

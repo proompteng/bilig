@@ -165,6 +165,13 @@ describe("js evaluator", () => {
     });
   });
 
+  it("supports LET scopes in lowered plans", () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula("LET(x,2,x+3)")), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5
+    });
+  });
+
   it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
     expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
     expect(optimizeFormula(parseFormula("-\"text\""))).toEqual({

@@ -258,6 +258,37 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
   });
 
+  it("evaluates LET through the JS runtime fallback", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "LET(x,2,x+3)");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
+  });
+
+  it("spills FILTER and UNIQUE through the JS runtime fallback", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 3);
+    engine.setCellValue("Sheet1", "A3", 2);
+    engine.setCellValue("Sheet1", "A4", 4);
+    engine.setCellFormula("Sheet1", "B1", "FILTER(A1:A4,A1:A4>2)");
+    engine.setCellFormula("Sheet1", "C1", "UNIQUE(A1:A4)");
+
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "C3")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "C4")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.JsOnly);
+  });
+
   it("supports cross-sheet references", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

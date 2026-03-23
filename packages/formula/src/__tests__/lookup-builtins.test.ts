@@ -144,4 +144,30 @@ describe("lookup builtins", () => {
       )
     ).toEqual(num(20));
   });
+
+  it("supports FILTER and UNIQUE dynamic-array results", () => {
+    const FILTER = getLookupBuiltin("FILTER")!;
+    const UNIQUE = getLookupBuiltin("UNIQUE")!;
+
+    const filtered = FILTER(
+      cellRange([num(1), num(3), num(2), num(4)], 4, 1),
+      cellRange([bool(false), bool(true), bool(false), bool(true)], 4, 1)
+    );
+    expect(filtered).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(3), num(4)]
+    });
+
+    const unique = UNIQUE(
+      cellRange([text("A"), text("B"), text("A"), text("C")], 4, 1)
+    );
+    expect(unique).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [text("A"), text("B"), text("C")]
+    });
+  });
 });

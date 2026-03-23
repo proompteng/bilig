@@ -7,7 +7,8 @@ import {
   isArrayValue,
   scalarFromEvaluationResult,
   type ArrayValue,
-  type EvaluationResult
+  type EvaluationResult,
+  type RangeLikeValue
 } from "./runtime-values.js";
 
 export interface EvaluationContext {
@@ -29,9 +30,14 @@ export type JsPlanInstruction =
   | { opcode: "unary"; operator: "+" | "-" }
   | { opcode: "binary"; operator: "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | ">" | ">=" | "<" | "<=" }
   | { opcode: "call"; callee: string; argc: number }
+  | { opcode: "begin-scope" }
+  | { opcode: "bind-name"; name: string }
+  | { opcode: "end-scope" }
   | { opcode: "jump-if-false"; target: number }
   | { opcode: "jump"; target: number }
   | { opcode: "return" };
+
+type BinaryOperator = Extract<JsPlanInstruction, { opcode: "binary" }>["operator"];
 
 type StackValue =
   | { kind: "scalar"; value: CellValue }
@@ -154,6 +160,119 @@ function toEvaluationResult(value: StackValue | undefined): EvaluationResult {
   return value;
 }
 
+function cloneStackValue(value: StackValue): StackValue {
+  if (value.kind === "scalar") {
+    return { kind: "scalar", value: value.value };
+  }
+  if (value.kind === "range") {
+    return { kind: "range", values: value.values, refKind: value.refKind, rows: value.rows, cols: value.cols };
+  }
+  return { kind: "array", values: value.values, rows: value.rows, cols: value.cols };
+}
+
+function toRangeLike(value: StackValue): RangeLikeValue {
+  if (value.kind === "range") {
+    return value;
+  }
+  if (value.kind === "array") {
+    return { kind: "range", values: value.values, rows: value.rows, cols: value.cols, refKind: "cells" };
+  }
+  return { kind: "range", values: [value.value], rows: 1, cols: 1, refKind: "cells" };
+}
+
+function scalarBinary(operator: BinaryOperator, leftValue: CellValue, rightValue: CellValue): CellValue {
+  if (leftValue.tag === ValueTag.Error) {
+    return leftValue;
+  }
+  if (rightValue.tag === ValueTag.Error) {
+    return rightValue;
+  }
+
+  if (operator === "&") {
+    return { tag: ValueTag.String, value: `${toStringValue(leftValue)}${toStringValue(rightValue)}`, stringId: 0 };
+  }
+
+  if (["+", "-", "*", "/", "^"].includes(operator)) {
+    const left = toNumber(leftValue);
+    const right = toNumber(rightValue);
+    if (left === undefined || right === undefined) {
+      return error(ErrorCode.Value);
+    }
+    if (operator === "/" && right === 0) {
+      return error(ErrorCode.Div0);
+    }
+    const value =
+      operator === "+"
+        ? left + right
+        : operator === "-"
+          ? left - right
+          : operator === "*"
+            ? left * right
+            : operator === "/"
+              ? left / right
+              : left ** right;
+    return { tag: ValueTag.Number, value };
+  }
+
+  const comparison = compareScalars(leftValue, rightValue);
+  if (comparison === undefined) {
+    return error(ErrorCode.Value);
+  }
+  return {
+    tag: ValueTag.Boolean,
+    value:
+      operator === "="
+        ? comparison === 0
+        : operator === "<>"
+          ? comparison !== 0
+          : operator === ">"
+            ? comparison > 0
+            : operator === ">="
+              ? comparison >= 0
+              : operator === "<"
+                ? comparison < 0
+                : comparison <= 0
+  };
+}
+
+function evaluateBinary(operator: BinaryOperator, leftValue: StackValue, rightValue: StackValue): EvaluationResult {
+  if (leftValue.kind === "scalar" && rightValue.kind === "scalar") {
+    return scalarBinary(operator, leftValue.value, rightValue.value);
+  }
+
+  const leftRange = toRangeLike(leftValue);
+  const rightRange = toRangeLike(rightValue);
+  const rows =
+    leftRange.rows === rightRange.rows
+      ? leftRange.rows
+      : leftRange.rows === 1
+        ? rightRange.rows
+        : rightRange.rows === 1
+          ? leftRange.rows
+          : 0;
+  const cols =
+    leftRange.cols === rightRange.cols
+      ? leftRange.cols
+      : leftRange.cols === 1
+        ? rightRange.cols
+        : rightRange.cols === 1
+          ? leftRange.cols
+          : 0;
+  if (rows === 0 || cols === 0) {
+    return error(ErrorCode.Value);
+  }
+
+  const values: CellValue[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const leftIndex = Math.min(row, leftRange.rows - 1) * leftRange.cols + Math.min(col, leftRange.cols - 1);
+      const rightIndex = Math.min(row, rightRange.rows - 1) * rightRange.cols + Math.min(col, rightRange.cols - 1);
+      values.push(scalarBinary(operator, leftRange.values[leftIndex] ?? emptyValue(), rightRange.values[rightIndex] ?? emptyValue()));
+    }
+  }
+  return rows === 1 && cols === 1 ? values[0] ?? emptyValue() : { kind: "array", values, rows, cols };
+}
+
 function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
   switch (node.kind) {
     case "NumberLiteral":
@@ -215,6 +334,26 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       return;
     case "CallExpr": {
       const callee = node.callee.toUpperCase();
+      if (callee === "LET") {
+        if (node.args.length < 3 || node.args.length % 2 === 0) {
+          plan.push({ opcode: "push-error", code: ErrorCode.Value });
+          return;
+        }
+        plan.push({ opcode: "begin-scope" });
+        for (let index = 0; index < node.args.length - 1; index += 2) {
+          const nameNode = node.args[index]!;
+          if (nameNode.kind !== "NameRef") {
+            plan.push({ opcode: "push-error", code: ErrorCode.Value });
+            plan.push({ opcode: "end-scope" });
+            return;
+          }
+          lowerNode(node.args[index + 1]!, plan);
+          plan.push({ opcode: "bind-name", name: nameNode.name });
+        }
+        lowerNode(node.args[node.args.length - 1]!, plan);
+        plan.push({ opcode: "end-scope" });
+        return;
+      }
       if (callee === "IF" && node.args.length === 3) {
         lowerNode(node.args[0]!, plan);
         const jumpIfFalseIndex = plan.push({ opcode: "jump-if-false", target: -1 }) - 1;
@@ -244,6 +383,7 @@ export function lowerToPlan(node: FormulaNode): JsPlanInstruction[] {
 
 export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: EvaluationContext): EvaluationResult {
   const stack: StackValue[] = [];
+  const scopes: Array<Map<string, StackValue>> = [];
   let pc = 0;
 
   while (pc < plan.length) {
@@ -262,10 +402,22 @@ export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: 
         stack.push({ kind: "scalar", value: error(instruction.code) });
         break;
       case "push-name":
-        stack.push({
-          kind: "scalar",
-          value: context.resolveName?.(instruction.name) ?? error(ErrorCode.Name)
-        });
+        {
+          let scopedValue: StackValue | undefined;
+          for (let index = scopes.length - 1; index >= 0; index -= 1) {
+            const found = scopes[index]!.get(instruction.name);
+            if (found) {
+              scopedValue = found;
+              break;
+            }
+          }
+          stack.push(scopedValue
+            ? cloneStackValue(scopedValue)
+            : {
+                kind: "scalar",
+                value: context.resolveName?.(instruction.name) ?? error(ErrorCode.Name)
+              });
+        }
         break;
       case "push-cell":
         stack.push({
@@ -317,82 +469,27 @@ export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: 
         break;
       }
       case "binary": {
-        const right = popScalar(stack);
-        const left = popScalar(stack);
-        if (left.tag === ValueTag.Error) {
-          stack.push({ kind: "scalar", value: left });
-          break;
-        }
-        if (right.tag === ValueTag.Error) {
-          stack.push({ kind: "scalar", value: right });
-          break;
-        }
-
-        if (instruction.operator === "&") {
-          stack.push({
-            kind: "scalar",
-            value: { tag: ValueTag.String, value: `${toStringValue(left)}${toStringValue(right)}`, stringId: 0 }
-          });
-          break;
-        }
-
-        const binaryValue: CellValue = (() => {
-          switch (instruction.operator) {
-            case "+":
-            case "-":
-            case "*":
-            case "/":
-            case "^": {
-              const leftNum = toNumber(left);
-              const rightNum = toNumber(right);
-              if (leftNum === undefined || rightNum === undefined) {
-                return error(ErrorCode.Value);
-              }
-
-              switch (instruction.operator) {
-                case "+":
-                  return { tag: ValueTag.Number, value: leftNum + rightNum };
-                case "-":
-                  return { tag: ValueTag.Number, value: leftNum - rightNum };
-                case "*":
-                  return { tag: ValueTag.Number, value: leftNum * rightNum };
-                case "/":
-                  return rightNum === 0 ? error(ErrorCode.Div0) : { tag: ValueTag.Number, value: leftNum / rightNum };
-                case "^":
-                  return { tag: ValueTag.Number, value: leftNum ** rightNum };
-              }
-            }
-            case "=":
-            case "<>":
-            case ">":
-            case ">=":
-            case "<":
-            case "<=": {
-              const comparison = compareScalars(left, right);
-              if (comparison === undefined) {
-                return error(ErrorCode.Value);
-              }
-
-              switch (instruction.operator) {
-                case "=":
-                  return { tag: ValueTag.Boolean, value: comparison === 0 };
-                case "<>":
-                  return { tag: ValueTag.Boolean, value: comparison !== 0 };
-                case ">":
-                  return { tag: ValueTag.Boolean, value: comparison > 0 };
-                case ">=":
-                  return { tag: ValueTag.Boolean, value: comparison >= 0 };
-                case "<":
-                  return { tag: ValueTag.Boolean, value: comparison < 0 };
-                case "<=":
-                  return { tag: ValueTag.Boolean, value: comparison <= 0 };
-              }
-            }
-          }
-        })();
-        stack.push({ kind: "scalar", value: binaryValue });
+        const right = popArgument(stack);
+        const left = popArgument(stack);
+        const result = evaluateBinary(instruction.operator, left, right);
+        stack.push(isArrayValue(result) ? result : { kind: "scalar", value: result });
         break;
       }
+      case "begin-scope":
+        scopes.push(new Map());
+        break;
+      case "bind-name": {
+        const scope = scopes[scopes.length - 1];
+        if (!scope) {
+          stack.push({ kind: "scalar", value: error(ErrorCode.Value) });
+          break;
+        }
+        scope.set(instruction.name, cloneStackValue(popArgument(stack)));
+        break;
+      }
+      case "end-scope":
+        scopes.pop();
+        break;
       case "call": {
         const lookupBuiltin = getLookupBuiltin(instruction.callee);
         if (lookupBuiltin) {
@@ -411,7 +508,8 @@ export function evaluatePlanResult(plan: readonly JsPlanInstruction[], context: 
                   }
             );
           }
-          stack.push({ kind: "scalar", value: lookupBuiltin(...args) });
+          const result = lookupBuiltin(...args);
+          stack.push(isArrayValue(result) ? result : { kind: "scalar", value: result });
           break;
         }
 

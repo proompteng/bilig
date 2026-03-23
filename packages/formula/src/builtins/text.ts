@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import { createBlockedBuiltinMap, textPlaceholderBuiltinNames } from "./placeholder.js";
 
 export type TextBuiltin = (...args: CellValue[]) => CellValue;
 
@@ -100,6 +101,20 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function indexOfWithMode(text: string, delimiter: string, start: number, matchMode: number): number {
+  if (matchMode === 1) {
+    return text.toLowerCase().indexOf(delimiter.toLowerCase(), start);
+  }
+  return text.indexOf(delimiter, start);
+}
+
+function lastIndexOfWithMode(text: string, delimiter: string, start: number, matchMode: number): number {
+  if (matchMode === 1) {
+    return text.toLowerCase().lastIndexOf(delimiter.toLowerCase(), start);
+  }
+  return text.lastIndexOf(delimiter, start);
+}
+
 function hasSearchSyntax(pattern: string): boolean {
   for (let index = 0; index < pattern.length; index += 1) {
     const char = pattern[index]!;
@@ -167,6 +182,8 @@ function findPosition(needle: string, haystack: string, start: number, caseSensi
   }
   return error(ErrorCode.Value);
 }
+
+const textPlaceholderBuiltins = createBlockedBuiltinMap(textPlaceholderBuiltinNames);
 
 export const textBuiltins: Record<string, TextBuiltin> = {
   LEN: (...args) => {
@@ -325,7 +342,64 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     }
     const coerced = coerceNumber(value);
     return coerced === undefined ? error(ErrorCode.Value) : numberResult(coerced);
-  }
+  },
+  TEXTBEFORE: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, delimiterValue, instanceValue, matchModeValue, matchEndValue, ifNotFoundValue] = args;
+    if (textValue === undefined || delimiterValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+
+    const text = coerceText(textValue);
+    const delimiter = coerceText(delimiterValue);
+    if (delimiter === "") {
+      return error(ErrorCode.Value);
+    }
+
+    const instanceNumber = instanceValue === undefined ? 1 : coerceNumber(instanceValue);
+    const matchMode = matchModeValue === undefined ? 0 : coerceNumber(matchModeValue);
+    const matchEndNumber = matchEndValue === undefined ? 0 : coerceNumber(matchEndValue);
+    if (
+      instanceNumber === undefined
+      || matchMode === undefined
+      || matchEndNumber === undefined
+      || !Number.isInteger(instanceNumber)
+      || instanceNumber === 0
+      || !Number.isInteger(matchMode)
+      || (matchMode !== 0 && matchMode !== 1)
+    ) {
+      return error(ErrorCode.Value);
+    }
+
+    const matchEnd = matchEndNumber !== 0;
+    if (instanceNumber > 0) {
+      let searchFrom = 0;
+      let found = -1;
+      for (let count = 0; count < instanceNumber; count += 1) {
+        found = indexOfWithMode(text, delimiter, searchFrom, matchMode);
+        if (found === -1) {
+          return ifNotFoundValue ?? error(ErrorCode.NA);
+        }
+        searchFrom = found + delimiter.length;
+      }
+      return stringResult(text.slice(0, found));
+    }
+
+    let searchFrom = text.length;
+    let found = matchEnd ? text.length : -1;
+    for (let count = 0; count < Math.abs(instanceNumber); count += 1) {
+      found = lastIndexOfWithMode(text, delimiter, searchFrom, matchMode);
+      if (found === -1) {
+        return ifNotFoundValue ?? error(ErrorCode.NA);
+      }
+      searchFrom = found - 1;
+    }
+    return stringResult(text.slice(0, found));
+  },
+  ...textPlaceholderBuiltins
 };
 
 export function getTextBuiltin(name: string): TextBuiltin | undefined {

@@ -26,7 +26,7 @@ interface VolatileMetadata {
 }
 
 function producesSpillResult(node: FormulaNode): boolean {
-  return node.kind === "CallExpr" && node.callee.toUpperCase() === "SEQUENCE";
+  return node.kind === "CallExpr" && ["SEQUENCE", "FILTER", "UNIQUE"].includes(node.callee.toUpperCase());
 }
 
 function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
@@ -234,7 +234,12 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
       case "jump-if-false":
         current -= 1;
         break;
+      case "bind-name":
+        current -= 1;
+        break;
       case "unary":
+      case "begin-scope":
+      case "end-scope":
       case "jump":
       case "return":
         break;

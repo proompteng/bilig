@@ -1,5 +1,6 @@
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
+import { createBlockedBuiltinMap, datetimePlaceholderBuiltinNames } from "./placeholder.js";
 
 export type Builtin = (...args: CellValue[]) => CellValue;
 export type DateTimeProvider = () => Date;
@@ -437,6 +438,8 @@ export function createEomonthBuiltin(): Builtin {
   };
 }
 
+const datetimePlaceholderBuiltins = createBlockedBuiltinMap(datetimePlaceholderBuiltinNames);
+
 export const datetimeBuiltins: Record<string, Builtin> = {
   DATE: createDateBuiltin(),
   YEAR: createDatePartBuiltin("year"),
@@ -451,5 +454,6 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   NOW: createNowBuiltin(),
   RAND: createRandBuiltin(),
   EDATE: createEdateBuiltin(),
-  EOMONTH: createEomonthBuiltin()
+  EOMONTH: createEomonthBuiltin(),
+  ...datetimePlaceholderBuiltins
 };

@@ -1,4 +1,5 @@
 import type { CellValue } from "@bilig/protocol";
+import type { EvaluationResult } from "./runtime-values.js";
 
 export const externalFunctionSurfaces = ["cube", "web", "host", "external-data", "add-in"] as const;
 
@@ -15,7 +16,7 @@ export interface ExternalRangeFunctionArgument {
 }
 
 export type ExternalLookupFunctionArgument = CellValue | ExternalRangeFunctionArgument;
-export type ExternalLookupFunction = (...args: ExternalLookupFunctionArgument[]) => CellValue;
+export type ExternalLookupFunction = (...args: ExternalLookupFunctionArgument[]) => EvaluationResult;
 
 export type ExternalFunctionBinding =
   | { kind: "scalar"; implementation: ExternalScalarFunction }
