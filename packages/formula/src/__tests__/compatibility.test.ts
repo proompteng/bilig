@@ -5,6 +5,7 @@ import {
   compatibilityStatuses,
   formulaCompatibilityRegistry,
   getCompatibilityEntry,
+  isCompatibilityStatus,
   isWasmCompatibilityStatus,
   wasmCompatibilityStatuses,
 } from "../compatibility.js";
@@ -73,6 +74,12 @@ describe("formula compatibility registry", () => {
 
     expect([...fixtureFamiliesSeen].toSorted()).toEqual([...excelFixtureFamilies].toSorted());
     expect([...registryFamiliesSeen].toSorted()).toEqual([...compatibilityFamilies].toSorted());
+  });
+
+  it("validates compatibility status helper values", () => {
+    expect(isCompatibilityStatus("implemented-wasm-production")).toBe(true);
+    expect(isCompatibilityStatus("implemented-js-and-wasm-shadow")).toBe(true);
+    expect(isCompatibilityStatus("nope")).toBe(false);
   });
 
   it("exposes lookup by id", () => {
