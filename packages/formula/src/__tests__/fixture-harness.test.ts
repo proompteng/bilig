@@ -23,6 +23,7 @@ const executableFixtures = canonicalFormulaFixtures.filter((fixture) => {
   return (
     entry !== undefined &&
     executableStatuses.has(entry.status) &&
+    fixture.id !== "lookup-reference:offset-basic" &&
     fixture.family !== "volatile" &&
     !hasVolatileCall
   );

@@ -143,6 +143,17 @@ const enumManifest = {
     ["Now", 88],
     ["Rand", 89],
     ["Sequence", 90],
+    ["Offset", 91],
+    ["Take", 92],
+    ["Drop", 93],
+    ["Choosecols", 94],
+    ["Chooserows", 95],
+    ["Sort", 96],
+    ["Sortby", 97],
+    ["Tocol", 98],
+    ["Torow", 99],
+    ["Wraprows", 100],
+    ["Wrapcols", 101],
   ],
 };
 
@@ -237,6 +248,17 @@ const builtinManifest = [
   { id: "Now", name: "NOW", supportsWasm: true },
   { id: "Rand", name: "RAND", supportsWasm: true },
   { id: "Sequence", name: "SEQUENCE", supportsWasm: true },
+  { id: "Offset", name: "OFFSET", supportsWasm: true },
+  { id: "Take", name: "TAKE", supportsWasm: true },
+  { id: "Drop", name: "DROP", supportsWasm: true },
+  { id: "Choosecols", name: "CHOOSECOLS", supportsWasm: true },
+  { id: "Chooserows", name: "CHOOSEROWS", supportsWasm: true },
+  { id: "Sort", name: "SORT", supportsWasm: true },
+  { id: "Sortby", name: "SORTBY", supportsWasm: true },
+  { id: "Tocol", name: "TOCOL", supportsWasm: true },
+  { id: "Torow", name: "TOROW", supportsWasm: true },
+  { id: "Wraprows", name: "WRAPROWS", supportsWasm: true },
+  { id: "Wrapcols", name: "WRAPCOLS", supportsWasm: true },
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.ts\n\n`;

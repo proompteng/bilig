@@ -142,5 +142,16 @@ export enum BuiltinId {
   Today = 87,
   Now = 88,
   Rand = 89,
-  Sequence = 90
+  Sequence = 90,
+  Offset = 91,
+  Take = 92,
+  Drop = 93,
+  Choosecols = 94,
+  Chooserows = 95,
+  Sort = 96,
+  Sortby = 97,
+  Tocol = 98,
+  Torow = 99,
+  Wraprows = 100,
+  Wrapcols = 101
 }

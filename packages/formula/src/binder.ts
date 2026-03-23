@@ -104,6 +104,17 @@ const WASM_SAFE_BUILTINS = new Set([
   "FIND",
   "SEARCH",
   "VALUE",
+  "OFFSET",
+  "TAKE",
+  "DROP",
+  "CHOOSECOLS",
+  "CHOOSEROWS",
+  "SORT",
+  "SORTBY",
+  "TOCOL",
+  "TOROW",
+  "WRAPROWS",
+  "WRAPCOLS",
 ]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
@@ -235,6 +246,24 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc >= 1;
     case "SEQUENCE":
       return argc >= 1 && argc <= 4;
+    case "OFFSET":
+      return argc >= 3 && argc <= 5;
+    case "TAKE":
+    case "DROP":
+      return argc >= 1 && argc <= 3;
+    case "CHOOSECOLS":
+    case "CHOOSEROWS":
+      return argc >= 2;
+    case "SORT":
+      return argc >= 1 && argc <= 4;
+    case "SORTBY":
+      return argc >= 2;
+    case "TOCOL":
+    case "TOROW":
+      return argc >= 1 && argc <= 3;
+    case "WRAPROWS":
+    case "WRAPCOLS":
+      return argc >= 2 && argc <= 4;
     default:
       return true;
   }
@@ -516,6 +545,32 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "SUBSTITUTE":
       case "REPT":
         return args.every((arg) => isScalarArg(arg));
+      case "OFFSET":
+      case "TAKE":
+      case "DROP":
+      case "CHOOSECOLS":
+      case "CHOOSEROWS":
+      case "SORT":
+      case "TOCOL":
+      case "TOROW":
+      case "WRAPROWS":
+      case "WRAPCOLS":
+        if (args.length === 0) {
+          return false;
+        }
+        return isCellRangeArg(args[0]!) && args.slice(1).every((arg) => isScalarArg(arg));
+      case "SORTBY":
+        if (args.length < 2) {
+          return false;
+        }
+        return (
+          isCellRangeArg(args[0]!) &&
+          args
+            .slice(1)
+            .every((arg, index) =>
+              index % 2 === 0 ? isScalarArg(arg) || isWasmSafe(arg, true) : isScalarArg(arg),
+            )
+        );
       default: {
         const allowRangeArgs = RANGE_SAFE_BUILTINS.has(callee);
         return args.every((arg) => isWasmSafe(arg, allowRangeArgs));
@@ -648,6 +703,17 @@ export function encodeBuiltin(name: string): BuiltinId {
     AVERAGEIFS: BuiltinId.Averageifs,
     SUMPRODUCT: BuiltinId.Sumproduct,
     SEQUENCE: BuiltinId.Sequence,
+    OFFSET: BuiltinId.Offset,
+    TAKE: BuiltinId.Take,
+    DROP: BuiltinId.Drop,
+    CHOOSECOLS: BuiltinId.Choosecols,
+    CHOOSEROWS: BuiltinId.Chooserows,
+    SORT: BuiltinId.Sort,
+    SORTBY: BuiltinId.Sortby,
+    TOCOL: BuiltinId.Tocol,
+    TOROW: BuiltinId.Torow,
+    WRAPROWS: BuiltinId.Wraprows,
+    WRAPCOLS: BuiltinId.Wrapcols,
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

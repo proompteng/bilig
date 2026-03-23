@@ -58,6 +58,17 @@ const BUILTIN = {
   HLOOKUP: BuiltinId.Hlookup,
   XMATCH: BuiltinId.Xmatch,
   XLOOKUP: BuiltinId.Xlookup,
+  OFFSET: BuiltinId.Offset,
+  TAKE: BuiltinId.Take,
+  DROP: BuiltinId.Drop,
+  CHOOSECOLS: BuiltinId.Choosecols,
+  CHOOSEROWS: BuiltinId.Chooserows,
+  SORT: BuiltinId.Sort,
+  SORTBY: BuiltinId.Sortby,
+  TOCOL: BuiltinId.Tocol,
+  TOROW: BuiltinId.Torow,
+  WRAPROWS: BuiltinId.Wraprows,
+  WRAPCOLS: BuiltinId.Wrapcols,
 } as const;
 
 function asciiCodes(text: string): Uint16Array {
@@ -1438,6 +1449,212 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[cellIndex(1, 8, width)]).toBe(45382);
     expect(kernel.readTags()[cellIndex(1, 9, width)]).toBe(ValueTag.Error);
     expect(kernel.readErrors()[cellIndex(1, 9, width)]).toBe(ErrorCode.Ref);
+  });
+
+  it("evaluates numeric-only dynamic-array builtins on the wasm path", async () => {
+    const kernel = await createKernel();
+    kernel.init(24, 11, 1, 1, 1);
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
+      new Float64Array([1, 2, 3, 4, 5, 6, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array(24),
+      new Uint16Array(24),
+    );
+    kernel.uploadRangeMembers(
+      Uint32Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+      Uint32Array.from([0, 6]),
+      Uint32Array.from([6, 4]),
+    );
+    kernel.uploadRangeShapes(Uint32Array.from([2, 4]), Uint32Array.from([3, 1]));
+
+    const packed = packPrograms([
+      [
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushNumber(0),
+        encodePushNumber(2),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.OFFSET, 5),
+        encodeRet(),
+      ],
+      [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.TAKE, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(1), encodeCall(BUILTIN.DROP, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.CHOOSECOLS, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.CHOOSEROWS, 2), encodeRet()],
+      [
+        encodePushRange(0),
+        encodePushNumber(2),
+        encodePushNumber(4),
+        encodeCall(BUILTIN.SORT, 3),
+        encodeRet(),
+      ],
+      [encodePushRange(1), encodePushRange(1), encodeCall(BUILTIN.SORTBY, 2), encodeRet()],
+      [encodePushRange(0), encodeCall(BUILTIN.TOCOL, 1), encodeRet()],
+      [encodePushRange(0), encodeCall(BUILTIN.TOROW, 1), encodeRet()],
+      [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.WRAPROWS, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.WRAPCOLS, 2), encodeRet()],
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]),
+    );
+    kernel.uploadConstants(
+      new Float64Array([0, 1, 2, 3, -1]),
+      new Uint32Array([0, 0, 0, 0, 0]),
+      new Uint32Array([1, 1, 1, 1, 1]),
+    );
+    kernel.evalBatch(Uint32Array.from([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]));
+
+    expect(kernel.readTags()[12]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[13]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[14]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[15]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[16]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[17]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[18]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[19]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[20]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[21]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[22]).toBe(ValueTag.Number);
+
+    expect(kernel.readSpillRows()[12]).toBe(2);
+    expect(kernel.readSpillCols()[12]).toBe(1);
+    expect(kernel.readSpillLengths()[12]).toBe(2);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[12], kernel.readSpillOffsets()[12] + 2),
+      ),
+    ).toEqual([1, 4]);
+
+    expect(kernel.readSpillRows()[13]).toBe(2);
+    expect(kernel.readSpillCols()[13]).toBe(3);
+    expect(kernel.readSpillLengths()[13]).toBe(6);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[13], kernel.readSpillOffsets()[13] + 6),
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(kernel.readSpillRows()[14]).toBe(1);
+    expect(kernel.readSpillCols()[14]).toBe(3);
+    expect(kernel.readSpillLengths()[14]).toBe(3);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[14], kernel.readSpillOffsets()[14] + 3),
+      ),
+    ).toEqual([4, 5, 6]);
+    expect(kernel.readSpillRows()[15]).toBe(2);
+    expect(kernel.readSpillCols()[15]).toBe(1);
+    expect(kernel.readSpillLengths()[15]).toBe(2);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[15], kernel.readSpillOffsets()[15] + 2),
+      ),
+    ).toEqual([2, 5]);
+    expect(kernel.readSpillRows()[16]).toBe(1);
+    expect(kernel.readSpillCols()[16]).toBe(3);
+    expect(kernel.readSpillLengths()[16]).toBe(3);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[16], kernel.readSpillOffsets()[16] + 3),
+      ),
+    ).toEqual([4, 5, 6]);
+    expect(kernel.readSpillRows()[17]).toBe(2);
+    expect(kernel.readSpillCols()[17]).toBe(3);
+    expect(kernel.readSpillLengths()[17]).toBe(6);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[17], kernel.readSpillOffsets()[17] + 6),
+      ),
+    ).toEqual([1, 1, 1, 4, 4, 4]);
+    expect(kernel.readSpillRows()[18]).toBe(4);
+    expect(kernel.readSpillCols()[18]).toBe(1);
+    expect(kernel.readSpillLengths()[18]).toBe(4);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[18], kernel.readSpillOffsets()[18] + 4),
+      ),
+    ).toEqual([4, 4, 4, 4]);
+    expect(kernel.readSpillRows()[19]).toBe(6);
+    expect(kernel.readSpillCols()[19]).toBe(1);
+    expect(kernel.readSpillLengths()[19]).toBe(6);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[19], kernel.readSpillOffsets()[19] + 6),
+      ),
+    ).toEqual([1, 4, 2, 5, 3, 6]);
+    expect(kernel.readSpillRows()[20]).toBe(1);
+    expect(kernel.readSpillCols()[20]).toBe(6);
+    expect(kernel.readSpillLengths()[20]).toBe(6);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[20], kernel.readSpillOffsets()[20] + 6),
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(kernel.readSpillRows()[21]).toBe(3);
+    expect(kernel.readSpillCols()[21]).toBe(2);
+    expect(kernel.readSpillLengths()[21]).toBe(6);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[21], kernel.readSpillOffsets()[21] + 6),
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(kernel.readSpillRows()[22]).toBe(2);
+    expect(kernel.readSpillCols()[22]).toBe(3);
+    expect(kernel.readSpillLengths()[22]).toBe(6);
+    expect(
+      Array.from(
+        kernel
+          .readSpillNumbers()
+          .slice(kernel.readSpillOffsets()[22], kernel.readSpillOffsets()[22] + 6),
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it("evaluates RAND from the uploaded recalc random sequence on the wasm path", async () => {
