@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { rewriteFormulaForStructuralTransform, translateFormulaReferences } from "../translation.js";
+import {
+  rewriteAddressForStructuralTransform,
+  rewriteFormulaForStructuralTransform,
+  rewriteRangeForStructuralTransform,
+  translateFormulaReferences
+} from "../translation.js";
 
 describe("translateFormulaReferences", () => {
   it("shifts relative cell references", () => {
@@ -59,5 +64,43 @@ describe("translateFormulaReferences", () => {
     expect(
       rewriteFormulaForStructuralTransform("B2", "Sheet1", "Sheet1", { kind: "delete", axis: "column", start: 1, count: 1 })
     ).toBe("#REF!");
+  });
+
+  it("skips structural rewrites for formulas outside the target sheet", () => {
+    expect(
+      rewriteFormulaForStructuralTransform("A1+Sheet2!B2", "Sheet1", "OtherSheet", {
+        kind: "insert",
+        axis: "row",
+        start: 1,
+        count: 2
+      })
+    ).toBe("A1+Sheet2!B2");
+  });
+
+  it("rewrites single-cell addresses and throws for invalid address inputs", () => {
+    expect(
+      rewriteAddressForStructuralTransform("B2", { kind: "delete", axis: "row", start: 1, count: 1 })
+    ).toBeUndefined();
+    expect(
+      rewriteAddressForStructuralTransform("A4", { kind: "move", axis: "row", start: 1, count: 1, target: 3 })
+    ).toBe("A3");
+    expect(() => rewriteAddressForStructuralTransform("bad", { kind: "move", axis: "column", start: 1, count: 1, target: 2 })).toThrow(
+      "Invalid cell reference 'bad'"
+    );
+  });
+
+  it("rewrites ranges across structural inserts, deletes, and throws on bad references", () => {
+    expect(
+      rewriteRangeForStructuralTransform("A1", "A4", { kind: "insert", axis: "row", start: 1, count: 1 })
+    ).toEqual({ startAddress: "A1", endAddress: "A5" });
+    expect(
+      rewriteRangeForStructuralTransform("A1", "A4", { kind: "delete", axis: "row", start: 1, count: 1 })
+    ).toEqual({ startAddress: "A1", endAddress: "A3" });
+    expect(() =>
+      rewriteRangeForStructuralTransform("A1", "bad", { kind: "move", axis: "column", start: 0, count: 1, target: 1 })
+    ).toThrow("Invalid range reference");
+    expect(
+      rewriteRangeForStructuralTransform("A1", "A1", { kind: "delete", axis: "row", start: 0, count: 1 })
+    ).toBeUndefined();
   });
 });

@@ -513,6 +513,182 @@ describe("formula builtins", () => {
     )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
+  it("covers ACCRINT and ACCRINTM basis variants and invalid argument branches", () => {
+    const issue = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2020 }, { tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 });
+    const firstInterest = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2020 }, { tag: ValueTag.Number, value: 2 }, { tag: ValueTag.Number, value: 1 });
+    const settlement = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2021 }, { tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 });
+    const rate = { tag: ValueTag.Number, value: 0.08 };
+    const par = { tag: ValueTag.Number, value: 1000 };
+    const frequency = { tag: ValueTag.Number, value: 2 };
+
+    expect(issue?.tag).toBe(ValueTag.Number);
+    expect(firstInterest?.tag).toBe(ValueTag.Number);
+    expect(settlement?.tag).toBe(ValueTag.Number);
+
+    for (const basis of [0, 1, 2, 3, 4]) {
+      expect(
+        getBuiltin("ACCRINT")?.(
+          issue!,
+          firstInterest!,
+          settlement!,
+          rate,
+          par,
+          frequency,
+          { tag: ValueTag.Number, value: basis }
+        )
+      ).toMatchObject({ tag: ValueTag.Number });
+      expect(
+        getBuiltin("ACCRINTM")?.(
+          issue!,
+          settlement!,
+          rate,
+          par,
+          { tag: ValueTag.Number, value: basis }
+        )
+      ).toMatchObject({ tag: ValueTag.Number });
+    }
+
+    expect(
+      getBuiltin("ACCRINT")?.(
+        issue!,
+        firstInterest!,
+        settlement!,
+        rate,
+        par,
+        frequency,
+        { tag: ValueTag.Number, value: 5 }
+      )
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      getBuiltin("ACCRINTM")?.(
+        issue!,
+        settlement!,
+        rate,
+        par,
+        { tag: ValueTag.Number, value: 5 }
+      )
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("covers AMORLINC and AMORDEGRC branch-heavy scenarios", () => {
+    const cost = { tag: ValueTag.Number, value: 1000 };
+    const datePurchased = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2020 }, { tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 });
+    const firstPeriod = getBuiltin("DATE")?.({ tag: ValueTag.Number, value: 2021 }, { tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 });
+    const basis = { tag: ValueTag.Number, value: 0 };
+
+    expect(datePurchased?.tag).toBe(ValueTag.Number);
+    expect(firstPeriod?.tag).toBe(ValueTag.Number);
+
+    expect(
+      getBuiltin("AMORLINC")?.(
+        cost,
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 25 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0.15 },
+        basis
+      )
+    ).toMatchObject({ tag: ValueTag.Number, value: 150 });
+
+    expect(
+      getBuiltin("AMORLINC")?.(
+        cost,
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 25 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0.15 },
+        basis
+      )
+    ).toMatchObject({ tag: ValueTag.Number, value: 150 });
+
+    expect(
+      getBuiltin("AMORLINC")?.(
+        cost,
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 25 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 0.15 },
+        basis
+      )
+    ).toMatchObject({ tag: ValueTag.Number, value: 75 });
+
+    expect(
+      getBuiltin("AMORLINC")?.(
+        cost,
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 25 },
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: 0.15 },
+        basis
+      )
+    ).toEqual({ tag: ValueTag.Number, value: 0 });
+
+    expect(
+      getBuiltin("AMORDEGRC")?.(
+        { tag: ValueTag.Number, value: 1000 },
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0.2 },
+        basis
+      )
+    ).toMatchObject({ tag: ValueTag.Number, value: 240 });
+
+    expect(
+      getBuiltin("AMORDEGRC")?.(
+        { tag: ValueTag.Number, value: 1000 },
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0.3 },
+        basis
+      )
+    ).toMatchObject({ tag: ValueTag.Number, value: 247 });
+
+    expect(
+      getBuiltin("AMORDEGRC")?.(
+        { tag: ValueTag.Number, value: 1000 },
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0.5 },
+        basis
+      )
+    ).toMatchObject({ tag: ValueTag.Number, value: 250 });
+
+    expect(
+      getBuiltin("AMORDEGRC")?.(
+        { tag: ValueTag.Number, value: 1000 },
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1.2 },
+        basis
+      )
+    ).toEqual({ tag: ValueTag.Number, value: 0 });
+
+    expect(
+      getBuiltin("AMORDEGRC")?.(
+        { tag: ValueTag.Number, value: 100 },
+        datePurchased!,
+        firstPeriod!,
+        { tag: ValueTag.Number, value: 200 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0.1 },
+        basis
+      )
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("registers protocol-declared placeholder builtins as blocked", () => {
     for (const name of placeholderBuiltinNames) {
       expect(getBuiltin(name)?.()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
