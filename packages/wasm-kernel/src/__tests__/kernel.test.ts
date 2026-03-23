@@ -23,6 +23,10 @@ const BUILTIN = {
   MINUTE: BuiltinId.Minute,
   SECOND: BuiltinId.Second,
   WEEKDAY: BuiltinId.Weekday,
+  DAYS: BuiltinId.Days,
+  WORKDAY: BuiltinId.Workday,
+  NETWORKDAYS: BuiltinId.Networkdays,
+  WEEKNUM: BuiltinId.Weeknum,
   TODAY: BuiltinId.Today,
   NOW: BuiltinId.Now,
   RAND: BuiltinId.Rand,
@@ -32,6 +36,9 @@ const BUILTIN = {
   TRIM: BuiltinId.Trim,
   UPPER: BuiltinId.Upper,
   LOWER: BuiltinId.Lower,
+  REPLACE: BuiltinId.Replace,
+  SUBSTITUTE: BuiltinId.Substitute,
+  REPT: BuiltinId.Rept,
   FIND: BuiltinId.Find,
   SEARCH: BuiltinId.Search,
   VALUE: BuiltinId.Value,
@@ -550,6 +557,59 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[cellIndex(1, 7, width)]).toBe(3);
     expect(kernel.readNumbers()[cellIndex(1, 8, width)]).toBe(3);
     expect(kernel.readOutputStrings()).toEqual(["Al", "a", "lph", "alpha beta", "ALPHA", "beta"]);
+  });
+
+  it("evaluates REPLACE, SUBSTITUTE, and REPT on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 10;
+    kernel.init(24, 6, 1, 1, 1);
+    kernel.uploadStrings(
+      Uint32Array.from([0, 0, 8, 9, 15, 17, 19]),
+      Uint32Array.from([0, 8, 1, 6, 2, 2, 2]),
+      asciiCodes("alphabetZbananaanooxo")
+    );
+    kernel.writeCells(
+      new Uint8Array([ValueTag.String, ValueTag.String, ValueTag.String, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array(24),
+      new Uint32Array([1, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint16Array(24)
+    );
+    const packed = packPrograms([
+      [encodePushCell(0), encodePushNumber(0), encodePushNumber(1), encodePushString(2), encodeCall(BUILTIN.REPLACE, 4), encodeRet()],
+      [encodePushCell(1), encodePushString(4), encodePushString(5), encodeCall(BUILTIN.SUBSTITUTE, 3), encodeRet()],
+      [encodePushCell(1), encodePushString(4), encodePushString(5), encodePushNumber(0), encodeCall(BUILTIN.SUBSTITUTE, 4), encodeRet()],
+      [encodePushCell(2), encodePushNumber(0), encodeCall(BUILTIN.REPT, 2), encodeRet()]
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width)
+      ])
+    );
+    kernel.uploadConstants(
+      new Float64Array([3, 2, 2, 3]),
+      new Uint32Array([0, 0, 2, 3]),
+      new Uint32Array([2, 0, 1, 1])
+    );
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width)
+      ])
+    );
+
+    expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.String);
+    expect(kernel.readTags()[cellIndex(1, 2, width)]).toBe(ValueTag.String);
+    expect(kernel.readTags()[cellIndex(1, 3, width)]).toBe(ValueTag.String);
+    expect(kernel.readTags()[cellIndex(1, 4, width)]).toBe(ValueTag.String);
+    expect(kernel.readOutputStrings()).toEqual(["alZabet", "booooa", "banooa", "xoxoxo"]);
   });
 
   it("evaluates VALUE for dynamic scalar inputs on the wasm path", async () => {
@@ -1191,6 +1251,76 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[cellIndex(1, 4, width)]).toBe(1);
     expect(kernel.readNumbers()[cellIndex(1, 5, width)]).toBe(1);
     expect(kernel.readNumbers()[cellIndex(1, 6, width)]).toBe(7);
+  });
+
+  it("evaluates DAYS, WEEKNUM, WORKDAY, and NETWORKDAYS on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 10;
+    kernel.init(30, 8, 1, 1, 1);
+    kernel.writeCells(
+      new Uint8Array([ValueTag.Number, ValueTag.Number, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([46097, 46101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array(30),
+      new Uint16Array(30)
+    );
+    kernel.uploadRangeMembers(new Uint32Array([0, 1]), new Uint32Array([0]), new Uint32Array([2]));
+    kernel.uploadRangeShapes(Uint32Array.from([2]), Uint32Array.from([1]));
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.DAYS, 2), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.WEEKNUM, 1), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.WEEKNUM, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.WORKDAY, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodePushCell(0), encodeCall(BUILTIN.WORKDAY, 3), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.NETWORKDAYS, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodePushCell(0), encodeCall(BUILTIN.NETWORKDAYS, 3), encodeRet()]
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(1, 6, width),
+        cellIndex(1, 7, width)
+      ])
+    );
+    kernel.uploadConstants(
+      new Float64Array([
+        46101, 46094,
+        46096,
+        46096, 2,
+        46094, 1,
+        46094, 1,
+        46094, 46101,
+        46094, 46101
+      ]),
+      new Uint32Array([0, 2, 3, 5, 7, 9, 11]),
+      new Uint32Array([2, 1, 2, 2, 2, 2, 2])
+    );
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(1, 6, width),
+        cellIndex(1, 7, width)
+      ])
+    );
+
+    expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(7);
+    expect(kernel.readNumbers()[cellIndex(1, 2, width)]).toBe(12);
+    expect(kernel.readNumbers()[cellIndex(1, 3, width)]).toBe(11);
+    expect(kernel.readNumbers()[cellIndex(1, 4, width)]).toBe(46097);
+    expect(kernel.readNumbers()[cellIndex(1, 5, width)]).toBe(46098);
+    expect(kernel.readNumbers()[cellIndex(1, 6, width)]).toBe(6);
+    expect(kernel.readNumbers()[cellIndex(1, 7, width)]).toBe(5);
   });
 
   it("evaluates logical and rounding builtins with parity-safe scalar semantics", async () => {

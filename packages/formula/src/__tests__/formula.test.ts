@@ -93,6 +93,12 @@ describe("formula", () => {
     expect(compileFormula("SECOND(A1)").mode).toBe(1);
     expect(compileFormula("WEEKDAY(A1)").mode).toBe(1);
     expect(compileFormula("WEEKDAY(A1,2)").mode).toBe(1);
+    expect(compileFormula("DAYS(A1,A2)").mode).toBe(1);
+    expect(compileFormula("WEEKNUM(A1)").mode).toBe(1);
+    expect(compileFormula("WORKDAY(A1,1)").mode).toBe(1);
+    expect(compileFormula("WORKDAY(A1,1,B1)").mode).toBe(1);
+    expect(compileFormula("NETWORKDAYS(A1,A2)").mode).toBe(1);
+    expect(compileFormula("NETWORKDAYS(A1,A2,B1)").mode).toBe(1);
     expect(compileFormula("EDATE(A1,1)").mode).toBe(1);
     expect(compileFormula("EOMONTH(A1,1)").mode).toBe(1);
     expect(compileFormula("EXACT(A1,A2)").mode).toBe(1);
@@ -108,6 +114,9 @@ describe("formula", () => {
     expect(compileFormula("LOWER(A1)").mode).toBe(1);
     expect(compileFormula("FIND(\"a\",A1)").mode).toBe(1);
     expect(compileFormula("SEARCH(\"a\",A1)").mode).toBe(1);
+    expect(compileFormula("REPLACE(A1,2,3,\"x\")").mode).toBe(1);
+    expect(compileFormula("SUBSTITUTE(A1,\"a\",\"b\")").mode).toBe(1);
+    expect(compileFormula("REPT(A1,3)").mode).toBe(1);
   });
 
   it("keeps LEN on the JS path when it depends on a range until the range-string bridge lands", () => {
@@ -180,8 +189,8 @@ describe("formula", () => {
     expect(compileFormula("WEEKDAY(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("SIN(A1,A2)").mode).toBe(0);
     expect(compileFormula("SWITCH(A1,1,\"yes\")").mode).toBe(1);
-    expect(compileFormula("WEEKNUM(A1)").mode).toBe(0);
-    expect(compileFormula("SUBSTITUTE(A1,\"a\",\"b\")").mode).toBe(0);
+    expect(compileFormula("WORKDAY(A1,1,B1:B3)").mode).toBe(0);
+    expect(compileFormula("NETWORKDAYS(A1,A2,B1:B3)").mode).toBe(0);
     expect(compileFormula("T.DIST(A1,2,TRUE)").mode).toBe(0);
     expect(compileFormula("TEXTJOIN(\",\",TRUE,A1,A2)").mode).toBe(0);
     expect(compileFormula("WORKDAY.INTL(A1,1)").mode).toBe(0);

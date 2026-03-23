@@ -68,6 +68,21 @@ describe("text builtins", () => {
     expect(TEXTBEFORE(text("alpha-beta"), text("-"), number(-5), number(0), number(1), text("edge"))).toEqual(text("edge"));
   });
 
+  it("supports REPLACE, SUBSTITUTE, and REPT", () => {
+    expect(getTextBuiltin("REPLACE")?.(text("alphabet"), number(3), number(2), text("Z"))).toEqual(text("alZabet"));
+    expect(getTextBuiltin("SUBSTITUTE")?.(text("banana"), text("an"), text("oo"))).toEqual(text("booooa"));
+    expect(getTextBuiltin("SUBSTITUTE")?.(text("banana"), text("an"), text("oo"), number(2))).toEqual(text("banooa"));
+    expect(getTextBuiltin("REPT")?.(text("xo"), number(3))).toEqual(text("xoxoxo"));
+  });
+
+  it("returns REPLACE, SUBSTITUTE, and REPT validation errors when arguments are invalid", () => {
+    expect(getTextBuiltin("REPLACE")?.(text("abc"), number(0), number(1), text("z"))).toEqual(valueError());
+    expect(getTextBuiltin("SUBSTITUTE")?.(text("abc"), text(""), text("z"))).toEqual(valueError());
+    expect(getTextBuiltin("SUBSTITUTE")?.(text("abc"), text("a"), text("z"), number(0))).toEqual(valueError());
+    expect(getTextBuiltin("REPT")?.(text("abc"), number(-1))).toEqual(valueError());
+    expect(getTextBuiltin("REPT")?.(err(ErrorCode.Ref), number(2))).toEqual(err(ErrorCode.Ref));
+  });
+
   it("returns TEXTBEFORE validation and lookup errors when arguments are invalid", () => {
     const TEXTBEFORE = getTextBuiltin("TEXTBEFORE")!;
 

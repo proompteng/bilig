@@ -84,6 +84,13 @@ const WASM_SAFE_BUILTINS = new Set([
   "RAND",
   "EDATE",
   "EOMONTH",
+  "DAYS",
+  "WEEKNUM",
+  "WORKDAY",
+  "NETWORKDAYS",
+  "REPLACE",
+  "SUBSTITUTE",
+  "REPT",
   "EXACT",
   "INT",
   "ROUNDUP",
@@ -163,6 +170,19 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc === 2;
     case "WEEKDAY":
       return argc === 1 || argc === 2;
+    case "DAYS":
+      return argc === 2;
+    case "WEEKNUM":
+      return argc === 1 || argc === 2;
+    case "WORKDAY":
+    case "NETWORKDAYS":
+      return argc === 2 || argc === 3;
+    case "REPLACE":
+      return argc === 4;
+    case "SUBSTITUTE":
+      return argc === 3 || argc === 4;
+    case "REPT":
+      return argc === 2;
     case "EXACT":
     case "ATAN2":
     case "POWER":
@@ -446,6 +466,21 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           && isCellRangeArg(args[1]!)
           && isScalarArg(args[2]!)
           && (args.length === 3 || isScalarArg(args[3]!));
+      case "DAYS":
+      case "WEEKNUM":
+        return args.every((arg) => isScalarArg(arg));
+      case "WORKDAY":
+        return args.length === 2
+          ? args.every((arg) => isScalarArg(arg))
+          : args.every((arg) => isScalarArg(arg));
+      case "NETWORKDAYS":
+        return args.length === 2
+          ? args.every((arg) => isScalarArg(arg))
+          : args.every((arg) => isScalarArg(arg));
+      case "REPLACE":
+      case "SUBSTITUTE":
+      case "REPT":
+        return args.every((arg) => isScalarArg(arg));
       default: {
         const allowRangeArgs = RANGE_SAFE_BUILTINS.has(callee);
         return args.every((arg) => isWasmSafe(arg, allowRangeArgs));
@@ -539,8 +574,15 @@ export function encodeBuiltin(name: string): BuiltinId {
     MINUTE: BuiltinId.Minute,
     SECOND: BuiltinId.Second,
     WEEKDAY: BuiltinId.Weekday,
+    DAYS: BuiltinId.Days,
+    WEEKNUM: BuiltinId.Weeknum,
+    WORKDAY: BuiltinId.Workday,
+    NETWORKDAYS: BuiltinId.Networkdays,
     EDATE: BuiltinId.Edate,
     EOMONTH: BuiltinId.Eomonth,
+    REPLACE: BuiltinId.Replace,
+    SUBSTITUTE: BuiltinId.Substitute,
+    REPT: BuiltinId.Rept,
     EXACT: BuiltinId.Exact,
     INT: BuiltinId.Int,
     ROUNDUP: BuiltinId.RoundUp,

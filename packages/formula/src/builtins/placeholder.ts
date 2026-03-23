@@ -366,18 +366,9 @@ export const scalarPlaceholderBuiltinNames = [
 
 export const logicalPlaceholderBuiltinNames = [] as const;
 
-export const datetimePlaceholderBuiltinNames = [
-  "DAYS",
-  "WORKDAY",
-  "NETWORKDAYS",
-  "WEEKNUM",
-] as const;
+export const datetimePlaceholderBuiltinNames = [] as const;
 
-export const textPlaceholderBuiltinNames = [
-  "REPLACE",
-  "SUBSTITUTE",
-  "REPT",
-] as const;
+export const textPlaceholderBuiltinNames = [] as const;
 
 export const placeholderBuiltinNames = [
   ...scalarPlaceholderBuiltinNames,

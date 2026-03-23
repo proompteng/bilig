@@ -118,8 +118,25 @@ describe("formula builtins and JS evaluator", () => {
             ]
           : context.resolveRange(_sheetName, start, end, "cells")
     })).toEqual({ tag: ValueTag.Number, value: -2 });
-    expect(evaluateAst(parseFormula("NETWORKDAYS(A1,A1)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
-    expect(evaluateAst(parseFormula("REPT(\"x\",3)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(evaluateAst(parseFormula("DAYS(46101,46094)"), context)).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(evaluateAst(parseFormula("WEEKNUM(46096)"), context)).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(evaluateAst(parseFormula("WORKDAY(46094,1,46097)"), context)).toEqual({ tag: ValueTag.Number, value: 46098 });
+    expect(evaluateAst(parseFormula("NETWORKDAYS(46094,46101,46097,46101)"), context)).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(evaluateAst(parseFormula("REPLACE(\"alphabet\",3,2,\"Z\")"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "alZabet",
+      stringId: 0
+    });
+    expect(evaluateAst(parseFormula("SUBSTITUTE(\"banana\",\"an\",\"oo\",2)"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "banooa",
+      stringId: 0
+    });
+    expect(evaluateAst(parseFormula("REPT(\"x\",3)"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "xxx",
+      stringId: 0
+    });
     expect(evaluateAst(parseFormula("T.DIST(0.1,2,TRUE)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
     expect(evaluateAst(parseFormula("TEXTJOIN(\",\",TRUE,\"a\",\"b\")"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
     expect(evaluateAst(parseFormula("LET(x,2,x+3)"), context)).toEqual({ tag: ValueTag.Number, value: 5 });

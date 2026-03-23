@@ -60,6 +60,10 @@ function floorDateSerial(serial: number): number {
   return Math.floor(serial);
 }
 
+function isErrorValue(value: Set<number> | CellValue): value is CellValue {
+  return !("size" in value);
+}
+
 function normalizeSecondOfDay(serial: number): number | undefined {
   if (!Number.isFinite(serial) || serial < 0) {
     return undefined;
@@ -350,6 +354,194 @@ function createWeekdayBuiltin(): Builtin {
   };
 }
 
+function createDaysBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length !== 2) {
+      return valueError();
+    }
+    const endSerial = truncArg(args[0]!);
+    const startSerial = truncArg(args[1]!);
+    if (typeof endSerial !== "number") {
+      return endSerial;
+    }
+    if (typeof startSerial !== "number") {
+      return startSerial;
+    }
+    return numberResult(endSerial - startSerial);
+  };
+}
+
+function createWeeknumBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 1 || args.length > 2) {
+      return valueError();
+    }
+
+    const serial = truncArg(args[0]!);
+    if (typeof serial !== "number") {
+      return serial;
+    }
+
+    const returnType = args[1] === undefined ? 1 : truncArg(args[1]);
+    if (typeof returnType !== "number") {
+      return returnType;
+    }
+
+    const dateParts = excelSerialToDateParts(serial);
+    if (!dateParts) {
+      return valueError();
+    }
+
+    let weekStartDay: number;
+    if (returnType === 1 || returnType === 17) {
+      weekStartDay = 0;
+    } else if (returnType === 2 || returnType === 11) {
+      weekStartDay = 1;
+    } else if (returnType === 12) {
+      weekStartDay = 2;
+    } else if (returnType === 13) {
+      weekStartDay = 3;
+    } else if (returnType === 14) {
+      weekStartDay = 4;
+    } else if (returnType === 15) {
+      weekStartDay = 5;
+    } else if (returnType === 16) {
+      weekStartDay = 6;
+    } else {
+      return valueError();
+    }
+
+    const serialJan1 = excelDatePartsToSerial(dateParts.year, 1, 1);
+    if (serialJan1 === undefined) {
+      return valueError();
+    }
+
+    const adjustedJan1 = serialJan1 < 60 ? Math.floor(serialJan1) : Math.floor(serialJan1) - 1;
+    const jan1Weekday = ((adjustedJan1 % 7) + 7) % 7;
+    const shift = ((jan1Weekday - weekStartDay) + 7) % 7;
+
+    let dayOfYear = dateParts.day;
+    for (let month = 1; month < dateParts.month; month += 1) {
+      dayOfYear += daysInExcelMonth(dateParts.year, month);
+    }
+
+    return numberResult(Math.floor((dayOfYear - 1 + shift) / 7) + 1);
+  };
+}
+
+function isWeekendSerial(serial: number): boolean {
+  const whole = floorDateSerial(serial);
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  const dow = ((adjustedWhole % 7) + 7) % 7;
+  return dow === 0 || dow === 6;
+}
+
+function normalizeHolidayDateSet(holidays: readonly CellValue[] | undefined): Set<number> | CellValue {
+  if (!holidays || holidays.length === 0) {
+    return new Set<number>();
+  }
+
+  const set = new Set<number>();
+  for (const holiday of holidays) {
+    const raw = coerceNumber(holiday);
+    if (raw === undefined) {
+      return valueError();
+    }
+    set.add(Math.trunc(raw));
+  }
+  return set;
+}
+
+function createWorkdayBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 2) {
+      return valueError();
+    }
+
+    const start = truncArg(args[0]!);
+    const offset = truncArg(args[1]!);
+    if (typeof start !== "number") {
+      return start;
+    }
+    if (typeof offset !== "number") {
+      return offset;
+    }
+
+    const holidays = normalizeHolidayDateSet(args.slice(2));
+    if (isErrorValue(holidays)) {
+      return holidays;
+    }
+
+    const isWorkday = (value: number): boolean => !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
+    let cursor = Math.trunc(start);
+    const direction = offset >= 0 ? 1 : -1;
+
+    while (!isWorkday(cursor)) {
+      cursor += direction;
+    }
+
+    let remaining = Math.abs(offset);
+    while (remaining > 0) {
+      cursor += direction;
+      if (isWorkday(cursor)) {
+        remaining -= 1;
+      }
+    }
+    return numberResult(cursor);
+  };
+}
+
+function createNetworkdaysBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 2) {
+      return valueError();
+    }
+
+    const start = truncArg(args[0]!);
+    const end = truncArg(args[1]!);
+    if (typeof start !== "number") {
+      return start;
+    }
+    if (typeof end !== "number") {
+      return end;
+    }
+
+    const holidays = normalizeHolidayDateSet(args.slice(2));
+    if (isErrorValue(holidays)) {
+      return holidays;
+    }
+
+    const isWorkday = (value: number): boolean => !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
+    const step = start <= end ? 1 : -1;
+    let count = 0;
+    for (let cursor = Math.trunc(start); ; cursor += step) {
+      if (isWorkday(cursor)) {
+        count += step;
+      }
+      if (cursor === Math.trunc(end)) {
+        break;
+      }
+    }
+    return numberResult(count);
+  };
+}
+
 export function createTodayBuiltin(now: DateTimeProvider = () => new Date()): Builtin {
   return (...args) => {
     const error = firstError(args);
@@ -450,6 +642,10 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   MINUTE: createTimePartBuiltin("minute"),
   SECOND: createTimePartBuiltin("second"),
   WEEKDAY: createWeekdayBuiltin(),
+  DAYS: createDaysBuiltin(),
+  WEEKNUM: createWeeknumBuiltin(),
+  WORKDAY: createWorkdayBuiltin(),
+  NETWORKDAYS: createNetworkdaysBuiltin(),
   TODAY: createTodayBuiltin(),
   NOW: createNowBuiltin(),
   RAND: createRandBuiltin(),

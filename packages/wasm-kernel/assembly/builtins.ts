@@ -322,6 +322,58 @@ function excelWeekdayFromSerial(tag: u8, value: f64, returnType: i32): i32 {
   return ((sundayOne - startDay + 7) % 7) + 1;
 }
 
+function excelWeeknumFromSerial(tag: u8, value: f64, returnType: i32): i32 {
+  const year = excelYearPartFromSerial(tag, value);
+  const month = excelMonthPartFromSerial(tag, value);
+  const day = excelDayPartFromSerial(tag, value);
+  if (year == i32.MIN_VALUE || month == i32.MIN_VALUE || day == i32.MIN_VALUE) {
+    return i32.MIN_VALUE;
+  }
+
+  let weekStartDay = 0;
+  if (returnType == 1 || returnType == 17) {
+    weekStartDay = 0;
+  } else if (returnType == 2 || returnType == 11) {
+    weekStartDay = 1;
+  } else if (returnType == 12) {
+    weekStartDay = 2;
+  } else if (returnType == 13) {
+    weekStartDay = 3;
+  } else if (returnType == 14) {
+    weekStartDay = 4;
+  } else if (returnType == 15) {
+    weekStartDay = 5;
+  } else if (returnType == 16) {
+    weekStartDay = 6;
+  } else {
+    return i32.MIN_VALUE;
+  }
+
+  const jan1Serial = excelDateSerial(
+    <u8>ValueTag.Number,
+    <f64>year,
+    <u8>ValueTag.Number,
+    1.0,
+    <u8>ValueTag.Number,
+    1.0
+  );
+  if (isNaN(jan1Serial)) {
+    return i32.MIN_VALUE;
+  }
+
+  let adjustedJan1 = <i32>Math.floor(jan1Serial);
+  adjustedJan1 = adjustedJan1 < 60 ? adjustedJan1 : adjustedJan1 - 1;
+  const jan1Weekday = ((adjustedJan1 % 7) + 7) % 7;
+  const shift = ((jan1Weekday - weekStartDay) + 7) % 7;
+
+  let dayOfYear = day;
+  for (let currentMonth = 1; currentMonth < month; currentMonth += 1) {
+    dayOfYear += daysInExcelMonth(year, currentMonth);
+  }
+
+  return <i32>Math.floor(<f64>(dayOfYear - 1 + shift) / 7.0) + 1;
+}
+
 function excelDateSerial(yearTag: u8, yearValue: f64, monthTag: u8, monthValue: f64, dayTag: u8, dayValue: f64): f64 {
   let year = truncToInt(yearTag, yearValue);
   const month = truncToInt(monthTag, monthValue);
@@ -638,6 +690,144 @@ function parseNumericText(input: string): f64 {
     return NaN;
   }
   return parsed;
+}
+
+function isWeekendSerial(whole: i32): bool {
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  const dayOfWeek = ((adjustedWhole % 7) + 7) % 7;
+  return dayOfWeek == 0 || dayOfWeek == 6;
+}
+
+function isHolidaySerial(
+  serial: i32,
+  kind: u8,
+  tag: u8,
+  value: f64,
+  rangeIndex: u32,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array
+): i32 {
+  if (kind == STACK_KIND_SCALAR) {
+    if (tag == ValueTag.Error) {
+      return -1;
+    }
+    const holiday = truncToInt(tag, value);
+    return holiday == i32.MIN_VALUE ? -1 : (holiday == serial ? 1 : 0);
+  }
+  if (kind != STACK_KIND_RANGE) {
+    return 0;
+  }
+  const start = <i32>rangeOffsets[rangeIndex];
+  const length = <i32>rangeLengths[rangeIndex];
+  for (let index = 0; index < length; index += 1) {
+    const memberIndex = rangeMembers[start + index];
+    if (cellTags[memberIndex] == ValueTag.Error) {
+      return -1;
+    }
+    const serialCandidate = truncToInt(cellTags[memberIndex], memberScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds, cellErrors));
+    if (serialCandidate == i32.MIN_VALUE) {
+      return -1;
+    }
+    if (serialCandidate == serial) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+function isWorkdaySerial(
+  serial: i32,
+  kind: u8,
+  tag: u8,
+  value: f64,
+  rangeIndex: u32,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array
+): i32 {
+  if (isWeekendSerial(serial)) {
+    return 0;
+  }
+  if (kind == STACK_KIND_SCALAR && tag == ValueTag.Empty) {
+    return 1;
+  }
+  if (kind != STACK_KIND_SCALAR && kind != STACK_KIND_RANGE) {
+    return 1;
+  }
+  const holiday = isHolidaySerial(serial, kind, tag, value, rangeIndex, rangeOffsets, rangeLengths, rangeMembers, cellTags, cellNumbers, cellStringIds, cellErrors);
+  if (holiday < 0) {
+    return -1;
+  }
+  return holiday == 1 ? 0 : 1;
+}
+
+function coerceNonNegativeLength(tag: u8, value: f64): i32 {
+  const numeric = toNumberExact(tag, value);
+  if (isNaN(numeric)) {
+    return i32.MIN_VALUE;
+  }
+  const truncated = <i32>numeric;
+  return truncated >= 0 ? truncated : i32.MIN_VALUE;
+}
+
+function replaceText(text: string, start: i32, count: i32, replacement: string): string {
+  const startIndex = start - 1;
+  if (startIndex >= text.length) {
+    return text;
+  }
+  return text.slice(0, startIndex) + replacement + text.slice(startIndex + count);
+}
+
+function substituteText(text: string, oldText: string, newText: string): string {
+  if (oldText.length == 0) {
+    return text;
+  }
+  let result = "";
+  let searchIndex = 0;
+  let found = text.indexOf(oldText, searchIndex);
+  if (found < 0) {
+    return text;
+  }
+  while (found >= 0) {
+    result += text.slice(searchIndex, found) + newText;
+    searchIndex = found + oldText.length;
+    found = text.indexOf(oldText, searchIndex);
+  }
+  return result + text.slice(searchIndex);
+}
+
+function substituteNthText(text: string, oldText: string, newText: string, instance: i32): string {
+  let count = 0;
+  let searchIndex = 0;
+  while (searchIndex <= text.length) {
+    const found = text.indexOf(oldText, searchIndex);
+    if (found < 0) {
+      return text;
+    }
+    count += 1;
+    if (count == instance) {
+      return text.slice(0, found) + newText + text.slice(found + oldText.length);
+    }
+    searchIndex = found + oldText.length;
+  }
+  return text;
+}
+
+function repeatText(text: string, count: i32): string {
+  let result = "";
+  for (let index = 0; index < count; index += 1) {
+    result += text;
+  }
+  return result;
 }
 
 function valueNumber(
@@ -2892,12 +3082,193 @@ export function applyBuiltin(
   }
 
   if (builtinId == BuiltinId.Days && argc == 2) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
     const end = excelSerialWhole(tagStack[base], valueStack[base]);
     const start = excelSerialWhole(tagStack[base + 1], valueStack[base + 1]);
     if (end == i32.MIN_VALUE || start == i32.MIN_VALUE) {
       return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
     }
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>(end - start), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Weeknum && (argc == 1 || argc == 2)) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const returnType = argc == 2 ? truncToInt(tagStack[base + 1], valueStack[base + 1]) : 1;
+    const weeknum = returnType == i32.MIN_VALUE ? i32.MIN_VALUE : excelWeeknumFromSerial(tagStack[base], valueStack[base], returnType);
+    if (weeknum == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>weeknum, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Workday && (argc == 2 || argc == 3)) {
+    const scalarError = scalarErrorAt(base, min<i32>(argc, 2), kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const start = excelSerialWhole(tagStack[base], valueStack[base]);
+    const offset = truncToInt(tagStack[base + 1], valueStack[base + 1]);
+    if (start == i32.MIN_VALUE || offset == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+
+    const holidayKind = argc == 3 ? kindStack[base + 2] : STACK_KIND_SCALAR;
+    const holidayTag = argc == 3 ? tagStack[base + 2] : <u8>ValueTag.Empty;
+    const holidayValue = argc == 3 ? valueStack[base + 2] : 0.0;
+    const holidayRangeIndex = argc == 3 ? rangeIndexStack[base + 2] : 0;
+
+    let cursor = start;
+    const direction = offset >= 0 ? 1 : -1;
+    while (true) {
+      const workday = isWorkdaySerial(
+        cursor,
+        holidayKind,
+        holidayTag,
+        holidayValue,
+        holidayRangeIndex,
+        rangeOffsets,
+        rangeLengths,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors
+      );
+      if (workday < 0) {
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+      }
+      if (workday == 1) {
+        break;
+      }
+      cursor += direction;
+    }
+
+    let remaining = offset >= 0 ? offset : -offset;
+    while (remaining > 0) {
+      cursor += direction;
+      const workday = isWorkdaySerial(
+        cursor,
+        holidayKind,
+        holidayTag,
+        holidayValue,
+        holidayRangeIndex,
+        rangeOffsets,
+        rangeLengths,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors
+      );
+      if (workday < 0) {
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+      }
+      if (workday == 1) {
+        remaining -= 1;
+      }
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>cursor, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Networkdays && (argc == 2 || argc == 3)) {
+    const scalarError = scalarErrorAt(base, min<i32>(argc, 2), kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const start = excelSerialWhole(tagStack[base], valueStack[base]);
+    const end = excelSerialWhole(tagStack[base + 1], valueStack[base + 1]);
+    if (start == i32.MIN_VALUE || end == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+
+    const holidayKind = argc == 3 ? kindStack[base + 2] : STACK_KIND_SCALAR;
+    const holidayTag = argc == 3 ? tagStack[base + 2] : <u8>ValueTag.Empty;
+    const holidayValue = argc == 3 ? valueStack[base + 2] : 0.0;
+    const holidayRangeIndex = argc == 3 ? rangeIndexStack[base + 2] : 0;
+
+    const step = start <= end ? 1 : -1;
+    let count = 0;
+    for (let cursor = start; ; cursor += step) {
+      const workday = isWorkdaySerial(
+        cursor,
+        holidayKind,
+        holidayTag,
+        holidayValue,
+        holidayRangeIndex,
+        rangeOffsets,
+        rangeLengths,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors
+      );
+      if (workday < 0) {
+        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+      }
+      if (workday == 1) {
+        count += step;
+      }
+      if (cursor == end) {
+        break;
+      }
+    }
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, <f64>count, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Replace && argc == 4) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const text = scalarText(tagStack[base], valueStack[base], stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData);
+    const start = coercePositiveStart(tagStack[base + 1], valueStack[base + 1], 1);
+    const count = coerceLength(tagStack[base + 2], valueStack[base + 2], 0);
+    const replacement = scalarText(tagStack[base + 3], valueStack[base + 3], stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData);
+    if (text == null || start == i32.MIN_VALUE || count == i32.MIN_VALUE || replacement == null) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeStringResult(base, replaceText(text, start, count, replacement), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Substitute && (argc == 3 || argc == 4)) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const text = scalarText(tagStack[base], valueStack[base], stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData);
+    const oldText = scalarText(tagStack[base + 1], valueStack[base + 1], stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData);
+    const newText = scalarText(tagStack[base + 2], valueStack[base + 2], stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData);
+    if (text == null || oldText == null || newText == null || oldText.length == 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    if (argc == 3) {
+      return writeStringResult(base, substituteText(text, oldText, newText), rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const instance = coercePositiveStart(tagStack[base + 3], valueStack[base + 3], 1);
+    if (instance == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeStringResult(base, substituteNthText(text, oldText, newText, instance), rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Rept && argc == 2) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, scalarError, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    const text = scalarText(tagStack[base], valueStack[base], stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData);
+    const count = coerceNonNegativeLength(tagStack[base + 1], valueStack[base + 1]);
+    if (text == null || count == i32.MIN_VALUE) {
+      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);
+    }
+    return writeStringResult(base, repeatText(text, count), rangeIndexStack, valueStack, tagStack, kindStack);
   }
 
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack);

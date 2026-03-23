@@ -122,6 +122,46 @@ describe("datetime builtins", () => {
     )).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
+  it("supports DAYS, WEEKNUM, WORKDAY, and NETWORKDAYS", () => {
+    const fridaySerial = excelDatePartsToSerial(2026, 3, 13)!;
+    const mondayHoliday = excelDatePartsToSerial(2026, 3, 16)!;
+    const fridayNextWeek = excelDatePartsToSerial(2026, 3, 20)!;
+
+    expect(datetimeBuiltins.DAYS(
+      { tag: ValueTag.Number, value: fridayNextWeek },
+      { tag: ValueTag.Number, value: fridaySerial }
+    )).toEqual({ tag: ValueTag.Number, value: 7 });
+
+    expect(datetimeBuiltins.WEEKNUM(
+      { tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 15)! }
+    )).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(datetimeBuiltins.WEEKNUM(
+      { tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 15)! },
+      { tag: ValueTag.Number, value: 2 }
+    )).toEqual({ tag: ValueTag.Number, value: 11 });
+
+    expect(datetimeBuiltins.WORKDAY(
+      { tag: ValueTag.Number, value: fridaySerial },
+      { tag: ValueTag.Number, value: 1 }
+    )).toEqual({ tag: ValueTag.Number, value: mondayHoliday });
+    expect(datetimeBuiltins.WORKDAY(
+      { tag: ValueTag.Number, value: fridaySerial },
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Number, value: mondayHoliday }
+    )).toEqual({ tag: ValueTag.Number, value: mondayHoliday + 1 });
+
+    expect(datetimeBuiltins.NETWORKDAYS(
+      { tag: ValueTag.Number, value: fridaySerial },
+      { tag: ValueTag.Number, value: fridayNextWeek }
+    )).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(datetimeBuiltins.NETWORKDAYS(
+      { tag: ValueTag.Number, value: fridaySerial },
+      { tag: ValueTag.Number, value: fridayNextWeek },
+      { tag: ValueTag.Number, value: mondayHoliday },
+      { tag: ValueTag.Number, value: fridayNextWeek }
+    )).toEqual({ tag: ValueTag.Number, value: 4 });
+  });
+
   it("creates deterministic TODAY and NOW builtins from injected UTC dates", () => {
     const fixedNow = new Date("2026-03-19T15:45:30.000Z");
     const TODAY = createTodayBuiltin(() => fixedNow);
