@@ -321,6 +321,22 @@ function resolveMetadataReferencesInAst(
         substituted
       };
     }
+    case "InvokeExpr": {
+      const callee = resolveMetadataReferencesInAst(node.callee, context, activeNames);
+      let fullyResolved = callee.fullyResolved;
+      let substituted = callee.substituted;
+      const args = node.args.map((arg) => {
+        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames);
+        fullyResolved = fullyResolved && resolved.fullyResolved;
+        substituted = substituted || resolved.substituted;
+        return resolved.node;
+      });
+      return {
+        node: substituted ? { ...node, callee: callee.node, args } : node,
+        fullyResolved,
+        substituted
+      };
+    }
   }
 }
 

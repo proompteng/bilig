@@ -208,7 +208,7 @@ const builtins: Record<string, Builtin> = {
   ...datetimeBuiltins
 };
 
-const jsSpecialBuiltins = new Set(["LET"]);
+const jsSpecialBuiltins = new Set(["LET", "LAMBDA", "MAKEARRAY", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL"]);
 
 function isBuiltinIdKey(value: string): value is keyof typeof BuiltinId {
   return value in BuiltinId;

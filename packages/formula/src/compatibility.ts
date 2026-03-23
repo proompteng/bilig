@@ -208,8 +208,8 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     prerequisites: ["core:volatile-context", "core:value-model"]
   }),
   entry("lambda:let-basic", "lambda", "=LET(x,2,x+3)", "implemented-js"),
-  entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "blocked"),
-  entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "blocked"),
+  entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "implemented-js"),
+  entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "implemented-js"),
   entry("logical:if-true-branch", "logical", "=IF(A1,A2,A3)", "implemented-wasm-production"),
   entry("logical:if-condition-error", "logical", "=IF(1/0,1,2)", "implemented-wasm-production", {
     notes: "The native branch VM now propagates IF condition errors before either branch executes."
@@ -300,7 +300,7 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("dynamic-array:wraprows-basic", "dynamic-array", "=WRAPROWS(A1:A4,2)", "blocked"),
   entry("dynamic-array:wrapcols-basic", "dynamic-array", "=WRAPCOLS(A1:A4,2)", "blocked"),
   entry("names:defined-name-range", "names", "=SUM(MyRange)", "blocked"),
-  entry("lambda:byrow-basic", "lambda", "=BYROW(A1:B2,LAMBDA(r,SUM(r)))", "blocked")
+  entry("lambda:byrow-basic", "lambda", "=BYROW(A1:B2,LAMBDA(r,SUM(r)))", "implemented-js")
 ];
 
 export function getCompatibilityEntry(id: string): FormulaCompatibilityEntry | undefined {

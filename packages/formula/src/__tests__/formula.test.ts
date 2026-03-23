@@ -175,7 +175,7 @@ describe("formula", () => {
     expect(compileFormula("TIME(A1,A2)").mode).toBe(0);
     expect(compileFormula("WEEKDAY(A1,A2,A3)").mode).toBe(0);
     expect(compileFormula("SIN(A1)").mode).toBe(0);
-    expect(compileFormula("SWITCH(A1,1,\"yes\")").mode).toBe(0);
+    expect(compileFormula("SWITCH(A1,1,\"yes\")").mode).toBe(1);
     expect(compileFormula("WEEKNUM(A1)").mode).toBe(0);
     expect(compileFormula("SUBSTITUTE(A1,\"a\",\"b\")").mode).toBe(0);
     expect(compileFormula("T.DIST(A1,2,TRUE)").mode).toBe(0);
@@ -185,6 +185,23 @@ describe("formula", () => {
     expect(compileFormula("TEXTBEFORE(A1,\"-\")").mode).toBe(0);
     expect(compileFormula("FILTER(A1:A4,A1:A4>2)")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("UNIQUE(A1:A4)")).toMatchObject({ mode: 0, producesSpill: true });
+  });
+
+  it("accelerates rewritten logical calls and keeps lambda families on the JS path", () => {
+    expect(compileFormula("TRUE()").mode).toBe(1);
+    expect(compileFormula("FALSE()").mode).toBe(1);
+    expect(compileFormula("IFS(A1>0,1,TRUE(),2)").mode).toBe(1);
+    expect(compileFormula("SWITCH(A1,1,\"yes\",\"no\")").mode).toBe(1);
+    expect(compileFormula("XOR(A1>0,B1>0)").mode).toBe(1);
+
+    expect(compileFormula("LAMBDA(x,x+1)(4)").mode).toBe(0);
+    expect(compileFormula("LET(fn,LAMBDA(x,x+1),fn(4))").mode).toBe(0);
+    expect(compileFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("MAP(A1:A3,LAMBDA(x,x*2))")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("SCAN(0,A1:A3,LAMBDA(acc,x,acc+x))")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))").mode).toBe(0);
   });
 
   it("evaluates AST against a context", () => {

@@ -12,7 +12,8 @@ export type FormulaNode =
   | RangeRefNode
   | UnaryExprNode
   | BinaryExprNode
-  | CallExprNode;
+  | CallExprNode
+  | InvokeExprNode;
 
 export interface NumberLiteralNode {
   kind: "NumberLiteral";
@@ -93,5 +94,11 @@ export interface BinaryExprNode {
 export interface CallExprNode {
   kind: "CallExpr";
   callee: string;
+  args: FormulaNode[];
+}
+
+export interface InvokeExprNode {
+  kind: "InvokeExpr";
+  callee: FormulaNode;
   args: FormulaNode[];
 }

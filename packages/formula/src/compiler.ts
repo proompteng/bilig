@@ -5,6 +5,7 @@ import { bindFormula, encodeBuiltin } from "./binder.js";
 import { lowerToPlan, type JsPlanInstruction } from "./js-evaluator.js";
 import { optimizeFormula } from "./optimizer.js";
 import { parseFormula } from "./parser.js";
+import { rewriteSpecialCall } from "./special-call-rewrites.js";
 
 function encodeInstruction(opcode: Opcode, operand = 0): number {
   return (opcode << 24) | (operand & 0x00ff_ffff);
@@ -26,7 +27,8 @@ interface VolatileMetadata {
 }
 
 function producesSpillResult(node: FormulaNode): boolean {
-  return node.kind === "CallExpr" && ["SEQUENCE", "FILTER", "UNIQUE"].includes(node.callee.toUpperCase());
+  return node.kind === "CallExpr"
+    && ["SEQUENCE", "FILTER", "UNIQUE", "MAKEARRAY", "MAP", "SCAN", "BYROW", "BYCOL"].includes(node.callee.toUpperCase());
 }
 
 function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
@@ -54,6 +56,10 @@ function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
       };
     }
     case "CallExpr": {
+      const rewritten = rewriteSpecialCall(node);
+      if (rewritten) {
+        return analyzeVolatileMetadata(rewritten);
+      }
       const callee = node.callee.toUpperCase();
       let volatile = VOLATILE_BUILTINS.has(callee);
       let randCallCount = callee === "RAND" ? 1 : 0;
@@ -63,6 +69,14 @@ function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
         randCallCount += child.randCallCount;
       });
       return { volatile, randCallCount };
+    }
+    case "InvokeExpr": {
+      const callee = analyzeVolatileMetadata(node.callee);
+      const args = node.args.map(analyzeVolatileMetadata);
+      return {
+        volatile: callee.volatile || args.some((child) => child.volatile),
+        randCallCount: callee.randCallCount + args.reduce((sum, child) => sum + child.randCallCount, 0)
+      };
     }
   }
 }
@@ -159,6 +173,11 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
       return;
     case "CallExpr":
       {
+        const rewritten = rewriteSpecialCall(node);
+        if (rewritten) {
+          emitNode(rewritten, state);
+          return;
+        }
         const callee = node.callee.toUpperCase();
         if (callee === "IF") {
           if (node.args.length !== 3) {
@@ -182,6 +201,8 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
         state.program.push(encodeInstruction(Opcode.CallBuiltin, (encodeBuiltin(callee) << 8) | argc));
       }
       return;
+    case "InvokeExpr":
+      throw new Error("Lambda invocation is not supported on the wasm fast path");
   }
 }
 
@@ -217,17 +238,22 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
     switch (instruction.opcode) {
       case "push-number":
       case "push-boolean":
-        case "push-string":
-        case "push-error":
-        case "push-name":
+      case "push-string":
+      case "push-error":
+      case "push-name":
       case "push-cell":
       case "push-range":
+      case "push-lambda":
         current += 1;
         break;
       case "binary":
         current -= 1;
         break;
       case "call":
+        current -= instruction.argc;
+        current += 1;
+        break;
+      case "invoke":
         current -= instruction.argc;
         current += 1;
         break;

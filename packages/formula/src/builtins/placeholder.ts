@@ -58,8 +58,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "BITOR",
   "BITRSHIFT",
   "BITXOR",
-  "BYCOL",
-  "BYROW",
   "CALL",
   "CEILING.MATH",
   "CEILING.PRECISE",
@@ -160,7 +158,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "EXPONDIST",
   "FACT",
   "FACTDOUBLE",
-  "FALSE",
   "F.DIST",
   "FDIST",
   "F.DIST.RT",
@@ -254,7 +251,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "ISPMT",
   "JIS",
   "KURT",
-  "LAMBDA",
   "LARGE",
   "LCM",
   "LINEST",
@@ -264,8 +260,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "LOGNORMDIST",
   "LOGNORM.INV",
   "LOOKUP",
-  "MAKEARRAY",
-  "MAP",
   "MAXA",
   "MAXIFS",
   "MDETERM",
@@ -342,7 +336,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "RANK",
   "RATE",
   "RECEIVED",
-  "REDUCE",
   "REGEXEXTRACT",
   "REGEXREPLACE",
   "REGEXTEST",
@@ -353,7 +346,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "RRI",
   "RSQ",
   "RTD",
-  "SCAN",
   "SEC",
   "SECH",
   "SERIESSUM",
@@ -409,7 +401,6 @@ const additionalExcelScalarPlaceholderBuiltinNames = [
   "TREND",
   "TRIMMEAN",
   "TRIMRANGE",
-  "TRUE",
   "TRUNC",
   "T.TEST",
   "TTEST",
@@ -446,11 +437,7 @@ export const scalarPlaceholderBuiltinNames = [
   ...additionalExcelScalarPlaceholderBuiltinNames
 ] as const;
 
-export const logicalPlaceholderBuiltinNames = [
-  "IFS",
-  "SWITCH",
-  "XOR",
-] as const;
+export const logicalPlaceholderBuiltinNames = [] as const;
 
 export const datetimePlaceholderBuiltinNames = [
   "DAYS",

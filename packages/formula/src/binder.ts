@@ -2,6 +2,7 @@ import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
 import { hasBuiltin } from "./builtins.js";
+import { rewriteSpecialCall } from "./special-call-rewrites.js";
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected formula node: ${JSON.stringify(value)}`);
@@ -227,6 +228,11 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         collectDeps(node.right, localNames);
         break;
       case "CallExpr": {
+        const rewritten = rewriteSpecialCall(node);
+        if (rewritten) {
+          collectDeps(rewritten, localNames);
+          break;
+        }
         const callee = node.callee.toUpperCase();
         if (callee === "LET" && node.args.length >= 3 && node.args.length % 2 === 1) {
           const scopedNames = new Set(localNames);
@@ -240,9 +246,27 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           collectDeps(node.args[node.args.length - 1]!, scopedNames);
           break;
         }
+        if (callee === "LAMBDA" && node.args.length >= 1) {
+          const scopedNames = new Set(localNames);
+          for (let index = 0; index < node.args.length - 1; index += 1) {
+            const paramNode = node.args[index]!;
+            if (paramNode.kind === "NameRef") {
+              scopedNames.add(paramNode.name);
+            }
+          }
+          collectDeps(node.args[node.args.length - 1]!, scopedNames);
+          break;
+        }
+        if (!hasBuiltin(callee) && !localNames.has(node.callee)) {
+          symbolicNames.add(node.callee);
+        }
         node.args.forEach((arg) => collectDeps(arg, localNames));
         break;
       }
+      case "InvokeExpr":
+        collectDeps(node.callee, localNames);
+        node.args.forEach((arg) => collectDeps(arg, localNames));
+        break;
       default:
         assertNever(node);
     }
@@ -284,8 +308,21 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           && isWasmSafe(node.left)
           && isWasmSafe(node.right);
       case "CallExpr": {
+        const rewritten = rewriteSpecialCall(node);
+        if (rewritten) {
+          return isWasmSafe(rewritten, allowRange);
+        }
         const callee = node.callee.toUpperCase();
-        if (callee === "LET") {
+        if (
+          callee === "LET"
+          || callee === "LAMBDA"
+          || callee === "MAKEARRAY"
+          || callee === "MAP"
+          || callee === "REDUCE"
+          || callee === "SCAN"
+          || callee === "BYROW"
+          || callee === "BYCOL"
+        ) {
           return false;
         }
         if (!hasBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
@@ -296,6 +333,8 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         }
         return isWasmSafeBuiltinArgs(callee, node.args);
       }
+      case "InvokeExpr":
+        return false;
     }
   }
 
@@ -386,6 +425,10 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
   function isTopLevelWasmSafe(node: FormulaNode): boolean {
     if (node.kind !== "CallExpr") {
       return false;
+    }
+    const rewritten = rewriteSpecialCall(node);
+    if (rewritten) {
+      return isWasmSafe(rewritten);
     }
     const callee = node.callee.toUpperCase();
     if (callee !== "SEQUENCE") {

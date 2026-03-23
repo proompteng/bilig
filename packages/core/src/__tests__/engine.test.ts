@@ -289,6 +289,35 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.JsOnly);
   });
 
+  it("evaluates missing logical functions and lambda arrays", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 2);
+    engine.setCellValue("Sheet1", "A3", 3);
+    engine.setCellValue("Sheet1", "B1", 4);
+    engine.setCellValue("Sheet1", "B2", 5);
+    engine.setCellValue("Sheet1", "B3", 6);
+    engine.setCellFormula("Sheet1", "C1", "IFS(A1>1,\"big\",TRUE(),\"small\")");
+    engine.setCellFormula("Sheet1", "D1", "SWITCH(A1,1,\"one\",\"other\")");
+    engine.setCellFormula("Sheet1", "E1", "XOR(TRUE(),FALSE(),TRUE())");
+    engine.setCellFormula("Sheet1", "F1", "LAMBDA(x,x+1)(4)");
+    engine.setCellFormula("Sheet1", "G1", "MAP(A1:A3,LAMBDA(x,x*2))");
+    engine.setCellFormula("Sheet1", "H1", "BYROW(A1:B3,LAMBDA(r,SUM(r)))");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({ tag: ValueTag.String, value: "small" });
+    expect(engine.getCellValue("Sheet1", "D1")).toMatchObject({ tag: ValueTag.String, value: "one" });
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "G1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "G2")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getCellValue("Sheet1", "G3")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "H1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCellValue("Sheet1", "H2")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getCellValue("Sheet1", "H3")).toEqual({ tag: ValueTag.Number, value: 9 });
+  });
+
   it("supports cross-sheet references", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

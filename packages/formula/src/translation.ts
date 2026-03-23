@@ -162,6 +162,12 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
         ...node,
         args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta))
       };
+    case "InvokeExpr":
+      return {
+        ...node,
+        callee: translateNode(node.callee, rowDelta, colDelta),
+        args: node.args.map((arg) => translateNode(arg, rowDelta, colDelta))
+      };
   }
 }
 
@@ -209,6 +215,12 @@ function rewriteNodeForStructuralTransform(
     case "CallExpr":
       return {
         ...node,
+        args: node.args.map((arg) => rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform))
+      };
+    case "InvokeExpr":
+      return {
+        ...node,
+        callee: rewriteNodeForStructuralTransform(node.callee, ownerSheetName, targetSheetName, transform),
         args: node.args.map((arg) => rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform))
       };
   }
@@ -379,6 +391,13 @@ export function serializeFormula(
       return `${node.operator}${serializeFormula(node.argument, 6)}`;
     case "CallExpr":
       return `${node.callee}(${node.args.map((arg) => serializeFormula(arg)).join(",")})`;
+    case "InvokeExpr": {
+      const callee =
+        node.callee.kind === "CallExpr" || node.callee.kind === "InvokeExpr"
+          ? serializeFormula(node.callee)
+          : `(${serializeFormula(node.callee)})`;
+      return `${callee}(${node.args.map((arg) => serializeFormula(arg)).join(",")})`;
+    }
     case "BinaryExpr": {
       const precedence = BINARY_PRECEDENCE[node.operator];
       const isRightAssociative = node.operator === "^";

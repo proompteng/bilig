@@ -106,6 +106,21 @@ describe("formula builtins and JS evaluator", () => {
     expect(evaluateAst(parseFormula("T.DIST(0.1,2,TRUE)"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
     expect(evaluateAst(parseFormula("TEXTJOIN(\",\",TRUE,\"a\",\"b\")"), context)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
     expect(evaluateAst(parseFormula("LET(x,2,x+3)"), context)).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(evaluateAst(parseFormula("LAMBDA(x,x+1)(4)"), context)).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(evaluateAst(parseFormula("LET(fn,LAMBDA(x,x*2),fn(4))"), context)).toEqual({ tag: ValueTag.Number, value: 8 });
+    expect(evaluateAst(parseFormula("TRUE()"), context)).toEqual({ tag: ValueTag.Boolean, value: true });
+    expect(evaluateAst(parseFormula("FALSE()"), context)).toEqual({ tag: ValueTag.Boolean, value: false });
+    expect(evaluateAst(parseFormula("IFS(A1>3,\"big\",TRUE(),\"small\")"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "big",
+      stringId: 0
+    });
+    expect(evaluateAst(parseFormula("SWITCH(A1,4,\"four\",\"other\")"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "four",
+      stringId: 0
+    });
+    expect(evaluateAst(parseFormula("XOR(TRUE(),FALSE(),TRUE())"), context)).toEqual({ tag: ValueTag.Boolean, value: false });
     expect(evaluateAst(parseFormula("TEXTBEFORE(\"alpha-beta\",\"-\")"), context)).toEqual({
       tag: ValueTag.String,
       value: "alpha",
@@ -181,6 +196,99 @@ describe("formula builtins and JS evaluator", () => {
         { tag: ValueTag.String, value: "A", stringId: 0 },
         { tag: ValueTag.String, value: "B", stringId: 0 },
         { tag: ValueTag.String, value: "C", stringId: 0 }
+      ]
+    });
+
+    expect(evaluateAstResult(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))"), context)).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 }
+      ]
+    });
+
+    expect(evaluateAstResult(parseFormula("MAP(A1:A3,LAMBDA(x,x*2))"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 }
+      ]
+    })).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 6 }
+      ]
+    });
+
+    expect(evaluateAst(parseFormula("REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 }
+      ]
+    })).toEqual({ tag: ValueTag.Number, value: 6 });
+
+    expect(evaluateAstResult(parseFormula("SCAN(0,A1:A3,LAMBDA(acc,x,acc+x))"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 }
+      ]
+    })).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 6 }
+      ]
+    });
+
+    expect(evaluateAstResult(parseFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 }
+      ]
+    })).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 7 }
+      ]
+    });
+
+    expect(evaluateAstResult(parseFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))"), {
+      ...context,
+      resolveRange: (): CellValue[] => [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 }
+      ]
+    })).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 6 }
       ]
     });
   });

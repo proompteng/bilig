@@ -242,4 +242,40 @@ describe("formula parser/compiler edges", () => {
       { opcode: "return" }
     ]);
   });
+
+  it("parses and lowers lambda invocation syntax", () => {
+    expect(parseFormula("LAMBDA(x,x+1)(4)")).toEqual({
+      kind: "InvokeExpr",
+      callee: {
+        kind: "CallExpr",
+        callee: "LAMBDA",
+        args: [
+          { kind: "NameRef", name: "x" },
+          {
+            kind: "BinaryExpr",
+            operator: "+",
+            left: { kind: "NameRef", name: "x" },
+            right: { kind: "NumberLiteral", value: 1 }
+          }
+        ]
+      },
+      args: [{ kind: "NumberLiteral", value: 4 }]
+    });
+
+    expect(lowerToPlan(parseFormula("LAMBDA(x,x+1)(4)"))).toEqual([
+      {
+        opcode: "push-lambda",
+        params: ["x"],
+        body: [
+          { opcode: "push-name", name: "x" },
+          { opcode: "push-number", value: 1 },
+          { opcode: "binary", operator: "+" },
+          { opcode: "return" }
+        ]
+      },
+      { opcode: "push-number", value: 4 },
+      { opcode: "invoke", argc: 1 },
+      { opcode: "return" }
+    ]);
+  });
 });

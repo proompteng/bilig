@@ -172,6 +172,18 @@ describe("js evaluator", () => {
     });
   });
 
+  it("supports lambda invocation and lambda-array helpers in lowered plans", () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,x+1)(4)")), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5
+    });
+
+    expect(evaluatePlan(lowerToPlan(parseFormula("LET(fn,LAMBDA(x,x+1),fn(4))")), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5
+    });
+  });
+
   it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
     expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
     expect(optimizeFormula(parseFormula("-\"text\""))).toEqual({

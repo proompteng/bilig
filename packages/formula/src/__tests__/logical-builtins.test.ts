@@ -80,4 +80,27 @@ describe("logical/info builtins", () => {
     expect(ISTEXT(empty())).toEqual(bool(false));
     expect(ISTEXT(err(ErrorCode.Value))).toEqual(bool(false));
   });
+
+  it("supports TRUE FALSE XOR IFS and SWITCH", () => {
+    const TRUE = getLogicalBuiltin("TRUE")!;
+    const FALSE = getLogicalBuiltin("FALSE")!;
+    const XOR = getLogicalBuiltin("XOR")!;
+    const IFS = getLogicalBuiltin("IFS")!;
+    const SWITCH = getLogicalBuiltin("SWITCH")!;
+
+    expect(TRUE()).toEqual(bool(true));
+    expect(FALSE()).toEqual(bool(false));
+    expect(TRUE(num(1))).toEqual(err(ErrorCode.Value));
+
+    expect(XOR(bool(true), bool(false), num(1))).toEqual(bool(false));
+    expect(XOR()).toEqual(err(ErrorCode.Value));
+
+    expect(IFS(bool(false), text("no"), num(1), text("yes"))).toEqual(text("yes"));
+    expect(IFS(bool(false), text("no"))).toEqual(err(ErrorCode.NA));
+    expect(IFS(bool(true))).toEqual(err(ErrorCode.Value));
+
+    expect(SWITCH(text("b"), text("a"), num(1), text("B"), num(2), num(9))).toEqual(num(2));
+    expect(SWITCH(text("z"), text("a"), num(1), text("b"), num(2))).toEqual(err(ErrorCode.NA));
+    expect(SWITCH(err(ErrorCode.Ref), text("a"), num(1))).toEqual(err(ErrorCode.Ref));
+  });
 });

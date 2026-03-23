@@ -4,6 +4,7 @@ import type {
   CellRefNode,
   ColumnRefNode,
   FormulaNode,
+  InvokeExprNode,
   NameRefNode,
   RangeRefNode,
   RowRefNode,
@@ -109,6 +110,22 @@ export function parseFormula(source: string): FormulaNode {
     };
   }
 
+  function parseCallArguments(): FormulaNode[] {
+    eat("lparen");
+    const args: FormulaNode[] = [];
+    if (current().kind !== "rparen") {
+      while (true) {
+        args.push(parseExpression());
+        if (current().kind !== "comma") {
+          break;
+        }
+        eat("comma");
+      }
+    }
+    eat("rparen");
+    return args;
+  }
+
   function parseSheetQualifiedReference(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode {
     const token = current();
     if (token.kind === "identifier") {
@@ -161,6 +178,7 @@ export function parseFormula(source: string): FormulaNode {
       case "UnaryExpr":
       case "BinaryExpr":
       case "CallExpr":
+      case "InvokeExpr":
       case "StructuredRef":
       case "SpillRef":
       case "RangeRef":
@@ -195,6 +213,10 @@ export function parseFormula(source: string): FormulaNode {
         assertNoStandaloneAxisRefs(node.right);
         return;
       case "CallExpr":
+        node.args.forEach(assertNoStandaloneAxisRefs);
+        return;
+      case "InvokeExpr":
+        assertNoStandaloneAxisRefs(node.callee);
         node.args.forEach(assertNoStandaloneAxisRefs);
         return;
     }
@@ -240,19 +262,7 @@ export function parseFormula(source: string): FormulaNode {
         eat("bang");
         result = parseSheetQualifiedReference(first);
       } else if (current().kind === "lparen") {
-        eat("lparen");
-        const args: FormulaNode[] = [];
-        if (current().kind !== "rparen") {
-          while (true) {
-            args.push(parseExpression());
-            if (current().kind !== "comma") {
-              break;
-            }
-            eat("comma");
-          }
-        }
-        eat("rparen");
-        result = { kind: "CallExpr", callee: first.toUpperCase(), args } satisfies CallExprNode;
+        result = { kind: "CallExpr", callee: first.toUpperCase(), args: parseCallArguments() } satisfies CallExprNode;
       } else if (current().kind === "lbracket") {
         result = parseStructuredReference(first);
       } else {
@@ -267,7 +277,11 @@ export function parseFormula(source: string): FormulaNode {
       throw new Error(`Unexpected token ${token.kind}`);
     }
 
-    while (current().kind === "hash" || current().kind === "percent") {
+    while (current().kind === "lparen" || current().kind === "hash" || current().kind === "percent") {
+      if (current().kind === "lparen") {
+        result = { kind: "InvokeExpr", callee: result, args: parseCallArguments() } satisfies InvokeExprNode;
+        continue;
+      }
       if (current().kind === "hash") {
         eat("hash");
         if (result.kind !== "CellRef") {

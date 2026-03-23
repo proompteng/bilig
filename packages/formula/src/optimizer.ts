@@ -2,6 +2,7 @@ import { ValueTag, type CellValue } from "@bilig/protocol";
 import type { CallExprNode, FormulaNode } from "./ast.js";
 import { evaluateAstResult, type EvaluationContext } from "./js-evaluator.js";
 import { isArrayValue } from "./runtime-values.js";
+import { rewriteSpecialCall } from "./special-call-rewrites.js";
 
 const VOLATILE_BUILTINS = new Set(["TODAY", "NOW", "RAND"]);
 
@@ -49,6 +50,8 @@ function isStaticNode(node: FormulaNode): boolean {
       return isStaticNode(node.left) && isStaticNode(node.right);
     case "CallExpr":
       return node.args.every(isStaticNode);
+    case "InvokeExpr":
+      return isStaticNode(node.callee) && node.args.every(isStaticNode);
   }
 }
 
@@ -97,6 +100,15 @@ function optimizeCall(node: CallExprNode): FormulaNode {
             : false;
       return optimizeFormula(truthy ? args[1]! : args[2]!);
     }
+  }
+
+  const rewritten = rewriteSpecialCall({
+    kind: "CallExpr",
+    callee,
+    args
+  });
+  if (rewritten) {
+    return optimizeFormula(rewritten);
   }
 
   const candidate: CallExprNode = {
@@ -150,5 +162,12 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
     }
     case "CallExpr":
       return optimizeCall(node);
+    case "InvokeExpr": {
+      const callee = optimizeFormula(node.callee);
+      const args = node.args.map(optimizeFormula);
+      const candidate = { ...node, callee, args };
+      const folded = isStaticNode(candidate) ? tryEvaluateStatic(candidate) : undefined;
+      return folded ? cellValueToAst(folded) ?? candidate : candidate;
+    }
   }
 }
