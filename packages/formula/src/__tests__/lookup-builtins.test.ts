@@ -274,6 +274,33 @@ describe("lookup builtins", () => {
     });
   });
 
+  it("covers TOCOL and TOROW argument edge cases", () => {
+    const TOCOL = getLookupBuiltin("TOCOL")!;
+    const TOROW = getLookupBuiltin("TOROW")!;
+
+    expect(TOCOL(num(1))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [num(1)],
+    });
+    expect(TOROW(num(1))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [num(1)],
+    });
+    expect(
+      TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), cellRange([num(1)], 1, 1)),
+    ).toEqual(err(ErrorCode.Value));
+    expect(TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), num(2))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), num(0), text("bad"))).toEqual(
+      err(ErrorCode.Value),
+    );
+  });
+
   it("supports WRAPROWS and WRAPCOLS packing", () => {
     const WRAPROWS = getLookupBuiltin("WRAPROWS")!;
     const WRAPCOLS = getLookupBuiltin("WRAPCOLS")!;
@@ -297,6 +324,74 @@ describe("lookup builtins", () => {
       cols: 3,
       values: [num(1), num(3), num(5), num(2), num(4), text("pad")],
     });
+
+    expect(WRAPROWS(vector, num(0))).toEqual(err(ErrorCode.Value));
+    expect(WRAPROWS(vector, num(2), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(WRAPROWS(vector, num(2), text("pad"), text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(WRAPCOLS(vector, num(0))).toEqual(err(ErrorCode.Value));
+    expect(WRAPCOLS(vector, cellRange([num(1)], 1, 1), text("pad"))).toEqual(err(ErrorCode.Value));
+    expect(WRAPCOLS(vector, num(2), text("pad"), text("bad"))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("covers COUNTIFS and SUMIFS error branches", () => {
+    const COUNTIFS = getLookupBuiltin("COUNTIFS")!;
+    const SUMIFS = getLookupBuiltin("SUMIFS")!;
+
+    expect(COUNTIFS(cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Value));
+    expect(
+      COUNTIFS(cellRange([num(1), num(2)], 2, 1), text(">1"), cellRange([num(2)], 1, 1), text("2")),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      SUMIFS(
+        cellRange([num(1), num(2)], 2, 1),
+        cellRange([num(1), num(2)], 2, 1),
+        text(">1"),
+        cellRange([num(3)], 1, 1),
+        text("3"),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+  });
+
+  it("covers UNIQUE by-column/row modes with duplicate and error branches", () => {
+    const UNIQUE = getLookupBuiltin("UNIQUE")!;
+
+    expect(
+      UNIQUE(
+        cellRange([num(1), num(1), num(2), num(1), num(1), num(2)], 2, 3),
+        bool(true),
+        bool(true),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(2), num(2)],
+    });
+
+    expect(UNIQUE(cellRange([num(1), num(2), num(3), num(4)], 2, 2), bool(true))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(2), num(3), num(4)],
+    });
+
+    expect(
+      UNIQUE(cellRange([num(1), err(ErrorCode.Ref), num(3), num(4)], 2, 2), bool(true)),
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(UNIQUE(cellRange([num(1), num(2), err(ErrorCode.Name), num(4)], 2, 2))).toEqual(
+      err(ErrorCode.Value),
+    );
+  });
+
+  it("covers criteria matching with error values and invalid operand types", () => {
+    const COUNTIF = getLookupBuiltin("COUNTIF")!;
+
+    expect(COUNTIF(cellRange([err(ErrorCode.Ref), num(1), num(2)], 3, 1), text(">0"))).toEqual(
+      num(2),
+    );
+    expect(COUNTIF(cellRange([num(1), num(2), num(3)], 3, 1), text(">=a"))).toEqual(num(0));
+    expect(COUNTIF(cellRange([num(3), num(1), num(4)], 3, 1), text("<2"))).toEqual(num(1));
   });
 
   it("covers boundary behavior for lookup reshaping helpers", () => {
