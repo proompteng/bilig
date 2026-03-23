@@ -32,7 +32,7 @@ export const OPCODE_NAMES: Record<Opcode, string> = {
   [Opcode.CallBuiltin]: "CallBuiltin",
   [Opcode.PushString]: "PushString",
   [Opcode.PushError]: "PushError",
-  [Opcode.Ret]: "Ret",
+  [Opcode.Ret]: "Ret"
 };
 
 export const BUILTINS: BuiltinDescriptor[] = [
@@ -125,5 +125,5 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Today, name: "TODAY", supportsWasm: true },
   { id: BuiltinId.Now, name: "NOW", supportsWasm: true },
   { id: BuiltinId.Rand, name: "RAND", supportsWasm: true },
-  { id: BuiltinId.Sequence, name: "SEQUENCE", supportsWasm: true },
+  { id: BuiltinId.Sequence, name: "SEQUENCE", supportsWasm: true }
 ];

@@ -5,6 +5,9 @@
     "**/dist/**",
     "**/build/**",
     "**/coverage/**",
-    "**/test-results/**"
+    "**/test-results/**",
+    "packages/protocol/src/enums.ts",
+    "packages/protocol/src/opcodes.ts",
+    "packages/wasm-kernel/assembly/protocol.ts"
   ]
 }
