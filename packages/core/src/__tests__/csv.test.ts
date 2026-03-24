@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ErrorCode, ValueTag, type CellSnapshot, type CellValue } from "@bilig/protocol";
+import { ErrorCode, ValueTag, type CellSnapshot } from "@bilig/protocol";
 import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "../csv.js";
 
 function mockCell(overrides: Partial<CellSnapshot>): CellSnapshot {
@@ -45,7 +45,7 @@ describe("csv helpers", () => {
       cellToCsvValue(
         mockCell({
           address: "A1",
-          value: { tag: ValueTag.String, value: "hello", stringId: 0 } as CellValue,
+          value: { tag: ValueTag.String, value: "hello", stringId: 0 },
         }),
       ),
     ).toBe("hello");
