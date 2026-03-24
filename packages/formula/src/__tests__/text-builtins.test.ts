@@ -31,6 +31,10 @@ describe("text builtins", () => {
     expect(getTextBuiltin("FIND")?.(text("z"), text("abc"))).toEqual(valueError());
     expect(getTextBuiltin("SEARCH")?.(text("a"), text("abc"), number(0))).toEqual(valueError());
     expect(getTextBuiltin("VALUE")?.(text("not-a-number"))).toEqual(valueError());
+    expect(getTextBuiltin("FIND")?.()).toEqual(valueError());
+    expect(getTextBuiltin("SEARCH")?.(text("a"))).toEqual(valueError());
+    expect(getTextBuiltin("ENCODEURL")?.()).toEqual(valueError());
+    expect(getTextBuiltin("FINDB")?.()).toEqual(valueError());
   });
 
   it("supports Excel-like SEARCH wildcards and FIND case sensitivity", () => {
@@ -39,6 +43,12 @@ describe("text builtins", () => {
     expect(getTextBuiltin("SEARCH")?.(text("~*"), text("a*b"))).toEqual(number(2));
     expect(getTextBuiltin("FIND")?.(text("A"), text("abcA"))).toEqual(number(4));
     expect(getTextBuiltin("FIND")?.(text("A"), text("abca"))).toEqual(valueError());
+    expect(getTextBuiltin("FIND")?.(text("A"), text("abc"), err(ErrorCode.Ref))).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(getTextBuiltin("SEARCH")?.(text("A"), text("abc"), err(ErrorCode.Name))).toEqual(
+      err(ErrorCode.Name),
+    );
   });
 
   it("keeps TRIM scoped to ASCII spaces", () => {
@@ -89,6 +99,16 @@ describe("text builtins", () => {
     expect(getTextBuiltin("LEFTB")?.(text("abc"), number(-1))).toEqual(valueError());
     expect(getTextBuiltin("MIDB")?.(text("abc"), number(0), number(2))).toEqual(valueError());
     expect(getTextBuiltin("RIGHTB")?.(text("abc"), number(-1))).toEqual(valueError());
+    expect(getTextBuiltin("LEFTB")?.()).toEqual(valueError());
+    expect(getTextBuiltin("MIDB")?.(text("abc"), number(1))).toEqual(valueError());
+    expect(getTextBuiltin("RIGHTB")?.()).toEqual(valueError());
+    expect(getTextBuiltin("LEFTB")?.(err(ErrorCode.Ref), number(1))).toEqual(err(ErrorCode.Ref));
+    expect(getTextBuiltin("MIDB")?.(text("abc"), err(ErrorCode.Name), number(1))).toEqual(
+      err(ErrorCode.Name),
+    );
+    expect(getTextBuiltin("RIGHTB")?.(text("abc"), err(ErrorCode.Div0))).toEqual(
+      err(ErrorCode.Div0),
+    );
   });
 
   it("supports CLEAN, CONCATENATE, and PROPER text cleanup functions", () => {
@@ -111,6 +131,9 @@ describe("text builtins", () => {
       TEXTAFTER(text("alpha"), text("-"), number(1), number(0), number(0), text("fallback")),
     ).toEqual(text("fallback"));
     expect(TEXTAFTER(text("alpha-beta-gamma"), text("-"), number(-1))).toEqual(text("gamma"));
+    expect(TEXTAFTER(text("alpha"), text("-"), number(-1), number(0), number(1))).toEqual(
+      err(ErrorCode.NA),
+    );
     expect(TEXTAFTER(err(ErrorCode.Ref), text("-"))).toEqual(err(ErrorCode.Ref));
   });
 
@@ -141,6 +164,9 @@ describe("text builtins", () => {
     expect(
       TEXTJOIN(text("-"), { tag: ValueTag.Boolean, value: true }, text("a"), text(""), text("b")),
     ).toEqual(text("a-b"));
+    expect(
+      TEXTJOIN(text("-"), { tag: ValueTag.Boolean, value: true }, text("a"), text(""), text("")),
+    ).toEqual(text("a"));
     expect(TEXTJOIN()).toEqual(valueError());
   });
 
@@ -156,6 +182,9 @@ describe("text builtins", () => {
     expect(
       TEXTBEFORE(text("alpha-beta"), text("-"), number(-5), number(0), number(1), text("edge")),
     ).toEqual(text("edge"));
+    expect(TEXTBEFORE(text("alpha"), text("-"), number(-1), number(0), number(1))).toEqual(
+      err(ErrorCode.NA),
+    );
   });
 
   it("supports REPLACE, SUBSTITUTE, and REPT", () => {
@@ -225,6 +254,51 @@ describe("text builtins", () => {
       code: ErrorCode.Ref,
     });
     expect(getTextBuiltin("VALUE")?.()).toEqual(valueError());
+    expect(getTextBuiltin("VALUE")?.(err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(getTextBuiltin("TEXTAFTER")?.()).toEqual(valueError());
+    expect(getTextBuiltin("TEXTAFTER")?.(text("alpha"), text(""))).toEqual(valueError());
+    expect(getTextBuiltin("TEXTAFTER")?.(text("alpha"), text("-"), number(1), number(2))).toEqual(
+      valueError(),
+    );
+    expect(
+      getTextBuiltin("TEXTAFTER")?.(text("alpha"), text("-"), number(1), number(0), number(0)),
+    ).toEqual(err(ErrorCode.NA));
+  });
+
+  it("covers additional text coercion and edge cases", () => {
+    const LEN = getTextBuiltin("LEN")!;
+    const VALUE = getTextBuiltin("VALUE")!;
+    const REPT = getTextBuiltin("REPT")!;
+    const SUBSTITUTE = getTextBuiltin("SUBSTITUTE")!;
+    const TEXTJOIN = getTextBuiltin("TEXTJOIN")!;
+
+    // coerceText
+    expect(LEN({ tag: ValueTag.Empty })).toEqual(number(0));
+    expect(LEN({ tag: ValueTag.Boolean, value: true })).toEqual(number(4)); // "TRUE"
+    expect(LEN({ tag: ValueTag.Boolean, value: false })).toEqual(number(5)); // "FALSE"
+
+    // coerceNumber
+    expect(VALUE(text("   "))).toEqual(number(0));
+    expect(VALUE({ tag: ValueTag.Boolean, value: false })).toEqual(number(0));
+
+    // REPT zero count
+    expect(REPT(text("abc"), number(0))).toEqual(text(""));
+
+    // SUBSTITUTE instance not found
+    expect(SUBSTITUTE(text("abc"), text("z"), text("x"))).toEqual(text("abc"));
+    expect(SUBSTITUTE(text("abc"), text("a"), text("x"), number(2))).toEqual(text("abc"));
+
+    // TEXTJOIN with mixed empty values
+    expect(
+      TEXTJOIN(
+        text(","),
+        { tag: ValueTag.Boolean, value: true },
+        text("a"),
+        { tag: ValueTag.Empty },
+        text(""),
+        text("b"),
+      ),
+    ).toEqual(text("a,b"));
   });
 });
 

@@ -174,6 +174,52 @@ describe("js evaluator", () => {
     );
   });
 
+  it("covers special-call rewrites and evaluator guard rails", () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula("IFS(FALSE,1,TRUE,2)")), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('SWITCH("b","a",1,"b",2,9)')), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("XOR(TRUE,FALSE,TRUE)")), context)).toEqual({
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("TRUE(1)")), context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("LET(x,1)")), context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("LET(1,2,3)")), context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        [{ opcode: "push-range", start: "bad", end: "B2", refKind: "cells" }, { opcode: "return" }],
+        {
+          ...context,
+          resolveRange: () => [num(7), num(8)],
+        },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(
+      evaluatePlan([{ opcode: "bind-name", name: "x" }, { opcode: "return" }], context),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SUM(LAMBDA(x,x))")), context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("optimizes unary and conditional expressions while preserving dynamic refs", () => {
     expect(optimizeFormula(parseFormula("+A1"))).toEqual({ kind: "CellRef", ref: "A1" });
     expect(optimizeFormula(parseFormula('-"text"'))).toEqual({

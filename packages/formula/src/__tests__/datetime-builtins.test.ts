@@ -77,6 +77,15 @@ describe("datetime builtins", () => {
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
+
+    expect(datetimeBuiltins.YEAR({ tag: ValueTag.Empty })).toEqual({
+      tag: ValueTag.Number,
+      value: 1899,
+    });
+    expect(datetimeBuiltins.MONTH({ tag: ValueTag.Boolean, value: true })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
   });
 
   it("supports TIME plus HOUR, MINUTE, SECOND, and WEEKDAY extraction", () => {
@@ -138,6 +147,18 @@ describe("datetime builtins", () => {
         { tag: ValueTag.Number, value: 99 },
       ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    const sundaySerial = excelDatePartsToSerial(2026, 3, 15)!;
+    const weekdayTypes = [1, 2, 11, 12, 13, 14, 15, 16, 17];
+    const expectedForSunday = [1, 7, 7, 6, 5, 4, 3, 2, 1];
+    weekdayTypes.forEach((type, i) => {
+      expect(
+        datetimeBuiltins.WEEKDAY(
+          { tag: ValueTag.Number, value: sundaySerial },
+          { tag: ValueTag.Number, value: type },
+        ),
+      ).toEqual({ tag: ValueTag.Number, value: expectedForSunday[i] });
+    });
   });
 
   it("supports DAYS, WEEKNUM, WORKDAY, and NETWORKDAYS", () => {
@@ -228,6 +249,150 @@ describe("datetime builtins", () => {
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
+  });
+
+  it("returns explicit errors for WORKDAY, NETWORKDAYS, TODAY, NOW, RAND, EDATE, and EOMONTH edge inputs", () => {
+    expect(datetimeBuiltins.WORKDAY()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.WORKDAY(
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.WORKDAY(
+        { tag: ValueTag.Number, value: 46094 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.WORKDAY(
+        { tag: ValueTag.Number, value: 46094 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(datetimeBuiltins.NETWORKDAYS()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.NETWORKDAYS(
+        { tag: ValueTag.Error, code: ErrorCode.Ref },
+        { tag: ValueTag.Number, value: 46095 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+    expect(
+      datetimeBuiltins.NETWORKDAYS(
+        { tag: ValueTag.Number, value: 46094 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.NETWORKDAYS(
+        { tag: ValueTag.Number, value: 46094 },
+        { tag: ValueTag.Number, value: 46095 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      createTodayBuiltin(() => new Date("2026-03-19T00:00:00.000Z"))({
+        tag: ValueTag.Error,
+        code: ErrorCode.Name,
+      }),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Name });
+    expect(
+      createNowBuiltin(() => new Date("2026-03-19T00:00:00.000Z"))({
+        tag: ValueTag.Number,
+        value: 1,
+      }),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(createRandBuiltin(() => 0.5)({ tag: ValueTag.Error, code: ErrorCode.NA })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    expect(
+      datetimeBuiltins.EDATE(
+        { tag: ValueTag.Number, value: 45322 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.EOMONTH(
+        { tag: ValueTag.Number, value: 45322 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("covers DAYS and WEEKNUM validation and alternate return-type branches", () => {
+    const sampleDate = excelDatePartsToSerial(2026, 3, 15)!;
+
+    expect(datetimeBuiltins.DAYS({ tag: ValueTag.Number, value: 10 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      datetimeBuiltins.DAYS(
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.DAYS(
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.String, value: "bad", stringId: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: sampleDate },
+        { tag: ValueTag.Number, value: 12 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 11 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: sampleDate },
+        { tag: ValueTag.Number, value: 13 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 11 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: sampleDate },
+        { tag: ValueTag.Number, value: 14 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 11 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: sampleDate },
+        { tag: ValueTag.Number, value: 15 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: sampleDate },
+        { tag: ValueTag.Number, value: 16 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.String, value: "bad", stringId: 3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: sampleDate },
+        { tag: ValueTag.String, value: "bad", stringId: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: Number.NaN },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
   it("supports EDATE month shifting with end-of-month clamping", () => {
@@ -562,5 +727,56 @@ describe("datetime builtins", () => {
         }),
       ]),
     );
+  });
+
+  it("covers yearFracByBasis complex branches and edge cases", () => {
+    const d1 = excelDatePartsToSerial(2023, 1, 1)!;
+    const d2 = excelDatePartsToSerial(2024, 1, 1)!;
+    const d3 = excelDatePartsToSerial(2025, 1, 1)!;
+
+    // Basis 1: Actual/actual
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: d1 },
+        { tag: ValueTag.Number, value: d2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 365 / 365 });
+
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: d2 },
+        { tag: ValueTag.Number, value: d3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 366 / 366 });
+
+    // Multi-year crossing
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: d1 },
+        { tag: ValueTag.Number, value: d3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2.0009124087591244 });
+  });
+
+  it("covers more TIMEVALUE parsing scenarios", () => {
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "  12:30 PM  ", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: 0.5208333333333334 });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "12:00:00", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: 0.5 });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "11:59:59 PM", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: (23 * 3600 + 59 * 60 + 59) / 86400 });
+  });
+
+  it("covers date boundary limits and normalization", () => {
+    expect(excelDatePartsToSerial(-1, 1, 1)).toBeUndefined();
+    expect(excelDatePartsToSerial(10000, 1, 1)).toBeUndefined();
+    expect(addMonthsToExcelDate(1, 120000)).toBeUndefined();
+    expect(endOfMonthExcelDate(1, 120000)).toBeUndefined();
   });
 });

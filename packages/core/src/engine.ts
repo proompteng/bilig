@@ -1952,6 +1952,7 @@ export class SpreadsheetEngine {
             )
           : { startAddress: pivot.source.startAddress, endAddress: pivot.source.endAddress };
       if (!nextAddress || !nextSource) {
+        this.clearOwnedPivot(pivot);
         this.workbook.deletePivot(pivot.sheetName, pivot.address);
         return;
       }
@@ -2218,6 +2219,18 @@ export class SpreadsheetEngine {
         );
 
         if (materialized) {
+          const owner = parseCellAddress(pivot.address, pivot.sheetName);
+          const blockedOutput = this.guardPivotOutputWrite(
+            pivot,
+            owner.row,
+            owner.col,
+            materialized.rows,
+            materialized.cols,
+            changedCellIndices,
+          );
+          if (blockedOutput) {
+            return blockedOutput;
+          }
           const values: CellValue[] = [];
           const count = materialized.rows * materialized.cols;
           const groupByCount = pivot.groupBy.length;
@@ -2275,19 +2288,16 @@ export class SpreadsheetEngine {
     }
 
     const owner = parseCellAddress(pivot.address, pivot.sheetName);
-    if (owner.row + materialized.rows > MAX_ROWS || owner.col + materialized.cols > MAX_COLS) {
-      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Spill)], changedCellIndices);
-    }
-    if (
-      this.isPivotOutputBlocked(pivot, owner.row, owner.col, materialized.rows, materialized.cols)
-    ) {
-      return this.writePivotOutput(
-        pivot,
-        1,
-        1,
-        [errorValue(ErrorCode.Blocked)],
-        changedCellIndices,
-      );
+    const blockedOutput = this.guardPivotOutputWrite(
+      pivot,
+      owner.row,
+      owner.col,
+      materialized.rows,
+      materialized.cols,
+      changedCellIndices,
+    );
+    if (blockedOutput) {
+      return blockedOutput;
     }
 
     return this.writePivotOutput(
@@ -2361,6 +2371,29 @@ export class SpreadsheetEngine {
       }
     }
     return false;
+  }
+
+  private guardPivotOutputWrite(
+    pivot: WorkbookPivotRecord,
+    startRow: number,
+    startCol: number,
+    rows: number,
+    cols: number,
+    changedCellIndices: number[],
+  ): number[] | undefined {
+    if (startRow + rows > MAX_ROWS || startCol + cols > MAX_COLS) {
+      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Spill)], changedCellIndices);
+    }
+    if (this.isPivotOutputBlocked(pivot, startRow, startCol, rows, cols)) {
+      return this.writePivotOutput(
+        pivot,
+        1,
+        1,
+        [errorValue(ErrorCode.Blocked)],
+        changedCellIndices,
+      );
+    }
+    return undefined;
   }
 
   private writePivotOutput(

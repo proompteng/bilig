@@ -76,6 +76,16 @@ function isRuntimeFormulaWithRanges(value: unknown): value is RuntimeFormulaWith
   );
 }
 
+function seedPivotSource(engine: SpreadsheetEngine): void {
+  engine.createSheet("Data");
+  engine.createSheet("Pivot");
+  engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B3" }, [
+    ["Region", "Sales"],
+    ["East", 10],
+    ["West", 7],
+  ]);
+}
+
 describe("SpreadsheetEngine", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -1621,6 +1631,45 @@ describe("SpreadsheetEngine", () => {
     expect(restored.exportSnapshot()).toEqual(snapshot);
   });
 
+  it("treats no-op structural, metadata, freeze, and filter updates as stable public operations", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+    engine.updateRowMetadata("Sheet1", 1, 1, 25, false);
+    engine.updateColumnMetadata("Sheet1", 0, 1, 90, true);
+    engine.setFreezePane("Sheet1", 1, 2);
+    const range = { sheetName: "Sheet1", startAddress: "A1", endAddress: "B5" } as const;
+    engine.setFilter("Sheet1", range);
+
+    const before = engine.exportSnapshot();
+
+    engine.insertRows("Sheet1", 0, 0);
+    engine.deleteRows("Sheet1", 0, 0);
+    engine.moveRows("Sheet1", 1, 0, 2);
+    engine.moveRows("Sheet1", 1, 1, 1);
+    engine.insertColumns("Sheet1", 0, 0);
+    engine.deleteColumns("Sheet1", 0, 0);
+    engine.moveColumns("Sheet1", 0, 0, 1);
+    engine.moveColumns("Sheet1", 0, 1, 0);
+    engine.updateRowMetadata("Sheet1", 1, 1, 25, false);
+    engine.updateColumnMetadata("Sheet1", 0, 1, 90, true);
+    engine.updateRowMetadata("Sheet1", 5, 1, null, null);
+    engine.updateColumnMetadata("Sheet1", 5, 1, null, null);
+    engine.setFreezePane("Sheet1", 1, 2);
+    engine.setFilter("Sheet1", range);
+
+    expect(engine.exportSnapshot()).toEqual(before);
+    expect(engine.clearFreezePane("Sheet1")).toBe(true);
+    expect(engine.clearFreezePane("Sheet1")).toBe(false);
+    expect(engine.clearFilter("Sheet1", range)).toBe(true);
+    expect(engine.clearFilter("Sheet1", range)).toBe(false);
+    expect(engine.getFreezePane("Sheet1")).toBeUndefined();
+    expect(engine.getFilters("Sheet1")).toEqual([]);
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 20 });
+  });
+
   it("tracks structural row identities and rewrites formulas for row inserts and moves", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -1646,6 +1695,91 @@ describe("SpreadsheetEngine", () => {
       { id: "row-1", index: 0, size: 30, hidden: false },
       { id: "row-2", index: 2 },
     ]);
+  });
+
+  it("rewrites metadata-backed ranges, names, freeze panes, and pivot sources across structural row edits", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Pivot");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B4" }, [
+      ["Region", "Sales"],
+      ["East", 10],
+      ["West", 7],
+      ["East", 5],
+    ]);
+    engine.setDefinedName("SalesRange", "=Data!A1:B4");
+    engine.setFreezePane("Data", 1, 0);
+    engine.setFilter("Data", { sheetName: "Data", startAddress: "A1", endAddress: "B4" });
+    engine.setSort("Data", { sheetName: "Data", startAddress: "A1", endAddress: "B4" }, [
+      { keyAddress: "B1", direction: "asc" },
+    ]);
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Data",
+      startAddress: "A1",
+      endAddress: "B4",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setPivotTable("Pivot", "B2", {
+      name: "SalesPivot",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B4" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+
+    engine.insertRows("Data", 0, 1);
+
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: "=Data!A2:B5",
+    });
+    expect(engine.getFreezePane("Data")).toEqual({ sheetName: "Data", rows: 2, cols: 0 });
+    expect(engine.getFilters("Data")).toEqual([
+      { sheetName: "Data", range: { sheetName: "Data", startAddress: "A2", endAddress: "B5" } },
+    ]);
+    expect(engine.getSorts("Data")).toEqual([
+      {
+        sheetName: "Data",
+        range: { sheetName: "Data", startAddress: "A2", endAddress: "B5" },
+        keys: [{ keyAddress: "B2", direction: "asc" }],
+      },
+    ]);
+    expect(engine.getTables()).toEqual([
+      {
+        name: "Sales",
+        sheetName: "Data",
+        startAddress: "A2",
+        endAddress: "B5",
+        columnNames: ["Region", "Sales"],
+        headerRow: true,
+        totalsRow: false,
+      },
+    ]);
+    expect(engine.getPivotTables()).toEqual([
+      {
+        name: "SalesPivot",
+        sheetName: "Pivot",
+        address: "B2",
+        source: { sheetName: "Data", startAddress: "A2", endAddress: "B5" },
+        groupBy: ["Region"],
+        values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+        rows: 3,
+        cols: 2,
+      },
+    ]);
+
+    engine.deleteRows("Data", 0, 5);
+
+    expect(engine.getDefinedName("SalesRange")).toEqual({ name: "SalesRange", value: "=#REF!" });
+    expect(engine.getFreezePane("Data")).toBeUndefined();
+    expect(engine.getFilters("Data")).toEqual([]);
+    expect(engine.getSorts("Data")).toEqual([]);
+    expect(engine.getTables()).toEqual([]);
+    expect(engine.getPivotTables()).toEqual([]);
+    expect(engine.getCellValue("Pivot", "B2")).toEqual({ tag: ValueTag.Empty });
   });
 
   it("rewrites formulas for structural column inserts and roundtrips calc settings metadata", async () => {
@@ -1990,6 +2124,220 @@ describe("SpreadsheetEngine", () => {
       value: "West",
     });
     expect(engine.getCellValue("Pivot", "B3")).toEqual({ tag: ValueTag.Number, value: 5 });
+  });
+
+  it("blocks overlapping pivot outputs and deletes pivots when users overwrite pivot cells", async () => {
+    const blockedByValue = new SpreadsheetEngine({ workbookName: "pivot-blocked-value" });
+    await blockedByValue.ready();
+    seedPivotSource(blockedByValue);
+    blockedByValue.setCellValue("Pivot", "C3", 99);
+    blockedByValue.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    expect(blockedByValue.getCellValue("Pivot", "B2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(blockedByValue.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Number, value: 99 });
+
+    const blockedByFormula = new SpreadsheetEngine({ workbookName: "pivot-blocked-formula" });
+    await blockedByFormula.ready();
+    seedPivotSource(blockedByFormula);
+    blockedByFormula.setCellFormula("Pivot", "C3", "1+1");
+    blockedByFormula.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    expect(blockedByFormula.getCellValue("Pivot", "B2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(blockedByFormula.getCellValue("Pivot", "C3")).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+
+    const blockedBySpillChild = new SpreadsheetEngine({ workbookName: "pivot-blocked-spill" });
+    await blockedBySpillChild.ready();
+    seedPivotSource(blockedBySpillChild);
+    blockedBySpillChild.setCellFormula("Pivot", "C2", "SEQUENCE(2,1,1,1)");
+    blockedBySpillChild.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    expect(blockedBySpillChild.getCellValue("Pivot", "B2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(blockedBySpillChild.getCellValue("Pivot", "C3")).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+
+    const blockedByPivotOwner = new SpreadsheetEngine({ workbookName: "pivot-blocked-pivot" });
+    await blockedByPivotOwner.ready();
+    seedPivotSource(blockedByPivotOwner);
+    blockedByPivotOwner.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    blockedByPivotOwner.setPivotTable("Pivot", "A1", {
+      name: "Overlap",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    expect(blockedByPivotOwner.getCellValue("Pivot", "A1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(blockedByPivotOwner.getCellValue("Pivot", "B3")).toMatchObject({
+      tag: ValueTag.String,
+      value: "East",
+    });
+
+    const overwrittenPivot = new SpreadsheetEngine({ workbookName: "pivot-overwrite" });
+    await overwrittenPivot.ready();
+    seedPivotSource(overwrittenPivot);
+    overwrittenPivot.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    expect(overwrittenPivot.getPivotTables()).toHaveLength(1);
+
+    overwrittenPivot.setCellValue("Pivot", "B3", "manual");
+
+    expect(overwrittenPivot.getPivotTables()).toEqual([]);
+    expect(overwrittenPivot.getCellValue("Pivot", "B2")).toEqual({ tag: ValueTag.Empty });
+    expect(overwrittenPivot.getCellValue("Pivot", "B3")).toMatchObject({
+      tag: ValueTag.String,
+      value: "manual",
+    });
+    expect(overwrittenPivot.getCellValue("Pivot", "C3")).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("explains missing cells and undoes table spill and pivot metadata changes", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Pivot");
+
+    expect(engine.explainCell("Data", "Z99")).toEqual({
+      sheetName: "Data",
+      address: "Z99",
+      value: { tag: ValueTag.Empty },
+      flags: 0,
+      version: 0,
+      inCycle: false,
+      directPrecedents: [],
+      directDependents: [],
+    });
+
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B3" }, [
+      ["Region", "Sales"],
+      ["East", 10],
+      ["West", 5],
+    ]);
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Data",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setSpillRange("Pivot", "E1", 2, 2);
+    engine.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Data",
+      startAddress: "A1",
+      endAddress: "B3",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: true,
+    });
+    engine.setSpillRange("Pivot", "E1", 3, 1);
+    engine.setPivotTable("Pivot", "B2", {
+      name: "SalesByRegion",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B3" },
+      groupBy: ["Region"],
+      values: [
+        { sourceColumn: "Sales", summarizeBy: "sum" },
+        { sourceColumn: "Sales", summarizeBy: "count", outputLabel: "Rows" },
+      ],
+    });
+
+    expect(engine.getTable("Sales")).toMatchObject({ totalsRow: true });
+    expect(engine.getSpillRanges()).toContainEqual({
+      sheetName: "Pivot",
+      address: "E1",
+      rows: 3,
+      cols: 1,
+    });
+    expect(engine.getPivotTable("Pivot", "B2")).toMatchObject({
+      values: [
+        { sourceColumn: "Sales", summarizeBy: "sum" },
+        { sourceColumn: "Sales", summarizeBy: "count", outputLabel: "Rows" },
+      ],
+    });
+
+    expect(engine.deleteTable("Sales")).toBe(true);
+    expect(engine.deleteSpillRange("Pivot", "E1")).toBe(true);
+    expect(engine.deletePivotTable("Pivot", "B2")).toBe(true);
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getPivotTable("Pivot", "B2")).toMatchObject({
+      values: [
+        { sourceColumn: "Sales", summarizeBy: "sum" },
+        { sourceColumn: "Sales", summarizeBy: "count", outputLabel: "Rows" },
+      ],
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getSpillRanges()).toContainEqual({
+      sheetName: "Pivot",
+      address: "E1",
+      rows: 3,
+      cols: 1,
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getTable("Sales")).toMatchObject({ totalsRow: true });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getPivotTable("Pivot", "B2")).toMatchObject({
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getSpillRanges()).toContainEqual({
+      sheetName: "Pivot",
+      address: "E1",
+      rows: 2,
+      cols: 2,
+    });
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.getTable("Sales")).toMatchObject({ totalsRow: false });
   });
 
   it("exports sparse high-row cells without truncating the sheet", async () => {

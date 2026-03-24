@@ -72,4 +72,31 @@ describe("CycleDetector", () => {
     expect(result.cycleGroups[1]).toBe(0);
     expect(result.cycleGroups[2]).toBe(0);
   });
+
+  it("grows internal buffers for high cell indexes and ignores non-formula dependencies", () => {
+    const graph = new Map<number, number[]>([
+      [130, [200, 131]],
+      [131, [132]],
+      [132, [131]],
+    ]);
+
+    const detector = new CycleDetector();
+    const result = detector.detect(
+      [130, 131, 132],
+      256,
+      (cellIndex, fn) => {
+        const dependencies = graph.get(cellIndex) ?? [];
+        for (let index = 0; index < dependencies.length; index += 1) {
+          fn(dependencies[index]);
+        }
+      },
+      (cellIndex) => cellIndex === 130 || cellIndex === 131 || cellIndex === 132,
+    );
+
+    expect(result.cycleMemberCount).toBe(2);
+    expect(Array.from(result.cycleMembers.slice(0, result.cycleMemberCount))).toEqual([132, 131]);
+    expect(result.cycleGroups[130]).toBe(-1);
+    expect(result.cycleGroups[131]).toBe(0);
+    expect(result.cycleGroups[132]).toBe(0);
+  });
 });

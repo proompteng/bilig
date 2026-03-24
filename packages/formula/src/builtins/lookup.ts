@@ -1425,12 +1425,12 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       if (sortIndex > array.rows) {
         return errorValue(ErrorCode.Value);
       }
-      const colIndex = sortIndex - 1;
-      const rowOrder = Array.from({ length: array.rows }, (_, row) => row);
-      rowOrder.sort((left, right) => {
+      const rowIndex = sortIndex - 1;
+      const colOrder = Array.from({ length: array.cols }, (_, col) => col);
+      colOrder.sort((left, right) => {
         const cmp = compareScalars(
-          getRangeValue(array, left, colIndex),
-          getRangeValue(array, right, colIndex),
+          getRangeValue(array, rowIndex, left),
+          getRangeValue(array, rowIndex, right),
         );
         if (cmp === undefined) {
           sortError = errorValue(ErrorCode.Value);
@@ -1442,8 +1442,10 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
         return sortError;
       }
       const values: CellValue[] = [];
-      for (const row of rowOrder) {
-        values.push(...pickRangeRow(array, row));
+      for (let row = 0; row < array.rows; row += 1) {
+        for (const col of colOrder) {
+          values.push(getRangeValue(array, row, col));
+        }
       }
       return arrayResult(values, array.rows, array.cols);
     }
@@ -1451,8 +1453,8 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       return errorValue(ErrorCode.Value);
     }
     const columnIndex = sortIndex - 1;
-    const colOrder = Array.from({ length: array.cols }, (_, col) => col);
-    colOrder.sort((left, right) => {
+    const rowOrder = Array.from({ length: array.rows }, (_, row) => row);
+    rowOrder.sort((left, right) => {
       const cmp = compareScalars(
         getRangeValue(array, left, columnIndex),
         getRangeValue(array, right, columnIndex),
@@ -1467,10 +1469,8 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       return sortError;
     }
     const values: CellValue[] = [];
-    for (let row = 0; row < array.rows; row += 1) {
-      for (const col of colOrder) {
-        values.push(getRangeValue(array, row, col));
-      }
+    for (const row of rowOrder) {
+      values.push(...pickRangeRow(array, row));
     }
     return arrayResult(values, array.rows, array.cols);
   },

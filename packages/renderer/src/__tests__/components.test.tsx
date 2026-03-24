@@ -56,4 +56,28 @@ describe("renderer components", () => {
       format: "currency-usd",
     });
   });
+
+  it("preserves non-element children when assigning stable keys", () => {
+    const workbookElement = Workbook({
+      name: "book",
+      children: ["plain child", <Sheet name="Sheet1" key="ignored" />],
+    });
+    expect(isPropsWithChildren(workbookElement.props)).toBe(true);
+    if (!isPropsWithChildren(workbookElement.props)) {
+      throw new Error("Workbook props should include children");
+    }
+    const workbookChildren = React.Children.toArray(workbookElement.props.children);
+    expect(workbookChildren[0]).toBe("plain child");
+
+    const sheetElement = Sheet({
+      name: "Sheet1",
+      children: ["note", <Cell addr="A1" value={1} key="ignored-a1" />],
+    });
+    expect(isPropsWithChildren(sheetElement.props)).toBe(true);
+    if (!isPropsWithChildren(sheetElement.props)) {
+      throw new Error("Sheet props should include children");
+    }
+    const sheetChildren = React.Children.toArray(sheetElement.props.children);
+    expect(sheetChildren[0]).toBe("note");
+  });
 });

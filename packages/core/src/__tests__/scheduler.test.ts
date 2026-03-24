@@ -60,4 +60,37 @@ describe("RecalcScheduler", () => {
     expect(second.orderedFormulaCount).toBe(0);
     expect(second.orderedFormulaCellIndices).toBe(first.orderedFormulaCellIndices);
   });
+
+  it("grows queue, range, and rank buffers while deduping repeated roots and ranges", () => {
+    const store = new CellStore();
+    for (let index = 0; index < 140; index += 1) {
+      store.allocate(1, 0, index);
+    }
+    store.topoRanks[10] = 0;
+    store.topoRanks[131] = 3;
+    store.topoRanks[130] = 130;
+
+    const rangeEntity = makeRangeEntity(90);
+    const graph = new Map<number, Uint32Array>([
+      [makeCellEntity(0), Uint32Array.from([rangeEntity, rangeEntity, makeCellEntity(10)])],
+      [rangeEntity, Uint32Array.from([makeCellEntity(131), makeCellEntity(130)])],
+    ]);
+
+    const scheduler = new RecalcScheduler();
+    const result = scheduler.collectDirty(
+      [0, 0],
+      {
+        getDependents: (entityId) => graph.get(entityId) ?? new Uint32Array(),
+      },
+      store,
+      (cellIndex) => cellIndex === 10 || cellIndex === 130 || cellIndex === 131,
+      128,
+    );
+
+    expect(result.orderedFormulaCount).toBe(3);
+    expect(
+      Array.from(result.orderedFormulaCellIndices.subarray(0, result.orderedFormulaCount)),
+    ).toEqual([10, 131, 130]);
+    expect(result.rangeNodeVisits).toBe(1);
+  });
 });

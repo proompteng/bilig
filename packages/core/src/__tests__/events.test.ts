@@ -20,6 +20,54 @@ function batchEvent(changedCellIndices: Uint32Array = new Uint32Array()): Engine
 }
 
 describe("EngineEventBus", () => {
+  it("tracks listener presence, handles skipped address resolution, and grows watcher ids", () => {
+    const events = new EngineEventBus();
+    const general = vi.fn();
+    const indexed = vi.fn();
+    const addressed = vi.fn();
+
+    expect(events.hasListeners()).toBe(false);
+    expect(events.hasCellListeners()).toBe(false);
+    expect(events.hasAddressListeners()).toBe(false);
+
+    const unsubscribeGeneral = events.subscribe(general);
+    const unsubscribeIndex = events.subscribeCellIndex(2, indexed);
+    const unsubscribeAddress = events.subscribeCellAddress("Sheet1!A1", addressed);
+
+    expect(events.hasListeners()).toBe(true);
+    expect(events.hasCellListeners()).toBe(true);
+    expect(events.hasAddressListeners()).toBe(true);
+
+    events.emit(batchEvent(), new Uint32Array());
+    expect(general).toHaveBeenCalledTimes(1);
+    expect(indexed).not.toHaveBeenCalled();
+    expect(addressed).not.toHaveBeenCalled();
+
+    events.emit(batchEvent(new Uint32Array([2, 3])), new Uint32Array([2, 3]), (cellIndex) =>
+      cellIndex === 2 ? "" : "!deleted",
+    );
+    expect(indexed).toHaveBeenCalledTimes(1);
+    expect(addressed).not.toHaveBeenCalled();
+
+    unsubscribeIndex();
+    unsubscribeAddress();
+    unsubscribeGeneral();
+
+    expect(events.hasListeners()).toBe(false);
+    expect(events.hasCellListeners()).toBe(false);
+    expect(events.hasAddressListeners()).toBe(false);
+
+    const growing = new EngineEventBus();
+    const listeners = Array.from({ length: 80 }, () => vi.fn());
+    listeners.forEach((listener, index) => {
+      growing.subscribeCellIndex(index, listener);
+    });
+    growing.emitAllWatched(batchEvent());
+    listeners.forEach((listener) => {
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("deduplicates repeated listener registrations across changed indices and addresses", () => {
     const events = new EngineEventBus();
     const listener = vi.fn();

@@ -221,4 +221,139 @@ describe("workbook host config", () => {
       "Unknown workbook host type",
     );
   });
+
+  it("guards descriptor parenting, container attachment, and prop updates", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "host-config-guards" });
+    await engine.ready();
+    const container = createContainer(engine);
+
+    const workbook = workbookHostConfig.createInstance(
+      "Workbook",
+      { name: "Book" } satisfies WorkbookProps,
+      container,
+    );
+    const sheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet1" } satisfies SheetProps,
+      container,
+    );
+    const cell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "A1", value: 1 } satisfies CellProps,
+      container,
+    );
+    const anotherCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "B1", value: 2 } satisfies CellProps,
+      container,
+    );
+
+    workbookHostConfig.appendInitialChild(workbook, sheet);
+    workbookHostConfig.appendInitialChild(sheet, cell);
+
+    expect(() => workbookHostConfig.appendInitialChild(workbook, anotherCell)).toThrow(
+      "Cannot append Cell to Workbook.",
+    );
+    expect(() =>
+      workbookHostConfig.appendInitialChild(
+        sheet,
+        workbookHostConfig.createInstance(
+          "Workbook",
+          { name: "Nested" } satisfies WorkbookProps,
+          container,
+        ),
+      ),
+    ).toThrow("Cannot append Workbook to Sheet.");
+
+    workbookHostConfig.appendInitialChild(cell, anotherCell);
+    expect(anotherCell.parent).toBe(workbook);
+
+    const floatingSheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet2" } satisfies SheetProps,
+      container,
+    );
+    const floatingCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "C1", value: 3 } satisfies CellProps,
+      container,
+    );
+    workbookHostConfig.insertBefore(workbook, floatingSheet, floatingCell);
+    expect(expectWorkbookDescriptor(workbook).children.at(-1)).toBe(floatingSheet);
+    workbookHostConfig.insertBefore(sheet, floatingCell, workbook);
+    expect(sheet.children.at(-1)).toBe(floatingCell);
+
+    workbookHostConfig.removeChild(workbook, floatingCell);
+    expect(expectWorkbookDescriptor(workbook).children.includes(floatingCell)).toBe(false);
+    workbookHostConfig.removeChild(sheet, floatingSheet);
+    expect(sheet.children.includes(floatingSheet)).toBe(false);
+
+    const orphanContainer = {
+      kind: "Workbook",
+      props: { name: "Orphan" },
+      children: [],
+      parent: null,
+      container: null,
+    };
+    expect(() =>
+      workbookHostConfig.appendChild(
+        orphanContainer,
+        workbookHostConfig.createInstance("Sheet", { name: "X" }, container),
+      ),
+    ).toThrow("Descriptor is not attached to a workbook container.");
+
+    expect(() => workbookHostConfig.appendChildToContainer(container, sheet)).toThrow(
+      "Only workbook descriptors can be attached to the root container.",
+    );
+    expect(() => workbookHostConfig.insertInContainerBefore(container, sheet)).toThrow(
+      "Only workbook descriptors can be attached to the root container.",
+    );
+    expect(() => workbookHostConfig.removeChildFromContainer(container, sheet)).toThrow(
+      "Only workbook descriptors can be removed from the root container.",
+    );
+
+    workbookHostConfig.prepareForCommit(container);
+    workbookHostConfig.insertInContainerBefore(container, expectWorkbookDescriptor(workbook));
+    workbookHostConfig.resetAfterCommit(container);
+    expect(container.root).toBe(workbook);
+
+    expect(() =>
+      workbookHostConfig.commitUpdate(
+        workbook,
+        "Workbook",
+        { addr: "A1", value: 1 } satisfies CellProps,
+        workbook.props,
+      ),
+    ).toThrow("Workbook updates require workbook props.");
+    expect(() =>
+      workbookHostConfig.commitUpdate(
+        sheet,
+        "Sheet",
+        { addr: "A1", value: 1 } satisfies CellProps,
+        sheet.props,
+      ),
+    ).toThrow("Sheet updates require sheet props.");
+    expect(() =>
+      workbookHostConfig.commitUpdate(
+        cell,
+        "Cell",
+        { name: "Bad" } satisfies SheetProps,
+        cell.props,
+      ),
+    ).toThrow("Cell updates require cell props.");
+
+    const detachedCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "Z1", value: 9 } satisfies CellProps,
+      container,
+    );
+    workbookHostConfig.commitUpdate(detachedCell, "Cell", detachedCell.props, {
+      addr: "Z2",
+      value: 10,
+    } satisfies CellProps);
+    expect(container.pendingOps).toEqual([]);
+
+    workbookHostConfig.clearContainer(container);
+    expect(container.root).toBeNull();
+  });
 });

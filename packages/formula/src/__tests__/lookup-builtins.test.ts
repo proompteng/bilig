@@ -400,7 +400,7 @@ describe("lookup builtins", () => {
       kind: "array",
       rows: 2,
       cols: 2,
-      values: [num(1), num(3), num(4), num(2)],
+      values: [num(2), num(4), num(3), num(1)],
     });
 
     expect(
@@ -741,6 +741,54 @@ describe("lookup builtins", () => {
     expect(UNIQUE(cellRange([num(1), num(2)], 2, 1), text("bad"))).toEqual(err(ErrorCode.Value));
   });
 
+  it("covers FILTER horizontal validation and UNIQUE argument validation branches", () => {
+    const FILTER = getLookupBuiltin("FILTER")!;
+    const UNIQUE = getLookupBuiltin("UNIQUE")!;
+
+    expect(
+      FILTER(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([err(ErrorCode.Ref), bool(true)], 1, 2),
+      ),
+    ).toEqual(err(ErrorCode.Ref));
+    expect(
+      FILTER(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([text("bad"), bool(true)], 1, 2),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      FILTER(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([bool(false), bool(false)], 1, 2),
+        cellRange([num(0)], 1, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(UNIQUE(err(ErrorCode.Name))).toEqual(err(ErrorCode.Value));
+    expect(UNIQUE(cellRange([num(1), num(2)], 2, 1), cellRange([bool(true)], 1, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(UNIQUE(cellRange([num(1), num(2)], 2, 1), err(ErrorCode.Ref))).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(UNIQUE(cellRange([num(1), num(2)], 2, 1), bool(false), err(ErrorCode.NA))).toEqual(
+      err(ErrorCode.NA),
+    );
+    expect(
+      UNIQUE(
+        cellRange([text("A"), num(1), text("A"), num(1), text("B"), num(2)], 3, 2),
+        bool(false),
+        bool(true),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [text("B"), num(2)],
+    });
+  });
+
   it("supports matrix and extended numeric lookup builtins", () => {
     const SUMX2MY2 = getLookupBuiltin("SUMX2MY2")!;
     const SUMX2PY2 = getLookupBuiltin("SUMX2PY2")!;
@@ -811,6 +859,36 @@ describe("lookup builtins", () => {
     expect(SUMXMY2(err(ErrorCode.Ref), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
   });
 
+  it("covers matrix helper validation and percent-of error branches", () => {
+    const SUMX2PY2 = getLookupBuiltin("SUMX2PY2")!;
+    const MDETERM = getLookupBuiltin("MDETERM")!;
+    const MINVERSE = getLookupBuiltin("MINVERSE")!;
+    const MMULT = getLookupBuiltin("MMULT")!;
+    const PERCENTOF = getLookupBuiltin("PERCENTOF")!;
+
+    expect(MINVERSE(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Value));
+    expect(MINVERSE(cellRange([num(1), num(2), num(3), num(4), num(5), num(6)], 2, 3))).toEqual(
+      err(ErrorCode.Value),
+    );
+
+    expect(MMULT(err(ErrorCode.Name), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(MMULT(cellRange([num(1)], 1, 1), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Value));
+    expect(MMULT(cellRange([num(1), num(2)], 1, 2), cellRange([num(1), num(2)], 1, 2))).toEqual(
+      err(ErrorCode.Value),
+    );
+
+    expect(PERCENTOF(err(ErrorCode.Name), cellRange([num(10)], 1, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(PERCENTOF(cellRange([num(1)], 1, 1), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Value));
+    expect(SUMX2PY2(err(ErrorCode.Ref), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(SUMX2PY2(cellRange([num(1)], 1, 1), err(ErrorCode.Name))).toEqual(err(ErrorCode.Value));
+    expect(SUMX2PY2(cellRange([num(1)], 1, 1), cellRange([num(1), num(2)], 2, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(MDETERM(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Value));
+  });
+
   it("covers conditional criteria parsing variants", () => {
     const COUNTIF = getLookupBuiltin("COUNTIF")!;
     const SUMIF = getLookupBuiltin("SUMIF")!;
@@ -830,5 +908,196 @@ describe("lookup builtins", () => {
         cellRange([num(1), num(2), num(3)], 3, 1),
       ),
     ).toEqual(num(4));
+  });
+
+  it("covers FILTER column selection and UNIQUE row and column de-duplication branches", () => {
+    const FILTER = getLookupBuiltin("FILTER")!;
+    const UNIQUE = getLookupBuiltin("UNIQUE")!;
+
+    expect(
+      FILTER(
+        cellRange([text("A"), text("B"), text("C"), text("D")], 2, 2),
+        cellRange([bool(true), bool(false)], 1, 2),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [text("A"), text("C")],
+    });
+    expect(
+      FILTER(
+        cellRange([text("A"), text("B"), text("C"), text("D")], 2, 2),
+        cellRange([text("bad"), bool(true)], 1, 2),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      FILTER(
+        cellRange([text("A"), text("B"), text("C"), text("D")], 2, 2),
+        cellRange([bool(false), bool(false)], 1, 2),
+        text("empty"),
+      ),
+    ).toEqual(text("empty"));
+    expect(
+      FILTER(
+        cellRange([text("A"), text("B"), text("C"), text("D")], 2, 2),
+        cellRange([bool(false), bool(false)], 1, 2),
+        cellRange([text("x")], 1, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(FILTER(err(ErrorCode.Ref), cellRange([bool(true)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(FILTER(cellRange([text("A")], 1, 1), err(ErrorCode.Name))).toEqual(err(ErrorCode.Value));
+
+    expect(
+      UNIQUE(
+        cellRange(
+          [text("A"), text("A"), text("B"), text("C"), num(1), num(1), num(2), num(3)],
+          2,
+          4,
+        ),
+        bool(true),
+        bool(true),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [text("B"), text("C"), num(2), num(3)],
+    });
+    expect(
+      UNIQUE(
+        cellRange([text("A"), num(1), text("A"), num(1), text("B"), num(2)], 3, 2),
+        bool(false),
+        bool(false),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [text("A"), num(1), text("B"), num(2)],
+    });
+  });
+
+  it("covers SUMPRODUCT and the remaining matrix helper validation paths", () => {
+    const SUMPRODUCT = getLookupBuiltin("SUMPRODUCT")!;
+    const SUMX2MY2 = getLookupBuiltin("SUMX2MY2")!;
+    const SUMXMY2 = getLookupBuiltin("SUMXMY2")!;
+    const MDETERM = getLookupBuiltin("MDETERM")!;
+
+    expect(SUMPRODUCT()).toEqual(err(ErrorCode.Value));
+    expect(SUMPRODUCT(err(ErrorCode.Ref), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(
+      SUMPRODUCT(cellRange([num(2), num(3)], 2, 1), cellRange([num(4), num(5)], 2, 1)),
+    ).toEqual(num(23));
+    expect(
+      SUMPRODUCT(cellRange([num(2), num(3)], 2, 1), cellRange([num(4), num(5), num(6)], 3, 1)),
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(SUMX2MY2(err(ErrorCode.Ref), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(SUMX2MY2(cellRange([num(1)], 1, 1), err(ErrorCode.Name))).toEqual(err(ErrorCode.Value));
+    expect(SUMX2MY2(cellRange([num(1)], 1, 1), cellRange([num(1), num(2)], 2, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(SUMXMY2(cellRange([num(1)], 1, 1), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Value));
+    expect(SUMXMY2(cellRange([num(1)], 1, 1), cellRange([num(1), num(2)], 2, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+
+    expect(MDETERM(cellRange([], 0, 0))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("covers AVERAGEIFS, MINIFS, and MAXIFS validation and zero-match branches", () => {
+    const AVERAGEIFS = getLookupBuiltin("AVERAGEIFS")!;
+    const MINIFS = getLookupBuiltin("MINIFS")!;
+    const MAXIFS = getLookupBuiltin("MAXIFS")!;
+
+    expect(AVERAGEIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text(">0"))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(
+      AVERAGEIFS(cellRange([text("skip")], 1, 1), cellRange([num(1)], 1, 1), text(">0")),
+    ).toEqual(err(ErrorCode.Div0));
+    expect(MINIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text(">0"))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(MINIFS(cellRange([num(1)], 1, 1), err(ErrorCode.Name), text(">0"))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(MAXIFS(err(ErrorCode.Ref), cellRange([num(1)], 1, 1), text(">0"))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(MAXIFS(cellRange([num(1)], 1, 1), err(ErrorCode.Name), text(">0"))).toEqual(
+      err(ErrorCode.Value),
+    );
+  });
+
+  it("covers remaining matrix, sort, and criteria edge cases", () => {
+    const MINVERSE = getLookupBuiltin("MINVERSE")!;
+    const SORT = getLookupBuiltin("SORT")!;
+    const UNIQUE = getLookupBuiltin("UNIQUE")!;
+    const HSTACK = getLookupBuiltin("HSTACK")!;
+    const VSTACK = getLookupBuiltin("VSTACK")!;
+    const COUNTIF = getLookupBuiltin("COUNTIF")!;
+    const TOCOL = getLookupBuiltin("TOCOL")!;
+    const TOROW = getLookupBuiltin("TOROW")!;
+
+    // Singular matrix for MINVERSE
+    expect(MINVERSE(cellRange([num(1), num(2), num(2), num(4)], 2, 2))).toEqual(
+      err(ErrorCode.Value),
+    );
+
+    // SORT by column
+    const matrix = cellRange([num(3), num(1), num(4), num(2)], 2, 2);
+    expect(SORT(matrix, num(1), num(1), bool(true))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(3), num(2), num(4)],
+    });
+
+    // UNIQUE exactlyOnce on 2D
+    const matrix2 = cellRange([num(1), num(2), num(1), num(2), num(3), num(4)], 3, 2);
+    expect(UNIQUE(matrix2, bool(false), bool(true))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [num(3), num(4)],
+    });
+
+    // HSTACK/VSTACK single row/col expansion
+    expect(HSTACK(cellRange([num(1)], 1, 1), cellRange([num(2), num(3)], 2, 1))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(2), num(1), num(3)],
+    });
+    expect(VSTACK(cellRange([num(1)], 1, 1), cellRange([num(2), num(3)], 1, 2))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(1), num(2), num(3)],
+    });
+
+    // matchesCriteria operators
+    const range = cellRange([num(1), num(2), num(3), num(4)], 4, 1);
+    expect(COUNTIF(range, text("<>2"))).toEqual(num(3));
+    expect(COUNTIF(range, text("<=2"))).toEqual(num(2));
+    expect(COUNTIF(range, text(">=3"))).toEqual(num(2));
+    expect(COUNTIF(range, text("<3"))).toEqual(num(2));
+
+    // TOCOL/TOROW ignoreEmpty
+    const sparse = cellRange([num(1), { tag: ValueTag.Empty }, num(2)], 3, 1);
+    expect(TOCOL(sparse, num(1))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(1), num(2)],
+    });
+    expect(TOROW(sparse, num(1))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [num(1), num(2)],
+    });
   });
 });

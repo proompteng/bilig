@@ -134,13 +134,22 @@ describe("logical/info builtins", () => {
 
     expect(XOR(bool(true), bool(false), num(1))).toEqual(bool(false));
     expect(XOR()).toEqual(err(ErrorCode.Value));
+    expect(XOR(err(ErrorCode.Ref), bool(true))).toEqual(err(ErrorCode.Ref));
 
     expect(IFS(bool(false), text("no"), num(1), text("yes"))).toEqual(text("yes"));
     expect(IFS(bool(false), text("no"))).toEqual(err(ErrorCode.NA));
     expect(IFS(bool(true))).toEqual(err(ErrorCode.Value));
+    expect(IFS(err(ErrorCode.Name), text("no"), bool(true), text("yes"))).toEqual(
+      err(ErrorCode.Name),
+    );
 
     expect(SWITCH(text("b"), text("a"), num(1), text("B"), num(2), num(9))).toEqual(num(2));
     expect(SWITCH(text("z"), text("a"), num(1), text("b"), num(2))).toEqual(err(ErrorCode.NA));
     expect(SWITCH(err(ErrorCode.Ref), text("a"), num(1))).toEqual(err(ErrorCode.Ref));
+    expect(SWITCH(text("b"), err(ErrorCode.Name), num(1), text("b"), num(2))).toEqual(
+      err(ErrorCode.Name),
+    );
+    expect(getLogicalBuiltin("ISFORMULA")?.()).toEqual(bool(false));
+    expect(getLogicalBuiltin("ISREF")?.()).toEqual(bool(false));
   });
 });

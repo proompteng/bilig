@@ -166,6 +166,37 @@ describe("formula", () => {
     expect(compileFormula("WRAPCOLS(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
   });
 
+  it("routes accelerated array-shape and conditional aggregate builtins by public compile contract", () => {
+    expect(compileFormula("TRANSPOSE(A1:B4)").mode).toBe(1);
+    expect(compileFormula("HSTACK(A1:B2,C1:D2)").mode).toBe(1);
+    expect(compileFormula("VSTACK(A1:B2,C1:D2)").mode).toBe(1);
+    expect(compileFormula("AREAS(A1:B4)").mode).toBe(1);
+    expect(compileFormula("ROWS(A1:B4)").mode).toBe(1);
+    expect(compileFormula("COLUMNS(A1:B4)").mode).toBe(1);
+    expect(compileFormula("ARRAYTOTEXT(A1:B4)").mode).toBe(1);
+    expect(compileFormula("ARRAYTOTEXT(A1:B4,1)").mode).toBe(1);
+    expect(compileFormula('MINIFS(A1:A4,B1:B4,">0")').mode).toBe(1);
+    expect(compileFormula('MAXIFS(A1:A4,B1:B4,">0")').mode).toBe(1);
+
+    expect(compileFormula("TAKE(A1,1)").mode).toBe(0);
+    expect(compileFormula("DROP(A1,1)").mode).toBe(0);
+    expect(compileFormula("CHOOSECOLS(A1,1)").mode).toBe(0);
+    expect(compileFormula("CHOOSEROWS(A1,1)").mode).toBe(0);
+    expect(compileFormula("SORT(A1)").mode).toBe(0);
+    expect(compileFormula("TOCOL(A1)").mode).toBe(0);
+    expect(compileFormula("TOROW(A1)").mode).toBe(0);
+    expect(compileFormula("WRAPROWS(A1,2)").mode).toBe(0);
+    expect(compileFormula("WRAPCOLS(A1,2)").mode).toBe(0);
+    expect(compileFormula("LOOKUP(A1)").mode).toBe(0);
+    expect(compileFormula("AREAS(A1)").mode).toBe(0);
+    expect(compileFormula("ROWS(A1)").mode).toBe(0);
+    expect(compileFormula("COLUMNS(A1)").mode).toBe(0);
+    expect(compileFormula("ARRAYTOTEXT(A1:B4,1,2)").mode).toBe(0);
+    expect(compileFormula("MINIFS(A1:A4,B1:B4)").mode).toBe(0);
+    expect(compileFormula('MAXIFS(A1,B1:B4,">0")').mode).toBe(0);
+    expect(compileFormula("SORTBY(A1:A4)").mode).toBe(0);
+  });
+
   it("keeps row and column aggregate formulas on the JS path", () => {
     expect(compileFormula("SUM(A:A)").mode).toBe(1);
     expect(compileFormula("SUM(1:10)").mode).toBe(1);
