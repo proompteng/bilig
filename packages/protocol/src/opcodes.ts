@@ -141,5 +141,10 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Areas, name: "AREAS", supportsWasm: true },
   { id: BuiltinId.Arraytotext, name: "ARRAYTOTEXT", supportsWasm: true },
   { id: BuiltinId.Columns, name: "COLUMNS", supportsWasm: true },
-  { id: BuiltinId.Rows, name: "ROWS", supportsWasm: true }
+  { id: BuiltinId.Rows, name: "ROWS", supportsWasm: true },
+  { id: BuiltinId.Transpose, name: "TRANSPOSE", supportsWasm: true },
+  { id: BuiltinId.Hstack, name: "HSTACK", supportsWasm: true },
+  { id: BuiltinId.Vstack, name: "VSTACK", supportsWasm: true },
+  { id: BuiltinId.Minifs, name: "MINIFS", supportsWasm: true },
+  { id: BuiltinId.Maxifs, name: "MAXIFS", supportsWasm: true }
 ];

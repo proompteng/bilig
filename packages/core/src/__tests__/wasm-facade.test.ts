@@ -98,7 +98,7 @@ describe("WasmKernelFacade", () => {
     });
   });
 
-  it("exposes numeric spill results for native SEQUENCE evaluation", async () => {
+  it("exposes typed spill results for native SEQUENCE evaluation", async () => {
     const facade = new WasmKernelFacade();
     await facade.init();
 
@@ -120,19 +120,80 @@ describe("WasmKernelFacade", () => {
     });
 
     const store = new CellStore();
+    const strings = new StringPool();
     const targetIndex = store.allocate(0, 0, 0);
     facade.syncFromStore(store, Uint32Array.from([targetIndex]));
     facade.evalBatch(new Uint32Array([targetIndex]));
-    facade.syncToStore(store, new Uint32Array([targetIndex]), new StringPool());
+    facade.syncToStore(store, new Uint32Array([targetIndex]), strings);
 
     expect(store.getValue(targetIndex, () => undefined)).toEqual({
       tag: ValueTag.Number,
       value: 1,
     });
-    expect(facade.readNumericSpill(targetIndex)).toEqual({
+    expect(facade.readSpill(targetIndex, strings)).toEqual({
       rows: 3,
       cols: 1,
-      values: new Float64Array([1, 2, 3]),
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+      ],
+    });
+  });
+
+  it("decodes mixed-type transpose spills through the facade", async () => {
+    const facade = new WasmKernelFacade();
+    await facade.init();
+
+    facade.uploadFormulas({
+      targets: new Uint32Array([4]),
+      programs: new Uint32Array([
+        (Opcode.PushRange << 24) | 0,
+        (Opcode.CallBuiltin << 24) | ((BuiltinId.Transpose << 8) | 1),
+        Opcode.Ret << 24,
+      ]),
+      programOffsets: new Uint32Array([0]),
+      programLengths: new Uint32Array([3]),
+      constants: new Float64Array(),
+      constantOffsets: new Uint32Array([0]),
+      constantLengths: new Uint32Array([0]),
+    });
+
+    facade.uploadRanges({
+      members: new Uint32Array([0, 1, 2, 3]),
+      offsets: new Uint32Array([0]),
+      lengths: new Uint32Array([4]),
+      rowCounts: new Uint32Array([2]),
+      colCounts: new Uint32Array([2]),
+    });
+
+    const store = new CellStore();
+    const a1 = store.allocate(0, 0, 0);
+    const b1 = store.allocate(0, 0, 1);
+    const a2 = store.allocate(0, 1, 0);
+    const b2 = store.allocate(0, 1, 1);
+    const targetIndex = store.allocate(0, 0, 3);
+    const strings = new StringPool();
+    const xId = strings.intern("x");
+    store.setValue(a1, { tag: ValueTag.Number, value: 1 });
+    store.setValue(b1, { tag: ValueTag.String, value: "x", stringId: xId }, xId);
+    store.setValue(a2, { tag: ValueTag.Boolean, value: true });
+    store.setValue(b2, { tag: ValueTag.Number, value: 4 });
+
+    facade.syncStringPool(strings.exportLayout());
+    facade.syncFromStore(store, Uint32Array.from([a1, b1, a2, b2, targetIndex]));
+    facade.evalBatch(new Uint32Array([targetIndex]));
+    facade.syncToStore(store, new Uint32Array([targetIndex]), strings);
+
+    expect(facade.readSpill(targetIndex, strings)).toEqual({
+      rows: 2,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "x", stringId: 0 },
+        { tag: ValueTag.Number, value: 4 },
+      ],
     });
   });
 });

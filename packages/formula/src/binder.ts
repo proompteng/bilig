@@ -120,6 +120,11 @@ const WASM_SAFE_BUILTINS = new Set([
   "ARRAYTOTEXT",
   "COLUMNS",
   "ROWS",
+  "TRANSPOSE",
+  "HSTACK",
+  "VSTACK",
+  "MINIFS",
+  "MAXIFS",
 ]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
@@ -274,9 +279,16 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "AREAS":
     case "COLUMNS":
     case "ROWS":
+    case "TRANSPOSE":
       return argc === 1;
+    case "HSTACK":
+    case "VSTACK":
+      return argc >= 1;
     case "ARRAYTOTEXT":
       return argc === 1 || argc === 2;
+    case "MINIFS":
+    case "MAXIFS":
+      return argc >= 3 && argc % 2 === 1;
     default:
       return true;
   }
@@ -584,6 +596,11 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           isCellOrScalarArg(args[1]!) &&
           (argc === 2 || isCellVectorArg(args[2]!) || isScalarArg(args[2]!))
         );
+      case "TRANSPOSE":
+        return args.length === 1 && isWasmSafe(args[0]!, true);
+      case "HSTACK":
+      case "VSTACK":
+        return args.length >= 1 && args.every((arg) => isWasmSafe(arg, true));
       case "AREAS":
       case "COLUMNS":
       case "ROWS":
@@ -594,6 +611,14 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           (isCellRangeArg(args[0]!) || isScalarArg(args[0]!)) &&
           (argc === 1 || isScalarArg(args[1]!))
         );
+      case "MINIFS":
+      case "MAXIFS":
+        if (args.length < 3 || args.length % 2 === 0 || !isCellRangeArg(args[0]!)) {
+          return false;
+        }
+        return args
+          .slice(1)
+          .every((arg, index) => (index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg)));
       case "SORTBY":
         if (args.length < 2) {
           return false;
@@ -754,6 +779,11 @@ export function encodeBuiltin(name: string): BuiltinId {
     ARRAYTOTEXT: BuiltinId.Arraytotext,
     COLUMNS: BuiltinId.Columns,
     ROWS: BuiltinId.Rows,
+    TRANSPOSE: BuiltinId.Transpose,
+    HSTACK: BuiltinId.Hstack,
+    VSTACK: BuiltinId.Vstack,
+    MINIFS: BuiltinId.Minifs,
+    MAXIFS: BuiltinId.Maxifs,
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

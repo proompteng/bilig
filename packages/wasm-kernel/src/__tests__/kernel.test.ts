@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BuiltinId, ErrorCode, Opcode, ValueTag } from "@bilig/protocol";
+import { BuiltinId, ErrorCode, Opcode, ValueTag, type CellValue } from "@bilig/protocol";
 import { createKernel } from "../index.js";
 
 const BUILTIN = {
@@ -58,6 +58,11 @@ const BUILTIN = {
   ARRAYTOTEXT: BuiltinId.Arraytotext,
   COLUMNS: BuiltinId.Columns,
   ROWS: BuiltinId.Rows,
+  TRANSPOSE: BuiltinId.Transpose,
+  HSTACK: BuiltinId.Hstack,
+  VSTACK: BuiltinId.Vstack,
+  MINIFS: BuiltinId.Minifs,
+  MAXIFS: BuiltinId.Maxifs,
   INDEX: BuiltinId.Index,
   VLOOKUP: BuiltinId.Vlookup,
   HLOOKUP: BuiltinId.Hlookup,
@@ -75,6 +80,8 @@ const BUILTIN = {
   WRAPROWS: BuiltinId.Wraprows,
   WRAPCOLS: BuiltinId.Wrapcols,
 } as const;
+
+const OUTPUT_STRING_BASE = 2147483648;
 
 function asciiCodes(text: string): Uint16Array {
   return Uint16Array.from(Array.from(text, (char) => char.charCodeAt(0)));
@@ -134,6 +141,43 @@ function packPrograms(programs: number[][]): {
 
 function cellIndex(row: number, col: number, width: number): number {
   return row * width + col;
+}
+
+type KernelInstance = Awaited<ReturnType<typeof createKernel>>;
+
+function readSpillValues(
+  kernel: KernelInstance,
+  ownerCellIndex: number,
+  pooledStrings: readonly string[],
+): CellValue[] {
+  const offset = kernel.readSpillOffsets()[ownerCellIndex] ?? 0;
+  const length = kernel.readSpillLengths()[ownerCellIndex] ?? 0;
+  const tags = kernel.readSpillTags();
+  const values = kernel.readSpillNumbers();
+  const outputStrings = kernel.readOutputStrings();
+  return Array.from({ length }, (_, index) => {
+    const tag = tags[offset + index] as ValueTag;
+    const rawValue = values[offset + index] ?? 0;
+    switch (tag) {
+      case ValueTag.Number:
+        return { tag, value: rawValue };
+      case ValueTag.Boolean:
+        return { tag, value: rawValue !== 0 };
+      case ValueTag.Empty:
+        return { tag };
+      case ValueTag.Error:
+        return { tag, code: rawValue as ErrorCode };
+      case ValueTag.String: {
+        const outputIndex = rawValue >= OUTPUT_STRING_BASE ? rawValue - OUTPUT_STRING_BASE : -1;
+        return {
+          tag,
+          value:
+            outputIndex >= 0 ? (outputStrings[outputIndex] ?? "") : (pooledStrings[rawValue] ?? ""),
+          stringId: 0,
+        };
+      }
+    }
+  });
 }
 
 describe("wasm kernel", () => {
@@ -1484,6 +1528,214 @@ describe("wasm kernel", () => {
     expect(kernel.readOutputStrings()).toEqual(["10\t20", "{10, 20}"]);
   });
 
+  it("evaluates TRANSPOSE, HSTACK, VSTACK, MINIFS, and MAXIFS on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 8;
+    const pooledStrings = ["", "x", "a", "b", "c", ">0"];
+    kernel.init(40, 8, 1, 8, 24);
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.Boolean,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.Boolean,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ...Array.from({ length: 16 }, () => ValueTag.Empty),
+      ]),
+      new Float64Array([
+        1,
+        0,
+        1,
+        4,
+        10,
+        20,
+        0,
+        0,
+        30,
+        0,
+        40,
+        50,
+        10,
+        0,
+        30,
+        5,
+        2,
+        4,
+        -1,
+        6,
+        0,
+        0,
+        0,
+        0,
+        ...Array.from({ length: 16 }, () => 0),
+      ]),
+      new Uint32Array([
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        2,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        3,
+        2,
+        ...Array.from({ length: 16 }, () => 0),
+      ]),
+      new Uint16Array(40),
+    );
+    kernel.uploadStringLengths(Uint32Array.from(pooledStrings.map((value) => value.length)));
+    kernel.uploadStrings(
+      Uint32Array.from([0, 0, 1, 2, 3, 4]),
+      Uint32Array.from(pooledStrings.map((value) => value.length)),
+      asciiCodes(pooledStrings.join("")),
+    );
+    kernel.uploadRangeMembers(
+      Uint32Array.from([
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+      ]),
+      Uint32Array.from([0, 4, 6, 8, 12, 16, 20]),
+      Uint32Array.from([4, 2, 2, 4, 4, 4, 4]),
+    );
+    kernel.uploadRangeShapes(
+      Uint32Array.from([2, 2, 1, 2, 4, 4, 4]),
+      Uint32Array.from([2, 1, 2, 2, 1, 1, 1]),
+    );
+
+    const packed = packPrograms([
+      [encodePushRange(0), encodeCall(BUILTIN.TRANSPOSE, 1), encodeRet()],
+      [
+        encodePushRange(1),
+        encodePushRange(2),
+        encodePushString(4),
+        encodeCall(BUILTIN.HSTACK, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(2),
+        encodePushRange(3),
+        encodePushString(4),
+        encodeCall(BUILTIN.VSTACK, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(4),
+        encodePushRange(5),
+        encodePushString(5),
+        encodePushRange(6),
+        encodePushString(2),
+        encodeCall(BUILTIN.MINIFS, 5),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(4),
+        encodePushRange(5),
+        encodePushString(5),
+        encodePushRange(6),
+        encodePushString(2),
+        encodeCall(BUILTIN.MAXIFS, 5),
+        encodeRet(),
+      ],
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+      ]),
+    );
+    kernel.uploadConstants(
+      new Float64Array(),
+      new Uint32Array([0, 0, 0, 0, 0]),
+      new Uint32Array([0, 0, 0, 0, 0]),
+    );
+
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+      ]),
+    );
+
+    expect(kernel.readTags()[cellIndex(3, 0, width)]).toBe(ValueTag.Number);
+    expect(readSpillValues(kernel, cellIndex(3, 0, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.String, value: "x", stringId: 0 },
+      { tag: ValueTag.Number, value: 4 },
+    ]);
+
+    expect(kernel.readTags()[cellIndex(3, 1, width)]).toBe(ValueTag.Number);
+    expect(readSpillValues(kernel, cellIndex(3, 1, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 10 },
+      { tag: ValueTag.String, value: "a", stringId: 0 },
+      { tag: ValueTag.String, value: "b", stringId: 0 },
+      { tag: ValueTag.String, value: "c", stringId: 0 },
+      { tag: ValueTag.Number, value: 20 },
+      { tag: ValueTag.String, value: "a", stringId: 0 },
+      { tag: ValueTag.String, value: "b", stringId: 0 },
+      { tag: ValueTag.String, value: "c", stringId: 0 },
+    ]);
+
+    expect(kernel.readTags()[cellIndex(3, 2, width)]).toBe(ValueTag.String);
+    expect(readSpillValues(kernel, cellIndex(3, 2, width), pooledStrings)).toEqual([
+      { tag: ValueTag.String, value: "a", stringId: 0 },
+      { tag: ValueTag.String, value: "b", stringId: 0 },
+      { tag: ValueTag.Number, value: 30 },
+      { tag: ValueTag.Boolean, value: false },
+      { tag: ValueTag.Number, value: 40 },
+      { tag: ValueTag.Number, value: 50 },
+      { tag: ValueTag.String, value: "c", stringId: 0 },
+      { tag: ValueTag.String, value: "c", stringId: 0 },
+    ]);
+
+    expect(kernel.readTags()[cellIndex(3, 3, width)]).toBe(ValueTag.Number);
+    expect(kernel.readNumbers()[cellIndex(3, 3, width)]).toBe(5);
+    expect(kernel.readTags()[cellIndex(3, 4, width)]).toBe(ValueTag.Number);
+    expect(kernel.readNumbers()[cellIndex(3, 4, width)]).toBe(10);
+  });
+
   it("evaluates exact-safe date builtins with Excel coercion and errors", async () => {
     const kernel = await createKernel();
     const width = 10;
@@ -1846,6 +2098,11 @@ describe("wasm kernel", () => {
     expect(kernel.readSpillCols()[0]).toBe(1);
     expect(kernel.readSpillOffsets()[0]).toBe(0);
     expect(kernel.readSpillLengths()[0]).toBe(3);
+    expect(Array.from(kernel.readSpillTags().slice(0, kernel.getSpillValueCount()))).toEqual([
+      ValueTag.Number,
+      ValueTag.Number,
+      ValueTag.Number,
+    ]);
     expect(Array.from(kernel.readSpillNumbers().slice(0, kernel.getSpillValueCount()))).toEqual([
       1, 2, 3,
     ]);

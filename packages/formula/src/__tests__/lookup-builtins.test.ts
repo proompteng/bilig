@@ -209,6 +209,8 @@ describe("lookup builtins", () => {
     const SUMIFS = getLookupBuiltin("SUMIFS")!;
     const AVERAGEIF = getLookupBuiltin("AVERAGEIF")!;
     const AVERAGEIFS = getLookupBuiltin("AVERAGEIFS")!;
+    const MINIFS = getLookupBuiltin("MINIFS")!;
+    const MAXIFS = getLookupBuiltin("MAXIFS")!;
     const SUMPRODUCT = getLookupBuiltin("SUMPRODUCT")!;
 
     expect(
@@ -264,6 +266,38 @@ describe("lookup builtins", () => {
         text("a"),
       ),
     ).toEqual(num((10 + 20 + 40) / 3));
+
+    expect(
+      MINIFS(
+        cellRange([num(10), { tag: ValueTag.Empty }, num(30), num(5)], 4, 1),
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0"),
+        cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
+        text("a"),
+      ),
+    ).toEqual(num(5));
+
+    expect(
+      MAXIFS(
+        cellRange([num(10), text("skip"), num(30), num(5)], 4, 1),
+        cellRange([num(2), num(4), num(-1), num(6)], 4, 1),
+        text(">0"),
+        cellRange([text("a"), text("a"), text("b"), text("a")], 4, 1),
+        text("a"),
+      ),
+    ).toEqual(num(10));
+
+    expect(
+      MINIFS(
+        cellRange([{ tag: ValueTag.Empty }, text("skip")], 2, 1),
+        cellRange([text("a"), text("a")], 2, 1),
+        text("a"),
+      ),
+    ).toEqual(num(0));
+
+    expect(
+      MAXIFS(cellRange([num(1), num(2)], 2, 1), cellRange([num(1)], 1, 1), text(">0")),
+    ).toEqual(err(ErrorCode.Value));
 
     expect(
       SUMPRODUCT(

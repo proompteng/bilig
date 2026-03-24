@@ -69,6 +69,7 @@ interface RawKernelExports {
   getSpillResultColsPtr(): number;
   getSpillResultOffsetsPtr(): number;
   getSpillResultLengthsPtr(): number;
+  getSpillResultTagsPtr(): number;
   getSpillResultNumbersPtr(): number;
   getSpillResultValueCount(): number;
   getCellCapacity(): number;
@@ -131,6 +132,7 @@ function isRawKernelExports(value: unknown): value is RawKernelExports {
     "getSpillResultColsPtr",
     "getSpillResultOffsetsPtr",
     "getSpillResultLengthsPtr",
+    "getSpillResultTagsPtr",
     "getSpillResultNumbersPtr",
     "getSpillResultValueCount",
     "getCellCapacity",
@@ -214,6 +216,7 @@ export interface SpreadsheetKernel {
   readSpillCols(): Uint32Array;
   readSpillOffsets(): Uint32Array;
   readSpillLengths(): Uint32Array;
+  readSpillTags(): Uint8Array;
   readSpillNumbers(): Float64Array;
   getSpillValueCount(): number;
   getCellCapacity(): number;
@@ -475,6 +478,7 @@ class KernelHandle implements SpreadsheetKernel {
   private spillCols = new Uint32Array();
   private spillOffsets = new Uint32Array();
   private spillLengths = new Uint32Array();
+  private spillTags = new Uint8Array();
   private spillNumbers = new Float64Array();
 
   constructor(private readonly raw: RawKernelExports) {
@@ -707,6 +711,10 @@ class KernelHandle implements SpreadsheetKernel {
     return this.spillLengths;
   }
 
+  readSpillTags(): Uint8Array {
+    return this.spillTags;
+  }
+
   readSpillNumbers(): Float64Array {
     return this.spillNumbers;
   }
@@ -804,6 +812,11 @@ class KernelHandle implements SpreadsheetKernel {
       memory,
       this.raw.getSpillResultLengthsPtr(),
       this.raw.getCellCapacity(),
+    );
+    this.spillTags = new Uint8Array(
+      memory,
+      this.raw.getSpillResultTagsPtr(),
+      this.raw.getSpillResultValueCount(),
     );
     this.spillNumbers = new Float64Array(
       memory,

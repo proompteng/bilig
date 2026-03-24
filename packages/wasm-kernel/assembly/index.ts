@@ -36,6 +36,7 @@ export {
   getSpillResultColsPtr,
   getSpillResultOffsetsPtr,
   getSpillResultLengthsPtr,
+  getSpillResultTagsPtr,
   getSpillResultNumbersPtr,
   getSpillResultValueCount,
   getCellCapacity,

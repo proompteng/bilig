@@ -159,8 +159,59 @@ function getRangeValue(range: RangeBuiltinArgument, row: number, col: number): C
   return range.values[index] ?? { tag: ValueTag.Empty };
 }
 
+function validateCriteriaPairs(
+  criteriaArgs: readonly LookupBuiltinArgument[],
+): { range: RangeBuiltinArgument; criteria: CellValue }[] | CellValue {
+  if (criteriaArgs.length === 0 || criteriaArgs.length % 2 !== 0) {
+    return errorValue(ErrorCode.Value);
+  }
+  const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
+  for (let index = 0; index < criteriaArgs.length; index += 2) {
+    const range = requireCellRange(criteriaArgs[index]!);
+    if (!isRangeArg(range)) {
+      return range;
+    }
+    const criteria = criteriaArgs[index + 1]!;
+    if (isRangeArg(criteria)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(criteria)) {
+      return criteria;
+    }
+    rangeCriteriaPairs.push({ range, criteria });
+  }
+  return rangeCriteriaPairs;
+}
+
+function findMatchingRowIndexes(
+  targetRange: RangeBuiltinArgument,
+  criteriaArgs: readonly LookupBuiltinArgument[],
+): number[] | CellValue {
+  const rangeCriteriaPairs = validateCriteriaPairs(criteriaArgs);
+  if (!Array.isArray(rangeCriteriaPairs)) {
+    return rangeCriteriaPairs;
+  }
+  if (rangeCriteriaPairs.some((pair) => pair.range.values.length !== targetRange.values.length)) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const matchingRows: number[] = [];
+  for (let row = 0; row < targetRange.values.length; row += 1) {
+    if (
+      rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
+    ) {
+      matchingRows.push(row);
+    }
+  }
+  return matchingRows;
+}
+
 function arrayResult(values: CellValue[], rows: number, cols: number): ArrayValue {
   return { kind: "array", values, rows, cols };
+}
+
+function numericAggregateCandidate(value: CellValue): number | undefined {
+  return value.tag === ValueTag.Number ? value.value : undefined;
 }
 
 function toCellRange(arg: LookupBuiltinArgument): RangeBuiltinArgument | CellValue {
@@ -1778,35 +1829,13 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     if (!isRangeArg(sumRange)) {
       return sumRange;
     }
-    if (criteriaArgs.length === 0 || criteriaArgs.length % 2 !== 0) {
-      return errorValue(ErrorCode.Value);
-    }
-    const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
-    for (let index = 0; index < criteriaArgs.length; index += 2) {
-      const range = requireCellRange(criteriaArgs[index]!);
-      if (!isRangeArg(range)) {
-        return range;
-      }
-      const criteria = criteriaArgs[index + 1]!;
-      if (isRangeArg(criteria)) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (isError(criteria)) {
-        return criteria;
-      }
-      rangeCriteriaPairs.push({ range, criteria });
-    }
-    if (rangeCriteriaPairs.some((pair) => pair.range.values.length !== sumRange.values.length)) {
-      return errorValue(ErrorCode.Value);
+    const matchingRows = findMatchingRowIndexes(sumRange, criteriaArgs);
+    if (!Array.isArray(matchingRows)) {
+      return matchingRows;
     }
 
     let sum = 0;
-    for (let row = 0; row < sumRange.values.length; row += 1) {
-      if (
-        !rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
-      ) {
-        continue;
-      }
+    for (const row of matchingRows) {
       sum += toNumber(sumRange.values[row]!) ?? 0;
     }
     return { tag: ValueTag.Number, value: sum };
@@ -1854,38 +1883,14 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     if (!isRangeArg(averageRange)) {
       return averageRange;
     }
-    if (criteriaArgs.length === 0 || criteriaArgs.length % 2 !== 0) {
-      return errorValue(ErrorCode.Value);
-    }
-    const rangeCriteriaPairs: { range: RangeBuiltinArgument; criteria: CellValue }[] = [];
-    for (let index = 0; index < criteriaArgs.length; index += 2) {
-      const range = requireCellRange(criteriaArgs[index]!);
-      if (!isRangeArg(range)) {
-        return range;
-      }
-      const criteria = criteriaArgs[index + 1]!;
-      if (isRangeArg(criteria)) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (isError(criteria)) {
-        return criteria;
-      }
-      rangeCriteriaPairs.push({ range, criteria });
-    }
-    if (
-      rangeCriteriaPairs.some((pair) => pair.range.values.length !== averageRange.values.length)
-    ) {
-      return errorValue(ErrorCode.Value);
+    const matchingRows = findMatchingRowIndexes(averageRange, criteriaArgs);
+    if (!Array.isArray(matchingRows)) {
+      return matchingRows;
     }
 
     let count = 0;
     let sum = 0;
-    for (let row = 0; row < averageRange.values.length; row += 1) {
-      if (
-        !rangeCriteriaPairs.every((pair) => matchesCriteria(pair.range.values[row]!, pair.criteria))
-      ) {
-        continue;
-      }
+    for (const row of matchingRows) {
       const numeric = toNumber(averageRange.values[row]!);
       if (numeric === undefined) {
         continue;
@@ -1897,6 +1902,46 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       return errorValue(ErrorCode.Div0);
     }
     return { tag: ValueTag.Number, value: sum / count };
+  },
+  MINIFS: (minRangeArg, ...criteriaArgs) => {
+    const minRange = requireCellRange(minRangeArg);
+    if (!isRangeArg(minRange)) {
+      return minRange;
+    }
+    const matchingRows = findMatchingRowIndexes(minRange, criteriaArgs);
+    if (!Array.isArray(matchingRows)) {
+      return matchingRows;
+    }
+
+    let minimum = Number.POSITIVE_INFINITY;
+    for (const row of matchingRows) {
+      const numeric = numericAggregateCandidate(minRange.values[row]!);
+      if (numeric === undefined) {
+        continue;
+      }
+      minimum = Math.min(minimum, numeric);
+    }
+    return { tag: ValueTag.Number, value: minimum === Number.POSITIVE_INFINITY ? 0 : minimum };
+  },
+  MAXIFS: (maxRangeArg, ...criteriaArgs) => {
+    const maxRange = requireCellRange(maxRangeArg);
+    if (!isRangeArg(maxRange)) {
+      return maxRange;
+    }
+    const matchingRows = findMatchingRowIndexes(maxRange, criteriaArgs);
+    if (!Array.isArray(matchingRows)) {
+      return matchingRows;
+    }
+
+    let maximum = Number.NEGATIVE_INFINITY;
+    for (const row of matchingRows) {
+      const numeric = numericAggregateCandidate(maxRange.values[row]!);
+      if (numeric === undefined) {
+        continue;
+      }
+      maximum = Math.max(maximum, numeric);
+    }
+    return { tag: ValueTag.Number, value: maximum === Number.NEGATIVE_INFINITY ? 0 : maximum };
   },
   SUMPRODUCT: (...args) => {
     if (args.length === 0) {

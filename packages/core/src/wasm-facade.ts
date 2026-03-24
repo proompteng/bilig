@@ -1,5 +1,7 @@
+import { type CellValue, type ErrorCode, ValueTag } from "@bilig/protocol";
 import { createKernel, type SpreadsheetKernel } from "@bilig/wasm-kernel";
 import type { CellStore } from "./cell-store.js";
+import type { StringPool } from "./string-pool.js";
 
 export interface WasmFormulaUploadLayout {
   targets: Uint32Array;
@@ -19,10 +21,38 @@ export interface WasmRangeUploadLayout {
   colCounts: Uint32Array;
 }
 
-export interface WasmNumericSpillResult {
+export interface WasmSpillResult {
   rows: number;
   cols: number;
-  values: Float64Array;
+  values: CellValue[];
+}
+
+const OUTPUT_STRING_BASE = 2147483648;
+
+function decodeSpillValue(
+  tag: number,
+  rawValue: number,
+  strings: StringPool,
+  outputStrings: readonly string[],
+): CellValue {
+  switch (tag) {
+    case 1:
+      return { tag: ValueTag.Number, value: rawValue };
+    case 2:
+      return { tag: ValueTag.Boolean, value: rawValue !== 0 };
+    case 3: {
+      const outputIndex = rawValue >= OUTPUT_STRING_BASE ? rawValue - OUTPUT_STRING_BASE : -1;
+      return {
+        tag: ValueTag.String,
+        value: outputIndex >= 0 ? (outputStrings[outputIndex] ?? "") : strings.get(rawValue),
+        stringId: 0,
+      };
+    }
+    case 4:
+      return { tag: ValueTag.Error, code: rawValue as ErrorCode };
+    default:
+      return { tag: ValueTag.Empty };
+  }
 }
 
 export class WasmKernelFacade {
@@ -156,7 +186,7 @@ export class WasmKernelFacade {
     this.kernel?.evalBatch(cellIndices);
   }
 
-  readNumericSpill(cellIndex: number): WasmNumericSpillResult | undefined {
+  readSpill(cellIndex: number, strings: StringPool): WasmSpillResult | undefined {
     if (!this.kernel) {
       return undefined;
     }
@@ -167,10 +197,20 @@ export class WasmKernelFacade {
     }
     const offset = this.kernel.readSpillOffsets()[cellIndex] ?? 0;
     const length = this.kernel.readSpillLengths()[cellIndex] ?? 0;
+    const spillTags = this.kernel.readSpillTags();
+    const spillValues = this.kernel.readSpillNumbers();
+    const outputStrings = this.kernel.readOutputStrings();
     return {
       rows,
       cols,
-      values: this.kernel.readSpillNumbers().subarray(offset, offset + length),
+      values: Array.from({ length }, (_, index) =>
+        decodeSpillValue(
+          spillTags[offset + index] ?? ValueTag.Empty,
+          spillValues[offset + index] ?? 0,
+          strings,
+          outputStrings,
+        ),
+      ),
     };
   }
 
@@ -199,11 +239,7 @@ export class WasmKernelFacade {
     );
   }
 
-  syncToStore(
-    store: CellStore,
-    changedCellIndices: Uint32Array,
-    strings: import("./string-pool.js").StringPool,
-  ): void {
+  syncToStore(store: CellStore, changedCellIndices: Uint32Array, strings: StringPool): void {
     if (!this.kernel) return;
 
     // Read and intern new output strings from WASM before updating cells

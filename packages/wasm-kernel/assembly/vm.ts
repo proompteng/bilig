@@ -38,6 +38,7 @@ let spillArrayCols = new Uint32Array(16);
 let spillArrayOffsets = new Uint32Array(16);
 let spillArrayLengths = new Uint32Array(16);
 let spillArrayCount = 0;
+let spillTags = new Uint8Array(64);
 let spillNumbers = new Float64Array(64);
 let spillValueCount = 0;
 const OUTPUT_STRING_BASE: f64 = 2147483648.0;
@@ -73,6 +74,9 @@ export function getSpillResultOffsetsPtr(): usize {
 export function getSpillResultLengthsPtr(): usize {
   return spillLengths.dataStart;
 }
+export function getSpillResultTagsPtr(): usize {
+  return spillTags.dataStart;
+}
 export function getSpillResultNumbersPtr(): usize {
   return spillNumbers.dataStart;
 }
@@ -98,6 +102,7 @@ function ensureSpillArrayCapacity(nextCapacity: i32): void {
 }
 
 function ensureSpillValueCapacity(nextCapacity: i32): void {
+  spillTags = ensureU8(spillTags, nextCapacity);
   spillNumbers = ensureF64(spillNumbers, nextCapacity);
 }
 
@@ -117,11 +122,22 @@ export function allocateSpillArrayResult(rows: i32, cols: i32): u32 {
 
 export function writeSpillArrayNumber(arrayIndex: u32, offset: i32, value: f64): void {
   const baseOffset = spillArrayOffsets[arrayIndex];
+  spillTags[baseOffset + offset] = <u8>ValueTag.Number;
+  spillNumbers[baseOffset + offset] = value;
+}
+
+export function writeSpillArrayValue(arrayIndex: u32, offset: i32, tag: u8, value: f64): void {
+  const baseOffset = spillArrayOffsets[arrayIndex];
+  spillTags[baseOffset + offset] = tag;
   spillNumbers[baseOffset + offset] = value;
 }
 
 export function readSpillArrayLength(arrayIndex: u32): i32 {
   return <i32>spillArrayLengths[arrayIndex];
+}
+
+export function readSpillArrayTag(arrayIndex: u32, offset: i32): u8 {
+  return spillTags[spillArrayOffsets[arrayIndex] + offset];
 }
 
 export function readSpillArrayNumber(arrayIndex: u32, offset: i32): f64 {
@@ -191,6 +207,26 @@ function outputStringIndex(value: f64): i32 {
     return -1;
   }
   return <i32>(value - OUTPUT_STRING_BASE);
+}
+
+function writeCellValue(cellIndex: i32, tag: u8, value: f64): void {
+  tags[cellIndex] = tag;
+  if (tag == ValueTag.String) {
+    stringIds[cellIndex] =
+      value >= OUTPUT_STRING_BASE ? 0x80000000 | <u32>(value - OUTPUT_STRING_BASE) : <u32>value;
+  } else {
+    stringIds[cellIndex] = 0;
+  }
+  if (tag == ValueTag.Error) {
+    errors[cellIndex] = <u16>value;
+    numbers[cellIndex] = 0;
+  } else if (tag == ValueTag.String) {
+    numbers[cellIndex] = 0;
+    errors[cellIndex] = ErrorCode.None;
+  } else {
+    numbers[cellIndex] = value;
+    errors[cellIndex] = ErrorCode.None;
+  }
 }
 
 function isTextLike(tag: u8): bool {
@@ -733,33 +769,15 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         spillCols[cellIndex] = spillArrayCols[arrayIndex];
         spillOffsets[cellIndex] = offset;
         spillLengths[cellIndex] = length;
-        tags[cellIndex] = length > 0 ? <u8>ValueTag.Number : <u8>ValueTag.Empty;
-        numbers[cellIndex] = length > 0 ? spillNumbers[offset] : 0;
-        stringIds[cellIndex] = 0;
-        errors[cellIndex] = ErrorCode.None;
+        writeCellValue(
+          cellIndex,
+          length > 0 ? spillTags[offset] : <u8>ValueTag.Empty,
+          length > 0 ? spillNumbers[offset] : 0,
+        );
         return;
       }
       const resultTag = tagStack[sp - 1];
-      tags[cellIndex] = resultTag;
-      if (resultTag == ValueTag.String) {
-        const stringValue = valueStack[sp - 1];
-        stringIds[cellIndex] =
-          stringValue >= OUTPUT_STRING_BASE
-            ? 0x80000000 | <u32>(stringValue - OUTPUT_STRING_BASE)
-            : <u32>stringValue;
-      } else {
-        stringIds[cellIndex] = 0;
-      }
-      if (resultTag == ValueTag.Error) {
-        errors[cellIndex] = <u16>valueStack[sp - 1];
-        numbers[cellIndex] = 0;
-      } else if (resultTag == ValueTag.String) {
-        numbers[cellIndex] = 0;
-        errors[cellIndex] = ErrorCode.None;
-      } else {
-        numbers[cellIndex] = valueStack[sp - 1];
-        errors[cellIndex] = ErrorCode.None;
-      }
+      writeCellValue(cellIndex, resultTag, valueStack[sp - 1]);
       return;
     }
   }

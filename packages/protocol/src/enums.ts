@@ -158,5 +158,10 @@ export enum BuiltinId {
   Areas = 103,
   Arraytotext = 104,
   Columns = 105,
-  Rows = 106
+  Rows = 106,
+  Transpose = 107,
+  Hstack = 108,
+  Vstack = 109,
+  Minifs = 110,
+  Maxifs = 111
 }

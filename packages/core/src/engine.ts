@@ -3967,15 +3967,12 @@ export class SpreadsheetEngine {
         const batchIndices = Uint32Array.of(cellIndex);
         this.wasm.evalBatch(batchIndices);
         this.wasm.syncToStore(this.workbook.cellStore, batchIndices, this.strings);
-        const spill = this.wasm.readNumericSpill(cellIndex);
+        const spill = this.wasm.readSpill(cellIndex, this.strings);
         const spillMaterialization = spill
           ? this.materializeSpill(cellIndex, {
               rows: spill.rows,
               cols: spill.cols,
-              values: Array.from(
-                spill.values,
-                (value): CellValue => ({ tag: ValueTag.Number, value }),
-              ),
+              values: spill.values,
             })
           : {
               changedCellIndices: this.clearOwnedSpill(cellIndex),

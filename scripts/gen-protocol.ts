@@ -159,6 +159,11 @@ const enumManifest = {
     ["Arraytotext", 104],
     ["Columns", 105],
     ["Rows", 106],
+    ["Transpose", 107],
+    ["Hstack", 108],
+    ["Vstack", 109],
+    ["Minifs", 110],
+    ["Maxifs", 111],
   ],
 };
 
@@ -269,6 +274,11 @@ const builtinManifest = [
   { id: "Arraytotext", name: "ARRAYTOTEXT", supportsWasm: true },
   { id: "Columns", name: "COLUMNS", supportsWasm: true },
   { id: "Rows", name: "ROWS", supportsWasm: true },
+  { id: "Transpose", name: "TRANSPOSE", supportsWasm: true },
+  { id: "Hstack", name: "HSTACK", supportsWasm: true },
+  { id: "Vstack", name: "VSTACK", supportsWasm: true },
+  { id: "Minifs", name: "MINIFS", supportsWasm: true },
+  { id: "Maxifs", name: "MAXIFS", supportsWasm: true },
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.ts\n\n`;
