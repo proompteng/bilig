@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-
-import { fileURLToPath } from "node:url";
-
-const rootDir = fileURLToPath(new URL("../", import.meta.url));
-const textDecoder = new TextDecoder();
+import { runEditBenchmark } from "../packages/benchmarks/src/benchmark-edit.ts";
+import { runLoadBenchmark } from "../packages/benchmarks/src/benchmark-load.ts";
+import { runRangeAggregateBenchmark } from "../packages/benchmarks/src/benchmark-range-heavy.ts";
+import { runTopologyEditBenchmark } from "../packages/benchmarks/src/benchmark-topology-edit.ts";
+import { runRenderCommitBenchmark } from "../packages/benchmarks/src/benchmark-renderer.ts";
 
 const baseBudgets = {
   load100kP95Ms: 1500,
@@ -43,6 +43,7 @@ function summarizeNumbers(values) {
     throw new Error("Cannot summarize empty benchmark samples");
   }
   const samples = [...values].toSorted((left, right) => left - right);
+
   const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
   return {
     samples,
@@ -65,44 +66,39 @@ function quantile(sortedValues, percentile) {
   return sortedValues[Math.max(0, Math.min(sortedValues.length - 1, index))];
 }
 
-function runBenchmarkScript(scriptRelativePath, arg) {
-  const args = Array.isArray(arg) ? arg.map(String) : [String(arg)];
-  const result = Bun.spawnSync([process.execPath, scriptRelativePath, ...args], {
-    cwd: rootDir,
-    env: process.env,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `Benchmark script failed (${scriptRelativePath} ${arg})\nstdout:\n${textDecoder.decode(result.stdout)}\nstderr:\n${textDecoder.decode(result.stderr)}`,
-    );
-  }
-  return JSON.parse(textDecoder.decode(result.stdout).trim());
-}
+async function sampleBenchmark(runner, iterations, { warmupIterations = 0 } = {}) {
+  const run = () => runner();
 
-function sampleBenchmark(scriptRelativePath, arg, iterations) {
+  await Array.from({ length: warmupIterations }).reduce((previous) => {
+    return previous.then(() => run());
+  }, Promise.resolve());
+
   const runs = [];
-  for (let index = 0; index < iterations; index += 1) {
-    runs.push(runBenchmarkScript(scriptRelativePath, arg));
-  }
+  await Array.from({ length: iterations }).reduce((previous) => {
+    return previous.then(() =>
+      run().then((result) => {
+        return runs.push(result);
+      }),
+    );
+  }, Promise.resolve());
   return runs;
 }
 
-const loadRuns = sampleBenchmark("packages/benchmarks/src/benchmark-load.ts", 100_000, 3);
-const editRuns = sampleBenchmark("packages/benchmarks/src/benchmark-edit.ts", 10_000, 5);
-const rangeRuns = sampleBenchmark(
-  "packages/benchmarks/src/benchmark-range-heavy.ts",
-  [1_024, 10_000],
-  3,
-);
-const topologyRuns = sampleBenchmark(
-  "packages/benchmarks/src/benchmark-topology-edit.ts",
-  10_000,
-  3,
-);
-const renderRuns = sampleBenchmark("packages/benchmarks/src/benchmark-renderer.ts", 10_000, 5);
+const loadRuns = await sampleBenchmark(() => runLoadBenchmark(100_000), 5, {
+  warmupIterations: 1,
+});
+const editRuns = await sampleBenchmark(() => runEditBenchmark(10_000), 5, {
+  warmupIterations: 1,
+});
+const rangeRuns = await sampleBenchmark(() => runRangeAggregateBenchmark(1_024, 10_000), 3, {
+  warmupIterations: 1,
+});
+const topologyRuns = await sampleBenchmark(() => runTopologyEditBenchmark(10_000), 3, {
+  warmupIterations: 1,
+});
+const renderRuns = await sampleBenchmark(() => runRenderCommitBenchmark(10_000), 5, {
+  warmupIterations: 1,
+});
 
 const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
 const loadWorkingSetDelta = summarizeNumbers(

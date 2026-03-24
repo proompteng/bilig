@@ -12,6 +12,9 @@ jobs:
     name: strict-verify
     runs-on: bilig-ci
     timeout-minutes: 20
+    env:
+      CI: "true"
+      BILIG_BENCH_TOLERANCE: "1.5"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4

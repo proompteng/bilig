@@ -21,6 +21,7 @@ jobs:
           - node: "24.11.1"
             bench_tolerance: "1.5"
     env:
+      CI: "true"
       BILIG_BENCH_TOLERANCE: ${{ matrix.bench_tolerance }}
     steps:
       - name: Checkout
