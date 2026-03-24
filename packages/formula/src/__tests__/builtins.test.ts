@@ -608,6 +608,219 @@ describe("formula builtins", () => {
     });
   });
 
+  it("covers address, formatting, and mean helper builtins", () => {
+    expect(
+      getBuiltin("MAXA")?.(
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "skip", stringId: 1 },
+        { tag: ValueTag.Empty },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      getBuiltin("MINA")?.(
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.Boolean, value: false },
+        { tag: ValueTag.String, value: "skip", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 0 });
+
+    expect(
+      getBuiltin("ADDRESS")?.(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 28 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "O'Brien", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "'O''Brien'!$AB2", stringId: 0 });
+    expect(
+      getBuiltin("ADDRESS")?.(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 28 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "R2C[28]", stringId: 0 });
+    expect(
+      getBuiltin("ADDRESS")?.(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 28 },
+        { tag: ValueTag.Number, value: 5 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      getBuiltin("ADDRESS")?.(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 28 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Empty },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      getBuiltin("DOLLAR")?.(
+        { tag: ValueTag.Number, value: -1234.567 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "-$1,234.6", stringId: 0 });
+    expect(
+      getBuiltin("DOLLAR")?.(
+        { tag: ValueTag.Number, value: 1234.567 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "$1234.6", stringId: 0 });
+    expect(
+      getBuiltin("FIXED")?.(
+        { tag: ValueTag.Number, value: 1234.567 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "1234.6", stringId: 0 });
+    expect(
+      getBuiltin("FIXED")?.(
+        { tag: ValueTag.Number, value: 1234.567 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      getBuiltin("DOLLARDE")?.(
+        { tag: ValueTag.Number, value: 1.08 },
+        { tag: ValueTag.Number, value: 16 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1.5 });
+    expect(
+      getBuiltin("DOLLARFR")?.(
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 16 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1.08 });
+    expect(
+      getBuiltin("DOLLARFR")?.(
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      getBuiltin("GEOMEAN")?.(
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(
+      getBuiltin("GEOMEAN")?.(
+        { tag: ValueTag.Number, value: -1 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      getBuiltin("HARMEAN")?.(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 3 / 1.75 });
+    expect(
+      getBuiltin("HARMEAN")?.(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("covers extended trigonometric and precise rounding builtins", () => {
+    expect(getBuiltin("SINH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(getBuiltin("COSH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(getBuiltin("TANH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(getBuiltin("ASINH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(getBuiltin("ACOSH")?.({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(getBuiltin("ATANH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(getBuiltin("ACOT")?.({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: Math.PI / 4,
+    });
+    expect(getBuiltin("ACOT")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: Math.PI / 2,
+    });
+    expect(getBuiltin("ACOTH")?.({ tag: ValueTag.Number, value: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0.5 * Math.log(3),
+    });
+    expect(getBuiltin("COTH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(getBuiltin("CSCH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(getBuiltin("SEC")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(getBuiltin("SECH")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(getBuiltin("SIGN")?.({ tag: ValueTag.String, value: "bad", stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      getBuiltin("FLOOR.MATH")?.(
+        { tag: ValueTag.Number, value: -5.5 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: -6 });
+    expect(
+      getBuiltin("FLOOR.MATH")?.(
+        { tag: ValueTag.Number, value: -5.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: -4 });
+    expect(
+      getBuiltin("CEILING.MATH")?.(
+        { tag: ValueTag.Number, value: -5.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: -6 });
+    expect(
+      getBuiltin("CEILING.PRECISE")?.(
+        { tag: ValueTag.Number, value: 5.1 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(
+      getBuiltin("ISO.CEILING")?.(
+        { tag: ValueTag.Number, value: 5.1 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 6 });
+  });
+
   it("supports ACCRINT, ACCRINTM, AMORDEGRC, and AMORLINC", () => {
     const issue = getBuiltin("DATE")?.(
       { tag: ValueTag.Number, value: 2020 },

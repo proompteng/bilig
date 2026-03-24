@@ -267,6 +267,83 @@ describe("datetime builtins", () => {
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
+  it("supports DAYS360 and YEARFRAC across basis modes", () => {
+    const jan1 = excelDatePartsToSerial(2024, 1, 1)!;
+    const jul1 = excelDatePartsToSerial(2024, 7, 1)!;
+    const feb28 = excelDatePartsToSerial(2023, 2, 28)!;
+    const mar31 = excelDatePartsToSerial(2023, 3, 31)!;
+
+    expect(
+      datetimeBuiltins.DAYS360(
+        { tag: ValueTag.Number, value: feb28 },
+        { tag: ValueTag.Number, value: mar31 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 33 });
+    expect(
+      datetimeBuiltins.DAYS360(
+        { tag: ValueTag.Number, value: feb28 },
+        { tag: ValueTag.Number, value: mar31 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 32 });
+    expect(
+      datetimeBuiltins.DAYS360(
+        { tag: ValueTag.Number, value: feb28 },
+        { tag: ValueTag.Number, value: mar31 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: jul1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 0.5 });
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: jul1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 182 / 366 });
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: jul1 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 182 / 360 });
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: jul1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 182 / 365 });
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: jul1 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 0.5 });
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jul1 },
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 182 / 366 });
+    expect(
+      datetimeBuiltins.YEARFRAC(
+        { tag: ValueTag.Number, value: jan1 },
+        { tag: ValueTag.Number, value: jul1 },
+        { tag: ValueTag.Number, value: 9 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("supports EOMONTH end-of-month lookups", () => {
     expect(endOfMonthExcelDate(45337, 0)).toBe(45351);
     expect(endOfMonthExcelDate(45337, 1)).toBe(45382);
@@ -284,6 +361,102 @@ describe("datetime builtins", () => {
         { tag: ValueTag.Error, code: ErrorCode.Ref },
       ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
+  });
+
+  it("supports TIMEVALUE parsing and extended week-number variants", () => {
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "12:30 PM", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: 0.5208333333333334 });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "12:00 AM", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "1:02:03 pm", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: (13 * 3600 + 2 * 60 + 3) / 86_400 });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "24:00", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "13:00 PM", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.TIMEVALUE({ tag: ValueTag.String, value: "12:60", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(datetimeBuiltins.TIMEVALUE()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(datetimeBuiltins.TIMEVALUE({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+
+    expect(
+      datetimeBuiltins.ISOWEEKNUM({
+        tag: ValueTag.Number,
+        value: excelDatePartsToSerial(2026, 1, 1)!,
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 15)! },
+        { tag: ValueTag.Number, value: 12 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 11 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 15)! },
+        { tag: ValueTag.Number, value: 16 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 12 });
+    expect(
+      datetimeBuiltins.WEEKNUM(
+        { tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 15)! },
+        { tag: ValueTag.Number, value: 21 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("handles reverse ranges, weekend starts, and invalid helper inputs", () => {
+    const fridaySerial = excelDatePartsToSerial(2026, 3, 13)!;
+    const saturdaySerial = excelDatePartsToSerial(2026, 3, 14)!;
+    const fridayNextWeek = excelDatePartsToSerial(2026, 3, 20)!;
+
+    expect(
+      datetimeBuiltins.WORKDAY(
+        { tag: ValueTag.Number, value: saturdaySerial },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 16)! });
+    expect(
+      datetimeBuiltins.WORKDAY(
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: -1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: excelDatePartsToSerial(2026, 3, 12)! });
+    expect(
+      datetimeBuiltins.WORKDAY(
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      datetimeBuiltins.NETWORKDAYS(
+        { tag: ValueTag.Number, value: fridayNextWeek },
+        { tag: ValueTag.Number, value: fridaySerial },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: -6 });
+    expect(
+      datetimeBuiltins.NETWORKDAYS(
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: fridayNextWeek },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(excelSerialToDateParts(Number.NaN)).toBeUndefined();
+    expect(excelDatePartsToSerial(10_000, 1, 1)).toBeUndefined();
+    expect(addMonthsToExcelDate(Number.NaN, 1)).toBeUndefined();
+    expect(endOfMonthExcelDate(Number.NaN, 1)).toBeUndefined();
   });
 
   it("ships a focused datetime fixture suite for later aggregation", () => {

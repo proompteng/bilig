@@ -284,12 +284,12 @@ function createIsoWeeknumBuiltin(): Builtin {
 
 function createTimeValueBuiltin(): Builtin {
   return (value) => {
+    if (value === undefined) {
+      return valueError();
+    }
     const error = firstError([value]);
     if (error) {
       return error;
-    }
-    if (value === undefined) {
-      return valueError();
     }
     const text = coerceText(value);
     if (text === undefined) {
