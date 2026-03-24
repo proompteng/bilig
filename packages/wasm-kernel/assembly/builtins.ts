@@ -184,6 +184,39 @@ function scalarText(
   return null;
 }
 
+function arrayToTextCell(
+  tag: u8,
+  value: f64,
+  strict: bool,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
+): string | null {
+  if (tag == ValueTag.Number) {
+    return value == Math.trunc(value) ? (<i64>value).toString() : value.toString();
+  }
+  const text = scalarText(
+    tag,
+    value,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  );
+  if (text == null) {
+    return null;
+  }
+  if (!strict || tag != ValueTag.String) {
+    return text;
+  }
+  return '"' + substituteText(text, '"', '""') + '"';
+}
+
 function truncToInt(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value);
   return isNaN(numeric) ? i32.MIN_VALUE : <i32>numeric;
@@ -1468,6 +1501,29 @@ function writeArrayResult(
   tagStack[base] = ValueTag.Empty;
   kindStack[base] = STACK_KIND_ARRAY;
   return base + 1;
+}
+
+function vectorSlotLength(
+  slot: i32,
+  kindStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+): i32 {
+  if (kindStack[slot] == STACK_KIND_SCALAR) {
+    return 1;
+  }
+  if (kindStack[slot] != STACK_KIND_RANGE) {
+    return i32.MIN_VALUE;
+  }
+  const rangeIndex = rangeIndexStack[slot];
+  const rowCount = <i32>rangeRowCounts[rangeIndex];
+  const colCount = <i32>rangeColCounts[rangeIndex];
+  if (rowCount <= 0 || colCount <= 0 || (rowCount != 1 && colCount != 1)) {
+    return i32.MIN_VALUE;
+  }
+  return <i32>rangeLengths[rangeIndex];
 }
 
 function coercePositiveIntegerArg(tag: u8, value: f64, hasValue: bool, fallback: i32): i32 {
@@ -6300,6 +6356,443 @@ export function applyBuiltin(
       STACK_KIND_SCALAR,
       <u8>ValueTag.Error,
       ErrorCode.NA,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Lookup && (argc == 2 || argc == 3)) {
+    if (kindStack[base] != STACK_KIND_SCALAR) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (
+      (kindStack[base + 1] != STACK_KIND_SCALAR && kindStack[base + 1] != STACK_KIND_RANGE) ||
+      (argc == 3 &&
+        kindStack[base + 2] != STACK_KIND_SCALAR &&
+        kindStack[base + 2] != STACK_KIND_RANGE)
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (tagStack[base] == ValueTag.Error) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        valueStack[base],
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (kindStack[base + 1] == STACK_KIND_SCALAR && tagStack[base + 1] == ValueTag.Error) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        valueStack[base + 1],
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (
+      argc == 3 &&
+      kindStack[base + 2] == STACK_KIND_SCALAR &&
+      tagStack[base + 2] == ValueTag.Error
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        valueStack[base + 2],
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const lookupLength = vectorSlotLength(
+      base + 1,
+      kindStack,
+      rangeIndexStack,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    const resultSlot = argc == 3 ? base + 2 : base + 1;
+    const resultLength = vectorSlotLength(
+      resultSlot,
+      kindStack,
+      rangeIndexStack,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+    );
+    if (
+      lookupLength == i32.MIN_VALUE ||
+      resultLength == i32.MIN_VALUE ||
+      lookupLength != resultLength
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    let position = -1;
+    if (kindStack[base + 1] == STACK_KIND_SCALAR) {
+      const exactComparison = compareScalarValues(
+        tagStack[base + 1],
+        valueStack[base + 1],
+        tagStack[base],
+        valueStack[base],
+        null,
+        stringOffsets,
+        stringLengths,
+        stringData,
+        outputStringOffsets,
+        outputStringLengths,
+        outputStringData,
+      );
+      if (exactComparison == 0) {
+        position = 1;
+      } else if (
+        position < 0 &&
+        tagStack[base] == ValueTag.Number &&
+        exactComparison != i32.MIN_VALUE &&
+        exactComparison <= 0
+      ) {
+        position = 1;
+      }
+    } else {
+      const lookupRangeIndex = rangeIndexStack[base + 1];
+      const lookupStart = rangeOffsets[lookupRangeIndex];
+      for (let index = 0; index < lookupLength; index++) {
+        const memberIndex = rangeMembers[lookupStart + index];
+        const comparison = compareScalarValues(
+          cellTags[memberIndex],
+          memberScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds, cellErrors),
+          tagStack[base],
+          valueStack[base],
+          null,
+          stringOffsets,
+          stringLengths,
+          stringData,
+          outputStringOffsets,
+          outputStringLengths,
+          outputStringData,
+        );
+        if (comparison == 0) {
+          position = index + 1;
+          break;
+        }
+      }
+      if (position < 0 && tagStack[base] == ValueTag.Number) {
+        let best = -1;
+        for (let index = 0; index < lookupLength; index++) {
+          const memberIndex = rangeMembers[lookupStart + index];
+          const comparison = compareScalarValues(
+            cellTags[memberIndex],
+            memberScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds, cellErrors),
+            tagStack[base],
+            valueStack[base],
+            null,
+            stringOffsets,
+            stringLengths,
+            stringData,
+            outputStringOffsets,
+            outputStringLengths,
+            outputStringData,
+          );
+          if (comparison == i32.MIN_VALUE) {
+            best = -1;
+            break;
+          }
+          if (comparison <= 0) {
+            best = index + 1;
+            continue;
+          }
+          break;
+        }
+        position = best;
+      }
+    }
+
+    if (position < 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.NA,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    if (kindStack[resultSlot] == STACK_KIND_SCALAR) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        tagStack[resultSlot],
+        valueStack[resultSlot],
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const resultRangeIndex = rangeIndexStack[resultSlot];
+    const resultMemberIndex = rangeMembers[rangeOffsets[resultRangeIndex] + position - 1];
+    return writeMemberResult(
+      base,
+      resultMemberIndex,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    );
+  }
+
+  if (builtinId == BuiltinId.Areas && argc == 1) {
+    if (kindStack[base] != STACK_KIND_RANGE) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      1,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Arraytotext && (argc == 1 || argc == 2)) {
+    if (kindStack[base] != STACK_KIND_SCALAR && kindStack[base] != STACK_KIND_RANGE) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    let format = 0;
+    if (argc == 2) {
+      if (kindStack[base + 1] != STACK_KIND_SCALAR) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      format = truncToInt(tagStack[base + 1], valueStack[base + 1]);
+      if (!(format == 0 || format == 1)) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+    }
+
+    const strict = format == 1;
+    let text = strict ? "{" : "";
+    if (kindStack[base] == STACK_KIND_SCALAR) {
+      const cellText = arrayToTextCell(
+        tagStack[base],
+        valueStack[base],
+        strict,
+        stringOffsets,
+        stringLengths,
+        stringData,
+        outputStringOffsets,
+        outputStringLengths,
+        outputStringData,
+      );
+      if (cellText == null) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      text += cellText;
+    } else {
+      const rangeIndex = rangeIndexStack[base];
+      const rowCount = <i32>rangeRowCounts[rangeIndex];
+      const colCount = <i32>rangeColCounts[rangeIndex];
+      for (let row = 0; row < rowCount; row++) {
+        if (row > 0) {
+          text += ";";
+        }
+        for (let col = 0; col < colCount; col++) {
+          if (col > 0) {
+            text += strict ? ", " : "\t";
+          }
+          const memberIndex = rangeMemberAt(
+            rangeIndex,
+            row,
+            col,
+            rangeOffsets,
+            rangeLengths,
+            rangeRowCounts,
+            rangeColCounts,
+            rangeMembers,
+          );
+          if (memberIndex == 0xffffffff) {
+            return writeResult(
+              base,
+              STACK_KIND_SCALAR,
+              <u8>ValueTag.Error,
+              ErrorCode.Value,
+              rangeIndexStack,
+              valueStack,
+              tagStack,
+              kindStack,
+            );
+          }
+          const cellText = arrayToTextCell(
+            cellTags[memberIndex],
+            memberScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds, cellErrors),
+            strict,
+            stringOffsets,
+            stringLengths,
+            stringData,
+            outputStringOffsets,
+            outputStringLengths,
+            outputStringData,
+          );
+          if (cellText == null) {
+            return writeResult(
+              base,
+              STACK_KIND_SCALAR,
+              <u8>ValueTag.Error,
+              ErrorCode.Value,
+              rangeIndexStack,
+              valueStack,
+              tagStack,
+              kindStack,
+            );
+          }
+          text += cellText;
+        }
+      }
+    }
+    if (strict) {
+      text += "}";
+    }
+    return writeStringResult(base, text, rangeIndexStack, valueStack, tagStack, kindStack);
+  }
+
+  if (builtinId == BuiltinId.Columns && argc == 1) {
+    if (kindStack[base] != STACK_KIND_RANGE) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      rangeColCounts[rangeIndexStack[base]],
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Rows && argc == 1) {
+    if (kindStack[base] != STACK_KIND_RANGE) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      rangeRowCounts[rangeIndexStack[base]],
       rangeIndexStack,
       valueStack,
       tagStack,

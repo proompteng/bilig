@@ -214,8 +214,9 @@ describe("formula builtins and JS evaluator", () => {
       code: ErrorCode.Blocked,
     });
     expect(evaluateAst(parseFormula('TEXTJOIN(",",TRUE,"a","b")'), context)).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Blocked,
+      tag: ValueTag.String,
+      value: "a,b",
+      stringId: 0,
     });
     expect(evaluateAst(parseFormula("LET(x,2,x+3)"), context)).toEqual({
       tag: ValueTag.Number,

@@ -67,6 +67,83 @@ describe("text builtins", () => {
     expect(getTextBuiltin("VALUE")?.({ tag: ValueTag.Empty })).toEqual(number(0));
   });
 
+  it("supports ENCODEURL for URL-safe formatting", () => {
+    expect(getTextBuiltin("ENCODEURL")?.(text("https://example.com/a b"))).toEqual(
+      text("https://example.com/a%20b"),
+    );
+    expect(getTextBuiltin("ENCODEURL")?.(text("a&b=c?x=y"))).toEqual(text("a&b=c?x=y"));
+    expect(getTextBuiltin("ENCODEURL")?.(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
+  });
+
+  it("supports FINDB, LEFTB, MIDB, and RIGHTB with byte boundaries", () => {
+    expect(getTextBuiltin("FINDB")?.(text("b"), text("abc"))).toEqual(number(2));
+    expect(getTextBuiltin("FINDB")?.(text("d"), text("abcd"), number(3))).toEqual(number(4));
+    expect(getTextBuiltin("LEFTB")?.(text("abcdef"), number(2))).toEqual(text("ab"));
+    expect(getTextBuiltin("MIDB")?.(text("abcdef"), number(3), number(2))).toEqual(text("cd"));
+    expect(getTextBuiltin("RIGHTB")?.(text("abcdef"), number(3))).toEqual(text("def"));
+  });
+
+  it("validates FINDB/LEFTB/MIDB/RIGHTB argument bounds as VALUE errors", () => {
+    expect(getTextBuiltin("FINDB")?.(text("x"), text("abc"), number(0))).toEqual(valueError());
+    expect(getTextBuiltin("FINDB")?.(text("x"), text("abc"), number(5))).toEqual(valueError());
+    expect(getTextBuiltin("LEFTB")?.(text("abc"), number(-1))).toEqual(valueError());
+    expect(getTextBuiltin("MIDB")?.(text("abc"), number(0), number(2))).toEqual(valueError());
+    expect(getTextBuiltin("RIGHTB")?.(text("abc"), number(-1))).toEqual(valueError());
+  });
+
+  it("supports CLEAN, CONCATENATE, and PROPER text cleanup functions", () => {
+    expect(getTextBuiltin("CLEAN")?.(text("a\u0001b\u007fc"))).toEqual(text("abc"));
+    expect(getTextBuiltin("CONCATENATE")?.(text("a"), number(1), text("b"))).toEqual(text("a1b"));
+    expect(getTextBuiltin("PROPER")?.(text("hello world"))).toEqual(text("Hello World"));
+    expect(getTextBuiltin("PROPER")?.(text("hELLO, wORLD"))).toEqual(text("Hello, World"));
+    expect(getTextBuiltin("CONCATENATE")?.()).toEqual(valueError());
+  });
+
+  it("supports TEXTAFTER search modes, negative instances, and fallback values", () => {
+    const TEXTAFTER = getTextBuiltin("TEXTAFTER")!;
+
+    expect(TEXTAFTER(text("alpha-beta-gamma"), text("-"))).toEqual(text("beta-gamma"));
+    expect(TEXTAFTER(text("alpha-beta-gamma"), text("-"), number(2))).toEqual(text("gamma"));
+    expect(TEXTAFTER(text("Alpha-beta"), text("A"), number(1), number(1))).toEqual(
+      text("lpha-beta"),
+    );
+    expect(
+      TEXTAFTER(text("alpha"), text("-"), number(1), number(0), number(0), text("fallback")),
+    ).toEqual(text("fallback"));
+    expect(TEXTAFTER(text("alpha-beta-gamma"), text("-"), number(-1))).toEqual(text("gamma"));
+    expect(TEXTAFTER(err(ErrorCode.Ref), text("-"))).toEqual(err(ErrorCode.Ref));
+  });
+
+  it("supports TEXTJOIN delimiter, ignore_empty behavior, and error propagation", () => {
+    const TEXTJOIN = getTextBuiltin("TEXTJOIN")!;
+
+    expect(
+      TEXTJOIN(text(","), { tag: ValueTag.Boolean, value: false }, text("a"), text("b")),
+    ).toEqual(text("a,b"));
+    expect(
+      TEXTJOIN(
+        text("|"),
+        { tag: ValueTag.Boolean, value: false },
+        text("a"),
+        { tag: ValueTag.Empty },
+        text("b"),
+      ),
+    ).toEqual(text("a||b"));
+    expect(
+      TEXTJOIN(
+        text("|"),
+        { tag: ValueTag.Boolean, value: false },
+        text("a"),
+        err(ErrorCode.Ref),
+        text("b"),
+      ),
+    ).toEqual(err(ErrorCode.Ref));
+    expect(
+      TEXTJOIN(text("-"), { tag: ValueTag.Boolean, value: true }, text("a"), text(""), text("b")),
+    ).toEqual(text("a-b"));
+    expect(TEXTJOIN()).toEqual(valueError());
+  });
+
   it("supports TEXTBEFORE search modes, negative instances, and fallbacks", () => {
     const TEXTBEFORE = getTextBuiltin("TEXTBEFORE")!;
 
@@ -104,6 +181,32 @@ describe("text builtins", () => {
     );
     expect(getTextBuiltin("REPT")?.(text("abc"), number(-1))).toEqual(valueError());
     expect(getTextBuiltin("REPT")?.(err(ErrorCode.Ref), number(2))).toEqual(err(ErrorCode.Ref));
+  });
+
+  it("supports CHAR, CODE, UNICODE, and UNICHAR scalar conversions", () => {
+    expect(getTextBuiltin("CHAR")?.(number(65))).toEqual(text("A"));
+    expect(getTextBuiltin("CHAR")?.(number(10.8))).toEqual(text("\n"));
+    expect(getTextBuiltin("CHAR")?.(number(0))).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(getTextBuiltin("CODE")?.(text("A"))).toEqual(number(65));
+    expect(getTextBuiltin("CODE")?.(text("😀"))).toEqual(number(0x1f600));
+    expect(getTextBuiltin("CODE")?.(text(""))).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(getTextBuiltin("UNICODE")?.(text("A"))).toEqual(number(65));
+    expect(getTextBuiltin("UNICODE")?.(text("😀"))).toEqual(number(0x1f600));
+
+    expect(getTextBuiltin("UNICHAR")?.(number(66))).toEqual(text("B"));
+    expect(getTextBuiltin("UNICHAR")?.(text("66"))).toEqual(text("B"));
+    expect(getTextBuiltin("UNICHAR")?.(number(-1))).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
   });
 
   it("returns TEXTBEFORE validation and lookup errors when arguments are invalid", () => {

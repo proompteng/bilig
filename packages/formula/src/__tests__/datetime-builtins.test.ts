@@ -249,6 +249,24 @@ describe("datetime builtins", () => {
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
   });
 
+  it("supports DATEVALUE for serial numbers and ISO date strings", () => {
+    expect(datetimeBuiltins.DATEVALUE({ tag: ValueTag.Number, value: 1.2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(
+      datetimeBuiltins.DATEVALUE({ tag: ValueTag.String, value: "2024-02-29", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: excelDatePartsToSerial(2024, 2, 29)! });
+    expect(datetimeBuiltins.DATEVALUE()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(datetimeBuiltins.DATEVALUE({ tag: ValueTag.Error, code: ErrorCode.Name })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    });
+    expect(
+      datetimeBuiltins.DATEVALUE({ tag: ValueTag.String, value: "not-a-date", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("supports EOMONTH end-of-month lookups", () => {
     expect(endOfMonthExcelDate(45337, 0)).toBe(45351);
     expect(endOfMonthExcelDate(45337, 1)).toBe(45382);

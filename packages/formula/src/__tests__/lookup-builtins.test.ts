@@ -27,6 +27,159 @@ describe("lookup builtins", () => {
     ).toEqual(err(ErrorCode.NA));
   });
 
+  it("supports AREAS, ARRAYTOTEXT, ROWS, COLUMNS, and CORREL", () => {
+    const AREAS = getLookupBuiltin("AREAS")!;
+    const ARRAYTOTEXT = getLookupBuiltin("ARRAYTOTEXT")!;
+    const ROWS = getLookupBuiltin("ROWS")!;
+    const COLUMNS = getLookupBuiltin("COLUMNS")!;
+    const CORREL = getLookupBuiltin("CORREL")!;
+
+    const matrix = cellRange([num(1), text("x"), num(3), num(4)], 2, 2);
+
+    expect(AREAS(matrix)).toEqual(num(1));
+    expect(ROWS(matrix)).toEqual(num(2));
+    expect(COLUMNS(matrix)).toEqual(num(2));
+    expect(ARRAYTOTEXT(matrix)).toEqual(text("1\tx;3\t4"));
+    expect(ARRAYTOTEXT(matrix, num(1))).toEqual(text('{1, "x";3, 4}'));
+    expect(
+      CORREL(cellRange([num(1), num(2), num(3)], 3, 1), cellRange([num(1), num(2), num(3)], 3, 1)),
+    ).toEqual(num(1));
+    expect(
+      CORREL(cellRange([num(1), num(2), num(3)], 3, 1), cellRange([num(1), num(2)], 2, 1)),
+    ).toEqual(err(ErrorCode.Value));
+  });
+
+  it("supports COVAR, COVARIANCE.P, COVARIANCE.S, AVEDEV, and DEVSQ", () => {
+    const COVAR = getLookupBuiltin("COVAR")!;
+    const COVARP = getLookupBuiltin("COVARIANCE.P")!;
+    const COVARS = getLookupBuiltin("COVARIANCE.S")!;
+    const AVEDEV = getLookupBuiltin("AVEDEV")!;
+    const DEVSQ = getLookupBuiltin("DEVSQ")!;
+
+    const first = cellRange([num(1), num(2), num(3)], 3, 1);
+    const second = cellRange([num(4), num(5), num(6)], 3, 1);
+    expect(COVAR(first, second)).toEqual(num(2 / 3));
+    expect(COVARP(first, second)).toEqual(num(2 / 3));
+    expect(COVARS(first, second)).toEqual(num(1));
+
+    expect(
+      COVAR(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([num(1), num(2), num(3)], 3, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(COVARS(cellRange([num(2)], 1, 1), cellRange([num(4)], 1, 1))).toEqual(
+      err(ErrorCode.Div0),
+    );
+
+    expect(AVEDEV(num(1), num(2), num(3))).toEqual(num(2 / 3));
+    expect(DEVSQ(num(1), num(2), num(3))).toEqual(num(2));
+    expect(AVEDEV(cellRange([text("bad")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(DEVSQ(cellRange([text("bad")], 1, 1))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("supports MEDIAN, SMALL, LARGE, RANK, and RANK.EQ", () => {
+    const MEDIAN = getLookupBuiltin("MEDIAN")!;
+    const SMALL = getLookupBuiltin("SMALL")!;
+    const LARGE = getLookupBuiltin("LARGE")!;
+    const RANK = getLookupBuiltin("RANK")!;
+    const RANKEQ = getLookupBuiltin("RANK.EQ")!;
+
+    const sample = cellRange([num(1), num(4), num(2), num(4), num(3)], 5, 1);
+
+    expect(MEDIAN(sample)).toEqual(num(3));
+    expect(MEDIAN(num(7))).toEqual(num(7));
+    expect(MEDIAN(cellRange([num(1), num(2), num(3), num(4)], 2, 2))).toEqual(num(2.5));
+    expect(MEDIAN(cellRange([text("bad"), num(1)], 1, 2))).toEqual(err(ErrorCode.Value));
+
+    expect(SMALL(sample, num(1))).toEqual(num(1));
+    expect(SMALL(sample, num(4))).toEqual(num(4));
+    expect(LARGE(sample, num(1))).toEqual(num(4));
+    expect(LARGE(sample, num(4))).toEqual(num(2));
+    expect(SMALL(sample, num(0))).toEqual(err(ErrorCode.Value));
+    expect(LARGE(sample, num(6))).toEqual(err(ErrorCode.Value));
+
+    expect(RANK(num(4), sample)).toEqual(num(1));
+    expect(RANK(num(1), sample)).toEqual(num(5));
+    expect(RANK(num(3), sample, num(1))).toEqual(num(3));
+    expect(RANKEQ(num(4), sample)).toEqual(num(1));
+    expect(RANKEQ(num(8), sample)).toEqual(err(ErrorCode.NA));
+  });
+
+  it("supports LOOKUP, TRANSPOSE, HSTACK, VSTACK, and PEARSON", () => {
+    const LOOKUP = getLookupBuiltin("LOOKUP")!;
+    const TRANSPOSE = getLookupBuiltin("TRANSPOSE")!;
+    const HSTACK = getLookupBuiltin("HSTACK")!;
+    const VSTACK = getLookupBuiltin("VSTACK")!;
+    const PEARSON = getLookupBuiltin("PEARSON")!;
+
+    const lookupValues = cellRange([num(1), num(2), num(3)], 3, 1);
+    const resultValues = cellRange([num(10), num(20), num(30)], 3, 1);
+
+    expect(LOOKUP(num(2), lookupValues, resultValues)).toEqual(num(20));
+    expect(LOOKUP(num(4), lookupValues, resultValues)).toEqual(num(30));
+    expect(
+      LOOKUP(
+        text("not-found"),
+        cellRange([text("a"), text("b"), text("c")], 3, 1),
+        cellRange([num(1), num(2), num(3)], 3, 1),
+      ),
+    ).toEqual(err(ErrorCode.NA));
+
+    expect(TRANSPOSE(cellRange([num(1), num(2), num(3), num(4), num(5), num(6)], 2, 3))).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 2,
+      values: [num(1), num(4), num(2), num(5), num(3), num(6)],
+    });
+    expect(TRANSPOSE(num(7))).toEqual(num(7));
+
+    expect(
+      HSTACK(
+        cellRange([num(1), num(2), num(3)], 3, 1),
+        cellRange([text("a"), text("b")], 1, 2),
+        num(99),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 4,
+      values: [
+        num(1),
+        text("a"),
+        text("b"),
+        num(99),
+        num(2),
+        text("a"),
+        text("b"),
+        num(99),
+        num(3),
+        text("a"),
+        text("b"),
+        num(99),
+      ],
+    });
+
+    expect(
+      VSTACK(
+        cellRange([text("x"), text("y")], 1, 2),
+        cellRange([num(3), num(4), num(5), num(6)], 2, 2),
+        num(7),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 2,
+      values: [text("x"), text("y"), num(3), num(4), num(5), num(6), num(7), num(7)],
+    });
+
+    expect(PEARSON(lookupValues, resultValues)).toEqual(num(1));
+    expect(PEARSON(cellRange([num(1)], 1, 1), cellRange([num(2)], 1, 1))).toEqual(
+      err(ErrorCode.Div0),
+    );
+  });
+
   it("supports INDEX over cell ranges", () => {
     const INDEX = getLookupBuiltin("INDEX")!;
     const matrix = cellRange([num(10), num(11), num(20), num(21)], 2, 2);

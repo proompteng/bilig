@@ -115,6 +115,11 @@ const WASM_SAFE_BUILTINS = new Set([
   "TOROW",
   "WRAPROWS",
   "WRAPCOLS",
+  "LOOKUP",
+  "AREAS",
+  "ARRAYTOTEXT",
+  "COLUMNS",
+  "ROWS",
 ]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
@@ -264,6 +269,14 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "WRAPROWS":
     case "WRAPCOLS":
       return argc >= 2 && argc <= 4;
+    case "LOOKUP":
+      return argc === 2 || argc === 3;
+    case "AREAS":
+    case "COLUMNS":
+    case "ROWS":
+      return argc === 1;
+    case "ARRAYTOTEXT":
+      return argc === 1 || argc === 2;
     default:
       return true;
   }
@@ -432,11 +445,14 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
   }
 
   function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode[]): boolean {
+    const argc = args.length;
     const isScalarArg = (arg: FormulaNode): boolean => isWasmSafe(arg);
     const isCellRangeArg = (arg: FormulaNode): boolean =>
       isWasmSafe(arg, true) && isCellRangeNode(arg);
     const isCellVectorArg = (arg: FormulaNode): boolean =>
       isWasmSafe(arg, true) && isCellVectorNode(arg);
+    const isCellOrScalarArg = (arg: FormulaNode): boolean =>
+      isCellVectorArg(arg) || isScalarArg(arg);
     const isNativeSequenceArg = (arg: FormulaNode): boolean =>
       arg.kind === "CallExpr" &&
       arg.callee.toUpperCase() === "SEQUENCE" &&
@@ -559,6 +575,25 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           return false;
         }
         return isCellRangeArg(args[0]!) && args.slice(1).every((arg) => isScalarArg(arg));
+      case "LOOKUP":
+        if (argc < 2 || argc > 3) {
+          return false;
+        }
+        return (
+          isScalarArg(args[0]!) &&
+          isCellOrScalarArg(args[1]!) &&
+          (argc === 2 || isCellVectorArg(args[2]!) || isScalarArg(args[2]!))
+        );
+      case "AREAS":
+      case "COLUMNS":
+      case "ROWS":
+        return args.length === 1 && isCellRangeArg(args[0]!);
+      case "ARRAYTOTEXT":
+        return (
+          (argc === 1 || argc === 2) &&
+          (isCellRangeArg(args[0]!) || isScalarArg(args[0]!)) &&
+          (argc === 1 || isScalarArg(args[1]!))
+        );
       case "SORTBY":
         if (args.length < 2) {
           return false;
@@ -714,6 +749,11 @@ export function encodeBuiltin(name: string): BuiltinId {
     TOROW: BuiltinId.Torow,
     WRAPROWS: BuiltinId.Wraprows,
     WRAPCOLS: BuiltinId.Wrapcols,
+    LOOKUP: BuiltinId.Lookup,
+    AREAS: BuiltinId.Areas,
+    ARRAYTOTEXT: BuiltinId.Arraytotext,
+    COLUMNS: BuiltinId.Columns,
+    ROWS: BuiltinId.Rows,
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

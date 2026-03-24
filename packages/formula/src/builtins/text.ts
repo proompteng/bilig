@@ -34,6 +34,63 @@ function coerceText(value: CellValue): string {
   }
 }
 
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder();
+
+function utf8Bytes(value: string): Uint8Array {
+  return utf8Encoder.encode(value);
+}
+
+function utf8Text(bytes: Uint8Array): string {
+  return utf8Decoder.decode(bytes);
+}
+
+function findSubBytes(haystack: Uint8Array, needle: Uint8Array, start: number): number {
+  if (needle.length === 0) {
+    return Math.max(0, Math.min(start, haystack.length));
+  }
+
+  for (let index = start; index + needle.length <= haystack.length; index += 1) {
+    let match = true;
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (haystack[index + offset] !== needle[offset]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function leftBytes(text: string, byteCount: number): string {
+  const bytes = utf8Bytes(text);
+  const normalizedCount = Math.max(0, Math.min(byteCount, bytes.length));
+  return utf8Text(bytes.slice(0, normalizedCount));
+}
+
+function rightBytes(text: string, byteCount: number): string {
+  const bytes = utf8Bytes(text);
+  const normalizedCount = Math.max(0, Math.min(byteCount, bytes.length));
+  return utf8Text(bytes.slice(bytes.length - normalizedCount));
+}
+
+function midBytes(text: string, start: number, byteCount: number): string {
+  const bytes = utf8Bytes(text);
+  if (byteCount <= 0) {
+    return "";
+  }
+
+  const zeroBasedStart = Math.max(0, start - 1);
+  const zeroBasedEnd = Math.min(bytes.length, zeroBasedStart + byteCount);
+  if (zeroBasedStart >= bytes.length) {
+    return "";
+  }
+  return utf8Text(bytes.slice(zeroBasedStart, zeroBasedEnd));
+}
+
 function coerceNumber(value: CellValue): number | undefined {
   switch (value.tag) {
     case ValueTag.Number:
@@ -53,6 +110,17 @@ function coerceNumber(value: CellValue): number | undefined {
     case ValueTag.Error:
       return undefined;
   }
+}
+
+function coerceBoolean(value: CellValue, fallback: boolean): boolean | CellValue {
+  if (value.tag === ValueTag.Boolean) {
+    return value.value;
+  }
+  if (value.tag === ValueTag.Empty) {
+    return fallback;
+  }
+  const numeric = coerceNumber(value);
+  return numeric === undefined ? error(ErrorCode.Value) : numeric !== 0;
 }
 
 function coercePositiveStart(
@@ -230,6 +298,40 @@ function excelTrim(input: string): string {
   return input.slice(start, end).replace(/ {2,}/g, " ");
 }
 
+function stripControlCharacters(input: string): string {
+  let output = "";
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input.charCodeAt(index);
+    if ((char >= 0 && char <= 31) || char === 127) {
+      continue;
+    }
+    output += input[index] ?? "";
+  }
+  return output;
+}
+
+function toTitleCase(input: string): string {
+  let result = "";
+  let capitalizeNext = true;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index] ?? "";
+    const code = char.charCodeAt(0);
+    const isAlpha = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+
+    if (!isAlpha) {
+      capitalizeNext = true;
+      result += char;
+      continue;
+    }
+
+    result += capitalizeNext ? char.toUpperCase() : char.toLowerCase();
+    capitalizeNext = false;
+  }
+
+  return result;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -332,6 +434,21 @@ function findPosition(
   return error(ErrorCode.Value);
 }
 
+function charCodeFromArgument(value: CellValue | undefined): number | CellValue {
+  if (value === undefined) {
+    return error(ErrorCode.Value);
+  }
+  const code = coerceNumber(value);
+  if (code === undefined) {
+    return error(ErrorCode.Value);
+  }
+  const integerCode = Math.trunc(code);
+  if (!Number.isFinite(integerCode) || integerCode < 1 || integerCode > 255) {
+    return error(ErrorCode.Value);
+  }
+  return integerCode;
+}
+
 const textPlaceholderBuiltins = createBlockedBuiltinMap(textPlaceholderBuiltinNames);
 
 export const textBuiltins: Record<string, TextBuiltin> = {
@@ -346,12 +463,91 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     }
     return numberResult(coerceText(value).length);
   },
+  CHAR: (...args) => {
+    const [codeValue] = args;
+    const codePoint = charCodeFromArgument(codeValue);
+    if (isErrorValue(codePoint)) {
+      return codePoint;
+    }
+    return stringResult(String.fromCodePoint(codePoint));
+  },
+  CODE: (...args) => {
+    const [textValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const text = coerceText(textValue);
+    if (text.length === 0) {
+      return error(ErrorCode.Value);
+    }
+    const codePoint = text.codePointAt(0);
+    return codePoint === undefined ? error(ErrorCode.Value) : numberResult(codePoint);
+  },
+  UNICODE: (...args) => {
+    const [textValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const text = coerceText(textValue);
+    if (text.length === 0) {
+      return error(ErrorCode.Value);
+    }
+    const codePoint = text.codePointAt(0);
+    return codePoint === undefined ? error(ErrorCode.Value) : numberResult(codePoint);
+  },
+  UNICHAR: (...args) => {
+    const [codeValue] = args;
+    if (codeValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const code = coerceNumber(codeValue);
+    if (code === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const integerCode = Math.trunc(code);
+    if (!Number.isFinite(integerCode) || integerCode < 0 || integerCode > 0x10ffff) {
+      return error(ErrorCode.Value);
+    }
+    return stringResult(String.fromCodePoint(integerCode));
+  },
+  CLEAN: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    return stringResult(stripControlCharacters(coerceText(textValue)));
+  },
+  CONCATENATE: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    if (args.length === 0) {
+      return error(ErrorCode.Value);
+    }
+    return stringResult(args.map(coerceText).join(""));
+  },
   CONCAT: (...args) => {
     const existingError = firstError(args);
     if (existingError) {
       return existingError;
     }
     return stringResult(args.map(coerceText).join(""));
+  },
+  PROPER: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    return stringResult(toTitleCase(coerceText(textValue)));
   },
   EXACT: (...args) => {
     const existingError = firstError(args);
@@ -492,6 +688,87 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     );
     return isErrorValue(found) ? found : numberResult(found);
   },
+  ENCODEURL: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [value] = args;
+    if (value === undefined) {
+      return error(ErrorCode.Value);
+    }
+    return stringResult(encodeURI(coerceText(value)));
+  },
+  FINDB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [findTextValue, withinTextValue, startValue] = args;
+    if (findTextValue === undefined || withinTextValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const start = coercePositiveStart(startValue, 1);
+    if (isErrorValue(start)) {
+      return start;
+    }
+    const findBytes = utf8Bytes(coerceText(findTextValue));
+    const withinBytes = utf8Bytes(coerceText(withinTextValue));
+    if (start > withinBytes.length + 1) {
+      return error(ErrorCode.Value);
+    }
+    const found = findSubBytes(withinBytes, findBytes, start - 1);
+    return found === -1 ? error(ErrorCode.Value) : numberResult(found + 1);
+  },
+  LEFTB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, countValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const count = coerceLength(countValue, 1);
+    if (isErrorValue(count)) {
+      return count;
+    }
+    return stringResult(leftBytes(coerceText(textValue), count));
+  },
+  MIDB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, startValue, countValue] = args;
+    if (textValue === undefined || startValue === undefined || countValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const start = coercePositiveStart(startValue, 1);
+    if (isErrorValue(start)) {
+      return start;
+    }
+    const count = coerceLength(countValue, 0);
+    if (isErrorValue(count)) {
+      return count;
+    }
+    return stringResult(midBytes(coerceText(textValue), start, count));
+  },
+  RIGHTB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, countValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const count = coerceLength(countValue, 1);
+    if (isErrorValue(count)) {
+      return count;
+    }
+    return stringResult(rightBytes(coerceText(textValue), count));
+  },
   VALUE: (...args) => {
     const existingError = firstError(args);
     if (existingError) {
@@ -566,6 +843,109 @@ export const textBuiltins: Record<string, TextBuiltin> = {
       searchFrom = found - 1;
     }
     return stringResult(text.slice(0, found));
+  },
+  TEXTAFTER: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [
+      textValue,
+      delimiterValue,
+      instanceValue,
+      matchModeValue,
+      matchEndValue,
+      ifNotFoundValue,
+    ] = args;
+    if (textValue === undefined || delimiterValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+
+    const text = coerceText(textValue);
+    const delimiter = coerceText(delimiterValue);
+    if (delimiter === "") {
+      return error(ErrorCode.Value);
+    }
+
+    const instanceNumber = instanceValue === undefined ? 1 : coerceNumber(instanceValue);
+    const matchMode = matchModeValue === undefined ? 0 : coerceNumber(matchModeValue);
+    const matchEndNumber = matchEndValue === undefined ? 0 : coerceNumber(matchEndValue);
+    if (
+      instanceNumber === undefined ||
+      matchMode === undefined ||
+      matchEndNumber === undefined ||
+      !Number.isInteger(instanceNumber) ||
+      instanceNumber === 0 ||
+      !Number.isInteger(matchMode) ||
+      (matchMode !== 0 && matchMode !== 1)
+    ) {
+      return error(ErrorCode.Value);
+    }
+
+    const matchEnd = matchEndNumber !== 0;
+    if (instanceNumber > 0) {
+      let searchFrom = 0;
+      let found = -1;
+      for (let count = 0; count < instanceNumber; count += 1) {
+        found = indexOfWithMode(text, delimiter, searchFrom, matchMode);
+        if (found === -1) {
+          return ifNotFoundValue ?? error(ErrorCode.NA);
+        }
+        searchFrom = found + delimiter.length;
+      }
+      return stringResult(text.slice(found + delimiter.length));
+    }
+
+    let searchFrom = text.length;
+    let found = matchEnd ? text.length : -1;
+    for (let count = 0; count < Math.abs(instanceNumber); count += 1) {
+      found = lastIndexOfWithMode(text, delimiter, searchFrom, matchMode);
+      if (found === -1) {
+        return ifNotFoundValue ?? error(ErrorCode.NA);
+      }
+      searchFrom = found - 1;
+    }
+    const start = found + delimiter.length;
+    return stringResult(text.slice(start));
+  },
+  TEXTJOIN: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [delimiterValue, ignoreEmptyValue, ...values] = args;
+    if (delimiterValue === undefined || ignoreEmptyValue === undefined || values.length === 0) {
+      return error(ErrorCode.Value);
+    }
+
+    const delimiter = coerceText(delimiterValue);
+    const ignoreEmpty = coerceBoolean(ignoreEmptyValue, false);
+    if (ignoreEmpty === undefined) {
+      return error(ErrorCode.Value);
+    }
+
+    const valuesJoined: string[] = [];
+    for (const value of values) {
+      if (value === undefined) {
+        continue;
+      }
+      if (value.tag === ValueTag.Empty) {
+        if (!ignoreEmpty) {
+          valuesJoined.push("");
+        }
+        continue;
+      }
+      if (value.tag === ValueTag.String && value.value === "" && !ignoreEmpty) {
+        valuesJoined.push("");
+        continue;
+      }
+      if (value.tag === ValueTag.String && value.value === "" && ignoreEmpty) {
+        continue;
+      }
+      valuesJoined.push(coerceText(value));
+    }
+
+    return stringResult(valuesJoined.join(delimiter));
   },
   REPLACE: createReplaceBuiltin(),
   SUBSTITUTE: createSubstituteBuiltin(),

@@ -7,6 +7,7 @@ const bool = (value: boolean): CellValue => ({ tag: ValueTag.Boolean, value });
 const num = (value: number): CellValue => ({ tag: ValueTag.Number, value });
 const text = (value: string): CellValue => ({ tag: ValueTag.String, value, stringId: 0 });
 const err = (code: ErrorCode): CellValue => ({ tag: ValueTag.Error, code });
+const number = (value: number): CellValue => ({ tag: ValueTag.Number, value });
 
 describe("logical/info builtins", () => {
   it("supports IF with explicit condition coercion and error propagation", () => {
@@ -79,6 +80,45 @@ describe("logical/info builtins", () => {
     expect(ISTEXT(text("hello"))).toEqual(bool(true));
     expect(ISTEXT(empty())).toEqual(bool(false));
     expect(ISTEXT(err(ErrorCode.Value))).toEqual(bool(false));
+  });
+
+  it("supports logical type predicates and ERROR.TYPE", () => {
+    const ISERROR = getLogicalBuiltin("ISERROR")!;
+    const ISERR = getLogicalBuiltin("ISERR")!;
+    const ISLOGICAL = getLogicalBuiltin("ISLOGICAL")!;
+    const ISNONTEXT = getLogicalBuiltin("ISNONTEXT")!;
+    const ISEVEN = getLogicalBuiltin("ISEVEN")!;
+    const ISODD = getLogicalBuiltin("ISODD")!;
+    const ISNA = getLogicalBuiltin("ISNA")!;
+    const ISREF = getLogicalBuiltin("ISREF")!;
+    const ERROR_TYPE = getLogicalBuiltin("ERROR.TYPE")!;
+
+    expect(ISERROR(err(ErrorCode.Div0))).toEqual(bool(true));
+    expect(ISERROR(num(1))).toEqual(bool(false));
+    expect(ISERR(err(ErrorCode.NA))).toEqual(bool(false));
+    expect(ISERR(err(ErrorCode.Name))).toEqual(bool(true));
+    expect(ISERR(num(1))).toEqual(bool(false));
+
+    expect(ISLOGICAL(bool(true))).toEqual(bool(true));
+    expect(ISLOGICAL(num(0))).toEqual(bool(false));
+    expect(ISNONTEXT(text("x"))).toEqual(bool(false));
+    expect(ISNONTEXT(num(1))).toEqual(bool(true));
+
+    expect(ISEVEN(num(4))).toEqual(bool(true));
+    expect(ISEVEN(text("7"))).toEqual(bool(false));
+    expect(ISODD(num(3))).toEqual(bool(true));
+    expect(ISODD(empty())).toEqual(bool(false));
+
+    expect(ISNA(err(ErrorCode.NA))).toEqual(bool(true));
+    expect(ISNA(err(ErrorCode.Value))).toEqual(bool(false));
+
+    expect(ISREF(text("x"))).toEqual(bool(false));
+    expect(ISREF(empty())).toEqual(bool(false));
+
+    expect(ERROR_TYPE(err(ErrorCode.Div0))).toEqual(number(1));
+    expect(ERROR_TYPE(err(ErrorCode.Ref))).toEqual(number(2));
+    expect(ERROR_TYPE(err(ErrorCode.NA))).toEqual(number(5));
+    expect(ERROR_TYPE(num(0))).toEqual(err(ErrorCode.NA));
   });
 
   it("supports TRUE FALSE XOR IFS and SWITCH", () => {

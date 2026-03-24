@@ -153,5 +153,10 @@ export enum BuiltinId {
   Tocol = 98,
   Torow = 99,
   Wraprows = 100,
-  Wrapcols = 101
+  Wrapcols = 101,
+  Lookup = 102,
+  Areas = 103,
+  Arraytotext = 104,
+  Columns = 105,
+  Rows = 106
 }

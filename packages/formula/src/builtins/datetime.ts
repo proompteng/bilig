@@ -45,6 +45,337 @@ function coerceNumber(value: CellValue): number | undefined {
   }
 }
 
+function coerceText(value: CellValue): string | undefined {
+  switch (value.tag) {
+    case ValueTag.String:
+      return value.value;
+    case ValueTag.Number:
+      return String(value.value);
+    case ValueTag.Boolean:
+      return value.value ? "TRUE" : "FALSE";
+    case ValueTag.Empty:
+      return "";
+    case ValueTag.Error:
+      return undefined;
+  }
+}
+
+function integerValue(value: CellValue | undefined, fallback?: number): number | undefined {
+  if (value === undefined) {
+    return fallback;
+  }
+  const numeric = coerceNumber(value);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return undefined;
+  }
+  return Math.trunc(numeric);
+}
+
+function parseDateValueFromText(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+  return Math.floor(utcDateToExcelSerial(parsed));
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function isValidBasis(basis: number): boolean {
+  return basis === 0 || basis === 1 || basis === 2 || basis === 3 || basis === 4;
+}
+
+function yearFracByBasis(
+  startSerial: number,
+  endSerial: number,
+  basis: number,
+): number | undefined {
+  if (!isValidBasis(basis)) {
+    return undefined;
+  }
+
+  let start = startSerial;
+  let end = endSerial;
+  if (start > end) {
+    [start, end] = [end, start];
+  }
+
+  const startParts = excelSerialToDateParts(start);
+  const endParts = excelSerialToDateParts(end);
+  if (startParts === undefined || endParts === undefined) {
+    return undefined;
+  }
+
+  let startDay = startParts.day;
+  let startMonth = startParts.month;
+  let startYear = startParts.year;
+  let endDay = endParts.day;
+  let endMonth = endParts.month;
+  let endYear = endParts.year;
+
+  let totalDays: number;
+  switch (basis) {
+    case 0:
+      if (startDay === 31) {
+        startDay -= 1;
+      }
+      if (startDay === 30 && endDay === 31) {
+        endDay -= 1;
+      } else if (startMonth === 2 && startDay === (isLeapYear(startYear) ? 29 : 28)) {
+        startDay = 30;
+        if (endMonth === 2 && endDay === (isLeapYear(endYear) ? 29 : 28)) {
+          endDay = 30;
+        }
+      }
+      totalDays = (endYear - startYear) * 360 + (endMonth - startMonth) * 30 + (endDay - startDay);
+      break;
+    case 1:
+    case 2:
+    case 3:
+      totalDays = end - start;
+      break;
+    case 4:
+      if (startDay === 31) {
+        startDay -= 1;
+      }
+      if (endDay === 31) {
+        endDay -= 1;
+      }
+      totalDays = (endYear - startYear) * 360 + (endMonth - startMonth) * 30 + (endDay - startDay);
+      break;
+    default:
+      return undefined;
+  }
+
+  let daysInYear: number;
+  switch (basis) {
+    case 1: {
+      const yearLength = (year: number) => (isLeapYear(year) ? 366 : 365);
+      if (startYear === endYear) {
+        daysInYear = yearLength(startYear);
+        break;
+      }
+      const crossesMultipleYears =
+        endYear !== startYear + 1 ||
+        endMonth < startMonth ||
+        (endMonth === startMonth && endDay > startDay);
+      if (crossesMultipleYears) {
+        let total = 0;
+        for (let year = startYear; year <= endYear; year += 1) {
+          total += yearLength(year);
+        }
+        daysInYear = total / (endYear - startYear + 1);
+      } else {
+        const startsInLeapYear =
+          isLeapYear(startYear) && (startMonth < 2 || (startMonth === 2 && startDay <= 29));
+        const endsInLeapYear =
+          isLeapYear(endYear) && (endMonth > 2 || (endMonth === 2 && endDay === 29));
+        daysInYear = startsInLeapYear || endsInLeapYear ? 366 : 365;
+      }
+      break;
+    }
+    case 3:
+      daysInYear = 365;
+      break;
+    case 0:
+    case 2:
+    case 4:
+      daysInYear = 360;
+      break;
+    default:
+      return undefined;
+  }
+
+  return totalDays / daysInYear;
+}
+
+function createDays360Builtin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 2 || args.length > 3) {
+      return valueError();
+    }
+
+    const startSerial = truncArg(args[0]!);
+    const endSerial = truncArg(args[1]!);
+    const method = args[2] === undefined ? 0 : integerValue(args[2], 0);
+    if (method === undefined || (method !== 0 && method !== 1)) {
+      return valueError();
+    }
+
+    if (typeof startSerial !== "number") {
+      return startSerial;
+    }
+    if (typeof endSerial !== "number") {
+      return endSerial;
+    }
+    const startParts = excelSerialToDateParts(startSerial);
+    const endParts = excelSerialToDateParts(endSerial);
+    if (!startParts || !endParts) {
+      return valueError();
+    }
+
+    let startDay = startParts.day;
+    let endDay = endParts.day;
+
+    if (method === 0) {
+      if (startDay === 31) {
+        startDay = 30;
+      }
+      if (endDay === 31 && startDay >= 30) {
+        endDay = 30;
+      }
+    } else {
+      if (startDay === 31) {
+        startDay = 30;
+      }
+      if (endDay === 31) {
+        endDay = 30;
+      }
+    }
+
+    return numberResult(
+      (endParts.year - startParts.year) * 360 +
+        (endParts.month - startParts.month) * 30 +
+        (endDay - startDay),
+    );
+  };
+}
+
+function createIsoWeeknumBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length !== 1) {
+      return valueError();
+    }
+
+    const serial = truncArg(args[0]!);
+    if (typeof serial !== "number") {
+      return serial;
+    }
+
+    const parts = excelSerialToDateParts(serial);
+    if (parts === undefined) {
+      return valueError();
+    }
+
+    const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    const dow = date.getUTCDay();
+    const dayShift = dow === 0 ? 7 : dow;
+    const shifted = new Date(date.getTime());
+    shifted.setUTCDate(date.getUTCDate() + 4 - dayShift);
+    const yearStart = new Date(Date.UTC(shifted.getUTCFullYear(), 0, 1));
+    const dayOfYear = Math.floor((shifted.getTime() - yearStart.getTime()) / MS_PER_DAY) + 1;
+    return numberResult(Math.floor((dayOfYear - 1) / 7) + 1);
+  };
+}
+
+function createTimeValueBuiltin(): Builtin {
+  return (value) => {
+    const error = firstError([value]);
+    if (error) {
+      return error;
+    }
+    if (value === undefined) {
+      return valueError();
+    }
+    const text = coerceText(value);
+    if (text === undefined) {
+      return valueError();
+    }
+
+    const trimmed = text.trim();
+    const amPmMatch = trimmed.match(/^(.+?)\s+([aApP][mM])$/);
+    const hasMeridiem = amPmMatch !== null;
+    const timeText = hasMeridiem ? (amPmMatch?.[1] ?? "") : trimmed;
+    const timeParts = timeText.split(":");
+    if (timeParts.length < 2 || timeParts.length > 3) {
+      return valueError();
+    }
+
+    const [hoursText, minutesText, secondsText = "0"] = timeParts;
+    const hours = Number(hoursText);
+    const minutes = Number(minutesText);
+    const seconds = Number(secondsText);
+    if (
+      Number.isNaN(hours) ||
+      Number.isNaN(minutes) ||
+      Number.isNaN(seconds) ||
+      !Number.isFinite(hours) ||
+      !Number.isFinite(minutes) ||
+      !Number.isFinite(seconds)
+    ) {
+      return valueError();
+    }
+
+    const truncHours = Math.trunc(hours);
+    const truncMinutes = Math.trunc(minutes);
+    const truncSeconds = Math.trunc(seconds);
+    const hasPm = hasMeridiem && amPmMatch?.[2]?.toLowerCase() === "pm";
+
+    if (truncMinutes < 0 || truncMinutes > 59 || truncSeconds < 0 || truncSeconds > 59) {
+      return valueError();
+    }
+
+    let hourValue = truncHours;
+    if (hasMeridiem) {
+      if (truncHours < 1 || truncHours > 12) {
+        return valueError();
+      }
+      if (truncHours === 12) {
+        hourValue = hasPm ? 12 : 0;
+      } else if (hasPm) {
+        hourValue = truncHours + 12;
+      }
+    } else if (truncHours === 24 && truncMinutes === 0 && truncSeconds === 0) {
+      hourValue = 0;
+    } else if (truncHours < 0 || truncHours > 23) {
+      return valueError();
+    }
+
+    return numberResult((hourValue * 3600 + truncMinutes * 60 + truncSeconds) / SECONDS_PER_DAY);
+  };
+}
+
+function createYearfracBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 2 || args.length > 3) {
+      return valueError();
+    }
+
+    const startSerial = truncArg(args[0]!);
+    const endSerial = truncArg(args[1]!);
+    const basis = args[2] === undefined ? 0 : integerValue(args[2]);
+    if (
+      typeof startSerial !== "number" ||
+      typeof endSerial !== "number" ||
+      basis === undefined ||
+      !isValidBasis(basis)
+    ) {
+      return valueError();
+    }
+
+    const fraction = yearFracByBasis(startSerial, endSerial, basis);
+    return fraction === undefined ? valueError() : numberResult(fraction);
+  };
+}
+
 function truncArg(value: CellValue): number | CellValue {
   if (value.tag === ValueTag.Error) {
     return value;
@@ -238,6 +569,40 @@ export function createDateBuiltin(): Builtin {
     const serial = excelDatePartsToSerial(year, month, day);
     return serial === undefined ? valueError() : numberResult(serial);
   };
+}
+
+export function createDateValueBuiltin(): Builtin {
+  return (dateText) => {
+    if (dateText === undefined) {
+      return valueError();
+    }
+    const error = firstError([dateText]);
+    if (error) {
+      return error;
+    }
+
+    const asNumber = toNumberValueDateValue(dateText);
+    if (asNumber !== undefined) {
+      return numberResult(asNumber);
+    }
+
+    const text = coerceText(dateText);
+    if (text === undefined) {
+      return valueError();
+    }
+
+    const serial = parseDateValueFromText(text);
+    return serial === undefined ? valueError() : numberResult(serial);
+  };
+}
+
+function toNumberValueDateValue(value: CellValue): number | undefined {
+  const numeric = coerceNumber(value);
+  if (numeric === undefined) {
+    return undefined;
+  }
+  const truncated = Math.trunc(numeric);
+  return Number.isFinite(truncated) ? truncated : undefined;
 }
 
 function createDatePartBuiltin(part: keyof ExcelDateParts): Builtin {
@@ -642,6 +1007,7 @@ const datetimePlaceholderBuiltins = createBlockedBuiltinMap(datetimePlaceholderB
 
 export const datetimeBuiltins: Record<string, Builtin> = {
   DATE: createDateBuiltin(),
+  DATEVALUE: createDateValueBuiltin(),
   YEAR: createDatePartBuiltin("year"),
   MONTH: createDatePartBuiltin("month"),
   DAY: createDatePartBuiltin("day"),
@@ -652,6 +1018,10 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   WEEKDAY: createWeekdayBuiltin(),
   DAYS: createDaysBuiltin(),
   WEEKNUM: createWeeknumBuiltin(),
+  DAYS360: createDays360Builtin(),
+  ISOWEEKNUM: createIsoWeeknumBuiltin(),
+  TIMEVALUE: createTimeValueBuiltin(),
+  YEARFRAC: createYearfracBuiltin(),
   WORKDAY: createWorkdayBuiltin(),
   NETWORKDAYS: createNetworkdaysBuiltin(),
   TODAY: createTodayBuiltin(),

@@ -84,6 +84,32 @@ function coerceLogical(value: CellValue): LogicalCoercion {
   }
 }
 
+function coerceNumberLike(value: CellValue): number | undefined {
+  switch (value.tag) {
+    case ValueTag.Number:
+      return value.value;
+    case ValueTag.Boolean:
+      return value.value ? 1 : 0;
+    case ValueTag.Empty:
+      return 0;
+    case ValueTag.String: {
+      const trimmed = value.value.trim();
+      if (trimmed === "") {
+        return 0;
+      }
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    case ValueTag.Error:
+    default:
+      return undefined;
+  }
+}
+
+function errorTypeCode(code: ErrorCode): number {
+  return code;
+}
+
 const logicalPlaceholderBuiltins = createBlockedBuiltinMap(logicalPlaceholderBuiltinNames);
 
 export const logicalBuiltins: Record<string, LogicalBuiltin> = {
@@ -227,6 +253,39 @@ export const logicalBuiltins: Record<string, LogicalBuiltin> = {
   ISBLANK: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Empty),
   ISNUMBER: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Number),
   ISTEXT: (value = emptyValue()) => booleanResult(value.tag === ValueTag.String),
+  ISERROR: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Error),
+  ISERR: (value = emptyValue()) => {
+    if (value.tag !== ValueTag.Error) {
+      return booleanResult(false);
+    }
+    return booleanResult(value.code !== ErrorCode.NA);
+  },
+  ISFORMULA: () => booleanResult(false),
+  ISLOGICAL: (value = emptyValue()) => booleanResult(value.tag === ValueTag.Boolean),
+  ISNONTEXT: (value = emptyValue()) => booleanResult(value.tag !== ValueTag.String),
+  ISEVEN: (value = emptyValue()) => {
+    const numberValue = coerceNumberLike(value);
+    if (numberValue === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    return booleanResult(Math.trunc(numberValue) % 2 === 0);
+  },
+  ISODD: (value = emptyValue()) => {
+    const numberValue = coerceNumberLike(value);
+    if (numberValue === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    return booleanResult(Math.trunc(numberValue) % 2 !== 0);
+  },
+  ISNA: (value = emptyValue()) =>
+    booleanResult(value.tag === ValueTag.Error && value.code === ErrorCode.NA),
+  ISREF: (_value = emptyValue()) => booleanResult(false),
+  "ERROR.TYPE": (value = emptyValue()) => {
+    if (value.tag !== ValueTag.Error) {
+      return errorValue(ErrorCode.NA);
+    }
+    return { tag: ValueTag.Number, value: errorTypeCode(value.code) };
+  },
   ...logicalPlaceholderBuiltins,
 };
 

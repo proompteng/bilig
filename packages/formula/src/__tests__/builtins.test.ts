@@ -7,6 +7,77 @@ import {
 } from "../builtins/placeholder.js";
 
 describe("formula builtins", () => {
+  it("supports CHOOSE, COUNTBLANK, and bitwise builtins", () => {
+    const CHOOSE = getBuiltin("CHOOSE")!;
+    const COUNTBLANK = getBuiltin("COUNTBLANK")!;
+    const BITAND = getBuiltin("BITAND")!;
+    const BITOR = getBuiltin("BITOR")!;
+    const BITXOR = getBuiltin("BITXOR")!;
+    const BITLSHIFT = getBuiltin("BITLSHIFT")!;
+    const BITRSHIFT = getBuiltin("BITRSHIFT")!;
+
+    expect(
+      CHOOSE(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "zero", stringId: 1 },
+        {
+          tag: ValueTag.Number,
+          value: 10,
+        },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(
+      CHOOSE(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Boolean, value: true },
+        {
+          tag: ValueTag.Number,
+          value: 20,
+        },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(CHOOSE({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(
+      COUNTBLANK(
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.String, value: "x", stringId: 1 },
+        { tag: ValueTag.Empty },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
+
+    expect(
+      BITAND(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(
+      BITOR(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(BITXOR({ tag: ValueTag.Number, value: 6 }, { tag: ValueTag.Number, value: 3 })).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    });
+    expect(
+      BITLSHIFT({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 4 }),
+    ).toEqual({ tag: ValueTag.Number, value: 16 });
+    expect(
+      BITRSHIFT({ tag: ValueTag.Number, value: 16 }, { tag: ValueTag.Number, value: 4 }),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      BITLSHIFT({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.String, value: "bad" }),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("supports numeric aggregates and error propagation", () => {
     const sum = getBuiltin("SUM");
     const avg = getBuiltin("AVG");
@@ -829,6 +900,62 @@ describe("formula builtins", () => {
         basis,
       ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("supports ADDRESS and DOLLAR formatting edge cases", () => {
+    const ADDRESS = getBuiltin("ADDRESS")!;
+    expect(
+      ADDRESS({ tag: ValueTag.Number, value: 12 }, { tag: ValueTag.Number, value: 3 }),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "$C$12",
+      stringId: 0,
+    });
+    expect(
+      ADDRESS(
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "B$7",
+      stringId: 0,
+    });
+    expect(
+      ADDRESS(
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "R4C5",
+      stringId: 0,
+    });
+
+    expect(
+      getBuiltin("DOLLAR")?.(
+        { tag: ValueTag.Number, value: -1234.5 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "-$1,234.5",
+      stringId: 0,
+    });
+    expect(
+      getBuiltin("DOLLAR")?.(
+        { tag: ValueTag.Number, value: 1234.56 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "$1235",
+      stringId: 0,
+    });
   });
 
   it("registers protocol-declared placeholder builtins as blocked", () => {

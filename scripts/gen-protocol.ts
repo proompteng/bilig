@@ -154,6 +154,11 @@ const enumManifest = {
     ["Torow", 99],
     ["Wraprows", 100],
     ["Wrapcols", 101],
+    ["Lookup", 102],
+    ["Areas", 103],
+    ["Arraytotext", 104],
+    ["Columns", 105],
+    ["Rows", 106],
   ],
 };
 
@@ -259,6 +264,11 @@ const builtinManifest = [
   { id: "Torow", name: "TOROW", supportsWasm: true },
   { id: "Wraprows", name: "WRAPROWS", supportsWasm: true },
   { id: "Wrapcols", name: "WRAPCOLS", supportsWasm: true },
+  { id: "Lookup", name: "LOOKUP", supportsWasm: true },
+  { id: "Areas", name: "AREAS", supportsWasm: true },
+  { id: "Arraytotext", name: "ARRAYTOTEXT", supportsWasm: true },
+  { id: "Columns", name: "COLUMNS", supportsWasm: true },
+  { id: "Rows", name: "ROWS", supportsWasm: true },
 ];
 
 const generatedHeader = `// GENERATED FILE. DO NOT EDIT DIRECTLY.\n// Source: scripts/gen-protocol.ts\n\n`;

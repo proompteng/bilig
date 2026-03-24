@@ -18,12 +18,12 @@ function errorValue(code: ErrorCode): CellValue {
 }
 
 function isError(
-  value: CellValue | undefined,
+  value: LookupBuiltinArgument | undefined,
 ): value is Extract<CellValue, { tag: ValueTag.Error }> {
-  return value !== undefined && value.tag === ValueTag.Error;
+  return value !== undefined && !isRangeArg(value) && value.tag === ValueTag.Error;
 }
 
-function isRangeArg(value: LookupBuiltinArgument): value is RangeBuiltinArgument {
+function isRangeArg(value: LookupBuiltinArgument | undefined): value is RangeBuiltinArgument {
   return typeof value === "object" && value !== null && "kind" in value && value.kind === "range";
 }
 
@@ -285,6 +285,186 @@ function flattenNumbers(arg: LookupBuiltinArgument): number[] | CellValue {
   return values;
 }
 
+function flattenNumericArguments(args: readonly LookupBuiltinArgument[]): number[] | CellValue {
+  const values: number[] = [];
+  for (const arg of args) {
+    const flattened = flattenNumbers(arg);
+    if (!Array.isArray(flattened)) {
+      return flattened;
+    }
+    values.push(...flattened);
+  }
+  return values;
+}
+
+function arrayTextCell(value: CellValue, strict: boolean): string | undefined {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return "";
+    case ValueTag.Number:
+      return String(value.value);
+    case ValueTag.Boolean:
+      return value.value ? "TRUE" : "FALSE";
+    case ValueTag.String:
+      return strict ? `"${value.value.replace(/"/g, '""')}"` : value.value;
+    case ValueTag.Error:
+      return undefined;
+  }
+}
+
+function parseCorrelationOperands(
+  firstArg: LookupBuiltinArgument,
+  secondArg: LookupBuiltinArgument,
+): { first: number[]; second: number[] } | CellValue {
+  const first = flattenNumbers(firstArg);
+  if (!Array.isArray(first)) {
+    return first;
+  }
+  const second = flattenNumbers(secondArg);
+  if (!Array.isArray(second)) {
+    return second;
+  }
+  if (first.length === 0 || first.length !== second.length) {
+    return errorValue(ErrorCode.Value);
+  }
+  return { first, second };
+}
+
+function covarianceFromPairs(
+  first: readonly number[],
+  second: readonly number[],
+  useSample: boolean,
+): number | CellValue {
+  const count = first.length;
+  const firstMean = first.reduce((sum, value) => sum + value, 0) / count;
+  const secondMean = second.reduce((sum, value) => sum + value, 0) / count;
+
+  let covarianceSum = 0;
+  for (let index = 0; index < count; index += 1) {
+    covarianceSum += (first[index]! - firstMean) * (second[index]! - secondMean);
+  }
+
+  const denominator = useSample ? count - 1 : count;
+  if (denominator <= 0) {
+    return errorValue(ErrorCode.Div0);
+  }
+  return covarianceSum / denominator;
+}
+
+function correlationFromPairs(
+  first: readonly number[],
+  second: readonly number[],
+): number | CellValue {
+  if (first.length < 2) {
+    return errorValue(ErrorCode.Div0);
+  }
+  const count = first.length;
+  const firstMean = first.reduce((sum, value) => sum + value, 0) / count;
+  const secondMean = second.reduce((sum, value) => sum + value, 0) / count;
+
+  let crossProducts = 0;
+  let firstVariance = 0;
+  let secondVariance = 0;
+  for (let index = 0; index < count; index += 1) {
+    const firstDeviation = first[index]! - firstMean;
+    const secondDeviation = second[index]! - secondMean;
+    crossProducts += firstDeviation * secondDeviation;
+    firstVariance += firstDeviation ** 2;
+    secondVariance += secondDeviation ** 2;
+  }
+  const denominator = Math.sqrt(firstVariance * secondVariance);
+  if (denominator === 0) {
+    return errorValue(ErrorCode.Div0);
+  }
+  return crossProducts / denominator;
+}
+
+function rankFromValues(
+  numberArg: LookupBuiltinArgument,
+  arrayArg: LookupBuiltinArgument,
+  orderArg: LookupBuiltinArgument | undefined,
+  useAverage: boolean,
+): CellValue {
+  if (isRangeArg(numberArg) || isRangeArg(orderArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(numberArg)) {
+    return numberArg;
+  }
+  if (isError(arrayArg)) {
+    return arrayArg;
+  }
+  if (isError(orderArg)) {
+    return orderArg;
+  }
+
+  const target = toNumber(numberArg);
+  if (target === undefined) {
+    return errorValue(ErrorCode.Value);
+  }
+  const order = orderArg === undefined ? 0 : toInteger(orderArg);
+  if (order === undefined || ![0, 1].includes(order)) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const values = flattenNumbers(arrayArg);
+  if (!Array.isArray(values)) {
+    return values;
+  }
+  if (values.length === 0) {
+    return errorValue(ErrorCode.NA);
+  }
+
+  let preceding = 0;
+  let ties = 0;
+  for (const value of values) {
+    if (value === target) {
+      ties += 1;
+      continue;
+    }
+    if (order === 0 ? value > target : value < target) {
+      preceding += 1;
+    }
+  }
+
+  if (ties === 0) {
+    return errorValue(ErrorCode.NA);
+  }
+
+  return {
+    tag: ValueTag.Number,
+    value: useAverage ? preceding + (ties + 1) / 2 : preceding + 1,
+  };
+}
+
+function nthValue(
+  arg: LookupBuiltinArgument,
+  positionArg: LookupBuiltinArgument,
+  ascending: boolean,
+): CellValue {
+  if (isRangeArg(positionArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(positionArg)) {
+    return positionArg;
+  }
+  const values = flattenNumbers(arg);
+  if (!Array.isArray(values)) {
+    return values;
+  }
+  if (values.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const position = toInteger(positionArg);
+  if (position === undefined || position < 1 || position > values.length) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const sortedValues = values.toSorted(ascending ? (a, b) => a - b : (a, b) => b - a);
+  return { tag: ValueTag.Number, value: sortedValues[position - 1] ?? 0 };
+}
+
 function sumOfNumbers(arg: LookupBuiltinArgument): number | CellValue {
   const values = flattenNumbers(arg);
   return Array.isArray(values) ? values.reduce((sum, value) => sum + value, 0) : values;
@@ -466,6 +646,210 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
 
     return position === -1 ? errorValue(ErrorCode.NA) : { tag: ValueTag.Number, value: position };
   },
+  LOOKUP: (lookupValue, lookupVectorArg, resultVectorArg = lookupVectorArg) => {
+    if (isRangeArg(lookupValue) || lookupValue === undefined || resultVectorArg === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const existingError = isError(lookupValue)
+      ? lookupValue
+      : isError(lookupVectorArg)
+        ? lookupVectorArg
+        : isError(resultVectorArg)
+          ? resultVectorArg
+          : undefined;
+    if (existingError) {
+      return existingError;
+    }
+
+    const lookupRangeOrError = toCellRange(lookupVectorArg);
+    const resultRangeOrError = toCellRange(resultVectorArg);
+    if (!isRangeArg(lookupRangeOrError)) {
+      return lookupRangeOrError;
+    }
+    if (!isRangeArg(resultRangeOrError)) {
+      return resultRangeOrError;
+    }
+
+    if (lookupRangeOrError.rows !== 1 && lookupRangeOrError.cols !== 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (resultRangeOrError.rows !== 1 && resultRangeOrError.cols !== 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (lookupRangeOrError.values.length !== resultRangeOrError.values.length) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const exactPosition = exactMatch(lookupValue, lookupRangeOrError);
+    const shouldApproximate = exactPosition === -1 && lookupValue.tag === ValueTag.Number;
+    const position = shouldApproximate
+      ? approximateMatchAscending(lookupValue, lookupRangeOrError)
+      : exactPosition;
+
+    if (position === -1) {
+      return errorValue(ErrorCode.NA);
+    }
+
+    const resultIndex = position - 1;
+    return resultRangeOrError.values[resultIndex] ?? errorValue(ErrorCode.NA);
+  },
+  AREAS: (arrayArg) => {
+    const range = requireCellRange(arrayArg);
+    if (!isRangeArg(range)) {
+      return range;
+    }
+    return { tag: ValueTag.Number, value: 1 };
+  },
+  ARRAYTOTEXT: (arrayArg, formatArg = { tag: ValueTag.Number, value: 0 }) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (isRangeArg(formatArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const format = toInteger(formatArg);
+    if (format === undefined || (format !== 0 && format !== 1)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const strict = format === 1;
+    const lines: string[] = [];
+    for (let row = 0; row < array.rows; row += 1) {
+      const lineValues: string[] = [];
+      for (let col = 0; col < array.cols; col += 1) {
+        const value = arrayTextCell(getRangeValue(array, row, col), strict);
+        if (value === undefined) {
+          return errorValue(ErrorCode.Value);
+        }
+        lineValues.push(value);
+      }
+      lines.push(strict ? lineValues.join(", ") : lineValues.join("\t"));
+    }
+    const body = lines.join(";");
+    return {
+      tag: ValueTag.String,
+      value: strict ? `{${body}}` : body,
+      stringId: 0,
+    };
+  },
+  COLUMNS: (arrayArg) => {
+    const range = requireCellRange(arrayArg);
+    if (!isRangeArg(range)) {
+      return range;
+    }
+    return { tag: ValueTag.Number, value: range.cols };
+  },
+  ROWS: (arrayArg) => {
+    const range = requireCellRange(arrayArg);
+    if (!isRangeArg(range)) {
+      return range;
+    }
+    return { tag: ValueTag.Number, value: range.rows };
+  },
+  CORREL: (firstArg, secondArg) => {
+    const values = parseCorrelationOperands(firstArg, secondArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const correlation = correlationFromPairs(values.first, values.second);
+    return typeof correlation === "number"
+      ? { tag: ValueTag.Number, value: correlation }
+      : correlation;
+  },
+  COVAR: (firstArg, secondArg) => {
+    const values = parseCorrelationOperands(firstArg, secondArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const covariance = covarianceFromPairs(values.first, values.second, false);
+    return typeof covariance === "number"
+      ? { tag: ValueTag.Number, value: covariance }
+      : covariance;
+  },
+  PEARSON: (firstArg, secondArg) => {
+    const values = parseCorrelationOperands(firstArg, secondArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const correlation = correlationFromPairs(values.first, values.second);
+    return typeof correlation === "number"
+      ? { tag: ValueTag.Number, value: correlation }
+      : correlation;
+  },
+  "COVARIANCE.P": (firstArg, secondArg) => {
+    const values = parseCorrelationOperands(firstArg, secondArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const covariance = covarianceFromPairs(values.first, values.second, false);
+    return typeof covariance === "number"
+      ? { tag: ValueTag.Number, value: covariance }
+      : covariance;
+  },
+  "COVARIANCE.S": (firstArg, secondArg) => {
+    const values = parseCorrelationOperands(firstArg, secondArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const covariance = covarianceFromPairs(values.first, values.second, true);
+    return typeof covariance === "number"
+      ? { tag: ValueTag.Number, value: covariance }
+      : covariance;
+  },
+  AVEDEV: (...args) => {
+    const values = flattenNumericArguments(args);
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    if (values.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const totalAbsoluteDeviation = values.reduce((sum, value) => sum + Math.abs(value - mean), 0);
+    return { tag: ValueTag.Number, value: totalAbsoluteDeviation / values.length };
+  },
+  DEVSQ: (...args) => {
+    const values = flattenNumericArguments(args);
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    if (values.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const total = values.reduce((sum, value) => {
+      const deviation = value - mean;
+      return sum + deviation * deviation;
+    }, 0);
+    return { tag: ValueTag.Number, value: total };
+  },
+  MEDIAN: (...args) => {
+    const values = flattenNumericArguments(args);
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    if (values.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const sortedValues = values.toSorted((left, right) => left - right);
+    const center = Math.floor(sortedValues.length / 2);
+    const isEven = sortedValues.length % 2 === 0;
+    if (!isEven) {
+      return { tag: ValueTag.Number, value: sortedValues[center] ?? 0 };
+    }
+
+    const lower = sortedValues[center - 1];
+    const upper = sortedValues[center];
+    return { tag: ValueTag.Number, value: ((lower ?? 0) + (upper ?? 0)) / 2 };
+  },
+  SMALL: (arg, positionArg) => nthValue(arg, positionArg, true),
+  LARGE: (arg, positionArg) => nthValue(arg, positionArg, false),
+  RANK: (numberArg, arrayArg, orderArg = { tag: ValueTag.Number, value: 0 }) =>
+    rankFromValues(numberArg, arrayArg, orderArg, false),
+  "RANK.EQ": (numberArg, arrayArg, orderArg = { tag: ValueTag.Number, value: 0 }) =>
+    rankFromValues(numberArg, arrayArg, orderArg, false),
   INDEX: (array, rowNumValue, colNumValue = { tag: ValueTag.Number, value: 1 }) => {
     if (!isRangeArg(array) || array.refKind !== "cells") {
       return errorValue(ErrorCode.Value);
@@ -1114,6 +1498,86 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       array.rows,
       array.cols,
     );
+  },
+  TRANSPOSE: (arrayArg) => {
+    const array = toCellRange(arrayArg);
+    if (!isRangeArg(array)) {
+      return array;
+    }
+    if (array.rows === 1 && array.cols === 1) {
+      return array.values[0] ?? { tag: ValueTag.Empty };
+    }
+    const values: CellValue[] = [];
+    for (let col = 0; col < array.cols; col += 1) {
+      for (let row = 0; row < array.rows; row += 1) {
+        values.push(getRangeValue(array, row, col));
+      }
+    }
+    return arrayResult(values, array.cols, array.rows);
+  },
+  HSTACK: (...arrayArgs) => {
+    if (arrayArgs.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const arrays = arrayArgs.map(toCellRange);
+    const rangeError = findFirstNonRange(arrays);
+    if (rangeError) {
+      return rangeError;
+    }
+    if (!areRangeArgs(arrays)) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const rowCount = Math.max(...arrays.map((array) => array.rows));
+    for (const array of arrays) {
+      if (array.rows !== 1 && array.rows !== rowCount) {
+        return errorValue(ErrorCode.Value);
+      }
+    }
+
+    const values: CellValue[] = [];
+    const totalCols = arrays.reduce((acc, array) => acc + array.cols, 0);
+    for (let row = 0; row < rowCount; row += 1) {
+      for (const array of arrays) {
+        for (let col = 0; col < array.cols; col += 1) {
+          const sourceRow = array.rows === 1 ? 0 : row;
+          values.push(getRangeValue(array, sourceRow, col));
+        }
+      }
+    }
+    return arrayResult(values, rowCount, totalCols);
+  },
+  VSTACK: (...arrayArgs) => {
+    if (arrayArgs.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    const arrays = arrayArgs.map(toCellRange);
+    const rangeError = findFirstNonRange(arrays);
+    if (rangeError) {
+      return rangeError;
+    }
+    if (!areRangeArgs(arrays)) {
+      return errorValue(ErrorCode.Value);
+    }
+
+    const colCount = Math.max(...arrays.map((array) => array.cols));
+    for (const array of arrays) {
+      if (array.cols !== 1 && array.cols !== colCount) {
+        return errorValue(ErrorCode.Value);
+      }
+    }
+
+    const values: CellValue[] = [];
+    const totalRows = arrays.reduce((acc, array) => acc + array.rows, 0);
+    for (const array of arrays) {
+      for (let row = 0; row < array.rows; row += 1) {
+        for (let col = 0; col < colCount; col += 1) {
+          const sourceCol = array.cols === 1 ? 0 : col;
+          values.push(getRangeValue(array, row, sourceCol));
+        }
+      }
+    }
+    return arrayResult(values, totalRows, colCount);
   },
   TOCOL: (arrayArg, ignoreArg = { tag: ValueTag.Number, value: 0 }, scanByColArg) => {
     const array = toCellRange(arrayArg);

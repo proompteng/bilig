@@ -26,6 +26,33 @@ function toNumber(value: CellValue): number | undefined {
   }
 }
 
+function toBitwiseUnsigned(value: CellValue | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const numeric = toNumber(value);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return undefined;
+  }
+  const truncated = Math.trunc(numeric);
+  if (!Number.isSafeInteger(truncated)) {
+    return undefined;
+  }
+  return truncated >>> 0;
+}
+
+function coerceShiftAmount(value: CellValue | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const numeric = toNumber(value);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return undefined;
+  }
+  const truncated = Math.trunc(numeric);
+  return truncated >= 0 ? truncated : undefined;
+}
+
 function numberResult(value: number): CellValue {
   return { tag: ValueTag.Number, value };
 }
@@ -71,6 +98,18 @@ function integerValue(value: CellValue | undefined, fallback?: number): number |
     return undefined;
   }
   return Math.trunc(numeric);
+}
+
+function toInteger(value: CellValue, fallback?: number): number | undefined {
+  if (value === undefined) {
+    return fallback;
+  }
+  const numeric = toNumber(value);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return undefined;
+  }
+  const truncated = Math.trunc(numeric);
+  return Number.isSafeInteger(truncated) ? truncated : undefined;
 }
 
 function nonNegativeIntegerValue(
@@ -644,6 +683,70 @@ function populationVariance(numbers: number[]): number {
   return squared / numbers.length;
 }
 
+function toZeroNumericValue(value: CellValue): number | undefined {
+  if (value.tag === ValueTag.String) {
+    return 0;
+  }
+  return toNumber(value);
+}
+
+function toColumnLabel(column: number): string | undefined {
+  if (!Number.isInteger(column) || column < 1) {
+    return undefined;
+  }
+  let current = column;
+  let label = "";
+  while (current > 0) {
+    const offset = (current - 1) % 26;
+    label = String.fromCharCode(65 + offset) + label;
+    current = Math.floor((current - 1) / 26);
+  }
+  return label;
+}
+
+function formatThousands(value: string): string {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function formatFixed(value: number, decimals: number, includeThousands: boolean): string {
+  if (!Number.isFinite(value) || !Number.isInteger(decimals)) {
+    return "";
+  }
+  const rounded = roundToDigits(value, decimals);
+  const sign = rounded < 0 ? "-" : "";
+  const unsigned = Math.abs(rounded);
+  const fixedDecimals = decimals >= 0 ? decimals : 0;
+  const fixed = unsigned.toFixed(fixedDecimals);
+  const [integerPart = "0", fractionPart] = fixed.split(".");
+  const normalizedInteger = includeThousands ? formatThousands(integerPart) : integerPart;
+  return `${sign}${normalizedInteger}${fractionPart === undefined ? "" : `.${fractionPart}`}`;
+}
+
+function countLeadingZeros(value: number): number {
+  if (value <= 0) {
+    return 1;
+  }
+  return Math.max(1, Math.ceil(Math.log10(value)));
+}
+
+function isValidDollarFraction(fraction: number): boolean {
+  if (!Number.isInteger(fraction) || fraction <= 0) {
+    return false;
+  }
+  if (fraction === 1) {
+    return true;
+  }
+  return Number.isInteger(Math.log2(fraction));
+}
+
+function parseDollarDecimal(value: number): { integerPart: number; fractionalNumerator: number } {
+  const absolute = Math.abs(value);
+  const parts = absolute.toString().split(".");
+  const integerPart = Number(parts[0] ?? 0);
+  const fractionalText = parts[1] ?? "0";
+  return { integerPart, fractionalNumerator: Number(fractionalText) };
+}
+
 function aggregateByCode(functionNum: number, values: CellValue[]): CellValue {
   const normalized = functionNum > 100 ? functionNum - 100 : functionNum;
   const numericValues = collectNumericArgs(values);
@@ -692,6 +795,16 @@ const scalarBuiltins: Record<string, Builtin> = {
     if (error) return error;
     return numberResult(args.reduce((sum, arg) => sum + (toNumber(arg) ?? 0), 0));
   },
+  AVERAGEA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = args
+      .map((arg) => toZeroNumericValue(arg))
+      .filter((value): value is number => value !== undefined);
+    return numberResult(
+      numbers.length === 0 ? 0 : numbers.reduce((sum, value) => sum + value, 0) / numbers.length,
+    );
+  },
   AVERAGE: (...args) => {
     const error = firstError(args);
     if (error) return error;
@@ -706,16 +819,187 @@ const scalarBuiltins: Record<string, Builtin> = {
     if (numbers.length === 0) return numberResult(0);
     return numberResult(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
   },
+  CHOOSE: (indexValue, ...values) => {
+    const index = integerValue(indexValue);
+    if (index === undefined || index < 1 || index > values.length) {
+      return valueError();
+    }
+    const value = values[index - 1];
+    return value === undefined ? valueError() : value;
+  },
   MIN: (...args) =>
     numberResult(Math.min(...args.map((arg) => toNumber(arg) ?? Number.POSITIVE_INFINITY))),
   MAX: (...args) =>
     numberResult(Math.max(...args.map((arg) => toNumber(arg) ?? Number.NEGATIVE_INFINITY))),
+  MAXA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const values = args
+      .map((arg) => toZeroNumericValue(arg))
+      .filter((value): value is number => value !== undefined);
+    return values.length === 0 ? numberResult(0) : numberResult(Math.max(...values));
+  },
+  MINA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const values = args
+      .map((arg) => toZeroNumericValue(arg))
+      .filter((value): value is number => value !== undefined);
+    return values.length === 0 ? numberResult(0) : numberResult(Math.min(...values));
+  },
   COUNT: (...args) =>
     numberResult(
       args.filter((arg) => arg.tag === ValueTag.Number || arg.tag === ValueTag.Boolean).length,
     ),
   COUNTA: (...args) => numberResult(args.filter((arg) => arg.tag !== ValueTag.Empty).length),
+  COUNTBLANK: (...args) => {
+    let blanks = 0;
+    for (const arg of args) {
+      if (arg.tag === ValueTag.Empty) {
+        blanks += 1;
+      }
+    }
+    return numberResult(blanks);
+  },
   ABS: (value) => numberResult(Math.abs(toNumber(value) ?? 0)),
+  ADDRESS: (
+    rowArg,
+    columnArg,
+    absNumArg = { tag: ValueTag.Number, value: 1 },
+    refStyleArg = { tag: ValueTag.Number, value: 1 },
+    sheetTextArg,
+  ) => {
+    const row = positiveIntegerValue(rowArg);
+    const column = positiveIntegerValue(columnArg);
+    const absNum = integerValue(absNumArg, 1);
+    const refStyle = integerValue(refStyleArg, 1);
+    if (
+      row === undefined ||
+      column === undefined ||
+      absNum === undefined ||
+      refStyle === undefined
+    ) {
+      return valueError();
+    }
+    if (![1, 2, 3, 4].includes(absNum) || ![1, 2].includes(refStyle)) {
+      return valueError();
+    }
+    if (
+      sheetTextArg !== undefined &&
+      sheetTextArg.tag !== ValueTag.String &&
+      sheetTextArg.tag !== ValueTag.Empty
+    ) {
+      return valueError();
+    }
+    if (sheetTextArg?.tag === ValueTag.Empty) {
+      return valueError();
+    }
+    const columnLabel = toColumnLabel(column);
+    if (columnLabel === undefined) {
+      return valueError();
+    }
+    const sheetPrefix =
+      sheetTextArg?.tag === ValueTag.String ? `'${sheetTextArg.value.replace(/'/g, "''")}'!` : "";
+    if (refStyle === 2) {
+      const rowLabel = absNum === 1 || absNum === 2 ? String(row) : `[${row}]`;
+      const colLabel = absNum === 1 || absNum === 3 ? String(column) : `[${column}]`;
+      return {
+        tag: ValueTag.String,
+        value: `${sheetPrefix}R${rowLabel}C${colLabel}`,
+        stringId: 0,
+      };
+    }
+    const rowLabel = absNum === 1 || absNum === 2 ? `$${row}` : `${row}`;
+    const colLabel = absNum === 1 || absNum === 3 ? `$${columnLabel}` : columnLabel;
+    return {
+      tag: ValueTag.String,
+      value: `${sheetPrefix}${colLabel}${rowLabel}`,
+      stringId: 0,
+    };
+  },
+  DOLLAR: (valueArg, decimalsArg = { tag: ValueTag.Number, value: 2 }, noCommasArg) => {
+    const value = toNumber(valueArg);
+    const decimals = toInteger(decimalsArg, 2);
+    const noCommasValue = noCommasArg === undefined ? 0 : (toNumber(noCommasArg) ?? 0);
+    if (value === undefined || decimals === undefined) {
+      return valueError();
+    }
+    const text = formatFixed(value, decimals, noCommasValue === 0);
+    if (text === "") {
+      return valueError();
+    }
+    const normalizedText = text.startsWith("-") ? text.slice(1) : text;
+    return {
+      tag: ValueTag.String,
+      value: value < 0 ? `-$${normalizedText}` : `$${text}`,
+      stringId: 0,
+    };
+  },
+  FIXED: (valueArg, decimalsArg = { tag: ValueTag.Number, value: 2 }, noCommasArg) => {
+    const value = toNumber(valueArg);
+    const decimals = toInteger(decimalsArg, 2);
+    const noCommasValue = noCommasArg === undefined ? 0 : (toNumber(noCommasArg) ?? 0);
+    if (value === undefined || decimals === undefined) {
+      return valueError();
+    }
+    const text = formatFixed(value, decimals, noCommasValue === 0);
+    return text === "" ? valueError() : { tag: ValueTag.String, value: text, stringId: 0 };
+  },
+  DOLLARDE: (valueArg, fractionArg) => {
+    const value = toNumber(valueArg);
+    const fraction = toInteger(fractionArg);
+    if (value === undefined || fraction === undefined || !isValidDollarFraction(fraction)) {
+      return valueError();
+    }
+    const { integerPart, fractionalNumerator } = parseDollarDecimal(value);
+    if (fractionalNumerator >= fraction || !Number.isInteger(fractionalNumerator)) {
+      return valueError();
+    }
+    const sign = value < 0 ? -1 : 1;
+    return numberResult(sign * (integerPart + fractionalNumerator / fraction));
+  },
+  DOLLARFR: (valueArg, fractionArg) => {
+    const value = toNumber(valueArg);
+    const fraction = toInteger(fractionArg);
+    if (value === undefined || fraction === undefined || !isValidDollarFraction(fraction)) {
+      return valueError();
+    }
+    const sign = value < 0 ? -1 : 1;
+    const absolute = Math.abs(value);
+    const integerPart = Math.floor(absolute);
+    const fractional = absolute - integerPart;
+    const width = countLeadingZeros(fraction);
+    const scaledNumerator = Math.round(fractional * fraction);
+    const carry = Math.floor(scaledNumerator / fraction);
+    const numerator = scaledNumerator - carry * fraction;
+    const outputValue = `${integerPart + carry}.${String(numerator).padStart(width, "0")}`;
+    return numberResult(sign * Number(outputValue));
+  },
+  GEOMEAN: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectNumericArgs(args);
+    if (numbers.length === 0) {
+      return valueError();
+    }
+    if (numbers.some((value) => value < 0)) {
+      return valueError();
+    }
+    if (numbers.some((value) => value === 0)) {
+      return numberResult(0);
+    }
+    const logSum = numbers.reduce((sum, value) => sum + Math.log(value), 0);
+    return numberResult(Math.exp(logSum / numbers.length));
+  },
+  HARMEAN: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectNumericArgs(args);
+    if (numbers.length === 0 || numbers.some((value) => value <= 0)) {
+      return valueError();
+    }
+    return numberResult(numbers.length / numbers.reduce((sum, value) => sum + 1 / value, 0));
+  },
   SIN: (value) => unaryMath(value, Math.sin),
   COS: (value) => unaryMath(value, Math.cos),
   TAN: (value) => unaryMath(value, Math.tan),
@@ -859,6 +1143,73 @@ const scalarBuiltins: Record<string, Builtin> = {
     const divisor = toNumber(right) ?? 0;
     if (divisor === 0) return { tag: ValueTag.Error, code: ErrorCode.Div0 };
     return numberResult((toNumber(left) ?? 0) % divisor);
+  },
+  BITAND: (...args) => {
+    if (args.length < 2) {
+      return valueError();
+    }
+    let value = toBitwiseUnsigned(args[0]);
+    if (value === undefined) {
+      return valueError();
+    }
+    for (let index = 1; index < args.length; index += 1) {
+      const current = toBitwiseUnsigned(args[index]);
+      if (current === undefined) {
+        return valueError();
+      }
+      value &= current;
+    }
+    return numberResult(value >>> 0);
+  },
+  BITOR: (...args) => {
+    if (args.length < 2) {
+      return valueError();
+    }
+    let value = toBitwiseUnsigned(args[0]);
+    if (value === undefined) {
+      return valueError();
+    }
+    for (let index = 1; index < args.length; index += 1) {
+      const current = toBitwiseUnsigned(args[index]);
+      if (current === undefined) {
+        return valueError();
+      }
+      value |= current;
+    }
+    return numberResult(value >>> 0);
+  },
+  BITXOR: (...args) => {
+    if (args.length < 2) {
+      return valueError();
+    }
+    let value = toBitwiseUnsigned(args[0]);
+    if (value === undefined) {
+      return valueError();
+    }
+    for (let index = 1; index < args.length; index += 1) {
+      const current = toBitwiseUnsigned(args[index]);
+      if (current === undefined) {
+        return valueError();
+      }
+      value ^= current;
+    }
+    return numberResult(value >>> 0);
+  },
+  BITLSHIFT: (valueArg, shiftArg) => {
+    const value = toBitwiseUnsigned(valueArg);
+    const shift = coerceShiftAmount(shiftArg);
+    if (value === undefined || shift === undefined) {
+      return valueError();
+    }
+    return numberResult((value << (shift & 31)) >>> 0);
+  },
+  BITRSHIFT: (valueArg, shiftArg) => {
+    const value = toBitwiseUnsigned(valueArg);
+    const shift = coerceShiftAmount(shiftArg);
+    if (value === undefined || shift === undefined) {
+      return valueError();
+    }
+    return numberResult((value >>> (shift & 31)) >>> 0);
   },
   INT: (value) => {
     const numberValue = toNumber(value);

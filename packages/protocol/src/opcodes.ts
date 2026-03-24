@@ -136,5 +136,10 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Tocol, name: "TOCOL", supportsWasm: true },
   { id: BuiltinId.Torow, name: "TOROW", supportsWasm: true },
   { id: BuiltinId.Wraprows, name: "WRAPROWS", supportsWasm: true },
-  { id: BuiltinId.Wrapcols, name: "WRAPCOLS", supportsWasm: true }
+  { id: BuiltinId.Wrapcols, name: "WRAPCOLS", supportsWasm: true },
+  { id: BuiltinId.Lookup, name: "LOOKUP", supportsWasm: true },
+  { id: BuiltinId.Areas, name: "AREAS", supportsWasm: true },
+  { id: BuiltinId.Arraytotext, name: "ARRAYTOTEXT", supportsWasm: true },
+  { id: BuiltinId.Columns, name: "COLUMNS", supportsWasm: true },
+  { id: BuiltinId.Rows, name: "ROWS", supportsWasm: true }
 ];

@@ -53,6 +53,11 @@ const BUILTIN = {
   AVERAGEIFS: BuiltinId.Averageifs,
   SUMPRODUCT: BuiltinId.Sumproduct,
   MATCH: BuiltinId.Match,
+  LOOKUP: BuiltinId.Lookup,
+  AREAS: BuiltinId.Areas,
+  ARRAYTOTEXT: BuiltinId.Arraytotext,
+  COLUMNS: BuiltinId.Columns,
+  ROWS: BuiltinId.Rows,
   INDEX: BuiltinId.Index,
   VLOOKUP: BuiltinId.Vlookup,
   HLOOKUP: BuiltinId.Hlookup,
@@ -1362,6 +1367,121 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[cellIndex(4, 4, width)]).toBe(20);
     expect(kernel.readTags()[cellIndex(4, 5, width)]).toBe(ValueTag.String);
     expect(kernel.readStringIds()[cellIndex(4, 5, width)]).toBe(5);
+  });
+
+  it("evaluates LOOKUP, AREAS, ARRAYTOTEXT, COLUMNS, and ROWS on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 8;
+    kernel.init(32, 8, 2, 3, 8);
+    kernel.uploadStrings(Uint32Array.from([0, 0]), Uint32Array.from([0, 1]), asciiCodes("z"));
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        0,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
+      new Float64Array([
+        1, 0, 3, 4, 10, 20, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0,
+      ]),
+      new Uint32Array(32),
+      new Uint16Array(32),
+    );
+    kernel.uploadRangeMembers(
+      Uint32Array.from([0, 2, 3, 4, 5, 6, 4, 5]),
+      Uint32Array.from([0, 3, 6]),
+      Uint32Array.from([3, 3, 2]),
+    );
+    kernel.uploadRangeShapes(Uint32Array.from([3, 3, 1]), Uint32Array.from([1, 1, 2]));
+
+    const packed = packPrograms([
+      [
+        encodePushNumber(0),
+        encodePushRange(0),
+        encodePushRange(1),
+        encodeCall(BUILTIN.LOOKUP, 3),
+        encodeRet(),
+      ],
+      [encodePushRange(2), encodeCall(BUILTIN.AREAS, 1), encodeRet()],
+      [encodePushRange(2), encodeCall(BUILTIN.COLUMNS, 1), encodeRet()],
+      [encodePushRange(2), encodeCall(BUILTIN.ROWS, 1), encodeRet()],
+      [encodePushRange(2), encodeCall(BUILTIN.ARRAYTOTEXT, 1), encodeRet()],
+      [encodePushRange(2), encodePushNumber(1), encodeCall(BUILTIN.ARRAYTOTEXT, 2), encodeRet()],
+      [encodePushString(1), encodePushString(1), encodeCall(BUILTIN.LOOKUP, 2), encodeRet()],
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(1, 0, width),
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(1, 6, width),
+      ]),
+    );
+    kernel.uploadConstants(
+      new Float64Array([3.5, 1]),
+      new Uint32Array([0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array([2, 2, 2, 2, 2, 2, 2]),
+    );
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(1, 0, width),
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(1, 6, width),
+      ]),
+    );
+
+    expect(kernel.readTags()[cellIndex(1, 0, width)]).toBe(ValueTag.Number);
+    expect(kernel.readNumbers()[cellIndex(1, 0, width)]).toBe(20);
+    expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Number);
+    expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(1);
+    expect(kernel.readTags()[cellIndex(1, 2, width)]).toBe(ValueTag.Number);
+    expect(kernel.readNumbers()[cellIndex(1, 2, width)]).toBe(2);
+    expect(kernel.readTags()[cellIndex(1, 3, width)]).toBe(ValueTag.Number);
+    expect(kernel.readNumbers()[cellIndex(1, 3, width)]).toBe(1);
+    expect(kernel.readTags()[cellIndex(1, 4, width)]).toBe(ValueTag.String);
+    expect(kernel.readTags()[cellIndex(1, 5, width)]).toBe(ValueTag.String);
+    expect(kernel.readTags()[cellIndex(1, 6, width)]).toBe(ValueTag.String);
+    expect(kernel.readStringIds()[cellIndex(1, 6, width)]).toBe(1);
+    expect(kernel.readOutputStrings()).toEqual(["10\t20", "{10, 20}"]);
   });
 
   it("evaluates exact-safe date builtins with Excel coercion and errors", async () => {
