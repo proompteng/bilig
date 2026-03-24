@@ -145,6 +145,48 @@ function cellIndex(row: number, col: number, width: number): number {
 
 type KernelInstance = Awaited<ReturnType<typeof createKernel>>;
 
+function decodeValueTag(rawTag: number): ValueTag {
+  switch (rawTag) {
+    case 0:
+      return ValueTag.Empty;
+    case 1:
+      return ValueTag.Number;
+    case 2:
+      return ValueTag.Boolean;
+    case 3:
+      return ValueTag.String;
+    case 4:
+      return ValueTag.Error;
+    default:
+      throw new Error(`Unexpected spill tag: ${rawTag}`);
+  }
+}
+
+function decodeErrorCode(rawCode: number): ErrorCode {
+  switch (rawCode) {
+    case 0:
+      return ErrorCode.None;
+    case 1:
+      return ErrorCode.Div0;
+    case 2:
+      return ErrorCode.Ref;
+    case 3:
+      return ErrorCode.Value;
+    case 4:
+      return ErrorCode.Name;
+    case 5:
+      return ErrorCode.NA;
+    case 6:
+      return ErrorCode.Cycle;
+    case 7:
+      return ErrorCode.Spill;
+    case 8:
+      return ErrorCode.Blocked;
+    default:
+      throw new Error(`Unexpected error code: ${rawCode}`);
+  }
+}
+
 function readSpillValues(
   kernel: KernelInstance,
   ownerCellIndex: number,
@@ -156,7 +198,7 @@ function readSpillValues(
   const values = kernel.readSpillNumbers();
   const outputStrings = kernel.readOutputStrings();
   return Array.from({ length }, (_, index) => {
-    const tag = tags[offset + index] as ValueTag;
+    const tag = decodeValueTag(tags[offset + index] ?? ValueTag.Empty);
     const rawValue = values[offset + index] ?? 0;
     switch (tag) {
       case ValueTag.Number:
@@ -166,7 +208,7 @@ function readSpillValues(
       case ValueTag.Empty:
         return { tag };
       case ValueTag.Error:
-        return { tag, code: rawValue as ErrorCode };
+        return { tag, code: decodeErrorCode(rawValue) };
       case ValueTag.String: {
         const outputIndex = rawValue >= OUTPUT_STRING_BASE ? rawValue - OUTPUT_STRING_BASE : -1;
         return {
