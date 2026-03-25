@@ -1747,6 +1747,375 @@ function coerceLogical(tag: u8, value: f64): i32 {
   return -(<i32>ErrorCode.Value) - 1;
 }
 
+function scalarArgsOnly(base: i32, argc: i32, kindStack: Uint8Array): bool {
+  for (let index = 0; index < argc; index++) {
+    if (kindStack[base + index] != STACK_KIND_SCALAR) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function statScalarValue(tag: u8, value: f64, includeStringsAsZero: bool): f64 {
+  if (tag == ValueTag.Number || tag == ValueTag.Boolean) {
+    return value;
+  }
+  if (tag == ValueTag.String) {
+    return includeStringsAsZero ? 0 : NaN;
+  }
+  return NaN;
+}
+
+function collectScalarStatValues(
+  base: i32,
+  argc: i32,
+  tagStack: Uint8Array,
+  valueStack: Float64Array,
+  includeStringsAsZero: bool,
+): Array<f64> {
+  const values = new Array<f64>();
+  for (let index = 0; index < argc; index++) {
+    const numeric = statScalarValue(
+      tagStack[base + index],
+      valueStack[base + index],
+      includeStringsAsZero,
+    );
+    if (!isNaN(numeric)) {
+      values.push(numeric);
+    }
+  }
+  return values;
+}
+
+function meanOf(values: Array<f64>): f64 {
+  let sum = 0.0;
+  for (let index = 0; index < values.length; index++) {
+    sum += unchecked(values[index]);
+  }
+  return values.length == 0 ? NaN : sum / <f64>values.length;
+}
+
+function sampleVarianceOf(values: Array<f64>): f64 {
+  if (values.length < 2) {
+    return NaN;
+  }
+  const mean = meanOf(values);
+  let squared = 0.0;
+  for (let index = 0; index < values.length; index++) {
+    const deviation = unchecked(values[index]) - mean;
+    squared += deviation * deviation;
+  }
+  return squared / <f64>(values.length - 1);
+}
+
+function populationVarianceOf(values: Array<f64>): f64 {
+  if (values.length == 0) {
+    return NaN;
+  }
+  const mean = meanOf(values);
+  let squared = 0.0;
+  for (let index = 0; index < values.length; index++) {
+    const deviation = unchecked(values[index]) - mean;
+    squared += deviation * deviation;
+  }
+  return squared / <f64>values.length;
+}
+
+function modeSingleOf(values: Array<f64>): f64 {
+  let bestValue = 0.0;
+  let bestCount = 1;
+  let found = false;
+  const unique = new Array<f64>();
+  const counts = new Array<i32>();
+  for (let index = 0; index < values.length; index++) {
+    const value = unchecked(values[index]);
+    let match = -1;
+    for (let cursor = 0; cursor < unique.length; cursor++) {
+      if (unchecked(unique[cursor]) == value) {
+        match = cursor;
+        break;
+      }
+    }
+    if (match >= 0) {
+      counts[match] = unchecked(counts[match]) + 1;
+    } else {
+      unique.push(value);
+      counts.push(1);
+      match = unique.length - 1;
+    }
+    const count = unchecked(counts[match]);
+    if (count > bestCount || (count == bestCount && (!found || value < bestValue))) {
+      bestCount = count;
+      bestValue = value;
+      found = true;
+    }
+  }
+  return bestCount >= 2 && found ? bestValue : NaN;
+}
+
+function erfApprox(value: f64): f64 {
+  const sign = value < 0 ? -1.0 : 1.0;
+  const absolute = Math.abs(value);
+  const t = 1.0 / (1.0 + 0.3275911 * absolute);
+  const y =
+    1.0 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+      t *
+      Math.exp(-absolute * absolute);
+  return sign * y;
+}
+
+function standardNormalPdf(value: f64): f64 {
+  return Math.exp(-(value * value) / 2.0) / Math.sqrt(2.0 * Math.PI);
+}
+
+function standardNormalCdf(value: f64): f64 {
+  return 0.5 * (1.0 + erfApprox(value / Math.sqrt(2.0)));
+}
+
+function inverseStandardNormal(value: f64): f64 {
+  if (!(value > 0.0 && value < 1.0)) {
+    return NaN;
+  }
+  const lower = 0.02425;
+  const upper = 1.0 - lower;
+
+  if (value < lower) {
+    const q = Math.sqrt(-2.0 * Math.log(value));
+    return (
+      (((((-0.007784894002430293 * q - 0.3223964580411365) * q - 2.400758277161838) * q -
+        2.549732539343734) *
+        q +
+        4.374664141464968) *
+        q +
+        2.938163982698783) /
+      ((((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q +
+        3.754408661907416) *
+        q +
+        1.0)
+    );
+  }
+
+  if (value > upper) {
+    const q = Math.sqrt(-2.0 * Math.log(1.0 - value));
+    return -(
+      (((((-0.007784894002430293 * q - 0.3223964580411365) * q - 2.400758277161838) * q -
+        2.549732539343734) *
+        q +
+        4.374664141464968) *
+        q +
+        2.938163982698783) /
+      ((((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q +
+        3.754408661907416) *
+        q +
+        1.0)
+    );
+  }
+
+  const q = value - 0.5;
+  const r = q * q;
+  return (
+    ((((((-39.69683028665376 * r + 220.9460984245205) * r - 275.9285104469687) * r +
+      138.357751867269) *
+      r -
+      30.66479806614716) *
+      r +
+      2.506628277459239) *
+      q) /
+    (((((-54.47609879822406 * r + 161.5858368580409) * r - 155.6989798598866) * r +
+      66.80131188771972) *
+      r -
+      13.28068155288572) *
+      r +
+      1.0)
+  );
+}
+
+function skewSampleOf(values: Array<f64>): f64 {
+  if (values.length < 3) {
+    return NaN;
+  }
+  const mean = meanOf(values);
+  const stddev = Math.sqrt(sampleVarianceOf(values));
+  if (!(stddev > 0.0)) {
+    return NaN;
+  }
+  let moment3 = 0.0;
+  for (let index = 0; index < values.length; index++) {
+    const deviation = unchecked(values[index]) - mean;
+    moment3 += deviation * deviation * deviation;
+  }
+  const n = <f64>values.length;
+  return (n * moment3) / ((n - 1.0) * (n - 2.0) * stddev * stddev * stddev);
+}
+
+function skewPopulationOf(values: Array<f64>): f64 {
+  if (values.length == 0) {
+    return NaN;
+  }
+  const mean = meanOf(values);
+  const stddev = Math.sqrt(populationVarianceOf(values));
+  if (!(stddev > 0.0)) {
+    return NaN;
+  }
+  let moment3 = 0.0;
+  for (let index = 0; index < values.length; index++) {
+    const deviation = unchecked(values[index]) - mean;
+    moment3 += deviation * deviation * deviation;
+  }
+  return moment3 / <f64>values.length / (stddev * stddev * stddev);
+}
+
+function kurtosisOf(values: Array<f64>): f64 {
+  if (values.length < 4) {
+    return NaN;
+  }
+  const mean = meanOf(values);
+  const stddev = Math.sqrt(sampleVarianceOf(values));
+  if (!(stddev > 0.0)) {
+    return NaN;
+  }
+  let sum4 = 0.0;
+  for (let index = 0; index < values.length; index++) {
+    const standardized = (unchecked(values[index]) - mean) / stddev;
+    sum4 += standardized * standardized * standardized * standardized;
+  }
+  const n = <f64>values.length;
+  return (
+    (n * (n + 1.0) * sum4) / ((n - 1.0) * (n - 2.0) * (n - 3.0)) -
+    (3.0 * (n - 1.0) * (n - 1.0)) / ((n - 2.0) * (n - 3.0))
+  );
+}
+
+function paymentType(tag: u8, value: f64, hasValue: bool): i32 {
+  if (!hasValue) {
+    return 0;
+  }
+  const numeric = toNumberExact(tag, value);
+  if (!isFinite(numeric)) {
+    return -1;
+  }
+  const truncated = <i32>numeric;
+  return truncated == 0 || truncated == 1 ? truncated : -1;
+}
+
+function futureValueCalc(
+  rate: f64,
+  periods: f64,
+  payment: f64,
+  present: f64,
+  paymentTypeValue: i32,
+): f64 {
+  if (rate == 0.0) {
+    return -(present + payment * periods);
+  }
+  const growth = Math.pow(1.0 + rate, periods);
+  return -(
+    present * growth +
+    payment * (1.0 + rate * <f64>paymentTypeValue) * ((growth - 1.0) / rate)
+  );
+}
+
+function presentValueCalc(
+  rate: f64,
+  periods: f64,
+  payment: f64,
+  future: f64,
+  paymentTypeValue: i32,
+): f64 {
+  if (rate == 0.0) {
+    return -(future + payment * periods);
+  }
+  const growth = Math.pow(1.0 + rate, periods);
+  return (
+    -(future + payment * (1.0 + rate * <f64>paymentTypeValue) * ((growth - 1.0) / rate)) / growth
+  );
+}
+
+function periodicPaymentCalc(
+  rate: f64,
+  periods: f64,
+  present: f64,
+  future: f64,
+  paymentTypeValue: i32,
+): f64 {
+  if (periods <= 0.0) {
+    return NaN;
+  }
+  if (rate == 0.0) {
+    return -(future + present) / periods;
+  }
+  const growth = Math.pow(1.0 + rate, periods);
+  const denominator = (1.0 + rate * <f64>paymentTypeValue) * (growth - 1.0);
+  if (denominator == 0.0) {
+    return NaN;
+  }
+  return (-rate * (future + present * growth)) / denominator;
+}
+
+function totalPeriodsCalc(
+  rate: f64,
+  payment: f64,
+  present: f64,
+  future: f64,
+  paymentTypeValue: i32,
+): f64 {
+  if (payment == 0.0 && rate == 0.0) {
+    return NaN;
+  }
+  if (rate == 0.0) {
+    return payment == 0.0 ? NaN : -(future + present) / payment;
+  }
+  const adjustedPayment = payment * (1.0 + rate * <f64>paymentTypeValue);
+  const numerator = adjustedPayment - future * rate;
+  const denominator = adjustedPayment + present * rate;
+  if (numerator <= 0.0 || denominator <= 0.0) {
+    return NaN;
+  }
+  return Math.log(numerator / denominator) / Math.log(1.0 + rate);
+}
+
+function interestPaymentCalc(
+  rate: f64,
+  period: f64,
+  periods: f64,
+  present: f64,
+  future: f64,
+  paymentTypeValue: i32,
+): f64 {
+  if (period < 1.0 || period > periods) {
+    return NaN;
+  }
+  const payment = periodicPaymentCalc(rate, periods, present, future, paymentTypeValue);
+  if (isNaN(payment)) {
+    return NaN;
+  }
+  if (paymentTypeValue == 1 && period == 1.0) {
+    return 0.0;
+  }
+  const balance = futureValueCalc(
+    rate,
+    paymentTypeValue == 1 ? period - 2.0 : period - 1.0,
+    payment,
+    present,
+    paymentTypeValue,
+  );
+  return balance * rate;
+}
+
+function principalPaymentCalc(
+  rate: f64,
+  period: f64,
+  periods: f64,
+  present: f64,
+  future: f64,
+  paymentTypeValue: i32,
+): f64 {
+  const payment = periodicPaymentCalc(rate, periods, present, future, paymentTypeValue);
+  const interest = interestPaymentCalc(rate, period, periods, present, future, paymentTypeValue);
+  return isNaN(payment) || isNaN(interest) ? NaN : payment - interest;
+}
+
 export function applyBuiltin(
   builtinId: i32,
   argc: i32,
@@ -7450,6 +7819,270 @@ export function applyBuiltin(
       rangeIndexStack[base] = rangeIndexStack[base + 1];
     }
     return base + 1;
+  }
+
+  if (builtinId == BuiltinId.T && (argc == 0 || argc == 1)) {
+    if (argc == 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Empty,
+        0,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (!scalarArgsOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (tagStack[base] == ValueTag.Error) {
+      return base + 1;
+    }
+    if (tagStack[base] == ValueTag.String) {
+      return base + 1;
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Empty,
+      0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.N && (argc == 0 || argc == 1)) {
+    if (argc == 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Number,
+        0,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (!scalarArgsOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (tagStack[base] == ValueTag.Error) {
+      return base + 1;
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      toNumberOrZero(tagStack[base], valueStack[base]),
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Type && (argc == 0 || argc == 1)) {
+    if (argc == 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Number,
+        1,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const typeCode =
+      kindStack[base] == STACK_KIND_ARRAY || kindStack[base] == STACK_KIND_RANGE
+        ? 64
+        : tagStack[base] == ValueTag.Number || tagStack[base] == ValueTag.Empty
+          ? 1
+          : tagStack[base] == ValueTag.String
+            ? 2
+            : tagStack[base] == ValueTag.Boolean
+              ? 4
+              : 16;
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      <f64>typeCode,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Delta && (argc == 1 || argc == 2)) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const left = valueNumber(
+      tagStack[base],
+      valueStack[base],
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    );
+    const right =
+      argc == 2
+        ? valueNumber(
+            tagStack[base + 1],
+            valueStack[base + 1],
+            stringOffsets,
+            stringLengths,
+            stringData,
+            outputStringOffsets,
+            outputStringLengths,
+            outputStringData,
+          )
+        : 0.0;
+    if (isNaN(left) || isNaN(right)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      left == right ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Gestep && (argc == 1 || argc == 2)) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const numberValue = valueNumber(
+      tagStack[base],
+      valueStack[base],
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    );
+    const stepValue =
+      argc == 2
+        ? valueNumber(
+            tagStack[base + 1],
+            valueStack[base + 1],
+            stringOffsets,
+            stringLengths,
+            stringData,
+            outputStringOffsets,
+            outputStringLengths,
+            outputStringData,
+          )
+        : 0.0;
+    if (isNaN(numberValue) || isNaN(stepValue)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      numberValue >= stepValue ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
   }
 
   const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);

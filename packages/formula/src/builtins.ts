@@ -1,4 +1,4 @@
-import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
+import { BUILTINS, BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
 import { datetimeBuiltins, excelSerialToDateParts } from "./builtins/datetime.js";
 import { logicalBuiltins } from "./builtins/logical.js";
@@ -482,6 +482,20 @@ function collectNumericArgs(args: CellValue[]): number[] {
   return args.map(toNumber).filter((value): value is number => value !== undefined);
 }
 
+function collectStatNumericArgs(args: CellValue[]): number[] {
+  const values: number[] = [];
+  for (const arg of args) {
+    if (arg.tag === ValueTag.Number) {
+      values.push(arg.value);
+      continue;
+    }
+    if (arg.tag === ValueTag.Boolean) {
+      values.push(arg.value ? 1 : 0);
+    }
+  }
+  return values;
+}
+
 function factorialValue(value: number): number | undefined {
   if (!Number.isFinite(value) || value < 0) {
     return undefined;
@@ -681,6 +695,290 @@ function populationVariance(numbers: number[]): number {
   const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
   const squared = numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0);
   return squared / numbers.length;
+}
+
+function sampleStandardDeviation(numbers: number[]): number {
+  const variance = sampleVariance(numbers);
+  return variance < 0 ? Number.NaN : Math.sqrt(variance);
+}
+
+function populationStandardDeviation(numbers: number[]): number {
+  const variance = populationVariance(numbers);
+  return variance < 0 ? Number.NaN : Math.sqrt(variance);
+}
+
+function collectAStyleNumericArgs(args: CellValue[]): number[] {
+  const values: number[] = [];
+  for (const arg of args) {
+    switch (arg.tag) {
+      case ValueTag.Number:
+        values.push(arg.value);
+        break;
+      case ValueTag.Boolean:
+        values.push(arg.value ? 1 : 0);
+        break;
+      case ValueTag.String:
+        values.push(0);
+        break;
+      case ValueTag.Empty:
+      case ValueTag.Error:
+        break;
+    }
+  }
+  return values;
+}
+
+function modeSingle(numbers: number[]): number | undefined {
+  const counts = new Map<number, number>();
+  let bestValue: number | undefined;
+  let bestCount = 1;
+  for (const value of numbers) {
+    const count = (counts.get(value) ?? 0) + 1;
+    counts.set(value, count);
+    if (
+      count > bestCount ||
+      (count === bestCount && bestValue !== undefined && value < bestValue)
+    ) {
+      bestCount = count;
+      bestValue = value;
+    }
+    if (count > bestCount && bestValue === undefined) {
+      bestValue = value;
+    }
+  }
+  return bestCount >= 2 ? bestValue : undefined;
+}
+
+function erfApprox(value: number): number {
+  const sign = value < 0 ? -1 : 1;
+  const absolute = Math.abs(value);
+  const t = 1 / (1 + 0.3275911 * absolute);
+  const y =
+    1 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+      t *
+      Math.exp(-absolute * absolute);
+  return sign * y;
+}
+
+function standardNormalPdf(value: number): number {
+  return Math.exp(-(value * value) / 2) / Math.sqrt(2 * Math.PI);
+}
+
+function standardNormalCdf(value: number): number {
+  return 0.5 * (1 + erfApprox(value / Math.SQRT2));
+}
+
+function inverseStandardNormal(probability: number): number | undefined {
+  if (!(probability > 0 && probability < 1)) {
+    return undefined;
+  }
+  const a = [
+    -39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716,
+    2.506628277459239,
+  ];
+  const b = [
+    -54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972,
+    -13.28068155288572,
+  ];
+  const c = [
+    -0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734,
+    4.374664141464968, 2.938163982698783,
+  ];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const lower = 0.02425;
+  const upper = 1 - lower;
+
+  if (probability < lower) {
+    const q = Math.sqrt(-2 * Math.log(probability));
+    return (
+      (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) /
+      ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1)
+    );
+  }
+  if (probability > upper) {
+    const q = Math.sqrt(-2 * Math.log(1 - probability));
+    return -(
+      (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) /
+      ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1)
+    );
+  }
+  const q = probability - 0.5;
+  const r = q * q;
+  return (
+    ((((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r + a[5]!) * q) /
+    (((((b[0]! * r + b[1]!) * r + b[2]!) * r + b[3]!) * r + b[4]!) * r + 1)
+  );
+}
+
+function skewSample(numbers: number[]): number | undefined {
+  if (numbers.length < 3) {
+    return undefined;
+  }
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+  const stddev = sampleStandardDeviation(numbers);
+  if (!(stddev > 0)) {
+    return undefined;
+  }
+  const moment3 = numbers.reduce((sum, value) => sum + (value - mean) ** 3, 0);
+  const n = numbers.length;
+  return (n * moment3) / ((n - 1) * (n - 2) * stddev ** 3);
+}
+
+function skewPopulation(numbers: number[]): number | undefined {
+  if (numbers.length === 0) {
+    return undefined;
+  }
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+  const stddev = populationStandardDeviation(numbers);
+  if (!(stddev > 0)) {
+    return undefined;
+  }
+  const moment3 = numbers.reduce((sum, value) => sum + (value - mean) ** 3, 0) / numbers.length;
+  return moment3 / stddev ** 3;
+}
+
+function kurtosis(numbers: number[]): number | undefined {
+  if (numbers.length < 4) {
+    return undefined;
+  }
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+  const stddev = sampleStandardDeviation(numbers);
+  if (!(stddev > 0)) {
+    return undefined;
+  }
+  const n = numbers.length;
+  const sum4 = numbers.reduce((sum, value) => sum + ((value - mean) / stddev) ** 4, 0);
+  return (
+    (n * (n + 1) * sum4) / ((n - 1) * (n - 2) * (n - 3)) - (3 * (n - 1) ** 2) / ((n - 2) * (n - 3))
+  );
+}
+
+function percentileNormal(mean: number, standardDeviation: number, value: number): number {
+  return standardNormalCdf((value - mean) / standardDeviation);
+}
+
+function inverseNormal(
+  probability: number,
+  mean: number,
+  standardDeviation: number,
+): number | undefined {
+  const z = inverseStandardNormal(probability);
+  return z === undefined ? undefined : mean + standardDeviation * z;
+}
+
+function coercePaymentType(value: CellValue | undefined, fallback: number): number | undefined {
+  const type = integerValue(value, fallback);
+  return type === 0 || type === 1 ? type : undefined;
+}
+
+function futureValue(
+  rate: number,
+  periods: number,
+  payment: number,
+  present: number,
+  type: number,
+): number {
+  if (rate === 0) {
+    return -(present + payment * periods);
+  }
+  const growth = (1 + rate) ** periods;
+  return -(present * growth + payment * (1 + rate * type) * ((growth - 1) / rate));
+}
+
+function presentValue(
+  rate: number,
+  periods: number,
+  payment: number,
+  future: number,
+  type: number,
+): number {
+  if (rate === 0) {
+    return -(future + payment * periods);
+  }
+  const growth = (1 + rate) ** periods;
+  return -(future + payment * (1 + rate * type) * ((growth - 1) / rate)) / growth;
+}
+
+function periodicPayment(
+  rate: number,
+  periods: number,
+  present: number,
+  future: number,
+  type: number,
+): number | undefined {
+  if (periods <= 0) {
+    return undefined;
+  }
+  if (rate === 0) {
+    return -(future + present) / periods;
+  }
+  const growth = (1 + rate) ** periods;
+  const denominator = (1 + rate * type) * (growth - 1);
+  if (denominator === 0) {
+    return undefined;
+  }
+  return (-rate * (future + present * growth)) / denominator;
+}
+
+function totalPeriods(
+  rate: number,
+  payment: number,
+  present: number,
+  future: number,
+  type: number,
+): number | undefined {
+  if (payment === 0 && rate === 0) {
+    return undefined;
+  }
+  if (rate === 0) {
+    return payment === 0 ? undefined : -(future + present) / payment;
+  }
+  const adjustedPayment = payment * (1 + rate * type);
+  const numerator = adjustedPayment - future * rate;
+  const denominator = adjustedPayment + present * rate;
+  if (numerator === 0 || denominator === 0 || numerator / denominator <= 0) {
+    return undefined;
+  }
+  return Math.log(numerator / denominator) / Math.log(1 + rate);
+}
+
+function interestPayment(
+  rate: number,
+  period: number,
+  periods: number,
+  present: number,
+  future: number,
+  type: number,
+): number | undefined {
+  if (period < 1 || period > periods) {
+    return undefined;
+  }
+  const payment = periodicPayment(rate, periods, present, future, type);
+  if (payment === undefined) {
+    return undefined;
+  }
+  if (type === 1 && period === 1) {
+    return 0;
+  }
+  const balance = futureValue(rate, type === 1 ? period - 2 : period - 1, payment, present, type);
+  return balance * rate;
+}
+
+function principalPayment(
+  rate: number,
+  period: number,
+  periods: number,
+  present: number,
+  future: number,
+  type: number,
+): number | undefined {
+  const payment = periodicPayment(rate, periods, present, future, type);
+  const interest = interestPayment(rate, period, periods, present, future, type);
+  if (payment === undefined || interest === undefined) {
+    return undefined;
+  }
+  return payment - interest;
 }
 
 function toZeroNumericValue(value: CellValue): number | undefined {
@@ -1564,6 +1862,538 @@ const scalarBuiltins: Record<string, Builtin> = {
     const numeric = arabicValue(value.value);
     return numeric === undefined ? valueError() : numberResult(numeric);
   },
+  T: (value = { tag: ValueTag.Empty }) => {
+    if (value.tag === ValueTag.Error) {
+      return value;
+    }
+    return value.tag === ValueTag.String ? value : { tag: ValueTag.Empty };
+  },
+  N: (value = { tag: ValueTag.Empty }) => {
+    if (value.tag === ValueTag.Error) {
+      return value;
+    }
+    return numberResult(toNumber(value) ?? 0);
+  },
+  TYPE: (value = { tag: ValueTag.Empty }) => {
+    if (value.tag === ValueTag.Error) {
+      return numberResult(16);
+    }
+    if ((value as EvaluationResult & { kind?: string }).kind === "array") {
+      return numberResult(64);
+    }
+    switch (value.tag) {
+      case ValueTag.Number:
+      case ValueTag.Empty:
+        return numberResult(1);
+      case ValueTag.String:
+        return numberResult(2);
+      case ValueTag.Boolean:
+        return numberResult(4);
+    }
+  },
+  DELTA: (leftArg, rightArg = { tag: ValueTag.Number, value: 0 }) => {
+    const left = toNumber(leftArg);
+    const right = toNumber(rightArg);
+    if (left === undefined || right === undefined) {
+      return valueError();
+    }
+    return numberResult(left === right ? 1 : 0);
+  },
+  GESTEP: (numberArg, stepArg = { tag: ValueTag.Number, value: 0 }) => {
+    const numberValue = toNumber(numberArg);
+    const stepValue = toNumber(stepArg);
+    if (numberValue === undefined || stepValue === undefined) {
+      return valueError();
+    }
+    return numberResult(numberValue >= stepValue ? 1 : 0);
+  },
+  GAUSS: (value) => {
+    const numeric = toNumber(value);
+    return numeric === undefined ? valueError() : numberResult(standardNormalCdf(numeric) - 0.5);
+  },
+  PHI: (value) => {
+    const numeric = toNumber(value);
+    return numeric === undefined ? valueError() : numberResult(standardNormalPdf(numeric));
+  },
+  STANDARDIZE: (xArg, meanArg, standardDeviationArg) => {
+    const x = toNumber(xArg);
+    const mean = toNumber(meanArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    if (
+      x === undefined ||
+      mean === undefined ||
+      standardDeviation === undefined ||
+      standardDeviation <= 0
+    ) {
+      return valueError();
+    }
+    return numberResult((x - mean) / standardDeviation);
+  },
+  MODE: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const mode = modeSingle(collectNumericArgs(args));
+    return mode === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : numberResult(mode);
+  },
+  "MODE.SNGL": (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const mode = modeSingle(collectNumericArgs(args));
+    return mode === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : numberResult(mode);
+  },
+  STDEV: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length < 2
+      ? valueError()
+      : numericResultOrError(sampleStandardDeviation(numbers));
+  },
+  "STDEV.S": (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length < 2
+      ? valueError()
+      : numericResultOrError(sampleStandardDeviation(numbers));
+  },
+  STDEVP: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length === 0
+      ? valueError()
+      : numericResultOrError(populationStandardDeviation(numbers));
+  },
+  "STDEV.P": (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length === 0
+      ? valueError()
+      : numericResultOrError(populationStandardDeviation(numbers));
+  },
+  STDEVA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectAStyleNumericArgs(args);
+    return numbers.length < 2
+      ? valueError()
+      : numericResultOrError(sampleStandardDeviation(numbers));
+  },
+  STDEVPA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectAStyleNumericArgs(args);
+    return numbers.length === 0
+      ? valueError()
+      : numericResultOrError(populationStandardDeviation(numbers));
+  },
+  VAR: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers));
+  },
+  "VAR.S": (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers));
+  },
+  VARP: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers));
+  },
+  "VAR.P": (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectStatNumericArgs(args);
+    return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers));
+  },
+  VARA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectAStyleNumericArgs(args);
+    return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers));
+  },
+  VARPA: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const numbers = collectAStyleNumericArgs(args);
+    return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers));
+  },
+  SKEW: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const skew = skewSample(collectStatNumericArgs(args));
+    return skew === undefined ? valueError() : numberResult(skew);
+  },
+  "SKEW.P": (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const skew = skewPopulation(collectStatNumericArgs(args));
+    return skew === undefined ? valueError() : numberResult(skew);
+  },
+  KURT: (...args) => {
+    const error = firstError(args);
+    if (error) return error;
+    const value = kurtosis(collectStatNumericArgs(args));
+    return value === undefined ? valueError() : numberResult(value);
+  },
+  NORMDIST: (xArg, meanArg, standardDeviationArg, cumulativeArg) => {
+    const x = toNumber(xArg);
+    const mean = toNumber(meanArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      x === undefined ||
+      mean === undefined ||
+      standardDeviation === undefined ||
+      cumulative === undefined ||
+      standardDeviation <= 0
+    ) {
+      return valueError();
+    }
+    return numberResult(
+      cumulative
+        ? percentileNormal(mean, standardDeviation, x)
+        : standardNormalPdf((x - mean) / standardDeviation) / standardDeviation,
+    );
+  },
+  "NORM.DIST": (xArg, meanArg, standardDeviationArg, cumulativeArg) => {
+    return scalarBuiltins["NORMDIST"]!(xArg, meanArg, standardDeviationArg, cumulativeArg);
+  },
+  NORMINV: (probabilityArg, meanArg, standardDeviationArg) => {
+    const probability = toNumber(probabilityArg);
+    const mean = toNumber(meanArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    if (
+      probability === undefined ||
+      mean === undefined ||
+      standardDeviation === undefined ||
+      standardDeviation <= 0
+    ) {
+      return valueError();
+    }
+    const result = inverseNormal(probability, mean, standardDeviation);
+    return result === undefined ? valueError() : numberResult(result);
+  },
+  "NORM.INV": (probabilityArg, meanArg, standardDeviationArg) => {
+    return scalarBuiltins["NORMINV"]!(probabilityArg, meanArg, standardDeviationArg);
+  },
+  NORMSDIST: (value) => {
+    const numeric = toNumber(value);
+    return numeric === undefined ? valueError() : numberResult(standardNormalCdf(numeric));
+  },
+  "NORM.S.DIST": (value, cumulativeArg = { tag: ValueTag.Boolean, value: true }) => {
+    const numeric = toNumber(value);
+    const cumulative = coerceBoolean(cumulativeArg, true);
+    if (numeric === undefined || cumulative === undefined) {
+      return valueError();
+    }
+    return numberResult(cumulative ? standardNormalCdf(numeric) : standardNormalPdf(numeric));
+  },
+  NORMSINV: (value) => {
+    const numeric = toNumber(value);
+    if (numeric === undefined) {
+      return valueError();
+    }
+    const result = inverseStandardNormal(numeric);
+    return result === undefined ? valueError() : numberResult(result);
+  },
+  "NORM.S.INV": (value) => {
+    return scalarBuiltins["NORMSINV"]!(value);
+  },
+  LOGINV: (probabilityArg, meanArg, standardDeviationArg) => {
+    const probability = toNumber(probabilityArg);
+    const mean = toNumber(meanArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    if (
+      probability === undefined ||
+      mean === undefined ||
+      standardDeviation === undefined ||
+      standardDeviation <= 0
+    ) {
+      return valueError();
+    }
+    const normal = inverseNormal(probability, mean, standardDeviation);
+    return normal === undefined ? valueError() : numberResult(Math.exp(normal));
+  },
+  "LOGNORM.INV": (probabilityArg, meanArg, standardDeviationArg) => {
+    return scalarBuiltins["LOGINV"]!(probabilityArg, meanArg, standardDeviationArg);
+  },
+  LOGNORMDIST: (xArg, meanArg, standardDeviationArg) => {
+    const x = toNumber(xArg);
+    const mean = toNumber(meanArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    if (
+      x === undefined ||
+      mean === undefined ||
+      standardDeviation === undefined ||
+      standardDeviation <= 0 ||
+      x <= 0
+    ) {
+      return valueError();
+    }
+    return numberResult(percentileNormal(mean, standardDeviation, Math.log(x)));
+  },
+  "LOGNORM.DIST": (
+    xArg,
+    meanArg,
+    standardDeviationArg,
+    cumulativeArg = { tag: ValueTag.Boolean, value: true },
+  ) => {
+    const x = toNumber(xArg);
+    const mean = toNumber(meanArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    const cumulative = coerceBoolean(cumulativeArg, true);
+    if (
+      x === undefined ||
+      mean === undefined ||
+      standardDeviation === undefined ||
+      cumulative === undefined ||
+      standardDeviation <= 0 ||
+      x <= 0
+    ) {
+      return valueError();
+    }
+    const z = (Math.log(x) - mean) / standardDeviation;
+    return numberResult(
+      cumulative ? standardNormalCdf(z) : standardNormalPdf(z) / (x * standardDeviation),
+    );
+  },
+  EFFECT: (nominalRateArg, periodsArg) => {
+    const nominalRate = toNumber(nominalRateArg);
+    const periods = positiveIntegerValue(periodsArg);
+    if (nominalRate === undefined || periods === undefined) {
+      return valueError();
+    }
+    return numberResult((1 + nominalRate / periods) ** periods - 1);
+  },
+  NOMINAL: (effectiveRateArg, periodsArg) => {
+    const effectiveRate = toNumber(effectiveRateArg);
+    const periods = positiveIntegerValue(periodsArg);
+    if (effectiveRate === undefined || periods === undefined || effectiveRate <= -1) {
+      return valueError();
+    }
+    return numberResult(periods * ((1 + effectiveRate) ** (1 / periods) - 1));
+  },
+  PDURATION: (rateArg, presentArg, futureArg) => {
+    const rate = toNumber(rateArg);
+    const present = toNumber(presentArg);
+    const future = toNumber(futureArg);
+    if (
+      rate === undefined ||
+      present === undefined ||
+      future === undefined ||
+      rate <= 0 ||
+      present <= 0 ||
+      future <= 0
+    ) {
+      return valueError();
+    }
+    return numberResult(Math.log(future / present) / Math.log(1 + rate));
+  },
+  RRI: (periodsArg, presentArg, futureArg) => {
+    const periods = toNumber(periodsArg);
+    const present = toNumber(presentArg);
+    const future = toNumber(futureArg);
+    if (
+      periods === undefined ||
+      present === undefined ||
+      future === undefined ||
+      periods <= 0 ||
+      present === 0
+    ) {
+      return valueError();
+    }
+    return numericResultOrError((future / present) ** (1 / periods) - 1);
+  },
+  FV: (rateArg, periodsArg, paymentArg, presentArg, typeArg) => {
+    const rate = toNumber(rateArg);
+    const periods = toNumber(periodsArg);
+    const payment = toNumber(paymentArg);
+    const present = coerceNumber(presentArg, 0);
+    const type = coercePaymentType(typeArg, 0);
+    if (
+      rate === undefined ||
+      periods === undefined ||
+      payment === undefined ||
+      present === undefined ||
+      type === undefined
+    ) {
+      return valueError();
+    }
+    return numberResult(futureValue(rate, periods, payment, present, type));
+  },
+  PV: (rateArg, periodsArg, paymentArg, futureArg, typeArg) => {
+    const rate = toNumber(rateArg);
+    const periods = toNumber(periodsArg);
+    const payment = toNumber(paymentArg);
+    const future = coerceNumber(futureArg, 0);
+    const type = coercePaymentType(typeArg, 0);
+    if (
+      rate === undefined ||
+      periods === undefined ||
+      payment === undefined ||
+      future === undefined ||
+      type === undefined
+    ) {
+      return valueError();
+    }
+    return numberResult(presentValue(rate, periods, payment, future, type));
+  },
+  PMT: (rateArg, periodsArg, presentArg, futureArg, typeArg) => {
+    const rate = toNumber(rateArg);
+    const periods = toNumber(periodsArg);
+    const present = toNumber(presentArg);
+    const future = coerceNumber(futureArg, 0);
+    const type = coercePaymentType(typeArg, 0);
+    if (
+      rate === undefined ||
+      periods === undefined ||
+      present === undefined ||
+      future === undefined ||
+      type === undefined
+    ) {
+      return valueError();
+    }
+    const payment = periodicPayment(rate, periods, present, future, type);
+    return payment === undefined ? valueError() : numberResult(payment);
+  },
+  NPER: (rateArg, paymentArg, presentArg, futureArg, typeArg) => {
+    const rate = toNumber(rateArg);
+    const payment = toNumber(paymentArg);
+    const present = toNumber(presentArg);
+    const future = coerceNumber(futureArg, 0);
+    const type = coercePaymentType(typeArg, 0);
+    if (
+      rate === undefined ||
+      payment === undefined ||
+      present === undefined ||
+      future === undefined ||
+      type === undefined
+    ) {
+      return valueError();
+    }
+    const periods = totalPeriods(rate, payment, present, future, type);
+    return periods === undefined ? valueError() : numberResult(periods);
+  },
+  NPV: (rateArg, ...valueArgs) => {
+    const rate = toNumber(rateArg);
+    if (rate === undefined || valueArgs.length === 0) {
+      return valueError();
+    }
+    let result = 0;
+    for (let index = 0; index < valueArgs.length; index += 1) {
+      const value = toNumber(valueArgs[index]!);
+      if (value === undefined) {
+        return valueError();
+      }
+      result += value / (1 + rate) ** (index + 1);
+    }
+    return numberResult(result);
+  },
+  IPMT: (rateArg, periodArg, periodsArg, presentArg, futureArg, typeArg) => {
+    const rate = toNumber(rateArg);
+    const period = toNumber(periodArg);
+    const periods = toNumber(periodsArg);
+    const present = toNumber(presentArg);
+    const future = coerceNumber(futureArg, 0);
+    const type = coercePaymentType(typeArg, 0);
+    if (
+      rate === undefined ||
+      period === undefined ||
+      periods === undefined ||
+      present === undefined ||
+      future === undefined ||
+      type === undefined
+    ) {
+      return valueError();
+    }
+    const interest = interestPayment(rate, period, periods, present, future, type);
+    return interest === undefined ? valueError() : numberResult(interest);
+  },
+  PPMT: (rateArg, periodArg, periodsArg, presentArg, futureArg, typeArg) => {
+    const rate = toNumber(rateArg);
+    const period = toNumber(periodArg);
+    const periods = toNumber(periodsArg);
+    const present = toNumber(presentArg);
+    const future = coerceNumber(futureArg, 0);
+    const type = coercePaymentType(typeArg, 0);
+    if (
+      rate === undefined ||
+      period === undefined ||
+      periods === undefined ||
+      present === undefined ||
+      future === undefined ||
+      type === undefined
+    ) {
+      return valueError();
+    }
+    const principal = principalPayment(rate, period, periods, present, future, type);
+    return principal === undefined ? valueError() : numberResult(principal);
+  },
+  ISPMT: (rateArg, periodArg, periodsArg, presentArg) => {
+    const rate = toNumber(rateArg);
+    const period = toNumber(periodArg);
+    const periods = toNumber(periodsArg);
+    const present = toNumber(presentArg);
+    if (
+      rate === undefined ||
+      period === undefined ||
+      periods === undefined ||
+      present === undefined ||
+      periods <= 0 ||
+      period < 1 ||
+      period > periods
+    ) {
+      return valueError();
+    }
+    return numberResult(present * rate * (period / periods - 1));
+  },
+  PERMUT: (numberArg, chosenArg) => {
+    const numberValue = nonNegativeIntegerValue(numberArg);
+    const chosenValue = nonNegativeIntegerValue(chosenArg);
+    if (numberValue === undefined || chosenValue === undefined || chosenValue > numberValue) {
+      return valueError();
+    }
+    let result = 1;
+    for (let index = 0; index < chosenValue; index += 1) {
+      result *= numberValue - index;
+    }
+    return numberResult(result);
+  },
+  PERMUTATIONA: (numberArg, chosenArg) => {
+    const numberValue = nonNegativeIntegerValue(numberArg);
+    const chosenValue = nonNegativeIntegerValue(chosenArg);
+    if (numberValue === undefined || chosenValue === undefined) {
+      return valueError();
+    }
+    return numberResult(numberValue ** chosenValue);
+  },
+  "CONFIDENCE.NORM": (alphaArg, standardDeviationArg, sizeArg) => {
+    const alpha = toNumber(alphaArg);
+    const standardDeviation = toNumber(standardDeviationArg);
+    const size = toNumber(sizeArg);
+    if (
+      alpha === undefined ||
+      standardDeviation === undefined ||
+      size === undefined ||
+      !(alpha > 0 && alpha < 1) ||
+      standardDeviation <= 0 ||
+      size < 1
+    ) {
+      return valueError();
+    }
+    const criticalValue = inverseStandardNormal(1 - alpha / 2);
+    return criticalValue === undefined
+      ? valueError()
+      : numberResult((criticalValue * standardDeviation) / Math.sqrt(size));
+  },
   SUBTOTAL: (functionNumArg, ...args) => {
     const functionNum = integerValue(functionNumArg);
     return functionNum === undefined ? valueError() : aggregateByCode(functionNum, args);
@@ -1594,9 +2424,9 @@ const jsSpecialBuiltins = new Set([
   "BYCOL",
 ]);
 
-function isBuiltinIdKey(value: string): value is keyof typeof BuiltinId {
-  return value in BuiltinId;
-}
+const builtinIdByName = new Map(
+  BUILTINS.map((builtin) => [builtin.name.toUpperCase(), builtin.id]),
+);
 
 export function getBuiltin(name: string): Builtin | undefined {
   return builtins[name.toUpperCase()] ?? getExternalScalarFunction(name);
@@ -1613,12 +2443,5 @@ export function hasBuiltin(name: string): boolean {
 }
 
 export function getBuiltinId(name: string): BuiltinId | undefined {
-  const first = name.charAt(0);
-  if (!first) return undefined;
-  const key = `${first.toUpperCase()}${name.slice(1).toLowerCase()}`;
-  if (!isBuiltinIdKey(key)) {
-    return undefined;
-  }
-  const builtinId = BuiltinId[key];
-  return typeof builtinId === "number" ? builtinId : undefined;
+  return builtinIdByName.get(name.toUpperCase());
 }

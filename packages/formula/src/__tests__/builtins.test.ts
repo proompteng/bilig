@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import { getBuiltin, getBuiltinId } from "../builtins.js";
+import type { ArrayValue } from "../runtime-values.js";
 import {
   placeholderBuiltinNames,
   protocolPlaceholderBuiltinNames,
@@ -1785,6 +1786,739 @@ describe("formula builtins", () => {
       tag: ValueTag.String,
       value: "$1235",
       stringId: 0,
+    });
+  });
+
+  it("covers the new type, statistical, distribution, and combinatoric builtins", () => {
+    const T = getBuiltin("T")!;
+    const N = getBuiltin("N")!;
+    const TYPE = getBuiltin("TYPE")!;
+    const DELTA = getBuiltin("DELTA")!;
+    const GESTEP = getBuiltin("GESTEP")!;
+    const GAUSS = getBuiltin("GAUSS")!;
+    const PHI = getBuiltin("PHI")!;
+    const STANDARDIZE = getBuiltin("STANDARDIZE")!;
+    const MODE = getBuiltin("MODE")!;
+    const MODE_SNGL = getBuiltin("MODE.SNGL")!;
+    const STDEV = getBuiltin("STDEV")!;
+    const STDEV_S = getBuiltin("STDEV.S")!;
+    const STDEVP = getBuiltin("STDEVP")!;
+    const STDEV_P = getBuiltin("STDEV.P")!;
+    const STDEVA = getBuiltin("STDEVA")!;
+    const STDEVPA = getBuiltin("STDEVPA")!;
+    const VAR = getBuiltin("VAR")!;
+    const VAR_S = getBuiltin("VAR.S")!;
+    const VARP = getBuiltin("VARP")!;
+    const VAR_P = getBuiltin("VAR.P")!;
+    const VARA = getBuiltin("VARA")!;
+    const VARPA = getBuiltin("VARPA")!;
+    const SKEW = getBuiltin("SKEW")!;
+    const SKEW_P = getBuiltin("SKEW.P")!;
+    const KURT = getBuiltin("KURT")!;
+    const NORMDIST = getBuiltin("NORMDIST")!;
+    const NORM_DIST = getBuiltin("NORM.DIST")!;
+    const NORMINV = getBuiltin("NORMINV")!;
+    const NORM_INV = getBuiltin("NORM.INV")!;
+    const NORMSDIST = getBuiltin("NORMSDIST")!;
+    const NORM_S_DIST = getBuiltin("NORM.S.DIST")!;
+    const NORMSINV = getBuiltin("NORMSINV")!;
+    const NORM_S_INV = getBuiltin("NORM.S.INV")!;
+    const LOGINV = getBuiltin("LOGINV")!;
+    const LOGNORMDIST = getBuiltin("LOGNORMDIST")!;
+    const LOGNORM_DIST = getBuiltin("LOGNORM.DIST")!;
+    const LOGNORM_INV = getBuiltin("LOGNORM.INV")!;
+    const CONFIDENCE_NORM = getBuiltin("CONFIDENCE.NORM")!;
+    const PERMUT = getBuiltin("PERMUT")!;
+    const PERMUTATIONA = getBuiltin("PERMUTATIONA")!;
+
+    expect(T({ tag: ValueTag.String, value: "alpha", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "alpha",
+      stringId: 1,
+    });
+    expect(T({ tag: ValueTag.Number, value: 42 })).toEqual({ tag: ValueTag.Empty });
+    expect(T({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+
+    expect(N({ tag: ValueTag.Boolean, value: true })).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(N({ tag: ValueTag.String, value: "alpha", stringId: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(N({ tag: ValueTag.Error, code: ErrorCode.Name })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    });
+
+    expect(TYPE({ tag: ValueTag.Number, value: 1 })).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(TYPE({ tag: ValueTag.String, value: "alpha", stringId: 3 })).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(TYPE({ tag: ValueTag.Boolean, value: true })).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(TYPE({ tag: ValueTag.Error, code: ErrorCode.Value })).toEqual({
+      tag: ValueTag.Number,
+      value: 16,
+    });
+    const arrayValue: ArrayValue = {
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [{ tag: ValueTag.Number, value: 1 }],
+    };
+    expect(TYPE(arrayValue)).toEqual({
+      tag: ValueTag.Number,
+      value: 64,
+    });
+
+    expect(DELTA({ tag: ValueTag.Number, value: 4 }, { tag: ValueTag.Number, value: 4 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(DELTA({ tag: ValueTag.Number, value: 4 })).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(DELTA({ tag: ValueTag.String, value: "bad", stringId: 4 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(GESTEP({ tag: ValueTag.Number, value: 4 }, { tag: ValueTag.Number, value: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(GESTEP({ tag: ValueTag.Number, value: -1 })).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(
+      GESTEP(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "bad", stringId: 5 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(GAUSS({ tag: ValueTag.Number, value: 0 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0, 8),
+    });
+    expect(PHI({ tag: ValueTag.Number, value: 0 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1 / Math.sqrt(2 * Math.PI), 12),
+    });
+    expect(
+      STANDARDIZE(
+        { tag: ValueTag.Number, value: 42 },
+        { tag: ValueTag.Number, value: 40 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(
+      STANDARDIZE(
+        { tag: ValueTag.Number, value: 42 },
+        { tag: ValueTag.Number, value: 40 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(
+      MODE(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(
+      MODE(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(
+      MODE_SNGL(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    expect(
+      STDEV(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(Math.sqrt(5 / 3), 12),
+    });
+    expect(
+      STDEV_S(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "skip", stringId: 6 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(
+      STDEVP(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(Math.sqrt(1.25), 12),
+    });
+    expect(STDEV_P({ tag: ValueTag.Number, value: 2 }, { tag: ValueTag.Number, value: 2 })).toEqual(
+      {
+        tag: ValueTag.Number,
+        value: 0,
+      },
+    );
+    expect(
+      STDEVA(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "skip", stringId: 7 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(
+      STDEVPA(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "skip", stringId: 8 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(Math.sqrt(2 / 3), 12),
+    });
+
+    expect(
+      VAR(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(5 / 3, 12),
+    });
+    expect(
+      VAR_S({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 2 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 12),
+    });
+    expect(
+      VARP(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1.25, 12),
+    });
+    expect(VAR_P({ tag: ValueTag.Number, value: 2 }, { tag: ValueTag.Number, value: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(
+      VARA(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "skip", stringId: 9 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(
+      VARPA(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.String, value: "skip", stringId: 10 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2 / 3, 12),
+    });
+
+    expect(
+      SKEW(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 6 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0, 12),
+    });
+    expect(
+      SKEW_P(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 6 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0, 12),
+    });
+    expect(
+      KURT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 5 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-1.2, 12),
+    });
+    expect(
+      KURT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(
+      NORMDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.8413447460685429, 7),
+    });
+    expect(
+      NORM_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.24197072451914337, 12),
+    });
+    expect(
+      NORMINV(
+        { tag: ValueTag.Number, value: 0.8413447460685429 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 8),
+    });
+    expect(
+      NORM_INV(
+        { tag: ValueTag.Number, value: 0.8413447460685429 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 8),
+    });
+    expect(NORMSDIST({ tag: ValueTag.Number, value: 1 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.8413447460685429, 7),
+    });
+    expect(
+      NORM_S_DIST({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Boolean, value: false }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.24197072451914337, 12),
+    });
+    expect(NORMSINV({ tag: ValueTag.Number, value: 0.001 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-3.090232306167813, 8),
+    });
+    expect(NORM_S_INV({ tag: ValueTag.Number, value: 0.999 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(3.090232306167813, 8),
+    });
+    expect(NORMSINV({ tag: ValueTag.Number, value: 0.5 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0, 12),
+    });
+    expect(
+      LOGINV(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 12),
+    });
+    expect(
+      LOGNORMDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 8),
+    });
+    expect(
+      LOGNORM_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1 / Math.sqrt(2 * Math.PI), 12),
+    });
+    expect(
+      LOGNORM_INV(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 12),
+    });
+    expect(
+      CONFIDENCE_NORM(
+        { tag: ValueTag.Number, value: 0.05 },
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 100 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.2939945976810081, 9),
+    });
+    expect(
+      CONFIDENCE_NORM(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 100 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      LOGNORMDIST(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(PERMUT({ tag: ValueTag.Number, value: 5 }, { tag: ValueTag.Number, value: 3 })).toEqual({
+      tag: ValueTag.Number,
+      value: 60,
+    });
+    expect(
+      PERMUTATIONA({ tag: ValueTag.Number, value: 2 }, { tag: ValueTag.Number, value: 3 }),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 8,
+    });
+    expect(PERMUT({ tag: ValueTag.Number, value: 3 }, { tag: ValueTag.Number, value: 4 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(getBuiltinId("norm.dist")).toBe(BuiltinId.NormDist);
+    expect(getBuiltinId("norm.s.inv")).toBe(BuiltinId.NormSInv);
+    expect(getBuiltinId("confidence.norm")).toBe(BuiltinId.ConfidenceNorm);
+    expect(getBuiltinId("permutationa")).toBe(BuiltinId.Permutationa);
+  });
+
+  it("covers the new financial builtins and their error branches", () => {
+    const EFFECT = getBuiltin("EFFECT")!;
+    const NOMINAL = getBuiltin("NOMINAL")!;
+    const PDURATION = getBuiltin("PDURATION")!;
+    const RRI = getBuiltin("RRI")!;
+    const FV = getBuiltin("FV")!;
+    const PV = getBuiltin("PV")!;
+    const PMT = getBuiltin("PMT")!;
+    const NPER = getBuiltin("NPER")!;
+    const NPV = getBuiltin("NPV")!;
+    const IPMT = getBuiltin("IPMT")!;
+    const PPMT = getBuiltin("PPMT")!;
+    const ISPMT = getBuiltin("ISPMT")!;
+
+    expect(
+      EFFECT({ tag: ValueTag.Number, value: 0.12 }, { tag: ValueTag.Number, value: 12 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.12682503013196977, 12),
+    });
+    expect(
+      NOMINAL(
+        { tag: ValueTag.Number, value: 0.12682503013196977 },
+        { tag: ValueTag.Number, value: 12 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.12, 12),
+    });
+    expect(
+      PDURATION(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 121 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2, 12),
+    });
+    expect(
+      RRI(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 121 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.1, 12),
+    });
+
+    expect(
+      FV(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: -100 },
+        { tag: ValueTag.Number, value: -1000 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1420, 12),
+    });
+    expect(
+      PV(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: -100 },
+        { tag: ValueTag.Number, value: 1420 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-1000, 12),
+    });
+    expect(
+      PMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-576.1904761904761, 12),
+    });
+    expect(
+      NPER(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: -576.1904761904761 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2, 12),
+    });
+    expect(
+      NPV(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 100 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(173.55371900826447, 12),
+    });
+    expect(
+      IPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: -100,
+    });
+    expect(
+      IPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(
+      PPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-476.19047619047615, 12),
+    });
+    expect(
+      ISPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: -50,
+    });
+
+    expect(
+      EFFECT({ tag: ValueTag.Number, value: 0.1 }, { tag: ValueTag.Number, value: 0 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NOMINAL({ tag: ValueTag.Number, value: -1 }, { tag: ValueTag.Number, value: 12 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      PDURATION(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 121 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      RRI(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 121 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      PMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NPER(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NPV(
+        { tag: ValueTag.String, value: "bad", stringId: 11 },
+        { tag: ValueTag.Number, value: 100 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      IPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      PPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      ISPMT(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
   });
 

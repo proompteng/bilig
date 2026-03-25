@@ -1,3 +1,9 @@
+declare const Bun:
+  | {
+      gc(force?: boolean): void;
+    }
+  | undefined;
+
 export interface MemorySnapshot {
   rssBytes: number;
   heapUsedBytes: number;
@@ -20,7 +26,14 @@ export interface MemoryMeasurement {
   delta: MemoryDelta;
 }
 
+export function collectGarbage(): void {
+  if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
+    Bun.gc(true);
+  }
+}
+
 export function sampleMemory(): MemorySnapshot {
+  collectGarbage();
   const memory = process.memoryUsage();
   return {
     rssBytes: memory.rss,

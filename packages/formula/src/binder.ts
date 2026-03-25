@@ -245,6 +245,72 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "CEILING":
     case "LOG":
       return argc === 1 || argc === 2;
+    case "T":
+    case "N":
+    case "TYPE":
+    case "GAUSS":
+    case "PHI":
+    case "NORMSDIST":
+    case "NORMSINV":
+      return argc === 1;
+    case "DELTA":
+    case "GESTEP":
+    case "LOGNORMDIST":
+    case "EFFECT":
+    case "NOMINAL":
+    case "RRI":
+    case "PERMUT":
+    case "PERMUTATIONA":
+      return argc === 2;
+    case "STANDARDIZE":
+    case "NORMINV":
+    case "LOGINV":
+    case "PDURATION":
+    case "CONFIDENCE.NORM":
+      return argc === 3;
+    case "NORMDIST":
+      return argc === 4;
+    case "NORM.DIST":
+      return argc === 4;
+    case "NORM.INV":
+      return argc === 3;
+    case "NORM.S.DIST":
+      return argc === 1 || argc === 2;
+    case "NORM.S.INV":
+      return argc === 1;
+    case "LOGNORM.DIST":
+      return argc === 3 || argc === 4;
+    case "LOGNORM.INV":
+      return argc === 3;
+    case "MODE":
+    case "MODE.SNGL":
+    case "STDEV":
+    case "STDEV.P":
+    case "STDEV.S":
+    case "STDEVA":
+    case "STDEVP":
+    case "STDEVPA":
+    case "VAR":
+    case "VAR.P":
+    case "VAR.S":
+    case "VARA":
+    case "VARP":
+    case "VARPA":
+    case "SKEW":
+    case "SKEW.P":
+    case "KURT":
+    case "NPV":
+      return argc >= 1;
+    case "FV":
+    case "PV":
+    case "PMT":
+    case "NPER":
+      return argc >= 3 && argc <= 5;
+    case "IPMT":
+    case "PPMT":
+      return argc >= 4 && argc <= 6;
+    case "ISPMT":
+      return argc === 4;
     case "DATE":
     case "TIME":
       return argc === 3;
@@ -784,6 +850,58 @@ export function encodeBuiltin(name: string): BuiltinId {
     VSTACK: BuiltinId.Vstack,
     MINIFS: BuiltinId.Minifs,
     MAXIFS: BuiltinId.Maxifs,
+    T: BuiltinId.T,
+    N: BuiltinId.N,
+    TYPE: BuiltinId.Type,
+    DELTA: BuiltinId.Delta,
+    GESTEP: BuiltinId.Gestep,
+    GAUSS: BuiltinId.Gauss,
+    PHI: BuiltinId.Phi,
+    STANDARDIZE: BuiltinId.Standardize,
+    MODE: BuiltinId.Mode,
+    "MODE.SNGL": BuiltinId.ModeSngl,
+    STDEV: BuiltinId.Stdev,
+    "STDEV.P": BuiltinId.StdevP,
+    "STDEV.S": BuiltinId.StdevS,
+    STDEVA: BuiltinId.Stdeva,
+    STDEVP: BuiltinId.Stdevp,
+    STDEVPA: BuiltinId.Stdevpa,
+    VAR: BuiltinId.Var,
+    "VAR.P": BuiltinId.VarP,
+    "VAR.S": BuiltinId.VarS,
+    VARA: BuiltinId.Vara,
+    VARP: BuiltinId.Varp,
+    VARPA: BuiltinId.Varpa,
+    SKEW: BuiltinId.Skew,
+    "SKEW.P": BuiltinId.SkewP,
+    KURT: BuiltinId.Kurt,
+    NORMDIST: BuiltinId.Normdist,
+    "NORM.DIST": BuiltinId.NormDist,
+    NORMINV: BuiltinId.Norminv,
+    "NORM.INV": BuiltinId.NormInv,
+    NORMSDIST: BuiltinId.Normsdist,
+    "NORM.S.DIST": BuiltinId.NormSDist,
+    NORMSINV: BuiltinId.Normsinv,
+    "NORM.S.INV": BuiltinId.NormSInv,
+    LOGINV: BuiltinId.Loginv,
+    LOGNORMDIST: BuiltinId.Lognormdist,
+    "LOGNORM.DIST": BuiltinId.LognormDist,
+    "LOGNORM.INV": BuiltinId.LognormInv,
+    "CONFIDENCE.NORM": BuiltinId.ConfidenceNorm,
+    EFFECT: BuiltinId.Effect,
+    NOMINAL: BuiltinId.Nominal,
+    PDURATION: BuiltinId.Pduration,
+    RRI: BuiltinId.Rri,
+    FV: BuiltinId.Fv,
+    PV: BuiltinId.Pv,
+    PMT: BuiltinId.Pmt,
+    NPER: BuiltinId.Nper,
+    NPV: BuiltinId.Npv,
+    IPMT: BuiltinId.Ipmt,
+    PPMT: BuiltinId.Ppmt,
+    ISPMT: BuiltinId.Ispmt,
+    PERMUT: BuiltinId.Permut,
+    PERMUTATIONA: BuiltinId.Permutationa,
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {
