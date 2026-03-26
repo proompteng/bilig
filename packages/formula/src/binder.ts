@@ -1,5 +1,6 @@
 import { BuiltinId, FormulaMode, MAX_WASM_RANGE_CELLS } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
+import { builtinWasmEnabledNames } from "./builtin-capabilities.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
 import { hasBuiltin } from "./builtins.js";
 import { rewriteSpecialCall } from "./special-call-rewrites.js";
@@ -17,145 +18,6 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const WASM_SAFE_BUILTINS = new Set([
-  "SUM",
-  "AVG",
-  "MIN",
-  "MAX",
-  "COUNT",
-  "COUNTA",
-  "COUNTIF",
-  "COUNTIFS",
-  "SUMIF",
-  "SUMIFS",
-  "AVERAGEIF",
-  "AVERAGEIFS",
-  "SUMPRODUCT",
-  "MATCH",
-  "XMATCH",
-  "XLOOKUP",
-  "INDEX",
-  "VLOOKUP",
-  "HLOOKUP",
-  "ABS",
-  "SIN",
-  "COS",
-  "TAN",
-  "ASIN",
-  "ACOS",
-  "ATAN",
-  "ATAN2",
-  "DEGREES",
-  "RADIANS",
-  "EXP",
-  "LN",
-  "LOG",
-  "LOG10",
-  "POWER",
-  "SQRT",
-  "PI",
-  "MOD",
-  "IF",
-  "IFERROR",
-  "IFNA",
-  "NA",
-  "AND",
-  "OR",
-  "NOT",
-  "ROUND",
-  "FLOOR",
-  "CEILING",
-  "LEN",
-  "CONCAT",
-  "ISBLANK",
-  "ISNUMBER",
-  "ISTEXT",
-  "DATE",
-  "YEAR",
-  "MONTH",
-  "DAY",
-  "TIME",
-  "HOUR",
-  "MINUTE",
-  "SECOND",
-  "WEEKDAY",
-  "TODAY",
-  "NOW",
-  "RAND",
-  "EDATE",
-  "EOMONTH",
-  "DAYS",
-  "WEEKNUM",
-  "WORKDAY",
-  "NETWORKDAYS",
-  "REPLACE",
-  "SUBSTITUTE",
-  "REPT",
-  "EXACT",
-  "INT",
-  "ROUNDUP",
-  "ROUNDDOWN",
-  "LEFT",
-  "RIGHT",
-  "MID",
-  "TRIM",
-  "UPPER",
-  "LOWER",
-  "FIND",
-  "SEARCH",
-  "VALUE",
-  "OFFSET",
-  "TAKE",
-  "DROP",
-  "CHOOSECOLS",
-  "CHOOSEROWS",
-  "SORT",
-  "SORTBY",
-  "TOCOL",
-  "TOROW",
-  "WRAPROWS",
-  "WRAPCOLS",
-  "LOOKUP",
-  "AREAS",
-  "ARRAYTOTEXT",
-  "COLUMNS",
-  "ROWS",
-  "TRANSPOSE",
-  "HSTACK",
-  "VSTACK",
-  "MINIFS",
-  "MAXIFS",
-  "ERF",
-  "ERF.PRECISE",
-  "ERFC",
-  "ERFC.PRECISE",
-  "FISHER",
-  "FISHERINV",
-  "GAMMALN",
-  "GAMMALN.PRECISE",
-  "GAMMA",
-  "CONFIDENCE",
-  "EXPONDIST",
-  "EXPON.DIST",
-  "POISSON",
-  "POISSON.DIST",
-  "WEIBULL",
-  "WEIBULL.DIST",
-  "GAMMADIST",
-  "GAMMA.DIST",
-  "CHIDIST",
-  "CHISQ.DIST.RT",
-  "CHISQ.DIST",
-  "BINOMDIST",
-  "BINOM.DIST",
-  "BINOM.DIST.RANGE",
-  "CRITBINOM",
-  "BINOM.INV",
-  "HYPGEOMDIST",
-  "HYPGEOM.DIST",
-  "NEGBINOMDIST",
-  "NEGBINOM.DIST",
-]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
 function isCellRangeNode(node: FormulaNode): boolean {
@@ -391,6 +253,10 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc >= 1;
     case "SEQUENCE":
       return argc >= 1 && argc <= 4;
+    case "FILTER":
+      return argc === 2 || argc === 3;
+    case "UNIQUE":
+      return argc >= 1 && argc <= 3;
     case "OFFSET":
       return argc >= 3 && argc <= 5;
     case "TAKE":
@@ -557,12 +423,12 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           return false;
         }
       case "UnaryExpr":
-        return ["+", "-"].includes(node.operator) && isWasmSafe(node.argument);
+        return ["+", "-"].includes(node.operator) && isWasmSafe(node.argument, true);
       case "BinaryExpr":
         return (
           ["+", "-", "*", "/", "^", "&", "=", "<>", ">", ">=", "<", "<="].includes(node.operator) &&
-          isWasmSafe(node.left) &&
-          isWasmSafe(node.right)
+          isWasmSafe(node.left, true) &&
+          isWasmSafe(node.right, true)
         );
       case "CallExpr": {
         const rewritten = rewriteSpecialCall(node);
@@ -582,7 +448,7 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         ) {
           return false;
         }
-        if (!hasBuiltin(callee) || !WASM_SAFE_BUILTINS.has(callee)) {
+        if (!hasBuiltin(callee) || !builtinWasmEnabledNames.has(callee)) {
           return false;
         }
         if (!isWasmSafeBuiltinArity(callee, node.args.length)) {
@@ -726,6 +592,20 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           return false;
         }
         return isCellRangeArg(args[0]!) && args.slice(1).every((arg) => isScalarArg(arg));
+      case "FILTER":
+        return (
+          (argc === 2 || argc === 3) &&
+          isCellRangeArg(args[0]!) &&
+          isWasmSafe(args[1]!, true) &&
+          (argc === 2 || isScalarArg(args[2]!))
+        );
+      case "UNIQUE":
+        return (
+          argc >= 1 &&
+          argc <= 3 &&
+          isCellRangeArg(args[0]!) &&
+          args.slice(1).every((arg) => isScalarArg(arg))
+        );
       case "LOOKUP":
         if (argc < 2 || argc > 3) {
           return false;
@@ -902,6 +782,8 @@ export function encodeBuiltin(name: string): BuiltinId {
     AVERAGEIFS: BuiltinId.Averageifs,
     SUMPRODUCT: BuiltinId.Sumproduct,
     SEQUENCE: BuiltinId.Sequence,
+    FILTER: BuiltinId.Filter,
+    UNIQUE: BuiltinId.Unique,
     OFFSET: BuiltinId.Offset,
     TAKE: BuiltinId.Take,
     DROP: BuiltinId.Drop,

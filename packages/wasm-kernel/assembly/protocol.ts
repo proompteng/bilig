@@ -245,5 +245,7 @@ export enum BuiltinId {
   Hypgeomdist = 190,
   HypgeomDist = 191,
   Negbinomdist = 192,
-  NegbinomDist = 193
+  NegbinomDist = 193,
+  Filter = 194,
+  Unique = 195
 }

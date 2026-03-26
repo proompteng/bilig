@@ -1,5 +1,6 @@
 import { BUILTINS, BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
+import { builtinJsSpecialNames } from "./builtin-capabilities.js";
 import { datetimeBuiltins, excelSerialToDateParts } from "./builtins/datetime.js";
 import { logicalBuiltins } from "./builtins/logical.js";
 import { lookupBuiltins } from "./builtins/lookup.js";
@@ -2964,17 +2965,6 @@ const builtins: Record<string, Builtin> = {
   ...datetimeBuiltins,
 };
 
-const jsSpecialBuiltins = new Set([
-  "LET",
-  "LAMBDA",
-  "MAKEARRAY",
-  "MAP",
-  "REDUCE",
-  "SCAN",
-  "BYROW",
-  "BYCOL",
-]);
-
 const builtinIdByName = new Map(
   BUILTINS.map((builtin) => [builtin.name.toUpperCase(), builtin.id]),
 );
@@ -2988,7 +2978,7 @@ export function hasBuiltin(name: string): boolean {
   return (
     builtins[upper] !== undefined ||
     lookupBuiltins[upper] !== undefined ||
-    jsSpecialBuiltins.has(upper) ||
+    builtinJsSpecialNames.has(upper) ||
     hasExternalFunction(upper)
   );
 }

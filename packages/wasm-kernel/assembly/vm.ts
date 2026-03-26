@@ -1,4 +1,10 @@
-import { applyBuiltin, STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR } from "./builtins";
+import {
+  applyBuiltin,
+  registerTrackedArrayShape,
+  STACK_KIND_ARRAY,
+  STACK_KIND_RANGE,
+  STACK_KIND_SCALAR,
+} from "./builtins";
 import { ErrorCode, Opcode, ValueTag } from "./protocol";
 
 export let tags = new Uint8Array(64);
@@ -194,6 +200,8 @@ const valueStack = new Float64Array(256);
 const tagStack = new Uint8Array(256);
 const kindStack = new Uint8Array(256);
 const rangeIndexStack = new Uint32Array(256);
+let binaryResultTag: u8 = <u8>ValueTag.Empty;
+let binaryResultValue: f64 = 0;
 
 function toNumeric(kind: u8, tag: u8, value: f64): f64 {
   if (kind == STACK_KIND_RANGE) return NaN;
@@ -307,6 +315,199 @@ function compareScalars(leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f
     return 0;
   }
   return leftNumeric < rightNumeric ? -1 : 1;
+}
+
+function slotRows(slot: i32): i32 {
+  const kind = kindStack[slot];
+  if (kind == STACK_KIND_SCALAR) {
+    return 1;
+  }
+  if (kind == STACK_KIND_RANGE) {
+    const rangeIndex = rangeIndexStack[slot];
+    return rangeIndex == UNRESOLVED_WASM_OPERAND ? i32.MIN_VALUE : <i32>rangeRowCounts[rangeIndex];
+  }
+  if (kind == STACK_KIND_ARRAY) {
+    return <i32>spillArrayRows[rangeIndexStack[slot]];
+  }
+  return i32.MIN_VALUE;
+}
+
+function slotCols(slot: i32): i32 {
+  const kind = kindStack[slot];
+  if (kind == STACK_KIND_SCALAR) {
+    return 1;
+  }
+  if (kind == STACK_KIND_RANGE) {
+    const rangeIndex = rangeIndexStack[slot];
+    return rangeIndex == UNRESOLVED_WASM_OPERAND ? i32.MIN_VALUE : <i32>rangeColCounts[rangeIndex];
+  }
+  if (kind == STACK_KIND_ARRAY) {
+    return <i32>spillArrayCols[rangeIndexStack[slot]];
+  }
+  return i32.MIN_VALUE;
+}
+
+function slotCellTag(slot: i32, row: i32, col: i32): u8 {
+  const kind = kindStack[slot];
+  if (kind == STACK_KIND_SCALAR) {
+    return row == 0 && col == 0 ? tagStack[slot] : <u8>ValueTag.Error;
+  }
+  if (kind == STACK_KIND_RANGE) {
+    const rangeIndex = rangeIndexStack[slot];
+    if (rangeIndex == UNRESOLVED_WASM_OPERAND) {
+      return <u8>ValueTag.Error;
+    }
+    const rows = <i32>rangeRowCounts[rangeIndex];
+    const cols = <i32>rangeColCounts[rangeIndex];
+    if (row < 0 || col < 0 || row >= rows || col >= cols) {
+      return <u8>ValueTag.Error;
+    }
+    const offset = row * cols + col;
+    if (offset >= <i32>rangeLengths[rangeIndex]) {
+      return <u8>ValueTag.Error;
+    }
+    return tags[rangeMembers[rangeOffsets[rangeIndex] + offset]];
+  }
+  if (kind == STACK_KIND_ARRAY) {
+    const arrayIndex = rangeIndexStack[slot];
+    const rows = <i32>spillArrayRows[arrayIndex];
+    const cols = <i32>spillArrayCols[arrayIndex];
+    if (row < 0 || col < 0 || row >= rows || col >= cols) {
+      return <u8>ValueTag.Error;
+    }
+    const offset = row * cols + col;
+    if (offset >= <i32>spillArrayLengths[arrayIndex]) {
+      return <u8>ValueTag.Error;
+    }
+    return spillTags[spillArrayOffsets[arrayIndex] + offset];
+  }
+  return <u8>ValueTag.Error;
+}
+
+function slotCellValue(slot: i32, row: i32, col: i32): f64 {
+  const kind = kindStack[slot];
+  if (kind == STACK_KIND_SCALAR) {
+    return row == 0 && col == 0 ? valueStack[slot] : NaN;
+  }
+  if (kind == STACK_KIND_RANGE) {
+    const rangeIndex = rangeIndexStack[slot];
+    if (rangeIndex == UNRESOLVED_WASM_OPERAND) {
+      return NaN;
+    }
+    const rows = <i32>rangeRowCounts[rangeIndex];
+    const cols = <i32>rangeColCounts[rangeIndex];
+    if (row < 0 || col < 0 || row >= rows || col >= cols) {
+      return NaN;
+    }
+    const offset = row * cols + col;
+    if (offset >= <i32>rangeLengths[rangeIndex]) {
+      return NaN;
+    }
+    const memberIndex = rangeMembers[rangeOffsets[rangeIndex] + offset];
+    const tag = tags[memberIndex];
+    if (tag == ValueTag.String) {
+      return stringIds[memberIndex];
+    }
+    if (tag == ValueTag.Error) {
+      return errors[memberIndex];
+    }
+    return numbers[memberIndex];
+  }
+  if (kind == STACK_KIND_ARRAY) {
+    const arrayIndex = rangeIndexStack[slot];
+    const rows = <i32>spillArrayRows[arrayIndex];
+    const cols = <i32>spillArrayCols[arrayIndex];
+    if (row < 0 || col < 0 || row >= rows || col >= cols) {
+      return NaN;
+    }
+    const offset = row * cols + col;
+    if (offset >= <i32>spillArrayLengths[arrayIndex]) {
+      return NaN;
+    }
+    return spillNumbers[spillArrayOffsets[arrayIndex] + offset];
+  }
+  return NaN;
+}
+
+function computeBinaryScalarResult(
+  opcode: i32,
+  leftTag: u8,
+  leftValue: f64,
+  rightTag: u8,
+  rightValue: f64,
+): void {
+  if (leftTag == ValueTag.Error) {
+    binaryResultTag = <u8>ValueTag.Error;
+    binaryResultValue = leftValue;
+    return;
+  }
+  if (rightTag == ValueTag.Error) {
+    binaryResultTag = <u8>ValueTag.Error;
+    binaryResultValue = rightValue;
+    return;
+  }
+
+  if (opcode == Opcode.Concat) {
+    const leftText = scalarText(leftTag, leftValue);
+    const rightText = scalarText(rightTag, rightValue);
+    if (leftText == null || rightText == null) {
+      binaryResultTag = <u8>ValueTag.Error;
+      binaryResultValue = ErrorCode.Value;
+      return;
+    }
+    const outputIndex = allocateOutputString(leftText.length + rightText.length);
+    let offset = 0;
+    for (let index = 0; index < leftText.length; index++) {
+      writeOutputStringData(outputIndex, offset++, <u16>leftText.charCodeAt(index));
+    }
+    for (let index = 0; index < rightText.length; index++) {
+      writeOutputStringData(outputIndex, offset++, <u16>rightText.charCodeAt(index));
+    }
+    binaryResultTag = <u8>ValueTag.String;
+    binaryResultValue = encodeOutputStringId(outputIndex);
+    return;
+  }
+
+  if (
+    opcode == Opcode.Eq ||
+    opcode == Opcode.Neq ||
+    opcode == Opcode.Gt ||
+    opcode == Opcode.Gte ||
+    opcode == Opcode.Lt ||
+    opcode == Opcode.Lte
+  ) {
+    const comparison = compareScalars(leftTag, leftValue, rightTag, rightValue);
+    if (comparison == i32.MIN_VALUE) {
+      binaryResultTag = <u8>ValueTag.Error;
+      binaryResultValue = ErrorCode.Value;
+      return;
+    }
+    let result = 0;
+    if (opcode == Opcode.Eq) result = comparison == 0 ? 1 : 0;
+    else if (opcode == Opcode.Neq) result = comparison != 0 ? 1 : 0;
+    else if (opcode == Opcode.Gt) result = comparison > 0 ? 1 : 0;
+    else if (opcode == Opcode.Gte) result = comparison >= 0 ? 1 : 0;
+    else if (opcode == Opcode.Lt) result = comparison < 0 ? 1 : 0;
+    else result = comparison <= 0 ? 1 : 0;
+    binaryResultTag = <u8>ValueTag.Boolean;
+    binaryResultValue = result;
+    return;
+  }
+
+  const left = toNumeric(STACK_KIND_SCALAR, leftTag, leftValue);
+  const right = toNumeric(STACK_KIND_SCALAR, rightTag, rightValue);
+  if (isNaN(left) || isNaN(right)) {
+    binaryResultTag = <u8>ValueTag.Error;
+    binaryResultValue = ErrorCode.Value;
+    return;
+  }
+  if (opcode == Opcode.Div && right == 0) {
+    binaryResultTag = <u8>ValueTag.Error;
+    binaryResultValue = ErrorCode.Div0;
+    return;
+  }
+  binaryResultTag = <u8>ValueTag.Number;
+  binaryResultValue = binaryNumeric(opcode, left, right);
 }
 
 function writeConcatenatedString(
@@ -618,76 +819,91 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       const leftTag = tagStack[sp - 2];
       const rightKind = kindStack[sp - 1];
       const leftKind = kindStack[sp - 2];
-      if (rightKind == STACK_KIND_RANGE || leftKind == STACK_KIND_RANGE) {
-        writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
-        sp--;
-        continue;
-      }
-      if (rightTag == ValueTag.Error || leftTag == ValueTag.Error) {
-        writeScalar(
-          sp - 2,
-          <u8>ValueTag.Error,
-          rightTag == ValueTag.Error ? valueStack[sp - 1] : valueStack[sp - 2],
-        );
-        sp--;
-        continue;
-      }
-      if (opcode == Opcode.Concat) {
-        writeConcatenatedString(sp - 2, leftTag, valueStack[sp - 2], rightTag, valueStack[sp - 1]);
-        sp--;
-        continue;
-      }
       if (
-        opcode == Opcode.Eq ||
-        opcode == Opcode.Neq ||
-        opcode == Opcode.Gt ||
-        opcode == Opcode.Gte ||
-        opcode == Opcode.Lt ||
-        opcode == Opcode.Lte
+        rightKind == STACK_KIND_RANGE ||
+        leftKind == STACK_KIND_RANGE ||
+        rightKind == STACK_KIND_ARRAY ||
+        leftKind == STACK_KIND_ARRAY
       ) {
-        const comparison = compareScalars(
-          leftTag,
-          valueStack[sp - 2],
-          rightTag,
-          valueStack[sp - 1],
-        );
-        if (comparison == i32.MIN_VALUE) {
+        const leftRows = slotRows(sp - 2);
+        const leftCols = slotCols(sp - 2);
+        const rightRows = slotRows(sp - 1);
+        const rightCols = slotCols(sp - 1);
+        if (
+          leftRows == i32.MIN_VALUE ||
+          leftCols == i32.MIN_VALUE ||
+          rightRows == i32.MIN_VALUE ||
+          rightCols == i32.MIN_VALUE
+        ) {
+          writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Ref);
+          sp--;
+          continue;
+        }
+        const rows =
+          leftRows == rightRows
+            ? leftRows
+            : leftRows == 1
+              ? rightRows
+              : rightRows == 1
+                ? leftRows
+                : 0;
+        const cols =
+          leftCols == rightCols
+            ? leftCols
+            : leftCols == 1
+              ? rightCols
+              : rightCols == 1
+                ? leftCols
+                : 0;
+        if (rows == 0 || cols == 0) {
           writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
           sp--;
           continue;
         }
-        let result = 0;
-        if (opcode == Opcode.Eq) result = comparison == 0 ? 1 : 0;
-        else if (opcode == Opcode.Neq) result = comparison != 0 ? 1 : 0;
-        else if (opcode == Opcode.Gt) result = comparison > 0 ? 1 : 0;
-        else if (opcode == Opcode.Gte) result = comparison >= 0 ? 1 : 0;
-        else if (opcode == Opcode.Lt) result = comparison < 0 ? 1 : 0;
-        else result = comparison <= 0 ? 1 : 0;
-        writeScalar(sp - 2, <u8>ValueTag.Boolean, result);
+
+        if (rows == 1 && cols == 1) {
+          computeBinaryScalarResult(
+            opcode,
+            slotCellTag(sp - 2, 0, 0),
+            slotCellValue(sp - 2, 0, 0),
+            slotCellTag(sp - 1, 0, 0),
+            slotCellValue(sp - 1, 0, 0),
+          );
+          writeScalar(sp - 2, binaryResultTag, binaryResultValue);
+          sp--;
+          continue;
+        }
+
+        const arrayIndex = allocateSpillArrayResult(rows, cols);
+        let outputOffset = 0;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const leftRow = leftRows == 1 ? 0 : row;
+            const leftCol = leftCols == 1 ? 0 : col;
+            const rightRow = rightRows == 1 ? 0 : row;
+            const rightCol = rightCols == 1 ? 0 : col;
+            computeBinaryScalarResult(
+              opcode,
+              slotCellTag(sp - 2, leftRow, leftCol),
+              slotCellValue(sp - 2, leftRow, leftCol),
+              slotCellTag(sp - 1, rightRow, rightCol),
+              slotCellValue(sp - 1, rightRow, rightCol),
+            );
+            writeSpillArrayValue(arrayIndex, outputOffset, binaryResultTag, binaryResultValue);
+            outputOffset += 1;
+          }
+        }
+        registerTrackedArrayShape(arrayIndex, rows, cols);
+        kindStack[sp - 2] = STACK_KIND_ARRAY;
+        rangeIndexStack[sp - 2] = arrayIndex;
+        tagStack[sp - 2] = ValueTag.Empty;
+        valueStack[sp - 2] = 0;
         sp--;
         continue;
       }
-      const left = toNumeric(leftKind, leftTag, valueStack[sp - 2]);
-      const right = toNumeric(rightKind, rightTag, valueStack[sp - 1]);
-      if (isNaN(left) || isNaN(right)) {
-        writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Value);
-        sp--;
-        continue;
-      }
-      const next = binaryNumeric(opcode, left, right);
-      if (opcode == Opcode.Div && right == 0) {
-        writeScalar(sp - 2, <u8>ValueTag.Error, ErrorCode.Div0);
-      } else {
-        writeScalar(
-          sp - 2,
-          <u8>(
-            (<i32>opcode >= Opcode.Eq && <i32>opcode <= Opcode.Lte
-              ? ValueTag.Boolean
-              : ValueTag.Number)
-          ),
-          next,
-        );
-      }
+
+      computeBinaryScalarResult(opcode, leftTag, valueStack[sp - 2], rightTag, valueStack[sp - 1]);
+      writeScalar(sp - 2, binaryResultTag, binaryResultValue);
       sp--;
       continue;
     }

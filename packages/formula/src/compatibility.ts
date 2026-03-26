@@ -250,8 +250,18 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
         "Numeric aggregate consumers can now read transient native SEQUENCE arrays directly on the AssemblyScript path without reviving the removed JS runtime fallback.",
     },
   ),
-  entry("dynamic-array:filter-basic", "dynamic-array", "=FILTER(A1:A4,A1:A4>2)", "implemented-js"),
-  entry("dynamic-array:unique-basic", "dynamic-array", "=UNIQUE(A1:A4)", "implemented-js"),
+  entry(
+    "dynamic-array:filter-basic",
+    "dynamic-array",
+    "=FILTER(A1:A4,A1:A4>2)",
+    "implemented-wasm-production",
+  ),
+  entry(
+    "dynamic-array:unique-basic",
+    "dynamic-array",
+    "=UNIQUE(A1:A4)",
+    "implemented-wasm-production",
+  ),
   entry("names:defined-name-scalar", "names", "=TaxRate*A1", "implemented-wasm-production", {
     notes:
       "Scalar workbook names rebind onto the AssemblyScript path once the engine has concrete scalar metadata; reference-valued names remain blocked.",
@@ -283,12 +293,25 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     notes:
       "Missing workbook-level names now stay on the AssemblyScript path, surface #NAME?, and rebind natively once the name appears.",
   }),
-  entry("tables:table-total-row-sum", "tables", "=SUM(Sales[Amount])", "blocked"),
+  entry(
+    "tables:table-total-row-sum",
+    "tables",
+    "=SUM(Sales[Amount])",
+    "implemented-wasm-production",
+    {
+      notes:
+        "Table-backed aggregate formulas now compile through metadata substitution and route onto the native aggregate path once the table exists.",
+    },
+  ),
   entry(
     "structured-reference:table-column-ref",
     "structured-reference",
     "=SUM(Sales[Amount])",
-    "blocked",
+    "implemented-wasm-production",
+    {
+      notes:
+        "Structured column references now compile through metadata substitution and route onto the native aggregate path once the table exists.",
+    },
   ),
   entry("volatile:rand-basic", "volatile", "=RAND()", "implemented-wasm-production", {
     prerequisites: ["core:volatile-context", "core:value-model"],
@@ -540,7 +563,10 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     "=WRAPCOLS(A1:A4,2)",
     "implemented-wasm-production",
   ),
-  entry("names:defined-name-range", "names", "=SUM(MyRange)", "blocked"),
+  entry("names:defined-name-range", "names", "=SUM(MyRange)", "implemented-wasm-production", {
+    notes:
+      "Range-valued workbook names now compile through metadata substitution and route onto the native aggregate path once the name resolves.",
+  }),
   entry("lambda:byrow-basic", "lambda", "=BYROW(A1:B2,LAMBDA(r,SUM(r)))", "implemented-js"),
 ];
 

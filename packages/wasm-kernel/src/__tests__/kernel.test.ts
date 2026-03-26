@@ -30,6 +30,8 @@ const BUILTIN = {
   TODAY: BuiltinId.Today,
   NOW: BuiltinId.Now,
   RAND: BuiltinId.Rand,
+  FILTER: BuiltinId.Filter,
+  UNIQUE: BuiltinId.Unique,
   LEFT: BuiltinId.Left,
   RIGHT: BuiltinId.Right,
   MID: BuiltinId.Mid,
@@ -2213,6 +2215,92 @@ describe("wasm kernel", () => {
     ]);
     expect(Array.from(kernel.readSpillNumbers().slice(0, kernel.getSpillValueCount()))).toEqual([
       1, 2, 3,
+    ]);
+  });
+
+  it("evaluates FILTER and UNIQUE spill builtins on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 6;
+    const pooledStrings = ["A", "a", "B", "C"];
+    kernel.init(18, 6, 4, 3, 12);
+    kernel.uploadStringLengths(Uint32Array.from(pooledStrings.map((value) => value.length)));
+    kernel.uploadStrings(
+      Uint32Array.from([0, 1, 2, 3]),
+      Uint32Array.from([1, 1, 1, 1]),
+      asciiCodes(pooledStrings.join("")),
+    );
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Boolean,
+        ValueTag.Boolean,
+        ValueTag.Boolean,
+        ValueTag.Boolean,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
+      new Float64Array([1, 3, 2, 4, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0]),
+      new Uint16Array(18),
+    );
+    kernel.uploadRangeMembers(
+      Uint32Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
+      Uint32Array.from([0, 4, 8]),
+      Uint32Array.from([4, 4, 4]),
+    );
+    kernel.uploadRangeShapes(Uint32Array.from([4, 4, 4]), Uint32Array.from([1, 1, 1]));
+
+    const packed = packPrograms([
+      [encodePushRange(0), encodePushRange(1), encodeCall(BUILTIN.FILTER, 2), encodeRet()],
+      [encodePushRange(2), encodeCall(BUILTIN.UNIQUE, 1), encodeRet()],
+      [
+        encodePushRange(0),
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodeBinary(Opcode.Gt),
+        encodeCall(BUILTIN.FILTER, 2),
+        encodeRet(),
+      ],
+    ]);
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]),
+    );
+    kernel.uploadConstants(
+      new Float64Array([2]),
+      new Uint32Array([0, 0, 0]),
+      new Uint32Array([0, 0, 1]),
+    );
+
+    kernel.evalBatch(
+      Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]),
+    );
+
+    expect(readSpillValues(kernel, cellIndex(2, 0, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 3 },
+      { tag: ValueTag.Number, value: 4 },
+    ]);
+    expect(readSpillValues(kernel, cellIndex(2, 1, width), pooledStrings)).toEqual([
+      { tag: ValueTag.String, value: "A", stringId: 0 },
+      { tag: ValueTag.String, value: "B", stringId: 0 },
+      { tag: ValueTag.String, value: "C", stringId: 0 },
+    ]);
+    expect(readSpillValues(kernel, cellIndex(2, 2, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 3 },
+      { tag: ValueTag.Number, value: 4 },
     ]);
   });
 

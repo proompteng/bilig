@@ -8,7 +8,15 @@ import {
 } from "../../../excel-fixtures/src/index.js";
 import { excelDateTimeFixtureSuite } from "../../../excel-fixtures/src/datetime-fixtures.js";
 import { formatAddress, parseCellAddress, parseRangeAddress } from "../addressing.js";
-import { compileFormula, evaluatePlan, evaluatePlanResult, isArrayValue } from "../index.js";
+import {
+  compileFormula,
+  compileFormulaAst,
+  evaluatePlan,
+  evaluatePlanResult,
+  isArrayValue,
+  parseFormula,
+  type FormulaNode,
+} from "../index.js";
 import { getCompatibilityEntry } from "../compatibility.js";
 
 const executableStatuses = new Set([
@@ -205,8 +213,13 @@ function assertScalarFixtureResult(fixture: ExcelFixtureCase, result: CellValue)
 }
 
 function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluatePlanResult> {
-  const compiled = compileFormula(fixture.formula);
   const defaultSheetName = fixture.sheetName ?? "Sheet1";
+  const originalAst = parseFormula(fixture.formula);
+  const resolvedAst = resolveFixtureMetadataReferences(originalAst, fixture, defaultSheetName);
+  const compiled =
+    resolvedAst === originalAst
+      ? compileFormula(fixture.formula)
+      : compileFormulaAst(fixture.formula, resolvedAst, { originalAst });
   const sheetValues = new Map<string, Map<string, CellValue>>();
   for (const input of fixture.inputs) {
     const sheetName = input.sheetName ?? defaultSheetName;
@@ -259,6 +272,153 @@ function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluateP
     resolveName: (name) =>
       definedNames.get(name.toUpperCase()) ?? { tag: ValueTag.Error, code: ErrorCode.Name },
   });
+}
+
+function resolveFixtureMetadataReferences(
+  node: FormulaNode,
+  fixture: ExcelFixtureCase,
+  defaultSheetName: string,
+  activeNames = new Set<string>(),
+): FormulaNode {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "CellRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "RangeRef":
+    case "SpillRef":
+      return node;
+    case "NameRef": {
+      const normalized = node.name.trim().toUpperCase();
+      if (activeNames.has(normalized)) {
+        return { kind: "ErrorLiteral", code: ErrorCode.Cycle };
+      }
+      const definedName = fixture.definedNames?.find(
+        (entry) => entry.name.trim().toUpperCase() === normalized,
+      );
+      if (!definedName) {
+        return node;
+      }
+      const replacement = definedNameValueToFormulaNode(definedName.value);
+      if (!replacement) {
+        return node;
+      }
+      const nextActiveNames = new Set(activeNames);
+      nextActiveNames.add(normalized);
+      return resolveFixtureMetadataReferences(
+        replacement,
+        fixture,
+        defaultSheetName,
+        nextActiveNames,
+      );
+    }
+    case "StructuredRef": {
+      const replacement = resolveFixtureStructuredReference(
+        node.tableName,
+        node.columnName,
+        fixture,
+        defaultSheetName,
+      );
+      return replacement ?? { kind: "ErrorLiteral", code: ErrorCode.Ref };
+    }
+    case "UnaryExpr":
+      return {
+        ...node,
+        argument: resolveFixtureMetadataReferences(
+          node.argument,
+          fixture,
+          defaultSheetName,
+          activeNames,
+        ),
+      };
+    case "BinaryExpr":
+      return {
+        ...node,
+        left: resolveFixtureMetadataReferences(node.left, fixture, defaultSheetName, activeNames),
+        right: resolveFixtureMetadataReferences(node.right, fixture, defaultSheetName, activeNames),
+      };
+    case "CallExpr":
+      return {
+        ...node,
+        args: node.args.map((arg) =>
+          resolveFixtureMetadataReferences(arg, fixture, defaultSheetName, activeNames),
+        ),
+      };
+    case "InvokeExpr":
+      return {
+        ...node,
+        callee: resolveFixtureMetadataReferences(
+          node.callee,
+          fixture,
+          defaultSheetName,
+          activeNames,
+        ),
+        args: node.args.map((arg) =>
+          resolveFixtureMetadataReferences(arg, fixture, defaultSheetName, activeNames),
+        ),
+      };
+  }
+}
+
+function definedNameValueToFormulaNode(value: LiteralInput): FormulaNode | undefined {
+  if (value === null) {
+    return { kind: "ErrorLiteral", code: ErrorCode.Ref };
+  }
+  switch (typeof value) {
+    case "number":
+      return { kind: "NumberLiteral", value };
+    case "boolean":
+      return { kind: "BooleanLiteral", value };
+    case "string":
+      return value.startsWith("=")
+        ? parseFormula(value.slice(1))
+        : { kind: "StringLiteral", value };
+    case "bigint":
+    case "function":
+    case "object":
+    case "symbol":
+    case "undefined":
+      return undefined;
+  }
+}
+
+function resolveFixtureStructuredReference(
+  tableName: string,
+  columnName: string,
+  fixture: ExcelFixtureCase,
+  defaultSheetName: string,
+): FormulaNode | undefined {
+  const table = fixture.tables?.find(
+    (entry) => entry.name.trim().toUpperCase() === tableName.trim().toUpperCase(),
+  );
+  if (!table) {
+    return undefined;
+  }
+  const columnIndex = table.columnNames.findIndex(
+    (name) => name.trim().toUpperCase() === columnName.trim().toUpperCase(),
+  );
+  if (columnIndex === -1) {
+    return undefined;
+  }
+  const sheetName = table.sheetName ?? defaultSheetName;
+  const start = parseCellAddress(table.startAddress, sheetName);
+  const end = parseCellAddress(table.endAddress, sheetName);
+  const startRow = start.row + (table.headerRow ? 1 : 0);
+  const endRow = end.row - (table.totalsRow ? 1 : 0);
+  if (endRow < startRow) {
+    return { kind: "ErrorLiteral", code: ErrorCode.Ref };
+  }
+  const column = start.col + columnIndex;
+  return {
+    kind: "RangeRef",
+    refKind: "cells",
+    sheetName,
+    start: formatAddress(startRow, column),
+    end: formatAddress(endRow, column),
+  };
 }
 
 function firstOutput(fixture: { outputs: { expected: ExcelExpectedValue }[] }): {

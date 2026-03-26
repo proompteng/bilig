@@ -51,6 +51,10 @@ function registerDynamicArrayShape(arrayIndex: u32, rows: i32, cols: i32): void 
   dynamicArrayShapeValid[index] = 1;
 }
 
+export function registerTrackedArrayShape(arrayIndex: u32, rows: i32, cols: i32): void {
+  registerDynamicArrayShape(arrayIndex, rows, cols);
+}
+
 function getDynamicArrayRows(arrayIndex: u32): i32 {
   const index = <i32>arrayIndex;
   if (index < 0 || index >= dynamicArrayShapeValid.length || dynamicArrayShapeValid[index] == 0) {
@@ -1227,6 +1231,209 @@ function copyInputCellToSpill(
   }
   writeSpillArrayValue(arrayIndex, outputOffset, tag, value);
   return ErrorCode.None;
+}
+
+function uniqueScalarKey(
+  tag: u8,
+  value: f64,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
+): string | null {
+  if (tag == ValueTag.Empty) {
+    return "E:";
+  }
+  if (tag == ValueTag.Number) {
+    return "N:" + value.toString();
+  }
+  if (tag == ValueTag.Boolean) {
+    return value != 0 ? "B:1" : "B:0";
+  }
+  if (tag == ValueTag.String) {
+    const text = scalarText(
+      tag,
+      value,
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    );
+    return text == null ? null : "S:" + text.toUpperCase();
+  }
+  return null;
+}
+
+function uniqueRowKey(
+  slot: i32,
+  row: i32,
+  cols: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
+): string | null {
+  let key = "";
+  for (let col = 0; col < cols; col++) {
+    const tag = inputCellTag(
+      slot,
+      row,
+      col,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+    );
+    const value = inputCellScalarValue(
+      slot,
+      row,
+      col,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    );
+    if (tag == ValueTag.Error) {
+      return null;
+    }
+    const cellKey = uniqueScalarKey(
+      tag,
+      value,
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    );
+    if (cellKey == null) {
+      return null;
+    }
+    if (col > 0) {
+      key += "\u0001";
+    }
+    key += cellKey;
+  }
+  return key;
+}
+
+function uniqueColKey(
+  slot: i32,
+  col: i32,
+  rows: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
+): string | null {
+  let key = "";
+  for (let row = 0; row < rows; row++) {
+    const tag = inputCellTag(
+      slot,
+      row,
+      col,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+    );
+    const value = inputCellScalarValue(
+      slot,
+      row,
+      col,
+      kindStack,
+      valueStack,
+      tagStack,
+      rangeIndexStack,
+      rangeOffsets,
+      rangeLengths,
+      rangeRowCounts,
+      rangeColCounts,
+      rangeMembers,
+      cellTags,
+      cellNumbers,
+      cellStringIds,
+      cellErrors,
+    );
+    if (tag == ValueTag.Error) {
+      return null;
+    }
+    const cellKey = uniqueScalarKey(
+      tag,
+      value,
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    );
+    if (cellKey == null) {
+      return null;
+    }
+    if (row > 0) {
+      key += "\u0001";
+    }
+    key += cellKey;
+  }
+  return key;
 }
 
 function replaceText(text: string, start: i32, count: i32, replacement: string): string {
@@ -2521,6 +2728,842 @@ export function applyBuiltin(
       arrayIndex,
       rows,
       cols,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Filter && (argc == 2 || argc == 3)) {
+    const sourceKind = kindStack[base];
+    const includeKind = kindStack[base + 1];
+    if (
+      (sourceKind != STACK_KIND_RANGE && sourceKind != STACK_KIND_ARRAY) ||
+      (includeKind != STACK_KIND_RANGE && includeKind != STACK_KIND_ARRAY)
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const sourceRows = inputRowsFromSlot(base, kindStack, rangeIndexStack, rangeRowCounts);
+    const sourceCols = inputColsFromSlot(base, kindStack, rangeIndexStack, rangeColCounts);
+    const includeRows = inputRowsFromSlot(base + 1, kindStack, rangeIndexStack, rangeRowCounts);
+    const includeCols = inputColsFromSlot(base + 1, kindStack, rangeIndexStack, rangeColCounts);
+    if (
+      sourceRows <= 0 ||
+      sourceCols <= 0 ||
+      includeRows <= 0 ||
+      includeCols <= 0 ||
+      sourceRows == i32.MIN_VALUE ||
+      sourceCols == i32.MIN_VALUE ||
+      includeRows == i32.MIN_VALUE ||
+      includeCols == i32.MIN_VALUE
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    if (includeRows == sourceRows && includeCols == 1) {
+      const keptRows = new Array<i32>();
+      for (let row = 0; row < sourceRows; row++) {
+        const includeTag = inputCellTag(
+          base + 1,
+          row,
+          0,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+        );
+        const includeValue = inputCellScalarValue(
+          base + 1,
+          row,
+          0,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+          cellStringIds,
+          cellErrors,
+        );
+        if (includeTag == ValueTag.Error) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            includeValue,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        const keep = coerceBoolean(includeTag, includeValue);
+        if (keep < 0) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            ErrorCode.Value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        if (keep == 1) {
+          keptRows.push(row);
+        }
+      }
+      if (keptRows.length == 0) {
+        if (argc < 3 || kindStack[base + 2] != STACK_KIND_SCALAR) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            ErrorCode.Value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          tagStack[base + 2],
+          valueStack[base + 2],
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      const arrayIndex = allocateSpillArrayResult(keptRows.length, sourceCols);
+      let outputOffset = 0;
+      for (let index = 0; index < keptRows.length; index++) {
+        const sourceRow = unchecked(keptRows[index]);
+        for (let col = 0; col < sourceCols; col++) {
+          const copyError = copyInputCellToSpill(
+            arrayIndex,
+            outputOffset,
+            base,
+            sourceRow,
+            col,
+            kindStack,
+            valueStack,
+            tagStack,
+            rangeIndexStack,
+            rangeOffsets,
+            rangeLengths,
+            rangeRowCounts,
+            rangeColCounts,
+            rangeMembers,
+            cellTags,
+            cellNumbers,
+            cellStringIds,
+            cellErrors,
+          );
+          if (copyError != ErrorCode.None) {
+            return writeResult(
+              base,
+              STACK_KIND_SCALAR,
+              <u8>ValueTag.Error,
+              copyError,
+              rangeIndexStack,
+              valueStack,
+              tagStack,
+              kindStack,
+            );
+          }
+          outputOffset += 1;
+        }
+      }
+      return writeArrayResult(
+        base,
+        arrayIndex,
+        keptRows.length,
+        sourceCols,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    if (includeRows == 1 && includeCols == sourceCols) {
+      const keptCols = new Array<i32>();
+      for (let col = 0; col < sourceCols; col++) {
+        const includeTag = inputCellTag(
+          base + 1,
+          0,
+          col,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+        );
+        const includeValue = inputCellScalarValue(
+          base + 1,
+          0,
+          col,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+          cellStringIds,
+          cellErrors,
+        );
+        if (includeTag == ValueTag.Error) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            includeValue,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        const keep = coerceBoolean(includeTag, includeValue);
+        if (keep < 0) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            ErrorCode.Value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        if (keep == 1) {
+          keptCols.push(col);
+        }
+      }
+      if (keptCols.length == 0) {
+        if (argc < 3 || kindStack[base + 2] != STACK_KIND_SCALAR) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            ErrorCode.Value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          tagStack[base + 2],
+          valueStack[base + 2],
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      const arrayIndex = allocateSpillArrayResult(sourceRows, keptCols.length);
+      let outputOffset = 0;
+      for (let row = 0; row < sourceRows; row++) {
+        for (let index = 0; index < keptCols.length; index++) {
+          const sourceCol = unchecked(keptCols[index]);
+          const copyError = copyInputCellToSpill(
+            arrayIndex,
+            outputOffset,
+            base,
+            row,
+            sourceCol,
+            kindStack,
+            valueStack,
+            tagStack,
+            rangeIndexStack,
+            rangeOffsets,
+            rangeLengths,
+            rangeRowCounts,
+            rangeColCounts,
+            rangeMembers,
+            cellTags,
+            cellNumbers,
+            cellStringIds,
+            cellErrors,
+          );
+          if (copyError != ErrorCode.None) {
+            return writeResult(
+              base,
+              STACK_KIND_SCALAR,
+              <u8>ValueTag.Error,
+              copyError,
+              rangeIndexStack,
+              valueStack,
+              tagStack,
+              kindStack,
+            );
+          }
+          outputOffset += 1;
+        }
+      }
+      return writeArrayResult(
+        base,
+        arrayIndex,
+        sourceRows,
+        keptCols.length,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Error,
+      ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Unique && argc >= 1 && argc <= 3) {
+    const sourceKind = kindStack[base];
+    if (sourceKind != STACK_KIND_RANGE && sourceKind != STACK_KIND_ARRAY) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (argc >= 2 && kindStack[base + 1] != STACK_KIND_SCALAR) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (argc >= 3 && kindStack[base + 2] != STACK_KIND_SCALAR) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (argc >= 2 && tagStack[base + 1] == ValueTag.Error) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        valueStack[base + 1],
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    if (argc >= 3 && tagStack[base + 2] == ValueTag.Error) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        valueStack[base + 2],
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const byColFlag = argc >= 2 ? coerceBoolean(tagStack[base + 1], valueStack[base + 1]) : 0;
+    const exactlyOnceFlag = argc >= 3 ? coerceBoolean(tagStack[base + 2], valueStack[base + 2]) : 0;
+    if (byColFlag < 0 || exactlyOnceFlag < 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const sourceRows = inputRowsFromSlot(base, kindStack, rangeIndexStack, rangeRowCounts);
+    const sourceCols = inputColsFromSlot(base, kindStack, rangeIndexStack, rangeColCounts);
+    if (
+      sourceRows <= 0 ||
+      sourceCols <= 0 ||
+      sourceRows == i32.MIN_VALUE ||
+      sourceCols == i32.MIN_VALUE
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    if (sourceRows == 1 || sourceCols == 1) {
+      const vectorLength = sourceRows * sourceCols;
+      const keys = new Array<string>();
+      for (let index = 0; index < vectorLength; index++) {
+        const row = sourceRows == 1 ? 0 : index;
+        const col = sourceRows == 1 ? index : 0;
+        const tag = inputCellTag(
+          base,
+          row,
+          col,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+        );
+        const value = inputCellScalarValue(
+          base,
+          row,
+          col,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+          cellStringIds,
+          cellErrors,
+        );
+        if (tag == ValueTag.Error) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        const key = uniqueScalarKey(
+          tag,
+          value,
+          stringOffsets,
+          stringLengths,
+          stringData,
+          outputStringOffsets,
+          outputStringLengths,
+          outputStringData,
+        );
+        if (key == null) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            ErrorCode.Value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        keys.push(key);
+      }
+
+      const keptIndexes = new Array<i32>();
+      for (let index = 0; index < vectorLength; index++) {
+        const key = unchecked(keys[index]);
+        let seenEarlier = false;
+        for (let prior = 0; prior < index; prior++) {
+          if (unchecked(keys[prior]) == key) {
+            seenEarlier = true;
+            break;
+          }
+        }
+        if (seenEarlier) {
+          continue;
+        }
+        if (exactlyOnceFlag == 1) {
+          let count = 0;
+          for (let cursor = 0; cursor < vectorLength; cursor++) {
+            if (unchecked(keys[cursor]) == key) {
+              count += 1;
+            }
+          }
+          if (count != 1) {
+            continue;
+          }
+        }
+        keptIndexes.push(index);
+      }
+
+      const outputRows = sourceRows == 1 ? 1 : keptIndexes.length;
+      const outputCols = sourceRows == 1 ? keptIndexes.length : 1;
+      const arrayIndex = allocateSpillArrayResult(outputRows, outputCols);
+      for (let outputOffset = 0; outputOffset < keptIndexes.length; outputOffset++) {
+        const sourceIndex = unchecked(keptIndexes[outputOffset]);
+        const sourceRow = sourceRows == 1 ? 0 : sourceIndex;
+        const sourceCol = sourceRows == 1 ? sourceIndex : 0;
+        const copyError = copyInputCellToSpill(
+          arrayIndex,
+          outputOffset,
+          base,
+          sourceRow,
+          sourceCol,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+          cellStringIds,
+          cellErrors,
+        );
+        if (copyError != ErrorCode.None) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            copyError,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+      }
+      return writeArrayResult(
+        base,
+        arrayIndex,
+        outputRows,
+        outputCols,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    if (byColFlag == 1) {
+      const keys = new Array<string>();
+      for (let col = 0; col < sourceCols; col++) {
+        const key = uniqueColKey(
+          base,
+          col,
+          sourceRows,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+          cellStringIds,
+          cellErrors,
+          stringOffsets,
+          stringLengths,
+          stringData,
+          outputStringOffsets,
+          outputStringLengths,
+          outputStringData,
+        );
+        if (key == null) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            ErrorCode.Value,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        keys.push(key);
+      }
+
+      const keptCols = new Array<i32>();
+      for (let col = 0; col < sourceCols; col++) {
+        const key = unchecked(keys[col]);
+        let seenEarlier = false;
+        for (let prior = 0; prior < col; prior++) {
+          if (unchecked(keys[prior]) == key) {
+            seenEarlier = true;
+            break;
+          }
+        }
+        if (seenEarlier) {
+          continue;
+        }
+        if (exactlyOnceFlag == 1) {
+          let count = 0;
+          for (let cursor = 0; cursor < sourceCols; cursor++) {
+            if (unchecked(keys[cursor]) == key) {
+              count += 1;
+            }
+          }
+          if (count != 1) {
+            continue;
+          }
+        }
+        keptCols.push(col);
+      }
+
+      const arrayIndex = allocateSpillArrayResult(sourceRows, keptCols.length);
+      let outputOffset = 0;
+      for (let row = 0; row < sourceRows; row++) {
+        for (let index = 0; index < keptCols.length; index++) {
+          const sourceCol = unchecked(keptCols[index]);
+          const copyError = copyInputCellToSpill(
+            arrayIndex,
+            outputOffset,
+            base,
+            row,
+            sourceCol,
+            kindStack,
+            valueStack,
+            tagStack,
+            rangeIndexStack,
+            rangeOffsets,
+            rangeLengths,
+            rangeRowCounts,
+            rangeColCounts,
+            rangeMembers,
+            cellTags,
+            cellNumbers,
+            cellStringIds,
+            cellErrors,
+          );
+          if (copyError != ErrorCode.None) {
+            return writeResult(
+              base,
+              STACK_KIND_SCALAR,
+              <u8>ValueTag.Error,
+              copyError,
+              rangeIndexStack,
+              valueStack,
+              tagStack,
+              kindStack,
+            );
+          }
+          outputOffset += 1;
+        }
+      }
+      return writeArrayResult(
+        base,
+        arrayIndex,
+        sourceRows,
+        keptCols.length,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+
+    const keys = new Array<string>();
+    for (let row = 0; row < sourceRows; row++) {
+      const key = uniqueRowKey(
+        base,
+        row,
+        sourceCols,
+        kindStack,
+        valueStack,
+        tagStack,
+        rangeIndexStack,
+        rangeOffsets,
+        rangeLengths,
+        rangeRowCounts,
+        rangeColCounts,
+        rangeMembers,
+        cellTags,
+        cellNumbers,
+        cellStringIds,
+        cellErrors,
+        stringOffsets,
+        stringLengths,
+        stringData,
+        outputStringOffsets,
+        outputStringLengths,
+        outputStringData,
+      );
+      if (key == null) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      keys.push(key);
+    }
+
+    const keptRows = new Array<i32>();
+    for (let row = 0; row < sourceRows; row++) {
+      const key = unchecked(keys[row]);
+      let seenEarlier = false;
+      for (let prior = 0; prior < row; prior++) {
+        if (unchecked(keys[prior]) == key) {
+          seenEarlier = true;
+          break;
+        }
+      }
+      if (seenEarlier) {
+        continue;
+      }
+      if (exactlyOnceFlag == 1) {
+        let count = 0;
+        for (let cursor = 0; cursor < sourceRows; cursor++) {
+          if (unchecked(keys[cursor]) == key) {
+            count += 1;
+          }
+        }
+        if (count != 1) {
+          continue;
+        }
+      }
+      keptRows.push(row);
+    }
+
+    const arrayIndex = allocateSpillArrayResult(keptRows.length, sourceCols);
+    let outputOffset = 0;
+    for (let index = 0; index < keptRows.length; index++) {
+      const sourceRow = unchecked(keptRows[index]);
+      for (let col = 0; col < sourceCols; col++) {
+        const copyError = copyInputCellToSpill(
+          arrayIndex,
+          outputOffset,
+          base,
+          sourceRow,
+          col,
+          kindStack,
+          valueStack,
+          tagStack,
+          rangeIndexStack,
+          rangeOffsets,
+          rangeLengths,
+          rangeRowCounts,
+          rangeColCounts,
+          rangeMembers,
+          cellTags,
+          cellNumbers,
+          cellStringIds,
+          cellErrors,
+        );
+        if (copyError != ErrorCode.None) {
+          return writeResult(
+            base,
+            STACK_KIND_SCALAR,
+            <u8>ValueTag.Error,
+            copyError,
+            rangeIndexStack,
+            valueStack,
+            tagStack,
+            kindStack,
+          );
+        }
+        outputOffset += 1;
+      }
+    }
+    return writeArrayResult(
+      base,
+      arrayIndex,
+      keptRows.length,
+      sourceCols,
       rangeIndexStack,
       valueStack,
       tagStack,

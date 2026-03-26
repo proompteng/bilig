@@ -246,6 +246,8 @@ const enumManifest = {
     ["HypgeomDist", 191],
     ["Negbinomdist", 192],
     ["NegbinomDist", 193],
+    ["Filter", 194],
+    ["Unique", 195],
   ],
 };
 
@@ -340,6 +342,8 @@ const builtinManifest = [
   { id: "Now", name: "NOW", supportsWasm: true },
   { id: "Rand", name: "RAND", supportsWasm: true },
   { id: "Sequence", name: "SEQUENCE", supportsWasm: true },
+  { id: "Filter", name: "FILTER", supportsWasm: true },
+  { id: "Unique", name: "UNIQUE", supportsWasm: true },
   { id: "Offset", name: "OFFSET", supportsWasm: true },
   { id: "Take", name: "TAKE", supportsWasm: true },
   { id: "Drop", name: "DROP", supportsWasm: true },

@@ -49,8 +49,20 @@ export interface ExcelFixtureDefinedName {
   note?: string;
 }
 
+export interface ExcelFixtureTable {
+  name: string;
+  sheetName?: string;
+  startAddress: string;
+  endAddress: string;
+  columnNames: string[];
+  headerRow: boolean;
+  totalsRow: boolean;
+  note?: string;
+}
+
 export interface ExcelFixtureExpectedOutput {
   address: string;
+  sheetName?: string;
   expected: ExcelExpectedValue;
   note?: string;
 }
@@ -75,6 +87,7 @@ export interface ExcelFixtureCase {
   notes?: string;
   sheetName?: string;
   definedNames?: ExcelFixtureDefinedName[];
+  tables?: ExcelFixtureTable[];
   inputs: ExcelFixtureInputCell[];
   outputs: ExcelFixtureExpectedOutput[];
 }
