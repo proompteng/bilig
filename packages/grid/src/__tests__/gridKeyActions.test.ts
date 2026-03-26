@@ -17,6 +17,47 @@ describe("gridKeyActions", () => {
     ).toEqual({ kind: "edit-append", value: "abcx" });
   });
 
+  test("commits and cancels edit mode keys before the overlay input takes focus", () => {
+    expect(
+      resolveGridKeyAction({
+        event: { key: "Enter", ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: true,
+        editorValue: "123",
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [0, 0],
+        currentSelectionCell: [0, 0],
+        currentRangeAnchor: [0, 0],
+      }),
+    ).toEqual({ kind: "commit-edit", movement: [0, 1] });
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: "Tab", ctrlKey: false, metaKey: false, altKey: false, shiftKey: true },
+        isEditingCell: true,
+        editorValue: "123",
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [0, 0],
+        currentSelectionCell: [0, 0],
+        currentRangeAnchor: [0, 0],
+      }),
+    ).toEqual({ kind: "commit-edit", movement: [-1, 0] });
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: "Escape", ctrlKey: false, metaKey: false, altKey: false },
+        isEditingCell: true,
+        editorValue: "123",
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [0, 0],
+        currentSelectionCell: [0, 0],
+        currentRangeAnchor: [0, 0],
+      }),
+    ).toEqual({ kind: "cancel-edit" });
+  });
+
   test("returns begin-edit and movement actions for core keys", () => {
     expect(
       resolveGridKeyAction({

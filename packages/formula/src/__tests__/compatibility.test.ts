@@ -3,6 +3,7 @@ import {
   compatibilityFamilies,
   compatibilityScopes,
   compatibilityStatuses,
+  deriveWasmStatus,
   formulaCompatibilityRegistry,
   getCompatibilityEntry,
   isCompatibilityStatus,
@@ -80,6 +81,11 @@ describe("formula compatibility registry", () => {
     expect(isCompatibilityStatus("implemented-wasm-production")).toBe(true);
     expect(isCompatibilityStatus("implemented-js-and-wasm-shadow")).toBe(true);
     expect(isCompatibilityStatus("nope")).toBe(false);
+  });
+
+  it("derives wasm compatibility status for shadowed and blocked entries", () => {
+    expect(deriveWasmStatus("implemented-js-and-wasm-shadow")).toBe("shadow");
+    expect(deriveWasmStatus("blocked")).toBe("blocked");
   });
 
   it("exposes lookup by id", () => {

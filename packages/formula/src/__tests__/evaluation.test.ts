@@ -230,6 +230,14 @@ describe("formula builtins and JS evaluator", () => {
       tag: ValueTag.Number,
       value: 8,
     });
+    expect(evaluateAst(parseFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(evaluateAst(parseFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4,9)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 9,
+    });
     expect(evaluateAst(parseFormula("TRUE()"), context)).toEqual({
       tag: ValueTag.Boolean,
       value: true,

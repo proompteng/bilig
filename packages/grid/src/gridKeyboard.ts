@@ -65,6 +65,7 @@ export function isHandledGridKey(
     isNavigationKey(event.key) ||
     event.key === "Enter" ||
     event.key === "Tab" ||
+    event.key === "Escape" ||
     event.key === "F2" ||
     event.key === "Backspace" ||
     event.key === "Delete"

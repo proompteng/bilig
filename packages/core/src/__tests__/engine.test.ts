@@ -285,14 +285,15 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
   });
 
-  it("evaluates LET through the JS runtime fallback", async () => {
+  it("evaluates LET through the wasm fast path after rewrite-based lowering", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
     engine.setCellFormula("Sheet1", "A1", "LET(x,2,x+3)");
 
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 5 });
-    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+    expect(engine.explainCell("Sheet1", "A1").mode).toBe(FormulaMode.WasmFastPath);
   });
 
   it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {
@@ -353,6 +354,14 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "F1", "LAMBDA(x,x+1)(4)");
     engine.setCellFormula("Sheet1", "G1", "MAP(A1:A3,LAMBDA(x,x*2))");
     engine.setCellFormula("Sheet1", "H1", "BYROW(A1:B3,LAMBDA(r,SUM(r)))");
+    engine.setCellFormula("Sheet1", "I1", "BYCOL(A1:B3,LAMBDA(c,SUM(c)))");
+    engine.setCellFormula("Sheet1", "K1", "REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))");
+    engine.setCellFormula("Sheet1", "L1", "SCAN(0,A1:A3,LAMBDA(acc,x,acc+x))");
+    engine.setCellFormula("Sheet1", "M1", "MAKEARRAY(2,2,LAMBDA(r,c,r+c))");
+    engine.setCellFormula("Sheet1", "O1", "BYROW(A1:B3,LAMBDA(r,AVERAGE(r)))");
+    engine.setCellFormula("Sheet1", "P1", "BYCOL(A1:B3,LAMBDA(c,COUNTA(c)))");
+    engine.setCellFormula("Sheet1", "R1", "REDUCE(1,A1:A3,LAMBDA(acc,x,acc*x))");
+    engine.setCellFormula("Sheet1", "S1", "SCAN(1,A1:A3,LAMBDA(acc,x,acc*x))");
 
     expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({
       tag: ValueTag.String,
@@ -370,6 +379,36 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "H1")).toEqual({ tag: ValueTag.Number, value: 5 });
     expect(engine.getCellValue("Sheet1", "H2")).toEqual({ tag: ValueTag.Number, value: 7 });
     expect(engine.getCellValue("Sheet1", "H3")).toEqual({ tag: ValueTag.Number, value: 9 });
+    expect(engine.getCellValue("Sheet1", "I1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "J1")).toEqual({ tag: ValueTag.Number, value: 15 });
+    expect(engine.getCellValue("Sheet1", "K1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "L1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "L2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "L3")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "M1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "N1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "M2")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "N2")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getCellValue("Sheet1", "O1")).toEqual({ tag: ValueTag.Number, value: 2.5 });
+    expect(engine.getCellValue("Sheet1", "O2")).toEqual({ tag: ValueTag.Number, value: 3.5 });
+    expect(engine.getCellValue("Sheet1", "O3")).toEqual({ tag: ValueTag.Number, value: 4.5 });
+    expect(engine.getCellValue("Sheet1", "P1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "Q1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "R1")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.getCellValue("Sheet1", "S1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "S2")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "S3")).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "H1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "I1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "K1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "L1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "M1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "O1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "P1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "R1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "S1").mode).toBe(FormulaMode.WasmFastPath);
   });
 
   it("evaluates accelerated math builtins and JS matrix spills", async () => {

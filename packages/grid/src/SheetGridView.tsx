@@ -547,6 +547,12 @@ export function SheetGridView({
         case "edit-append":
           onEditorChange(action.value);
           return;
+        case "commit-edit":
+          onCommitEdit(action.movement);
+          return;
+        case "cancel-edit":
+          onCancelEdit();
+          return;
         case "begin-edit":
           pendingTypeSeedRef.current = action.pendingTypeSeed;
           beginSelectedEdit(action.seed, action.selectionBehavior);
@@ -600,7 +606,9 @@ export function SheetGridView({
       editorValue,
       gridSelection.current?.cell,
       isEditingCell,
+      onCancelEdit,
       onClearCell,
+      onCommitEdit,
       onEditorChange,
       onSelect,
       selectedCell.col,

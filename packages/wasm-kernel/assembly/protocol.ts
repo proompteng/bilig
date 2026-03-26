@@ -247,5 +247,14 @@ export enum BuiltinId {
   Negbinomdist = 192,
   NegbinomDist = 193,
   Filter = 194,
-  Unique = 195
+  Unique = 195,
+  ByrowSum = 196,
+  BycolSum = 197,
+  ReduceSum = 198,
+  ScanSum = 199,
+  MakearraySum = 200,
+  ByrowAggregate = 201,
+  BycolAggregate = 202,
+  ReduceProduct = 203,
+  ScanProduct = 204
 }

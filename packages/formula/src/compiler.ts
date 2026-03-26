@@ -1,4 +1,4 @@
-import { FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
+import { BuiltinId, FormulaMode, Opcode, type FormulaRecord } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
 import { formatRangeAddress, parseRangeAddress } from "./addressing.js";
 import { bindFormula, encodeBuiltin } from "./binder.js";
@@ -159,6 +159,94 @@ function emitArgument(node: FormulaNode, state: CompilerState): number {
   return 1;
 }
 
+const AXIS_AGGREGATE_CODES = new Map<string, number>([
+  ["SUM", 1],
+  ["AVERAGE", 2],
+  ["AVG", 2],
+  ["MIN", 3],
+  ["MAX", 4],
+  ["COUNT", 5],
+  ["COUNTA", 6],
+]);
+
+function getNativeAxisAggregateCode(node: FormulaNode): number | null {
+  if (
+    node.kind !== "CallExpr" ||
+    node.callee.toUpperCase() !== "LAMBDA" ||
+    node.args.length !== 2
+  ) {
+    return null;
+  }
+  const [param, body] = node.args;
+  if (param?.kind !== "NameRef" || body?.kind !== "CallExpr" || body.args.length !== 1) {
+    return null;
+  }
+  const aggregateCode = AXIS_AGGREGATE_CODES.get(body.callee.toUpperCase());
+  if (aggregateCode === undefined) {
+    return null;
+  }
+  return body.args[0]?.kind === "NameRef" &&
+    body.args[0].name.trim().toUpperCase() === param.name.trim().toUpperCase()
+    ? aggregateCode
+    : null;
+}
+
+function getNativeRunningFoldCode(node: FormulaNode): number | null {
+  if (
+    node.kind !== "CallExpr" ||
+    node.callee.toUpperCase() !== "LAMBDA" ||
+    node.args.length !== 3
+  ) {
+    return null;
+  }
+  const [acc, value, body] = node.args;
+  if (acc?.kind !== "NameRef" || value?.kind !== "NameRef" || body?.kind !== "BinaryExpr") {
+    return null;
+  }
+  const foldCode = body.operator === "+" ? 1 : body.operator === "*" ? 2 : null;
+  if (foldCode === null) {
+    return null;
+  }
+  const left = body.left;
+  const right = body.right;
+  const accName = acc.name.trim().toUpperCase();
+  const valueName = value.name.trim().toUpperCase();
+  return left.kind === "NameRef" &&
+    right.kind === "NameRef" &&
+    ((left.name.trim().toUpperCase() === accName &&
+      right.name.trim().toUpperCase() === valueName) ||
+      (left.name.trim().toUpperCase() === valueName && right.name.trim().toUpperCase() === accName))
+    ? foldCode
+    : null;
+}
+
+function isNativeMakearraySumLambda(node: FormulaNode): boolean {
+  if (
+    node.kind !== "CallExpr" ||
+    node.callee.toUpperCase() !== "LAMBDA" ||
+    node.args.length !== 3
+  ) {
+    return false;
+  }
+  const [rowParam, colParam, body] = node.args;
+  if (rowParam?.kind !== "NameRef" || colParam?.kind !== "NameRef" || body?.kind !== "BinaryExpr") {
+    return false;
+  }
+  if (body.operator !== "+") {
+    return false;
+  }
+  const left = body.left;
+  const right = body.right;
+  const rowName = rowParam.name.trim().toUpperCase();
+  const colName = colParam.name.trim().toUpperCase();
+  return (
+    left.kind === "NameRef" &&
+    right.kind === "NameRef" &&
+    ((left.name.trim().toUpperCase() === rowName && right.name.trim().toUpperCase() === colName) ||
+      (left.name.trim().toUpperCase() === colName && right.name.trim().toUpperCase() === rowName))
+  );
+}
+
 function emitNode(node: FormulaNode, state: CompilerState): void {
   switch (node.kind) {
     case "NumberLiteral": {
@@ -243,6 +331,68 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
           state.program[jumpIfFalseIndex] = encodeInstruction(Opcode.JumpIfFalse, falseBranchStart);
           state.program[jumpIndex] = encodeInstruction(Opcode.Jump, end);
           return;
+        }
+        if ((callee === "BYROW" || callee === "BYCOL") && node.args.length === 2) {
+          const lambda = node.args[1]!;
+          const aggregateCode = getNativeAxisAggregateCode(lambda);
+          if (aggregateCode !== null) {
+            const aggregateIndex = state.constants.push(aggregateCode) - 1;
+            state.program.push(encodeInstruction(Opcode.PushNumber, aggregateIndex));
+            emitArgument(node.args[0]!, state);
+            state.program.push(
+              encodeInstruction(
+                Opcode.CallBuiltin,
+                ((callee === "BYROW" ? BuiltinId.ByrowAggregate : BuiltinId.BycolAggregate) << 8) |
+                  2,
+              ),
+            );
+            return;
+          }
+        }
+        if (
+          callee === "MAKEARRAY" &&
+          node.args.length === 3 &&
+          isNativeMakearraySumLambda(node.args[2]!)
+        ) {
+          emitArgument(node.args[0]!, state);
+          emitArgument(node.args[1]!, state);
+          state.program.push(
+            encodeInstruction(Opcode.CallBuiltin, (BuiltinId.MakearraySum << 8) | 2),
+          );
+          return;
+        }
+        if (callee === "REDUCE" || callee === "SCAN") {
+          const sourceArg = node.args.length === 3 ? node.args[1] : node.args[0];
+          const lambdaArg = node.args.length === 3 ? node.args[2] : node.args[1];
+          const initialArg = node.args.length === 3 ? node.args[0] : undefined;
+          const foldCode = lambdaArg ? getNativeRunningFoldCode(lambdaArg) : null;
+          if (
+            (node.args.length === 2 || node.args.length === 3) &&
+            sourceArg !== undefined &&
+            lambdaArg !== undefined &&
+            foldCode !== null
+          ) {
+            let argc = 0;
+            if (initialArg !== undefined) {
+              argc += emitArgument(initialArg, state);
+            }
+            argc += emitArgument(sourceArg, state);
+            state.program.push(
+              encodeInstruction(
+                Opcode.CallBuiltin,
+                ((callee === "REDUCE"
+                  ? foldCode === 1
+                    ? BuiltinId.ReduceSum
+                    : BuiltinId.ReduceProduct
+                  : foldCode === 1
+                    ? BuiltinId.ScanSum
+                    : BuiltinId.ScanProduct) <<
+                  8) |
+                  argc,
+              ),
+            );
+            return;
+          }
         }
         let argc = 0;
         node.args.forEach((arg) => {

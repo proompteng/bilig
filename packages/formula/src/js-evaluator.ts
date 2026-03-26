@@ -58,6 +58,7 @@ type BinaryOperator = Extract<JsPlanInstruction, { opcode: "binary" }>["operator
 
 type StackValue =
   | { kind: "scalar"; value: CellValue }
+  | { kind: "omitted" }
   | {
       kind: "range";
       values: CellValue[];
@@ -153,6 +154,9 @@ function popScalar(stack: StackValue[]): CellValue {
   if (value.kind === "scalar") {
     return value.value;
   }
+  if (value.kind === "omitted") {
+    return error(ErrorCode.Value);
+  }
   if (value.kind === "lambda") {
     return error(ErrorCode.Value);
   }
@@ -169,6 +173,9 @@ function toEvaluationResult(value: StackValue | undefined): EvaluationResult {
   }
   if (value.kind === "scalar") {
     return value.value;
+  }
+  if (value.kind === "omitted") {
+    return error(ErrorCode.Value);
   }
   if (value.kind === "lambda") {
     return error(ErrorCode.Value);
@@ -187,6 +194,9 @@ function toEvaluationResult(value: StackValue | undefined): EvaluationResult {
 function cloneStackValue(value: StackValue): StackValue {
   if (value.kind === "scalar") {
     return { kind: "scalar", value: value.value };
+  }
+  if (value.kind === "omitted") {
+    return { kind: "omitted" };
   }
   if (value.kind === "range") {
     return {
@@ -215,6 +225,9 @@ function cloneScopes(scopes: readonly Map<string, StackValue>[]): Array<Map<stri
 }
 
 function toRangeLike(value: StackValue): RangeLikeValue {
+  if (value.kind === "omitted") {
+    return { kind: "range", values: [error(ErrorCode.Value)], rows: 1, cols: 1, refKind: "cells" };
+  }
   if (value.kind === "lambda") {
     return { kind: "range", values: [error(ErrorCode.Value)], rows: 1, cols: 1, refKind: "cells" };
   }
@@ -360,6 +373,9 @@ function isSingleCellValue(value: StackValue): CellValue | undefined {
   if (value.kind === "scalar") {
     return value.value;
   }
+  if (value.kind === "omitted") {
+    return error(ErrorCode.Value);
+  }
   if (value.kind === "lambda") {
     return undefined;
   }
@@ -369,6 +385,9 @@ function isSingleCellValue(value: StackValue): CellValue | undefined {
 function toRangeArgument(value: StackValue): CellValue | RangeBuiltinArgument {
   if (value.kind === "scalar") {
     return value.value;
+  }
+  if (value.kind === "omitted") {
+    return error(ErrorCode.Value);
   }
   if (value.kind === "lambda") {
     return error(ErrorCode.Value);
@@ -424,12 +443,15 @@ function applyLambda(
         : error(ErrorCode.Value),
     );
   }
-  if (lambdaValue.params.length !== args.length) {
+  if (args.length > lambdaValue.params.length) {
     return stackScalar(error(ErrorCode.Value));
   }
   const parameterScope = new Map<string, StackValue>();
   lambdaValue.params.forEach((name, index) => {
-    parameterScope.set(normalizeScopeName(name), cloneStackValue(args[index]!));
+    parameterScope.set(
+      normalizeScopeName(name),
+      cloneStackValue(args[index] ?? { kind: "omitted" }),
+    );
   });
   return (
     executePlan(lambdaValue.body, context, [...cloneScopes(lambdaValue.scopes), parameterScope]) ??
@@ -443,6 +465,11 @@ function evaluateSpecialCall(
   context: EvaluationContext,
 ): StackValue | undefined {
   switch (callee) {
+    case "ISOMITTED":
+      if (rawArgs.length !== 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      return stackScalar({ tag: ValueTag.Boolean, value: rawArgs[0]?.kind === "omitted" });
     case "MAKEARRAY": {
       if (rawArgs.length !== 3) {
         return stackScalar(error(ErrorCode.Value));
@@ -883,6 +910,10 @@ function executePlan(
         for (const rawArg of rawArgs) {
           if (rawArg.kind === "scalar") {
             args.push(rawArg.value);
+            continue;
+          }
+          if (rawArg.kind === "omitted") {
+            args.push(error(ErrorCode.Value));
             continue;
           }
           if (rawArg.kind === "lambda") {
