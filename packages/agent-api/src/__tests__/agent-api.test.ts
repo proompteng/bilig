@@ -5,6 +5,7 @@ import {
   decodeStdioMessages,
   encodeAgentFrame,
   encodeStdioMessage,
+  XLSX_CONTENT_TYPE,
 } from "../index.js";
 
 describe("agent api", () => {
@@ -45,5 +46,38 @@ describe("agent api", () => {
     const decoded = decodeStdioMessages(encoded);
     expect(decoded.frames).toHaveLength(2);
     expect(decoded.remainder.byteLength).toBe(0);
+  });
+
+  it("roundtrips workbook file load requests and responses", () => {
+    const requestFrame = {
+      kind: "request" as const,
+      request: {
+        kind: "loadWorkbookFile" as const,
+        id: "upload-1",
+        replicaId: "agent-local",
+        openMode: "create" as const,
+        fileName: "report.xlsx",
+        contentType: XLSX_CONTENT_TYPE,
+        bytesBase64: "QUJD",
+      },
+    };
+    expect(decodeAgentFrame(encodeAgentFrame(requestFrame))).toEqual(requestFrame);
+
+    const responseFrame = {
+      kind: "response" as const,
+      response: {
+        kind: "workbookLoaded" as const,
+        id: "upload-1",
+        documentId: "xlsx:abc123",
+        sessionId: "xlsx:abc123:agent-local",
+        workbookName: "report.xlsx",
+        sheetNames: ["Sheet1"],
+        serverUrl: "http://127.0.0.1:4381",
+        browserUrl:
+          "http://127.0.0.1:4173/?document=xlsx%3Aabc123&server=http%3A%2F%2F127.0.0.1%3A4381",
+        warnings: [],
+      },
+    };
+    expect(decodeAgentFrame(encodeAgentFrame(responseFrame))).toEqual(responseFrame);
   });
 });

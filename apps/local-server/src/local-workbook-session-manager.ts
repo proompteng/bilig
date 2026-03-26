@@ -1,14 +1,23 @@
 import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
 import type { CellRangeRef, CellValue } from "@bilig/protocol";
+import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
 import type {
   AckFrame,
   CursorWatermarkFrame,
   ErrorFrame,
   HeartbeatFrame,
   ProtocolFrame,
+  SnapshotChunkFrame,
 } from "@bilig/binary-protocol";
-import type { AgentEvent, AgentFrame, AgentResponse } from "@bilig/agent-api";
+import {
+  XLSX_CONTENT_TYPE,
+  type AgentEvent,
+  type AgentFrame,
+  type AgentResponse,
+  type LoadWorkbookFileRequest,
+} from "@bilig/agent-api";
 import { shouldApplyBatch } from "@bilig/crdt";
+import { importXlsx } from "@bilig/excel-import";
 import type { UpstreamSyncRelay } from "./sync-relay.js";
 
 interface BrowserSubscriber {
@@ -36,6 +45,14 @@ interface StoredBatch {
   frame: Extract<ProtocolFrame, { kind: "appendBatch" }>;
 }
 
+interface StoredSnapshotPublication {
+  cursor: number;
+  snapshotId: string;
+  contentType: string;
+  bytes: Uint8Array;
+  frames: SnapshotChunkFrame[];
+}
+
 interface LocalWorkbookSession {
   documentId: string;
   engine: SpreadsheetEngine;
@@ -45,6 +62,7 @@ interface LocalWorkbookSession {
   eventBacklog: AgentEvent[];
   eventFlushScheduled: boolean;
   batches: StoredBatch[];
+  latestSnapshot: StoredSnapshotPublication | null;
   cursor: number;
   replicaSnapshot: EngineReplicaSnapshot | null;
   upstreamRelay: UpstreamSyncRelay | null;
@@ -53,6 +71,9 @@ interface LocalWorkbookSession {
 
 export interface LocalWorkbookSessionManagerOptions {
   createSyncRelay?: (documentId: string) => UpstreamSyncRelay | null;
+  browserAppBaseUrl?: string;
+  publicServerUrl?: string;
+  maxImportBytes?: number;
 }
 
 export interface LocalDocumentStateSummary {
@@ -62,6 +83,20 @@ export interface LocalDocumentStateSummary {
   agentSessions: string[];
   lastBatchId: string | null;
 }
+
+export interface LocalSnapshotSummary {
+  cursor: number;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+export interface AgentFrameContext {
+  serverUrl?: string;
+  browserAppBaseUrl?: string;
+}
+
+const DEFAULT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
+const snapshotEncoder = new TextEncoder();
 
 function normalizeSessionId(documentId: string, replicaId: string): string {
   return `${documentId}:${replicaId}`;
@@ -110,6 +145,43 @@ function encodeColumn(value: number): string {
   return output;
 }
 
+function normalizeBaseUrl(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function buildBrowserUrl(
+  browserAppBaseUrl: string | undefined,
+  serverUrl: string,
+  documentId: string,
+): string | undefined {
+  if (!browserAppBaseUrl) {
+    return undefined;
+  }
+  const url = new URL(normalizeBaseUrl(browserAppBaseUrl));
+  url.searchParams.set("document", documentId);
+  url.searchParams.set("server", serverUrl);
+  return url.toString();
+}
+
+function decodeBase64(bytesBase64: string): Uint8Array {
+  const normalized = bytesBase64.trim();
+  if (normalized.length === 0 || normalized.length % 4 !== 0) {
+    throw new Error("Workbook upload bytesBase64 must be a non-empty base64 string");
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    throw new Error("Workbook upload bytesBase64 contains invalid base64 characters");
+  }
+  return new Uint8Array(Buffer.from(normalized, "base64"));
+}
+
+function createImportedDocumentId(): string {
+  const random =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return `xlsx:${random}`;
+}
+
 export class LocalWorkbookSessionManager {
   private readonly sessions = new Map<string, LocalWorkbookSession>();
   private readonly agentEventListeners = new Set<(event: AgentEvent) => void>();
@@ -137,6 +209,7 @@ export class LocalWorkbookSessionManager {
       eventBacklog: [],
       eventFlushScheduled: false,
       batches: [],
+      latestSnapshot: null,
       cursor: 0,
       replicaSnapshot: null,
       upstreamRelay: this.options.createSyncRelay?.(documentId) ?? null,
@@ -188,16 +261,26 @@ export class LocalWorkbookSessionManager {
     const documentId = frame.documentId;
     switch (frame.kind) {
       case "hello": {
+        const snapshotFrames =
+          session.latestSnapshot && frame.lastServerCursor < session.latestSnapshot.cursor
+            ? session.latestSnapshot.frames
+            : [];
         const missed = session.batches
-          .filter((entry) => entry.cursor > frame.lastServerCursor)
+          .filter(
+            (entry) =>
+              entry.cursor > Math.max(frame.lastServerCursor, session.latestSnapshot?.cursor ?? 0),
+          )
           .map((entry) => entry.frame);
         return [
+          ...snapshotFrames,
           ...missed,
           {
             kind: "cursorWatermark",
             documentId: frame.documentId,
             cursor: session.cursor,
-            compactedCursor: Math.max(0, session.cursor - session.batches.length),
+            compactedCursor:
+              session.latestSnapshot?.cursor ??
+              Math.max(0, session.cursor - session.batches.length),
           } satisfies CursorWatermarkFrame,
         ];
       }
@@ -262,7 +345,7 @@ export class LocalWorkbookSessionManager {
     }
   }
 
-  async handleAgentFrame(frame: AgentFrame): Promise<AgentFrame> {
+  async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
     if (frame.kind !== "request") {
       return this.agentError(
         "unknown",
@@ -277,6 +360,11 @@ export class LocalWorkbookSessionManager {
     let response: AgentResponse;
     try {
       switch (request.kind) {
+        case "loadWorkbookFile": {
+          response = this.loadWorkbookFile(request, context);
+          break;
+        }
+
         case "openWorkbookSession": {
           const session = this.ensureSession(request.documentId);
           const sessionId = normalizeSessionId(request.documentId, request.replicaId);
@@ -494,6 +582,18 @@ export class LocalWorkbookSessionManager {
     };
   }
 
+  getLatestSnapshot(documentId: string): LocalSnapshotSummary | null {
+    const session = this.sessions.get(documentId);
+    if (!session?.latestSnapshot) {
+      return null;
+    }
+    return {
+      cursor: session.latestSnapshot.cursor,
+      contentType: session.latestSnapshot.contentType,
+      bytes: session.latestSnapshot.bytes,
+    };
+  }
+
   private readRange(engine: SpreadsheetEngine, range: CellRangeRef): CellValue[][] {
     const addresses = iterateRange(range);
     const [startColPart] = splitAddress(range.startAddress);
@@ -520,6 +620,61 @@ export class LocalWorkbookSessionManager {
       throw new Error(`Unknown agent session: ${sessionId}`);
     }
     return session;
+  }
+
+  private loadWorkbookFile(
+    request: LoadWorkbookFileRequest,
+    context: AgentFrameContext,
+  ): AgentResponse {
+    if (request.contentType !== XLSX_CONTENT_TYPE) {
+      throw new Error("Unsupported workbook upload content type");
+    }
+    if (request.openMode === "replace" && !request.documentId) {
+      throw new Error("Workbook replace uploads require documentId");
+    }
+
+    const bytes = decodeBase64(request.bytesBase64);
+    const maxImportBytes = this.options.maxImportBytes ?? DEFAULT_IMPORT_MAX_BYTES;
+    if (bytes.byteLength > maxImportBytes) {
+      throw new Error(`Workbook upload exceeds ${maxImportBytes} bytes`);
+    }
+
+    const imported = importXlsx(bytes, request.fileName);
+    const documentId = request.documentId ?? createImportedDocumentId();
+    const session = this.ensureSession(documentId);
+    const sessionId = normalizeSessionId(documentId, request.replicaId);
+    session.agentSessions.set(sessionId, {
+      sessionId,
+      documentId,
+      replicaId: request.replicaId,
+      subscriptionIds: session.agentSessions.get(sessionId)?.subscriptionIds ?? new Set(),
+    });
+
+    session.engine.importSnapshot(imported.snapshot);
+    session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+    this.publishSnapshot(session, imported.snapshot);
+
+    const serverUrl = normalizeBaseUrl(
+      context.serverUrl ?? this.options.publicServerUrl ?? "http://127.0.0.1:4381",
+    );
+    return {
+      kind: "workbookLoaded",
+      id: request.id,
+      documentId,
+      sessionId,
+      workbookName: imported.workbookName,
+      sheetNames: imported.sheetNames,
+      serverUrl,
+      ...(() => {
+        const browserUrl = buildBrowserUrl(
+          context.browserAppBaseUrl ?? this.options.browserAppBaseUrl,
+          serverUrl,
+          documentId,
+        );
+        return browserUrl ? { browserUrl } : {};
+      })(),
+      warnings: imported.warnings,
+    };
   }
 
   private removeAgentSubscription(
@@ -578,6 +733,38 @@ export class LocalWorkbookSessionManager {
       return;
     }
     session.browserSubscribers.forEach((subscriber) => subscriber.send(frame));
+  }
+
+  private publishSnapshot(
+    session: LocalWorkbookSession,
+    snapshot: Parameters<SpreadsheetEngine["importSnapshot"]>[0],
+  ): void {
+    const snapshotId = `${session.documentId}:snapshot:${Date.now()}`;
+    const cursor = session.cursor + 1;
+    const bytes = snapshotEncoder.encode(JSON.stringify(snapshot));
+    const frames = createSnapshotChunkFrames({
+      documentId: session.documentId,
+      snapshotId,
+      cursor,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes,
+    });
+    session.cursor = cursor;
+    session.batches = [];
+    session.latestSnapshot = {
+      cursor,
+      snapshotId,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes,
+      frames,
+    };
+    frames.forEach((frame) => this.broadcast(session.documentId, frame));
+    this.broadcast(session.documentId, {
+      kind: "cursorWatermark",
+      documentId: session.documentId,
+      cursor,
+      compactedCursor: cursor,
+    });
   }
 
   private async relayUpstream(

@@ -117,6 +117,7 @@ export interface EngineSyncClientConnection {
 export interface EngineSyncClient {
   connect(handlers: {
     applyRemoteBatch(batch: EngineOpBatch): void;
+    applyRemoteSnapshot?(snapshot: WorkbookSnapshot): void;
     setState(state: SyncState): void;
   }): EngineSyncClientConnection | Promise<EngineSyncClientConnection>;
 }
@@ -575,6 +576,9 @@ export class SpreadsheetEngine {
     const connection = await client.connect({
       applyRemoteBatch: (batch) => {
         this.applyRemoteBatch(batch);
+      },
+      applyRemoteSnapshot: (snapshot) => {
+        this.importSnapshot(snapshot);
       },
       setState: (state) => {
         this.setSyncState(state);

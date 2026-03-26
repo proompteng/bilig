@@ -7,7 +7,9 @@
   "references": [
     { "path": "../../packages/binary-protocol" },
     { "path": "../../packages/agent-api" },
-    { "path": "../../packages/storage-server" }
+    { "path": "../../packages/protocol" },
+    { "path": "../../packages/storage-server" },
+    { "path": "../../packages/excel-import" }
   ],
   "include": ["src/**/*"],
   "exclude": ["src/**/__tests__/**"]

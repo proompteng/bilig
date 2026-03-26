@@ -87,6 +87,11 @@ export interface WorkbookWorkerBootstrapOptions {
   persistState: boolean;
 }
 
+interface ServerSnapshotSeed {
+  cursor: number;
+  snapshot: WorkbookSnapshot;
+}
+
 export interface WorkbookWorkerStateSnapshot {
   workbookName: string;
   sheetNames: string[];
@@ -97,6 +102,37 @@ export interface WorkbookWorkerStateSnapshot {
 interface PersistedWorkbookState {
   snapshot: WorkbookSnapshot;
   replica: EngineReplicaSnapshot;
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"]) &&
+    value["sheets"].every((sheet) => {
+      return (
+        isRecord(sheet) &&
+        typeof sheet["name"] === "string" &&
+        typeof sheet["order"] === "number" &&
+        Array.isArray(sheet["cells"]) &&
+        sheet["cells"].every((cell) => {
+          return (
+            isRecord(cell) &&
+            typeof cell["address"] === "string" &&
+            (cell["value"] === undefined ||
+              cell["value"] === null ||
+              typeof cell["value"] === "string" ||
+              typeof cell["value"] === "number" ||
+              typeof cell["value"] === "boolean") &&
+            (cell["formula"] === undefined || typeof cell["formula"] === "string") &&
+            (cell["format"] === undefined || typeof cell["format"] === "string")
+          );
+        })
+      );
+    })
+  );
 }
 
 interface ViewportSubscriptionState {
@@ -162,6 +198,7 @@ export class WorkbookWorkerRuntime {
       replicaId: options.replicaId,
     });
     await this.engine.ready();
+    let initialServerSnapshot: ServerSnapshotSeed | null = null;
 
     if (options.persistState) {
       const persisted = await this.persistence.loadJson(
@@ -171,6 +208,19 @@ export class WorkbookWorkerRuntime {
       if (persisted) {
         this.engine.importSnapshot(persisted.snapshot);
         this.engine.importReplicaSnapshot(persisted.replica);
+      }
+    }
+    if (options.baseUrl) {
+      try {
+        initialServerSnapshot = await this.fetchLatestServerSnapshot(
+          options.baseUrl,
+          options.documentId,
+        );
+        if (initialServerSnapshot) {
+          this.engine.importSnapshot(initialServerSnapshot.snapshot);
+        }
+      } catch {
+        initialServerSnapshot = null;
       }
     }
     if (this.engine.workbook.sheetsByName.size === 0) {
@@ -190,6 +240,7 @@ export class WorkbookWorkerRuntime {
             documentId: options.documentId,
             replicaId: options.replicaId,
             baseUrl: options.baseUrl,
+            ...(initialServerSnapshot ? { initialServerCursor: initialServerSnapshot.cursor } : {}),
           }),
         );
       } catch {
@@ -334,6 +385,29 @@ export class WorkbookWorkerRuntime {
       this.persistenceKey(this.bootstrapOptions.documentId),
       persisted,
     );
+  }
+
+  private async fetchLatestServerSnapshot(
+    baseUrl: string,
+    documentId: string,
+  ): Promise<ServerSnapshotSeed | null> {
+    const url = new URL(`/v1/documents/${encodeURIComponent(documentId)}/snapshot/latest`, baseUrl);
+    const response = await fetch(url);
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch latest server snapshot (${response.status})`);
+    }
+    const cursor = Number.parseInt(response.headers.get("x-bilig-snapshot-cursor") ?? "0", 10);
+    const parsed: unknown = JSON.parse(await response.text());
+    if (!isWorkbookSnapshot(parsed)) {
+      throw new Error("Invalid workbook snapshot payload");
+    }
+    return {
+      cursor: Number.isFinite(cursor) ? cursor : 0,
+      snapshot: parsed,
+    };
   }
 
   private broadcastViewportPatches(metrics: RecalcMetrics): void {

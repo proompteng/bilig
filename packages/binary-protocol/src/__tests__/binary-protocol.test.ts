@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeFrame, encodeFrame } from "../index.js";
+import {
+  WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+  createSnapshotChunkFrames,
+  decodeFrame,
+  encodeFrame,
+} from "../index.js";
 
 describe("binary protocol", () => {
   it("roundtrips hello frames", () => {
@@ -186,5 +191,50 @@ describe("binary protocol", () => {
     encoded[10] = 0;
 
     expect(() => decodeFrame(encoded)).toThrow(/length mismatch/i);
+  });
+
+  it("chunks snapshot payloads into ordered snapshotChunk frames", () => {
+    const frames = createSnapshotChunkFrames({
+      documentId: "book-1",
+      snapshotId: "snap-1",
+      cursor: 3,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes: new TextEncoder().encode("abcdef"),
+      chunkSize: 2,
+    });
+
+    expect(frames).toHaveLength(3);
+    expect(frames.map((frame) => decodeFrame(encodeFrame(frame)))).toEqual([
+      {
+        kind: "snapshotChunk",
+        documentId: "book-1",
+        snapshotId: "snap-1",
+        cursor: 3,
+        chunkIndex: 0,
+        chunkCount: 3,
+        contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+        bytes: new TextEncoder().encode("ab"),
+      },
+      {
+        kind: "snapshotChunk",
+        documentId: "book-1",
+        snapshotId: "snap-1",
+        cursor: 3,
+        chunkIndex: 1,
+        chunkCount: 3,
+        contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+        bytes: new TextEncoder().encode("cd"),
+      },
+      {
+        kind: "snapshotChunk",
+        documentId: "book-1",
+        snapshotId: "snap-1",
+        cursor: 3,
+        chunkIndex: 2,
+        chunkCount: 3,
+        contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+        bytes: new TextEncoder().encode("ef"),
+      },
+    ]);
   });
 });

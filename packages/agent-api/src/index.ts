@@ -13,6 +13,33 @@ export const AGENT_STDIN_MAGIC = 0x41474e54;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+export const XLSX_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+export type WorkbookFileOpenMode = "create" | "replace";
+
+export interface LoadWorkbookFileRequest {
+  kind: "loadWorkbookFile";
+  id: string;
+  replicaId: string;
+  openMode: WorkbookFileOpenMode;
+  documentId?: string;
+  fileName: string;
+  contentType: typeof XLSX_CONTENT_TYPE;
+  bytesBase64: string;
+}
+
+export interface WorkbookLoadedResponse {
+  kind: "workbookLoaded";
+  id: string;
+  documentId: string;
+  sessionId: string;
+  workbookName: string;
+  sheetNames: string[];
+  serverUrl: string;
+  browserUrl?: string;
+  warnings: string[];
+}
+
 export type AgentRequest =
   | { kind: "openWorkbookSession"; id: string; documentId: string; replicaId: string }
   | { kind: "closeWorkbookSession"; id: string; sessionId: string }
@@ -64,7 +91,8 @@ export type AgentRequest =
       source: CellRangeRef;
       groupBy: string[];
       values: WorkbookPivotValueSnapshot[];
-    };
+    }
+  | LoadWorkbookFileRequest;
 
 export type AgentResponse =
   | { kind: "ok"; id: string; sessionId?: string; value?: unknown }
@@ -72,6 +100,7 @@ export type AgentResponse =
   | { kind: "dependencies"; id: string; addresses: string[] }
   | { kind: "snapshot"; id: string; snapshot: WorkbookSnapshot }
   | { kind: "metrics"; id: string; value: unknown }
+  | WorkbookLoadedResponse
   | { kind: "error"; id: string; code: string; message: string; retryable: boolean };
 
 export type AgentEvent =
@@ -92,6 +121,57 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isLoadWorkbookFileRequest(value: unknown): value is LoadWorkbookFileRequest {
+  return (
+    isRecord(value) &&
+    value["kind"] === "loadWorkbookFile" &&
+    typeof value["id"] === "string" &&
+    typeof value["replicaId"] === "string" &&
+    (value["openMode"] === "create" || value["openMode"] === "replace") &&
+    (value["documentId"] === undefined || typeof value["documentId"] === "string") &&
+    typeof value["fileName"] === "string" &&
+    value["contentType"] === XLSX_CONTENT_TYPE &&
+    typeof value["bytesBase64"] === "string"
+  );
+}
+
+function isWorkbookLoadedResponse(value: unknown): value is WorkbookLoadedResponse {
+  return (
+    isRecord(value) &&
+    value["kind"] === "workbookLoaded" &&
+    typeof value["id"] === "string" &&
+    typeof value["documentId"] === "string" &&
+    typeof value["sessionId"] === "string" &&
+    typeof value["workbookName"] === "string" &&
+    Array.isArray(value["sheetNames"]) &&
+    value["sheetNames"].every((entry) => typeof entry === "string") &&
+    typeof value["serverUrl"] === "string" &&
+    (value["browserUrl"] === undefined || typeof value["browserUrl"] === "string") &&
+    Array.isArray(value["warnings"]) &&
+    value["warnings"].every((entry) => typeof entry === "string")
+  );
+}
+
+function isAgentRequest(value: unknown): value is AgentRequest {
+  if (!isRecord(value) || typeof value["kind"] !== "string" || typeof value["id"] !== "string") {
+    return false;
+  }
+  if (value["kind"] === "loadWorkbookFile") {
+    return isLoadWorkbookFileRequest(value);
+  }
+  return true;
+}
+
+function isAgentResponse(value: unknown): value is AgentResponse {
+  if (!isRecord(value) || typeof value["kind"] !== "string" || typeof value["id"] !== "string") {
+    return false;
+  }
+  if (value["kind"] === "workbookLoaded") {
+    return isWorkbookLoadedResponse(value);
+  }
+  return true;
+}
+
 function isAgentFrame(value: unknown): value is AgentFrame {
   const kind = isRecord(value) ? value["kind"] : undefined;
   if (typeof kind !== "string") {
@@ -99,9 +179,9 @@ function isAgentFrame(value: unknown): value is AgentFrame {
   }
   switch (kind) {
     case "request":
-      return isRecord(value) && "request" in value;
+      return isRecord(value) && isAgentRequest(value["request"]);
     case "response":
-      return isRecord(value) && "response" in value;
+      return isRecord(value) && isAgentResponse(value["response"]);
     case "event":
       return isRecord(value) && "event" in value;
     default:

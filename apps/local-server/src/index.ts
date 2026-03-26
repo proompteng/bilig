@@ -7,6 +7,15 @@ const port = Number.parseInt(process.env["PORT"] ?? "4381", 10);
 const host = process.env["HOST"] ?? "127.0.0.1";
 const syncServerUrl = process.env["SYNC_SERVER_URL"] ?? process.env["BILIG_SYNC_SERVER_URL"] ?? "";
 const stdioMode = process.env["BILIG_AGENT_STDIO"] === "1";
+const publicServerUrl = process.env["BILIG_PUBLIC_SERVER_URL"] ?? "";
+const browserAppBaseUrl = process.env["BILIG_WEB_APP_BASE_URL"] ?? "";
+const maxImportBytes = Number.parseInt(process.env["BILIG_AGENT_IMPORT_MAX_BYTES"] ?? "", 10);
+
+const sharedManagerOptions = {
+  ...(publicServerUrl ? { publicServerUrl } : {}),
+  ...(browserAppBaseUrl ? { browserAppBaseUrl } : {}),
+  ...(Number.isFinite(maxImportBytes) ? { maxImportBytes } : {}),
+};
 
 const sessionManager = new LocalWorkbookSessionManager(
   syncServerUrl
@@ -16,8 +25,9 @@ const sessionManager = new LocalWorkbookSessionManager(
             documentId,
             baseUrl: syncServerUrl,
           }),
+        ...sharedManagerOptions,
       }
-    : {},
+    : sharedManagerOptions,
 );
 const { app } = createLocalServer({
   sessionManager,

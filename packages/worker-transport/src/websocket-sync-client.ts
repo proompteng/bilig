@@ -1,5 +1,49 @@
 import type { EngineSyncClient } from "@bilig/core";
-import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
+import type { WorkbookSnapshot } from "@bilig/protocol";
+import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, decodeFrame, encodeFrame } from "@bilig/binary-protocol";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"]) &&
+    value["sheets"].every((sheet) => {
+      return (
+        isRecord(sheet) &&
+        typeof sheet["name"] === "string" &&
+        typeof sheet["order"] === "number" &&
+        Array.isArray(sheet["cells"]) &&
+        sheet["cells"].every((cell) => {
+          return (
+            isRecord(cell) &&
+            typeof cell["address"] === "string" &&
+            (cell["value"] === undefined ||
+              cell["value"] === null ||
+              typeof cell["value"] === "string" ||
+              typeof cell["value"] === "number" ||
+              typeof cell["value"] === "boolean") &&
+            (cell["formula"] === undefined || typeof cell["formula"] === "string") &&
+            (cell["format"] === undefined || typeof cell["format"] === "string")
+          );
+        })
+      );
+    })
+  );
+}
+
+function parseWorkbookSnapshot(bytes: Uint8Array): WorkbookSnapshot {
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (!isWorkbookSnapshot(parsed)) {
+    throw new Error("Invalid workbook snapshot payload");
+  }
+  return parsed;
+}
 
 export interface BrowserWebSocketLike {
   binaryType: string;
@@ -13,6 +57,7 @@ export interface WebSocketSyncClientOptions {
   documentId: string;
   replicaId: string;
   baseUrl: string;
+  initialServerCursor?: number;
   createSocket?: (url: string) => BrowserWebSocketLike;
 }
 
@@ -54,8 +99,16 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
           return new WebSocket(url);
         });
       const socket = createSocket(toWebSocketUrl(options.baseUrl, options.documentId));
-      let lastServerCursor = 0;
+      let lastServerCursor = options.initialServerCursor ?? 0;
       let settled = false;
+      const pendingSnapshots = new Map<
+        string,
+        {
+          cursor: number;
+          contentType: string;
+          chunks: Array<Uint8Array | undefined>;
+        }
+      >();
 
       socket.binaryType = "arraybuffer";
 
@@ -127,6 +180,34 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
               fail(frame.message);
               break;
             case "snapshotChunk":
+              lastServerCursor = Math.max(lastServerCursor, frame.cursor);
+              const assembly = pendingSnapshots.get(frame.snapshotId) ?? {
+                cursor: frame.cursor,
+                contentType: frame.contentType,
+                chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
+              };
+              assembly.chunks[frame.chunkIndex] = frame.bytes;
+              pendingSnapshots.set(frame.snapshotId, assembly);
+              if (assembly.chunks.every((chunk): chunk is Uint8Array => chunk !== undefined)) {
+                pendingSnapshots.delete(frame.snapshotId);
+                if (assembly.contentType !== WORKBOOK_SNAPSHOT_CONTENT_TYPE) {
+                  fail(`Unsupported snapshot content type ${assembly.contentType}`);
+                  return;
+                }
+                const totalLength = assembly.chunks.reduce(
+                  (sum, chunk) => sum + chunk.byteLength,
+                  0,
+                );
+                const bytes = new Uint8Array(totalLength);
+                let offset = 0;
+                assembly.chunks.forEach((chunk) => {
+                  bytes.set(chunk, offset);
+                  offset += chunk.byteLength;
+                });
+                handlers.applyRemoteSnapshot?.(parseWorkbookSnapshot(bytes));
+                handlers.setState("live");
+                complete(() => connection, resolve);
+              }
               break;
           }
         };

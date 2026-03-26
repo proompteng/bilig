@@ -13,6 +13,15 @@ export interface LocalServerOptions {
   logger?: boolean;
 }
 
+function normalizeBaseUrl(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function resolveServerUrl(request: FastifyRequest): string {
+  const host = request.headers.host ?? "127.0.0.1:4381";
+  return normalizeBaseUrl(`${request.protocol}://${host}`);
+}
+
 export function createLocalServer(options: LocalServerOptions = {}) {
   const sessionManager = options.sessionManager ?? new LocalWorkbookSessionManager();
   const app = Fastify({ logger: options.logger ?? true });
@@ -38,6 +47,22 @@ export function createLocalServer(options: LocalServerOptions = {}) {
     },
   );
 
+  app.get(
+    "/v1/documents/:documentId/snapshot/latest",
+    async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
+      const snapshot = sessionManager.getLatestSnapshot(request.params.documentId);
+      if (!snapshot) {
+        reply.code(404);
+        return {
+          error: "SNAPSHOT_NOT_FOUND",
+        };
+      }
+      reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
+      reply.header("content-type", snapshot.contentType);
+      return Buffer.from(snapshot.bytes);
+    },
+  );
+
   app.post(
     "/v1/agent/frames",
     async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
@@ -53,7 +78,12 @@ export function createLocalServer(options: LocalServerOptions = {}) {
               retryable: false,
             },
           }
-        : await sessionManager.handleAgentFrame(frame);
+        : await sessionManager.handleAgentFrame(frame, {
+            serverUrl: resolveServerUrl(request),
+            ...(process.env["BILIG_WEB_APP_BASE_URL"]
+              ? { browserAppBaseUrl: process.env["BILIG_WEB_APP_BASE_URL"] }
+              : {}),
+          });
       reply.header("content-type", "application/octet-stream");
       return Buffer.from(encodeAgentFrame(response));
     },

@@ -1,11 +1,62 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
 
-import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
+import { XLSX_CONTENT_TYPE, decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import type { ProtocolFrame } from "@bilig/binary-protocol";
 import { ValueTag } from "@bilig/protocol";
 
 import { createLocalServer } from "../server.js";
 import { LocalWorkbookSessionManager } from "../local-workbook-session-manager.js";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseSnapshotPayload(value: unknown): {
+  workbook: { name: string };
+  sheets: Array<{ cells: Array<{ address: string; value?: number; formula?: string }> }>;
+} {
+  if (
+    !isRecord(value) ||
+    !isRecord(value["workbook"]) ||
+    typeof value["workbook"]["name"] !== "string" ||
+    !Array.isArray(value["sheets"])
+  ) {
+    throw new Error("Invalid snapshot payload");
+  }
+  return {
+    workbook: { name: value["workbook"]["name"] },
+    sheets: value["sheets"].map((sheet) => {
+      if (!isRecord(sheet) || !Array.isArray(sheet["cells"])) {
+        throw new Error("Invalid snapshot payload");
+      }
+      return {
+        cells: sheet["cells"].map((cell) => {
+          if (!isRecord(cell) || typeof cell["address"] !== "string") {
+            throw new Error("Invalid snapshot payload");
+          }
+          return {
+            address: cell["address"],
+            ...(typeof cell["value"] === "number" ? { value: cell["value"] } : {}),
+            ...(typeof cell["formula"] === "string" ? { formula: cell["formula"] } : {}),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+function buildWorkbookUploadBase64(): string {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    [11, 5],
+    [null, null],
+  ]);
+  sheet["C1"] = { t: "n", f: "A1+B1" };
+  sheet["!ref"] = "A1:C2";
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+  return Buffer.from(XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })).toString("base64");
+}
 
 describe("local-server", () => {
   const { app } = createLocalServer();
@@ -276,5 +327,86 @@ describe("local-server", () => {
 
     expect(relayedBatchIds).toContain("local-server:relay-doc:1");
     expect(relayedBatchIds).toContain("browser-relay:1");
+  });
+
+  it("imports xlsx uploads through the agent API and exposes the imported snapshot", async () => {
+    const uploadResponse = await app.inject({
+      method: "POST",
+      url: "/v1/agent/frames",
+      headers: { "content-type": "application/octet-stream" },
+      payload: Buffer.from(
+        encodeAgentFrame({
+          kind: "request",
+          request: {
+            kind: "loadWorkbookFile",
+            id: "upload-1",
+            replicaId: "agent-upload",
+            openMode: "create",
+            fileName: "report.xlsx",
+            contentType: XLSX_CONTENT_TYPE,
+            bytesBase64: buildWorkbookUploadBase64(),
+          },
+        }),
+      ),
+    });
+
+    const uploadFrame = decodeAgentFrame(uploadResponse.rawPayload);
+    expect(uploadFrame.kind).toBe("response");
+    if (uploadFrame.kind !== "response" || uploadFrame.response.kind !== "workbookLoaded") {
+      throw new Error("Expected workbookLoaded response");
+    }
+    expect(uploadFrame.response.workbookName).toBe("report");
+    expect(uploadFrame.response.sheetNames).toEqual(["Sheet1"]);
+
+    const snapshotResponse = await app.inject({
+      method: "GET",
+      url: `/v1/documents/${encodeURIComponent(uploadFrame.response.documentId)}/snapshot/latest`,
+    });
+    expect(snapshotResponse.statusCode).toBe(200);
+    const snapshot = parseSnapshotPayload(JSON.parse(snapshotResponse.body) as unknown);
+    expect(snapshot.workbook.name).toBe("report");
+    expect(snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([expect.objectContaining({ address: "A1", value: 11 })]),
+    );
+    expect(snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([expect.objectContaining({ address: "C1", formula: "A1+B1" })]),
+    );
+  });
+
+  it("broadcasts snapshot chunks to connected browsers when replacing a workbook from xlsx", async () => {
+    const manager = new LocalWorkbookSessionManager();
+    const broadcasts: ProtocolFrame[] = [];
+    const detach = manager.attachBrowser("replace-doc", "browser-sub", (frame) => {
+      broadcasts.push(frame);
+    });
+
+    const response = await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "loadWorkbookFile",
+        id: "replace-1",
+        replicaId: "agent-replace",
+        openMode: "replace",
+        documentId: "replace-doc",
+        fileName: "replace.xlsx",
+        contentType: XLSX_CONTENT_TYPE,
+        bytesBase64: buildWorkbookUploadBase64(),
+      },
+    });
+
+    expect(response).toMatchObject({
+      kind: "response",
+      response: {
+        kind: "workbookLoaded",
+        documentId: "replace-doc",
+      },
+    });
+    expect(broadcasts.some((frame) => frame.kind === "snapshotChunk")).toBe(true);
+    expect(broadcasts.at(-1)).toMatchObject({
+      kind: "cursorWatermark",
+      documentId: "replace-doc",
+    });
+
+    detach();
   });
 });

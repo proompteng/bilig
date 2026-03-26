@@ -13,6 +13,7 @@
     "dev": "pnpm --filter @bilig/playground dev",
     "dev:web": "pnpm --filter @bilig/web dev",
     "dev:local": "pnpm --filter @bilig/local-server dev",
+    "dev:web-local": "pnpm --filter @bilig/local-server --filter @bilig/web --parallel run dev",
     "dev:sync": "pnpm --filter @bilig/sync-server dev",
     "docker:build:web": "docker buildx build --target web-runtime -t registry.ide-newton.ts.net/lab/bilig-web:${BILIG_IMAGE_TAG:-local} .",
     "docker:build:sync": "docker buildx build --target sync-runtime -t registry.ide-newton.ts.net/lab/bilig-sync:${BILIG_IMAGE_TAG:-local} .",
@@ -27,7 +28,7 @@
     "hooks:pre-commit": "lint-staged",
     "hooks:pre-push": "pnpm lint",
     "prepare": "simple-git-hooks",
-    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
+    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/excel-import build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
@@ -58,7 +59,8 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vite": "8.0.0",
-    "vitest": "4.1.0"
+    "vitest": "4.1.0",
+    "xlsx": "^0.18.5"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm hooks:pre-commit",
