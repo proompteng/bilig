@@ -1,11 +1,6 @@
 import * as XLSX from "xlsx";
 
-import type {
-  LiteralInput,
-  WorkbookAxisEntrySnapshot,
-  WorkbookSnapshot,
-  SheetMetadataSnapshot,
-} from "@bilig/protocol";
+import type { WorkbookAxisEntrySnapshot, WorkbookSnapshot } from "@bilig/protocol";
 
 export interface ImportedWorkbook {
   snapshot: WorkbookSnapshot;
@@ -36,7 +31,7 @@ function normalizeWorkbookName(fileName: string): string {
   return trimmed.replace(/\.xlsx$/i, "") || "Imported workbook";
 }
 
-function toLiteralInput(value: unknown): LiteralInput | undefined {
+function toLiteralInput(value: unknown) {
   if (value === null || value === undefined) {
     return undefined;
   }
@@ -213,7 +208,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
 
     const rows = buildRowEntries(sheet["!rows"]);
     const columns = buildColumnEntries(sheet["!cols"]);
-    const metadata: SheetMetadataSnapshot | undefined =
+    const metadata =
       rows || columns
         ? {
             ...(rows ? { rows } : {}),
