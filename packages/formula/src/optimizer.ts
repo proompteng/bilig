@@ -1,5 +1,5 @@
-import { ValueTag, type CellValue } from "@bilig/protocol";
-import type { CallExprNode, FormulaNode } from "./ast.js";
+import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
+import type { CallExprNode, FormulaNode, InvokeExprNode } from "./ast.js";
 import { evaluateAstResult, type EvaluationContext } from "./js-evaluator.js";
 import { isArrayValue } from "./runtime-values.js";
 import { rewriteSpecialCall } from "./special-call-rewrites.js";
@@ -80,12 +80,224 @@ function flattenConcatArgs(args: FormulaNode[]): FormulaNode[] {
   return flattened;
 }
 
+function normalizeName(name: string): string {
+  return name.trim().toUpperCase();
+}
+
+function cloneFormulaNode(node: FormulaNode): FormulaNode {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "NameRef":
+      return { ...node };
+    case "StructuredRef":
+      return { ...node };
+    case "CellRef":
+    case "SpillRef":
+    case "RowRef":
+    case "ColumnRef":
+      return { ...node };
+    case "RangeRef":
+      return { ...node };
+    case "UnaryExpr":
+      return { ...node, argument: cloneFormulaNode(node.argument) };
+    case "BinaryExpr":
+      return {
+        ...node,
+        left: cloneFormulaNode(node.left),
+        right: cloneFormulaNode(node.right),
+      };
+    case "CallExpr":
+      return { ...node, args: node.args.map(cloneFormulaNode) };
+    case "InvokeExpr":
+      return {
+        ...node,
+        callee: cloneFormulaNode(node.callee),
+        args: node.args.map(cloneFormulaNode),
+      };
+  }
+}
+
+function substituteNames(
+  node: FormulaNode,
+  replacements: ReadonlyMap<string, FormulaNode>,
+  shadowed = new Set<string>(),
+): FormulaNode {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "StructuredRef":
+    case "CellRef":
+    case "SpillRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "RangeRef":
+      return cloneFormulaNode(node);
+    case "NameRef": {
+      const key = normalizeName(node.name);
+      if (shadowed.has(key)) {
+        return { ...node };
+      }
+      const replacement = replacements.get(key);
+      return replacement ? cloneFormulaNode(replacement) : { ...node };
+    }
+    case "UnaryExpr":
+      return { ...node, argument: substituteNames(node.argument, replacements, shadowed) };
+    case "BinaryExpr":
+      return {
+        ...node,
+        left: substituteNames(node.left, replacements, shadowed),
+        right: substituteNames(node.right, replacements, shadowed),
+      };
+    case "CallExpr": {
+      const callee = node.callee.toUpperCase();
+      if (callee === "LAMBDA" && node.args.length >= 1) {
+        const params = node.args.slice(0, -1);
+        const body = node.args[node.args.length - 1]!;
+        const innerShadowed = new Set(shadowed);
+        params.forEach((param) => {
+          if (param.kind === "NameRef") {
+            innerShadowed.add(normalizeName(param.name));
+          }
+        });
+        return {
+          ...node,
+          callee,
+          args: [
+            ...params.map(cloneFormulaNode),
+            substituteNames(body, replacements, innerShadowed),
+          ],
+        };
+      }
+
+      const replacement = shadowed.has(callee) ? undefined : replacements.get(callee);
+      if (replacement?.kind === "CallExpr" && replacement.callee.toUpperCase() === "LAMBDA") {
+        return {
+          kind: "InvokeExpr",
+          callee: cloneFormulaNode(replacement),
+          args: node.args.map((arg) => substituteNames(arg, replacements, shadowed)),
+        };
+      }
+
+      return {
+        ...node,
+        callee,
+        args: node.args.map((arg) => substituteNames(arg, replacements, shadowed)),
+      };
+    }
+    case "InvokeExpr":
+      return {
+        ...node,
+        callee: substituteNames(node.callee, replacements, shadowed),
+        args: node.args.map((arg) => substituteNames(arg, replacements, shadowed)),
+      };
+  }
+}
+
+function rewriteLet(node: CallExprNode): FormulaNode | undefined {
+  if (node.args.length < 3 || node.args.length % 2 === 0) {
+    return { kind: "ErrorLiteral", code: ErrorCode.Value };
+  }
+
+  const replacements = new Map<string, FormulaNode>();
+  const lastArgIndex = node.args.length - 1;
+  for (let index = 0; index < lastArgIndex; index += 2) {
+    const nameArg = node.args[index];
+    const valueArg = node.args[index + 1];
+    if (nameArg?.kind !== "NameRef" || valueArg === undefined) {
+      return { kind: "ErrorLiteral", code: ErrorCode.Value };
+    }
+    replacements.set(normalizeName(nameArg.name), substituteNames(valueArg, replacements));
+  }
+  return substituteNames(node.args[lastArgIndex]!, replacements);
+}
+
+function rewriteImmediateLambdaInvoke(node: InvokeExprNode): FormulaNode | undefined {
+  const callee = node.callee;
+  if (
+    callee.kind !== "CallExpr" ||
+    callee.callee.toUpperCase() !== "LAMBDA" ||
+    callee.args.length < 1
+  ) {
+    return undefined;
+  }
+
+  const params = callee.args.slice(0, -1);
+  const body = callee.args[callee.args.length - 1]!;
+  if (node.args.length > params.length) {
+    return { kind: "ErrorLiteral", code: ErrorCode.Value };
+  }
+  if (node.args.length !== params.length) {
+    return undefined;
+  }
+
+  const replacements = new Map<string, FormulaNode>();
+  for (let index = 0; index < params.length; index += 1) {
+    const param = params[index];
+    if (param?.kind !== "NameRef") {
+      return { kind: "ErrorLiteral", code: ErrorCode.Value };
+    }
+    replacements.set(normalizeName(param.name), node.args[index]!);
+  }
+  return substituteNames(body, replacements);
+}
+
+function rewriteMap(node: CallExprNode): FormulaNode | undefined {
+  if (node.args.length < 2) {
+    return { kind: "ErrorLiteral", code: ErrorCode.Value };
+  }
+  const lambda = node.args[node.args.length - 1]!;
+  if (
+    lambda.kind !== "CallExpr" ||
+    lambda.callee.toUpperCase() !== "LAMBDA" ||
+    lambda.args.length < 1
+  ) {
+    return undefined;
+  }
+
+  const params = lambda.args.slice(0, -1);
+  const body = lambda.args[lambda.args.length - 1]!;
+  const inputs = node.args.slice(0, -1);
+  if (params.length !== inputs.length) {
+    return { kind: "ErrorLiteral", code: ErrorCode.Value };
+  }
+
+  const replacements = new Map<string, FormulaNode>();
+  for (let index = 0; index < params.length; index += 1) {
+    const param = params[index];
+    if (param?.kind !== "NameRef") {
+      return { kind: "ErrorLiteral", code: ErrorCode.Value };
+    }
+    replacements.set(normalizeName(param.name), inputs[index]!);
+  }
+
+  return substituteNames(body, replacements);
+}
+
 function optimizeCall(node: CallExprNode): FormulaNode {
   const callee = node.callee.toUpperCase();
   let args = node.args.map(optimizeFormula);
 
   if (callee === "CONCAT") {
     args = flattenConcatArgs(args);
+  }
+
+  if (callee === "LET") {
+    const rewritten = rewriteLet({ kind: "CallExpr", callee, args });
+    if (rewritten) {
+      return optimizeFormula(rewritten);
+    }
+  }
+
+  if (callee === "MAP") {
+    const rewritten = rewriteMap({ kind: "CallExpr", callee, args });
+    if (rewritten) {
+      return optimizeFormula(rewritten);
+    }
   }
 
   if (callee === "IF" && args.length === 3) {
@@ -169,6 +381,10 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
       const callee = optimizeFormula(node.callee);
       const args = node.args.map(optimizeFormula);
       const candidate = { ...node, callee, args };
+      const rewritten = rewriteImmediateLambdaInvoke(candidate);
+      if (rewritten) {
+        return optimizeFormula(rewritten);
+      }
       const folded = isStaticNode(candidate) ? tryEvaluateStatic(candidate) : undefined;
       return folded ? (cellValueToAst(folded) ?? candidate) : candidate;
     }

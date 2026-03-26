@@ -18,7 +18,17 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
+const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA"]);
+
+const AXIS_AGGREGATE_CODES = new Map<string, number>([
+  ["SUM", 1],
+  ["AVERAGE", 2],
+  ["AVG", 2],
+  ["MIN", 3],
+  ["MAX", 4],
+  ["COUNT", 5],
+  ["COUNTA", 6],
+]);
 
 function isCellRangeNode(node: FormulaNode): boolean {
   if (node.kind !== "RangeRef") {
@@ -30,6 +40,84 @@ function isCellRangeNode(node: FormulaNode): boolean {
   } catch {
     return false;
   }
+}
+
+function getNativeAxisAggregateCode(node: FormulaNode): number | null {
+  if (
+    node.kind !== "CallExpr" ||
+    node.callee.toUpperCase() !== "LAMBDA" ||
+    node.args.length !== 2
+  ) {
+    return null;
+  }
+  const [param, body] = node.args;
+  if (param?.kind !== "NameRef" || body?.kind !== "CallExpr" || body.args.length !== 1) {
+    return null;
+  }
+  const aggregateCode = AXIS_AGGREGATE_CODES.get(body.callee.toUpperCase());
+  if (aggregateCode === undefined) {
+    return null;
+  }
+  return body.args[0]?.kind === "NameRef" &&
+    body.args[0].name.trim().toUpperCase() === param.name.trim().toUpperCase()
+    ? aggregateCode
+    : null;
+}
+
+function getNativeRunningFoldCode(node: FormulaNode): number | null {
+  if (
+    node.kind !== "CallExpr" ||
+    node.callee.toUpperCase() !== "LAMBDA" ||
+    node.args.length !== 3
+  ) {
+    return null;
+  }
+  const [acc, value, body] = node.args;
+  if (acc?.kind !== "NameRef" || value?.kind !== "NameRef" || body?.kind !== "BinaryExpr") {
+    return null;
+  }
+  const foldCode = body.operator === "+" ? 1 : body.operator === "*" ? 2 : null;
+  if (foldCode === null) {
+    return null;
+  }
+  const left = body.left;
+  const right = body.right;
+  const accName = acc.name.trim().toUpperCase();
+  const valueName = value.name.trim().toUpperCase();
+  return left.kind === "NameRef" &&
+    right.kind === "NameRef" &&
+    ((left.name.trim().toUpperCase() === accName &&
+      right.name.trim().toUpperCase() === valueName) ||
+      (left.name.trim().toUpperCase() === valueName && right.name.trim().toUpperCase() === accName))
+    ? foldCode
+    : null;
+}
+
+function isNativeMakearraySumLambda(node: FormulaNode): boolean {
+  if (
+    node.kind !== "CallExpr" ||
+    node.callee.toUpperCase() !== "LAMBDA" ||
+    node.args.length !== 3
+  ) {
+    return false;
+  }
+  const [rowParam, colParam, body] = node.args;
+  if (rowParam?.kind !== "NameRef" || colParam?.kind !== "NameRef" || body?.kind !== "BinaryExpr") {
+    return false;
+  }
+  if (body.operator !== "+") {
+    return false;
+  }
+  const left = body.left;
+  const right = body.right;
+  const rowName = rowParam.name.trim().toUpperCase();
+  const colName = colParam.name.trim().toUpperCase();
+  return (
+    left.kind === "NameRef" &&
+    right.kind === "NameRef" &&
+    ((left.name.trim().toUpperCase() === rowName && right.name.trim().toUpperCase() === colName) ||
+      (left.name.trim().toUpperCase() === colName && right.name.trim().toUpperCase() === rowName))
+  );
 }
 
 function isCellVectorNode(node: FormulaNode): boolean {
@@ -436,6 +524,39 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           return isWasmSafe(rewritten, allowRange);
         }
         const callee = node.callee.toUpperCase();
+        if (
+          (callee === "BYROW" || callee === "BYCOL") &&
+          node.args.length === 2 &&
+          isWasmSafe(node.args[0]!, true) &&
+          getNativeAxisAggregateCode(node.args[1]!) !== null
+        ) {
+          return true;
+        }
+        if (callee === "REDUCE" || callee === "SCAN") {
+          const sourceArg = node.args.length === 3 ? node.args[1] : node.args[0];
+          const lambdaArg = node.args.length === 3 ? node.args[2] : node.args[1];
+          const initialArg = node.args.length === 3 ? node.args[0] : undefined;
+          const foldCode = lambdaArg ? getNativeRunningFoldCode(lambdaArg) : null;
+          if (
+            (node.args.length === 2 || node.args.length === 3) &&
+            sourceArg !== undefined &&
+            lambdaArg !== undefined &&
+            isWasmSafe(sourceArg, true) &&
+            (initialArg === undefined || isWasmSafe(initialArg)) &&
+            foldCode !== null
+          ) {
+            return true;
+          }
+        }
+        if (
+          callee === "MAKEARRAY" &&
+          node.args.length === 3 &&
+          isWasmSafe(node.args[0]!) &&
+          isWasmSafe(node.args[1]!) &&
+          isNativeMakearraySumLambda(node.args[2]!)
+        ) {
+          return true;
+        }
         if (
           callee === "LET" ||
           callee === "LAMBDA" ||

@@ -251,7 +251,8 @@ describe("formula", () => {
     expect(compileFormula("T.DIST(A1,2,TRUE)").mode).toBe(0);
     expect(compileFormula('TEXTJOIN(",",TRUE,A1,A2)').mode).toBe(0);
     expect(compileFormula("WORKDAY.INTL(A1,1)").mode).toBe(0);
-    expect(compileFormula("LET(x,2,x+3)").mode).toBe(0);
+    expect(compileFormula("LET(x,2,x+3)").mode).toBe(1);
+    expect(compileFormula("LET(x,A1*2,x+3)").mode).toBe(1);
     expect(compileFormula('TEXTBEFORE(A1,"-")').mode).toBe(0);
     expect(compileFormula("FILTER(A1:A4,A1:A4>2)")).toMatchObject({ mode: 1, producesSpill: true });
     expect(compileFormula("UNIQUE(A1:A4)")).toMatchObject({ mode: 1, producesSpill: true });
@@ -259,36 +260,55 @@ describe("formula", () => {
     expect(compileFormula("A1:A4>2")).toMatchObject({ mode: 1, producesSpill: true });
   });
 
-  it("accelerates rewritten logical calls and keeps lambda families on the JS path", () => {
+  it("accelerates rewritten logical calls while keeping higher-order lambda families on the JS path", () => {
     expect(compileFormula("TRUE()").mode).toBe(1);
     expect(compileFormula("FALSE()").mode).toBe(1);
     expect(compileFormula("IFS(A1>0,1,TRUE(),2)").mode).toBe(1);
     expect(compileFormula('SWITCH(A1,1,"yes","no")').mode).toBe(1);
     expect(compileFormula("XOR(A1>0,B1>0)").mode).toBe(1);
 
-    expect(compileFormula("LAMBDA(x,x+1)(4)").mode).toBe(0);
-    expect(compileFormula("LET(fn,LAMBDA(x,x+1),fn(4))").mode).toBe(0);
+    expect(compileFormula("LAMBDA(x,x+1)(4)").mode).toBe(1);
+    expect(compileFormula("LAMBDA(x,x+1)(A1)").mode).toBe(1);
+    expect(compileFormula("LET(fn,LAMBDA(x,x+1),fn(4))").mode).toBe(1);
+    expect(compileFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4)").mode).toBe(0);
     expect(compileFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")).toMatchObject({
-      mode: 0,
+      mode: 1,
       producesSpill: true,
     });
     expect(compileFormula("MAP(A1:A3,LAMBDA(x,x*2))")).toMatchObject({
-      mode: 0,
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("MAP(A1:A3,B1:B3,LAMBDA(x,y,x+y))")).toMatchObject({
+      mode: 1,
       producesSpill: true,
     });
     expect(compileFormula("SCAN(0,A1:A3,LAMBDA(acc,x,acc+x))")).toMatchObject({
-      mode: 0,
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("SCAN(1,A1:A3,LAMBDA(acc,x,acc*x))")).toMatchObject({
+      mode: 1,
       producesSpill: true,
     });
     expect(compileFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")).toMatchObject({
-      mode: 0,
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("BYROW(A1:B2,LAMBDA(r,AVERAGE(r)))")).toMatchObject({
+      mode: 1,
       producesSpill: true,
     });
     expect(compileFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")).toMatchObject({
-      mode: 0,
+      mode: 1,
       producesSpill: true,
     });
-    expect(compileFormula("REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))").mode).toBe(0);
+    expect(compileFormula("BYCOL(A1:B2,LAMBDA(c,COUNTA(c)))")).toMatchObject({
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("REDUCE(0,A1:A3,LAMBDA(acc,x,acc+x))").mode).toBe(1);
+    expect(compileFormula("REDUCE(1,A1:A3,LAMBDA(acc,x,acc*x))").mode).toBe(1);
   });
 
   it("keeps newly added JS math families on the JS path while marking spill producers", () => {

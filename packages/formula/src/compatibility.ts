@@ -94,7 +94,7 @@ const familyPrerequisites: Record<CompatibilityFamily, readonly string[]> = {
   lambda: ["core:lambda-runtime", "core:shape-model"],
 };
 
-function deriveWasmStatus(status: CompatibilityStatus): WasmCompatibilityStatus {
+export function deriveWasmStatus(status: CompatibilityStatus): WasmCompatibilityStatus {
   switch (status) {
     case "unsupported":
     case "seeded":
@@ -316,9 +316,18 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("volatile:rand-basic", "volatile", "=RAND()", "implemented-wasm-production", {
     prerequisites: ["core:volatile-context", "core:value-model"],
   }),
-  entry("lambda:let-basic", "lambda", "=LET(x,2,x+3)", "implemented-js"),
-  entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "implemented-js"),
-  entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "implemented-js"),
+  entry("lambda:let-basic", "lambda", "=LET(x,2,x+3)", "implemented-wasm-production", {
+    notes:
+      "LET formulas with rewrite-safe bindings now lower to ordinary scalar AST before binding, which lets deterministic cases route through the native fast path without a general closure VM.",
+  }),
+  entry("lambda:lambda-invoke", "lambda", "=LAMBDA(x,x+1)(4)", "implemented-wasm-production", {
+    notes:
+      "Immediate LAMBDA invocation now rewrites to the invoked body with argument substitution before binding, so scalar deterministic cases compile onto the native path.",
+  }),
+  entry("lambda:map-basic", "lambda", "=MAP(A1:A3,LAMBDA(x,x*2))", "implemented-wasm-production", {
+    notes:
+      "MAP calls whose lambda body rewrites to an ordinary broadcasted array expression now lower before binding and execute on the native spill path.",
+  }),
   entry("logical:if-true-branch", "logical", "=IF(A1,A2,A3)", "implemented-wasm-production"),
   entry("logical:if-condition-error", "logical", "=IF(1/0,1,2)", "implemented-wasm-production", {
     notes: "The native branch VM now propagates IF condition errors before either branch executes.",
@@ -567,7 +576,16 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     notes:
       "Range-valued workbook names now compile through metadata substitution and route onto the native aggregate path once the name resolves.",
   }),
-  entry("lambda:byrow-basic", "lambda", "=BYROW(A1:B2,LAMBDA(r,SUM(r)))", "implemented-js"),
+  entry(
+    "lambda:byrow-basic",
+    "lambda",
+    "=BYROW(A1:B2,LAMBDA(r,SUM(r)))",
+    "implemented-wasm-production",
+    {
+      notes:
+        "BYROW aggregate lambdas in the canonical SUM form now lower onto an internal native row-sum builtin, so the canonical spill case executes on the wasm path.",
+    },
+  ),
 ];
 
 export function getCompatibilityEntry(id: string): FormulaCompatibilityEntry | undefined {

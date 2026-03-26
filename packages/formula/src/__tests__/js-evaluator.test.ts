@@ -165,6 +165,18 @@ describe("js evaluator", () => {
       tag: ValueTag.Number,
       value: 5,
     });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4)")), context),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,y,IF(ISOMITTED(y),x,y))(4,9)")), context),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 9,
+    });
 
     expect(evaluatePlan(lowerToPlan(parseFormula("LET(fn,LAMBDA(x,x+1),fn(4))")), context)).toEqual(
       {
@@ -246,6 +258,50 @@ describe("js evaluator", () => {
         { kind: "NumberLiteral", value: 3 },
         { kind: "CellRef", ref: "B1" },
       ],
+    });
+
+    expect(optimizeFormula(parseFormula("LET(x,2,x+3)"))).toEqual({
+      kind: "NumberLiteral",
+      value: 5,
+    });
+    expect(optimizeFormula(parseFormula("LET(x,A1+1,x+3)"))).toEqual({
+      kind: "BinaryExpr",
+      operator: "+",
+      left: {
+        kind: "BinaryExpr",
+        operator: "+",
+        left: { kind: "CellRef", ref: "A1" },
+        right: { kind: "NumberLiteral", value: 1 },
+      },
+      right: { kind: "NumberLiteral", value: 3 },
+    });
+    expect(optimizeFormula(parseFormula("LET(x,1,LET(x,2,x+3)+x)"))).toEqual({
+      kind: "NumberLiteral",
+      value: 6,
+    });
+    expect(optimizeFormula(parseFormula("LAMBDA(x,x+1)(A1)"))).toEqual({
+      kind: "BinaryExpr",
+      operator: "+",
+      left: { kind: "CellRef", ref: "A1" },
+      right: { kind: "NumberLiteral", value: 1 },
+    });
+    expect(optimizeFormula(parseFormula("LET(fn,LAMBDA(x,x+1),fn(A1))"))).toEqual({
+      kind: "BinaryExpr",
+      operator: "+",
+      left: { kind: "CellRef", ref: "A1" },
+      right: { kind: "NumberLiteral", value: 1 },
+    });
+    expect(optimizeFormula(parseFormula("LET(x,10,LAMBDA(x,x+1)(4)+x)"))).toEqual({
+      kind: "NumberLiteral",
+      value: 15,
+    });
+    expect(optimizeFormula(parseFormula("LET(1,2,3)"))).toEqual({
+      kind: "ErrorLiteral",
+      code: ErrorCode.Value,
+    });
+    expect(optimizeFormula(parseFormula("LAMBDA(x,x+1)(4,5)"))).toEqual({
+      kind: "ErrorLiteral",
+      code: ErrorCode.Value,
     });
   });
 });
