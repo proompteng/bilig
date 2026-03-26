@@ -1,21 +1,32 @@
 # Worker Runtime and Viewport Patches RFC
 
-## Problem
+## Current state
 
-The browser runtime still runs the engine in-process by default, and the grid does not yet consume a dedicated derived viewport patch stream. That makes the runtime/UI seam weaker than the local engine seam and keeps the main thread closer to workbook semantics than it should be.
+The current browser runtime implements these RFC items:
+
+- `apps/web` boots a worker-backed engine by default
+- the UI consumes viewport patches rather than raw engine state
+- the worker owns engine boot, persistence restore, sync connectivity, WASM lifecycle, and patch derivation
+
+The remaining runtime items are:
+
+- package cleanliness between `apps/web` and `apps/playground`
+- stronger region-oriented patch subscriptions and rollout hardening
+- typed patch codecs instead of JSON payloads inside a byte envelope
+- full reconnect and remote-catch-up behavior once sync-server closes more of the multiplayer path
 
 ## Goals
 
-- make worker-first browser execution the default runtime shape
+- keep worker-first browser execution as the default runtime shape
 - keep the UI thread focused on paint, input, clipboard, overlays, and formula-bar UX
-- introduce a derived viewport patch stream for visible workbook state
-- replace address-by-address subscription patterns with region-based viewport subscriptions
+- keep a derived viewport patch stream for visible workbook state
+- continue replacing direct engine coupling and narrow ad hoc subscription patterns with region-based viewport subscriptions
 
 ## Non-goals
 
 - move workbook semantics into the UI layer
 - make React or `@bilig/grid` the canonical runtime state
-- depend on worker-first execution before the authoritative op model exists
+- reintroduce in-process engine ownership into the product shell
 
 ## Runtime responsibilities
 
@@ -41,7 +52,7 @@ The browser runtime still runs the engine in-process by default, and the grid do
 
 ## Streams
 
-The runtime should separate:
+The runtime should continue to separate:
 
 1. authoritative workbook op stream
 2. derived viewport patch stream
@@ -49,11 +60,11 @@ The runtime should separate:
 
 The grid should consume the second stream, not raw engine state or raw transaction replay.
 
-## Proposed viewport model
+## Viewport model
 
 ### Region subscriptions
 
-Replace cell-by-cell or narrow ad hoc subscriptions with region-based subscriptions:
+The target subscription model is:
 
 - visible sheet region
 - overscan region
@@ -62,23 +73,22 @@ Replace cell-by-cell or narrow ad hoc subscriptions with region-based subscripti
 
 ### Derived patch payloads
 
-A patch stream should be optimized for rendering, not for workbook semantics. Candidate fields:
+A patch stream should be optimized for rendering, not for workbook semantics. Current payloads carry:
 
 - changed visible cells
 - display strings
-- error tags
-- style or format IDs
+- copy and editor strings
+- format and style ids
 - row heights
 - column widths
-- visible selection overlays if needed
-- patch cursor or version
+- patch version
 
-The worker can derive these from authoritative workbook state without making the grid responsible for replay logic.
+The remaining improvement is codec quality and region-subscription hardening.
 
 ## Proposed package direction
 
 - `@bilig/worker-transport`
-  - request/response and subscription transport between UI and worker
+  - request, response, and subscription transport between UI and worker
 - a future render-patch or viewport-runtime package
   - viewport subscriptions
   - patch derivation
@@ -88,43 +98,13 @@ The worker can derive these from authoritative workbook state without making the
 - `apps/web`
   - worker-first shell boot
 
-## Boot sequence target
+## Remaining migration order
 
-1. restore workbook snapshot and local queue
-2. boot worker transport
-3. initialize WASM in worker
-4. connect local daemon or fallback local-only runtime
-5. replay authoritative transaction tail
-6. subscribe visible regions
-7. stream viewport patches to UI
-8. surface sync state and reconnect status in shell
-
-## Preconditions
-
-This RFC depends on earlier architecture work:
-
-- the authoritative workbook op model must exist
-- metadata needed for names, tables, spills, and structure must already be first-class
-
-Without those, worker-first execution just moves incomplete semantics to another thread.
-
-## Migration order
-
-1. formalize worker boot contract
-2. introduce viewport subscription model and derived patch types
-3. add region-based subscriptions for the visible grid
-4. move `apps/web` to worker-first default boot
-5. keep in-process execution only as an explicit fallback during rollout
-6. remove address-by-address hot paths from the browser rendering loop
-
-## Suggested PR breakdown
-
-1. worker boot and runtime contract cleanup
-2. viewport subscription and patch type introduction
-3. worker-derived patch implementation for visible cells and metrics
-4. `@bilig/grid` adaptation to patch consumption
-5. `apps/web` worker-first default boot rollout
-6. reconnect/restore/browser test hardening
+1. finish worker boot and reconnect contract cleanup
+2. harden region-based subscriptions for the visible grid
+3. replace JSON patch payloads with typed codecs
+4. packageize `apps/web` away from `apps/playground`
+5. harden reconnect, restore, and browser test coverage
 
 ## Exit gate
 
@@ -132,4 +112,5 @@ Without those, worker-first execution just moves incomplete semantics to another
 - the grid renders from worker-derived viewport patches
 - visible updates no longer depend on in-process engine coupling
 - reconnect, restore, and local-daemon catch-up work through the worker runtime
-- region-based subscriptions replace address-by-address hot paths for the primary grid surface
+- region-based subscriptions back the primary grid surface
+- viewport patches use typed codecs rather than JSON payload wrappers
