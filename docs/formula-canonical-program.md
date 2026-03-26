@@ -2,99 +2,66 @@
 
 ## Goal
 
-Close the canonical Excel for the web worksheet formula corpus as the next hard product milestone.
+Close the current canonical Excel for the web worksheet formula corpus as represented in `packages/formula/src/compatibility.ts`.
 
-## Canonical Artifacts
+## Canonical artifacts
 
 - `formulaCompatibilityRegistry` in `packages/formula/src/compatibility.ts`
 - `canonicalFormulaFixtures` in `packages/excel-fixtures/src/index.ts`
 - `canonicalFormulaSmokeSuite` in `packages/excel-fixtures/src/index.ts`
 - scope key `canonical`
 
-The current canonical corpus is fixed at `100` audited cases:
-- keep the current `61` tracked cases unchanged
-- add the fixed `39` expansion cases from the product plan
-- do not substitute convenience variants for the fixed expansion list
+## Current code-backed status
 
-## Fixed Expansion Cases
+The canonical registry in code currently contains `101` canonical rows.
 
-Text:
-- `EXACT`
-- `LEFT`
-- `RIGHT`
-- `MID`
-- `TRIM`
-- `UPPER`
-- `LOWER`
-- `FIND`
-- `SEARCH`
-- `VALUE`
+Current status split:
 
-Lookup/reference:
-- `XMATCH`
-- `HLOOKUP`
-- `OFFSET`
-- `TAKE`
-- `DROP`
-- `CHOOSECOLS`
-- `CHOOSEROWS`
+- `92` rows are `implemented-wasm-production`
+- `6` rows are `implemented-js`
+- `3` rows are `blocked`
 
-Statistical/math:
-- `SUMIF`
-- `SUMIFS`
-- `AVERAGEIFS`
-- `COUNTIFS`
-- `SUMPRODUCT`
-- `INT`
-- `ROUNDUP`
-- `ROUNDDOWN`
+The remaining open canonical rows are:
 
-Date/time:
-- `NOW`
-- `TIME`
-- `HOUR`
-- `MINUTE`
-- `SECOND`
-- `WEEKDAY`
+- `dynamic-array:filter-basic`
+- `dynamic-array:unique-basic`
+- `lambda:let-basic`
+- `lambda:lambda-invoke`
+- `lambda:map-basic`
+- `lambda:byrow-basic`
+- `names:defined-name-range`
+- `tables:table-total-row-sum`
+- `structured-reference:table-column-ref`
 
-Dynamic array:
-- `SORT`
-- `SORTBY`
-- `TOCOL`
-- `TOROW`
-- `WRAPROWS`
-- `WRAPCOLS`
+The checked-in registry is the authoritative source of corpus size and composition.
 
-`SEQUENCE` remains represented by the existing legacy `sequence-spill` row. The product plan text listed a separate 2D case, but the current canonical corpus stays fixed at `100` audited cases, so the preserved `SEQUENCE` slot remains singular instead of adding a second row.
+## Remaining semantic focus
 
-## Canonical Exclusions
+The remaining non-production rows break down as:
 
-The canonical formula export intentionally excludes two legacy probe rows that remain useful for ad hoc regression work but are not part of the audited canonical corpus:
-- `text:case-insensitive-compare`
-- `information:value-error-display`
+- dynamic-array:
+  - `dynamic-array:filter-basic`
+  - `dynamic-array:unique-basic`
+- lambda:
+  - `lambda:let-basic`
+  - `lambda:lambda-invoke`
+  - `lambda:map-basic`
+  - `lambda:byrow-basic`
+- names:
+  - `names:defined-name-range`
+- tables:
+  - `tables:table-total-row-sum`
+- structured-reference:
+  - `structured-reference:table-column-ref`
 
-Names/lambda:
-- defined-name range
-- `BYROW`
-
-## Execution Order
-
-1. arithmetic, aggregation, and core math
-2. logical and information
-3. text
-4. date/time with JS-level volatile coverage, but excluding native volatile promotion
-5. lookup/reference
-6. conditional statistical functions
-7. names, tables, structured refs, and dynamic arrays required by canonical corpus entries
-
-## Delivery Rule
+## Delivery rule
 
 - JS lands first as semantic oracle
 - fixtures prove Excel for the web behavior
-- WASM lands in shadow mode
+- WASM lands in shadow or direct production mode depending on maturity
 - production routing flips only after differential parity is green
 
-## Required Outputs
+## Required outputs
 
 - canonical compatibility registry
 - family fixture packs
@@ -103,8 +70,8 @@ Names/lambda:
 - workbook metadata contract
 - dynamic-array runtime contract
 
-## Exit Gate
+## Exit gate
 
 - canonical corpus unsupported count is zero
-- every canonical corpus family is `implemented-wasm-production`
-- JS remains non-production validation only for closed families
+- every canonical corpus row is `implemented-wasm-production`
+- JS remains non-production validation infrastructure for closed canonical rows

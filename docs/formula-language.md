@@ -3,19 +3,27 @@
 ## Current state
 
 - JS is still the semantic oracle
-- WASM executes only a subset of the implemented surface
-- the compatibility registry now tracks a broader starter corpus, but the canonical formula corpus milestone is still open
+- canonical production routing is closed for `92` of `101` canonical rows
+- `6` canonical rows remain `implemented-js`
+- `3` canonical rows remain `blocked`
 
-## Canonical Corpus Milestone
+## Canonical corpus milestone
 
-The active milestone is the **canonical Excel for the web worksheet formula corpus**. That corpus currently includes `100` audited cases and:
+The active milestone is the canonical Excel for the web worksheet formula corpus represented in `packages/formula/src/compatibility.ts`.
 
-- arithmetic and aggregate operators
-- logical and information functions
-- high-usage text functions
-- high-usage date/time functions
-- high-usage lookup/reference functions
-- high-usage conditional statistical functions
+The current code-backed canonical registry contains `101` rows.
+
+The `9` non-production canonical rows are:
+
+- `dynamic-array:filter-basic`
+- `dynamic-array:unique-basic`
+- `lambda:let-basic`
+- `lambda:lambda-invoke`
+- `lambda:map-basic`
+- `lambda:byrow-basic`
+- `names:defined-name-range`
+- `tables:table-total-row-sum`
+- `structured-reference:table-column-ref`
 
 ## Full target
 
@@ -47,7 +55,7 @@ The worksheet engine keeps non-worksheet Excel surfaces behind the adapter contr
 - Excel for the web is the behavior oracle
 - visible error strings follow Excel codes
 - JS and WASM must not diverge on coercion, blanks, error precedence, spill blocking, or lookup comparison rules
-- a formula family is not complete until production execution can route it through WASM
+- a canonical row is not complete until production execution can route it through WASM
 
 ## Canonical companions
 

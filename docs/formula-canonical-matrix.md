@@ -2,90 +2,47 @@
 
 ## Contract
 
-- the canonical registry contains exactly `100` rows
-- the canonical fixture export contains exactly `100` rows
-- registry ids and fixture ids must match exactly
-- the first `61` rows are the preserved pre-expansion set
-- the remaining `39` rows are the fixed expansion list
+- `packages/formula/src/compatibility.ts` is the authoritative source of canonical row count and status
+- the current code-backed canonical registry contains `101` rows
+- canonical fixture ids must stay aligned with canonical registry ids
+- the checked-in registry is the authoritative source of canonical row count and status
 - scope key in code is `canonical`
 
-## Family View
+## Family view
 
-| family | status | wasmStatus | blocking gaps |
+| family | status | wasmStatus | current gap |
 | --- | --- | --- | --- |
-| `arithmetic` | `implemented-wasm-production` | `production` | remaining operator edge parity outside the current tracked slice |
-| `comparison` | mixed | mixed | string and lookup collation parity across the broader extended surface |
-| `logical` | mixed | mixed | native control-flow promotion for `IF`, `IFERROR`, and `IFNA` |
-| `aggregation` | `implemented-wasm-production` | `production` | broader family coverage outside the current tracked slice |
-| `math` | mixed | mixed | remaining promoted functions plus criteria-aware math families |
-| `text` | mixed | mixed | `VALUE` plus full string-runtime promotion into WASM |
-| `date-time` | mixed | mixed | `NOW` native promotion and volatile epoch normalization |
-| `lookup-reference` | mixed | mixed | `OFFSET` and richer reference-returning semantics |
-| `statistical` | mixed | `not-started` | criteria/wildcard parity and WASM promotion |
-| `information` | `implemented-wasm-production` | `production` | broader information-family coverage outside the current tracked slice |
-| `dynamic-array` | `blocked` | `blocked` | spill runtime, array value model, and blocking semantics |
-| `names` | `blocked` | `blocked` | workbook metadata model and name rebinding |
-| `tables` | `blocked` | `blocked` | table metadata model |
-| `structured-reference` | `blocked` | `blocked` | parser support and metadata binding |
-| `volatile` | mixed | `not-started` | epoch/provider contract for native promotion |
-| `lambda` | `blocked` | `blocked` | callable scope/runtime model |
+| `arithmetic` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `comparison` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `logical` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `aggregation` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `math` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `text` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `date-time` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `lookup-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `statistical` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `information` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `dynamic-array` | mixed | mixed | `FILTER` and `UNIQUE` are JS-only in the canonical slice |
+| `names` | mixed | mixed | scalar names are promoted; reference-valued names remain blocked |
+| `tables` | `blocked` | `blocked` | `tables:table-total-row-sum` |
+| `structured-reference` | `blocked` | `blocked` | `structured-reference:table-column-ref` |
+| `volatile` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `lambda` | mixed | `not-started` | `LET`, `LAMBDA`, `MAP`, and `BYROW` remain JS-only |
 
-## Fixed Expansion Rows
+## Current remaining open rows
 
-Text:
-- `text:exact-basic`
-- `text:left-basic`
-- `text:right-basic`
-- `text:mid-basic`
-- `text:trim-basic`
-- `text:upper-basic`
-- `text:lower-basic`
-- `text:find-basic`
-- `text:search-basic`
-- `text:value-basic`
-
-Lookup/reference and dynamic-array selection helpers:
-- `lookup-reference:xmatch-basic`
-- `lookup-reference:hlookup-basic`
-- `lookup-reference:offset-basic`
-- `dynamic-array:take-basic`
-- `dynamic-array:drop-basic`
-- `dynamic-array:choosecols-basic`
-- `dynamic-array:chooserows-basic`
-
-Statistical and math:
-- `statistical:sumif-basic`
-- `statistical:sumifs-basic`
-- `statistical:averageifs-basic`
-- `statistical:countifs-basic`
-- `math:sumproduct-basic`
-- `math:int-basic`
-- `math:roundup-basic`
-- `math:rounddown-basic`
-
-Date/time:
-- `date-time:now-volatile`
-- `date-time:time-basic`
-- `date-time:hour-basic`
-- `date-time:minute-basic`
-- `date-time:second-basic`
-- `date-time:weekday-basic`
-
-Dynamic array:
-- `dynamic-array:sort-basic`
-- `dynamic-array:sortby-basic`
-- `dynamic-array:tocol-basic`
-- `dynamic-array:torow-basic`
-- `dynamic-array:wraprows-basic`
-- `dynamic-array:wrapcols-basic`
-
-Names and lambda:
-- `names:defined-name-range`
-- `lambda:byrow-basic`
-
-`SEQUENCE` stays represented by the preserved legacy `dynamic-array:sequence-spill` row so the current canonical corpus stays fixed at `100`.
+- `dynamic-array:filter-basic` (`implemented-js`)
+- `dynamic-array:unique-basic` (`implemented-js`)
+- `lambda:let-basic` (`implemented-js`)
+- `lambda:lambda-invoke` (`implemented-js`)
+- `lambda:map-basic` (`implemented-js`)
+- `lambda:byrow-basic` (`implemented-js`)
+- `names:defined-name-range` (`blocked`)
+- `tables:table-total-row-sum` (`blocked`)
+- `structured-reference:table-column-ref` (`blocked`)
 
 ## Notes
 
-- the canonical corpus intentionally excludes legacy probe rows that still exist for ad hoc regression work
-- the `extended` scope exists in the code registry for work that comes after the audited canonical corpus; it is intentionally outside this matrix
+- the canonical corpus excludes `text:case-insensitive-compare` and `information:value-error-display`
+- the `extended` scope exists in the code registry for work that comes after the current canonical corpus
+- this matrix is descriptive of current source code, not of older planning snapshots

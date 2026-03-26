@@ -1,4 +1,5 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import websocket from "@fastify/websocket";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
@@ -12,11 +13,23 @@ export interface SyncServerOptions {
   logger?: boolean;
 }
 
+function noop(): void {}
+
+function normalizeBaseUrl(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function resolveServerUrl(request: FastifyRequest): string {
+  const host = request.headers.host ?? "127.0.0.1:4321";
+  return normalizeBaseUrl(`${request.protocol}://${host}`);
+}
+
 export function createSyncServer(options: SyncServerOptions = {}) {
   const sessionManager =
     options.sessionManager ??
     new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
   const app = Fastify({ logger: options.logger ?? true });
+  app.register(websocket);
 
   app.addContentTypeParser(
     "application/octet-stream",
@@ -49,6 +62,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         };
       }
 
+      reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
       reply.header("content-type", snapshot.contentType);
       return Buffer.from(snapshot.bytes);
     },
@@ -63,11 +77,155 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.post(
     "/v1/agent/frames",
     async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
-      const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body));
+      const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body), {
+        serverUrl: resolveServerUrl(request),
+        ...(process.env["BILIG_WEB_APP_BASE_URL"]
+          ? { browserAppBaseUrl: process.env["BILIG_WEB_APP_BASE_URL"] }
+          : {}),
+      });
       reply.header("content-type", "application/octet-stream");
       return Buffer.from(encodeAgentFrame(response));
     },
   );
 
+  app.register(async (wsApp) => {
+    wsApp.get("/v1/documents/:documentId/ws", { websocket: true }, (socket) => {
+      const ws = normalizeWebSocket(socket);
+      let documentId: string | null = null;
+      let sessionId: string | null = null;
+      const subscriberId = `sync-browser:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      let detach = noop;
+
+      ws.on("message", async (raw: unknown) => {
+        try {
+          const frame = decodeFrame(toMessageBytes(raw));
+          if (frame.kind === "hello" && documentId === null) {
+            documentId = frame.documentId;
+            sessionId = frame.sessionId;
+            detach = sessionManager.attachBrowser(documentId, subscriberId, (nextFrame) => {
+              ws.send(encodeFrame(nextFrame));
+            });
+            const helloFrames = await sessionManager.openBrowserSession(frame);
+            helloFrames.forEach((responseFrame) => ws.send(encodeFrame(responseFrame)));
+            return;
+          }
+          const response = await sessionManager.handleSyncFrame(frame);
+          ws.send(encodeFrame(response));
+        } catch (error) {
+          ws.send(
+            encodeFrame({
+              kind: "error",
+              documentId: documentId ?? "unknown",
+              code: "SYNC_SERVER_MESSAGE_FAILURE",
+              message: error instanceof Error ? error.message : String(error),
+              retryable: false,
+            }),
+          );
+        }
+      });
+
+      ws.on("close", () => {
+        detach();
+        if (documentId && sessionId) {
+          void sessionManager.persistence.presence.leave(documentId, sessionId);
+        }
+      });
+    });
+  });
+
   return { app, sessionManager };
+}
+
+function toMessageBytes(raw: unknown): Uint8Array {
+  if (raw instanceof Buffer) {
+    return new Uint8Array(raw);
+  }
+  if (raw instanceof ArrayBuffer) {
+    return new Uint8Array(raw);
+  }
+  if (ArrayBuffer.isView(raw)) {
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  }
+  throw new Error("Unsupported websocket payload");
+}
+
+type NormalizedWebSocket = {
+  on(event: string, listener: (...args: unknown[]) => void): void;
+  send(data: Uint8Array): void;
+};
+
+function isNormalizedWebSocket(value: unknown): value is NormalizedWebSocket {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "on" in value &&
+    typeof value.on === "function" &&
+    "send" in value &&
+    typeof value.send === "function"
+  );
+}
+
+function hasSocket(value: unknown): value is { socket: unknown } {
+  return typeof value === "object" && value !== null && "socket" in value;
+}
+
+function hasWebSocket(value: unknown): value is { websocket: unknown } {
+  return typeof value === "object" && value !== null && "websocket" in value;
+}
+
+type EventTargetWebSocket = {
+  addEventListener(event: string, listener: (event: unknown) => void): void;
+  send(data: Uint8Array): void;
+};
+
+function isEventTargetWebSocket(value: unknown): value is EventTargetWebSocket {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "addEventListener" in value &&
+    typeof value.addEventListener === "function" &&
+    "send" in value &&
+    typeof value.send === "function"
+  );
+}
+
+function asNormalizedEventTargetSocket(socket: EventTargetWebSocket): NormalizedWebSocket {
+  return {
+    on(event, listener) {
+      socket.addEventListener(event, (payload) => {
+        if (
+          event === "message" &&
+          typeof payload === "object" &&
+          payload !== null &&
+          "data" in payload
+        ) {
+          listener(payload.data);
+          return;
+        }
+        listener(payload);
+      });
+    },
+    send(data) {
+      socket.send(data);
+    },
+  };
+}
+
+function normalizeWebSocket(candidate: unknown): NormalizedWebSocket {
+  if (isNormalizedWebSocket(candidate)) {
+    return candidate;
+  }
+  if (isEventTargetWebSocket(candidate)) {
+    return asNormalizedEventTargetSocket(candidate);
+  }
+  if (hasSocket(candidate) && isNormalizedWebSocket(candidate.socket)) {
+    return candidate.socket;
+  }
+  if (hasSocket(candidate) && isEventTargetWebSocket(candidate.socket)) {
+    return asNormalizedEventTargetSocket(candidate.socket);
+  }
+  if (hasWebSocket(candidate)) {
+    return normalizeWebSocket(candidate.websocket);
+  }
+  throw new Error("Unsupported websocket connection shape");
 }

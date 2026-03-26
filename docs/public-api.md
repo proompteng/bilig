@@ -4,7 +4,7 @@
 
 - `@bilig/core` now implements the documented range-mutation, undo/redo, selection, and sync-state surface.
 - `SelectionState` is additive: existing callers can keep using `sheetName` and `address`, while newer callers can use `anchorAddress`, `range`, and `editMode`.
-- `connectSyncClient` is live, but it is still an engine-side integration surface. The browser app is not worker-first yet, and the remote sync service is not the final durable backend.
+- `connectSyncClient` is live. `apps/web` is already worker-first by default, but the remote sync service is not a closed durable worksheet backend yet.
 - `@bilig/binary-protocol` is already a real wire protocol for sync frames, but the authoritative replicated workbook op family is still narrower than the full local engine surface.
 - `@bilig/agent-api` is currently a binary envelope around JSON payloads, not yet a fully typed binary request/response/event schema.
 

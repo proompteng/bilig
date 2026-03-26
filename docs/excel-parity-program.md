@@ -2,9 +2,11 @@
 
 ## Current milestone
 
-The immediate milestone is the **canonical Excel for the web worksheet formula corpus**, which currently contains `100` audited cases.
+The immediate milestone is the checked-in canonical Excel for the web worksheet formula corpus as represented in `packages/formula/src/compatibility.ts`.
 
-That milestone is the gate between the current starter surface and the full canonical target.
+The current code-backed canonical registry contains `101` rows.
+
+That milestone gates formula completion.
 
 ## Canonical target
 
@@ -13,15 +15,15 @@ Match Excel 365 worksheet semantics as of `2026-03-15` across:
 - grammar
 - evaluation semantics
 - workbook metadata semantics
-- spill/dynamic array semantics
-- lookup/reference semantics
+- spill and dynamic-array semantics
+- lookup and reference semantics
 - volatile semantics
 
 ## Delivery model
 
 - fixtures are captured from Excel for the web and checked into `@bilig/excel-fixtures`
 - JS lands first as oracle behavior
-- WASM lands second in differential mode
+- WASM lands second in differential and then production mode
 - production routing flips to WASM only after parity closes
 
 ## Milestone docs
@@ -33,5 +35,5 @@ Match Excel 365 worksheet semantics as of `2026-03-15` across:
 ## Exit gate
 
 - all canonical formula entries are fixture-backed
-- all closed entries run in WASM production mode
+- all canonical entries run in WASM production mode
 - remaining open work is only outside the current canonical corpus or outside the worksheet formula scope

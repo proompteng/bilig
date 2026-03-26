@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { BrowserPersistence } from "@bilig/storage-browser";
+import type { WorkbookSnapshot } from "@bilig/protocol";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
 import type { EngineSyncClient } from "@bilig/core";
@@ -170,5 +171,127 @@ describe("WorkbookWorkerRuntime", () => {
     });
 
     expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("bootstraps from the latest server snapshot before rendering the default sheet", async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: "Imported" },
+      sheets: [
+        {
+          name: "Sheet1",
+          order: 0,
+          cells: [{ address: "A1", value: 55 }],
+        },
+      ],
+    };
+
+    const fetchMock = async () =>
+      new Response(JSON.stringify(snapshot), {
+        status: 200,
+        headers: { "x-bilig-snapshot-cursor": "3" },
+      });
+
+    const originalFetch = globalThis.fetch;
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchMock,
+    });
+
+    const seenInitialCursor: Array<number | undefined> = [];
+    const runtime = new WorkbookWorkerRuntime({
+      persistence: createMemoryPersistence(),
+      createSyncClient: (options): EngineSyncClient => ({
+        async connect(handlers) {
+          seenInitialCursor.push(options.initialServerCursor);
+          handlers.setState("live");
+          return {
+            send() {},
+            disconnect() {
+              handlers.setState("local-only");
+            },
+          };
+        },
+      }),
+    });
+
+    try {
+      await runtime.bootstrap({
+        documentId: "server-doc",
+        replicaId: "browser:test",
+        baseUrl: "http://127.0.0.1:4381",
+        persistState: false,
+      });
+    } finally {
+      Object.defineProperty(globalThis, "fetch", {
+        configurable: true,
+        value: originalFetch,
+      });
+    }
+
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Number, value: 55 });
+    expect(seenInitialCursor).toEqual([3]);
+  });
+
+  it("applies live remote snapshots from the sync client and emits viewport patches", async () => {
+    let applyRemoteSnapshot: ((snapshot: WorkbookSnapshot) => void) | undefined;
+    const runtime = new WorkbookWorkerRuntime({
+      persistence: createMemoryPersistence(),
+      createSyncClient: (): EngineSyncClient => ({
+        async connect(handlers) {
+          applyRemoteSnapshot = (snapshot) => {
+            handlers.applyRemoteSnapshot?.(snapshot);
+          };
+          handlers.setState("live");
+          return {
+            send() {},
+            disconnect() {
+              handlers.setState("local-only");
+            },
+          };
+        },
+      }),
+    });
+
+    await runtime.bootstrap({
+      documentId: "sync-snapshot-doc",
+      replicaId: "browser:test",
+      baseUrl: "http://127.0.0.1:4381",
+      persistState: false,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    if (!applyRemoteSnapshot) {
+      throw new Error("Expected sync client to provide applyRemoteSnapshot");
+    }
+    applyRemoteSnapshot({
+      version: 1,
+      workbook: { name: "Imported live" },
+      sheets: [
+        {
+          name: "Sheet1",
+          order: 0,
+          cells: [{ address: "A1", value: 88 }],
+        },
+      ],
+    });
+
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Number, value: 88 });
+    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === "A1")?.displayText).toBe(
+      "88",
+    );
   });
 });

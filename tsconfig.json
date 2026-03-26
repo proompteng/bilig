@@ -9,6 +9,7 @@
     { "path": "./packages/storage-browser" },
     { "path": "./packages/storage-server" },
     { "path": "./packages/excel-fixtures" },
+    { "path": "./packages/excel-import" },
     { "path": "./packages/wasm-kernel" },
     { "path": "./packages/core" },
     { "path": "./packages/worker-transport" },

@@ -2,11 +2,17 @@
 
 ## Current state
 
-- the product shell now renders through `apps/web` with workbook title, name box, formula bar, worksheet grid, sheet tabs, and status bar only.
-- the default `apps/web` surface no longer renders playground preset chrome, replica panels, or metrics panels.
-- browser smoke now exists for both `apps/playground` and `apps/web`.
-- the product shell is now denser and closer to Excel for the web, including a single visible formula-input row and a flatter footer/status treatment.
-- selection, editing, frozen panes, and richer spreadsheet affordances still have open correctness or completeness gaps and should not be treated as finished. Rectangular drag selection, product-shell clipboard copy/paste, fill handle propagation, column resize, and double-click autofit are now shipped in the product shell, but broader structural parity is not complete yet.
+- the default `apps/web` surface renders a product shell with name box, formula bar, worksheet grid, sheet tabs, and status bar only
+- the product shell no longer renders playground preset chrome, replica panels, or metrics panels
+- the product shell is worker-backed by default
+- browser smoke exists for both `apps/playground` and `apps/web`
+- the product shell uses a single visible formula-input row and a compact footer and status treatment
+- type-to-replace, F2 edit, Enter and Tab commit movement, product-shell clipboard copy and paste, fill handle propagation, column resize, and column autofit are now shipped in the product shell
+- structural rows that are not closed:
+  - row resize is not implemented
+  - hide and unhide controls are not implemented in the product shell
+  - context menus for structural actions are not implemented
+  - frozen-pane model support exists in the engine, but product-shell UX and acceptance coverage are open
 
 ## Target state
 
@@ -24,10 +30,10 @@ Required correctness:
 - exact cell hit-testing
 - drag selection
 - keyboard range extension
-- arrows, Tab, Enter, Shift+Enter, Shift+Tab, Home, End, Page Up, Page Down, modifier navigation
+- arrows, Tab, Enter, Shift+Enter, Shift+Tab, Home, End, Page Up, Page Down, and modifier navigation
 - in-cell edit
 - formula bar edit
-- copy, cut, paste, multi-cell paste
+- copy, cut, paste, and multi-cell paste
 - fill handle
 - frozen panes
 - undo and redo
@@ -37,8 +43,7 @@ Required correctness:
 
 Reference layout:
 
-- a thin workbook title row above the formula surface
-- a single dense formula row with name box, `fx`, and current cell input
+- a dense formula row with name box, `fx`, and current cell input
 - the worksheet grid immediately under the formula row, with no extra informational band
 - sheet tabs and compact status indicators along the bottom edge
 - no visible resolved-value chip in the product formula row

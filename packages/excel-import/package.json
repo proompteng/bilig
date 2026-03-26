@@ -1,0 +1,50 @@
+{
+  "name": "@bilig/excel-import",
+  "version": "0.1.0",
+  "description": "XLSX-to-workbook snapshot import helpers for bilig.",
+  "keywords": [
+    "bilig",
+    "excel",
+    "import",
+    "spreadsheet",
+    "xlsx"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/excel-import#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/excel-import"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/protocol": "workspace:*",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

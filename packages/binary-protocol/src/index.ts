@@ -16,6 +16,7 @@ import type {
 
 export const PROTOCOL_MAGIC = 0x424c4731;
 export const PROTOCOL_VERSION = 1;
+export const WORKBOOK_SNAPSHOT_CONTENT_TYPE = "application/vnd.bilig.workbook+json";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -63,6 +64,15 @@ export interface SnapshotChunkFrame {
   chunkCount: number;
   contentType: string;
   bytes: Uint8Array;
+}
+
+export interface SnapshotChunkOptions {
+  documentId: string;
+  snapshotId: string;
+  cursor: number;
+  contentType: string;
+  bytes: Uint8Array;
+  chunkSize?: number;
 }
 
 export interface CursorWatermarkFrame {
@@ -1026,4 +1036,25 @@ export function decodeFrame(bytesLike: Uint8Array | ArrayBuffer): ProtocolFrame 
   }
 
   return decodePayload(kind, bytes.subarray(11));
+}
+
+export function createSnapshotChunkFrames(options: SnapshotChunkOptions): SnapshotChunkFrame[] {
+  const chunkSize = Math.max(1, options.chunkSize ?? 64 * 1024);
+  const chunkCount = Math.max(1, Math.ceil(options.bytes.byteLength / chunkSize));
+  const frames: SnapshotChunkFrame[] = [];
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+    const start = chunkIndex * chunkSize;
+    const end = Math.min(options.bytes.byteLength, start + chunkSize);
+    frames.push({
+      kind: "snapshotChunk",
+      documentId: options.documentId,
+      snapshotId: options.snapshotId,
+      cursor: options.cursor,
+      chunkIndex,
+      chunkCount,
+      contentType: options.contentType,
+      bytes: options.bytes.subarray(start, end),
+    });
+  }
+  return frames;
 }

@@ -9,7 +9,8 @@
     { "path": "../../packages/crdt" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/binary-protocol" },
-    { "path": "../../packages/agent-api" }
+    { "path": "../../packages/agent-api" },
+    { "path": "../../packages/excel-import" }
   ],
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/__tests__/**"]

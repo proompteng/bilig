@@ -20,6 +20,7 @@ export interface BatchStore {
   append(documentId: string, batch: EngineOpBatch, receivedAtUnixMs?: number): Promise<StoredBatch>;
   listAfter(documentId: string, cursor: number, limit?: number): Promise<StoredBatch[]>;
   latestCursor(documentId: string): Promise<number>;
+  reset(documentId: string, cursor?: number): Promise<void>;
 }
 
 export interface SnapshotStore {
@@ -41,6 +42,7 @@ export interface PresenceStore {
 
 export class InMemoryBatchStore implements BatchStore {
   private readonly documents = new Map<string, StoredBatch[]>();
+  private readonly baseCursors = new Map<string, number>();
 
   async append(
     documentId: string,
@@ -50,7 +52,10 @@ export class InMemoryBatchStore implements BatchStore {
     const entries = this.documents.get(documentId) ?? [];
     const record = {
       documentId,
-      cursor: entries.length === 0 ? 1 : entries[entries.length - 1]!.cursor + 1,
+      cursor:
+        entries.length === 0
+          ? (this.baseCursors.get(documentId) ?? 0) + 1
+          : entries[entries.length - 1]!.cursor + 1,
       batch,
       receivedAtUnixMs,
     } satisfies StoredBatch;
@@ -67,7 +72,14 @@ export class InMemoryBatchStore implements BatchStore {
 
   async latestCursor(documentId: string): Promise<number> {
     const entries = this.documents.get(documentId);
-    return entries && entries.length > 0 ? entries[entries.length - 1]!.cursor : 0;
+    return entries && entries.length > 0
+      ? entries[entries.length - 1]!.cursor
+      : (this.baseCursors.get(documentId) ?? 0);
+  }
+
+  async reset(documentId: string, cursor = 0): Promise<void> {
+    this.documents.delete(documentId);
+    this.baseCursors.set(documentId, cursor);
   }
 }
 
