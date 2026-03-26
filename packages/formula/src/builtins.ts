@@ -761,6 +761,223 @@ function erfApprox(value: number): number {
   return sign * y;
 }
 
+const LANCZOS_G = 7;
+const LANCZOS_COEFFICIENTS = [
+  676.5203681218851, -1259.1392167224028, 771.3234287776531, -176.6150291621406, 12.507343278686905,
+  -0.13857109526572012, 9.984369578019572e-6, 1.5056327351493116e-7,
+] as const;
+
+function logGamma(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return Number.NaN;
+  }
+  let sum = 0.9999999999998099;
+  const shifted = value - 1;
+  LANCZOS_COEFFICIENTS.forEach((coefficient, index) => {
+    sum += coefficient / (shifted + index + 1);
+  });
+  const t = shifted + LANCZOS_G + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(sum);
+}
+
+function gammaFunction(value: number): number {
+  if (!Number.isFinite(value) || (Number.isInteger(value) && value <= 0)) {
+    return Number.NaN;
+  }
+  if (value < 0.5) {
+    const sine = Math.sin(Math.PI * value);
+    if (sine === 0) {
+      return Number.NaN;
+    }
+    return Math.PI / (sine * gammaFunction(1 - value));
+  }
+  return Math.exp(logGamma(value));
+}
+
+function regularizedLowerGamma(shape: number, x: number): number {
+  if (!Number.isFinite(shape) || !Number.isFinite(x) || shape <= 0 || x < 0) {
+    return Number.NaN;
+  }
+  if (x === 0) {
+    return 0;
+  }
+  const logGammaShape = logGamma(shape);
+  if (!Number.isFinite(logGammaShape)) {
+    return Number.NaN;
+  }
+  if (x < shape + 1) {
+    let term = 1 / shape;
+    let sum = term;
+    for (let iteration = 1; iteration < 1000; iteration += 1) {
+      term *= x / (shape + iteration);
+      sum += term;
+      if (Math.abs(term) <= Math.abs(sum) * 1e-14) {
+        break;
+      }
+    }
+    return sum * Math.exp(-x + shape * Math.log(x) - logGammaShape);
+  }
+
+  let b = x + 1 - shape;
+  let c = 1 / 1e-300;
+  let d = 1 / b;
+  let h = d;
+  for (let iteration = 1; iteration < 1000; iteration += 1) {
+    const factor = -iteration * (iteration - shape);
+    b += 2;
+    d = factor * d + b;
+    if (Math.abs(d) < 1e-300) {
+      d = 1e-300;
+    }
+    c = b + factor / c;
+    if (Math.abs(c) < 1e-300) {
+      c = 1e-300;
+    }
+    d = 1 / d;
+    const delta = d * c;
+    h *= delta;
+    if (Math.abs(delta - 1) <= 1e-14) {
+      break;
+    }
+  }
+  return 1 - Math.exp(-x + shape * Math.log(x) - logGammaShape) * h;
+}
+
+function regularizedUpperGamma(shape: number, x: number): number {
+  const lower = regularizedLowerGamma(shape, x);
+  return Number.isFinite(lower) ? 1 - lower : Number.NaN;
+}
+
+function logCombination(total: number, chosen: number): number {
+  if (!Number.isInteger(total) || !Number.isInteger(chosen) || chosen < 0 || chosen > total) {
+    return Number.NaN;
+  }
+  return logGamma(total + 1) - logGamma(chosen + 1) - logGamma(total - chosen + 1);
+}
+
+function binomialProbability(successes: number, trials: number, probability: number): number {
+  if (
+    !Number.isInteger(successes) ||
+    !Number.isInteger(trials) ||
+    successes < 0 ||
+    trials < 0 ||
+    successes > trials ||
+    probability < 0 ||
+    probability > 1
+  ) {
+    return Number.NaN;
+  }
+  if (probability === 0) {
+    return successes === 0 ? 1 : 0;
+  }
+  if (probability === 1) {
+    return successes === trials ? 1 : 0;
+  }
+  return Math.exp(
+    logCombination(trials, successes) +
+      successes * Math.log(probability) +
+      (trials - successes) * Math.log(1 - probability),
+  );
+}
+
+function negativeBinomialProbability(
+  failures: number,
+  successes: number,
+  probability: number,
+): number {
+  if (
+    !Number.isInteger(failures) ||
+    !Number.isInteger(successes) ||
+    failures < 0 ||
+    successes <= 0 ||
+    probability < 0 ||
+    probability > 1
+  ) {
+    return Number.NaN;
+  }
+  if (probability === 0) {
+    return 0;
+  }
+  if (probability === 1) {
+    return failures === 0 ? 1 : 0;
+  }
+  return Math.exp(
+    logCombination(failures + successes - 1, failures) +
+      failures * Math.log(1 - probability) +
+      successes * Math.log(probability),
+  );
+}
+
+function hypergeometricProbability(
+  sampleSuccesses: number,
+  sampleSize: number,
+  populationSuccesses: number,
+  populationSize: number,
+): number {
+  if (
+    !Number.isInteger(sampleSuccesses) ||
+    !Number.isInteger(sampleSize) ||
+    !Number.isInteger(populationSuccesses) ||
+    !Number.isInteger(populationSize) ||
+    sampleSuccesses < 0 ||
+    sampleSize < 0 ||
+    populationSuccesses < 0 ||
+    populationSize <= 0 ||
+    sampleSize > populationSize ||
+    populationSuccesses > populationSize
+  ) {
+    return Number.NaN;
+  }
+  const minimum = Math.max(0, sampleSize - (populationSize - populationSuccesses));
+  const maximum = Math.min(sampleSize, populationSuccesses);
+  if (sampleSuccesses < minimum || sampleSuccesses > maximum) {
+    return 0;
+  }
+  return Math.exp(
+    logCombination(populationSuccesses, sampleSuccesses) +
+      logCombination(populationSize - populationSuccesses, sampleSize - sampleSuccesses) -
+      logCombination(populationSize, sampleSize),
+  );
+}
+
+function poissonProbability(events: number, mean: number): number {
+  if (!Number.isInteger(events) || events < 0 || !Number.isFinite(mean) || mean < 0) {
+    return Number.NaN;
+  }
+  if (mean === 0) {
+    return events === 0 ? 1 : 0;
+  }
+  return Math.exp(events * Math.log(mean) - mean - logGamma(events + 1));
+}
+
+function gammaDistributionDensity(x: number, alpha: number, beta: number): number {
+  if (!Number.isFinite(x) || !Number.isFinite(alpha) || !Number.isFinite(beta)) {
+    return Number.NaN;
+  }
+  if (x < 0 || alpha <= 0 || beta <= 0) {
+    return Number.NaN;
+  }
+  if (x === 0) {
+    if (alpha === 1) {
+      return 1 / beta;
+    }
+    return alpha < 1 ? Number.POSITIVE_INFINITY : 0;
+  }
+  return Math.exp((alpha - 1) * Math.log(x) - x / beta - logGamma(alpha) - alpha * Math.log(beta));
+}
+
+function gammaDistributionCdf(x: number, alpha: number, beta: number): number {
+  return regularizedLowerGamma(alpha, x / beta);
+}
+
+function chiSquareDensity(x: number, degreesFreedom: number): number {
+  return gammaDistributionDensity(x, degreesFreedom / 2, 2);
+}
+
+function chiSquareCdf(x: number, degreesFreedom: number): number {
+  return gammaDistributionCdf(x, degreesFreedom / 2, 2);
+}
+
 function standardNormalPdf(value: number): number {
   return Math.exp(-(value * value) / 2) / Math.sqrt(2 * Math.PI);
 }
@@ -2393,6 +2610,340 @@ const scalarBuiltins: Record<string, Builtin> = {
     return criticalValue === undefined
       ? valueError()
       : numberResult((criticalValue * standardDeviation) / Math.sqrt(size));
+  },
+  ERF: (lowerArg, upperArg) => {
+    const lower = toNumber(lowerArg);
+    if (lower === undefined) {
+      return valueError();
+    }
+    if (upperArg === undefined) {
+      return numberResult(erfApprox(lower));
+    }
+    const upper = toNumber(upperArg);
+    return upper === undefined ? valueError() : numberResult(erfApprox(upper) - erfApprox(lower));
+  },
+  "ERF.PRECISE": (valueArg) => {
+    const value = toNumber(valueArg);
+    return value === undefined ? valueError() : numberResult(erfApprox(value));
+  },
+  ERFC: (valueArg) => {
+    const value = toNumber(valueArg);
+    return value === undefined ? valueError() : numberResult(1 - erfApprox(value));
+  },
+  "ERFC.PRECISE": (valueArg) => {
+    const value = toNumber(valueArg);
+    return value === undefined ? valueError() : numberResult(1 - erfApprox(value));
+  },
+  FISHER: (valueArg) => {
+    const value = toNumber(valueArg);
+    if (value === undefined || value <= -1 || value >= 1) {
+      return valueError();
+    }
+    return numberResult(0.5 * Math.log((1 + value) / (1 - value)));
+  },
+  FISHERINV: (valueArg) => {
+    const value = toNumber(valueArg);
+    if (value === undefined) {
+      return valueError();
+    }
+    const exponent = Math.exp(2 * value);
+    return numberResult((exponent - 1) / (exponent + 1));
+  },
+  GAMMALN: (valueArg) => {
+    const value = toNumber(valueArg);
+    return value === undefined ? valueError() : numericResultOrError(logGamma(value));
+  },
+  "GAMMALN.PRECISE": (valueArg) => {
+    return scalarBuiltins["GAMMALN"]!(valueArg);
+  },
+  GAMMA: (valueArg) => {
+    const value = toNumber(valueArg);
+    return value === undefined ? valueError() : numericResultOrError(gammaFunction(value));
+  },
+  CONFIDENCE: (alphaArg, standardDeviationArg, sizeArg) => {
+    return scalarBuiltins["CONFIDENCE.NORM"]!(alphaArg, standardDeviationArg, sizeArg);
+  },
+  EXPONDIST: (xArg, lambdaArg, cumulativeArg) => {
+    const x = toNumber(xArg);
+    const lambda = toNumber(lambdaArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      x === undefined ||
+      lambda === undefined ||
+      cumulative === undefined ||
+      x < 0 ||
+      lambda <= 0
+    ) {
+      return valueError();
+    }
+    return numberResult(cumulative ? 1 - Math.exp(-lambda * x) : lambda * Math.exp(-lambda * x));
+  },
+  "EXPON.DIST": (xArg, lambdaArg, cumulativeArg) => {
+    return scalarBuiltins["EXPONDIST"]!(xArg, lambdaArg, cumulativeArg);
+  },
+  POISSON: (eventsArg, meanArg, cumulativeArg) => {
+    const events = nonNegativeIntegerValue(eventsArg);
+    const mean = toNumber(meanArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (events === undefined || mean === undefined || cumulative === undefined || mean < 0) {
+      return valueError();
+    }
+    if (!cumulative) {
+      return numericResultOrError(poissonProbability(events, mean));
+    }
+    let total = 0;
+    for (let index = 0; index <= events; index += 1) {
+      total += poissonProbability(index, mean);
+    }
+    return numericResultOrError(total);
+  },
+  "POISSON.DIST": (eventsArg, meanArg, cumulativeArg) => {
+    return scalarBuiltins["POISSON"]!(eventsArg, meanArg, cumulativeArg);
+  },
+  WEIBULL: (xArg, alphaArg, betaArg, cumulativeArg) => {
+    const x = toNumber(xArg);
+    const alpha = toNumber(alphaArg);
+    const beta = toNumber(betaArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      x === undefined ||
+      alpha === undefined ||
+      beta === undefined ||
+      cumulative === undefined ||
+      x < 0 ||
+      alpha <= 0 ||
+      beta <= 0
+    ) {
+      return valueError();
+    }
+    if (cumulative) {
+      return numberResult(1 - Math.exp(-((x / beta) ** alpha)));
+    }
+    if (x === 0) {
+      return numberResult(alpha === 1 ? 1 / beta : alpha < 1 ? Number.POSITIVE_INFINITY : 0);
+    }
+    return numberResult(
+      (alpha / beta ** alpha) * x ** (alpha - 1) * Math.exp(-((x / beta) ** alpha)),
+    );
+  },
+  "WEIBULL.DIST": (xArg, alphaArg, betaArg, cumulativeArg) => {
+    return scalarBuiltins["WEIBULL"]!(xArg, alphaArg, betaArg, cumulativeArg);
+  },
+  GAMMADIST: (xArg, alphaArg, betaArg, cumulativeArg) => {
+    const x = toNumber(xArg);
+    const alpha = toNumber(alphaArg);
+    const beta = toNumber(betaArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      x === undefined ||
+      alpha === undefined ||
+      beta === undefined ||
+      cumulative === undefined ||
+      x < 0 ||
+      alpha <= 0 ||
+      beta <= 0
+    ) {
+      return valueError();
+    }
+    return numberResult(
+      cumulative ? gammaDistributionCdf(x, alpha, beta) : gammaDistributionDensity(x, alpha, beta),
+    );
+  },
+  "GAMMA.DIST": (xArg, alphaArg, betaArg, cumulativeArg) => {
+    return scalarBuiltins["GAMMADIST"]!(xArg, alphaArg, betaArg, cumulativeArg);
+  },
+  CHIDIST: (xArg, degreesArg) => {
+    const x = toNumber(xArg);
+    const degrees = toNumber(degreesArg);
+    if (x === undefined || degrees === undefined || x < 0 || degrees < 1) {
+      return valueError();
+    }
+    return numericResultOrError(regularizedUpperGamma(degrees / 2, x / 2));
+  },
+  "CHISQ.DIST.RT": (xArg, degreesArg) => {
+    return scalarBuiltins["CHIDIST"]!(xArg, degreesArg);
+  },
+  "CHISQ.DIST": (xArg, degreesArg, cumulativeArg) => {
+    const x = toNumber(xArg);
+    const degrees = toNumber(degreesArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      x === undefined ||
+      degrees === undefined ||
+      cumulative === undefined ||
+      x < 0 ||
+      degrees < 1
+    ) {
+      return valueError();
+    }
+    return numberResult(cumulative ? chiSquareCdf(x, degrees) : chiSquareDensity(x, degrees));
+  },
+  BINOMDIST: (successesArg, trialsArg, probabilityArg, cumulativeArg) => {
+    const successes = nonNegativeIntegerValue(successesArg);
+    const trials = nonNegativeIntegerValue(trialsArg);
+    const probability = toNumber(probabilityArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      successes === undefined ||
+      trials === undefined ||
+      probability === undefined ||
+      cumulative === undefined ||
+      successes > trials ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return valueError();
+    }
+    if (!cumulative) {
+      return numericResultOrError(binomialProbability(successes, trials, probability));
+    }
+    let total = 0;
+    for (let index = 0; index <= successes; index += 1) {
+      total += binomialProbability(index, trials, probability);
+    }
+    return numericResultOrError(total);
+  },
+  "BINOM.DIST": (successesArg, trialsArg, probabilityArg, cumulativeArg) => {
+    return scalarBuiltins["BINOMDIST"]!(successesArg, trialsArg, probabilityArg, cumulativeArg);
+  },
+  "BINOM.DIST.RANGE": (trialsArg, probabilityArg, successesArg, upperSuccessesArg) => {
+    const trials = nonNegativeIntegerValue(trialsArg);
+    const probability = toNumber(probabilityArg);
+    const lower = nonNegativeIntegerValue(successesArg);
+    const upper = nonNegativeIntegerValue(upperSuccessesArg, lower);
+    if (
+      trials === undefined ||
+      probability === undefined ||
+      lower === undefined ||
+      upper === undefined ||
+      lower > upper ||
+      upper > trials ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return valueError();
+    }
+    let total = 0;
+    for (let index = lower; index <= upper; index += 1) {
+      total += binomialProbability(index, trials, probability);
+    }
+    return numericResultOrError(total);
+  },
+  CRITBINOM: (trialsArg, probabilityArg, alphaArg) => {
+    const trials = nonNegativeIntegerValue(trialsArg);
+    const probability = toNumber(probabilityArg);
+    const alpha = toNumber(alphaArg);
+    if (
+      trials === undefined ||
+      probability === undefined ||
+      alpha === undefined ||
+      probability < 0 ||
+      probability > 1 ||
+      alpha <= 0 ||
+      alpha >= 1
+    ) {
+      return valueError();
+    }
+    let cumulative = 0;
+    for (let index = 0; index <= trials; index += 1) {
+      cumulative += binomialProbability(index, trials, probability);
+      if (cumulative >= alpha) {
+        return numberResult(index);
+      }
+    }
+    return numberResult(trials);
+  },
+  "BINOM.INV": (trialsArg, probabilityArg, alphaArg) => {
+    return scalarBuiltins["CRITBINOM"]!(trialsArg, probabilityArg, alphaArg);
+  },
+  HYPGEOMDIST: (sampleSuccessesArg, sampleSizeArg, populationSuccessesArg, populationSizeArg) => {
+    const sampleSuccesses = nonNegativeIntegerValue(sampleSuccessesArg);
+    const sampleSize = nonNegativeIntegerValue(sampleSizeArg);
+    const populationSuccesses = nonNegativeIntegerValue(populationSuccessesArg);
+    const populationSize = positiveIntegerValue(populationSizeArg);
+    if (
+      sampleSuccesses === undefined ||
+      sampleSize === undefined ||
+      populationSuccesses === undefined ||
+      populationSize === undefined
+    ) {
+      return valueError();
+    }
+    return numericResultOrError(
+      hypergeometricProbability(sampleSuccesses, sampleSize, populationSuccesses, populationSize),
+    );
+  },
+  "HYPGEOM.DIST": (
+    sampleSuccessesArg,
+    sampleSizeArg,
+    populationSuccessesArg,
+    populationSizeArg,
+    cumulativeArg,
+  ) => {
+    const sampleSuccesses = nonNegativeIntegerValue(sampleSuccessesArg);
+    const sampleSize = nonNegativeIntegerValue(sampleSizeArg);
+    const populationSuccesses = nonNegativeIntegerValue(populationSuccessesArg);
+    const populationSize = positiveIntegerValue(populationSizeArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      sampleSuccesses === undefined ||
+      sampleSize === undefined ||
+      populationSuccesses === undefined ||
+      populationSize === undefined ||
+      cumulative === undefined
+    ) {
+      return valueError();
+    }
+    if (!cumulative) {
+      return numericResultOrError(
+        hypergeometricProbability(sampleSuccesses, sampleSize, populationSuccesses, populationSize),
+      );
+    }
+    const minimum = Math.max(0, sampleSize - (populationSize - populationSuccesses));
+    let total = 0;
+    for (let index = minimum; index <= sampleSuccesses; index += 1) {
+      total += hypergeometricProbability(index, sampleSize, populationSuccesses, populationSize);
+    }
+    return numericResultOrError(total);
+  },
+  NEGBINOMDIST: (failuresArg, successesArg, probabilityArg) => {
+    const failures = nonNegativeIntegerValue(failuresArg);
+    const successes = positiveIntegerValue(successesArg);
+    const probability = toNumber(probabilityArg);
+    if (
+      failures === undefined ||
+      successes === undefined ||
+      probability === undefined ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return valueError();
+    }
+    return numericResultOrError(negativeBinomialProbability(failures, successes, probability));
+  },
+  "NEGBINOM.DIST": (failuresArg, successesArg, probabilityArg, cumulativeArg) => {
+    const failures = nonNegativeIntegerValue(failuresArg);
+    const successes = positiveIntegerValue(successesArg);
+    const probability = toNumber(probabilityArg);
+    const cumulative = coerceBoolean(cumulativeArg, false);
+    if (
+      failures === undefined ||
+      successes === undefined ||
+      probability === undefined ||
+      cumulative === undefined ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return valueError();
+    }
+    if (!cumulative) {
+      return numericResultOrError(negativeBinomialProbability(failures, successes, probability));
+    }
+    let total = 0;
+    for (let index = 0; index <= failures; index += 1) {
+      total += negativeBinomialProbability(index, successes, probability);
+    }
+    return numericResultOrError(total);
   },
   SUBTOTAL: (functionNumArg, ...args) => {
     const functionNum = integerValue(functionNumArg);

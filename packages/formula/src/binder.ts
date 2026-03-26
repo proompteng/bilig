@@ -125,6 +125,36 @@ const WASM_SAFE_BUILTINS = new Set([
   "VSTACK",
   "MINIFS",
   "MAXIFS",
+  "ERF",
+  "ERF.PRECISE",
+  "ERFC",
+  "ERFC.PRECISE",
+  "FISHER",
+  "FISHERINV",
+  "GAMMALN",
+  "GAMMALN.PRECISE",
+  "GAMMA",
+  "CONFIDENCE",
+  "EXPONDIST",
+  "EXPON.DIST",
+  "POISSON",
+  "POISSON.DIST",
+  "WEIBULL",
+  "WEIBULL.DIST",
+  "GAMMADIST",
+  "GAMMA.DIST",
+  "CHIDIST",
+  "CHISQ.DIST.RT",
+  "CHISQ.DIST",
+  "BINOMDIST",
+  "BINOM.DIST",
+  "BINOM.DIST.RANGE",
+  "CRITBINOM",
+  "BINOM.INV",
+  "HYPGEOMDIST",
+  "HYPGEOM.DIST",
+  "NEGBINOMDIST",
+  "NEGBINOM.DIST",
 ]);
 const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 
@@ -267,7 +297,46 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "LOGINV":
     case "PDURATION":
     case "CONFIDENCE.NORM":
+    case "CONFIDENCE":
+    case "CRITBINOM":
+    case "BINOM.INV":
       return argc === 3;
+    case "ERF":
+      return argc === 1 || argc === 2;
+    case "ERF.PRECISE":
+    case "ERFC":
+    case "ERFC.PRECISE":
+    case "FISHER":
+    case "FISHERINV":
+    case "GAMMALN":
+    case "GAMMALN.PRECISE":
+    case "GAMMA":
+      return argc === 1;
+    case "CHIDIST":
+    case "CHISQ.DIST.RT":
+      return argc === 2;
+    case "CHISQ.DIST":
+      return argc === 3;
+    case "WEIBULL":
+    case "WEIBULL.DIST":
+    case "GAMMADIST":
+    case "GAMMA.DIST":
+    case "BINOMDIST":
+    case "BINOM.DIST":
+    case "NEGBINOM.DIST":
+      return argc === 4;
+    case "EXPONDIST":
+    case "EXPON.DIST":
+    case "POISSON":
+    case "POISSON.DIST":
+    case "NEGBINOMDIST":
+      return argc === 3;
+    case "BINOM.DIST.RANGE":
+      return argc === 3 || argc === 4;
+    case "HYPGEOMDIST":
+      return argc === 4;
+    case "HYPGEOM.DIST":
+      return argc === 5;
     case "NORMDIST":
       return argc === 4;
     case "NORM.DIST":
@@ -441,12 +510,16 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         if (!hasBuiltin(callee) && !localNames.has(node.callee)) {
           symbolicNames.add(node.callee);
         }
-        node.args.forEach((arg) => collectDeps(arg, localNames));
+        node.args.forEach((arg) => {
+          collectDeps(arg, localNames);
+        });
         break;
       }
       case "InvokeExpr":
         collectDeps(node.callee, localNames);
-        node.args.forEach((arg) => collectDeps(arg, localNames));
+        node.args.forEach((arg) => {
+          collectDeps(arg, localNames);
+        });
         break;
       default:
         assertNever(node);
@@ -888,6 +961,7 @@ export function encodeBuiltin(name: string): BuiltinId {
     "LOGNORM.DIST": BuiltinId.LognormDist,
     "LOGNORM.INV": BuiltinId.LognormInv,
     "CONFIDENCE.NORM": BuiltinId.ConfidenceNorm,
+    CONFIDENCE: BuiltinId.Confidence,
     EFFECT: BuiltinId.Effect,
     NOMINAL: BuiltinId.Nominal,
     PDURATION: BuiltinId.Pduration,
@@ -902,6 +976,35 @@ export function encodeBuiltin(name: string): BuiltinId {
     ISPMT: BuiltinId.Ispmt,
     PERMUT: BuiltinId.Permut,
     PERMUTATIONA: BuiltinId.Permutationa,
+    ERF: BuiltinId.Erf,
+    "ERF.PRECISE": BuiltinId.ErfPrecise,
+    ERFC: BuiltinId.Erfc,
+    "ERFC.PRECISE": BuiltinId.ErfcPrecise,
+    FISHER: BuiltinId.Fisher,
+    FISHERINV: BuiltinId.Fisherinv,
+    GAMMALN: BuiltinId.Gammaln,
+    "GAMMALN.PRECISE": BuiltinId.GammalnPrecise,
+    GAMMA: BuiltinId.Gamma,
+    EXPONDIST: BuiltinId.Expondist,
+    "EXPON.DIST": BuiltinId.ExponDist,
+    POISSON: BuiltinId.Poisson,
+    "POISSON.DIST": BuiltinId.PoissonDist,
+    WEIBULL: BuiltinId.Weibull,
+    "WEIBULL.DIST": BuiltinId.WeibullDist,
+    GAMMADIST: BuiltinId.Gammadist,
+    "GAMMA.DIST": BuiltinId.GammaDist,
+    CHIDIST: BuiltinId.Chidist,
+    "CHISQ.DIST.RT": BuiltinId.ChisqDistRt,
+    "CHISQ.DIST": BuiltinId.ChisqDist,
+    BINOMDIST: BuiltinId.Binomdist,
+    "BINOM.DIST": BuiltinId.BinomDist,
+    "BINOM.DIST.RANGE": BuiltinId.BinomDistRange,
+    CRITBINOM: BuiltinId.Critbinom,
+    "BINOM.INV": BuiltinId.BinomInv,
+    HYPGEOMDIST: BuiltinId.Hypgeomdist,
+    "HYPGEOM.DIST": BuiltinId.HypgeomDist,
+    NEGBINOMDIST: BuiltinId.Negbinomdist,
+    "NEGBINOM.DIST": BuiltinId.NegbinomDist,
   };
   const id = builtins[name.toUpperCase()];
   if (!id) {

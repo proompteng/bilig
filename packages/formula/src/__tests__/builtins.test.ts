@@ -1958,6 +1958,14 @@ describe("formula builtins", () => {
       tag: ValueTag.Error,
       code: ErrorCode.NA,
     });
+    expect(MODE({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(MODE_SNGL({ tag: ValueTag.Error, code: ErrorCode.Div0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
 
     expect(
       STDEV(
@@ -2017,6 +2025,30 @@ describe("formula builtins", () => {
       tag: ValueTag.Number,
       value: expect.closeTo(Math.sqrt(2 / 3), 12),
     });
+    expect(STDEV({ tag: ValueTag.Error, code: ErrorCode.Name })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    });
+    expect(STDEV_S({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(STDEVP({ tag: ValueTag.Error, code: ErrorCode.Value })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(STDEV_P({ tag: ValueTag.Error, code: ErrorCode.Div0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(STDEVA({ tag: ValueTag.Error, code: ErrorCode.Num })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Num,
+    });
+    expect(STDEVPA({ tag: ValueTag.Error, code: ErrorCode.NA })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
 
     expect(
       VAR(
@@ -2070,6 +2102,30 @@ describe("formula builtins", () => {
       tag: ValueTag.Number,
       value: expect.closeTo(2 / 3, 12),
     });
+    expect(VAR({ tag: ValueTag.Error, code: ErrorCode.Name })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    });
+    expect(VAR_S({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(VARP({ tag: ValueTag.Error, code: ErrorCode.Value })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(VAR_P({ tag: ValueTag.Error, code: ErrorCode.Div0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(VARA({ tag: ValueTag.Error, code: ErrorCode.Num })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Num,
+    });
+    expect(VARPA({ tag: ValueTag.Error, code: ErrorCode.NA })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
 
     expect(
       SKEW(
@@ -2116,6 +2172,18 @@ describe("formula builtins", () => {
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
+    });
+    expect(SKEW({ tag: ValueTag.Error, code: ErrorCode.Name })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Name,
+    });
+    expect(SKEW_P({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(KURT({ tag: ValueTag.Error, code: ErrorCode.Div0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
     });
 
     expect(
@@ -2181,6 +2249,39 @@ describe("formula builtins", () => {
     expect(NORMSINV({ tag: ValueTag.Number, value: 0.5 })).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(0, 12),
+    });
+    expect(
+      NORMINV(
+        { tag: ValueTag.String, value: "bad", stringId: 11 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NORM_S_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "bad", stringId: 12 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(NORMSINV({ tag: ValueTag.String, value: "bad", stringId: 13 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      LOGINV(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
     expect(
       LOGINV(
@@ -2264,6 +2365,15 @@ describe("formula builtins", () => {
       tag: ValueTag.Number,
       value: 8,
     });
+    expect(
+      PERMUTATIONA(
+        { tag: ValueTag.String, value: "bad", stringId: 14 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
     expect(PERMUT({ tag: ValueTag.Number, value: 3 }, { tag: ValueTag.Number, value: 4 })).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
@@ -2273,6 +2383,492 @@ describe("formula builtins", () => {
     expect(getBuiltinId("norm.s.inv")).toBe(BuiltinId.NormSInv);
     expect(getBuiltinId("confidence.norm")).toBe(BuiltinId.ConfidenceNorm);
     expect(getBuiltinId("permutationa")).toBe(BuiltinId.Permutationa);
+  });
+
+  it("supports the new statistical distribution builtins and aliases", () => {
+    const ERF = getBuiltin("ERF")!;
+    const ERF_PRECISE = getBuiltin("ERF.PRECISE")!;
+    const ERFC = getBuiltin("ERFC")!;
+    const ERFC_PRECISE = getBuiltin("ERFC.PRECISE")!;
+    const FISHER = getBuiltin("FISHER")!;
+    const FISHERINV = getBuiltin("FISHERINV")!;
+    const GAMMALN = getBuiltin("GAMMALN")!;
+    const GAMMALN_PRECISE = getBuiltin("GAMMALN.PRECISE")!;
+    const GAMMA = getBuiltin("GAMMA")!;
+    const CONFIDENCE = getBuiltin("CONFIDENCE")!;
+    const EXPONDIST = getBuiltin("EXPONDIST")!;
+    const EXPON_DIST = getBuiltin("EXPON.DIST")!;
+    const POISSON = getBuiltin("POISSON")!;
+    const POISSON_DIST = getBuiltin("POISSON.DIST")!;
+    const WEIBULL = getBuiltin("WEIBULL")!;
+    const WEIBULL_DIST = getBuiltin("WEIBULL.DIST")!;
+    const GAMMADIST = getBuiltin("GAMMADIST")!;
+    const GAMMA_DIST = getBuiltin("GAMMA.DIST")!;
+    const CHIDIST = getBuiltin("CHIDIST")!;
+    const CHISQ_DIST_RT = getBuiltin("CHISQ.DIST.RT")!;
+    const CHISQ_DIST = getBuiltin("CHISQ.DIST")!;
+    const BINOMDIST = getBuiltin("BINOMDIST")!;
+    const BINOM_DIST = getBuiltin("BINOM.DIST")!;
+    const BINOM_DIST_RANGE = getBuiltin("BINOM.DIST.RANGE")!;
+    const CRITBINOM = getBuiltin("CRITBINOM")!;
+    const BINOM_INV = getBuiltin("BINOM.INV")!;
+    const HYPGEOMDIST = getBuiltin("HYPGEOMDIST")!;
+    const HYPGEOM_DIST = getBuiltin("HYPGEOM.DIST")!;
+    const NEGBINOMDIST = getBuiltin("NEGBINOMDIST")!;
+    const NEGBINOM_DIST = getBuiltin("NEGBINOM.DIST")!;
+
+    expect(ERF({ tag: ValueTag.Number, value: 1 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.8427006897475899, 7),
+    });
+    expect(
+      ERF({ tag: ValueTag.Number, value: 0 }, { tag: ValueTag.Number, value: 1 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.8427006897475899, 7),
+    });
+    expect(ERF_PRECISE({ tag: ValueTag.Number, value: 1 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.8427006897475899, 7),
+    });
+    expect(ERFC({ tag: ValueTag.Number, value: 1 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.15729931025241006, 7),
+    });
+    expect(ERFC_PRECISE({ tag: ValueTag.Number, value: 1 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.15729931025241006, 7),
+    });
+    expect(ERF({ tag: ValueTag.String, value: "bad", stringId: 15 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(FISHER({ tag: ValueTag.Number, value: 0.5 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5493061443340549, 12),
+    });
+    expect(FISHERINV({ tag: ValueTag.Number, value: 0.5493061443340549 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 12),
+    });
+    expect(FISHERINV({ tag: ValueTag.String, value: "bad", stringId: 16 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(GAMMALN({ tag: ValueTag.Number, value: 5 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(Math.log(24), 12),
+    });
+    expect(GAMMALN_PRECISE({ tag: ValueTag.Number, value: 5 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(Math.log(24), 12),
+    });
+    expect(GAMMA({ tag: ValueTag.Number, value: 5 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(24, 10),
+    });
+    expect(
+      CONFIDENCE(
+        { tag: ValueTag.Number, value: 0.05 },
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 100 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.2939945976810081, 9),
+    });
+    expect(
+      EXPONDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.2706705664732254, 12),
+    });
+    expect(
+      EXPON_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.8646647167633873, 12),
+    });
+    expect(
+      EXPONDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      POISSON(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2.5 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.21376301724973648, 12),
+    });
+    expect(
+      POISSON_DIST(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2.5 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.7575761331330662, 12),
+    });
+    expect(
+      POISSON(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: -1 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      WEIBULL(
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.2596002610238016, 12),
+    });
+    expect(
+      WEIBULL_DIST(
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.22119921692859512, 12),
+    });
+    expect(
+      WEIBULL(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: Number.POSITIVE_INFINITY });
+    expect(
+      WEIBULL(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      GAMMADIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.09196986029286061, 12),
+    });
+    expect(
+      GAMMA_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.08030139707139418, 12),
+    });
+    expect(
+      HYPGEOM_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 12),
+    });
+    expect(
+      NEGBINOM_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.1875, 12),
+    });
+    expect(
+      CHIDIST({ tag: ValueTag.Number, value: 3 }, { tag: ValueTag.Number, value: 4 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5578254003710748, 12),
+    });
+    expect(
+      CHISQ_DIST_RT({ tag: ValueTag.Number, value: 3 }, { tag: ValueTag.Number, value: 4 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5578254003710748, 12),
+    });
+    expect(
+      CHISQ_DIST(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.4421745996289252, 12),
+    });
+    expect(
+      BINOMDIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.375, 12),
+    });
+    expect(
+      BINOM_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.6875, 12),
+    });
+    expect(
+      BINOM_DIST_RANGE(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.78125, 12),
+    });
+    expect(
+      CRITBINOM(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 0.7 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(
+      CRITBINOM(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 0.999999999999 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      BINOM_INV(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 0.7 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(
+      HYPGEOMDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 10 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 12),
+    });
+    expect(
+      HYPGEOM_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2 / 3, 12),
+    });
+    expect(
+      NEGBINOMDIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0.5 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.1875, 12),
+    });
+    expect(
+      NEGBINOM_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 12),
+    });
+
+    expect(FISHER({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      GAMMADIST(
+        { tag: ValueTag.Number, value: -1 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      GAMMA_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(GAMMA({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CHIDIST({ tag: ValueTag.Number, value: -1 }, { tag: ValueTag.Number, value: 4 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CHISQ_DIST(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      BINOMDIST(
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      BINOM_DIST_RANGE(
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CRITBINOM(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      HYPGEOMDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      HYPGEOM_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NEGBINOMDIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1.5 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NEGBINOM_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.String, value: "bad", stringId: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(getBuiltinId("gamma.dist")).toBe(BuiltinId.GammaDist);
+    expect(getBuiltinId("negbinom.dist")).toBe(BuiltinId.NegbinomDist);
+    expect(getBuiltinId("binom.inv")).toBe(BuiltinId.BinomInv);
   });
 
   it("covers the new financial builtins and their error branches", () => {
@@ -2376,6 +2972,17 @@ describe("formula builtins", () => {
     ).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(173.55371900826447, 12),
+    });
+    expect(
+      IPMT(
+        { tag: ValueTag.String, value: "bad", stringId: 17 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
     expect(
       IPMT(

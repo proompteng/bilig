@@ -79,6 +79,24 @@ const BUILTIN = {
   TOROW: BuiltinId.Torow,
   WRAPROWS: BuiltinId.Wraprows,
   WRAPCOLS: BuiltinId.Wrapcols,
+  ERF: BuiltinId.Erf,
+  ERFC: BuiltinId.Erfc,
+  FISHER: BuiltinId.Fisher,
+  FISHERINV: BuiltinId.Fisherinv,
+  GAMMALN: BuiltinId.Gammaln,
+  GAMMA: BuiltinId.Gamma,
+  CONFIDENCE: BuiltinId.Confidence,
+  EXPONDIST: BuiltinId.Expondist,
+  POISSON: BuiltinId.Poisson,
+  WEIBULL: BuiltinId.Weibull,
+  GAMMADIST: BuiltinId.Gammadist,
+  CHIDIST: BuiltinId.Chidist,
+  CHISQ_DIST: BuiltinId.ChisqDist,
+  BINOMDIST: BuiltinId.Binomdist,
+  BINOM_DIST_RANGE: BuiltinId.BinomDistRange,
+  CRITBINOM: BuiltinId.Critbinom,
+  HYPGEOMDIST: BuiltinId.Hypgeomdist,
+  NEGBINOMDIST: BuiltinId.Negbinomdist,
 } as const;
 
 const OUTPUT_STRING_BASE = 2147483648;
@@ -105,6 +123,14 @@ function encodePushNumber(constantIndex: number): number {
 
 function encodePushString(stringId: number): number {
   return (Opcode.PushString << 24) | stringId;
+}
+
+function encodePushBoolean(value: boolean): number {
+  return (Opcode.PushBoolean << 24) | (value ? 1 : 0);
+}
+
+function encodePushError(code: ErrorCode): number {
+  return (Opcode.PushError << 24) | code;
 }
 
 function encodeBinary(opcode: Opcode): number {
@@ -134,6 +160,30 @@ function packPrograms(programs: number[][]): {
 
   return {
     programs: Uint32Array.from(flat),
+    offsets: Uint32Array.from(offsets),
+    lengths: Uint32Array.from(lengths),
+  };
+}
+
+function packConstants(constantsByProgram: number[][]): {
+  constants: Float64Array;
+  offsets: Uint32Array;
+  lengths: Uint32Array;
+} {
+  const flat: number[] = [];
+  const offsets: number[] = [];
+  const lengths: number[] = [];
+  let offset = 0;
+
+  for (const constants of constantsByProgram) {
+    offsets.push(offset);
+    lengths.push(constants.length);
+    flat.push(...constants);
+    offset += constants.length;
+  }
+
+  return {
+    constants: Float64Array.from(flat),
     offsets: Uint32Array.from(offsets),
     lengths: Uint32Array.from(lengths),
   };
@@ -219,7 +269,23 @@ function readSpillValues(
         };
       }
     }
+    throw new Error("Unexpected decoded spill tag");
   });
+}
+
+function expectNumberCell(
+  kernel: KernelInstance,
+  index: number,
+  expected: number,
+  digits = 12,
+): void {
+  expect(kernel.readTags()[index]).toBe(ValueTag.Number);
+  expect(kernel.readNumbers()[index]).toBeCloseTo(expected, digits);
+}
+
+function expectErrorCell(kernel: KernelInstance, index: number, expected: ErrorCode): void {
+  expect(kernel.readTags()[index]).toBe(ValueTag.Error);
+  expect(kernel.readErrors()[index]).toBe(expected);
 }
 
 describe("wasm kernel", () => {
@@ -2508,6 +2574,376 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[5]).toBe(0);
     expect(kernel.readTags()[6]).toBe(ValueTag.Error);
     expect(kernel.readErrors()[6]).toBe(ErrorCode.Value);
+  });
+
+  it("evaluates statistical special functions on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 12;
+    kernel.init(24, 10, 11, 1, 1);
+    kernel.writeCells(
+      new Uint8Array(24),
+      new Float64Array(24),
+      new Uint32Array(24),
+      new Uint16Array(24),
+    );
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodeCall(BUILTIN.ERF, 1), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.ERF, 2), encodeRet()],
+      [encodePushNumber(0), encodeCall(BuiltinId.ErfPrecise, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.ERFC, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BuiltinId.ErfcPrecise, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.FISHER, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.FISHERINV, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.GAMMALN, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BuiltinId.GammalnPrecise, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.GAMMA, 1), encodeRet()],
+    ]);
+
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from(Array.from({ length: 10 }, (_, index) => cellIndex(1, index, width))),
+    );
+    const constants = packConstants([
+      [1],
+      [0, 1],
+      [1],
+      [1],
+      [1],
+      [0.5],
+      [0.5493061443340549],
+      [5],
+      [5],
+      [5],
+    ]);
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths);
+    kernel.evalBatch(
+      Uint32Array.from(Array.from({ length: 10 }, (_, index) => cellIndex(1, index, width))),
+    );
+
+    expectNumberCell(kernel, cellIndex(1, 0, width), 0.8427006897475899, 7);
+    expectNumberCell(kernel, cellIndex(1, 1, width), 0.8427006897475899, 7);
+    expectNumberCell(kernel, cellIndex(1, 2, width), 0.8427006897475899, 7);
+    expectNumberCell(kernel, cellIndex(1, 3, width), 0.15729931025241006, 7);
+    expectNumberCell(kernel, cellIndex(1, 4, width), 0.15729931025241006, 7);
+    expectNumberCell(kernel, cellIndex(1, 5, width), 0.5493061443340549, 12);
+    expectNumberCell(kernel, cellIndex(1, 6, width), 0.5, 12);
+    expectNumberCell(kernel, cellIndex(1, 7, width), Math.log(24), 12);
+    expectNumberCell(kernel, cellIndex(1, 8, width), Math.log(24), 12);
+    expectNumberCell(kernel, cellIndex(1, 9, width), 24, 10);
+  });
+
+  it("evaluates statistical distribution builtins and aliases on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 12;
+    kernel.init(48, 22, 64, 1, 1);
+    kernel.writeCells(
+      new Uint8Array(48),
+      new Float64Array(48),
+      new Uint32Array(48),
+      new Uint16Array(48),
+    );
+
+    const packed = packPrograms([
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.CONFIDENCE, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushBoolean(false),
+        encodeCall(BUILTIN.EXPONDIST, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.ExponDist, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodePushBoolean(false),
+        encodeCall(BUILTIN.POISSON, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.PoissonDist, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(false),
+        encodeCall(BUILTIN.WEIBULL, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.WeibullDist, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(false),
+        encodeCall(BUILTIN.GAMMADIST, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.GammaDist, 4),
+        encodeRet(),
+      ],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHIDIST, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BuiltinId.ChisqDistRt, 2), encodeRet()],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushBoolean(true),
+        encodeCall(BUILTIN.CHISQ_DIST, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(false),
+        encodeCall(BUILTIN.BINOMDIST, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.BinomDist, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.BINOM_DIST_RANGE, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.BINOM_DIST_RANGE, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.CRITBINOM, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BuiltinId.BinomInv, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.HYPGEOMDIST, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.HypgeomDist, 5),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.NEGBINOMDIST, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushBoolean(true),
+        encodeCall(BuiltinId.NegbinomDist, 4),
+        encodeRet(),
+      ],
+    ]);
+
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from(
+        Array.from({ length: 22 }, (_, index) =>
+          cellIndex(1 + Math.floor(index / width), index % width, width),
+        ),
+      ),
+    );
+    const constants = packConstants([
+      [0.05, 1.5, 100],
+      [1, 2],
+      [1, 2],
+      [3, 2.5],
+      [1.5, 2, 3],
+      [1.5, 2, 3],
+      [2, 3, 2],
+      [2, 3, 2],
+      [3, 4],
+      [3, 4],
+      [3, 4],
+      [2, 4, 0.5],
+      [2, 4, 0.5],
+      [6, 0.5, 2, 4],
+      [6, 0.5, 2],
+      [6, 0.5, 0.7],
+      [6, 0.5, 0.7],
+      [1, 4, 3, 10],
+      [1, 4, 3, 10],
+      [2, 3, 0.5],
+      [2, 3, 0.5],
+    ]);
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths);
+    const targetCells = Uint32Array.from(
+      Array.from({ length: 22 }, (_, index) =>
+        cellIndex(1 + Math.floor(index / width), index % width, width),
+      ),
+    );
+    kernel.evalBatch(targetCells);
+
+    expectNumberCell(kernel, targetCells[0], 0.2939945976810081, 9);
+    expectNumberCell(kernel, targetCells[1], 0.2706705664732254, 12);
+    expectNumberCell(kernel, targetCells[2], 0.8646647167633873, 12);
+
+    expect(kernel.readTags()[targetCells[3]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[4]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[5]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[6]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[7]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[8]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[9]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[10]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[11]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[12]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[13]]).toBe(ValueTag.Error);
+    expect(kernel.readTags()[targetCells[14]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[15]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[16]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[17]]).toBe(ValueTag.Error);
+    expect(kernel.readTags()[targetCells[18]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[19]]).toBe(ValueTag.Error);
+    expect(kernel.readTags()[targetCells[20]]).toBe(ValueTag.Number);
+    expect(kernel.readTags()[targetCells[21]]).toBe(ValueTag.Error);
+  });
+
+  it("returns statistical value errors on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 8;
+    kernel.init(24, 5, 5, 1, 2);
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Empty,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]),
+      new Float64Array([1, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array(24),
+      new Uint16Array(24),
+    );
+    kernel.uploadRangeMembers(new Uint32Array([0, 1]), new Uint32Array([0]), new Uint32Array([2]));
+    kernel.uploadRangeShapes(new Uint32Array([2]), new Uint32Array([1]));
+
+    const packed = packPrograms([
+      [encodePushCell(0), encodeCall(BUILTIN.FISHER, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BUILTIN.GAMMA, 1), encodeRet()],
+      [
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodeCall(BUILTIN.BINOM_DIST_RANGE, 4),
+        encodeRet(),
+      ],
+      [encodePushRange(0), encodeCall(BUILTIN.ERF, 1), encodeRet()],
+      [
+        encodePushError(ErrorCode.Ref),
+        encodePushNumber(0),
+        encodePushBoolean(false),
+        encodeCall(BUILTIN.POISSON, 3),
+        encodeRet(),
+      ],
+    ]);
+
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from(Array.from({ length: 5 }, (_, index) => cellIndex(1, index, width))),
+    );
+    const constants = packConstants([[0], [0], [4, 0.5, 3, 2], [], [1]]);
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths);
+    kernel.evalBatch(
+      Uint32Array.from(Array.from({ length: 5 }, (_, index) => cellIndex(1, index, width))),
+    );
+
+    expectErrorCell(kernel, cellIndex(1, 0, width), ErrorCode.Value);
+    expectErrorCell(kernel, cellIndex(1, 1, width), ErrorCode.Value);
+    expectErrorCell(kernel, cellIndex(1, 2, width), ErrorCode.Value);
+    expectErrorCell(kernel, cellIndex(1, 3, width), ErrorCode.Value);
+    expectErrorCell(kernel, cellIndex(1, 4, width), ErrorCode.Ref);
   });
 
   it("materializes pivots using the actual source width", async () => {

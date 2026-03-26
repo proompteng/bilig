@@ -2116,6 +2116,211 @@ function principalPaymentCalc(
   return isNaN(payment) || isNaN(interest) ? NaN : payment - interest;
 }
 
+function logGamma(value: f64): f64 {
+  if (!isFinite(value) || value <= 0.0) {
+    return NaN;
+  }
+  const shifted = value - 1.0;
+  let sum = 0.9999999999998099;
+  sum += 676.5203681218851 / (shifted + 1.0);
+  sum += -1259.1392167224028 / (shifted + 2.0);
+  sum += 771.3234287776531 / (shifted + 3.0);
+  sum += -176.6150291621406 / (shifted + 4.0);
+  sum += 12.507343278686905 / (shifted + 5.0);
+  sum += -0.13857109526572012 / (shifted + 6.0);
+  sum += 9.984369578019572e-6 / (shifted + 7.0);
+  sum += 1.5056327351493116e-7 / (shifted + 8.0);
+  const t = shifted + 7.5;
+  return 0.5 * Math.log(2.0 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(sum);
+}
+
+function gammaFunction(value: f64): f64 {
+  if (!isFinite(value) || (value <= 0.0 && value == Math.floor(value))) {
+    return NaN;
+  }
+  if (value < 0.5) {
+    const sine = Math.sin(Math.PI * value);
+    if (sine == 0.0) {
+      return NaN;
+    }
+    return Math.PI / (sine * gammaFunction(1.0 - value));
+  }
+  return Math.exp(logGamma(value));
+}
+
+function regularizedLowerGamma(shape: f64, x: f64): f64 {
+  if (!isFinite(shape) || !isFinite(x) || shape <= 0.0 || x < 0.0) {
+    return NaN;
+  }
+  if (x == 0.0) {
+    return 0.0;
+  }
+  const logGammaShape = logGamma(shape);
+  if (!isFinite(logGammaShape)) {
+    return NaN;
+  }
+  if (x < shape + 1.0) {
+    let term = 1.0 / shape;
+    let sum = term;
+    for (let iteration = 1; iteration < 1000; iteration += 1) {
+      term *= x / (shape + <f64>iteration);
+      sum += term;
+      if (Math.abs(term) <= Math.abs(sum) * 1e-14) {
+        break;
+      }
+    }
+    return sum * Math.exp(-x + shape * Math.log(x) - logGammaShape);
+  }
+
+  let b = x + 1.0 - shape;
+  let c = 1.0 / 1e-300;
+  let d = 1.0 / b;
+  let h = d;
+  for (let iteration = 1; iteration < 1000; iteration += 1) {
+    const factor = -(<f64>iteration) * (<f64>iteration - shape);
+    b += 2.0;
+    d = factor * d + b;
+    if (Math.abs(d) < 1e-300) {
+      d = 1e-300;
+    }
+    c = b + factor / c;
+    if (Math.abs(c) < 1e-300) {
+      c = 1e-300;
+    }
+    d = 1.0 / d;
+    const delta = d * c;
+    h *= delta;
+    if (Math.abs(delta - 1.0) <= 1e-14) {
+      break;
+    }
+  }
+  return 1.0 - Math.exp(-x + shape * Math.log(x) - logGammaShape) * h;
+}
+
+function regularizedUpperGamma(shape: f64, x: f64): f64 {
+  const lower = regularizedLowerGamma(shape, x);
+  return isFinite(lower) ? 1.0 - lower : NaN;
+}
+
+function logCombination(total: i32, chosen: i32): f64 {
+  if (chosen < 0 || chosen > total) {
+    return NaN;
+  }
+  return (
+    logGamma(<f64>total + 1.0) - logGamma(<f64>chosen + 1.0) - logGamma(<f64>(total - chosen) + 1.0)
+  );
+}
+
+function binomialProbability(successes: i32, trials: i32, probability: f64): f64 {
+  if (successes < 0 || trials < 0 || successes > trials || probability < 0.0 || probability > 1.0) {
+    return NaN;
+  }
+  if (probability == 0.0) {
+    return successes == 0 ? 1.0 : 0.0;
+  }
+  if (probability == 1.0) {
+    return successes == trials ? 1.0 : 0.0;
+  }
+  return Math.exp(
+    logCombination(trials, successes) +
+      <f64>successes * Math.log(probability) +
+      <f64>(trials - successes) * Math.log(1.0 - probability),
+  );
+}
+
+function negativeBinomialProbability(failures: i32, successes: i32, probability: f64): f64 {
+  if (failures < 0 || successes <= 0 || probability < 0.0 || probability > 1.0) {
+    return NaN;
+  }
+  if (probability == 0.0) {
+    return 0.0;
+  }
+  if (probability == 1.0) {
+    return failures == 0 ? 1.0 : 0.0;
+  }
+  return Math.exp(
+    logCombination(failures + successes - 1, failures) +
+      <f64>failures * Math.log(1.0 - probability) +
+      <f64>successes * Math.log(probability),
+  );
+}
+
+function hypergeometricProbability(
+  sampleSuccesses: i32,
+  sampleSize: i32,
+  populationSuccesses: i32,
+  populationSize: i32,
+): f64 {
+  if (
+    sampleSuccesses < 0 ||
+    sampleSize < 0 ||
+    populationSuccesses < 0 ||
+    populationSize <= 0 ||
+    sampleSize > populationSize ||
+    populationSuccesses > populationSize
+  ) {
+    return NaN;
+  }
+  const minimum = max<i32>(0, sampleSize - (populationSize - populationSuccesses));
+  const maximum = min<i32>(sampleSize, populationSuccesses);
+  if (sampleSuccesses < minimum || sampleSuccesses > maximum) {
+    return 0.0;
+  }
+  return Math.exp(
+    logCombination(populationSuccesses, sampleSuccesses) +
+      logCombination(populationSize - populationSuccesses, sampleSize - sampleSuccesses) -
+      logCombination(populationSize, sampleSize),
+  );
+}
+
+function poissonProbability(events: i32, mean: f64): f64 {
+  if (events < 0 || !isFinite(mean) || mean < 0.0) {
+    return NaN;
+  }
+  if (mean == 0.0) {
+    return events == 0 ? 1.0 : 0.0;
+  }
+  return Math.exp(<f64>events * Math.log(mean) - mean - logGamma(<f64>events + 1.0));
+}
+
+function gammaDistributionDensity(x: f64, alpha: f64, beta: f64): f64 {
+  if (
+    !isFinite(x) ||
+    !isFinite(alpha) ||
+    !isFinite(beta) ||
+    x < 0.0 ||
+    alpha <= 0.0 ||
+    beta <= 0.0
+  ) {
+    return NaN;
+  }
+  if (x == 0.0) {
+    if (alpha == 1.0) {
+      return 1.0 / beta;
+    }
+    return alpha < 1.0 ? Infinity : 0.0;
+  }
+  return Math.exp(
+    (alpha - 1.0) * Math.log(x) - x / beta - logGamma(alpha) - alpha * Math.log(beta),
+  );
+}
+
+function gammaDistributionCdf(x: f64, alpha: f64, beta: f64): f64 {
+  return regularizedLowerGamma(alpha, x / beta);
+}
+
+function chiSquareDensity(x: f64, degreesFreedom: f64): f64 {
+  return gammaDistributionDensity(x, degreesFreedom / 2.0, 2.0);
+}
+
+function chiSquareCdf(x: f64, degreesFreedom: f64): f64 {
+  return gammaDistributionCdf(x, degreesFreedom / 2.0, 2.0);
+}
+
+function isNumericResult(value: f64): bool {
+  return !isNaN(value);
+}
+
 export function applyBuiltin(
   builtinId: i32,
   argc: i32,
@@ -8078,6 +8283,628 @@ export function applyBuiltin(
       STACK_KIND_SCALAR,
       <u8>ValueTag.Number,
       numberValue >= stepValue ? 1 : 0,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Erf && (argc == 1 || argc == 2)) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const lower = toNumberExact(tagStack[base], valueStack[base]);
+    const upper = argc == 2 ? toNumberExact(tagStack[base + 1], valueStack[base + 1]) : 0.0;
+    if (isNaN(lower) || (argc == 2 && isNaN(upper))) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      argc == 2 ? erfApprox(upper) - erfApprox(lower) : erfApprox(lower),
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (
+    (builtinId == BuiltinId.ErfPrecise ||
+      builtinId == BuiltinId.Erfc ||
+      builtinId == BuiltinId.ErfcPrecise ||
+      builtinId == BuiltinId.Fisher ||
+      builtinId == BuiltinId.Fisherinv ||
+      builtinId == BuiltinId.Gammaln ||
+      builtinId == BuiltinId.GammalnPrecise ||
+      builtinId == BuiltinId.Gamma) &&
+    argc == 1
+  ) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const value = toNumberExact(tagStack[base], valueStack[base]);
+    if (isNaN(value)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    let result = NaN;
+    if (builtinId == BuiltinId.ErfPrecise) {
+      result = erfApprox(value);
+    } else if (builtinId == BuiltinId.Erfc || builtinId == BuiltinId.ErfcPrecise) {
+      result = 1.0 - erfApprox(value);
+    } else if (builtinId == BuiltinId.Fisher) {
+      result = value <= -1.0 || value >= 1.0 ? NaN : 0.5 * Math.log((1.0 + value) / (1.0 - value));
+    } else if (builtinId == BuiltinId.Fisherinv) {
+      const exponent = Math.exp(2.0 * value);
+      result = (exponent - 1.0) / (exponent + 1.0);
+    } else if (builtinId == BuiltinId.Gammaln || builtinId == BuiltinId.GammalnPrecise) {
+      result = logGamma(value);
+    } else if (builtinId == BuiltinId.Gamma) {
+      result = gammaFunction(value);
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Confidence && argc == 3) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const alpha = toNumberExact(tagStack[base], valueStack[base]);
+    const standardDeviation = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const size = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+    const critical = inverseStandardNormal(1.0 - alpha / 2.0);
+    const result =
+      isNaN(alpha) ||
+      isNaN(standardDeviation) ||
+      isNaN(size) ||
+      !(alpha > 0.0 && alpha < 1.0) ||
+      standardDeviation <= 0.0 ||
+      size < 1.0 ||
+      isNaN(critical)
+        ? NaN
+        : (critical * standardDeviation) / Math.sqrt(size);
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (
+    (builtinId == BuiltinId.Expondist ||
+      builtinId == BuiltinId.ExponDist ||
+      builtinId == BuiltinId.Poisson ||
+      builtinId == BuiltinId.PoissonDist ||
+      builtinId == BuiltinId.Negbinomdist) &&
+    argc == 3
+  ) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    let result = NaN;
+    if (builtinId == BuiltinId.Expondist || builtinId == BuiltinId.ExponDist) {
+      const x = toNumberExact(tagStack[base], valueStack[base]);
+      const lambda = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const cumulative = coerceBoolean(tagStack[base + 2], valueStack[base + 2]);
+      result =
+        isNaN(x) || isNaN(lambda) || cumulative < 0 || x < 0.0 || lambda <= 0.0
+          ? NaN
+          : cumulative == 1
+            ? 1.0 - Math.exp(-lambda * x)
+            : lambda * Math.exp(-lambda * x);
+    } else if (builtinId == BuiltinId.Poisson || builtinId == BuiltinId.PoissonDist) {
+      const eventsRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const mean = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const cumulative = coerceBoolean(tagStack[base + 2], valueStack[base + 2]);
+      const events = <i32>eventsRaw;
+      if (!isNaN(eventsRaw) && mean >= 0.0 && cumulative >= 0 && events >= 0) {
+        if (cumulative == 1) {
+          result = 0.0;
+          for (let index = 0; index <= events; index += 1) {
+            result += poissonProbability(index, mean);
+          }
+        } else {
+          result = poissonProbability(events, mean);
+        }
+      }
+    } else {
+      const failuresRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const successesRaw = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const probability = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const failures = <i32>failuresRaw;
+      const successes = <i32>successesRaw;
+      if (!isNaN(failuresRaw) && !isNaN(successesRaw)) {
+        result = negativeBinomialProbability(failures, successes, probability);
+      }
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (
+    (builtinId == BuiltinId.Weibull ||
+      builtinId == BuiltinId.WeibullDist ||
+      builtinId == BuiltinId.Gammadist ||
+      builtinId == BuiltinId.GammaDist ||
+      builtinId == BuiltinId.Binomdist ||
+      builtinId == BuiltinId.BinomDist ||
+      builtinId == BuiltinId.NegbinomDist) &&
+    argc == 4
+  ) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    let result = NaN;
+    if (builtinId == BuiltinId.Weibull || builtinId == BuiltinId.WeibullDist) {
+      const x = toNumberExact(tagStack[base], valueStack[base]);
+      const alpha = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const beta = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const cumulative = coerceBoolean(tagStack[base + 3], valueStack[base + 3]);
+      if (
+        !isNaN(x) &&
+        !isNaN(alpha) &&
+        !isNaN(beta) &&
+        cumulative >= 0 &&
+        x >= 0.0 &&
+        alpha > 0.0 &&
+        beta > 0.0
+      ) {
+        if (cumulative == 1) {
+          result = 1.0 - Math.exp(-Math.pow(x / beta, alpha));
+        } else if (x == 0.0) {
+          result = alpha == 1.0 ? 1.0 / beta : alpha < 1.0 ? Infinity : 0.0;
+        } else {
+          result =
+            (alpha / Math.pow(beta, alpha)) *
+            Math.pow(x, alpha - 1.0) *
+            Math.exp(-Math.pow(x / beta, alpha));
+        }
+      }
+    } else if (builtinId == BuiltinId.Gammadist || builtinId == BuiltinId.GammaDist) {
+      const x = toNumberExact(tagStack[base], valueStack[base]);
+      const alpha = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const beta = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const cumulative = coerceBoolean(tagStack[base + 3], valueStack[base + 3]);
+      if (
+        !isNaN(x) &&
+        !isNaN(alpha) &&
+        !isNaN(beta) &&
+        cumulative >= 0 &&
+        x >= 0.0 &&
+        alpha > 0.0 &&
+        beta > 0.0
+      ) {
+        result =
+          cumulative == 1
+            ? gammaDistributionCdf(x, alpha, beta)
+            : gammaDistributionDensity(x, alpha, beta);
+      }
+    } else if (builtinId == BuiltinId.Binomdist || builtinId == BuiltinId.BinomDist) {
+      const successesRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const trialsRaw = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const probability = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const cumulative = coerceBoolean(tagStack[base + 3], valueStack[base + 3]);
+      const successes = <i32>successesRaw;
+      const trials = <i32>trialsRaw;
+      if (!isNaN(successesRaw) && !isNaN(trialsRaw) && cumulative >= 0) {
+        if (cumulative == 1) {
+          result = 0.0;
+          for (let index = 0; index <= successes; index += 1) {
+            result += binomialProbability(index, trials, probability);
+          }
+        } else {
+          result = binomialProbability(successes, trials, probability);
+        }
+      }
+    } else {
+      const failuresRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const successesRaw = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const probability = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const cumulative = coerceBoolean(tagStack[base + 3], valueStack[base + 3]);
+      const failures = <i32>failuresRaw;
+      const successes = <i32>successesRaw;
+      if (!isNaN(failuresRaw) && !isNaN(successesRaw) && cumulative >= 0) {
+        if (cumulative == 1) {
+          result = 0.0;
+          for (let index = 0; index <= failures; index += 1) {
+            result += negativeBinomialProbability(index, successes, probability);
+          }
+        } else {
+          result = negativeBinomialProbability(failures, successes, probability);
+        }
+      }
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if ((builtinId == BuiltinId.Chidist || builtinId == BuiltinId.ChisqDistRt) && argc == 2) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const x = toNumberExact(tagStack[base], valueStack[base]);
+    const degrees = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const result =
+      !isNaN(x) && !isNaN(degrees) && x >= 0.0 && degrees >= 1.0
+        ? regularizedUpperGamma(degrees / 2.0, x / 2.0)
+        : NaN;
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.ChisqDist && argc == 3) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const x = toNumberExact(tagStack[base], valueStack[base]);
+    const degrees = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const cumulative = coerceBoolean(tagStack[base + 2], valueStack[base + 2]);
+    const result =
+      !isNaN(x) && !isNaN(degrees) && cumulative >= 0 && x >= 0.0 && degrees >= 1.0
+        ? cumulative == 1
+          ? chiSquareCdf(x, degrees)
+          : chiSquareDensity(x, degrees)
+        : NaN;
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (
+    (builtinId == BuiltinId.BinomDistRange && (argc == 3 || argc == 4)) ||
+    (builtinId == BuiltinId.Critbinom && argc == 3) ||
+    (builtinId == BuiltinId.BinomInv && argc == 3) ||
+    (builtinId == BuiltinId.Hypgeomdist && argc == 4) ||
+    (builtinId == BuiltinId.HypgeomDist && argc == 5)
+  ) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    let result = NaN;
+    if (builtinId == BuiltinId.BinomDistRange) {
+      const trialsRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const probability = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const lowerRaw = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const upperRaw =
+        argc == 4 ? toNumberExact(tagStack[base + 3], valueStack[base + 3]) : lowerRaw;
+      const trials = <i32>trialsRaw;
+      const lower = <i32>lowerRaw;
+      const upper = <i32>upperRaw;
+      if (!isNaN(trialsRaw) && !isNaN(lowerRaw) && !isNaN(upperRaw) && lower <= upper) {
+        result = 0.0;
+        for (let index = lower; index <= upper; index += 1) {
+          result += binomialProbability(index, trials, probability);
+        }
+      }
+    } else if (builtinId == BuiltinId.Critbinom || builtinId == BuiltinId.BinomInv) {
+      const trialsRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const probability = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const alpha = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const trials = <i32>trialsRaw;
+      if (
+        !isNaN(trialsRaw) &&
+        !isNaN(probability) &&
+        !isNaN(alpha) &&
+        trials >= 0 &&
+        probability >= 0.0 &&
+        probability <= 1.0 &&
+        alpha > 0.0 &&
+        alpha < 1.0
+      ) {
+        let cumulative = 0.0;
+        for (let index = 0; index <= trials; index += 1) {
+          cumulative += binomialProbability(index, trials, probability);
+          if (cumulative >= alpha) {
+            result = <f64>index;
+            break;
+          }
+        }
+        if (isNaN(result)) {
+          result = <f64>trials;
+        }
+      }
+    } else if (builtinId == BuiltinId.Hypgeomdist) {
+      const sampleSuccessesRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const sampleSizeRaw = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const populationSuccessesRaw = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const populationSizeRaw = toNumberExact(tagStack[base + 3], valueStack[base + 3]);
+      if (
+        !isNaN(sampleSuccessesRaw) &&
+        !isNaN(sampleSizeRaw) &&
+        !isNaN(populationSuccessesRaw) &&
+        !isNaN(populationSizeRaw)
+      ) {
+        result = hypergeometricProbability(
+          <i32>sampleSuccessesRaw,
+          <i32>sampleSizeRaw,
+          <i32>populationSuccessesRaw,
+          <i32>populationSizeRaw,
+        );
+      }
+    } else {
+      const sampleSuccessesRaw = toNumberExact(tagStack[base], valueStack[base]);
+      const sampleSizeRaw = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+      const populationSuccessesRaw = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+      const populationSizeRaw = toNumberExact(tagStack[base + 3], valueStack[base + 3]);
+      const cumulative = coerceBoolean(tagStack[base + 4], valueStack[base + 4]);
+      const sampleSuccesses = <i32>sampleSuccessesRaw;
+      const sampleSize = <i32>sampleSizeRaw;
+      const populationSuccesses = <i32>populationSuccessesRaw;
+      const populationSize = <i32>populationSizeRaw;
+      if (
+        !isNaN(sampleSuccessesRaw) &&
+        !isNaN(sampleSizeRaw) &&
+        !isNaN(populationSuccessesRaw) &&
+        !isNaN(populationSizeRaw) &&
+        cumulative >= 0
+      ) {
+        if (cumulative == 1) {
+          result = 0.0;
+          const minimum = max<i32>(0, sampleSize - (populationSize - populationSuccesses));
+          for (let index = minimum; index <= sampleSuccesses; index += 1) {
+            result += hypergeometricProbability(
+              index,
+              sampleSize,
+              populationSuccesses,
+              populationSize,
+            );
+          }
+        } else {
+          result = hypergeometricProbability(
+            sampleSuccesses,
+            sampleSize,
+            populationSuccesses,
+            populationSize,
+          );
+        }
+      }
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
+      isNumericResult(result) ? result : ErrorCode.Value,
       rangeIndexStack,
       valueStack,
       tagStack,

@@ -133,9 +133,83 @@ describe("formula parser/compiler edges", () => {
     expect(isBuiltinAvailable("VLOOKUP")).toBe(true);
     expect(isBuiltinAvailable("DOES_NOT_EXIST")).toBe(false);
     expect(encodeBuiltin("LEN")).toBeDefined();
+    expect(() => encodeBuiltin("DOES_NOT_EXIST")).toThrow(
+      "Unsupported builtin for wasm: DOES_NOT_EXIST",
+    );
     expect(() => compileFormula("Sheet1!A")).toThrow(
       "Row and column references must appear inside a range",
     );
+  });
+
+  it("routes the new statistical builtin tranche onto the wasm path with proper ids", () => {
+    expect(compileFormula("ERF(1)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("ERF(0,1)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("ERF.PRECISE(1)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("ERFC(1)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("ERFC.PRECISE(1)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("FISHER(0.5)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("FISHERINV(0.5)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("GAMMALN(5)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("GAMMALN.PRECISE(5)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("GAMMA(5)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("CONFIDENCE(0.05,1.5,100)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("EXPONDIST(1,2,FALSE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("EXPON.DIST(1,2,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("POISSON(3,2.5,FALSE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("POISSON.DIST(3,2.5,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("WEIBULL(1.5,2,3,FALSE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("WEIBULL.DIST(1.5,2,3,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("GAMMADIST(2,3,2,FALSE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("GAMMA.DIST(2,3,2,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("CHIDIST(3,4)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("CHISQ.DIST.RT(3,4)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("CHISQ.DIST(3,4,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("BINOMDIST(2,4,0.5,FALSE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("BINOM.DIST(2,4,0.5,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("BINOM.DIST.RANGE(6,0.5,2,4)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("CRITBINOM(6,0.5,0.7)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("BINOM.INV(6,0.5,0.7)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("HYPGEOMDIST(1,4,3,10)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("HYPGEOM.DIST(1,4,3,10,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("NEGBINOMDIST(2,3,0.5)").mode).toBe(FormulaMode.WasmFastPath);
+    expect(compileFormula("NEGBINOM.DIST(2,3,0.5,TRUE)").mode).toBe(FormulaMode.WasmFastPath);
+
+    expect(encodeBuiltin("ERF")).toBeDefined();
+    expect(encodeBuiltin("CONFIDENCE")).toBeDefined();
+    expect(encodeBuiltin("POISSON.DIST")).toBeDefined();
+    expect(encodeBuiltin("BINOM.INV")).toBeDefined();
+    expect(encodeBuiltin("NEGBINOM.DIST")).toBeDefined();
+  });
+
+  it("keeps invalid wasm arities and non-scalar argument shapes on the JS path", () => {
+    expect(compileFormula("SEQUENCE()").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("LOOKUP(A1)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("LOOKUP(A1,A1:A2,B1:B2,C1:C2)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("SORTBY(A1:A2)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("OFFSET()").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("AREAS(A1)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("COUNTIFS(A1)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("SUMIFS(1, A1:A2, 1)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("IFS(A1:A2,1,TRUE(),2)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("MINIFS(A1:A2)").mode).toBe(FormulaMode.JsOnly);
+  });
+
+  it("tracks unknown callees as symbolic names while preserving rewritten and range-safe bindings", () => {
+    const unknownCall = bindFormula(parseFormula("CustomFn(A1)"));
+    expect(unknownCall.deps).toEqual(["A1"]);
+    expect(unknownCall.symbolicNames).toEqual(["CUSTOMFN"]);
+    expect(unknownCall.mode).toBe(FormulaMode.JsOnly);
+
+    expect(bindFormula(parseFormula("LOOKUP(A1,A1:A2)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("SORTBY(A1:A2,B1:B2,1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("AREAS(A1:A2)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("ARRAYTOTEXT(A1:A2,1)")).mode).toBe(FormulaMode.WasmFastPath);
+  });
+
+  it("keeps non-call and invalid rewritten top-level nodes off the wasm fast path", () => {
+    expect(bindFormula(parseFormula("TRUE(1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("SWITCH(A1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("A1+1")).mode).toBe(FormulaMode.WasmFastPath);
   });
 
   it("compiles literal text, CONCAT, and IF text branches onto the wasm path", () => {
