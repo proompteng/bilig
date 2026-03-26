@@ -14,6 +14,8 @@ export interface GridKeyActionEvent {
 export type GridKeyAction =
   | { kind: "none" }
   | { kind: "edit-append"; value: string }
+  | { kind: "commit-edit"; movement?: readonly [-1 | 0 | 1, -1 | 0 | 1] }
+  | { kind: "cancel-edit" }
   | {
       kind: "begin-edit";
       seed?: string;
@@ -51,14 +53,19 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   } = options;
 
   if (isEditingCell) {
-    if (
-      event.key.length === 1 &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      !editorInputFocused
-    ) {
-      return { kind: "edit-append", value: `${editorValue}${event.key}` };
+    if (!editorInputFocused) {
+      if (event.key === "Enter") {
+        return { kind: "commit-edit", movement: [0, event.shiftKey ? -1 : 1] };
+      }
+      if (event.key === "Tab") {
+        return { kind: "commit-edit", movement: [event.shiftKey ? -1 : 1, 0] };
+      }
+      if (event.key === "Escape") {
+        return { kind: "cancel-edit" };
+      }
+      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        return { kind: "edit-append", value: `${editorValue}${event.key}` };
+      }
     }
     return { kind: "none" };
   }

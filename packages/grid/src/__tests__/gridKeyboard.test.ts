@@ -29,7 +29,7 @@ describe("gridKeyboard", () => {
       true,
     );
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: "Escape", metaKey: false })).toBe(
-      false,
+      true,
     );
   });
 
