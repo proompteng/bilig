@@ -5,6 +5,26 @@ import { StringPool } from "../string-pool.js";
 import { WasmKernelFacade } from "../wasm-facade.js";
 
 describe("WasmKernelFacade", () => {
+  it("returns undefined for reads that have no initialized kernel or no spill shape", async () => {
+    const uninitialized = new WasmKernelFacade();
+    expect(uninitialized.readSpill(0, new StringPool())).toBeUndefined();
+    expect(
+      uninitialized.materializePivotTable(
+        0,
+        1,
+        new Uint32Array(),
+        new Uint32Array(),
+        new Uint8Array(),
+      ),
+    ).toBeUndefined();
+    expect(uninitialized.stringIds).toEqual(new Uint32Array());
+    expect(uninitialized.errors).toEqual(new Uint16Array());
+
+    const initialized = new WasmKernelFacade();
+    await initialized.init();
+    expect(initialized.readSpill(0, new StringPool())).toBeUndefined();
+  });
+
   it("exposes refreshed runtime views after formula and range uploads", async () => {
     const facade = new WasmKernelFacade();
     await facade.init();
@@ -58,6 +78,8 @@ describe("WasmKernelFacade", () => {
     facade.syncFromStore(store, Uint32Array.from([sourceIndex]));
     expect(facade.tags[sourceIndex]).toBe(ValueTag.Number);
     expect(facade.numbers[sourceIndex]).toBe(10);
+    facade.syncFromStore(store);
+    expect(facade.stringIds[sourceIndex]).toBe(0);
 
     facade.evalBatch(new Uint32Array([targetIndex]));
     facade.syncToStore(store, new Uint32Array([targetIndex]), new StringPool());
@@ -67,6 +89,9 @@ describe("WasmKernelFacade", () => {
     expect(facade.constantOffsets[0]).toBe(0);
     expect(facade.constantLengths[0]).toBe(1);
     expect(facade.constants[0]).toBe(2);
+
+    facade.syncFromStore(store, Uint32Array.from([store.size + 10]));
+    expect(facade.tags[sourceIndex]).toBe(ValueTag.Number);
   });
   it("uploads volatile random values for RAND evaluation", async () => {
     const facade = new WasmKernelFacade();
