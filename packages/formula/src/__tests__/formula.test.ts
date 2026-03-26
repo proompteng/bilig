@@ -253,8 +253,10 @@ describe("formula", () => {
     expect(compileFormula("WORKDAY.INTL(A1,1)").mode).toBe(0);
     expect(compileFormula("LET(x,2,x+3)").mode).toBe(0);
     expect(compileFormula('TEXTBEFORE(A1,"-")').mode).toBe(0);
-    expect(compileFormula("FILTER(A1:A4,A1:A4>2)")).toMatchObject({ mode: 0, producesSpill: true });
-    expect(compileFormula("UNIQUE(A1:A4)")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("FILTER(A1:A4,A1:A4>2)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("UNIQUE(A1:A4)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("FILTER(A1:A4,B1:B4)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("A1:A4>2")).toMatchObject({ mode: 1, producesSpill: true });
   });
 
   it("accelerates rewritten logical calls and keeps lambda families on the JS path", () => {

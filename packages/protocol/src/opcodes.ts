@@ -126,6 +126,8 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Now, name: "NOW", supportsWasm: true },
   { id: BuiltinId.Rand, name: "RAND", supportsWasm: true },
   { id: BuiltinId.Sequence, name: "SEQUENCE", supportsWasm: true },
+  { id: BuiltinId.Filter, name: "FILTER", supportsWasm: true },
+  { id: BuiltinId.Unique, name: "UNIQUE", supportsWasm: true },
   { id: BuiltinId.Offset, name: "OFFSET", supportsWasm: true },
   { id: BuiltinId.Take, name: "TAKE", supportsWasm: true },
   { id: BuiltinId.Drop, name: "DROP", supportsWasm: true },

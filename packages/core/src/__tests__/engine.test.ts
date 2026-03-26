@@ -295,7 +295,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 0, jsFormulaCount: 1 });
   });
 
-  it("spills FILTER and UNIQUE through the JS runtime fallback", async () => {
+  it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -312,8 +312,29 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 3 });
     expect(engine.getCellValue("Sheet1", "C3")).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(engine.getCellValue("Sheet1", "C4")).toEqual({ tag: ValueTag.Number, value: 4 });
-    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.JsOnly);
-    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0 });
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.WasmFastPath);
+  });
+
+  it("spills FILTER through the wasm fast path when the include mask is a range", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "A2", 3);
+    engine.setCellValue("Sheet1", "A3", 2);
+    engine.setCellValue("Sheet1", "A4", 4);
+    engine.setCellValue("Sheet1", "B1", false);
+    engine.setCellValue("Sheet1", "B2", true);
+    engine.setCellValue("Sheet1", "B3", false);
+    engine.setCellValue("Sheet1", "B4", true);
+    engine.setCellFormula("Sheet1", "C1", "FILTER(A1:A4,B1:B4)");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.WasmFastPath);
   });
 
   it("evaluates missing logical functions and lambda arrays", async () => {
@@ -1866,6 +1887,8 @@ describe("SpreadsheetEngine", () => {
     engine.setCellFormula("Sheet1", "B1", "SUM(SalesRange)");
 
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 37 });
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.setCellValue("Sheet1", "A2", 20);
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 45 });
@@ -1898,6 +1921,8 @@ describe("SpreadsheetEngine", () => {
 
     engine.setCellFormula("Sheet1", "C1", "SUM(Sales[Amount])");
     expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 37 });
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
 
     engine.setCellValue("Sheet1", "B3", 20);
     expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 45 });

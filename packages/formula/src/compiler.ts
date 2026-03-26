@@ -27,34 +27,52 @@ interface VolatileMetadata {
 }
 
 function producesSpillResult(node: FormulaNode): boolean {
-  return (
-    node.kind === "CallExpr" &&
-    [
-      "SEQUENCE",
-      "OFFSET",
-      "TAKE",
-      "DROP",
-      "CHOOSECOLS",
-      "CHOOSEROWS",
-      "SORT",
-      "SORTBY",
-      "TOCOL",
-      "TOROW",
-      "WRAPROWS",
-      "WRAPCOLS",
-      "FILTER",
-      "UNIQUE",
-      "MAKEARRAY",
-      "MAP",
-      "SCAN",
-      "BYROW",
-      "BYCOL",
-      "RANDARRAY",
-      "MUNIT",
-      "MINVERSE",
-      "MMULT",
-    ].includes(node.callee.toUpperCase())
-  );
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "NameRef":
+    case "StructuredRef":
+    case "CellRef":
+    case "SpillRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "InvokeExpr":
+      return false;
+    case "RangeRef":
+      return true;
+    case "UnaryExpr":
+      return producesSpillResult(node.argument);
+    case "BinaryExpr":
+      return producesSpillResult(node.left) || producesSpillResult(node.right);
+    case "CallExpr":
+      return [
+        "SEQUENCE",
+        "OFFSET",
+        "TAKE",
+        "DROP",
+        "CHOOSECOLS",
+        "CHOOSEROWS",
+        "SORT",
+        "SORTBY",
+        "TOCOL",
+        "TOROW",
+        "WRAPROWS",
+        "WRAPCOLS",
+        "FILTER",
+        "UNIQUE",
+        "MAKEARRAY",
+        "MAP",
+        "SCAN",
+        "BYROW",
+        "BYCOL",
+        "RANDARRAY",
+        "MUNIT",
+        "MINVERSE",
+        "MMULT",
+      ].includes(node.callee.toUpperCase());
+  }
 }
 
 function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {

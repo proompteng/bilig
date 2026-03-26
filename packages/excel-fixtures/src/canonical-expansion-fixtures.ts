@@ -480,15 +480,18 @@ export const canonicalExpansionFixtures: readonly ExcelFixtureCase[] = [
       output("C2", numberExpected(4)),
     ],
   ),
-  fixture(
-    "names",
-    "defined-name-range",
-    "Defined-name range reference",
-    "=SUM(MyRange)",
-    [input("A1", 10), input("A2", 12), input("A3", 15)],
-    [output("A4", numberExpected(37))],
-    "Requires workbook-level name metadata in the oracle workbook.",
-  ),
+  {
+    ...fixture(
+      "names",
+      "defined-name-range",
+      "Defined-name range reference",
+      "=SUM(MyRange)",
+      [input("A1", 10), input("A2", 12), input("A3", 15)],
+      [output("A4", numberExpected(37))],
+      "Requires workbook-level name metadata in the oracle workbook.",
+    ),
+    definedNames: [{ name: "MyRange", value: "=A1:A3" }],
+  },
   fixture(
     "lambda",
     "byrow-basic",

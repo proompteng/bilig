@@ -3141,7 +3141,7 @@ describe("formula builtins", () => {
     expect(getBuiltinId("sin")).toBe(BuiltinId.Sin);
     expect(getBuiltinId("weeknum")).toBe(BuiltinId.Weeknum);
     expect(getBuiltinId("rept")).toBe(BuiltinId.Rept);
-    expect(getBuiltinId("filter")).toBeUndefined();
+    expect(getBuiltinId("filter")).toBe(BuiltinId.Filter);
     expect(getBuiltinId("let")).toBeUndefined();
     expect(getBuiltinId("textjoin")).toBeUndefined();
   });
