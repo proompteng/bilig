@@ -30,6 +30,20 @@ function assertBudget(label, actual, threshold, formatter = formatMs) {
   }
 }
 
+function assertAllRunsUseWasmFastPath(label, runs, expectedWasmFormulaCount) {
+  const degradedRun = runs.find((run) => {
+    return (
+      run.metrics.wasmFormulaCount < expectedWasmFormulaCount || run.metrics.jsFormulaCount !== 0
+    );
+  });
+  if (!degradedRun) {
+    return;
+  }
+  throw new Error(
+    `${label} did not stay on the wasm fast path: wasm=${degradedRun.metrics.wasmFormulaCount}, js=${degradedRun.metrics.jsFormulaCount}`,
+  );
+}
+
 function formatMs(value) {
   return `${value.toFixed(2)}ms`;
 }
@@ -120,6 +134,8 @@ const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.a
 
 const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
 const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
+
+assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
 
 assertBudget("100k snapshot load p95", loadElapsed.p95, budgets.load100kP95Ms);
 assertBudget(
