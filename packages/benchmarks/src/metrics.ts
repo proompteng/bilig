@@ -29,6 +29,11 @@ export interface MemoryMeasurement {
 export function collectGarbage(): void {
   if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
     Bun.gc(true);
+    return;
+  }
+  const gc = Reflect.get(globalThis, "gc");
+  if (typeof gc === "function") {
+    gc();
   }
 }
 
