@@ -18,9 +18,12 @@ async function clearWorkspace(page: Page) {
 }
 
 async function jumpTo(page: Page, target: string) {
+  const normalizedTarget = target.toUpperCase();
   const nameBox = page.getByTestId("name-box");
-  await nameBox.fill(target);
+  await nameBox.fill(normalizedTarget);
+  await expect(nameBox).toHaveValue(normalizedTarget);
   await nameBox.press("Enter");
+  await expect(page.getByTestId("selection-chip")).toContainText(normalizedTarget);
 }
 
 async function loadPreset(page: Page, presetId: string, label?: string) {

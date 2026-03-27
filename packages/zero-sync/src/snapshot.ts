@@ -115,10 +115,10 @@ function parseDefinedNames(entries: unknown[]): WorkbookDefinedNameSnapshot[] {
 }
 
 function withSheetMetadataFallback(
-  fallback: SheetMetadataSnapshot | undefined,
   rowEntries: WorkbookAxisMetadataSnapshot[],
   columnEntries: WorkbookAxisMetadataSnapshot[],
-): SheetMetadataSnapshot | undefined {
+  fallback?: SheetMetadataSnapshot,
+) {
   const next: SheetMetadataSnapshot = {};
   if (fallback?.rows) {
     next.rows = fallback.rows;
@@ -148,10 +148,7 @@ function withSheetMetadataFallback(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
-export function projectWorkbookToSnapshot(
-  value: unknown,
-  documentId: string,
-): WorkbookSnapshot | null {
+export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
   if (!isRecord(value)) {
     return null;
   }
@@ -214,9 +211,9 @@ export function projectWorkbookToSnapshot(
 
       const fallbackSheet = fallbackSheets.get(sheetName);
       const metadata = withSheetMetadataFallback(
-        fallbackSheet?.metadata,
         parseAxisMetadata(asArray(sheetEntry["rowMetadata"])),
         parseAxisMetadata(asArray(sheetEntry["columnMetadata"])),
+        fallbackSheet?.metadata,
       );
 
       return metadata

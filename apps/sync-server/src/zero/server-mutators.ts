@@ -1,6 +1,6 @@
 import { SpreadsheetEngine } from "@bilig/core";
 import { formatAddress } from "@bilig/formula";
-import type { CellRangeRef, WorkbookSnapshot } from "@bilig/protocol";
+import type { WorkbookSnapshot } from "@bilig/protocol";
 import {
   clearCellArgsSchema,
   rangeMutationArgsSchema,
@@ -160,7 +160,7 @@ export async function handleServerMutator(tx: unknown, name: string, args: unkno
     case "workbook.fillRange": {
       const parsed = rangeMutationArgsSchema.parse(args);
       await applyWorkbookMutation(parsed.documentId, serverTx, (engine) => {
-        engine.fillRange(parsed.source as CellRangeRef, parsed.target as CellRangeRef);
+        engine.fillRange(parsed.source, parsed.target);
       });
       return;
     }
@@ -168,7 +168,7 @@ export async function handleServerMutator(tx: unknown, name: string, args: unkno
     case "workbook.copyRange": {
       const parsed = rangeMutationArgsSchema.parse(args);
       await applyWorkbookMutation(parsed.documentId, serverTx, (engine) => {
-        engine.copyRange(parsed.source as CellRangeRef, parsed.target as CellRangeRef);
+        engine.copyRange(parsed.source, parsed.target);
       });
       return;
     }

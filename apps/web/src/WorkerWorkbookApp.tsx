@@ -73,6 +73,12 @@ interface WorkerHandle {
   cache: WorkerViewportCache;
 }
 
+interface RuntimeConfig {
+  documentId: string;
+  baseUrl: string | null;
+  persistState: boolean;
+}
+
 interface RibbonButtonProps {
   active?: boolean;
   ariaLabel: string;
@@ -422,9 +428,33 @@ function toOptimisticCellValue(value: LiteralInput, currentValue: CellValue): Ce
   };
 }
 
-function resolveDocumentId(defaultDocumentId: string): string {
-  const explicit = new URLSearchParams(window.location.search).get("document");
-  return explicit && explicit.length > 0 ? explicit : defaultDocumentId;
+function createSessionDocumentId(defaultDocumentId: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${defaultDocumentId}:${crypto.randomUUID()}`;
+  }
+  return `${defaultDocumentId}:${Math.random().toString(36).slice(2)}`;
+}
+
+function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig {
+  const searchParams = new URLSearchParams(window.location.search);
+  const explicitDocumentId = searchParams.get("document");
+  const baseUrl = searchParams.get("server");
+
+  if (explicitDocumentId) {
+    return {
+      documentId: explicitDocumentId,
+      baseUrl,
+      persistState: true,
+    };
+  }
+
+  return {
+    documentId: baseUrl
+      ? createSessionDocumentId(config.defaultDocumentId)
+      : config.defaultDocumentId,
+    baseUrl,
+    persistState: baseUrl ? false : config.persistState,
+  };
 }
 
 function classNames(...values: Array<string | false | null | undefined>): string {
@@ -703,10 +733,8 @@ function ColorPaletteButton({
 }
 
 export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
-  const documentId = useMemo(
-    () => resolveDocumentId(config.defaultDocumentId),
-    [config.defaultDocumentId],
-  );
+  const runtimeConfig = useMemo(() => resolveRuntimeConfig(config), [config]);
+  const documentId = runtimeConfig.documentId;
   const zero = useZero();
   const zeroOnline = useZeroOnline();
   const [remoteWorkbook] = useQuery(queries.workbooks.byId({ documentId }));
@@ -799,8 +827,8 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
         const response = await client.invoke("bootstrap", {
           documentId,
           replicaId,
-          baseUrl: null,
-          persistState: config.persistState,
+          baseUrl: runtimeConfig.baseUrl,
+          persistState: runtimeConfig.persistState,
         } satisfies WorkbookWorkerBootstrapOptions);
         if (!isRuntimeStateSnapshot(response)) {
           throw new Error("Worker returned an invalid bootstrap payload");
@@ -862,9 +890,19 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       worker.terminate();
       workerHandleRef.current = null;
     };
-  }, [refreshRuntimeState, refreshSelectedCell, documentId, replicaId, config.persistState]);
+  }, [
+    refreshRuntimeState,
+    refreshSelectedCell,
+    documentId,
+    replicaId,
+    runtimeConfig.baseUrl,
+    runtimeConfig.persistState,
+  ]);
 
   useEffect(() => {
+    if (runtimeConfig.baseUrl) {
+      return;
+    }
     const active = workerHandleRef.current;
     if (!active || !remoteSnapshot) {
       return;
@@ -882,7 +920,13 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       .catch((error: unknown) => {
         setRuntimeError(error instanceof Error ? error.message : String(error));
       });
-  }, [refreshRuntimeState, refreshSelectedCell, remoteSnapshot, workerHandle]);
+  }, [
+    refreshRuntimeState,
+    refreshSelectedCell,
+    remoteSnapshot,
+    runtimeConfig.baseUrl,
+    workerHandle,
+  ]);
 
   useEffect(() => {
     const active = workerHandleRef.current;
@@ -890,14 +934,20 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       return;
     }
 
-    const syncState = remoteSnapshot === null ? "syncing" : zeroOnline ? "live" : "reconnecting";
+    const syncState = runtimeConfig.baseUrl
+      ? null
+      : remoteSnapshot === null
+        ? "local-only"
+        : zeroOnline
+          ? "live"
+          : "reconnecting";
     void active.client.invoke("setExternalSyncState", syncState).then(() => {
       void refreshRuntimeState(active).catch((error: unknown) => {
         setRuntimeError(error instanceof Error ? error.message : String(error));
       });
       return undefined;
     });
-  }, [refreshRuntimeState, remoteSnapshot, workerHandle, zeroOnline]);
+  }, [refreshRuntimeState, remoteSnapshot, runtimeConfig.baseUrl, workerHandle, zeroOnline]);
 
   useEffect(() => {
     if (!runtimeState || runtimeState.sheetNames.length === 0) {
@@ -938,6 +988,9 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
 
   const runZeroMutation = useCallback(
     async (mutation: Parameters<typeof zero.mutate>[0]) => {
+      if (runtimeConfig.baseUrl) {
+        return null;
+      }
       const result = zero.mutate(mutation);
       const clientResult = await result.client;
       if (
@@ -951,7 +1004,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       }
       return result;
     },
-    [zero],
+    [runtimeConfig.baseUrl, zero],
   );
 
   const invokeMutation = useCallback(

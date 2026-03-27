@@ -18,87 +18,31 @@ jobs:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4
 
-      - name: Bootstrap Docker
+      - name: Resolve image tags
+        id: meta
         run: |
-          set -euxo pipefail
-
-          if [ "$(id -u)" -eq 0 ]; then
-            SUDO=""
-          elif command -v sudo >/dev/null 2>&1; then
-            SUDO="sudo"
-          else
-            SUDO=""
-          fi
-
-          if ! command -v docker >/dev/null 2>&1; then
-            if command -v apt-get >/dev/null 2>&1; then
-              ${SUDO} apt-get update
-              DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y docker.io
-            else
-              echo "docker is not installed and apt-get is unavailable"
-              exit 1
-            fi
-          fi
-
-          if ! docker info >/dev/null 2>&1; then
-            if command -v systemctl >/dev/null 2>&1; then
-              ${SUDO} systemctl start docker || true
-            fi
-          fi
-
-          if ! docker info >/dev/null 2>&1; then
-            ${SUDO} sh -lc 'nohup dockerd >/tmp/dockerd.log 2>&1 &' || true
-            for _ in $(seq 1 30); do
-              docker info >/dev/null 2>&1 && break
-              sleep 1
-            done
-          fi
-
-          docker info >/dev/null 2>&1 || {
-            cat /tmp/dockerd.log || true
-            exit 1
-          }
-
-          docker version
+          set -eu
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push bilig-web
-        run: |
-          set -eu
-          SHA="$(git rev-parse HEAD)"
-          SHORT_SHA="$(git rev-parse --short=7 HEAD)"
-          IMAGE_SHA="$REGISTRY/$IMAGE_NAMESPACE/bilig-web:$SHA"
-          IMAGE_SHORT="$REGISTRY/$IMAGE_NAMESPACE/bilig-web:$SHORT_SHA"
-          IMAGE_LATEST="$REGISTRY/$IMAGE_NAMESPACE/bilig-web:latest"
-
-          docker build \
-            --file ./Dockerfile \
-            --target web-runtime \
-            --tag "$IMAGE_SHA" \
-            .
-
-          docker tag "$IMAGE_SHA" "$IMAGE_SHORT"
-          docker tag "$IMAGE_SHA" "$IMAGE_LATEST"
-          docker push "$IMAGE_SHA"
-          docker push "$IMAGE_SHORT"
-          docker push "$IMAGE_LATEST"
+        uses: docker://gcr.io/kaniko-project/executor:v1.23.2-debug
+        with:
+          args: >-
+            --context=${{ github.workspace }}
+            --dockerfile=${{ github.workspace }}/Dockerfile
+            --target=web-runtime
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-web:${{ steps.meta.outputs.sha }}
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-web:${{ steps.meta.outputs.short_sha }}
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-web:latest
 
       - name: Build and push bilig-sync
-        run: |
-          set -eu
-          SHA="$(git rev-parse HEAD)"
-          SHORT_SHA="$(git rev-parse --short=7 HEAD)"
-          IMAGE_SHA="$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:$SHA"
-          IMAGE_SHORT="$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:$SHORT_SHA"
-          IMAGE_LATEST="$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:latest"
-
-          docker build \
-            --file ./Dockerfile \
-            --target sync-runtime \
-            --tag "$IMAGE_SHA" \
-            .
-
-          docker tag "$IMAGE_SHA" "$IMAGE_SHORT"
-          docker tag "$IMAGE_SHA" "$IMAGE_LATEST"
-          docker push "$IMAGE_SHA"
-          docker push "$IMAGE_SHORT"
-          docker push "$IMAGE_LATEST"
+        uses: docker://gcr.io/kaniko-project/executor:v1.23.2-debug
+        with:
+          args: >-
+            --context=${{ github.workspace }}
+            --dockerfile=${{ github.workspace }}/Dockerfile
+            --target=sync-runtime
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-sync:${{ steps.meta.outputs.sha }}
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-sync:${{ steps.meta.outputs.short_sha }}
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-sync:latest
