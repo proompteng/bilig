@@ -5,7 +5,7 @@ const workbooks = table("workbooks")
     id: string(),
     name: string(),
     snapshot: json(),
-    updatedAt: string().from("updated_at"),
+    updatedAt: number().from("updated_at"),
   })
   .primaryKey("id");
 
