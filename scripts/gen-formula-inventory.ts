@@ -2,10 +2,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import ts from "typescript";
 import { BUILTINS } from "../packages/protocol/src/opcodes.ts";
-import { getBuiltinCapability } from "../packages/formula/src/builtin-capabilities.ts";
-import { scalarPlaceholderBuiltinNames } from "../packages/formula/src/builtins/placeholder.ts";
-import { hasBuiltin } from "../packages/formula/src/builtins.ts";
 
 interface FormulaInventorySourceEntry {
   name: string;
@@ -29,6 +27,13 @@ const generatedReportPath = path.join(
 );
 const generatedDocPath = path.join(repoRoot, "docs/odf-1.4-mandatory-office-excel-functions.md");
 const missingProtocolPath = path.join(repoRoot, "docs/formula-inventory-missing-from-protocol.md");
+const builtinCapabilitiesPath = path.join(repoRoot, "packages/formula/src/builtin-capabilities.ts");
+const builtinsPath = path.join(repoRoot, "packages/formula/src/builtins.ts");
+const logicalBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/logical.ts");
+const textBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/text.ts");
+const datetimeBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/datetime.ts");
+const lookupBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/lookup.ts");
+const placeholderBuiltinsPath = path.join(repoRoot, "packages/formula/src/builtins/placeholder.ts");
 
 const providerBackedNames = new Set([
   "CALL",
@@ -50,11 +55,19 @@ const providerBackedNames = new Set([
   "WEBSERVICE",
 ]);
 
-const placeholderNames = new Set(scalarPlaceholderBuiltinNames.map((name) => name.toUpperCase()));
 const protocolBuiltinsByName = new Map(
   BUILTINS.map((builtin) => [builtin.name.toUpperCase(), builtin]),
 );
 const runtimeAliasByCanonicalName = new Map<string, string>([["AVERAGE", "AVG"]]);
+
+interface SourceDerivedRuntimeData {
+  placeholderNames: Set<string>;
+  implementedBuiltinNames: Set<string>;
+  jsSpecialBuiltinNames: Set<string>;
+  wasmProductionBuiltinNames: Set<string>;
+}
+
+let cachedRuntimeData: Promise<SourceDerivedRuntimeData> | undefined;
 
 function escapeTsString(value: string): string {
   return JSON.stringify(value);
@@ -74,28 +87,192 @@ function runtimeLookupNames(name: string): string[] {
   return alias ? [canonical, alias] : [canonical];
 }
 
-function inferRuntimeStatus(name: string): FormulaRuntimeStatus {
+function inferRuntimeStatus(
+  name: string,
+  runtimeData: SourceDerivedRuntimeData,
+): FormulaRuntimeStatus {
   const lookupNames = runtimeLookupNames(name);
-  if (lookupNames.some((entry) => placeholderNames.has(entry))) {
+  if (lookupNames.some((entry) => runtimeData.placeholderNames.has(entry))) {
     return "placeholder";
   }
-  return lookupNames.some((entry) => hasBuiltin(entry)) ? "implemented" : "missing";
+  return lookupNames.some((entry) => runtimeData.implementedBuiltinNames.has(entry))
+    ? "implemented"
+    : "missing";
+}
+
+async function readTsSourceFile(filePath: string): Promise<ts.SourceFile> {
+  const sourceText = await readFile(filePath, "utf8");
+  return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+}
+
+function getVariableInitializer(
+  sourceFile: ts.SourceFile,
+  variableName: string,
+): ts.Expression | undefined {
+  let found: ts.Expression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === variableName
+    ) {
+      found = node.initializer;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function extractStringLiteralValue(node: ts.Expression): string | undefined {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
+  }
+  return undefined;
+}
+
+function extractStringArray(expression: ts.Expression | undefined): string[] {
+  if (!expression) {
+    return [];
+  }
+  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
+    return extractStringArray(expression.expression);
+  }
+  if (ts.isArrayLiteralExpression(expression)) {
+    return expression.elements
+      .flatMap((element) => {
+        if (ts.isSpreadElement(element)) {
+          return extractStringArray(element.expression);
+        }
+        const value = extractStringLiteralValue(element);
+        return value ? [value] : [];
+      })
+      .map((value) => value.trim().toUpperCase());
+  }
+  if (
+    ts.isNewExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === "Set" &&
+    expression.arguments?.[0]
+  ) {
+    return extractStringArray(expression.arguments[0]);
+  }
+  return [];
+}
+
+function extractObjectKeys(expression: ts.Expression | undefined): string[] {
+  if (!expression) {
+    return [];
+  }
+  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
+    return extractObjectKeys(expression.expression);
+  }
+  if (!ts.isObjectLiteralExpression(expression)) {
+    return [];
+  }
+  return expression.properties.flatMap((property) => {
+    if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) {
+      return [];
+    }
+    const nameNode = property.name;
+    if (ts.isIdentifier(nameNode) || ts.isStringLiteral(nameNode)) {
+      return [nameNode.text.trim().toUpperCase()];
+    }
+    return [];
+  });
+}
+
+async function readSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData> {
+  const [
+    capabilitySource,
+    builtinsSource,
+    logicalSource,
+    textSource,
+    datetimeSource,
+    lookupSource,
+    placeholderSource,
+  ] = await Promise.all([
+    readTsSourceFile(builtinCapabilitiesPath),
+    readTsSourceFile(builtinsPath),
+    readTsSourceFile(logicalBuiltinsPath),
+    readTsSourceFile(textBuiltinsPath),
+    readTsSourceFile(datetimeBuiltinsPath),
+    readTsSourceFile(lookupBuiltinsPath),
+    readTsSourceFile(placeholderBuiltinsPath),
+  ]);
+
+  const implementedBuiltinNames = new Set([
+    ...extractObjectKeys(getVariableInitializer(builtinsSource, "scalarBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(logicalSource, "logicalBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(textSource, "textBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(datetimeSource, "datetimeBuiltins")),
+    ...extractObjectKeys(getVariableInitializer(lookupSource, "lookupBuiltins")),
+  ]);
+
+  const jsSpecialBuiltinNames = new Set(
+    extractStringArray(getVariableInitializer(capabilitySource, "jsSpecialBuiltinNames")),
+  );
+  const wasmProductionBuiltinNames = new Set(
+    extractStringArray(getVariableInitializer(capabilitySource, "wasmProductionBuiltinNames")),
+  );
+  jsSpecialBuiltinNames.forEach((name) => implementedBuiltinNames.add(name));
+
+  const implementedScalarPlaceholderBuiltinNames = new Set(
+    extractStringArray(getVariableInitializer(placeholderSource, "implementedScalarBuiltinNames")),
+  );
+  const allAdditionalExcelScalarBuiltinNames = extractStringArray(
+    getVariableInitializer(placeholderSource, "allAdditionalExcelScalarBuiltinNames"),
+  );
+  const protocolScalarPlaceholderBuiltinNames = extractStringArray(
+    getVariableInitializer(placeholderSource, "protocolScalarPlaceholderBuiltinNames"),
+  );
+  const placeholderNames = new Set([
+    ...protocolScalarPlaceholderBuiltinNames,
+    ...allAdditionalExcelScalarBuiltinNames.filter(
+      (name) => !implementedScalarPlaceholderBuiltinNames.has(name),
+    ),
+  ]);
+
+  return {
+    placeholderNames,
+    implementedBuiltinNames,
+    jsSpecialBuiltinNames,
+    wasmProductionBuiltinNames,
+  };
+}
+
+async function getSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData> {
+  cachedRuntimeData ??= readSourceDerivedRuntimeData();
+  return cachedRuntimeData;
 }
 
 function summarizeOdfMembership(odfStatus: string): boolean {
   return odfStatus === "Implemented";
 }
 
-function renderInventoryReport(source: FormulaInventorySource): string {
+async function renderInventoryReport(source: FormulaInventorySource): Promise<string> {
+  const runtimeData = await getSourceDerivedRuntimeData();
   const entries = source.entries.map((entry) => {
     const name = entry.name.trim().toUpperCase();
-    const capability = runtimeLookupNames(name)
-      .map((entryName) => getBuiltinCapability(entryName))
-      .find((entryCapability) => entryCapability !== undefined);
     const protocolBuiltin = runtimeLookupNames(name)
       .map((entryName) => protocolBuiltinsByName.get(entryName))
       .find((entryBuiltin) => entryBuiltin !== undefined);
-    const runtimeStatus = inferRuntimeStatus(name);
+    const runtimeStatus = inferRuntimeStatus(name, runtimeData);
+    const jsStatus = runtimeLookupNames(name).some((entryName) =>
+      runtimeData.jsSpecialBuiltinNames.has(entryName),
+    )
+      ? "special-js-only"
+      : runtimeStatus === "implemented"
+        ? "implemented"
+        : runtimeStatus === "placeholder"
+          ? "placeholder"
+          : "missing";
+    const wasmStatus = runtimeLookupNames(name).some((entryName) =>
+      runtimeData.wasmProductionBuiltinNames.has(entryName),
+    )
+      ? "production"
+      : "not-started";
     return {
       name,
       odfStatus: entry.odfStatus,
@@ -105,14 +282,8 @@ function renderInventoryReport(source: FormulaInventorySource): string {
       protocolId: protocolBuiltin?.id,
       protocolName: protocolBuiltin?.name,
       protocolSupportsWasm: protocolBuiltin?.supportsWasm ?? false,
-      jsStatus:
-        capability?.jsStatus ??
-        (runtimeStatus === "implemented"
-          ? "implemented"
-          : runtimeStatus === "placeholder"
-            ? "placeholder"
-            : "missing"),
-      wasmStatus: capability?.wasmStatus ?? "not-started",
+      jsStatus,
+      wasmStatus,
       placeholder: runtimeStatus === "placeholder",
       registeredInCodebase: runtimeStatus !== "missing",
     };
@@ -171,10 +342,11 @@ ${lines.join(",\n")}
 `;
 }
 
-function renderInventoryDoc(source: FormulaInventorySource): string {
+async function renderInventoryDoc(source: FormulaInventorySource): Promise<string> {
+  const runtimeData = await getSourceDerivedRuntimeData();
   const rows = source.entries.map((entry) => {
     const name = entry.name.trim().toUpperCase();
-    const runtimeStatus = inferRuntimeStatus(name);
+    const runtimeStatus = inferRuntimeStatus(name, runtimeData);
     const implemented = runtimeStatus === "missing" ? "No" : "Yes";
     return `| ${escapeMd(name)} | ${escapeMd(entry.odfStatus)} | ${entry.inOfficeList ? "Yes" : "No"} | ${implemented} |`;
   });
@@ -193,7 +365,10 @@ function renderInventoryDoc(source: FormulaInventorySource): string {
     (entry) => !summarizeOdfMembership(entry.odfStatus) && entry.inOfficeList,
   ).length;
   const implementedCount = source.entries.filter(
-    (entry) => inferRuntimeStatus(entry.name.trim().toUpperCase()) !== "missing",
+    (entry) => inferRuntimeStatus(entry.name.trim().toUpperCase(), runtimeData) !== "missing",
+  ).length;
+  const placeholderCount = source.entries.filter(
+    (entry) => inferRuntimeStatus(entry.name.trim().toUpperCase(), runtimeData) === "placeholder",
   ).length;
 
   return `# ODF 1.4 and Office Excel Function Coverage
@@ -219,7 +394,7 @@ function renderInventoryDoc(source: FormulaInventorySource): string {
 ## Current code coverage snapshot
 - Registered in codebase: **${implementedCount}**
 - Not yet registered in codebase: **${source.entries.length - implementedCount}**
-- Placeholder-backed registrations: **${source.entries.filter((entry) => inferRuntimeStatus(entry.name.trim().toUpperCase()) === "placeholder").length}**
+- Placeholder-backed registrations: **${placeholderCount}**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
 ## Full unified function list (ODF 1.4 mandatory + Office category)
@@ -230,11 +405,12 @@ ${rows.join("\n")}
 `;
 }
 
-function renderMissingProtocolDoc(source: FormulaInventorySource): string {
+async function renderMissingProtocolDoc(source: FormulaInventorySource): Promise<string> {
+  const runtimeData = await getSourceDerivedRuntimeData();
   const entries = source.entries
     .map((entry) => {
       const name = entry.name.trim().toUpperCase();
-      const runtimeStatus = inferRuntimeStatus(name);
+      const runtimeStatus = inferRuntimeStatus(name, runtimeData);
       return {
         name,
         runtimeStatus,
@@ -320,9 +496,9 @@ async function readSource(): Promise<FormulaInventorySource> {
 async function writeGeneratedFiles(checkMode: boolean): Promise<void> {
   const source = await readSource();
   const outputs = [
-    { path: generatedReportPath, contents: renderInventoryReport(source) },
-    { path: generatedDocPath, contents: renderInventoryDoc(source) },
-    { path: missingProtocolPath, contents: renderMissingProtocolDoc(source) },
+    { path: generatedReportPath, contents: await renderInventoryReport(source) },
+    { path: generatedDocPath, contents: await renderInventoryDoc(source) },
+    { path: missingProtocolPath, contents: await renderMissingProtocolDoc(source) },
   ];
 
   const stalePaths: string[] = [];
