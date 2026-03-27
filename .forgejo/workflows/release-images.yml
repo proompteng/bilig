@@ -19,6 +19,51 @@ jobs:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4
 
+      - name: Bootstrap Docker
+        run: |
+          set -euxo pipefail
+
+          if [ "$(id -u)" -eq 0 ]; then
+            SUDO=""
+          elif command -v sudo >/dev/null 2>&1; then
+            SUDO="sudo"
+          else
+            SUDO=""
+          fi
+
+          if ! command -v docker >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              ${SUDO} apt-get update
+              DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y docker.io docker-buildx || \
+                DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y docker.io
+            else
+              echo "docker is not installed and apt-get is unavailable"
+              exit 1
+            fi
+          fi
+
+          if ! docker info >/dev/null 2>&1; then
+            if command -v systemctl >/dev/null 2>&1; then
+              ${SUDO} systemctl start docker || true
+            fi
+          fi
+
+          if ! docker info >/dev/null 2>&1; then
+            ${SUDO} sh -lc 'nohup dockerd >/tmp/dockerd.log 2>&1 &' || true
+            for _ in $(seq 1 30); do
+              docker info >/dev/null 2>&1 && break
+              sleep 1
+            done
+          fi
+
+          docker info >/dev/null 2>&1 || {
+            cat /tmp/dockerd.log || true
+            exit 1
+          }
+
+          docker version
+          docker buildx version
+
       - name: Enable buildx
         run: |
           set -eu
