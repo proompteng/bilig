@@ -209,7 +209,7 @@ async function startLocalServer(port: number) {
   const localServerUrl = `http://127.0.0.1:${port}`;
 
   let logs = "";
-  const appendLogChunk = (chunk: Buffer | string) => {
+  const appendLogChunk = (chunk: Uint8Array | string) => {
     logs += chunk.toString();
     if (logs.length > 12_000) {
       logs = logs.slice(-12_000);
@@ -218,13 +218,11 @@ async function startLocalServer(port: number) {
   child.stdout?.on("data", appendLogChunk);
   child.stderr?.on("data", appendLogChunk);
 
-  const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve) => {
-      child.once("exit", (code, signal) => {
-        resolve({ code, signal });
-      });
-    },
-  );
+  const exitPromise = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+    child.once("exit", (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
 
   try {
     await Promise.race([
@@ -1046,14 +1044,23 @@ async function expectRenderedBorderNearPoint(
   expect(distance).toBeLessThanOrEqual(tolerance);
 }
 
-async function expectNoRenderedBorderNearPoint(
+async function borderVisibilityMatches(
   page: Parameters<typeof test>[0]["page"],
-  x: number,
-  y: number,
-  tolerance = 6,
-) {
-  const distance = await findClosestBorderOverlayDistance(page, x, y);
-  expect(distance).toBeGreaterThan(tolerance);
+  checks: readonly {
+    x: number;
+    y: number;
+    mode: "present" | "absent";
+    tolerance?: number;
+  }[],
+): Promise<boolean> {
+  const results = await Promise.all(
+    checks.map(async (check) => {
+      const distance = await findClosestBorderOverlayDistance(page, check.x, check.y);
+      const tolerance = check.tolerance ?? (check.mode === "present" ? 5 : 6);
+      return check.mode === "present" ? distance <= tolerance : distance > tolerance;
+    }),
+  );
+  return results.every(Boolean);
 }
 
 async function waitForRenderedBorders(page: Parameters<typeof test>[0]["page"], minimumCount = 1) {
@@ -2485,14 +2492,22 @@ test.describe("web app validates each toolbar formatting action individually", (
     const innerVertical = getProductCellClientPoint(grid, 1, 8, 0.97, 0.5);
     const innerHorizontal = getProductCellClientPoint(grid, 3, 1, 0.5, 0.92);
 
-    await Promise.all([
-      expectRenderedBorderNearPoint(page, leftEdge.x, leftEdge.y, 12),
-      expectRenderedBorderNearPoint(page, topEdge.x, topEdge.y, 12),
-      expectRenderedBorderNearPoint(page, rightEdge.x, rightEdge.y, 12),
-      expectRenderedBorderNearPoint(page, bottomEdge.x, bottomEdge.y, 12),
-      expectNoRenderedBorderNearPoint(page, innerVertical.x, innerVertical.y),
-      expectNoRenderedBorderNearPoint(page, innerHorizontal.x, innerHorizontal.y),
-    ]);
+    await expect
+      .poll(
+        async () =>
+          await borderVisibilityMatches(page, [
+            { x: leftEdge.x, y: leftEdge.y, mode: "present", tolerance: 12 },
+            { x: topEdge.x, y: topEdge.y, mode: "present", tolerance: 12 },
+            { x: rightEdge.x, y: rightEdge.y, mode: "present", tolerance: 12 },
+            { x: bottomEdge.x, y: bottomEdge.y, mode: "present", tolerance: 12 },
+            { x: innerVertical.x, y: innerVertical.y, mode: "absent" },
+            { x: innerHorizontal.x, y: innerHorizontal.y, mode: "absent" },
+          ]),
+        {
+          message: "outer-border overlay should settle on the perimeter only",
+        },
+      )
+      .toBe(true);
   });
 
   test("large blank range keeps all borders after clicking a far away cell", async ({ page }) => {
