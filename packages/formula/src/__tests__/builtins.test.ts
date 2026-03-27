@@ -381,6 +381,151 @@ describe("formula builtins", () => {
     });
   });
 
+  it("covers the remaining complex engineering and value-classification builtins", () => {
+    expect(getBuiltin("IMEXP")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "1",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMLN")?.({ tag: ValueTag.String, value: "1", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "0",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMLOG10")?.({ tag: ValueTag.String, value: "10", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "1",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMLOG2")?.({ tag: ValueTag.String, value: "8", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "3",
+      stringId: 0,
+    });
+    expect(
+      getBuiltin("IMPOWER")?.(
+        { tag: ValueTag.String, value: "2", stringId: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "8", stringId: 0 });
+    expect(getBuiltin("IMTAN")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "0",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMSINH")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "0",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMCOSH")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "1",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMSEC")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "1",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMCSC")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(getBuiltin("IMCOT")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(getBuiltin("IMCSCH")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Div0,
+    });
+    expect(getBuiltin("IMLOG10")?.({ tag: ValueTag.String, value: "bad", stringId: 1 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      getBuiltin("IMPOWER")?.(
+        { tag: ValueTag.String, value: "1+i", stringId: 1 },
+        { tag: ValueTag.String, value: "bad", stringId: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(getBuiltin("ROMAN")?.({ tag: ValueTag.Number, value: 1999 })).toEqual({
+      tag: ValueTag.String,
+      value: "MCMXCIX",
+      stringId: 0,
+    });
+    expect(getBuiltin("ARABIC")?.({ tag: ValueTag.String, value: "MCMXCIX", stringId: 1 })).toEqual(
+      {
+        tag: ValueTag.Number,
+        value: 1999,
+      },
+    );
+    expect(getBuiltin("ARABIC")?.({ tag: ValueTag.Number, value: 10 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(getBuiltin("T")?.({ tag: ValueTag.String, value: "text", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "text",
+      stringId: 1,
+    });
+    expect(getBuiltin("T")?.({ tag: ValueTag.Number, value: 7 })).toEqual({ tag: ValueTag.Empty });
+    expect(getBuiltin("T")?.({ tag: ValueTag.Error, code: ErrorCode.Ref })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+
+    expect(getBuiltin("ISOMITTED")?.({ tag: ValueTag.Number, value: 1 })).toEqual({
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+    expect(getBuiltin("ISOMITTED")?.()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+
+    expect(getBuiltin("N")?.({ tag: ValueTag.Boolean, value: true })).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(getBuiltin("N")?.({ tag: ValueTag.String, value: "text", stringId: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(getBuiltin("N")?.({ tag: ValueTag.Error, code: ErrorCode.NA })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    const matrix: ArrayValue = {
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+      ],
+    };
+    expect(getBuiltin("TYPE")?.({ tag: ValueTag.Error, code: ErrorCode.Name })).toEqual({
+      tag: ValueTag.Number,
+      value: 16,
+    });
+    expect(Reflect.apply(getBuiltin("TYPE")!, undefined, [matrix])).toEqual({
+      tag: ValueTag.Number,
+      value: 64,
+    });
+    expect(getBuiltin("DELTA")?.({ tag: ValueTag.Number, value: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(
+      getBuiltin("GESTEP")?.(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+  });
+
   it("supports expanded math and numeric utility builtins", () => {
     expect(getBuiltin("SIN")?.({ tag: ValueTag.Number, value: Math.PI / 2 })).toEqual({
       tag: ValueTag.Number,

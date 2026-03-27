@@ -312,6 +312,39 @@ describe("text builtins", () => {
     expect(VALUETOTEXT(text("alpha"), number(2))).toEqual(valueError());
   });
 
+  it("covers remaining VALUETOTEXT and regex validation branches", () => {
+    const VALUETOTEXT = getTextBuiltin("VALUETOTEXT")!;
+    const REGEXTEST = getTextBuiltin("REGEXTEST")!;
+    const REGEXREPLACE = getTextBuiltin("REGEXREPLACE")!;
+    const REGEXEXTRACT = getTextBuiltin("REGEXEXTRACT")!;
+
+    expect(VALUETOTEXT()).toEqual(valueError());
+    expect(VALUETOTEXT(number(42), text("bad"))).toEqual(valueError());
+
+    expect(REGEXTEST()).toEqual(valueError());
+    expect(REGEXTEST(text("abc"), text("a"), number(2))).toEqual(valueError());
+    expect(REGEXTEST(err(ErrorCode.Ref), text("a"))).toEqual(err(ErrorCode.Ref));
+
+    expect(REGEXREPLACE()).toEqual(valueError());
+    expect(REGEXREPLACE(text("abc"), text("a"), text("x"), text("bad"))).toEqual(valueError());
+    expect(REGEXREPLACE(text("abc"), text("a"), text("x"), number(1), number(9))).toEqual(
+      valueError(),
+    );
+    expect(REGEXREPLACE(text("abc"), text("("), text("x"))).toEqual(valueError());
+    expect(REGEXREPLACE(text("abc"), text("z"), text("x"), number(1))).toEqual(text("abc"));
+    expect(REGEXREPLACE(text("a1 b2 c3"), text("[0-9]"), text("X"), number(-1))).toEqual(
+      text("a1 b2 cX"),
+    );
+
+    expect(REGEXEXTRACT()).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("([a-z]+)"), number(3))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("([a-z]+)"), number(0), number(9))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("("))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("[0-9]+"), number(1))).toEqual(err(ErrorCode.NA));
+    expect(REGEXEXTRACT(text("abc"), text("[a-z]+"), number(2))).toEqual(err(ErrorCode.NA));
+    expect(REGEXEXTRACT(err(ErrorCode.Name), text("[a-z]+"))).toEqual(err(ErrorCode.Name));
+  });
+
   it("returns TEXTBEFORE validation and lookup errors when arguments are invalid", () => {
     const TEXTBEFORE = getTextBuiltin("TEXTBEFORE")!;
 

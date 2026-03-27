@@ -320,6 +320,68 @@ describe("lookup builtins", () => {
     ).toEqual(num(20));
   });
 
+  it("covers conditional aggregate validation and error branches", () => {
+    const COUNTIF = getLookupBuiltin("COUNTIF")!;
+    const COUNTIFS = getLookupBuiltin("COUNTIFS")!;
+    const SUMIF = getLookupBuiltin("SUMIF")!;
+    const SUMIFS = getLookupBuiltin("SUMIFS")!;
+    const AVERAGEIF = getLookupBuiltin("AVERAGEIF")!;
+    const AVERAGEIFS = getLookupBuiltin("AVERAGEIFS")!;
+
+    const values = cellRange([num(2), num(4), num(-1)], 3, 1);
+    const otherValues = cellRange([num(10), text("skip"), num(30)], 3, 1);
+
+    expect(COUNTIF(num(2), text(">0"))).toEqual(err(ErrorCode.Value));
+    expect(COUNTIF(values, cellRange([text(">0")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(COUNTIF(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+
+    expect(COUNTIFS()).toEqual(err(ErrorCode.Value));
+    expect(COUNTIFS(values)).toEqual(err(ErrorCode.Value));
+    expect(COUNTIFS(num(1), text(">0"))).toEqual(err(ErrorCode.Value));
+    expect(COUNTIFS(values, cellRange([text(">0")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(COUNTIFS(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(
+      COUNTIFS(values, text(">0"), cellRange([text("a"), text("b")], 2, 1), text("a")),
+    ).toEqual(err(ErrorCode.Value));
+
+    expect(SUMIF(num(2), text(">0"))).toEqual(err(ErrorCode.Value));
+    expect(SUMIF(values, text(">0"), num(2))).toEqual(err(ErrorCode.Value));
+    expect(SUMIF(values, text(">0"), cellRange([num(10), num(20)], 2, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(SUMIF(values, cellRange([text(">0")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(SUMIF(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+
+    expect(SUMIFS(num(10))).toEqual(err(ErrorCode.Value));
+    expect(SUMIFS(values)).toEqual(err(ErrorCode.Value));
+    expect(SUMIFS(num(10), values, text(">0"))).toEqual(err(ErrorCode.Value));
+    expect(SUMIFS(values, values, cellRange([text(">0")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(SUMIFS(values, values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(SUMIFS(values, cellRange([text("a"), text("b")], 2, 1), text("a"))).toEqual(
+      err(ErrorCode.Value),
+    );
+
+    expect(AVERAGEIF(num(2), text(">0"))).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIF(values, text(">0"), num(2))).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIF(values, text(">0"), cellRange([num(10), num(20)], 2, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(AVERAGEIF(values, cellRange([text(">0")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIF(values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(AVERAGEIF(values, text("<-100"))).toEqual(err(ErrorCode.Div0));
+    expect(AVERAGEIF(values, text(">0"), otherValues)).toEqual(num(10));
+
+    expect(AVERAGEIFS(num(10))).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIFS(values)).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIFS(num(10), values, text(">0"))).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIFS(values, values, cellRange([text(">0")], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(AVERAGEIFS(values, values, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(AVERAGEIFS(values, cellRange([text("a"), text("b")], 2, 1), text("a"))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(AVERAGEIFS(values, values, text("<-100"))).toEqual(err(ErrorCode.Div0));
+  });
+
   it("supports OFFSET, TAKE, and DROP shape transformations", () => {
     const OFFSET = getLookupBuiltin("OFFSET")!;
     const TAKE = getLookupBuiltin("TAKE")!;
@@ -464,6 +526,13 @@ describe("lookup builtins", () => {
   it("covers TOCOL and TOROW argument edge cases", () => {
     const TOCOL = getLookupBuiltin("TOCOL")!;
     const TOROW = getLookupBuiltin("TOROW")!;
+    const rowRefRange: RangeBuiltinArgument = {
+      kind: "range",
+      refKind: "rows",
+      rows: 1,
+      cols: 1,
+      values: [num(1)],
+    };
 
     expect(TOCOL(num(1))).toEqual({
       kind: "array",
@@ -471,15 +540,29 @@ describe("lookup builtins", () => {
       cols: 1,
       values: [num(1)],
     });
+    expect(TOCOL(rowRefRange)).toEqual(err(ErrorCode.Value));
+    expect(TOCOL(cellRange([num(1), num(2), num(3), num(4)], 2, 2), err(ErrorCode.Name))).toEqual(
+      err(ErrorCode.Name),
+    );
+    expect(
+      TOCOL(cellRange([num(1), num(2), num(3), num(4)], 2, 2), num(0), err(ErrorCode.Ref)),
+    ).toEqual(err(ErrorCode.Ref));
     expect(TOROW(num(1))).toEqual({
       kind: "array",
       rows: 1,
       cols: 1,
       values: [num(1)],
     });
+    expect(TOROW(rowRefRange)).toEqual(err(ErrorCode.Value));
     expect(
       TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), cellRange([num(1)], 1, 1)),
     ).toEqual(err(ErrorCode.Value));
+    expect(TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), err(ErrorCode.Name))).toEqual(
+      err(ErrorCode.Name),
+    );
+    expect(
+      TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), num(0), err(ErrorCode.Ref)),
+    ).toEqual(err(ErrorCode.Ref));
     expect(TOROW(cellRange([num(1), num(2), num(3), num(4)], 2, 2), num(2))).toEqual(
       err(ErrorCode.Value),
     );
@@ -492,6 +575,13 @@ describe("lookup builtins", () => {
     const WRAPROWS = getLookupBuiltin("WRAPROWS")!;
     const WRAPCOLS = getLookupBuiltin("WRAPCOLS")!;
     const vector = cellRange([num(1), num(2), num(3), num(4), num(5)], 5, 1);
+    const rowRefRange: RangeBuiltinArgument = {
+      kind: "range",
+      refKind: "rows",
+      rows: 1,
+      cols: 1,
+      values: [num(1)],
+    };
 
     expect(WRAPROWS(vector, num(2))).toEqual({
       kind: "array",
@@ -514,10 +604,28 @@ describe("lookup builtins", () => {
 
     expect(WRAPROWS(vector, num(0))).toEqual(err(ErrorCode.Value));
     expect(WRAPROWS(vector, num(2), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(WRAPROWS(vector, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(WRAPROWS(vector, num(2), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA));
+    expect(WRAPROWS(vector, num(2), text("pad"), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
+    expect(WRAPROWS(rowRefRange, num(2))).toEqual(err(ErrorCode.Value));
     expect(WRAPROWS(vector, num(2), text("pad"), text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(WRAPCOLS(vector, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(WRAPCOLS(vector, num(2), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA));
+    expect(WRAPCOLS(vector, num(2), text("pad"), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
     expect(WRAPCOLS(vector, num(0))).toEqual(err(ErrorCode.Value));
+    expect(WRAPCOLS(rowRefRange, num(2))).toEqual(err(ErrorCode.Value));
     expect(WRAPCOLS(vector, cellRange([num(1)], 1, 1), text("pad"))).toEqual(err(ErrorCode.Value));
     expect(WRAPCOLS(vector, num(2), text("pad"), text("bad"))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("covers remaining SUMPRODUCT validation branches", () => {
+    const SUMPRODUCT = getLookupBuiltin("SUMPRODUCT")!;
+
+    expect(SUMPRODUCT()).toEqual(err(ErrorCode.Value));
+    expect(SUMPRODUCT(num(1), cellRange([num(2)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(SUMPRODUCT(cellRange([num(1), num(2)], 2, 1), cellRange([num(3)], 1, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
   });
 
   it("covers COUNTIFS and SUMIFS error branches", () => {

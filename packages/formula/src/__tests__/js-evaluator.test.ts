@@ -189,12 +189,37 @@ describe("js evaluator", () => {
       tag: ValueTag.Boolean,
       value: true,
     });
+    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,SUM(x))()")), context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
     expect(
       evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,IF(ISOMITTED(x),9,x))(4)")), context),
     ).toEqual({
       tag: ValueTag.Number,
       value: 4,
     });
+  });
+
+  it("evaluates higher-order array helpers on the JS plan runtime", () => {
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,r+c))")), context),
+    ).toEqual(num(2));
+    expect(evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,x+1))")), context)).toEqual(
+      num(3),
+    );
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("BYROW(A1:B2,LAMBDA(r,SUM(r)))")), context),
+    ).toEqual(num(5));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("BYCOL(A1:B2,LAMBDA(c,SUM(c)))")), context),
+    ).toEqual(num(3));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("REDUCE(0,A1:B2,LAMBDA(a,x,a+x))")), context),
+    ).toEqual(num(6));
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("SCAN(0,A1:B2,LAMBDA(a,x,a+x))")), context),
+    ).toEqual(num(2));
   });
 
   it("covers special-call rewrites and evaluator guard rails", () => {
@@ -238,6 +263,124 @@ describe("js evaluator", () => {
       code: ErrorCode.Value,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula("SUM(LAMBDA(x,x))")), context)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
+  it("covers contextual reference builtins and array-lambda error paths", () => {
+    const metadataContext = {
+      ...context,
+      sheetName: "Sheet2",
+      currentAddress: "C4",
+      listSheetNames: () => ["Sheet1", "Sheet2", "Summary"],
+      resolveFormula: (sheetName: string, address: string): string | undefined =>
+        sheetName === "Sheet2" && address === "B1" ? "SUM(A1:A2)" : undefined,
+    };
+
+    expect(evaluatePlan(lowerToPlan(parseFormula("ROW()")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("COLUMN(B:D)")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(Sheet2!B1)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "=SUM(A1:A2)",
+      stringId: 0,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(1)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(Sheet2!A9)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET()")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Summary")')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Missing")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS()")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('SHEETS("Summary")')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("filename")')), metadataContext)).toEqual({
+      tag: ValueTag.String,
+      value: "",
+      stringId: 0,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("bogus",A1)')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("address")')), {
+        ...metadataContext,
+        currentAddress: undefined,
+      }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,x)(1,2)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(0,2,LAMBDA(r,c,r+c))")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,SEQUENCE(2)))")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("BYROW(A1:B2,LAMBDA(r,SEQUENCE(2)))")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("SCAN(A1:B2,LAMBDA(a,x,SEQUENCE(2)))")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA()")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(1,1)")), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
