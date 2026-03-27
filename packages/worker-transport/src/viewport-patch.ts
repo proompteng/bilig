@@ -1,4 +1,4 @@
-import type { CellSnapshot, RecalcMetrics, Viewport } from "@bilig/protocol";
+import type { CellSnapshot, CellStyleRecord, RecalcMetrics, Viewport } from "@bilig/protocol";
 
 export interface ViewportPatchSubscription extends Viewport {
   sheetName: string;
@@ -12,7 +12,7 @@ export interface ViewportPatchedCell {
   copyText: string;
   editorText: string;
   formatId: number;
-  styleId: number;
+  styleId: string;
 }
 
 export interface ViewportAxisPatch {
@@ -26,6 +26,7 @@ export interface ViewportPatch {
   full: boolean;
   viewport: ViewportPatchSubscription;
   metrics: RecalcMetrics;
+  styles: CellStyleRecord[];
   cells: ViewportPatchedCell[];
   columns: ViewportAxisPatch[];
   rows: ViewportAxisPatch[];
@@ -43,7 +44,10 @@ function isViewportPatch(value: unknown): value is ViewportPatch {
     return false;
   }
   return (
-    Array.isArray(value["cells"]) && Array.isArray(value["columns"]) && Array.isArray(value["rows"])
+    Array.isArray(value["styles"]) &&
+    Array.isArray(value["cells"]) &&
+    Array.isArray(value["columns"]) &&
+    Array.isArray(value["rows"])
   );
 }
 

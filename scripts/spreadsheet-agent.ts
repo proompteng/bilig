@@ -4,7 +4,14 @@ import { readFile } from "node:fs/promises";
 import type { AgentFrame, AgentResponse } from "../packages/agent-api/src/index.ts";
 import { decodeAgentFrame, encodeAgentFrame } from "../packages/agent-api/src/index.ts";
 import type {
+  CellDateStyle,
+  CellNumberFormatInput,
+  CellNumberFormatKind,
+  CellNumberNegativeStyle,
+  CellNumberZeroStyle,
   CellRangeRef,
+  CellStyleField,
+  CellStylePatch,
   LiteralInput,
   WorkbookPivotValueSnapshot,
 } from "../packages/protocol/src/index.ts";
@@ -17,6 +24,10 @@ type CommandName =
   | "write-range"
   | "set-formula"
   | "set-formulas"
+  | "set-range-style"
+  | "clear-range-style"
+  | "set-range-number-format"
+  | "clear-range-number-format"
   | "clear-range"
   | "create-pivot"
   | "batch"
@@ -33,6 +44,10 @@ function printUsage(): void {
   bun scripts/spreadsheet-agent.ts write-range --range Sheet1!A1:B2 --values '[[1,2],[3,4]]'
   bun scripts/spreadsheet-agent.ts set-formula --sheet Sheet1 --addr B1 --formula 'SUM(A1:A10)'
   bun scripts/spreadsheet-agent.ts set-formulas --range Sheet1!B1:B2 --formulas '[["A1*2"],["A2*2"]]'
+  bun scripts/spreadsheet-agent.ts set-range-style --range Sheet1!A1:C3 --patch '{"fill":{"backgroundColor":"#fff59d"},"font":{"family":"Georgia"}}'
+  bun scripts/spreadsheet-agent.ts clear-range-style --range Sheet1!A1:C3 [--fields '["backgroundColor"]']
+  bun scripts/spreadsheet-agent.ts set-range-number-format --range Sheet1!B2:B10 --format '{"kind":"accounting","currency":"USD","decimals":2}'
+  bun scripts/spreadsheet-agent.ts clear-range-number-format --range Sheet1!B2:B10
   bun scripts/spreadsheet-agent.ts clear-range --range Sheet1!A1:B2
   bun scripts/spreadsheet-agent.ts create-pivot --name MyPivot --sheet Sheet1 --addr D1 --source Sheet2!A1:C100 --group '["Category"]' --values '[{"sourceColumn":"Amount","summarizeBy":"sum"}]'
   bun scripts/spreadsheet-agent.ts batch --requests @ops.json [--server URL] [--document ID] [--replica ID]
@@ -191,6 +206,221 @@ function parsePivotValues(value: unknown, label: string): WorkbookPivotValueSnap
   });
 }
 
+function parseStylePatch(value: unknown, label: string): CellStylePatch {
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const patch: CellStylePatch = {};
+  if ("fill" in value) {
+    const fill = value.fill;
+    if (!isRecord(fill)) {
+      throw new Error(`${label}.fill must be an object`);
+    }
+    if ("backgroundColor" in fill && typeof fill.backgroundColor !== "string") {
+      throw new Error(`${label}.fill.backgroundColor must be a string`);
+    }
+    patch.fill = {};
+    if (typeof fill.backgroundColor === "string") {
+      patch.fill.backgroundColor = fill.backgroundColor;
+    }
+  }
+  if ("font" in value) {
+    const font = value.font;
+    if (!isRecord(font)) {
+      throw new Error(`${label}.font must be an object`);
+    }
+    patch.font = {};
+    if (typeof font.family === "string" || font.family === null) {
+      patch.font.family = font.family;
+    }
+    if (typeof font.size === "number" || font.size === null) {
+      patch.font.size = font.size;
+    }
+    if (typeof font.bold === "boolean" || font.bold === null) {
+      patch.font.bold = font.bold;
+    }
+    if (typeof font.italic === "boolean" || font.italic === null) {
+      patch.font.italic = font.italic;
+    }
+    if (typeof font.underline === "boolean" || font.underline === null) {
+      patch.font.underline = font.underline;
+    }
+    if (typeof font.color === "string" || font.color === null) {
+      patch.font.color = font.color;
+    }
+  }
+  if ("alignment" in value) {
+    const alignment = value.alignment;
+    if (!isRecord(alignment)) {
+      throw new Error(`${label}.alignment must be an object`);
+    }
+    patch.alignment = {};
+    if (
+      alignment.horizontal === null ||
+      alignment.horizontal === "general" ||
+      alignment.horizontal === "left" ||
+      alignment.horizontal === "center" ||
+      alignment.horizontal === "right"
+    ) {
+      patch.alignment.horizontal = alignment.horizontal;
+    }
+    if (
+      alignment.vertical === null ||
+      alignment.vertical === "top" ||
+      alignment.vertical === "middle" ||
+      alignment.vertical === "bottom"
+    ) {
+      patch.alignment.vertical = alignment.vertical;
+    }
+    if (typeof alignment.wrap === "boolean" || alignment.wrap === null) {
+      patch.alignment.wrap = alignment.wrap;
+    }
+    if (typeof alignment.indent === "number" || alignment.indent === null) {
+      patch.alignment.indent = alignment.indent;
+    }
+  }
+  if ("borders" in value) {
+    const borders = value.borders;
+    if (!isRecord(borders)) {
+      throw new Error(`${label}.borders must be an object`);
+    }
+    patch.borders = {};
+    for (const side of ["top", "right", "bottom", "left"] as const) {
+      const border = borders[side];
+      if (border === null) {
+        patch.borders[side] = null;
+        continue;
+      }
+      if (!isRecord(border)) {
+        continue;
+      }
+      patch.borders[side] = {};
+      if (
+        border.style === null ||
+        border.style === "solid" ||
+        border.style === "dashed" ||
+        border.style === "dotted" ||
+        border.style === "double"
+      ) {
+        patch.borders[side].style = border.style;
+      }
+      if (
+        border.weight === null ||
+        border.weight === "thin" ||
+        border.weight === "medium" ||
+        border.weight === "thick"
+      ) {
+        patch.borders[side].weight = border.weight;
+      }
+      if (typeof border.color === "string" || border.color === null) {
+        patch.borders[side].color = border.color;
+      }
+    }
+  }
+  return patch;
+}
+
+function parseStyleFields(value: unknown, label: string): CellStyleField[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be a JSON array`);
+  }
+  return value.map((entry, index) => {
+    if (
+      entry !== "backgroundColor" &&
+      entry !== "fontFamily" &&
+      entry !== "fontSize" &&
+      entry !== "fontBold" &&
+      entry !== "fontItalic" &&
+      entry !== "fontUnderline" &&
+      entry !== "fontColor" &&
+      entry !== "alignmentHorizontal" &&
+      entry !== "alignmentVertical" &&
+      entry !== "alignmentWrap" &&
+      entry !== "alignmentIndent" &&
+      entry !== "borderTop" &&
+      entry !== "borderRight" &&
+      entry !== "borderBottom" &&
+      entry !== "borderLeft"
+    ) {
+      throw new Error(`${label}[${index}] is not a supported style field`);
+    }
+    return entry;
+  });
+}
+
+function parseNumberFormatInput(value: unknown, label: string): CellNumberFormatInput {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!isRecord(value) || typeof value.kind !== "string") {
+    throw new Error(`${label} must be a string or number-format preset object`);
+  }
+
+  const preset = {
+    kind: parseNumberFormatKind(value.kind, `${label}.kind`),
+    ...(typeof value.currency === "string" ? { currency: value.currency } : {}),
+    ...(typeof value.decimals === "number" ? { decimals: value.decimals } : {}),
+    ...(typeof value.useGrouping === "boolean" ? { useGrouping: value.useGrouping } : {}),
+    ...(value.negativeStyle !== undefined
+      ? { negativeStyle: parseNegativeStyle(value.negativeStyle, `${label}.negativeStyle`) }
+      : {}),
+    ...(value.zeroStyle !== undefined
+      ? { zeroStyle: parseZeroStyle(value.zeroStyle, `${label}.zeroStyle`) }
+      : {}),
+    ...(value.dateStyle !== undefined
+      ? { dateStyle: parseDateStyle(value.dateStyle, `${label}.dateStyle`) }
+      : {}),
+  };
+  return preset;
+}
+
+function parseNumberFormatKind(value: unknown, label: string): CellNumberFormatKind {
+  switch (value) {
+    case "general":
+    case "number":
+    case "currency":
+    case "accounting":
+    case "percent":
+    case "date":
+    case "time":
+    case "datetime":
+    case "text":
+      return value;
+    default:
+      throw new Error(`${label} is not a supported number format kind`);
+  }
+}
+
+function parseNegativeStyle(value: unknown, label: string): CellNumberNegativeStyle {
+  switch (value) {
+    case "minus":
+    case "parentheses":
+      return value;
+    default:
+      throw new Error(`${label} is not a supported negative style`);
+  }
+}
+
+function parseZeroStyle(value: unknown, label: string): CellNumberZeroStyle {
+  switch (value) {
+    case "zero":
+    case "dash":
+      return value;
+    default:
+      throw new Error(`${label} is not a supported zero style`);
+  }
+}
+
+function parseDateStyle(value: unknown, label: string): CellDateStyle {
+  switch (value) {
+    case "short":
+    case "iso":
+      return value;
+    default:
+      throw new Error(`${label} is not a supported date style`);
+  }
+}
+
 function parseRange(value: string, fallbackSheet?: string): CellRangeRef {
   const [sheetAndStart, endAddress] = value.includes(":") ? value.split(":") : [value, value];
   const bangIndex = sheetAndStart.indexOf("!");
@@ -230,6 +460,23 @@ function parseRangeLike(
     throw new Error("Range object requires sheetName/startAddress/endAddress");
   }
   return { sheetName, startAddress, endAddress };
+}
+
+function parseRangeInput(value: unknown): string | CellRangeRef | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  if (typeof value.sheetName !== "string" || typeof value.startAddress !== "string") {
+    return undefined;
+  }
+  return {
+    sheetName: value.sheetName,
+    startAddress: value.startAddress,
+    endAddress: typeof value.endAddress === "string" ? value.endAddress : value.startAddress,
+  };
 }
 
 async function sendFrame(serverBaseUrl: string, frame: AgentFrame): Promise<SuccessAgentResponse> {
@@ -329,6 +576,54 @@ async function runCommand(
           ),
         },
       });
+    case "set-range-style":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "setRangeStyle",
+          id: `set-range-style:${Date.now()}`,
+          sessionId,
+          range: parseRange(options.range ?? "", options.sheet),
+          patch: parseStylePatch(await loadJsonArgument(options.patch ?? "", "--patch"), "--patch"),
+        },
+      });
+    case "clear-range-style":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "clearRangeStyle",
+          id: `clear-range-style:${Date.now()}`,
+          sessionId,
+          range: parseRange(options.range ?? "", options.sheet),
+          fields: options.fields
+            ? parseStyleFields(await loadJsonArgument(options.fields, "--fields"), "--fields")
+            : undefined,
+        },
+      });
+    case "set-range-number-format":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "setRangeNumberFormat",
+          id: `set-range-number-format:${Date.now()}`,
+          sessionId,
+          range: parseRange(options.range ?? "", options.sheet),
+          format: parseNumberFormatInput(
+            await loadJsonArgument(options.format ?? "", "--format"),
+            "--format",
+          ),
+        },
+      });
+    case "clear-range-number-format":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "clearRangeNumberFormat",
+          id: `clear-range-number-format:${Date.now()}`,
+          sessionId,
+          range: parseRange(options.range ?? "", options.sheet),
+        },
+      });
     case "clear-range":
       return sendFrame(options.server, {
         kind: "request",
@@ -406,12 +701,7 @@ async function dispatchBatchRequest(
           kind: "readRange",
           id,
           sessionId,
-          range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range)
-              ? request.range
-              : undefined,
-            options.sheet,
-          ),
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
         },
       });
     case "writeRange":
@@ -421,12 +711,7 @@ async function dispatchBatchRequest(
           kind: "writeRange",
           id,
           sessionId,
-          range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range)
-              ? request.range
-              : undefined,
-            options.sheet,
-          ),
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
           values: parseLiteralMatrix(request.values, `--requests[${index}].values`),
         },
       });
@@ -437,13 +722,54 @@ async function dispatchBatchRequest(
           kind: "setRangeFormulas",
           id,
           sessionId,
-          range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range)
-              ? request.range
-              : undefined,
-            options.sheet,
-          ),
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
           formulas: parseFormulaMatrix(request.formulas, `--requests[${index}].formulas`),
+        },
+      });
+    case "setRangeStyle":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "setRangeStyle",
+          id,
+          sessionId,
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
+          patch: parseStylePatch(request.patch, `--requests[${index}].patch`),
+        },
+      });
+    case "clearRangeStyle":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "clearRangeStyle",
+          id,
+          sessionId,
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
+          fields:
+            request.fields === undefined
+              ? undefined
+              : parseStyleFields(request.fields, `--requests[${index}].fields`),
+        },
+      });
+    case "setRangeNumberFormat":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "setRangeNumberFormat",
+          id,
+          sessionId,
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
+          format: parseNumberFormatInput(request.format, `--requests[${index}].format`),
+        },
+      });
+    case "clearRangeNumberFormat":
+      return sendFrame(options.server, {
+        kind: "request",
+        request: {
+          kind: "clearRangeNumberFormat",
+          id,
+          sessionId,
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
         },
       });
     case "clearRange":
@@ -453,12 +779,7 @@ async function dispatchBatchRequest(
           kind: "clearRange",
           id,
           sessionId,
-          range: parseRangeLike(
-            typeof request.range === "string" || isRecord(request.range)
-              ? request.range
-              : undefined,
-            options.sheet,
-          ),
+          range: parseRangeLike(parseRangeInput(request.range), options.sheet),
         },
       });
     case "getMetrics":
@@ -498,12 +819,7 @@ async function dispatchBatchRequest(
           name: request.name,
           sheetName: request.sheetName,
           address: request.address,
-          source: parseRangeLike(
-            typeof request.source === "string" || isRecord(request.source)
-              ? request.source
-              : undefined,
-            options.sheet,
-          ),
+          source: parseRangeLike(parseRangeInput(request.source), options.sheet),
           groupBy: parseStringArray(request.groupBy, `--requests[${index}].groupBy`),
           values: parsePivotValues(request.values, `--requests[${index}].values`),
         },
@@ -534,6 +850,10 @@ function isCommandName(value: string): value is CommandName {
     "write-range",
     "set-formula",
     "set-formulas",
+    "set-range-style",
+    "clear-range-style",
+    "set-range-number-format",
+    "clear-range-number-format",
     "clear-range",
     "create-pivot",
     "batch",

@@ -45,6 +45,8 @@ export interface CellSnapshot {
   address: string;
   formula?: string;
   format?: string;
+  numberFormatId?: string;
+  styleId?: string;
   input?: LiteralInput;
   value: CellValue;
   flags: number;
@@ -61,6 +63,8 @@ export interface ExplainCellSnapshot {
   address: string;
   formula?: string;
   format?: string;
+  numberFormatId?: string;
+  styleId?: string;
   mode?: FormulaMode;
   value: CellValue;
   flags: number;
@@ -230,6 +234,152 @@ export interface WorkbookFreezePaneSnapshot {
   cols: number;
 }
 
+export interface CellStyleFillSnapshot {
+  backgroundColor: string;
+}
+
+export interface CellStyleFontSnapshot {
+  family?: string;
+  size?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  color?: string;
+}
+
+export type CellHorizontalAlignment = "general" | "left" | "center" | "right";
+export type CellVerticalAlignment = "top" | "middle" | "bottom";
+export type CellBorderStyle = "solid" | "dashed" | "dotted" | "double";
+export type CellBorderWeight = "thin" | "medium" | "thick";
+
+export interface CellStyleAlignmentSnapshot {
+  horizontal?: CellHorizontalAlignment;
+  vertical?: CellVerticalAlignment;
+  wrap?: boolean;
+  indent?: number;
+}
+
+export interface CellBorderSideSnapshot {
+  style: CellBorderStyle;
+  weight: CellBorderWeight;
+  color: string;
+}
+
+export interface CellStyleBordersSnapshot {
+  top?: CellBorderSideSnapshot;
+  right?: CellBorderSideSnapshot;
+  bottom?: CellBorderSideSnapshot;
+  left?: CellBorderSideSnapshot;
+}
+
+export interface CellStyleRecord {
+  id: string;
+  fill?: CellStyleFillSnapshot;
+  font?: CellStyleFontSnapshot;
+  alignment?: CellStyleAlignmentSnapshot;
+  borders?: CellStyleBordersSnapshot;
+}
+
+export interface CellStyleFillPatch {
+  backgroundColor?: string | null;
+}
+
+export interface CellStyleFontPatch {
+  family?: string | null;
+  size?: number | null;
+  bold?: boolean | null;
+  italic?: boolean | null;
+  underline?: boolean | null;
+  color?: string | null;
+}
+
+export interface CellStyleAlignmentPatch {
+  horizontal?: CellHorizontalAlignment | null;
+  vertical?: CellVerticalAlignment | null;
+  wrap?: boolean | null;
+  indent?: number | null;
+}
+
+export interface CellBorderSidePatch {
+  style?: CellBorderStyle | null;
+  weight?: CellBorderWeight | null;
+  color?: string | null;
+}
+
+export interface CellStyleBordersPatch {
+  top?: CellBorderSidePatch | null;
+  right?: CellBorderSidePatch | null;
+  bottom?: CellBorderSidePatch | null;
+  left?: CellBorderSidePatch | null;
+}
+
+export interface CellStylePatch {
+  fill?: CellStyleFillPatch | null;
+  font?: CellStyleFontPatch | null;
+  alignment?: CellStyleAlignmentPatch | null;
+  borders?: CellStyleBordersPatch | null;
+}
+
+export type CellStyleField =
+  | "backgroundColor"
+  | "fontFamily"
+  | "fontSize"
+  | "fontBold"
+  | "fontItalic"
+  | "fontUnderline"
+  | "fontColor"
+  | "alignmentHorizontal"
+  | "alignmentVertical"
+  | "alignmentWrap"
+  | "alignmentIndent"
+  | "borderTop"
+  | "borderRight"
+  | "borderBottom"
+  | "borderLeft";
+
+export type CellNumberFormatKind =
+  | "general"
+  | "number"
+  | "currency"
+  | "accounting"
+  | "percent"
+  | "date"
+  | "time"
+  | "datetime"
+  | "text";
+
+export type CellNumberNegativeStyle = "minus" | "parentheses";
+export type CellNumberZeroStyle = "zero" | "dash";
+export type CellDateStyle = "short" | "iso";
+
+export interface CellNumberFormatPreset {
+  kind: CellNumberFormatKind;
+  currency?: string;
+  decimals?: number;
+  useGrouping?: boolean;
+  negativeStyle?: CellNumberNegativeStyle;
+  zeroStyle?: CellNumberZeroStyle;
+  dateStyle?: CellDateStyle;
+}
+
+export type CellNumberFormatInput = string | CellNumberFormatPreset;
+
+export interface CellNumberFormatRecord {
+  id: string;
+  code: string;
+  kind: CellNumberFormatKind;
+}
+
+export interface SheetStyleRangeSnapshot {
+  range: CellRangeRef;
+  styleId: string;
+}
+
+export interface SheetFormatRangeSnapshot {
+  range: CellRangeRef;
+  formatId: string;
+}
+
 export interface WorkbookSortKeySnapshot {
   keyAddress: string;
   direction: "asc" | "desc";
@@ -246,6 +396,8 @@ export interface WorkbookMetadataSnapshot {
   tables?: WorkbookTableSnapshot[];
   spills?: WorkbookSpillSnapshot[];
   pivots?: WorkbookPivotSnapshot[];
+  styles?: CellStyleRecord[];
+  formats?: CellNumberFormatRecord[];
   calculationSettings?: WorkbookCalculationSettingsSnapshot;
   volatileContext?: WorkbookVolatileContextSnapshot;
 }
@@ -255,6 +407,8 @@ export interface SheetMetadataSnapshot {
   columns?: WorkbookAxisEntrySnapshot[];
   rowMetadata?: WorkbookAxisMetadataSnapshot[];
   columnMetadata?: WorkbookAxisMetadataSnapshot[];
+  styleRanges?: SheetStyleRangeSnapshot[];
+  formatRanges?: SheetFormatRangeSnapshot[];
   freezePane?: WorkbookFreezePaneSnapshot;
   filters?: CellRangeRef[];
   sorts?: WorkbookSortSnapshot[];

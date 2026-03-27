@@ -216,6 +216,10 @@ export class DocumentSessionManager {
           case "readRange":
           case "writeRange":
           case "setRangeFormulas":
+          case "setRangeStyle":
+          case "clearRangeStyle":
+          case "setRangeNumberFormat":
+          case "clearRangeNumberFormat":
           case "clearRange":
           case "fillRange":
           case "copyRange":
@@ -269,6 +273,10 @@ export class DocumentSessionManager {
         case "readRange":
         case "writeRange":
         case "setRangeFormulas":
+        case "setRangeStyle":
+        case "clearRangeStyle":
+        case "setRangeNumberFormat":
+        case "clearRangeNumberFormat":
         case "clearRange":
         case "fillRange":
         case "copyRange":

@@ -20,12 +20,15 @@
     "@bilig/renderer": "workspace:*",
     "@bilig/storage-browser": "workspace:*",
     "@bilig/worker-transport": "workspace:*",
+    "lucide-react": "^1.7.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "@vitejs/plugin-react": "6.0.0"
+    "@vitejs/plugin-react": "6.0.0",
+    "tailwindcss": "^4.2.2"
   }
 }

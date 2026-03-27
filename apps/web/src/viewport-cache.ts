@@ -1,9 +1,10 @@
 import type { GridEngineLike } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import { ValueTag, type CellSnapshot, type Viewport } from "@bilig/protocol";
+import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport } from "@bilig/protocol";
 import { decodeViewportPatch, type WorkerEngineClient } from "@bilig/worker-transport";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
+const DEFAULT_STYLE_ID = "style-0";
 type CellItem = readonly [number, number];
 
 interface CellSubscription {
@@ -35,6 +36,9 @@ export class WorkerViewportCache implements GridEngineLike {
   };
 
   private readonly cellSnapshots = new Map<string, CellSnapshot>();
+  private readonly cellStyles = new Map<string, CellStyleRecord>([
+    [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
+  ]);
   private readonly cellSubscriptions = new Set<CellSubscription>();
   private readonly listeners = new Set<() => void>();
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>();
@@ -59,6 +63,13 @@ export class WorkerViewportCache implements GridEngineLike {
 
   getCell(sheetName: string, address: string): CellSnapshot {
     return this.peekCell(sheetName, address) ?? this.emptyCellSnapshot(sheetName, address);
+  }
+
+  getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
+    if (!styleId) {
+      return this.cellStyles.get(DEFAULT_STYLE_ID);
+    }
+    return this.cellStyles.get(styleId) ?? this.cellStyles.get(DEFAULT_STYLE_ID);
   }
 
   setCellSnapshot(snapshot: CellSnapshot): void {
@@ -121,6 +132,9 @@ export class WorkerViewportCache implements GridEngineLike {
 
     const changedKeys = new Set<string>();
     const damage: { cell: CellItem }[] = [];
+    patch.styles.forEach((style) => {
+      this.cellStyles.set(style.id, style);
+    });
     for (const cell of patch.cells) {
       const key = `${patch.viewport.sheetName}!${cell.snapshot.address}`;
       this.cellSnapshots.set(key, cell.snapshot);

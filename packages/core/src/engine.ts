@@ -1,5 +1,11 @@
 import {
+  createCellNumberFormatRecord,
+  type CellNumberFormatInput,
+  type CellNumberFormatRecord,
   type CellRangeRef,
+  type CellStyleField,
+  type CellStylePatch,
+  type CellStyleRecord,
   ErrorCode,
   FormulaMode,
   MAX_COLS,
@@ -16,6 +22,8 @@ import {
   type SyncState,
   type SelectionState,
   type SheetMetadataSnapshot,
+  type SheetFormatRangeSnapshot,
+  type SheetStyleRangeSnapshot,
   type WorkbookAxisEntrySnapshot,
   type WorkbookAxisMetadataSnapshot,
   type WorkbookCalculationSettingsSnapshot,
@@ -681,6 +689,34 @@ export class SpreadsheetEngine {
     this.executeLocalTransaction([{ kind: "setCellFormat", sheetName, address, format }]);
   }
 
+  setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
+    const ops = this.buildFormatPatchOps(range, format);
+    this.executeLocalTransaction(ops);
+  }
+
+  clearRangeNumberFormat(range: CellRangeRef): void {
+    const ops = this.buildFormatClearOps(range);
+    this.executeLocalTransaction(ops);
+  }
+
+  setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void {
+    const ops = this.buildStylePatchOps(range, patch);
+    this.executeLocalTransaction(ops);
+  }
+
+  clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
+    const ops = this.buildStyleClearOps(range, fields);
+    this.executeLocalTransaction(ops);
+  }
+
+  getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
+    return this.workbook.getCellStyle(styleId);
+  }
+
+  getCellNumberFormat(id: string | undefined): CellNumberFormatRecord | undefined {
+    return this.workbook.getCellNumberFormat(id);
+  }
+
   setDefinedName(name: string, value: WorkbookDefinedNameValueSnapshot): void {
     const normalizedName = normalizeDefinedName(name);
     const previous = this.workbook.getDefinedName(normalizedName);
@@ -1269,9 +1305,18 @@ export class SpreadsheetEngine {
   getCell(sheetName: string, address: string): CellSnapshot {
     const cellIndex = this.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
+      const parsed = parseCellAddress(address, sheetName);
+      const styleId = this.workbook.getStyleId(sheetName, parsed.row, parsed.col);
+      const numberFormatId = this.workbook.getRangeFormatId(sheetName, parsed.row, parsed.col);
+      const formatRecord = this.workbook.getCellNumberFormat(numberFormatId);
       return {
         sheetName,
         address,
+        ...(styleId !== WorkbookStore.defaultStyleId ? { styleId } : {}),
+        ...(numberFormatId !== WorkbookStore.defaultFormatId ? { numberFormatId } : {}),
+        ...(formatRecord && numberFormatId !== WorkbookStore.defaultFormatId
+          ? { format: formatRecord.code }
+          : {}),
         value: emptyValue(),
         flags: 0,
         version: 0,
@@ -1290,9 +1335,31 @@ export class SpreadsheetEngine {
       flags: this.workbook.cellStore.flags[cellIndex]!,
       version: this.workbook.cellStore.versions[cellIndex] ?? 0,
     };
-    const format = this.workbook.getCellFormat(cellIndex);
-    if (format !== undefined) {
-      snapshot.format = format;
+    const styleId = this.workbook.getStyleId(
+      sheetName,
+      this.workbook.cellStore.rows[cellIndex]!,
+      this.workbook.cellStore.cols[cellIndex]!,
+    );
+    if (styleId !== WorkbookStore.defaultStyleId) {
+      snapshot.styleId = styleId;
+    }
+    const explicitFormat = this.workbook.getCellFormat(cellIndex);
+    const numberFormatId =
+      explicitFormat !== undefined
+        ? this.workbook.internCellNumberFormat(explicitFormat).id
+        : this.workbook.getRangeFormatId(
+            sheetName,
+            this.workbook.cellStore.rows[cellIndex]!,
+            this.workbook.cellStore.cols[cellIndex]!,
+          );
+    const formatRecord = this.workbook.getCellNumberFormat(numberFormatId);
+    if (numberFormatId !== WorkbookStore.defaultFormatId) {
+      snapshot.numberFormatId = numberFormatId;
+    }
+    if (explicitFormat !== undefined) {
+      snapshot.format = explicitFormat;
+    } else if (formatRecord && numberFormatId !== WorkbookStore.defaultFormatId) {
+      snapshot.format = formatRecord.code;
     }
     const formula = this.formulas.get(cellIndex)?.source;
     if (formula !== undefined) {
@@ -1402,6 +1469,26 @@ export class SpreadsheetEngine {
     const spills = this.workbook
       .listSpills()
       .map(({ sheetName, address, rows, cols }) => ({ sheetName, address, rows, cols }));
+    const referencedStyleIds = new Set<string>();
+    const referencedFormatIds = new Set<string>();
+    this.workbook.sheetsByName.forEach((sheet) => {
+      sheet.styleRanges.forEach((record) => referencedStyleIds.add(record.styleId));
+      sheet.formatRanges.forEach((record) => referencedFormatIds.add(record.formatId));
+    });
+    for (let cellIndex = 0; cellIndex < this.workbook.cellStore.size; cellIndex += 1) {
+      const explicitFormat = this.workbook.getCellFormat(cellIndex);
+      if (explicitFormat !== undefined) {
+        referencedFormatIds.add(this.workbook.internCellNumberFormat(explicitFormat).id);
+      }
+    }
+    const styles = this.workbook
+      .listCellStyles()
+      .filter((style) => referencedStyleIds.has(style.id))
+      .map((style) => cloneCellStyleRecord(style));
+    const formats = this.workbook
+      .listCellNumberFormats()
+      .filter((format) => referencedFormatIds.has(format.id))
+      .map((format) => Object.assign({}, format));
     const pivots = this.workbook.listPivots().map((pivot) => ({
       name: pivot.name,
       sheetName: pivot.sheetName,
@@ -1418,6 +1505,8 @@ export class SpreadsheetEngine {
       tables.length > 0 ||
       spills.length > 0 ||
       pivots.length > 0 ||
+      styles.length > 0 ||
+      formats.length > 0 ||
       calculationSettings.mode !== "automatic" ||
       calculationSettings.compatibilityMode !== "excel-modern" ||
       volatileContext.recalcEpoch !== 0
@@ -1437,6 +1526,12 @@ export class SpreadsheetEngine {
       }
       if (pivots.length > 0) {
         workbook.metadata.pivots = pivots;
+      }
+      if (styles.length > 0) {
+        workbook.metadata.styles = styles;
+      }
+      if (formats.length > 0) {
+        workbook.metadata.formats = formats;
       }
       if (
         calculationSettings.mode !== "automatic" ||
@@ -1509,6 +1604,12 @@ export class SpreadsheetEngine {
     snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
       ops.push({ kind: "upsertDefinedName", name, value });
     });
+    snapshot.workbook.metadata?.styles?.forEach((style) => {
+      ops.push({ kind: "upsertCellStyle", style: cloneCellStyleRecord(style) });
+    });
+    snapshot.workbook.metadata?.formats?.forEach((format) => {
+      ops.push({ kind: "upsertCellNumberFormat", format: { ...format } });
+    });
     snapshot.sheets.forEach((sheet) => {
       ops.push({ kind: "upsertSheet", name: sheet.name, order: sheet.order });
     });
@@ -1573,6 +1674,20 @@ export class SpreadsheetEngine {
           cols: sheet.metadata.freezePane.cols,
         });
       }
+      sheet.metadata?.styleRanges?.forEach((styleRange) => {
+        ops.push({
+          kind: "setStyleRange",
+          range: { ...styleRange.range },
+          styleId: styleRange.styleId,
+        });
+      });
+      sheet.metadata?.formatRanges?.forEach((formatRange) => {
+        ops.push({
+          kind: "setFormatRange",
+          range: { ...formatRange.range },
+          formatId: formatRange.formatId,
+        });
+      });
       sheet.metadata?.filters?.forEach((range) => {
         ops.push({ kind: "setFilter", sheetName: sheet.name, range: { ...range } });
       });
@@ -1663,6 +1778,14 @@ export class SpreadsheetEngine {
     const columns = this.workbook.listColumnAxisEntries(sheetName);
     const rowMetadata = this.axisMetadataToSnapshot(this.workbook.listRowMetadata(sheetName));
     const columnMetadata = this.axisMetadataToSnapshot(this.workbook.listColumnMetadata(sheetName));
+    const styleRanges = this.workbook.listStyleRanges(sheetName).map((record) => ({
+      range: { ...record.range },
+      styleId: record.styleId,
+    }));
+    const formatRanges = this.workbook.listFormatRanges(sheetName).map((record) => ({
+      range: { ...record.range },
+      formatId: record.formatId,
+    }));
     const freezePane = this.freezePaneToSnapshot(this.workbook.getFreezePane(sheetName));
     const filters = this.workbook
       .listFilters(sheetName)
@@ -1677,6 +1800,8 @@ export class SpreadsheetEngine {
       columns.length === 0 &&
       rowMetadata.length === 0 &&
       columnMetadata.length === 0 &&
+      styleRanges.length === 0 &&
+      formatRanges.length === 0 &&
       freezePane === undefined &&
       filters.length === 0 &&
       sorts.length === 0
@@ -1696,6 +1821,12 @@ export class SpreadsheetEngine {
     }
     if (columnMetadata.length > 0) {
       metadata.columnMetadata = columnMetadata;
+    }
+    if (styleRanges.length > 0) {
+      metadata.styleRanges = styleRanges;
+    }
+    if (formatRanges.length > 0) {
+      metadata.formatRanges = formatRanges;
     }
     if (freezePane) {
       metadata.freezePane = freezePane;
@@ -1742,6 +1873,12 @@ export class SpreadsheetEngine {
         size: record.size,
         hidden: record.hidden,
       });
+    });
+    this.workbook.listStyleRanges(sheetName).forEach((record) => {
+      ops.push({ kind: "setStyleRange", range: { ...record.range }, styleId: record.styleId });
+    });
+    this.workbook.listFormatRanges(sheetName).forEach((record) => {
+      ops.push({ kind: "setFormatRange", range: { ...record.range }, formatId: record.formatId });
     });
     const freezePane = this.workbook.getFreezePane(sheetName);
     if (freezePane) {
@@ -1988,6 +2125,46 @@ export class SpreadsheetEngine {
         })),
       );
     });
+    const rewrittenStyleRanges: SheetStyleRangeSnapshot[] = [];
+    const rewrittenFormatRanges: SheetFormatRangeSnapshot[] = [];
+    this.workbook.listStyleRanges(sheetName).forEach((record) => {
+      const range = rewriteRangeForStructuralTransform(
+        record.range.startAddress,
+        record.range.endAddress,
+        transform,
+      );
+      if (!range) {
+        return;
+      }
+      rewrittenStyleRanges.push({
+        range: {
+          ...record.range,
+          startAddress: range.startAddress,
+          endAddress: range.endAddress,
+        },
+        styleId: record.styleId,
+      });
+    });
+    this.workbook.setStyleRanges(sheetName, rewrittenStyleRanges);
+    this.workbook.listFormatRanges(sheetName).forEach((record) => {
+      const range = rewriteRangeForStructuralTransform(
+        record.range.startAddress,
+        record.range.endAddress,
+        transform,
+      );
+      if (!range) {
+        return;
+      }
+      rewrittenFormatRanges.push({
+        range: {
+          ...record.range,
+          startAddress: range.startAddress,
+          endAddress: range.endAddress,
+        },
+        formatId: record.formatId,
+      });
+    });
+    this.workbook.setFormatRanges(sheetName, rewrittenFormatRanges);
     const freezePane = this.workbook.getFreezePane(sheetName);
     if (freezePane) {
       const nextRows =
@@ -2789,6 +2966,8 @@ export class SpreadsheetEngine {
     let explicitChangedCount = 0;
     let topologyChanged = false;
     let sheetDeleted = false;
+    let styleRangeChanged = false;
+    let formatRangeChanged = false;
     let refreshAllPivots = false;
     let appliedOps = 0;
     const canSkipOrderChecks = source !== "remote";
@@ -3011,6 +3190,24 @@ export class SpreadsheetEngine {
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
+          case "upsertCellStyle":
+            this.workbook.upsertCellStyle(op.style);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          case "upsertCellNumberFormat":
+            this.workbook.upsertCellNumberFormat(op.format);
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          case "setStyleRange":
+            this.workbook.setStyleRange(op.range, op.styleId);
+            styleRangeChanged = true;
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
+          case "setFormatRange":
+            this.workbook.setFormatRange(op.range, op.formatId);
+            formatRangeChanged = true;
+            this.entityVersions.set(this.entityKeyForOp(op), order);
+            break;
           case "clearCell": {
             const cellIndex = this.workbook.getCellIndex(op.sheetName, op.address);
             if (cellIndex === undefined) {
@@ -3118,7 +3315,7 @@ export class SpreadsheetEngine {
       changedCellIndices: changed,
       metrics: this.lastMetrics,
     } satisfies EngineEvent;
-    if (sheetDeleted) {
+    if (sheetDeleted || styleRangeChanged || formatRangeChanged) {
       this.events.emitAllWatched(event);
     } else {
       this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
@@ -3406,6 +3603,24 @@ export class SpreadsheetEngine {
           },
         ];
       }
+      case "upsertCellStyle": {
+        const existing = this.workbook.getCellStyle(op.style.id);
+        if (!existing || existing.id !== op.style.id) {
+          return [];
+        }
+        return [{ kind: "upsertCellStyle", style: cloneCellStyleRecord(existing) }];
+      }
+      case "upsertCellNumberFormat": {
+        const existing = this.workbook.getCellNumberFormat(op.format.id);
+        if (!existing || existing.id !== op.format.id) {
+          return [];
+        }
+        return [{ kind: "upsertCellNumberFormat", format: { ...existing } }];
+      }
+      case "setStyleRange":
+        return this.restoreStyleRangeOps(op.range);
+      case "setFormatRange":
+        return this.restoreFormatRangeOps(op.range);
       case "upsertDefinedName": {
         const existing = this.workbook.getDefinedName(op.name);
         if (!existing) {
@@ -3529,6 +3744,7 @@ export class SpreadsheetEngine {
         ];
       }
     }
+    return assertNever(op);
   }
 
   private restoreCellOps(sheetName: string, address: string): EngineOp[] {
@@ -3552,6 +3768,195 @@ export class SpreadsheetEngine {
       rows.push(cells);
     }
     return rows;
+  }
+
+  private buildStylePatchOps(range: CellRangeRef, patch: CellStylePatch): EngineOp[] {
+    const normalizedPatch = normalizeCellStylePatch(patch);
+    if (
+      !normalizedPatch.fill &&
+      !normalizedPatch.font &&
+      !normalizedPatch.alignment &&
+      !normalizedPatch.borders
+    ) {
+      return [];
+    }
+    return this.materializeStyleRangeOps(range, (baseStyle) =>
+      this.workbook.internCellStyle(applyStylePatch(baseStyle, normalizedPatch)),
+    );
+  }
+
+  private buildStyleClearOps(range: CellRangeRef, fields?: readonly CellStyleField[]): EngineOp[] {
+    return this.materializeStyleRangeOps(range, (baseStyle) =>
+      this.workbook.internCellStyle(clearStyleFields(baseStyle, fields)),
+    );
+  }
+
+  private restoreStyleRangeOps(range: CellRangeRef): EngineOp[] {
+    return this.materializeStyleRangeOps(range, (baseStyle, currentStyleId) => ({
+      id: currentStyleId,
+      ...baseStyle,
+    }));
+  }
+
+  private buildFormatPatchOps(range: CellRangeRef, format: CellNumberFormatInput): EngineOp[] {
+    const normalized = this.workbook.internCellNumberFormat(
+      typeof format === "string"
+        ? format
+        : createCellNumberFormatRecord(WorkbookStore.defaultFormatId, format),
+    );
+    return this.materializeFormatRangeOps(range, () => normalized.id, normalized);
+  }
+
+  private buildFormatClearOps(range: CellRangeRef): EngineOp[] {
+    return this.materializeFormatRangeOps(range, () => WorkbookStore.defaultFormatId);
+  }
+
+  private restoreFormatRangeOps(range: CellRangeRef): EngineOp[] {
+    return this.materializeFormatRangeOps(range, (_currentFormatId, tile) => tile.formatId);
+  }
+
+  private materializeStyleRangeOps(
+    range: CellRangeRef,
+    resolveStyle: (
+      baseStyle: Omit<CellStyleRecord, "id">,
+      currentStyleId: string,
+    ) => CellStyleRecord,
+  ): EngineOp[] {
+    const tiles = this.resolveStyleTiles(range);
+    const ops: EngineOp[] = [];
+    tiles.forEach((tile) => {
+      const current = this.workbook.getCellStyle(tile.styleId) ?? {
+        id: WorkbookStore.defaultStyleId,
+      };
+      const next = resolveStyle(current, tile.styleId);
+      const normalizedId = next.id || WorkbookStore.defaultStyleId;
+      if (normalizedId === tile.styleId) {
+        return;
+      }
+      if (normalizedId !== WorkbookStore.defaultStyleId) {
+        ops.push({
+          kind: "upsertCellStyle",
+          style: cloneCellStyleRecord(next),
+        });
+      }
+      ops.push({
+        kind: "setStyleRange",
+        range: tile.range,
+        styleId: normalizedId,
+      });
+    });
+    return ops;
+  }
+
+  private materializeFormatRangeOps(
+    range: CellRangeRef,
+    resolveFormatId: (
+      currentFormatId: string,
+      tile: { range: CellRangeRef; formatId: string },
+    ) => string,
+    upsertFormat?: CellNumberFormatRecord,
+  ): EngineOp[] {
+    const tiles = this.resolveFormatTiles(range);
+    const ops: EngineOp[] = [];
+    if (upsertFormat && upsertFormat.id !== WorkbookStore.defaultFormatId) {
+      ops.push({ kind: "upsertCellNumberFormat", format: { ...upsertFormat } });
+    }
+    tiles.forEach((tile) => {
+      const nextFormatId = resolveFormatId(tile.formatId, tile);
+      if (nextFormatId === tile.formatId) {
+        return;
+      }
+      ops.push({
+        kind: "setFormatRange",
+        range: tile.range,
+        formatId: nextFormatId,
+      });
+    });
+    return ops;
+  }
+
+  private resolveStyleTiles(range: CellRangeRef): Array<{ range: CellRangeRef; styleId: string }> {
+    const bounds = normalizeRange(range);
+    const sheetRanges = this.workbook.listStyleRanges(range.sheetName);
+    const rowBoundaries = new Set<number>([bounds.startRow, bounds.endRow + 1]);
+    const colBoundaries = new Set<number>([bounds.startCol, bounds.endCol + 1]);
+
+    sheetRanges.forEach((record) => {
+      const clipped = intersectRangeBounds(record.range, bounds);
+      if (!clipped) {
+        return;
+      }
+      rowBoundaries.add(clipped.startRow);
+      rowBoundaries.add(clipped.endRow + 1);
+      colBoundaries.add(clipped.startCol);
+      colBoundaries.add(clipped.endCol + 1);
+    });
+
+    const rows = [...rowBoundaries].toSorted((left, right) => left - right);
+    const cols = [...colBoundaries].toSorted((left, right) => left - right);
+    const tiles: Array<{ range: CellRangeRef; styleId: string }> = [];
+
+    for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex += 1) {
+      const startRow = rows[rowIndex]!;
+      const endRow = rows[rowIndex + 1]! - 1;
+      for (let colIndex = 0; colIndex < cols.length - 1; colIndex += 1) {
+        const startCol = cols[colIndex]!;
+        const endCol = cols[colIndex + 1]! - 1;
+        tiles.push({
+          range: {
+            sheetName: range.sheetName,
+            startAddress: formatAddress(startRow, startCol),
+            endAddress: formatAddress(endRow, endCol),
+          },
+          styleId: this.workbook.getStyleId(range.sheetName, startRow, startCol),
+        });
+      }
+    }
+
+    return tiles;
+  }
+
+  private resolveFormatTiles(
+    range: CellRangeRef,
+  ): Array<{ range: CellRangeRef; formatId: string }> {
+    const bounds = normalizeRange(range);
+    const sheetRanges = this.workbook.listFormatRanges(range.sheetName);
+    const rowBoundaries = new Set<number>([bounds.startRow, bounds.endRow + 1]);
+    const colBoundaries = new Set<number>([bounds.startCol, bounds.endCol + 1]);
+
+    sheetRanges.forEach((record) => {
+      const clipped = intersectRangeBounds(record.range, bounds);
+      if (!clipped) {
+        return;
+      }
+      rowBoundaries.add(clipped.startRow);
+      rowBoundaries.add(clipped.endRow + 1);
+      colBoundaries.add(clipped.startCol);
+      colBoundaries.add(clipped.endCol + 1);
+    });
+
+    const rows = [...rowBoundaries].toSorted((left, right) => left - right);
+    const cols = [...colBoundaries].toSorted((left, right) => left - right);
+    const tiles: Array<{ range: CellRangeRef; formatId: string }> = [];
+
+    for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex += 1) {
+      const startRow = rows[rowIndex]!;
+      const endRow = rows[rowIndex + 1]! - 1;
+      for (let colIndex = 0; colIndex < cols.length - 1; colIndex += 1) {
+        const startCol = cols[colIndex]!;
+        const endCol = cols[colIndex + 1]! - 1;
+        tiles.push({
+          range: {
+            sheetName: range.sheetName,
+            startAddress: formatAddress(startRow, startCol),
+            endAddress: formatAddress(endRow, endCol),
+          },
+          formatId: this.workbook.getRangeFormatId(range.sheetName, startRow, startCol),
+        });
+      }
+    }
+
+    return tiles;
   }
 
   private toCellStateOps(
@@ -4767,6 +5172,14 @@ export class SpreadsheetEngine {
         return `sort:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
       case "setCellFormat":
         return `format:${op.sheetName}!${op.address}`;
+      case "upsertCellStyle":
+        return `style:${op.style.id}`;
+      case "upsertCellNumberFormat":
+        return `number-format:${op.format.id}`;
+      case "setStyleRange":
+        return `style-range:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+      case "setFormatRange":
+        return `format-range:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
       case "setCellValue":
       case "setCellFormula":
       case "clearCell":
@@ -4785,6 +5198,7 @@ export class SpreadsheetEngine {
       case "deletePivotTable":
         return `pivot:${pivotKey(op.sheetName, op.address)}`;
     }
+    return assertNever(op);
   }
 
   private sheetDeleteBarrierForOp(op: EngineOp): OpOrder | undefined {
@@ -4821,6 +5235,13 @@ export class SpreadsheetEngine {
       case "deleteSpillRange":
       case "deletePivotTable":
         return this.sheetDeleteVersions.get(op.sheetName);
+      case "setStyleRange":
+      case "setFormatRange":
+        return this.sheetDeleteVersions.get(op.range.sheetName);
+      case "upsertCellNumberFormat":
+        return undefined;
+      case "upsertCellStyle":
+        return undefined;
       case "upsertSheet":
         return this.sheetDeleteVersions.get(op.name);
       case "upsertPivotTable":
@@ -5467,6 +5888,294 @@ function mapStructuralBoundary(boundary: number, transform: StructuralAxisTransf
   }
   const mapped = mapStructuralAxisIndex(boundary - 1, transform);
   return mapped === undefined ? 0 : mapped + 1;
+}
+
+function cloneCellStyleRecord(style: CellStyleRecord): CellStyleRecord {
+  const cloned: CellStyleRecord = { id: style.id };
+  if (style.fill) {
+    cloned.fill = { backgroundColor: style.fill.backgroundColor };
+  }
+  if (style.font) {
+    cloned.font = { ...style.font };
+  }
+  if (style.alignment) {
+    cloned.alignment = { ...style.alignment };
+  }
+  if (style.borders) {
+    cloned.borders = {
+      ...(style.borders.top ? { top: { ...style.borders.top } } : {}),
+      ...(style.borders.right ? { right: { ...style.borders.right } } : {}),
+      ...(style.borders.bottom ? { bottom: { ...style.borders.bottom } } : {}),
+      ...(style.borders.left ? { left: { ...style.borders.left } } : {}),
+    };
+  }
+  return cloned;
+}
+
+function normalizeCellStylePatch(patch: CellStylePatch): CellStylePatch {
+  const normalized: CellStylePatch = {};
+  const fillColor = patch.fill?.backgroundColor;
+  if (fillColor !== undefined) {
+    normalized.fill =
+      fillColor === null ? { backgroundColor: null } : { backgroundColor: fillColor };
+  }
+  if (patch.font) {
+    normalized.font = {};
+    if (patch.font.family !== undefined) {
+      normalized.font.family = patch.font.family;
+    }
+    if (patch.font.size !== undefined) {
+      normalized.font.size = patch.font.size;
+    }
+    if (patch.font.bold !== undefined) {
+      normalized.font.bold = patch.font.bold;
+    }
+    if (patch.font.italic !== undefined) {
+      normalized.font.italic = patch.font.italic;
+    }
+    if (patch.font.underline !== undefined) {
+      normalized.font.underline = patch.font.underline;
+    }
+    if (patch.font.color !== undefined) {
+      normalized.font.color = patch.font.color;
+    }
+  }
+  if (patch.alignment) {
+    normalized.alignment = {};
+    if (patch.alignment.horizontal !== undefined) {
+      normalized.alignment.horizontal = patch.alignment.horizontal;
+    }
+    if (patch.alignment.vertical !== undefined) {
+      normalized.alignment.vertical = patch.alignment.vertical;
+    }
+    if (patch.alignment.wrap !== undefined) {
+      normalized.alignment.wrap = patch.alignment.wrap;
+    }
+    if (patch.alignment.indent !== undefined) {
+      normalized.alignment.indent = patch.alignment.indent;
+    }
+  }
+  if (patch.borders) {
+    normalized.borders = {};
+    if (patch.borders.top !== undefined) {
+      normalized.borders.top = patch.borders.top;
+    }
+    if (patch.borders.right !== undefined) {
+      normalized.borders.right = patch.borders.right;
+    }
+    if (patch.borders.bottom !== undefined) {
+      normalized.borders.bottom = patch.borders.bottom;
+    }
+    if (patch.borders.left !== undefined) {
+      normalized.borders.left = patch.borders.left;
+    }
+  }
+  return normalized;
+}
+
+function applyStylePatch(
+  baseStyle: Omit<CellStyleRecord, "id">,
+  patch: CellStylePatch,
+): Omit<CellStyleRecord, "id"> {
+  const next = cloneStyleWithoutId(baseStyle);
+  const backgroundColor = patch.fill?.backgroundColor;
+  if (backgroundColor !== undefined) {
+    if (backgroundColor === null) {
+      delete next.fill;
+    } else {
+      next.fill = { backgroundColor };
+    }
+  }
+  if (patch.font) {
+    const font = { ...next.font };
+    applyOptionalField(font, "family", patch.font.family);
+    applyOptionalField(font, "size", patch.font.size);
+    applyOptionalField(font, "bold", patch.font.bold);
+    applyOptionalField(font, "italic", patch.font.italic);
+    applyOptionalField(font, "underline", patch.font.underline);
+    applyOptionalField(font, "color", patch.font.color);
+    if (Object.keys(font).length > 0) {
+      next.font = font;
+    } else {
+      delete next.font;
+    }
+  }
+  if (patch.alignment) {
+    const alignment = { ...next.alignment };
+    applyOptionalField(alignment, "horizontal", patch.alignment.horizontal);
+    applyOptionalField(alignment, "vertical", patch.alignment.vertical);
+    applyOptionalField(alignment, "wrap", patch.alignment.wrap);
+    applyOptionalField(alignment, "indent", patch.alignment.indent);
+    if (Object.keys(alignment).length > 0) {
+      next.alignment = alignment;
+    } else {
+      delete next.alignment;
+    }
+  }
+  if (patch.borders) {
+    const borders = { ...next.borders };
+    applyOptionalField(borders, "top", normalizeBorderPatchSide(patch.borders.top));
+    applyOptionalField(borders, "right", normalizeBorderPatchSide(patch.borders.right));
+    applyOptionalField(borders, "bottom", normalizeBorderPatchSide(patch.borders.bottom));
+    applyOptionalField(borders, "left", normalizeBorderPatchSide(patch.borders.left));
+    if (Object.keys(borders).length > 0) {
+      next.borders = borders;
+    } else {
+      delete next.borders;
+    }
+  }
+  return next;
+}
+
+function clearStyleFields(
+  baseStyle: Omit<CellStyleRecord, "id">,
+  fields: readonly CellStyleField[] | undefined,
+): Omit<CellStyleRecord, "id"> {
+  const clearAll = !fields || fields.length === 0;
+  const cleared = new Set(fields ?? []);
+  if (clearAll) {
+    return {};
+  }
+  const next = cloneStyleWithoutId(baseStyle);
+  if (cleared.has("backgroundColor")) {
+    delete next.fill;
+  }
+  const font = filterStyleSection(
+    next.font,
+    [
+      ["fontFamily", "family"],
+      ["fontSize", "size"],
+      ["fontBold", "bold"],
+      ["fontItalic", "italic"],
+      ["fontUnderline", "underline"],
+      ["fontColor", "color"],
+    ],
+    cleared,
+  );
+  if (font) {
+    next.font = font;
+  } else {
+    delete next.font;
+  }
+  const alignment = filterStyleSection(
+    next.alignment,
+    [
+      ["alignmentHorizontal", "horizontal"],
+      ["alignmentVertical", "vertical"],
+      ["alignmentWrap", "wrap"],
+      ["alignmentIndent", "indent"],
+    ],
+    cleared,
+  );
+  if (alignment) {
+    next.alignment = alignment;
+  } else {
+    delete next.alignment;
+  }
+  const borders = filterStyleSection(
+    next.borders,
+    [
+      ["borderTop", "top"],
+      ["borderRight", "right"],
+      ["borderBottom", "bottom"],
+      ["borderLeft", "left"],
+    ],
+    cleared,
+  );
+  if (borders) {
+    next.borders = borders;
+  } else {
+    delete next.borders;
+  }
+  return next;
+}
+
+function cloneStyleWithoutId(style: Omit<CellStyleRecord, "id">): Omit<CellStyleRecord, "id"> {
+  const cloned: Omit<CellStyleRecord, "id"> = {};
+  if (style.fill) {
+    cloned.fill = { backgroundColor: style.fill.backgroundColor };
+  }
+  if (style.font) {
+    cloned.font = { ...style.font };
+  }
+  if (style.alignment) {
+    cloned.alignment = { ...style.alignment };
+  }
+  if (style.borders) {
+    cloned.borders = {
+      ...(style.borders.top ? { top: { ...style.borders.top } } : {}),
+      ...(style.borders.right ? { right: { ...style.borders.right } } : {}),
+      ...(style.borders.bottom ? { bottom: { ...style.borders.bottom } } : {}),
+      ...(style.borders.left ? { left: { ...style.borders.left } } : {}),
+    };
+  }
+  return cloned;
+}
+
+function applyOptionalField<T extends object, K extends keyof T>(
+  target: T,
+  key: K,
+  value: T[K] | null | undefined,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (value === null) {
+    delete target[key];
+    return;
+  }
+  target[key] = value;
+}
+
+function normalizeBorderPatchSide(
+  side: NonNullable<NonNullable<CellStylePatch["borders"]>["top"]> | null | undefined,
+): NonNullable<NonNullable<CellStyleRecord["borders"]>["top"]> | null | undefined {
+  if (side === undefined) {
+    return undefined;
+  }
+  if (side === null) {
+    return null;
+  }
+  if (!side.style || !side.weight || !side.color) {
+    return null;
+  }
+  return {
+    style: side.style,
+    weight: side.weight,
+    color: side.color,
+  };
+}
+
+function filterStyleSection<T extends object>(
+  section: T | undefined,
+  keys: ReadonlyArray<[CellStyleField, keyof T]>,
+  cleared: ReadonlySet<CellStyleField>,
+): T | undefined {
+  if (!section) {
+    return undefined;
+  }
+  const next = { ...section };
+  keys.forEach(([field, key]) => {
+    if (cleared.has(field)) {
+      delete next[key];
+    }
+  });
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function intersectRangeBounds(
+  range: CellRangeRef,
+  bounds: { startRow: number; endRow: number; startCol: number; endCol: number },
+): { startRow: number; endRow: number; startCol: number; endCol: number } | undefined {
+  const normalized = normalizeRange(range);
+  const startRow = Math.max(bounds.startRow, normalized.startRow);
+  const endRow = Math.min(bounds.endRow, normalized.endRow);
+  const startCol = Math.max(bounds.startCol, normalized.startCol);
+  const endCol = Math.min(bounds.endCol, normalized.endCol);
+  if (startRow > endRow || startCol > endCol) {
+    return undefined;
+  }
+  return { startRow, endRow, startCol, endCol };
 }
 
 function normalizeRange(range: CellRangeRef): {

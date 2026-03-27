@@ -294,4 +294,41 @@ describe("WorkbookWorkerRuntime", () => {
       "88",
     );
   });
+
+  it("publishes viewport style dictionaries and stable style ids", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "style-doc",
+      replicaId: "browser:test",
+      baseUrl: null,
+      persistState: false,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    runtime.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      { fill: { backgroundColor: "#336699" }, font: { family: "Fira Sans" } },
+    );
+
+    const patch = received.at(-1);
+    expect(patch?.styles).toHaveLength(1);
+    expect(patch?.styles[0]).toMatchObject({
+      fill: { backgroundColor: "#336699" },
+      font: { family: "Fira Sans" },
+    });
+    expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id);
+  });
 });

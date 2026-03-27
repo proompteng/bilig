@@ -230,6 +230,10 @@ export class LocalWorkbookSessionManager {
       void this.relayUpstream(session, batch);
     });
 
+    if (engine.workbook.sheetsByName.size === 0) {
+      engine.createSheet("Sheet1");
+    }
+
     this.sessions.set(documentId, session);
     return session;
   }
@@ -411,6 +415,34 @@ export class LocalWorkbookSessionManager {
         case "setRangeFormulas": {
           const { engine } = this.getSessionByAgentSessionId(request.sessionId);
           engine.setRangeFormulas(request.range, request.formulas);
+          response = { kind: "ok", id: request.id };
+          break;
+        }
+
+        case "setRangeStyle": {
+          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+          engine.setRangeStyle(request.range, request.patch);
+          response = { kind: "ok", id: request.id };
+          break;
+        }
+
+        case "clearRangeStyle": {
+          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+          engine.clearRangeStyle(request.range, request.fields);
+          response = { kind: "ok", id: request.id };
+          break;
+        }
+
+        case "setRangeNumberFormat": {
+          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+          engine.setRangeNumberFormat(request.range, request.format);
+          response = { kind: "ok", id: request.id };
+          break;
+        }
+
+        case "clearRangeNumberFormat": {
+          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+          engine.clearRangeNumberFormat(request.range);
           response = { kind: "ok", id: request.id };
           break;
         }

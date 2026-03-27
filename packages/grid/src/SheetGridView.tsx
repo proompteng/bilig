@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
-import type { Viewport } from "@bilig/protocol";
+import type { CellStyleRecord, Viewport } from "@bilig/protocol";
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
 import {
   DataEditor,
   type FillPatternEventArgs,
   type DataEditorRef,
+  type DrawCellCallback,
   type GridColumn,
   type GridSelection,
   type Item,
@@ -46,7 +55,7 @@ import {
   resolveHeaderDragSelection,
 } from "./gridDragSelection.js";
 import { parseClipboardPlainText } from "./gridClipboard.js";
-import { cellToEditorSeed, cellToGridCell } from "./gridCells.js";
+import { cellToEditorSeed, cellToGridCell, getResolvedCellFontFamily } from "./gridCells.js";
 import {
   isClipboardShortcut,
   isHandledGridKey,
@@ -114,6 +123,11 @@ interface SheetGridViewProps {
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
+}
+
+interface BorderOverlaySegment {
+  key: string;
+  style: CSSProperties;
 }
 
 function isCellEditorInputFocused(): boolean {
@@ -189,6 +203,8 @@ export function SheetGridView({
   const columnResizeActiveRef = useRef(false);
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingTypeSeedRef = useRef<string | null>(null);
+  const [borderOverlayRevision, setBorderOverlayRevision] = useState(0);
+  const [borderSegments, setBorderSegments] = useState<readonly BorderOverlaySegment[]>([]);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
@@ -206,6 +222,7 @@ export function SheetGridView({
     createGridSelection(selectedCell.col, selectedCell.row),
   );
   const gridMetrics = useMemo(() => getGridMetrics(variant), [variant]);
+  const product = variant === "product";
   const columnWidths =
     controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
 
@@ -269,12 +286,63 @@ export function SheetGridView({
     if (subscribeViewport) {
       return subscribeViewport(sheetName, viewport, (damage) => {
         editorRef.current?.updateCells(damage ? [...damage] : visibleDamage);
+        setBorderOverlayRevision((current) => current + 1);
       });
     }
     return engine.subscribeCells(sheetName, visibleAddresses, () => {
       editorRef.current?.updateCells(visibleDamage);
+      setBorderOverlayRevision((current) => current + 1);
     });
   }, [engine, sheetName, subscribeViewport, viewport, visibleAddresses, visibleDamage]);
+
+  useLayoutEffect(() => {
+    const hostBounds = hostRef.current?.getBoundingClientRect();
+    const editor = editorRef.current;
+    if (!hostBounds || !editor) {
+      setBorderSegments([]);
+      return;
+    }
+
+    const segments = new Map<string, BorderOverlaySegment>();
+    for (const [col, row] of visibleItems) {
+      const snapshot = engine.getCell(sheetName, formatAddress(row, col));
+      const style = engine.getCellStyle(snapshot.styleId);
+      if (!style?.borders) {
+        continue;
+      }
+      const bounds = editor.getBounds(col, row);
+      if (!bounds) {
+        continue;
+      }
+
+      const rect = {
+        x: bounds.x - hostBounds.left,
+        y: bounds.y - hostBounds.top,
+        width: bounds.width,
+        height: bounds.height,
+      };
+
+      const borderEntries = [
+        ["top", style.borders.top],
+        ["right", style.borders.right],
+        ["bottom", style.borders.bottom],
+        ["left", style.borders.left],
+      ] as const;
+
+      for (const [side, border] of borderEntries) {
+        if (!border) {
+          continue;
+        }
+        const descriptor = createBorderOverlayDescriptor(rect, side, border);
+        if (!descriptor) {
+          continue;
+        }
+        segments.set(descriptor.key, descriptor.segment);
+      }
+    }
+
+    setBorderSegments([...segments.values()]);
+  }, [borderOverlayRevision, engine, sheetName, visibleItems, visibleRegion]);
 
   useLayoutEffect(() => {
     editorRef.current?.scrollTo(selectedCell.col, selectedCell.row);
@@ -732,7 +800,6 @@ export function SheetGridView({
         return gridMetrics.columnWidth;
       }
 
-      const cellFont = `400 ${gridTheme.editorFontSize} ${gridTheme.fontFamily}`;
       const headerFont = gridTheme.headerFontStyle;
       let measuredWidth = 0;
 
@@ -748,13 +815,15 @@ export function SheetGridView({
           return;
         }
         const cell = cellToGridCell(engine, sheetName, formatAddress(row, col));
+        const snapshot = engine.getCell(sheetName, formatAddress(row, col));
+        const style = engine.getCellStyle(snapshot.styleId);
         const displayText =
           "displayData" in cell
             ? String(cell.displayData ?? "")
             : "copyData" in cell
               ? String(cell.copyData ?? "")
               : "";
-        context.font = cellFont;
+        context.font = `400 ${gridTheme.editorFontSize} ${getResolvedCellFontFamily(style?.font?.family)}`;
         measuredWidth = Math.max(measuredWidth, context.measureText(displayText).width);
       });
 
@@ -767,15 +836,37 @@ export function SheetGridView({
       engine,
       gridMetrics.columnWidth,
       gridTheme.editorFontSize,
-      gridTheme.fontFamily,
       gridTheme.headerFontStyle,
       sheetName,
       variant,
     ],
   );
 
+  const drawCell = useCallback<DrawCellCallback>(
+    (args, drawContent) => {
+      drawContent();
+      const snapshot = engine.getCell(sheetName, formatAddress(args.row, args.col));
+      const style = engine.getCellStyle(snapshot.styleId);
+      if (!style) {
+        return;
+      }
+      if (style.font?.underline && "displayData" in args.cell) {
+        drawCellUnderline(
+          args,
+          style,
+          String(args.cell.displayData ?? ""),
+          gridTheme.editorFontSize,
+        );
+      }
+    },
+    [engine, gridTheme.editorFontSize, sheetName],
+  );
+
   return (
-    <div className="sheet-grid-shell" data-testid="sheet-grid-shell">
+    <div
+      className={product ? "relative flex min-h-0 flex-1 flex-col bg-white" : "sheet-grid-shell"}
+      data-testid="sheet-grid-shell"
+    >
       {variant === "playground" ? (
         <div className="sheet-grid-banner">
           <div>
@@ -793,7 +884,11 @@ export function SheetGridView({
         </div>
       ) : null}
       <div
-        className="sheet-grid-host"
+        className={
+          product
+            ? "sheet-grid-host min-h-0 flex-1 bg-white pr-2 pb-2 [--gdg-accent-color:#1a73e8]"
+            : "sheet-grid-host"
+        }
         data-column-width-overrides={JSON.stringify(columnWidths)}
         data-default-column-width={String(gridMetrics.columnWidth)}
         data-testid="sheet-grid"
@@ -1153,6 +1248,7 @@ export function SheetGridView({
           cellActivationBehavior="double-click"
           className="glide-sheet-grid"
           columns={columns}
+          drawCell={drawCell}
           drawFocusRing={variant === "product"}
           editOnType={false}
           fillHandle={variant === "product"}
@@ -1316,6 +1412,22 @@ export function SheetGridView({
           verticalBorder={true}
           width="100%"
         />
+        {product ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-10"
+            aria-hidden="true"
+            data-testid="grid-border-overlay"
+          >
+            {borderSegments.map((segment) => (
+              <div
+                key={segment.key}
+                className="absolute"
+                data-testid="grid-border-overlay-segment"
+                style={segment.style}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
       {isEditingCell && overlayStyle ? (
         <CellEditorOverlay
@@ -1332,4 +1444,117 @@ export function SheetGridView({
       ) : null}
     </div>
   );
+}
+
+function drawCellUnderline(
+  args: Parameters<DrawCellCallback>[0],
+  style: CellStyleRecord,
+  text: string,
+  editorFontSize: string,
+): void {
+  if (!text) {
+    return;
+  }
+  const size = Number.parseInt(editorFontSize, 10) || style.font?.size || 13;
+  const fontParts = [
+    style.font?.italic ? "italic" : "",
+    style.font?.bold ? "700" : "400",
+    `${style.font?.size ?? size}px`,
+    getResolvedCellFontFamily(style.font?.family),
+  ].filter(Boolean);
+  const padding = 8;
+  args.ctx.save();
+  args.ctx.font = fontParts.join(" ");
+  const textWidth = args.ctx.measureText(text).width;
+  const align = "contentAlign" in args.cell ? args.cell.contentAlign : "left";
+  const startX =
+    align === "right"
+      ? args.rect.x + args.rect.width - padding - textWidth
+      : align === "center"
+        ? args.rect.x + (args.rect.width - textWidth) / 2
+        : args.rect.x + padding;
+  const endX = startX + textWidth;
+  const y = args.rect.y + args.rect.height - 5;
+  args.ctx.strokeStyle = style.font?.color ?? args.theme.textDark;
+  args.ctx.lineWidth = 1;
+  args.ctx.beginPath();
+  args.ctx.moveTo(startX, y);
+  args.ctx.lineTo(endX, y);
+  args.ctx.stroke();
+  args.ctx.restore();
+}
+
+function createBorderOverlayDescriptor(
+  rect: Pick<Rectangle, "x" | "y" | "width" | "height">,
+  side: "top" | "right" | "bottom" | "left",
+  border: NonNullable<NonNullable<CellStyleRecord["borders"]>["top"]>,
+): { key: string; segment: BorderOverlaySegment } | null {
+  const thickness = border.weight === "thick" ? 3 : border.weight === "medium" ? 2 : 1;
+  const isHorizontal = side === "top" || side === "bottom";
+  // Glide cell bounds include the trailing shared gridline pixel. Canonicalize right/bottom
+  // edges onto that shared line so adjacent cells collapse into one rendered border segment.
+  const edgeX = side === "left" ? rect.x : side === "right" ? rect.x + rect.width - 1 : rect.x;
+  const edgeY = side === "top" ? rect.y : side === "bottom" ? rect.y + rect.height - 1 : rect.y;
+  const length = isHorizontal ? rect.width : rect.height;
+  const offset = thickness / 2;
+  const style: CSSProperties = {
+    position: "absolute",
+    pointerEvents: "none",
+    backgroundColor: border.color,
+    left: isHorizontal ? edgeX : edgeX - offset,
+    top: isHorizontal ? edgeY - offset : edgeY,
+    width: isHorizontal ? length : thickness,
+    height: isHorizontal ? thickness : length,
+  };
+
+  if (border.style === "dashed" || border.style === "dotted") {
+    style.backgroundColor = "transparent";
+    style.backgroundImage = isHorizontal
+      ? `repeating-linear-gradient(90deg, ${border.color} 0 ${border.style === "dashed" ? 6 : 1}px, transparent ${border.style === "dashed" ? 6 : 1}px ${border.style === "dashed" ? 10 : 4}px)`
+      : `repeating-linear-gradient(180deg, ${border.color} 0 ${border.style === "dashed" ? 6 : 1}px, transparent ${border.style === "dashed" ? 6 : 1}px ${border.style === "dashed" ? 10 : 4}px)`;
+  }
+
+  if (border.style === "double") {
+    style.backgroundColor = "transparent";
+    style.backgroundImage = isHorizontal
+      ? `linear-gradient(to bottom, ${border.color} 0 1px, transparent 1px calc(100% - 1px), ${border.color} calc(100% - 1px) 100%)`
+      : `linear-gradient(to right, ${border.color} 0 1px, transparent 1px calc(100% - 1px), ${border.color} calc(100% - 1px) 100%)`;
+    style.height = isHorizontal ? Math.max(3, thickness + 2) : length;
+    style.width = isHorizontal ? length : Math.max(3, thickness + 2);
+    style.left = isHorizontal ? edgeX : edgeX - Math.max(3, thickness + 2) / 2;
+    style.top = isHorizontal ? edgeY - Math.max(3, thickness + 2) / 2 : edgeY;
+  }
+
+  const left = Number(style.left);
+  const top = Number(style.top);
+  const width = Number(style.width);
+  const height = Number(style.height);
+  if (
+    !Number.isFinite(left) ||
+    !Number.isFinite(top) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return null;
+  }
+
+  const key = [
+    Math.round(edgeX * 100) / 100,
+    Math.round(edgeY * 100) / 100,
+    Math.round(length * 100) / 100,
+    isHorizontal ? "h" : "v",
+    border.style,
+    border.weight ?? "thin",
+    border.color ?? "#111827",
+  ].join(":");
+
+  return {
+    key,
+    segment: {
+      key,
+      style,
+    },
+  };
 }

@@ -1,5 +1,8 @@
 import type {
   CellRangeRef,
+  CellNumberFormatInput,
+  CellStyleField,
+  CellStylePatch,
   CellValue,
   LiteralInput,
   SyncState,
@@ -57,6 +60,33 @@ export type AgentRequest =
       sessionId: string;
       range: CellRangeRef;
       formulas: string[][];
+    }
+  | {
+      kind: "setRangeStyle";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
+      patch: CellStylePatch;
+    }
+  | {
+      kind: "clearRangeStyle";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
+      fields?: CellStyleField[];
+    }
+  | {
+      kind: "setRangeNumberFormat";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
+      format: CellNumberFormatInput;
+    }
+  | {
+      kind: "clearRangeNumberFormat";
+      id: string;
+      sessionId: string;
+      range: CellRangeRef;
     }
   | { kind: "clearRange"; id: string; sessionId: string; range: CellRangeRef }
   | { kind: "fillRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }

@@ -1,6 +1,15 @@
-import { ValueTag, formatErrorCode, type CellSnapshot } from "@bilig/protocol";
+import {
+  ValueTag,
+  formatCellDisplayValue,
+  formatErrorCode,
+  shouldRightAlignCell,
+  type CellSnapshot,
+  type CellStyleRecord,
+} from "@bilig/protocol";
 import { GridCellKind, type GridCell } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
+
+const DEFAULT_FONT_FALLBACK = '"Aptos","Segoe UI","IBM Plex Sans",sans-serif';
 
 export function cellToEditorSeed(
   snapshot: Pick<CellSnapshot, "formula" | "input" | "value">,
@@ -29,9 +38,14 @@ export function cellToEditorSeed(
 }
 
 export function snapshotToGridCell(
-  snapshot: Pick<CellSnapshot, "formula" | "input" | "value">,
+  snapshot: Pick<CellSnapshot, "formula" | "input" | "value" | "format">,
+  style?: CellStyleRecord,
 ): GridCell {
   const rawValue = cellToEditorSeed(snapshot);
+  const themeOverride = cellStyleToThemeOverride(style);
+  const displayText = formatCellDisplayValue(snapshot.value, snapshot.format);
+  const contentAlign = resolveContentAlign(snapshot, style);
+  const allowWrapping = style?.alignment?.wrap === true;
 
   switch (snapshot.value.tag) {
     case ValueTag.Number:
@@ -39,10 +53,12 @@ export function snapshotToGridCell(
         kind: GridCellKind.Number,
         allowOverlay: false,
         data: snapshot.value.value,
-        displayData: String(snapshot.value.value),
+        displayData: displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : String(snapshot.value.value),
-        contentAlign: "right",
+        copyData: snapshot.formula ? rawValue : displayText,
+        contentAlign,
+        ...(allowWrapping ? { allowWrapping: true } : {}),
+        ...(themeOverride ? { themeOverride } : {}),
       };
     case ValueTag.Boolean:
       return {
@@ -51,6 +67,7 @@ export function snapshotToGridCell(
         data: snapshot.value.value,
         readonly: false,
         copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE",
+        ...(themeOverride ? { themeOverride } : {}),
       };
     case ValueTag.Error:
       return {
@@ -60,28 +77,79 @@ export function snapshotToGridCell(
         displayData: formatErrorCode(snapshot.value.code),
         readonly: false,
         copyData: snapshot.formula ? rawValue : formatErrorCode(snapshot.value.code),
+        ...(allowWrapping ? { allowWrapping: true } : {}),
+        ...(themeOverride ? { themeOverride } : {}),
       };
     case ValueTag.String:
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,
         data: snapshot.value.value,
-        displayData: snapshot.value.value,
+        displayData: displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : snapshot.value.value,
+        copyData: snapshot.formula ? rawValue : displayText,
+        contentAlign,
+        ...(allowWrapping ? { allowWrapping: true } : {}),
+        ...(themeOverride ? { themeOverride } : {}),
       };
     case ValueTag.Empty:
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,
         data: "",
-        displayData: "",
+        displayData: displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : "",
+        copyData: snapshot.formula ? rawValue : displayText,
+        contentAlign,
+        ...(allowWrapping ? { allowWrapping: true } : {}),
+        ...(themeOverride ? { themeOverride } : {}),
       };
   }
 }
 
 export function cellToGridCell(engine: GridEngineLike, sheetName: string, addr: string): GridCell {
-  return snapshotToGridCell(engine.getCell(sheetName, addr));
+  const snapshot = engine.getCell(sheetName, addr);
+  return snapshotToGridCell(snapshot, engine.getCellStyle(snapshot.styleId));
+}
+
+export function cellStyleToThemeOverride(style: CellStyleRecord | undefined) {
+  if (!style?.fill && !style?.font) {
+    return undefined;
+  }
+  const fontStyleParts: string[] = [];
+  if (style.font?.italic) {
+    fontStyleParts.push("italic");
+  }
+  fontStyleParts.push(style.font?.bold ? "700" : "400");
+  fontStyleParts.push(`${style.font?.size ?? 13}px`);
+  return {
+    ...(style.fill?.backgroundColor ? { bgCell: style.fill.backgroundColor } : {}),
+    ...(style.font?.color ? { textDark: style.font.color } : {}),
+    ...(fontStyleParts.length > 0 ? { baseFontStyle: fontStyleParts.join(" ") } : {}),
+    ...(style.font?.family ? { fontFamily: getResolvedCellFontFamily(style.font.family) } : {}),
+  };
+}
+
+function resolveContentAlign(
+  snapshot: Pick<CellSnapshot, "value" | "format">,
+  style?: CellStyleRecord,
+): "left" | "center" | "right" {
+  switch (style?.alignment?.horizontal) {
+    case "left":
+      return "left";
+    case "center":
+      return "center";
+    case "right":
+      return "right";
+    case "general":
+    case undefined:
+      return shouldRightAlignCell(snapshot.value, snapshot.format) ? "right" : "left";
+  }
+}
+
+export function getResolvedCellFontFamily(family: string | undefined): string {
+  if (!family) {
+    return DEFAULT_FONT_FALLBACK;
+  }
+  return `"${family.replaceAll('"', '\\"')}",${DEFAULT_FONT_FALLBACK}`;
 }

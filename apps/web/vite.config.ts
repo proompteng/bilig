@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 const require = createRequire(import.meta.url);
 const glideEntry = require.resolve("@glideapps/glide-data-grid", {
@@ -11,7 +12,7 @@ const glideEntry = require.resolve("@glideapps/glide-data-grid", {
 const glidePackageRoot = resolve(dirname(glideEntry), "..", "..");
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@glideapps/glide-data-grid/index.css": resolve(glidePackageRoot, "dist/index.css"),

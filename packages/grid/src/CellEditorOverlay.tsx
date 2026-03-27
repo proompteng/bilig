@@ -92,6 +92,7 @@ export function CellEditorOverlay({
     <div className="cell-editor-overlay" data-testid="cell-editor-overlay" style={style}>
       <input
         aria-label={`${label} editor`}
+        className="h-full w-full border-0 bg-transparent px-2 text-[13px] leading-tight text-[#202124] outline-none"
         data-testid="cell-editor-input"
         ref={inputRef}
         style={{ textAlign }}

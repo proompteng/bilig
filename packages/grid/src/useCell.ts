@@ -27,6 +27,7 @@ function snapshotSignature(snapshot: CellSnapshot): string {
     snapshot.flags,
     snapshot.formula ?? "",
     snapshot.format ?? "",
+    snapshot.styleId ?? "",
     snapshot.input ?? "",
     valueKey,
   ].join("|");

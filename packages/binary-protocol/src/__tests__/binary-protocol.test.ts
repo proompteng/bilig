@@ -48,6 +48,19 @@ describe("binary protocol", () => {
             { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
             { kind: "setCellFormula", sheetName: "Sheet1", address: "A2", formula: "A1*2" },
             { kind: "setCellFormat", sheetName: "Sheet1", address: "A1", format: "0.00" },
+            {
+              kind: "upsertCellStyle",
+              style: {
+                id: "style-a",
+                fill: { backgroundColor: "#ff0000" },
+                font: { family: "IBM Plex Sans" },
+              },
+            },
+            {
+              kind: "setStyleRange",
+              range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+              styleId: "style-a",
+            },
             { kind: "clearCell", sheetName: "Sheet1", address: "B1" },
           ],
         },
@@ -67,6 +80,19 @@ describe("binary protocol", () => {
       { kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 7 },
       { kind: "setCellFormula", sheetName: "Sheet1", address: "A2", formula: "A1*2" },
       { kind: "setCellFormat", sheetName: "Sheet1", address: "A1", format: "0.00" },
+      {
+        kind: "upsertCellStyle",
+        style: {
+          id: "style-a",
+          fill: { backgroundColor: "#ff0000" },
+          font: { family: "IBM Plex Sans" },
+        },
+      },
+      {
+        kind: "setStyleRange",
+        range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+        styleId: "style-a",
+      },
       { kind: "clearCell", sheetName: "Sheet1", address: "B1" },
     ]);
   });
