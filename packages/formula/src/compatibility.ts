@@ -501,6 +501,12 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
   entry("date-time:minute-basic", "date-time", "=MINUTE(A1)", "implemented-wasm-production"),
   entry("date-time:second-basic", "date-time", "=SECOND(A1)", "implemented-wasm-production"),
   entry(
+    "date-time:datedif-ym",
+    "date-time",
+    '=DATEDIF(DATE(2020,1,15),DATE(2021,3,20),"YM")',
+    "implemented-wasm-production",
+  ),
+  entry(
     "date-time:weekday-basic",
     "date-time",
     "=WEEKDAY(DATE(2026,3,15))",

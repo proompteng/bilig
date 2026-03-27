@@ -113,6 +113,7 @@ const wasmProductionBuiltinNames = new Set([
   "RAND",
   "EDATE",
   "EOMONTH",
+  "DATEDIF",
   "DAYS",
   "WEEKNUM",
   "WORKDAY",
@@ -188,6 +189,12 @@ const wasmProductionBuiltinNames = new Set([
   "HYPGEOM.DIST",
   "NEGBINOMDIST",
   "NEGBINOM.DIST",
+  "FVSCHEDULE",
+  "DB",
+  "DDB",
+  "VDB",
+  "SLN",
+  "SYD",
 ]);
 
 const aggregationBuiltinNames = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
@@ -238,6 +245,7 @@ const dateTimeBuiltinNames = new Set([
   "RAND",
   "EDATE",
   "EOMONTH",
+  "DATEDIF",
   "DAYS",
   "WEEKNUM",
   "WORKDAY",

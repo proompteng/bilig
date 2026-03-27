@@ -394,6 +394,47 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "K6").mode).toBe(FormulaMode.WasmFastPath);
   });
 
+  it("routes DATEDIF and financial scalar helpers through the wasm path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", 'DATEDIF(DATE(2020,1,15),DATE(2021,3,20),"YM")');
+    engine.setCellFormula("Sheet1", "B1", "FVSCHEDULE(1000,0.09,0.11,0.1)");
+    engine.setCellFormula("Sheet1", "C1", "DB(10000,1000,5,1)");
+    engine.setCellFormula("Sheet1", "D1", "DDB(2400,300,10,2)");
+    engine.setCellFormula("Sheet1", "E1", "VDB(2400,300,10,1,3)");
+    engine.setCellFormula("Sheet1", "F1", "SLN(10000,1000,9)");
+    engine.setCellFormula("Sheet1", "G1", "SYD(10000,1000,9,1)");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "B1")).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1330.89, 12),
+    });
+    expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(3690, 12),
+    });
+    expect(engine.getCellValue("Sheet1", "D1")).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(384, 12),
+    });
+    expect(engine.getCellValue("Sheet1", "E1")).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(691.2, 12),
+    });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 1000 });
+    expect(engine.getCellValue("Sheet1", "G1")).toEqual({ tag: ValueTag.Number, value: 1800 });
+
+    expect(engine.explainCell("Sheet1", "A1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "D1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.WasmFastPath);
+  });
+
   it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

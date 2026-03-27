@@ -9,6 +9,8 @@ describe("builtin capabilities", () => {
   it("tracks native production coverage for the current promoted builtin set", () => {
     expect(builtinWasmEnabledNames.has("SUM")).toBe(true);
     expect(builtinWasmEnabledNames.has("COUNTIFS")).toBe(true);
+    expect(builtinWasmEnabledNames.has("DATEDIF")).toBe(true);
+    expect(builtinWasmEnabledNames.has("FVSCHEDULE")).toBe(true);
     expect(builtinWasmEnabledNames.has("LET")).toBe(false);
   });
 
@@ -46,6 +48,11 @@ describe("builtin capabilities", () => {
       jsStatus: "implemented",
       wasmStatus: "production",
       needsArrayRuntime: true,
+    });
+    expect(getBuiltinCapability("DATEDIF")).toMatchObject({
+      category: "date-time",
+      jsStatus: "implemented",
+      wasmStatus: "production",
     });
   });
 });

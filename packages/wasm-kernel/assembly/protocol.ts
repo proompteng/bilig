@@ -258,5 +258,12 @@ export enum BuiltinId {
   ReduceProduct = 203,
   ScanProduct = 204,
   Expand = 205,
-  Trimrange = 206
+  Trimrange = 206,
+  Datedif = 207,
+  Fvschedule = 208,
+  Db = 209,
+  Ddb = 210,
+  Vdb = 211,
+  Sln = 212,
+  Syd = 213
 }

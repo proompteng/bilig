@@ -186,6 +186,7 @@ const canonicalBaseFixtureIds = new Set<string>([
   "text:len-basic",
   "date-time:serial-addition",
   "date-time:date-constructor",
+  "date-time:datedif-ym",
   "date-time:today-volatile",
   "lookup-reference:index-basic",
   "lookup-reference:match-exact",

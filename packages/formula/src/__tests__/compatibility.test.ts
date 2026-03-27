@@ -24,7 +24,7 @@ describe("formula compatibility registry", () => {
       (entry) => entry.scope === "canonical",
     );
 
-    expect(canonicalFormulaFixtures).toHaveLength(101);
+    expect(canonicalFormulaFixtures).toHaveLength(102);
     expect(canonicalRegistryEntries).toHaveLength(canonicalFormulaFixtures.length);
 
     const fixtureIds = new Set(canonicalFormulaFixtures.map((fixture) => fixture.id));

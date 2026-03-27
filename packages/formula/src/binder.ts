@@ -332,7 +332,19 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc === 4;
     case "DATE":
     case "TIME":
+    case "DATEDIF":
       return argc === 3;
+    case "FVSCHEDULE":
+      return argc >= 2;
+    case "SLN":
+      return argc === 3;
+    case "DB":
+    case "DDB":
+      return argc === 4 || argc === 5;
+    case "SYD":
+      return argc === 4;
+    case "VDB":
+      return argc >= 5 && argc <= 7;
     case "EDATE":
     case "EOMONTH":
       return argc === 2;
@@ -879,6 +891,7 @@ export function encodeBuiltin(name: string): BuiltinId {
     YEAR: BuiltinId.Year,
     MONTH: BuiltinId.Month,
     DAY: BuiltinId.Day,
+    DATEDIF: BuiltinId.Datedif,
     TIME: BuiltinId.Time,
     HOUR: BuiltinId.Hour,
     MINUTE: BuiltinId.Minute,
@@ -992,6 +1005,10 @@ export function encodeBuiltin(name: string): BuiltinId {
     PDURATION: BuiltinId.Pduration,
     RRI: BuiltinId.Rri,
     FV: BuiltinId.Fv,
+    FVSCHEDULE: BuiltinId.Fvschedule,
+    DB: BuiltinId.Db,
+    DDB: BuiltinId.Ddb,
+    VDB: BuiltinId.Vdb,
     PV: BuiltinId.Pv,
     PMT: BuiltinId.Pmt,
     NPER: BuiltinId.Nper,
@@ -999,6 +1016,8 @@ export function encodeBuiltin(name: string): BuiltinId {
     IPMT: BuiltinId.Ipmt,
     PPMT: BuiltinId.Ppmt,
     ISPMT: BuiltinId.Ispmt,
+    SLN: BuiltinId.Sln,
+    SYD: BuiltinId.Syd,
     PERMUT: BuiltinId.Permut,
     PERMUTATIONA: BuiltinId.Permutationa,
     ERF: BuiltinId.Erf,

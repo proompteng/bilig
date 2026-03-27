@@ -561,6 +561,209 @@ function addMonthsExcelSerial(
   );
 }
 
+function excelDatedifValue(startWhole: i32, endWhole: i32, unit: string): f64 {
+  if (startWhole > endWhole) {
+    return NaN;
+  }
+
+  const startYear = excelYearPartFromSerial(<u8>ValueTag.Number, <f64>startWhole);
+  const startMonth = excelMonthPartFromSerial(<u8>ValueTag.Number, <f64>startWhole);
+  const startDay = excelDayPartFromSerial(<u8>ValueTag.Number, <f64>startWhole);
+  const endYear = excelYearPartFromSerial(<u8>ValueTag.Number, <f64>endWhole);
+  const endMonth = excelMonthPartFromSerial(<u8>ValueTag.Number, <f64>endWhole);
+  const endDay = excelDayPartFromSerial(<u8>ValueTag.Number, <f64>endWhole);
+  if (
+    startYear == i32.MIN_VALUE ||
+    startMonth == i32.MIN_VALUE ||
+    startDay == i32.MIN_VALUE ||
+    endYear == i32.MIN_VALUE ||
+    endMonth == i32.MIN_VALUE ||
+    endDay == i32.MIN_VALUE
+  ) {
+    return NaN;
+  }
+
+  const totalDays = endWhole - startWhole;
+  const totalMonths =
+    (endYear - startYear) * 12 + (endMonth - startMonth) - (endDay < startDay ? 1 : 0);
+  const totalYears =
+    endYear -
+    startYear -
+    (endMonth < startMonth || (endMonth == startMonth && endDay < startDay) ? 1 : 0);
+
+  if (unit == "D") return <f64>totalDays;
+  if (unit == "M") return <f64>totalMonths;
+  if (unit == "Y") return <f64>totalYears;
+  if (unit == "YM") return <f64>(((totalMonths % 12) + 12) % 12);
+  if (unit == "YD") {
+    let comparisonYear = endYear;
+    let comparison = excelDateSerial(
+      <u8>ValueTag.Number,
+      <f64>comparisonYear,
+      <u8>ValueTag.Number,
+      <f64>startMonth,
+      <u8>ValueTag.Number,
+      <f64>startDay,
+    );
+    if (isNaN(comparison) || comparison > <f64>endWhole) {
+      comparisonYear -= 1;
+      comparison = excelDateSerial(
+        <u8>ValueTag.Number,
+        <f64>comparisonYear,
+        <u8>ValueTag.Number,
+        <f64>startMonth,
+        <u8>ValueTag.Number,
+        <f64>startDay,
+      );
+    }
+    return isNaN(comparison) ? NaN : <f64>(endWhole - <i32>Math.floor(comparison));
+  }
+  if (unit == "MD") {
+    if (endDay >= startDay) {
+      return <f64>(endDay - startDay);
+    }
+    const previousMonth = endMonth == 1 ? 12 : endMonth - 1;
+    return <f64>(daysInExcelMonth(endYear, previousMonth) - startDay + endDay);
+  }
+  return NaN;
+}
+
+function fixedDecliningBalanceRate(cost: f64, salvage: f64, life: f64): f64 {
+  if (
+    !isFinite(cost) ||
+    !isFinite(salvage) ||
+    !isFinite(life) ||
+    cost <= 0 ||
+    salvage < 0 ||
+    life <= 0
+  ) {
+    return NaN;
+  }
+  const ratio = salvage / cost;
+  if (ratio < 0) {
+    return NaN;
+  }
+  return Math.round((1.0 - Math.pow(ratio, 1.0 / life)) * 1000.0) / 1000.0;
+}
+
+function dbDepreciation(cost: f64, salvage: f64, life: f64, period: f64, month: f64): f64 {
+  const rate = fixedDecliningBalanceRate(cost, salvage, life);
+  if (isNaN(rate) || month < 1 || month > 12 || period < 1 || period > life + 1) {
+    return NaN;
+  }
+
+  let bookValue = cost;
+  let depreciation = 0.0;
+  for (let currentPeriod = 1.0; currentPeriod <= period; currentPeriod += 1.0) {
+    const raw =
+      currentPeriod == 1.0
+        ? bookValue * rate * (month / 12.0)
+        : currentPeriod == <f64>Math.floor(life) + 1.0
+          ? bookValue * rate * ((12.0 - month) / 12.0)
+          : bookValue * rate;
+    depreciation = Math.min(Math.max(raw, 0.0), Math.max(0.0, bookValue - salvage));
+    bookValue -= depreciation;
+  }
+  return depreciation;
+}
+
+function ddbPeriodDepreciation(
+  bookValue: f64,
+  salvage: f64,
+  life: f64,
+  factor: f64,
+  remainingLife: f64,
+  noSwitch: bool,
+): f64 {
+  const declining = (bookValue * factor) / life;
+  const straightLine = remainingLife <= 0 ? 0.0 : (bookValue - salvage) / remainingLife;
+  const base = noSwitch ? declining : Math.max(declining, straightLine);
+  return Math.min(Math.max(base, 0.0), Math.max(0.0, bookValue - salvage));
+}
+
+function ddbDepreciation(cost: f64, salvage: f64, life: f64, period: f64, factor: f64): f64 {
+  if (
+    !isFinite(cost) ||
+    !isFinite(salvage) ||
+    !isFinite(life) ||
+    !isFinite(period) ||
+    !isFinite(factor) ||
+    cost <= 0 ||
+    salvage < 0 ||
+    life <= 0 ||
+    period <= 0 ||
+    factor <= 0
+  ) {
+    return NaN;
+  }
+  let bookValue = cost;
+  let current = 0.0;
+  let depreciation = 0.0;
+  while (current < period && bookValue > salvage) {
+    const segment = Math.min(1.0, period - current);
+    const full = Math.min(
+      Math.max((bookValue * factor) / life, 0.0),
+      Math.max(0.0, bookValue - salvage),
+    );
+    depreciation = Math.min(full * segment, Math.max(0.0, bookValue - salvage));
+    bookValue -= depreciation;
+    current += segment;
+  }
+  return depreciation;
+}
+
+function vdbDepreciation(
+  cost: f64,
+  salvage: f64,
+  life: f64,
+  startPeriod: f64,
+  endPeriod: f64,
+  factor: f64,
+  noSwitch: bool,
+): f64 {
+  if (
+    !isFinite(cost) ||
+    !isFinite(salvage) ||
+    !isFinite(life) ||
+    !isFinite(startPeriod) ||
+    !isFinite(endPeriod) ||
+    !isFinite(factor) ||
+    cost <= 0 ||
+    salvage < 0 ||
+    life <= 0 ||
+    startPeriod < 0 ||
+    endPeriod < startPeriod ||
+    factor <= 0
+  ) {
+    return NaN;
+  }
+
+  let bookValue = cost;
+  let total = 0.0;
+  for (let current = 0.0; current < endPeriod && bookValue > salvage; current += 1.0) {
+    const overlap = Math.max(
+      0.0,
+      Math.min(endPeriod, current + 1.0) - Math.max(startPeriod, current),
+    );
+    if (overlap <= 0) {
+      const full = ddbPeriodDepreciation(
+        bookValue,
+        salvage,
+        life,
+        factor,
+        life - current,
+        noSwitch,
+      );
+      bookValue -= full;
+      continue;
+    }
+    const full = ddbPeriodDepreciation(bookValue, salvage, life, factor, life - current, noSwitch);
+    total += full * overlap;
+    bookValue -= full;
+  }
+  return total;
+}
+
 function roundToDigits(value: f64, digits: i32): f64 {
   if (digits >= 0) {
     const factor = Math.pow(10.0, <f64>digits);
@@ -12094,6 +12297,70 @@ export function applyBuiltin(
     );
   }
 
+  if (builtinId == BuiltinId.Datedif && argc == 3) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const startWhole = excelSerialWhole(tagStack[base], valueStack[base]);
+    const endWhole = excelSerialWhole(tagStack[base + 1], valueStack[base + 1]);
+    const unitText = scalarText(
+      tagStack[base + 2],
+      valueStack[base + 2],
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    );
+    if (startWhole == i32.MIN_VALUE || endWhole == i32.MIN_VALUE || unitText == null) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const unit = trimAsciiWhitespace(unitText).toUpperCase();
+    const value = unit.length == 0 ? NaN : excelDatedifValue(startWhole, endWhole, unit);
+    if (isNaN(value)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
   if (builtinId == BuiltinId.Int && argc == 1) {
     const numeric = toNumberExact(tagStack[base], valueStack[base]);
     if (isNaN(numeric)) {
@@ -12647,6 +12914,291 @@ export function applyBuiltin(
       STACK_KIND_SCALAR,
       <u8>ValueTag.Number,
       <f64>count,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Fvschedule && argc >= 2) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const principal = toNumberExact(tagStack[base], valueStack[base]);
+    if (isNaN(principal)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    let result = principal;
+    for (let index = 1; index < argc; index++) {
+      const rate = toNumberExact(tagStack[base + index], valueStack[base + index]);
+      if (isNaN(rate)) {
+        return writeResult(
+          base,
+          STACK_KIND_SCALAR,
+          <u8>ValueTag.Error,
+          ErrorCode.Value,
+          rangeIndexStack,
+          valueStack,
+          tagStack,
+          kindStack,
+        );
+      }
+      result *= 1.0 + rate;
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      result,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Db && (argc == 4 || argc == 5)) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const cost = toNumberExact(tagStack[base], valueStack[base]);
+    const salvage = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const life = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+    const period = toNumberExact(tagStack[base + 3], valueStack[base + 3]);
+    const month = argc == 5 ? toNumberExact(tagStack[base + 4], valueStack[base + 4]) : 12.0;
+    const depreciation = dbDepreciation(cost, salvage, life, period, month);
+    if (isNaN(depreciation)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      depreciation,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Ddb && (argc == 4 || argc == 5)) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const cost = toNumberExact(tagStack[base], valueStack[base]);
+    const salvage = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const life = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+    const period = toNumberExact(tagStack[base + 3], valueStack[base + 3]);
+    const factor = argc == 5 ? toNumberExact(tagStack[base + 4], valueStack[base + 4]) : 2.0;
+    const depreciation = ddbDepreciation(cost, salvage, life, period, factor);
+    if (isNaN(depreciation)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      depreciation,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Vdb && argc >= 5 && argc <= 7) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const cost = toNumberExact(tagStack[base], valueStack[base]);
+    const salvage = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const life = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+    const startPeriod = toNumberExact(tagStack[base + 3], valueStack[base + 3]);
+    const endPeriod = toNumberExact(tagStack[base + 4], valueStack[base + 4]);
+    const factor = argc >= 6 ? toNumberExact(tagStack[base + 5], valueStack[base + 5]) : 2.0;
+    const noSwitch = argc >= 7 ? coerceBoolean(tagStack[base + 6], valueStack[base + 6]) : 0;
+    const depreciation =
+      noSwitch < 0
+        ? NaN
+        : vdbDepreciation(cost, salvage, life, startPeriod, endPeriod, factor, noSwitch != 0);
+    if (isNaN(depreciation)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      depreciation,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Sln && argc == 3) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const cost = toNumberExact(tagStack[base], valueStack[base]);
+    const salvage = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const life = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+    if (isNaN(cost) || isNaN(salvage) || isNaN(life) || life <= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      (cost - salvage) / life,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.Syd && argc == 4) {
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const cost = toNumberExact(tagStack[base], valueStack[base]);
+    const salvage = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const life = toNumberExact(tagStack[base + 2], valueStack[base + 2]);
+    const period = toNumberExact(tagStack[base + 3], valueStack[base + 3]);
+    if (
+      isNaN(cost) ||
+      isNaN(salvage) ||
+      isNaN(life) ||
+      isNaN(period) ||
+      life <= 0 ||
+      period <= 0 ||
+      period > life
+    ) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const denominator = (life * (life + 1.0)) / 2.0;
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      <u8>ValueTag.Number,
+      ((cost - salvage) * (life - period + 1.0)) / denominator,
       rangeIndexStack,
       valueStack,
       tagStack,

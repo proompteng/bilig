@@ -207,6 +207,15 @@ export const excelDateTimeFixtureSuite: ExcelFixtureSuite = {
       outputs: [{ address: "A3", expected: errorExpected(ErrorCode.Value, "#VALUE!") }],
     },
     {
+      id: createExcelFixtureId("date-time", "datedif-ym"),
+      family: "date-time",
+      title: "DATEDIF returns remaining months after full years",
+      formula: '=DATEDIF(DATE(2020,1,15),DATE(2021,3,20),"YM")',
+      sheetName: "Sheet1",
+      inputs: [],
+      outputs: [{ address: "A1", expected: numberExpected(2) }],
+    },
+    {
       id: createExcelFixtureId("volatile", "today-captured-utc"),
       family: "volatile",
       title: "TODAY captured at suite timestamp",

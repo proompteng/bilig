@@ -84,6 +84,13 @@ const BUILTIN = {
   DROP: BuiltinId.Drop,
   EXPAND: BuiltinId.Expand,
   TRIMRANGE: BuiltinId.Trimrange,
+  DATEDIF: BuiltinId.Datedif,
+  FVSCHEDULE: BuiltinId.Fvschedule,
+  DB: BuiltinId.Db,
+  DDB: BuiltinId.Ddb,
+  VDB: BuiltinId.Vdb,
+  SLN: BuiltinId.Sln,
+  SYD: BuiltinId.Syd,
   CHOOSECOLS: BuiltinId.Choosecols,
   CHOOSEROWS: BuiltinId.Chooserows,
   SORT: BuiltinId.Sort,
@@ -2292,6 +2299,117 @@ describe("wasm kernel", () => {
       { tag: ValueTag.Number, value: 3 },
       { tag: ValueTag.Empty },
     ]);
+  });
+
+  it("evaluates DATEDIF and financial scalar helpers on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 8;
+    kernel.init(16, 1, 0, 7, 32);
+    kernel.writeCells(
+      new Uint8Array(16),
+      new Float64Array(16),
+      new Uint32Array(16),
+      new Uint16Array(16),
+    );
+    kernel.uploadStrings(Uint32Array.from([0, 0]), Uint32Array.from([0, 2]), asciiCodes("YM"));
+
+    const packed = packPrograms([
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.DATE, 3),
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodePushNumber(5),
+        encodeCall(BUILTIN.DATE, 3),
+        encodePushString(1),
+        encodeCall(BUILTIN.DATEDIF, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.FVSCHEDULE, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.DB, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.DDB, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodeCall(BUILTIN.VDB, 5),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.SLN, 3),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(3),
+        encodeCall(BUILTIN.SYD, 4),
+        encodeRet(),
+      ],
+    ]);
+    const constants = packConstants([
+      [2020, 1, 15, 2021, 3, 20],
+      [1000, 0.09, 0.11, 0.1],
+      [10000, 1000, 5, 1],
+      [2400, 300, 10, 2],
+      [2400, 300, 10, 1, 3],
+      [10000, 1000, 9],
+      [10000, 1000, 9, 1],
+    ]);
+
+    const outputCells = Uint32Array.from([
+      cellIndex(0, 0, width),
+      cellIndex(0, 1, width),
+      cellIndex(0, 2, width),
+      cellIndex(0, 3, width),
+      cellIndex(0, 4, width),
+      cellIndex(0, 5, width),
+      cellIndex(0, 6, width),
+    ]);
+    kernel.uploadPrograms(packed.programs, packed.offsets, packed.lengths, outputCells);
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths);
+
+    kernel.evalBatch(outputCells);
+
+    const tags = kernel.readTags();
+    const numbers = kernel.readNumbers();
+    expect(tags[cellIndex(0, 0, width)]).toBe(ValueTag.Number);
+    expect(numbers[cellIndex(0, 0, width)]).toBe(2);
+    expect(numbers[cellIndex(0, 1, width)]).toBeCloseTo(1330.89, 12);
+    expect(numbers[cellIndex(0, 2, width)]).toBeCloseTo(3690, 12);
+    expect(numbers[cellIndex(0, 3, width)]).toBeCloseTo(384, 12);
+    expect(numbers[cellIndex(0, 4, width)]).toBeCloseTo(691.2, 12);
+    expect(numbers[cellIndex(0, 5, width)]).toBe(1000);
+    expect(numbers[cellIndex(0, 6, width)]).toBe(1800);
   });
 
   it("returns numeric spill descriptors for SEQUENCE on the wasm path", async () => {

@@ -392,9 +392,21 @@ describe("formula builtins and JS evaluator", () => {
       tag: ValueTag.Number,
       value: expect.closeTo(3690, 12),
     });
+    expect(evaluateAst(parseFormula("DDB(2400,300,10,2)"), context)).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(384, 12),
+    });
     expect(evaluateAst(parseFormula("VDB(2400,300,10,1,3)"), context)).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(691.2, 12),
+    });
+    expect(evaluateAst(parseFormula("SLN(10000,1000,9)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 1000,
+    });
+    expect(evaluateAst(parseFormula("SYD(10000,1000,9,1)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 1800,
     });
     expect(evaluateAst(parseFormula('LENB("é")'), context)).toEqual({
       tag: ValueTag.Number,

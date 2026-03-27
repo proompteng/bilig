@@ -181,6 +181,16 @@ describe("formula", () => {
     });
   });
 
+  it("routes accelerated date and financial scalar helpers to the wasm path", () => {
+    expect(compileFormula('DATEDIF(DATE(2020,1,15),DATE(2021,3,20),"YM")').mode).toBe(1);
+    expect(compileFormula("FVSCHEDULE(1000,0.09,0.11,0.1)").mode).toBe(1);
+    expect(compileFormula("DB(10000,1000,5,1)").mode).toBe(1);
+    expect(compileFormula("DDB(2400,300,10,2)").mode).toBe(1);
+    expect(compileFormula("VDB(2400,300,10,1,3)").mode).toBe(1);
+    expect(compileFormula("SLN(10000,1000,9)").mode).toBe(1);
+    expect(compileFormula("SYD(10000,1000,9,1)").mode).toBe(1);
+  });
+
   it("routes accelerated array-shape and conditional aggregate builtins by public compile contract", () => {
     expect(compileFormula("TRANSPOSE(A1:B4)").mode).toBe(1);
     expect(compileFormula("HSTACK(A1:B2,C1:D2)").mode).toBe(1);
