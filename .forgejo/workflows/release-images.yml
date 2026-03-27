@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: registry.ide-newton.ts.net
   IMAGE_NAMESPACE: lab
+  IMAGE_PLATFORM: linux/arm64
 
 jobs:
   build-and-push:
@@ -30,7 +31,7 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
           docker buildx build \
-            --platform linux/amd64 \
+            --platform "$IMAGE_PLATFORM" \
             --file ./Dockerfile \
             --target web-runtime \
             --push \
@@ -45,7 +46,7 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
           docker buildx build \
-            --platform linux/amd64 \
+            --platform "$IMAGE_PLATFORM" \
             --file ./Dockerfile \
             --target sync-runtime \
             --push \
