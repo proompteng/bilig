@@ -3815,6 +3815,7 @@ export function hasBuiltin(name: string): boolean {
   return (
     builtins[upper] !== undefined ||
     lookupBuiltins[upper] !== undefined ||
+    builtinIdByName.has(upper) ||
     builtinJsSpecialNames.has(upper) ||
     hasExternalFunction(upper)
   );

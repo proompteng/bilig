@@ -82,6 +82,8 @@ const BUILTIN = {
   OFFSET: BuiltinId.Offset,
   TAKE: BuiltinId.Take,
   DROP: BuiltinId.Drop,
+  EXPAND: BuiltinId.Expand,
+  TRIMRANGE: BuiltinId.Trimrange,
   CHOOSECOLS: BuiltinId.Choosecols,
   CHOOSEROWS: BuiltinId.Chooserows,
   SORT: BuiltinId.Sort,
@@ -2179,6 +2181,117 @@ describe("wasm kernel", () => {
     expect(kernel.readNumbers()[0]).toBe(0.625);
     expect(kernel.readTags()[1]).toBe(ValueTag.Number);
     expect(kernel.readNumbers()[1]).toBeCloseTo(1, 12);
+  });
+
+  it("evaluates EXPAND and TRIMRANGE on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 6;
+    kernel.init(24, 4, 0, 4, 32);
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+        ValueTag.Empty,
+      ]),
+      new Float64Array([
+        0, 0, 0, 0, 10, 20, 0, 1, 2, 0, 30, 40, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
+      new Uint32Array(24),
+      new Uint16Array(24),
+    );
+    kernel.uploadRangeMembers(
+      Uint32Array.from([
+        cellIndex(0, 4, width),
+        cellIndex(0, 5, width),
+        cellIndex(1, 4, width),
+        cellIndex(1, 5, width),
+        cellIndex(0, 0, width),
+        cellIndex(0, 1, width),
+        cellIndex(0, 2, width),
+        cellIndex(0, 3, width),
+        cellIndex(1, 0, width),
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(2, 0, width),
+        cellIndex(2, 1, width),
+        cellIndex(2, 2, width),
+        cellIndex(2, 3, width),
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+      ]),
+      Uint32Array.from([0, 4]),
+      Uint32Array.from([4, 16]),
+    );
+    kernel.uploadRangeShapes(Uint32Array.from([2, 4]), Uint32Array.from([2, 4]));
+
+    const packedPrograms = packPrograms([
+      [
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.EXPAND, 4),
+        encodeRet(),
+      ],
+      [encodePushRange(1), encodeCall(BUILTIN.TRIMRANGE, 1), encodeRet()],
+    ]);
+    const packedConstants = packConstants([[3, 3, 0], []]);
+
+    kernel.uploadPrograms(
+      packedPrograms.programs,
+      packedPrograms.offsets,
+      packedPrograms.lengths,
+      Uint32Array.from([cellIndex(3, 4, width), cellIndex(3, 5, width)]),
+    );
+    kernel.uploadConstants(
+      packedConstants.constants,
+      packedConstants.offsets,
+      packedConstants.lengths,
+    );
+
+    kernel.evalBatch(Uint32Array.from([cellIndex(3, 4, width), cellIndex(3, 5, width)]));
+
+    expect(readSpillValues(kernel, cellIndex(3, 4, width), [])).toEqual([
+      { tag: ValueTag.Number, value: 10 },
+      { tag: ValueTag.Number, value: 20 },
+      { tag: ValueTag.Number, value: 0 },
+      { tag: ValueTag.Number, value: 30 },
+      { tag: ValueTag.Number, value: 40 },
+      { tag: ValueTag.Number, value: 0 },
+      { tag: ValueTag.Number, value: 0 },
+      { tag: ValueTag.Number, value: 0 },
+      { tag: ValueTag.Number, value: 0 },
+    ]);
+    expect(readSpillValues(kernel, cellIndex(3, 5, width), [])).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Number, value: 2 },
+      { tag: ValueTag.Number, value: 3 },
+      { tag: ValueTag.Empty },
+    ]);
   });
 
   it("returns numeric spill descriptors for SEQUENCE on the wasm path", async () => {

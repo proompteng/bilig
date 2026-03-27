@@ -207,6 +207,9 @@ async function readSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData>
   ]);
 
   const implementedBuiltinNames = new Set([
+    ...BUILTINS.filter((builtin) => !builtin.name.startsWith("__")).map((builtin) =>
+      builtin.name.trim().toUpperCase(),
+    ),
     ...extractObjectKeys(getVariableInitializer(builtinsSource, "scalarBuiltins")),
     ...extractObjectKeys(getVariableInitializer(logicalSource, "logicalBuiltins")),
     ...extractObjectKeys(getVariableInitializer(textSource, "textBuiltins")),

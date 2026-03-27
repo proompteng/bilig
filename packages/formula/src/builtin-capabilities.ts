@@ -37,7 +37,6 @@ const jsSpecialBuiltinNames = new Set([
   "BYCOL",
   "CELL",
   "COLUMN",
-  "EXPAND",
   "FORMULA",
   "FORMULATEXT",
   "INDIRECT",
@@ -45,7 +44,6 @@ const jsSpecialBuiltinNames = new Set([
   "SHEET",
   "SHEETS",
   "TEXTSPLIT",
-  "TRIMRANGE",
 ]);
 
 const wasmProductionBuiltinNames = new Set([
@@ -137,6 +135,7 @@ const wasmProductionBuiltinNames = new Set([
   "VALUE",
   "FILTER",
   "UNIQUE",
+  "EXPAND",
   "OFFSET",
   "TAKE",
   "DROP",
@@ -148,6 +147,7 @@ const wasmProductionBuiltinNames = new Set([
   "TOROW",
   "WRAPROWS",
   "WRAPCOLS",
+  "TRIMRANGE",
   "LOOKUP",
   "AREAS",
   "ARRAYTOTEXT",

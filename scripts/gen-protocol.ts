@@ -257,6 +257,8 @@ const enumManifest = {
     ["BycolAggregate", 202],
     ["ReduceProduct", 203],
     ["ScanProduct", 204],
+    ["Expand", 205],
+    ["Trimrange", 206],
   ],
 };
 
@@ -365,6 +367,8 @@ const builtinManifest = [
   { id: "Offset", name: "OFFSET", supportsWasm: true },
   { id: "Take", name: "TAKE", supportsWasm: true },
   { id: "Drop", name: "DROP", supportsWasm: true },
+  { id: "Expand", name: "EXPAND", supportsWasm: true },
+  { id: "Trimrange", name: "TRIMRANGE", supportsWasm: true },
   { id: "Choosecols", name: "CHOOSECOLS", supportsWasm: true },
   { id: "Chooserows", name: "CHOOSEROWS", supportsWasm: true },
   { id: "Sort", name: "SORT", supportsWasm: true },

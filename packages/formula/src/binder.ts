@@ -341,9 +341,13 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc >= 1;
     case "SEQUENCE":
       return argc >= 1 && argc <= 4;
+    case "EXPAND":
+      return argc >= 2 && argc <= 4;
     case "FILTER":
       return argc === 2 || argc === 3;
     case "UNIQUE":
+      return argc >= 1 && argc <= 3;
+    case "TRIMRANGE":
       return argc >= 1 && argc <= 3;
     case "OFFSET":
       return argc >= 3 && argc <= 5;
@@ -687,6 +691,15 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "DAYS":
       case "WEEKNUM":
         return args.every((arg) => isScalarArg(arg));
+      case "EXPAND":
+        return (
+          argc >= 2 &&
+          argc <= 4 &&
+          isWasmSafe(args[0]!, true) &&
+          isScalarArg(args[1]!) &&
+          (argc < 3 || isScalarArg(args[2]!)) &&
+          (argc < 4 || isScalarArg(args[3]!))
+        );
       case "WORKDAY":
         return args.length === 2
           ? args.every((arg) => isScalarArg(arg))
@@ -725,6 +738,13 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           argc >= 1 &&
           argc <= 3 &&
           isCellRangeArg(args[0]!) &&
+          args.slice(1).every((arg) => isScalarArg(arg))
+        );
+      case "TRIMRANGE":
+        return (
+          argc >= 1 &&
+          argc <= 3 &&
+          isWasmSafe(args[0]!, true) &&
           args.slice(1).every((arg) => isScalarArg(arg))
         );
       case "LOOKUP":
@@ -905,6 +925,8 @@ export function encodeBuiltin(name: string): BuiltinId {
     SEQUENCE: BuiltinId.Sequence,
     FILTER: BuiltinId.Filter,
     UNIQUE: BuiltinId.Unique,
+    EXPAND: BuiltinId.Expand,
+    TRIMRANGE: BuiltinId.Trimrange,
     OFFSET: BuiltinId.Offset,
     TAKE: BuiltinId.Take,
     DROP: BuiltinId.Drop,

@@ -18,7 +18,8 @@ describe("builtin capabilities", () => {
     expect(builtinJsSpecialNames.has("MAP")).toBe(true);
     expect(builtinJsSpecialNames.has("INDIRECT")).toBe(true);
     expect(builtinJsSpecialNames.has("TEXTSPLIT")).toBe(true);
-    expect(builtinJsSpecialNames.has("TRIMRANGE")).toBe(true);
+    expect(builtinJsSpecialNames.has("EXPAND")).toBe(false);
+    expect(builtinJsSpecialNames.has("TRIMRANGE")).toBe(false);
   });
 
   it("exposes array-runtime backlog metadata for non-native families", () => {
@@ -36,14 +37,14 @@ describe("builtin capabilities", () => {
     });
     expect(getBuiltinCapability("EXPAND")).toMatchObject({
       category: "dynamic-array",
-      jsStatus: "special-js-only",
-      wasmStatus: "not-started",
+      jsStatus: "implemented",
+      wasmStatus: "production",
       needsArrayRuntime: true,
     });
     expect(getBuiltinCapability("TRIMRANGE")).toMatchObject({
       category: "dynamic-array",
-      jsStatus: "special-js-only",
-      wasmStatus: "not-started",
+      jsStatus: "implemented",
+      wasmStatus: "production",
       needsArrayRuntime: true,
     });
   });

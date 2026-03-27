@@ -140,6 +140,8 @@ export const BUILTINS: BuiltinDescriptor[] = [
   { id: BuiltinId.Offset, name: "OFFSET", supportsWasm: true },
   { id: BuiltinId.Take, name: "TAKE", supportsWasm: true },
   { id: BuiltinId.Drop, name: "DROP", supportsWasm: true },
+  { id: BuiltinId.Expand, name: "EXPAND", supportsWasm: true },
+  { id: BuiltinId.Trimrange, name: "TRIMRANGE", supportsWasm: true },
   { id: BuiltinId.Choosecols, name: "CHOOSECOLS", supportsWasm: true },
   { id: BuiltinId.Chooserows, name: "CHOOSEROWS", supportsWasm: true },
   { id: BuiltinId.Sort, name: "SORT", supportsWasm: true },

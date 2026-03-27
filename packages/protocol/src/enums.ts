@@ -256,5 +256,7 @@ export enum BuiltinId {
   ByrowAggregate = 201,
   BycolAggregate = 202,
   ReduceProduct = 203,
-  ScanProduct = 204
+  ScanProduct = 204,
+  Expand = 205,
+  Trimrange = 206
 }
