@@ -1779,11 +1779,11 @@ export class SpreadsheetEngine {
     const rowMetadata = this.axisMetadataToSnapshot(this.workbook.listRowMetadata(sheetName));
     const columnMetadata = this.axisMetadataToSnapshot(this.workbook.listColumnMetadata(sheetName));
     const styleRanges = this.workbook.listStyleRanges(sheetName).map((record) => ({
-      range: { ...record.range },
+      range: this.toSnapshotRangeRef(record.range),
       styleId: record.styleId,
     }));
     const formatRanges = this.workbook.listFormatRanges(sheetName).map((record) => ({
-      range: { ...record.range },
+      range: this.toSnapshotRangeRef(record.range),
       formatId: record.formatId,
     }));
     const freezePane = this.freezePaneToSnapshot(this.workbook.getFreezePane(sheetName));
@@ -1838,6 +1838,14 @@ export class SpreadsheetEngine {
       metadata.sorts = sorts;
     }
     return metadata;
+  }
+
+  private toSnapshotRangeRef(range: CellRangeRef): CellRangeRef {
+    return {
+      sheetName: range.sheetName,
+      startAddress: range.startAddress,
+      endAddress: range.endAddress,
+    };
   }
 
   private sheetMetadataToOps(sheetName: string): EngineOp[] {
