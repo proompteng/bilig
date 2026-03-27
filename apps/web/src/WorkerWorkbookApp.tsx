@@ -29,6 +29,7 @@ import {
   Underline,
   WrapText,
 } from "lucide-react";
+import { useQuery, useZero, useZeroOnline } from "@rocicorp/zero/react";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
@@ -47,6 +48,12 @@ import {
   type MessagePortLike,
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
+import {
+  mutators,
+  projectWorkbookToSnapshot,
+  queries,
+  type BiligRuntimeConfig,
+} from "@bilig/zero-sync";
 import { WorkerViewportCache } from "./viewport-cache.js";
 import type {
   WorkbookWorkerBootstrapOptions,
@@ -64,12 +71,6 @@ interface WorkerHandle {
   worker: Worker;
   client: WorkerEngineClient;
   cache: WorkerViewportCache;
-}
-
-interface RuntimeConfig {
-  documentId: string;
-  baseUrl: string | null;
-  persistState: boolean;
 }
 
 interface RibbonButtonProps {
@@ -221,7 +222,6 @@ function isPresetColor(color: string): boolean {
     GOOGLE_SHEETS_STANDARD_SWATCHS.some((swatch) => swatch.value === normalized)
   );
 }
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -385,6 +385,13 @@ function formatSyncStateLabel(state: WorkbookWorkerStateSnapshot["syncState"]): 
   return exhaustiveState;
 }
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
 function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   return {
     sheetName,
@@ -415,31 +422,9 @@ function toOptimisticCellValue(value: LiteralInput, currentValue: CellValue): Ce
   };
 }
 
-function createSessionDocumentId(defaultDocumentId: string): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${defaultDocumentId}:${crypto.randomUUID()}`;
-  }
-  return `${defaultDocumentId}:${Math.random().toString(36).slice(2)}`;
-}
-
-function resolveRuntimeConfig(
-  searchParams: URLSearchParams,
-  defaultDocumentId: string,
-  defaultLocalServerUrl: string,
-): RuntimeConfig {
-  const explicit = searchParams.get("document");
-  if (explicit) {
-    return {
-      documentId: explicit,
-      baseUrl: searchParams.get("server") ?? defaultLocalServerUrl,
-      persistState: true,
-    };
-  }
-  return {
-    documentId: createSessionDocumentId(defaultDocumentId),
-    baseUrl: searchParams.get("server") ?? defaultLocalServerUrl,
-    persistState: false,
-  };
+function resolveDocumentId(defaultDocumentId: string): string {
+  const explicit = new URLSearchParams(window.location.search).get("document");
+  return explicit && explicit.length > 0 ? explicit : defaultDocumentId;
 }
 
 function classNames(...values: Array<string | false | null | undefined>): string {
@@ -717,14 +702,18 @@ function ColorPaletteButton({
   );
 }
 
-export function WorkerWorkbookApp() {
-  const runtimeConfig = useMemo(() => {
-    const defaultDocumentId = import.meta.env["VITE_BILIG_DOCUMENT_ID"] ?? "bilig-demo";
-    const defaultLocalServerUrl =
-      import.meta.env["VITE_BILIG_LOCAL_SERVER_URL"] ?? "http://127.0.0.1:4381";
-    const searchParams = new URLSearchParams(window.location.search);
-    return resolveRuntimeConfig(searchParams, defaultDocumentId, defaultLocalServerUrl);
-  }, []);
+export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
+  const documentId = useMemo(
+    () => resolveDocumentId(config.defaultDocumentId),
+    [config.defaultDocumentId],
+  );
+  const zero = useZero();
+  const zeroOnline = useZeroOnline();
+  const [remoteWorkbook] = useQuery(queries.workbooks.byId({ documentId }));
+  const remoteSnapshot = useMemo(
+    () => projectWorkbookToSnapshot(remoteWorkbook ?? null, documentId),
+    [documentId, remoteWorkbook],
+  );
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const [workerHandle, setWorkerHandle] = useState<WorkerHandle | null>(null);
   const [runtimeState, setRuntimeState] = useState<WorkbookWorkerStateSnapshot | null>(null);
@@ -747,6 +736,7 @@ export function WorkerWorkbookApp() {
   const [, setCacheVersion] = useState(0);
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef<WorkerHandle | null>(null);
+  const remoteSnapshotSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -807,10 +797,10 @@ export function WorkerWorkbookApp() {
     void (async () => {
       try {
         const response = await client.invoke("bootstrap", {
-          documentId: runtimeConfig.documentId,
+          documentId,
           replicaId,
-          baseUrl: runtimeConfig.baseUrl,
-          persistState: runtimeConfig.persistState,
+          baseUrl: null,
+          persistState: config.persistState,
         } satisfies WorkbookWorkerBootstrapOptions);
         if (!isRuntimeStateSnapshot(response)) {
           throw new Error("Worker returned an invalid bootstrap payload");
@@ -872,14 +862,42 @@ export function WorkerWorkbookApp() {
       worker.terminate();
       workerHandleRef.current = null;
     };
-  }, [
-    refreshRuntimeState,
-    refreshSelectedCell,
-    replicaId,
-    runtimeConfig.baseUrl,
-    runtimeConfig.documentId,
-    runtimeConfig.persistState,
-  ]);
+  }, [refreshRuntimeState, refreshSelectedCell, documentId, replicaId, config.persistState]);
+
+  useEffect(() => {
+    const active = workerHandleRef.current;
+    if (!active || !remoteSnapshot) {
+      return;
+    }
+
+    const signature = JSON.stringify(remoteSnapshot);
+    if (remoteSnapshotSignatureRef.current === signature) {
+      return;
+    }
+    remoteSnapshotSignatureRef.current = signature;
+
+    void active.client
+      .invoke("replaceSnapshot", remoteSnapshot)
+      .then(() => Promise.all([refreshRuntimeState(active), refreshSelectedCell(active)]))
+      .catch((error: unknown) => {
+        setRuntimeError(error instanceof Error ? error.message : String(error));
+      });
+  }, [refreshRuntimeState, refreshSelectedCell, remoteSnapshot, workerHandle]);
+
+  useEffect(() => {
+    const active = workerHandleRef.current;
+    if (!active) {
+      return;
+    }
+
+    const syncState = remoteSnapshot === null ? "syncing" : zeroOnline ? "live" : "reconnecting";
+    void active.client.invoke("setExternalSyncState", syncState).then(() => {
+      void refreshRuntimeState(active).catch((error: unknown) => {
+        setRuntimeError(error instanceof Error ? error.message : String(error));
+      });
+      return undefined;
+    });
+  }, [refreshRuntimeState, remoteSnapshot, workerHandle, zeroOnline]);
 
   useEffect(() => {
     if (!runtimeState || runtimeState.sheetNames.length === 0) {
@@ -910,15 +928,46 @@ export function WorkerWorkbookApp() {
     };
   }, [refreshSelectedCell, selection.address, selection.sheetName, workerHandle]);
 
-  const invokeMutation = useCallback(
-    async (method: string, ...args: unknown[]): Promise<unknown> => {
-      const active = workerHandleRef.current;
-      if (!active) {
-        throw new Error("Worker runtime is not ready");
+  const invokeWorker = useCallback(async (method: string, ...args: unknown[]): Promise<unknown> => {
+    const active = workerHandleRef.current;
+    if (!active) {
+      throw new Error("Worker runtime is not ready");
+    }
+    return await active.client.invoke(method, ...args);
+  }, []);
+
+  const runZeroMutation = useCallback(
+    async (mutation: Parameters<typeof zero.mutate>[0]) => {
+      const result = zero.mutate(mutation);
+      const clientResult = await result.client;
+      if (
+        typeof clientResult === "object" &&
+        clientResult !== null &&
+        "type" in clientResult &&
+        clientResult.type === "error"
+      ) {
+        const error = clientResult.error;
+        throw error instanceof Error ? error : new Error(toErrorMessage(error));
       }
-      return await active.client.invoke(method, ...args);
+      return result;
     },
-    [],
+    [zero],
+  );
+
+  const invokeMutation = useCallback(
+    async (method: string, ...args: unknown[]) => {
+      const result = await invokeWorker(method, ...args);
+      const snapshot = await invokeWorker("exportSnapshot");
+      await runZeroMutation(
+        mutators.workbook.replaceSnapshot({
+          documentId,
+          snapshot,
+        }),
+      );
+      await Promise.all([refreshRuntimeState(), refreshSelectedCell()]);
+      return result;
+    },
+    [documentId, invokeWorker, refreshRuntimeState, refreshSelectedCell, runZeroMutation],
   );
 
   const applyOptimisticCellEdit = useCallback(
@@ -981,16 +1030,39 @@ export function WorkerWorkbookApp() {
   const applyParsedInput = useCallback(
     async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
       if (parsed.kind === "formula") {
-        await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
+        await invokeWorker("setCellFormula", sheetName, address, parsed.formula);
+        await runZeroMutation(
+          mutators.workbook.setCellFormula({
+            documentId,
+            sheetName,
+            address,
+            formula: parsed.formula,
+          }),
+        );
         return;
       }
       if (parsed.kind === "clear") {
-        await invokeMutation("clearCell", sheetName, address);
+        await invokeWorker("clearCell", sheetName, address);
+        await runZeroMutation(
+          mutators.workbook.clearCell({
+            documentId,
+            sheetName,
+            address,
+          }),
+        );
         return;
       }
-      await invokeMutation("setCellValue", sheetName, address, parsed.value);
+      await invokeWorker("setCellValue", sheetName, address, parsed.value);
+      await runZeroMutation(
+        mutators.workbook.setCellValue({
+          documentId,
+          sheetName,
+          address,
+          value: parsed.value,
+        }),
+      );
     },
-    [invokeMutation],
+    [documentId, invokeWorker, runZeroMutation],
   );
 
   const commitEditor = useCallback(
@@ -1036,12 +1108,27 @@ export function WorkerWorkbookApp() {
     applyOptimisticCellEdit(selection.sheetName, selection.address, { kind: "clear" });
     setEditorValue("");
     setEditingMode("idle");
-    void invokeMutation("clearCell", selection.sheetName, selection.address).catch(
-      (error: unknown) => {
+    void invokeWorker("clearCell", selection.sheetName, selection.address)
+      .then(() =>
+        runZeroMutation(
+          mutators.workbook.clearCell({
+            documentId,
+            sheetName: selection.sheetName,
+            address: selection.address,
+          }),
+        ),
+      )
+      .catch((error: unknown) => {
         setRuntimeError(error instanceof Error ? error.message : String(error));
-      },
-    );
-  }, [applyOptimisticCellEdit, invokeMutation, selection.address, selection.sheetName]);
+      });
+  }, [
+    applyOptimisticCellEdit,
+    documentId,
+    invokeWorker,
+    runZeroMutation,
+    selection.address,
+    selection.sheetName,
+  ]);
 
   const pasteIntoSelection = useCallback(
     (startAddr: string, values: readonly (readonly string[])[]) => {
@@ -1081,13 +1168,22 @@ export function WorkerWorkbookApp() {
       if (ops.length === 0) {
         return;
       }
-      void invokeMutation("renderCommit", ops).catch((error: unknown) => {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      });
+      void invokeWorker("renderCommit", ops)
+        .then(() =>
+          runZeroMutation(
+            mutators.workbook.renderCommit({
+              documentId,
+              ops,
+            }),
+          ),
+        )
+        .catch((error: unknown) => {
+          setRuntimeError(error instanceof Error ? error.message : String(error));
+        });
       setEditorSelectionBehavior("select-all");
       setEditingMode("idle");
     },
-    [invokeMutation, selection.sheetName],
+    [documentId, invokeWorker, runZeroMutation, selection.sheetName],
   );
 
   const fillSelectionRange = useCallback(
@@ -1097,19 +1193,26 @@ export function WorkerWorkbookApp() {
       targetStartAddr: string,
       targetEndAddr: string,
     ) => {
-      void invokeMutation(
-        "fillRange",
-        {
-          sheetName: selection.sheetName,
-          startAddress: sourceStartAddr,
-          endAddress: sourceEndAddr,
-        },
-        {
-          sheetName: selection.sheetName,
-          startAddress: targetStartAddr,
-          endAddress: targetEndAddr,
-        },
-      )
+      const source = {
+        sheetName: selection.sheetName,
+        startAddress: sourceStartAddr,
+        endAddress: sourceEndAddr,
+      };
+      const target = {
+        sheetName: selection.sheetName,
+        startAddress: targetStartAddr,
+        endAddress: targetEndAddr,
+      };
+      void invokeWorker("fillRange", source, target)
+        .then(() =>
+          runZeroMutation(
+            mutators.workbook.fillRange({
+              documentId,
+              source,
+              target,
+            }),
+          ),
+        )
         .then(() => {
           setEditingMode("idle");
           return undefined;
@@ -1118,7 +1221,7 @@ export function WorkerWorkbookApp() {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
     },
-    [invokeMutation, selection.sheetName],
+    [documentId, invokeWorker, runZeroMutation, selection.sheetName],
   );
 
   const copySelectionRange = useCallback(
@@ -1128,19 +1231,26 @@ export function WorkerWorkbookApp() {
       targetStartAddr: string,
       targetEndAddr: string,
     ) => {
-      void invokeMutation(
-        "copyRange",
-        {
-          sheetName: selection.sheetName,
-          startAddress: sourceStartAddr,
-          endAddress: sourceEndAddr,
-        },
-        {
-          sheetName: selection.sheetName,
-          startAddress: targetStartAddr,
-          endAddress: targetEndAddr,
-        },
-      )
+      const source = {
+        sheetName: selection.sheetName,
+        startAddress: sourceStartAddr,
+        endAddress: sourceEndAddr,
+      };
+      const target = {
+        sheetName: selection.sheetName,
+        startAddress: targetStartAddr,
+        endAddress: targetEndAddr,
+      };
+      void invokeWorker("copyRange", source, target)
+        .then(() =>
+          runZeroMutation(
+            mutators.workbook.copyRange({
+              documentId,
+              source,
+              target,
+            }),
+          ),
+        )
         .then(() => {
           setEditingMode("idle");
           return undefined;
@@ -1149,7 +1259,7 @@ export function WorkerWorkbookApp() {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
     },
-    [invokeMutation, selection.sheetName],
+    [documentId, invokeWorker, runZeroMutation, selection.sheetName],
   );
 
   const selectAddress = useCallback(
@@ -1707,14 +1817,24 @@ export function WorkerWorkbookApp() {
           }}
           onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, fallbackWidth);
-            return invokeMutation("autofitColumn", selection.sheetName, columnIndex).then(
-              (width) => {
-                if (typeof width === "number") {
-                  workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
+            return invokeWorker("autofitColumn", selection.sheetName, columnIndex)
+              .then((width) => {
+                if (typeof width !== "number") {
+                  return undefined;
                 }
-                return undefined;
-              },
-            );
+                workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
+                return runZeroMutation(
+                  mutators.workbook.updateColumnWidth({
+                    documentId,
+                    sheetName: selection.sheetName,
+                    columnIndex,
+                    width,
+                  }),
+                ).then(() => undefined);
+              })
+              .catch((error: unknown) => {
+                setRuntimeError(error instanceof Error ? error.message : String(error));
+              });
           }}
           onBeginEdit={beginEditing}
           onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "select-all", "formula")}
@@ -1722,14 +1842,20 @@ export function WorkerWorkbookApp() {
           onClearCell={clearSelectedCell}
           onColumnWidthChange={(columnIndex: number, newSize: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, newSize);
-            void invokeMutation(
-              "updateColumnWidth",
-              selection.sheetName,
-              columnIndex,
-              newSize,
-            ).catch((error: unknown) => {
-              setRuntimeError(error instanceof Error ? error.message : String(error));
-            });
+            void invokeWorker("updateColumnWidth", selection.sheetName, columnIndex, newSize)
+              .then(() =>
+                runZeroMutation(
+                  mutators.workbook.updateColumnWidth({
+                    documentId,
+                    sheetName: selection.sheetName,
+                    columnIndex,
+                    width: Math.round(newSize),
+                  }),
+                ),
+              )
+              .catch((error: unknown) => {
+                setRuntimeError(error instanceof Error ? error.message : String(error));
+              });
           }}
           onCommitEdit={commitEditor}
           onCopyRange={copySelectionRange}

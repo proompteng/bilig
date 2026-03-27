@@ -1,12 +1,36 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { ZeroProvider } from "@rocicorp/zero/react";
+import { loadRuntimeConfig, mutators, schema } from "@bilig/zero-sync";
 import { App } from "./App";
 
 import "@glideapps/glide-data-grid/index.css";
 import "./index.css";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+
+void loadRuntimeConfig()
+  .then((config) => {
+    root.render(
+      <React.StrictMode>
+        <ZeroProvider
+          cacheURL={config.zeroCacheUrl}
+          userID="anon"
+          schema={schema}
+          mutators={mutators}
+        >
+          <App config={config} />
+        </ZeroProvider>
+      </React.StrictMode>,
+    );
+    return undefined;
+  })
+  .catch((error: unknown) => {
+    root.render(
+      <React.StrictMode>
+        <div className="error-banner" data-testid="worker-error">
+          {error instanceof Error ? error.message : String(error)}
+        </div>
+      </React.StrictMode>,
+    );
+  });

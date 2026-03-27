@@ -183,6 +183,7 @@ export class WorkbookWorkerRuntime {
   private engine: WorkerEngine | null = null;
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
+  private externalSyncState: SyncState | null = null;
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionState>();
   private readonly formatIds = new Map<string, number>([["", 0]]);
   private readonly styles = new Map<string, CellStyleRecord>([
@@ -207,6 +208,7 @@ export class WorkbookWorkerRuntime {
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerStateSnapshot> {
     this.cleanup();
     this.bootstrapOptions = options;
+    this.externalSyncState = null;
     const engine = new SpreadsheetEngine({
       workbookName: options.documentId,
       replicaId: options.replicaId,
@@ -272,8 +274,25 @@ export class WorkbookWorkerRuntime {
       workbookName: engine.workbook.workbookName,
       sheetNames: this.listSheetNames(),
       metrics: { ...engine.getLastMetrics() },
-      syncState: engine.getSyncState(),
+      syncState: this.externalSyncState ?? engine.getSyncState(),
     };
+  }
+
+  async replaceSnapshot(snapshot: WorkbookSnapshot): Promise<WorkbookWorkerStateSnapshot> {
+    const engine = this.requireEngine();
+    engine.importSnapshot(snapshot);
+    await this.persistState();
+    this.broadcastViewportPatches(engine.getLastMetrics());
+    return this.getRuntimeState();
+  }
+
+  setExternalSyncState(syncState: SyncState | null): WorkbookWorkerStateSnapshot {
+    this.externalSyncState = syncState;
+    return this.getRuntimeState();
+  }
+
+  exportSnapshot(): WorkbookSnapshot {
+    return this.requireEngine().exportSnapshot();
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {

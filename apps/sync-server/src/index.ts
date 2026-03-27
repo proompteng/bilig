@@ -1,6 +1,7 @@
 import { createSyncServer } from "./server.js";
 import { DocumentSessionManager } from "./document-session-manager.js";
 import { createHttpWorksheetExecutor } from "./worksheet-executor.js";
+import { createZeroSyncService } from "./zero/service.js";
 
 const host = process.env["HOST"] ?? "0.0.0.0";
 const port = Number.parseInt(process.env["PORT"] ?? "4321", 10);
@@ -21,18 +22,29 @@ const sessionManager = new DocumentSessionManager(
   },
 );
 
-const { app } = createSyncServer({
-  sessionManager,
-});
+const zeroSyncService = createZeroSyncService();
 
-app
-  .listen({ host, port })
-  .then(() => {
-    app.log.info({ host, port }, "bilig sync server listening");
+void zeroSyncService
+  .initialize()
+  .then(async () => {
+    const { app } = createSyncServer({
+      sessionManager,
+      zeroSyncService,
+    });
+
+    try {
+      await app.listen({ host, port });
+      app.log.info(
+        { host, port, zeroSync: zeroSyncService.enabled },
+        "bilig sync server listening",
+      );
+    } catch (error) {
+      app.log.error(error, "bilig sync server failed to start");
+      process.exitCode = 1;
+    }
     return undefined;
   })
   .catch((error) => {
-    app.log.error(error, "bilig sync server failed to start");
+    console.error("Failed to initialize Zero sync", error);
     process.exitCode = 1;
-    return undefined;
   });

@@ -85,6 +85,16 @@ vi.mock("@bilig/worker-transport", async (importOriginal) => {
   };
 });
 
+vi.mock("@rocicorp/zero/react", () => ({
+  useQuery: () => [undefined],
+  useZero: () => ({
+    mutate: () => ({
+      client: Promise.resolve({ type: "complete" }),
+    }),
+  }),
+  useZeroOnline: () => true,
+}));
+
 class ResizeObserverMock {
   observe() {}
   unobserve() {}
