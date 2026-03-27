@@ -335,6 +335,56 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
   });
 
+  it("spills TEXTSPLIT and EXPAND and resolves INDIRECT through the JS runtime fallback", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Sheet2");
+    engine.setCellValue("Sheet1", "A1", "red,blue|green");
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellFormula("Sheet2", "A1", "B1*2");
+    engine.setCellFormula("Sheet1", "C1", 'TEXTSPLIT(A1,",","|")');
+    engine.setCellFormula("Sheet1", "E1", "EXPAND(B1:B2,3,2,0)");
+    engine.setCellFormula("Sheet1", "G1", 'INDIRECT("B1:B2")');
+    engine.setCellFormula("Sheet1", "H1", 'INDIRECT("B2")');
+    engine.setCellFormula("Sheet1", "I1", "FORMULA(Sheet2!A1)");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "red",
+    });
+    expect(engine.getCellValue("Sheet1", "D1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "blue",
+    });
+    expect(engine.getCellValue("Sheet1", "C2")).toMatchObject({
+      tag: ValueTag.String,
+      value: "green",
+    });
+    expect(engine.getCellValue("Sheet1", "D2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(engine.getCellValue("Sheet1", "E1")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "E2")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Sheet1", "F2")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "E3")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "F3")).toEqual({ tag: ValueTag.Number, value: 0 });
+    expect(engine.getCellValue("Sheet1", "G1")).toEqual({ tag: ValueTag.Number, value: 10 });
+    expect(engine.getCellValue("Sheet1", "G2")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Sheet1", "H1")).toEqual({ tag: ValueTag.Number, value: 20 });
+    expect(engine.getCellValue("Sheet1", "I1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "=B1*2",
+    });
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "I1").mode).toBe(FormulaMode.JsOnly);
+  });
+
   it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

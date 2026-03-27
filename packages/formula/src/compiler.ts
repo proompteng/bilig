@@ -49,6 +49,7 @@ function producesSpillResult(node: FormulaNode): boolean {
     case "CallExpr":
       return [
         "SEQUENCE",
+        "EXPAND",
         "OFFSET",
         "TAKE",
         "DROP",
@@ -62,6 +63,7 @@ function producesSpillResult(node: FormulaNode): boolean {
         "WRAPCOLS",
         "FILTER",
         "UNIQUE",
+        "TEXTSPLIT",
         "MAKEARRAY",
         "MAP",
         "SCAN",

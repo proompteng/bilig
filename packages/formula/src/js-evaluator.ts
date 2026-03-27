@@ -613,6 +613,123 @@ function getBroadcastShape(
   return compatible ? { rows, cols } : undefined;
 }
 
+function coerceScalarTextArgument(value: StackValue | undefined): string | CellValue {
+  if (value === undefined) {
+    return error(ErrorCode.Value);
+  }
+  const scalar = isSingleCellValue(value);
+  if (!scalar) {
+    return error(ErrorCode.Value);
+  }
+  if (scalar.tag === ValueTag.Error) {
+    return scalar;
+  }
+  return toStringValue(scalar);
+}
+
+function coerceOptionalBooleanArgument(
+  value: StackValue | undefined,
+  fallback: boolean,
+): boolean | CellValue {
+  if (value === undefined) {
+    return fallback;
+  }
+  const scalar = isSingleCellValue(value);
+  if (!scalar) {
+    return error(ErrorCode.Value);
+  }
+  if (scalar.tag === ValueTag.Error) {
+    return scalar;
+  }
+  if (scalar.tag === ValueTag.Boolean) {
+    return scalar.value;
+  }
+  const numeric = toNumber(scalar);
+  return numeric === undefined ? error(ErrorCode.Value) : numeric !== 0;
+}
+
+function coerceOptionalMatchModeArgument(
+  value: StackValue | undefined,
+  fallback: 0 | 1,
+): 0 | 1 | CellValue {
+  if (value === undefined) {
+    return fallback;
+  }
+  const scalar = isSingleCellValue(value);
+  if (!scalar) {
+    return error(ErrorCode.Value);
+  }
+  if (scalar.tag === ValueTag.Error) {
+    return scalar;
+  }
+  const numeric = toNumber(scalar);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return error(ErrorCode.Value);
+  }
+  const integer = Math.trunc(numeric);
+  return integer === 0 || integer === 1 ? integer : error(ErrorCode.Value);
+}
+
+function coerceOptionalPositiveIntegerArgument(
+  value: StackValue | undefined,
+  fallback: number,
+): number | CellValue {
+  if (value === undefined) {
+    return fallback;
+  }
+  const scalar = isSingleCellValue(value);
+  if (!scalar) {
+    return error(ErrorCode.Value);
+  }
+  if (scalar.tag === ValueTag.Error) {
+    return scalar;
+  }
+  const numeric = toNumber(scalar);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return error(ErrorCode.Value);
+  }
+  const integer = Math.trunc(numeric);
+  return integer >= 1 ? integer : error(ErrorCode.Value);
+}
+
+function isCellValueError(value: number | boolean | string | CellValue): value is CellValue {
+  return typeof value === "object" && value !== null && "tag" in value;
+}
+
+function indexOfWithMatchMode(
+  text: string,
+  delimiter: string,
+  startIndex: number,
+  matchMode: 0 | 1,
+): number {
+  if (matchMode === 1) {
+    return text.toLowerCase().indexOf(delimiter.toLowerCase(), startIndex);
+  }
+  return text.indexOf(delimiter, startIndex);
+}
+
+function splitTextByDelimiter(text: string, delimiter: string, matchMode: 0 | 1): string[] {
+  if (delimiter === "") {
+    return [text];
+  }
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor <= text.length) {
+    const found = indexOfWithMatchMode(text, delimiter, cursor, matchMode);
+    if (found === -1) {
+      parts.push(text.slice(cursor));
+      break;
+    }
+    parts.push(text.slice(cursor, found));
+    cursor = found + delimiter.length;
+  }
+  return parts;
+}
+
+function makeArrayStack(rows: number, cols: number, values: CellValue[]): StackValue {
+  return { kind: "array", rows, cols, values };
+}
+
 function applyLambda(
   lambdaValue: StackValue,
   args: StackValue[],
@@ -669,6 +786,22 @@ function evaluateSpecialCall(
       return stackScalar({ tag: ValueTag.Boolean, value: rawArgs[0]?.kind === "omitted" });
     }
     case "FORMULATEXT": {
+      if (rawArgs.length !== 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const address = referenceTopLeftAddress(argRefs[0]);
+      const sheetName = referenceSheetName(argRefs[0], context);
+      if (!address || !sheetName) {
+        return stackScalar(error(ErrorCode.Ref));
+      }
+      const formula = context.resolveFormula?.(sheetName, address);
+      return stackScalar(
+        formula
+          ? stringValue(formula.startsWith("=") ? formula : `=${formula}`)
+          : error(ErrorCode.NA),
+      );
+    }
+    case "FORMULA": {
       if (rawArgs.length !== 1) {
         return stackScalar(error(ErrorCode.Value));
       }
@@ -773,6 +906,164 @@ function evaluateSpecialCall(
         default:
           return stackScalar(error(ErrorCode.Value));
       }
+    }
+    case "INDIRECT": {
+      if (rawArgs.length < 1 || rawArgs.length > 2) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const refText = coerceScalarTextArgument(rawArgs[0]);
+      if (isCellValueError(refText)) {
+        return stackScalar(refText);
+      }
+      const a1Mode = coerceOptionalBooleanArgument(rawArgs[1], true);
+      if (isCellValueError(a1Mode)) {
+        return stackScalar(a1Mode);
+      }
+      if (!a1Mode) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const normalizedRefText = refText.trim();
+      if (normalizedRefText === "") {
+        return stackScalar(error(ErrorCode.Ref));
+      }
+
+      try {
+        const cell = parseCellAddress(normalizedRefText, context.sheetName);
+        return stackScalar(context.resolveCell(cell.sheetName ?? context.sheetName, cell.text));
+      } catch {
+        // fall through to range/name resolution
+      }
+
+      try {
+        const range = parseRangeAddress(normalizedRefText, context.sheetName);
+        if (range.kind !== "cells") {
+          return stackScalar(error(ErrorCode.Ref));
+        }
+        const targetSheetName = range.sheetName ?? context.sheetName;
+        const values = context.resolveRange(
+          targetSheetName,
+          range.start.text,
+          range.end.text,
+          "cells",
+        );
+        const rows = range.end.row - range.start.row + 1;
+        const cols = range.end.col - range.start.col + 1;
+        return {
+          kind: "range",
+          values,
+          refKind: "cells",
+          rows,
+          cols,
+        };
+      } catch {
+        // fall through to name resolution
+      }
+
+      const resolvedName = context.resolveName?.(normalizedRefText);
+      return stackScalar(resolvedName ?? error(ErrorCode.Ref));
+    }
+    case "EXPAND": {
+      if (rawArgs.length < 2 || rawArgs.length > 4) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const source = toRangeLike(rawArgs[0]!);
+      const rows = coerceOptionalPositiveIntegerArgument(rawArgs[1], source.rows);
+      const cols = coerceOptionalPositiveIntegerArgument(rawArgs[2], source.cols);
+      if (isCellValueError(rows)) {
+        return stackScalar(rows);
+      }
+      if (isCellValueError(cols)) {
+        return stackScalar(cols);
+      }
+      const padArgument = rawArgs[3];
+      const padValue =
+        padArgument === undefined
+          ? error(ErrorCode.NA)
+          : ((): CellValue => {
+              const scalar = isSingleCellValue(padArgument);
+              return scalar ?? error(ErrorCode.Value);
+            })();
+      if (padValue.tag === ValueTag.Error && padArgument !== undefined) {
+        const scalar = isSingleCellValue(padArgument);
+        if (!scalar) {
+          return stackScalar(error(ErrorCode.Value));
+        }
+      }
+      if (rows < source.rows || cols < source.cols) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const values: CellValue[] = [];
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          values.push(
+            row < source.rows && col < source.cols ? getRangeCell(source, row, col) : padValue,
+          );
+        }
+      }
+      return makeArrayStack(rows, cols, values);
+    }
+    case "TEXTSPLIT": {
+      if (rawArgs.length < 2 || rawArgs.length > 6) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const text = coerceScalarTextArgument(rawArgs[0]);
+      const columnDelimiter = coerceScalarTextArgument(rawArgs[1]);
+      const rowDelimiter =
+        rawArgs[2] === undefined ? undefined : coerceScalarTextArgument(rawArgs[2]);
+      const ignoreEmpty = coerceOptionalBooleanArgument(rawArgs[3], false);
+      const matchMode = coerceOptionalMatchModeArgument(rawArgs[4], 0);
+      if (isCellValueError(text)) {
+        return stackScalar(text);
+      }
+      if (isCellValueError(columnDelimiter)) {
+        return stackScalar(columnDelimiter);
+      }
+      if (rowDelimiter !== undefined && isCellValueError(rowDelimiter)) {
+        return stackScalar(rowDelimiter);
+      }
+      if (isCellValueError(ignoreEmpty)) {
+        return stackScalar(ignoreEmpty);
+      }
+      if (isCellValueError(matchMode)) {
+        return stackScalar(matchMode);
+      }
+      if (columnDelimiter === "" && rowDelimiter === undefined) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const padArgument = rawArgs[5];
+      const padValue =
+        padArgument === undefined
+          ? error(ErrorCode.NA)
+          : ((): CellValue => {
+              const scalar = isSingleCellValue(padArgument);
+              return scalar ?? error(ErrorCode.Value);
+            })();
+      if (padArgument !== undefined && !isSingleCellValue(padArgument)) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+
+      const rowSlices =
+        rowDelimiter === undefined || rowDelimiter === ""
+          ? [text]
+          : splitTextByDelimiter(text, rowDelimiter, matchMode);
+      const matrix = rowSlices.map((rowSlice) => {
+        const parts =
+          columnDelimiter === ""
+            ? [rowSlice]
+            : splitTextByDelimiter(rowSlice, columnDelimiter, matchMode);
+        const filtered = ignoreEmpty ? parts.filter((part) => part !== "") : parts;
+        return filtered.length === 0 ? [] : filtered;
+      });
+      const rows = Math.max(matrix.length, 1);
+      const cols = Math.max(1, ...matrix.map((row) => row.length));
+      const values: CellValue[] = [];
+      for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+        const row = matrix[rowIndex] ?? [];
+        for (let colIndex = 0; colIndex < cols; colIndex += 1) {
+          values.push(colIndex < row.length ? stringValue(row[colIndex]!) : padValue);
+        }
+      }
+      return makeArrayStack(rows, cols, values);
     }
     case "MAKEARRAY": {
       if (rawArgs.length !== 3) {

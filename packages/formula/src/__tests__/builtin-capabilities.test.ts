@@ -16,6 +16,8 @@ describe("builtin capabilities", () => {
     expect(builtinJsSpecialNames.has("LET")).toBe(true);
     expect(builtinJsSpecialNames.has("LAMBDA")).toBe(true);
     expect(builtinJsSpecialNames.has("MAP")).toBe(true);
+    expect(builtinJsSpecialNames.has("INDIRECT")).toBe(true);
+    expect(builtinJsSpecialNames.has("TEXTSPLIT")).toBe(true);
   });
 
   it("exposes array-runtime backlog metadata for non-native families", () => {
@@ -27,6 +29,12 @@ describe("builtin capabilities", () => {
     });
     expect(getBuiltinCapability("BYROW")).toMatchObject({
       category: "lambda",
+      jsStatus: "special-js-only",
+      wasmStatus: "not-started",
+      needsArrayRuntime: true,
+    });
+    expect(getBuiltinCapability("EXPAND")).toMatchObject({
+      category: "dynamic-array",
       jsStatus: "special-js-only",
       wasmStatus: "not-started",
       needsArrayRuntime: true,

@@ -37,10 +37,14 @@ const jsSpecialBuiltinNames = new Set([
   "BYCOL",
   "CELL",
   "COLUMN",
+  "EXPAND",
+  "FORMULA",
   "FORMULATEXT",
+  "INDIRECT",
   "ROW",
   "SHEET",
   "SHEETS",
+  "TEXTSPLIT",
 ]);
 
 const wasmProductionBuiltinNames = new Set([
@@ -189,6 +193,7 @@ const aggregationBuiltinNames = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "C
 const logicalBuiltinNames = new Set(["IF", "AND", "OR", "NOT", "IFERROR", "IFNA", "NA"]);
 const informationBuiltinNames = new Set([
   "CELL",
+  "FORMULA",
   "FORMULATEXT",
   "ISBLANK",
   "ISNUMBER",
@@ -247,6 +252,7 @@ const lookupBuiltinNames = new Set([
   "HLOOKUP",
   "LOOKUP",
   "OFFSET",
+  "INDIRECT",
   "ROW",
 ]);
 const statisticalBuiltinNames = new Set([
@@ -322,6 +328,7 @@ const statisticalBuiltinNames = new Set([
 ]);
 const dynamicArrayBuiltinNames = new Set([
   "SEQUENCE",
+  "EXPAND",
   "FILTER",
   "UNIQUE",
   "TAKE",
@@ -340,6 +347,7 @@ const dynamicArrayBuiltinNames = new Set([
   "TRANSPOSE",
   "HSTACK",
   "VSTACK",
+  "TEXTSPLIT",
 ]);
 const lambdaBuiltinNames = new Set([
   "LET",

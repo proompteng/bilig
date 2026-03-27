@@ -275,7 +275,15 @@ describe("js evaluator", () => {
       currentAddress: "C4",
       listSheetNames: () => ["Sheet1", "Sheet2", "Summary"],
       resolveFormula: (sheetName: string, address: string): string | undefined =>
-        sheetName === "Sheet2" && address === "B1" ? "SUM(A1:A2)" : undefined,
+        sheetName === "Sheet2" && address === "B1"
+          ? "SUM(A1:A2)"
+          : sheetName === "Sheet2" && address === "C1"
+            ? "A1*2"
+            : undefined,
+      resolveName: (name: string): CellValue =>
+        name === "TaxRate"
+          ? { tag: ValueTag.Number, value: 0.085 }
+          : { tag: ValueTag.Error, code: ErrorCode.Name },
     };
 
     expect(evaluatePlan(lowerToPlan(parseFormula("ROW()")), metadataContext)).toEqual({
@@ -291,6 +299,11 @@ describe("js evaluator", () => {
     ).toEqual({
       tag: ValueTag.String,
       value: "=SUM(A1:A2)",
+      stringId: 0,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("FORMULA(Sheet2!C1)")), metadataContext)).toEqual({
+      tag: ValueTag.String,
+      value: "=A1*2",
       stringId: 0,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(1)")), metadataContext)).toEqual({
@@ -327,6 +340,15 @@ describe("js evaluator", () => {
       tag: ValueTag.String,
       value: "",
       stringId: 0,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), {
+        ...metadataContext,
+        currentAddress: undefined,
+      }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("bogus",A1)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
@@ -381,6 +403,186 @@ describe("js evaluator", () => {
       code: ErrorCode.Value,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(1,1)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("A1")')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('INDIRECT("TaxRate")+1')), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1.085,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('INDIRECT("R1C1",FALSE())')), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("INDIRECT()")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "INDIRECT", argc: 1 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "A1" },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "INDIRECT", argc: 2 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("A:A")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("a,b,,c",",","",TRUE(),0,"-")')),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "a",
+      stringId: 0,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha","")')), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "push-string", value: "," },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 2 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "alpha" },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 2 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "alpha" },
+          { opcode: "push-string", value: "," },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 3 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "alpha" },
+          { opcode: "push-string", value: "," },
+          { opcode: "push-string", value: "" },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 4 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),2)')),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),0,SEQUENCE(2))')),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,0)")), metadataContext)).toEqual(
+      {
+        tag: ValueTag.Number,
+        value: 2,
+      },
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,1,1)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,0,3)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,0)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,SEQUENCE(2))")), metadataContext),
+    ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });

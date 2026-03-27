@@ -12,16 +12,16 @@
 
 ## Coverage Summary
 - Unified function count: **525**
-- ODF mandatory function count: **57**
+- ODF mandatory function count: **59**
 - Office function count (cleaned scrape): **508**
-- Overlap (present in both): **57**
-- ODF-only (mandatory, not listed by Office): **0**
-- Office-only (not in ODF 1.4 mandatory): **451**
+- Overlap (present in both): **58**
+- ODF-only (mandatory, not listed by Office): **1**
+- Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **514**
-- Not yet registered in codebase: **11**
-- Placeholder-backed registrations: **133**
+- Registered in codebase: **515**
+- Not yet registered in codebase: **10**
+- Placeholder-backed registrations: **130**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
 ## Full unified function list (ODF 1.4 mandatory + Office category)
@@ -214,7 +214,7 @@
 | FLOOR.MATH | Not in ODF 1.4 mandatory | Yes | Yes |
 | FLOOR.PRECISE | Not in ODF 1.4 mandatory | Yes | Yes |
 | FORECAST | Placeholder (blocked) | No | Yes |
-| FORMULA | Missing | No | No |
+| FORMULA | Implemented | No | Yes |
 | FORMULATEXT | Not in ODF 1.4 mandatory | Yes | Yes |
 | FREQUENCY | Placeholder (blocked) | Yes | Yes |
 | FTEST | Placeholder (blocked) | Yes | Yes |
@@ -275,7 +275,7 @@
 | IMSUM | Placeholder (blocked) | Yes | Yes |
 | IMTAN | Placeholder (blocked) | Yes | Yes |
 | INDEX | Not in ODF 1.4 mandatory | Yes | Yes |
-| INDIRECT | Placeholder (blocked) | Yes | Yes |
+| INDIRECT | Implemented | Yes | Yes |
 | INFO | Placeholder (blocked) | Yes | Yes |
 | INT | Not in ODF 1.4 mandatory | Yes | Yes |
 | INTERCEPT | Placeholder (blocked) | Yes | Yes |

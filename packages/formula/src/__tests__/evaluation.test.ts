@@ -318,6 +318,11 @@ describe("formula builtins and JS evaluator", () => {
       value: "=A1*2",
       stringId: 0,
     });
+    expect(evaluateAst(parseFormula("FORMULA(Sheet2!B1)"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "=A1*2",
+      stringId: 0,
+    });
     expect(evaluateAst(parseFormula("SHEET()"), context)).toEqual({
       tag: ValueTag.Number,
       value: 1,
@@ -394,6 +399,10 @@ describe("formula builtins and JS evaluator", () => {
     expect(evaluateAst(parseFormula('LENB("é")'), context)).toEqual({
       tag: ValueTag.Number,
       value: 2,
+    });
+    expect(evaluateAst(parseFormula('INDIRECT("A1")+1'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
     });
     expect(evaluateAst(parseFormula("SKEWP(1,2,3)"), context)).toEqual({
       tag: ValueTag.Number,
@@ -512,6 +521,65 @@ describe("formula builtins and JS evaluator", () => {
       values: [
         { tag: ValueTag.String, value: "abc", stringId: 0 },
         { tag: ValueTag.String, value: "123", stringId: 0 },
+      ],
+    });
+
+    expect(evaluateAstResult(parseFormula('TEXTSPLIT("red,blue|green",",","|")'), context)).toEqual(
+      {
+        kind: "array",
+        rows: 2,
+        cols: 2,
+        values: [
+          { tag: ValueTag.String, value: "red", stringId: 0 },
+          { tag: ValueTag.String, value: "blue", stringId: 0 },
+          { tag: ValueTag.String, value: "green", stringId: 0 },
+          { tag: ValueTag.Error, code: ErrorCode.NA },
+        ],
+      },
+    );
+
+    expect(
+      evaluateAstResult(parseFormula("EXPAND(A1:A3,4,2,0)"), {
+        ...context,
+        resolveRange: (): CellValue[] => [
+          { tag: ValueTag.Number, value: 1 },
+          { tag: ValueTag.Number, value: 3 },
+          { tag: ValueTag.Number, value: 2 },
+        ],
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+      ],
+    });
+
+    expect(
+      evaluateAstResult(parseFormula('INDIRECT("A1:A3")'), {
+        ...context,
+        resolveRange: (): CellValue[] => [
+          { tag: ValueTag.Number, value: 7 },
+          { tag: ValueTag.Number, value: 8 },
+          { tag: ValueTag.Number, value: 9 },
+        ],
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 9 },
       ],
     });
 
