@@ -78,6 +78,7 @@ describe("formula builtins and JS evaluator", () => {
     const text = (value: string): CellValue => ({ tag: ValueTag.String, value, stringId: 0 });
     const context = {
       sheetName: "Sheet1",
+      currentAddress: "C7",
       resolveCell: (sheetName: string, address: string): CellValue => {
         if (sheetName === "Sheet2" && address === "B1") {
           return num(9);
@@ -104,6 +105,9 @@ describe("formula builtins and JS evaluator", () => {
         }
         return [];
       },
+      resolveFormula: (sheetName: string, address: string): string | undefined =>
+        sheetName === "Sheet2" && address === "B1" ? "A1*2" : undefined,
+      listSheetNames: (): string[] => ["Sheet1", "Summary", "Sheet2"],
     };
 
     expect(evaluateAst(parseFormula('A1&"!"'), context)).toEqual({
@@ -238,6 +242,14 @@ describe("formula builtins and JS evaluator", () => {
       tag: ValueTag.Number,
       value: 9,
     });
+    expect(evaluateAst(parseFormula("LAMBDA(x,ISOMITTED(x))()"), context)).toEqual({
+      tag: ValueTag.Boolean,
+      value: true,
+    });
+    expect(evaluateAst(parseFormula("LAMBDA(x,IF(ISOMITTED(x),9,x))(4)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
     expect(evaluateAst(parseFormula("TRUE()"), context)).toEqual({
       tag: ValueTag.Boolean,
       value: true,
@@ -265,6 +277,134 @@ describe("formula builtins and JS evaluator", () => {
       value: "alpha",
       stringId: 0,
     });
+    expect(evaluateAst(parseFormula('NUMBERVALUE("2.500,27",",",".")'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2500.27,
+    });
+    expect(evaluateAst(parseFormula('REGEXTEST("Alpha-42","[a-z]+-[0-9]+",1)'), context)).toEqual({
+      tag: ValueTag.Boolean,
+      value: true,
+    });
+    expect(
+      evaluateAst(parseFormula('REGEXREPLACE("abc123","([a-z]+)([0-9]+)","$2-$1")'), context),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "123-abc",
+      stringId: 0,
+    });
+    expect(evaluateAst(parseFormula('VALUETOTEXT("alpha",1)'), context)).toEqual({
+      tag: ValueTag.String,
+      value: '"alpha"',
+      stringId: 0,
+    });
+    expect(evaluateAst(parseFormula("ROW()"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 7,
+    });
+    expect(evaluateAst(parseFormula("COLUMN()"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(evaluateAst(parseFormula("ROW(A2:B4)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluateAst(parseFormula("COLUMN(B:D)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluateAst(parseFormula("FORMULATEXT(Sheet2!B1)"), context)).toEqual({
+      tag: ValueTag.String,
+      value: "=A1*2",
+      stringId: 0,
+    });
+    expect(evaluateAst(parseFormula("SHEET()"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(evaluateAst(parseFormula('SHEET("Summary")'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluateAst(parseFormula("SHEETS()"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(evaluateAst(parseFormula("SHEETS(A1:B2)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(evaluateAst(parseFormula('CELL("address",B3)'), context)).toEqual({
+      tag: ValueTag.String,
+      value: "$B$3",
+      stringId: 0,
+    });
+    expect(evaluateAst(parseFormula('CELL("row",B3)'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(evaluateAst(parseFormula('CELL("col",B3)'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluateAst(parseFormula('CELL("contents",A1)'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
+    expect(evaluateAst(parseFormula('CELL("type",A2)'), context)).toEqual({
+      tag: ValueTag.String,
+      value: "l",
+      stringId: 0,
+    });
+    expect(evaluateAst(parseFormula('BIN2DEC("1111111111")'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: -1,
+    });
+    expect(evaluateAst(parseFormula('COMPLEX(3,-4,"j")'), context)).toEqual({
+      tag: ValueTag.String,
+      value: "3-4j",
+      stringId: 0,
+    });
+    expect(evaluateAst(parseFormula('IMABS("3+4i")'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    });
+    expect(
+      evaluateAst(parseFormula('DATEDIF(DATE(2020,1,15),DATE(2021,3,20),"YM")'), context),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluateAst(parseFormula("WORKDAY.INTL(DATE(2026,3,13),1,7)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 46097,
+    });
+    expect(evaluateAst(parseFormula("FVSCHEDULE(1000,0.09,0.11,0.1)"), context)).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1330.89, 12),
+    });
+    expect(evaluateAst(parseFormula("DB(10000,1000,5,1)"), context)).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(3690, 12),
+    });
+    expect(evaluateAst(parseFormula("VDB(2400,300,10,1,3)"), context)).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(691.2, 12),
+    });
+    expect(evaluateAst(parseFormula('LENB("é")'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(evaluateAst(parseFormula("SKEWP(1,2,3)"), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    const legacyNormsDist = evaluateAst(parseFormula("LEGACY.NORMSDIST(0)"), context);
+    expect(legacyNormsDist).toMatchObject({ tag: ValueTag.Number });
+    if (legacyNormsDist.tag !== ValueTag.Number) {
+      throw new Error("LEGACY.NORMSDIST should return a number");
+    }
+    expect(legacyNormsDist.value).toBeCloseTo(0.5, 8);
     expect(evaluateAst(parseFormula("MissingFn(A1)"), context)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Name,
@@ -347,6 +487,31 @@ describe("formula builtins and JS evaluator", () => {
         { tag: ValueTag.String, value: "A", stringId: 0 },
         { tag: ValueTag.String, value: "B", stringId: 0 },
         { tag: ValueTag.String, value: "C", stringId: 0 },
+      ],
+    });
+
+    expect(
+      evaluateAstResult(parseFormula('REGEXEXTRACT("a1 b2 c3","[a-z][0-9]",1)'), context),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [
+        { tag: ValueTag.String, value: "a1", stringId: 0 },
+        { tag: ValueTag.String, value: "b2", stringId: 0 },
+        { tag: ValueTag.String, value: "c3", stringId: 0 },
+      ],
+    });
+
+    expect(
+      evaluateAstResult(parseFormula('REGEXEXTRACT("abc-123","([a-z]+)-([0-9]+)",2)'), context),
+    ).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [
+        { tag: ValueTag.String, value: "abc", stringId: 0 },
+        { tag: ValueTag.String, value: "123", stringId: 0 },
       ],
     });
 

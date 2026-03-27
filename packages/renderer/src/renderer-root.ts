@@ -9,6 +9,16 @@ export interface WorkbookRendererRoot {
   unmount(): Promise<void>;
 }
 
+function scheduleCommitSettlement(finish: () => void): void {
+  // React/compat can surface commit errors after the update callback returns.
+  // Wait through microtasks and one macrotask turn before reading lastError.
+  queueMicrotask(() => {
+    setTimeout(() => {
+      queueMicrotask(finish);
+    }, 0);
+  });
+}
+
 function isNamedComponentType(value: unknown): value is { displayName?: string; name?: string } {
   return typeof value === "function";
 }
@@ -160,7 +170,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, element, () => {
-            queueMicrotask(finish);
+            scheduleCommitSettlement(finish);
           });
         } catch (error) {
           settled = true;
@@ -194,7 +204,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, null, () => {
-            queueMicrotask(finish);
+            scheduleCommitSettlement(finish);
           });
         } catch (error) {
           settled = true;

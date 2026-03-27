@@ -178,6 +178,69 @@ describe("binary protocol", () => {
     ]);
   });
 
+  it("roundtrips compatibility mode and explicit defined-name value payloads", () => {
+    const decoded = decodeFrame(
+      encodeFrame({
+        kind: "appendBatch",
+        documentId: "book-3",
+        cursor: 10,
+        batch: {
+          id: "replica:3",
+          replicaId: "replica",
+          clock: { counter: 3 },
+          ops: [
+            {
+              kind: "setCalculationSettings",
+              settings: { mode: "manual", compatibilityMode: "odf-1.4" },
+            },
+            {
+              kind: "upsertDefinedName",
+              name: "SalesRange",
+              value: {
+                kind: "range-ref",
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A3",
+              },
+            },
+            {
+              kind: "upsertDefinedName",
+              name: "TaxExpr",
+              value: { kind: "formula", formula: "=B1*0.1" },
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(decoded.kind).toBe("appendBatch");
+    if (decoded.kind !== "appendBatch") {
+      return;
+    }
+
+    expect(decoded.batch.ops).toEqual([
+      {
+        kind: "setCalculationSettings",
+        settings: { mode: "manual", compatibilityMode: "odf-1.4" },
+      },
+      {
+        kind: "upsertDefinedName",
+        name: "SalesRange",
+        value: {
+          kind: "range-ref",
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A3",
+        },
+      },
+      {
+        kind: "upsertDefinedName",
+        name: "TaxExpr",
+        value: { kind: "formula", formula: "=B1*0.1" },
+      },
+    ]);
+  });
+
   it("rejects malformed payload lengths", () => {
     const encoded = encodeFrame({
       kind: "heartbeat",

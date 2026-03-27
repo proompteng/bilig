@@ -5,6 +5,7 @@ export type FormulaId = number;
 export type RangeIndex = number;
 export type EntityId = number;
 export type LiteralInput = number | string | boolean | null;
+export type CompatibilityMode = "excel-modern" | "odf-1.4";
 
 export type EmptyValue = { tag: ValueTag.Empty };
 export type NumberValue = { tag: ValueTag.Number; value: number };
@@ -118,8 +119,45 @@ export interface Viewport {
 
 export interface WorkbookDefinedNameSnapshot {
   name: string;
+  value: WorkbookDefinedNameValueSnapshot;
+}
+
+export interface WorkbookDefinedNameScalarValueSnapshot {
+  kind: "scalar";
   value: LiteralInput;
 }
+
+export interface WorkbookDefinedNameCellRefValueSnapshot {
+  kind: "cell-ref";
+  sheetName: string;
+  address: string;
+}
+
+export interface WorkbookDefinedNameRangeRefValueSnapshot {
+  kind: "range-ref";
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+}
+
+export interface WorkbookDefinedNameStructuredRefValueSnapshot {
+  kind: "structured-ref";
+  tableName: string;
+  columnName: string;
+}
+
+export interface WorkbookDefinedNameFormulaValueSnapshot {
+  kind: "formula";
+  formula: string;
+}
+
+export type WorkbookDefinedNameValueSnapshot =
+  | LiteralInput
+  | WorkbookDefinedNameScalarValueSnapshot
+  | WorkbookDefinedNameCellRefValueSnapshot
+  | WorkbookDefinedNameRangeRefValueSnapshot
+  | WorkbookDefinedNameStructuredRefValueSnapshot
+  | WorkbookDefinedNameFormulaValueSnapshot;
 
 export interface WorkbookPropertySnapshot {
   key: string;
@@ -180,6 +218,7 @@ export type WorkbookCalculationMode = "automatic" | "manual";
 
 export interface WorkbookCalculationSettingsSnapshot {
   mode: WorkbookCalculationMode;
+  compatibilityMode?: CompatibilityMode;
 }
 
 export interface WorkbookVolatileContextSnapshot {

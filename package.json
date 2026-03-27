@@ -19,6 +19,8 @@
     "docker:build:sync": "docker buildx build --target sync-runtime -t registry.ide-newton.ts.net/lab/bilig-sync:${BILIG_IMAGE_TAG:-local} .",
     "protocol:generate": "bun scripts/gen-protocol.ts",
     "protocol:check": "bun scripts/gen-protocol.ts --check",
+    "formula-inventory:generate": "bun scripts/gen-formula-inventory.ts",
+    "formula-inventory:check": "bun scripts/gen-formula-inventory.ts --check",
     "naming:check": "bun scripts/check-canonical-naming.ts",
     "sheet:agent": "bun scripts/spreadsheet-agent.ts",
     "format": "oxfmt --write .oxlintrc.json package.json playwright.config.ts playwright.web.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
@@ -40,7 +42,7 @@
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

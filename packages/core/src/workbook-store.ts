@@ -5,6 +5,7 @@ import {
   type LiteralInput,
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
+  type WorkbookDefinedNameValueSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookPivotValueSnapshot,
   type WorkbookTableSnapshot,
@@ -18,7 +19,7 @@ const SHEET_STRIDE = MAX_ROWS * MAX_COLS;
 
 export interface WorkbookDefinedNameRecord {
   name: string;
-  value: LiteralInput;
+  value: WorkbookDefinedNameValueSnapshot;
 }
 
 export interface WorkbookPropertyRecord {
@@ -134,7 +135,7 @@ export class WorkbookStore {
     pivots: new Map(),
     rowMetadata: new Map(),
     columnMetadata: new Map(),
-    calculationSettings: { mode: "automatic" },
+    calculationSettings: { mode: "automatic", compatibilityMode: "excel-modern" },
     volatileContext: { recalcEpoch: 0 },
     freezePanes: new Map(),
     filters: new Map(),
@@ -278,7 +279,10 @@ export class WorkbookStore {
   setCalculationSettings(
     settings: WorkbookCalculationSettingsSnapshot,
   ): WorkbookCalculationSettingsRecord {
-    this.metadata.calculationSettings = { ...settings };
+    this.metadata.calculationSettings = {
+      compatibilityMode: "excel-modern",
+      ...settings,
+    };
     return this.metadata.calculationSettings;
   }
 
@@ -295,7 +299,7 @@ export class WorkbookStore {
     return { ...this.metadata.volatileContext };
   }
 
-  setDefinedName(name: string, value: LiteralInput): WorkbookDefinedNameRecord {
+  setDefinedName(name: string, value: WorkbookDefinedNameValueSnapshot): WorkbookDefinedNameRecord {
     const trimmedName = name.trim();
     const record: WorkbookDefinedNameRecord = { name: trimmedName, value };
     this.metadata.definedNames.set(normalizeDefinedName(trimmedName), record);
@@ -648,7 +652,7 @@ export class WorkbookStore {
     this.metadata.pivots.clear();
     this.metadata.rowMetadata.clear();
     this.metadata.columnMetadata.clear();
-    this.metadata.calculationSettings = { mode: "automatic" };
+    this.metadata.calculationSettings = { mode: "automatic", compatibilityMode: "excel-modern" };
     this.metadata.volatileContext = { recalcEpoch: 0 };
     this.metadata.freezePanes.clear();
     this.metadata.filters.clear();

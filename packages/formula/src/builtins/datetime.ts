@@ -535,6 +535,51 @@ export function endOfMonthExcelDate(serial: number, offsetMonths: number): numbe
   return excelDatePartsToSerial(shifted.year, shifted.month, day);
 }
 
+function datedifValue(startSerial: number, endSerial: number, unit: string): number | undefined {
+  if (startSerial > endSerial) {
+    return undefined;
+  }
+  const start = excelSerialToDateParts(startSerial);
+  const end = excelSerialToDateParts(endSerial);
+  if (!start || !end) {
+    return undefined;
+  }
+  const totalDays = Math.trunc(endSerial) - Math.trunc(startSerial);
+  const totalMonths =
+    (end.year - start.year) * 12 + (end.month - start.month) - (end.day < start.day ? 1 : 0);
+  const totalYears =
+    end.year -
+    start.year -
+    (end.month < start.month || (end.month === start.month && end.day < start.day) ? 1 : 0);
+
+  switch (unit) {
+    case "D":
+      return totalDays;
+    case "M":
+      return totalMonths;
+    case "Y":
+      return totalYears;
+    case "YM":
+      return ((totalMonths % 12) + 12) % 12;
+    case "YD": {
+      let comparisonYear = end.year;
+      let comparison = excelDatePartsToSerial(comparisonYear, start.month, start.day);
+      if (comparison === undefined || comparison > endSerial) {
+        comparisonYear -= 1;
+        comparison = excelDatePartsToSerial(comparisonYear, start.month, start.day);
+      }
+      return comparison === undefined ? undefined : Math.trunc(endSerial) - Math.trunc(comparison);
+    }
+    case "MD":
+      if (end.day >= start.day) {
+        return end.day - start.day;
+      }
+      return daysInExcelMonth(end.year, end.month === 1 ? 12 : end.month - 1) - start.day + end.day;
+    default:
+      return undefined;
+  }
+}
+
 function normalizeTimeSerial(hours: number, minutes: number, seconds: number): number | undefined {
   if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
     return undefined;
@@ -813,6 +858,66 @@ function isWeekendSerial(serial: number): boolean {
   return dow === 0 || dow === 6;
 }
 
+function weekendSerialDay(serial: number): number {
+  const whole = floorDateSerial(serial);
+  const adjustedWhole = whole < 60 ? whole : whole - 1;
+  return ((adjustedWhole % 7) + 7) % 7;
+}
+
+function weekendMaskFromCode(code: number): Set<number> | undefined {
+  const twoDayWeekendMap: Record<number, readonly number[]> = {
+    1: [6, 0],
+    2: [0, 1],
+    3: [1, 2],
+    4: [2, 3],
+    5: [3, 4],
+    6: [4, 5],
+    7: [5, 6],
+  };
+  if (code >= 1 && code <= 7) {
+    return new Set(twoDayWeekendMap[code]);
+  }
+  if (code >= 11 && code <= 17) {
+    return new Set([(code - 10) % 7]);
+  }
+  return undefined;
+}
+
+function weekendMaskFromString(maskText: string): Set<number> | undefined {
+  const trimmed = maskText.trim();
+  if (!/^[01]{7}$/.test(trimmed) || trimmed === "1111111") {
+    return undefined;
+  }
+  const days = new Set<number>();
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (trimmed[index] !== "1") {
+      continue;
+    }
+    const dow = index === 6 ? 0 : index + 1;
+    days.add(dow);
+  }
+  return days;
+}
+
+function normalizeWeekendMask(weekendArg: CellValue | undefined): Set<number> | CellValue {
+  if (weekendArg === undefined) {
+    return new Set([0, 6]);
+  }
+  if (weekendArg.tag === ValueTag.Error) {
+    return weekendArg;
+  }
+  if (weekendArg.tag === ValueTag.String) {
+    const mask = weekendMaskFromString(weekendArg.value);
+    return mask ?? valueError();
+  }
+  const code = integerValue(weekendArg);
+  if (code === undefined) {
+    return valueError();
+  }
+  const mask = weekendMaskFromCode(code);
+  return mask ?? valueError();
+}
+
 function normalizeHolidayDateSet(
   holidays: readonly CellValue[] | undefined,
 ): Set<number> | CellValue {
@@ -829,6 +934,10 @@ function normalizeHolidayDateSet(
     set.add(Math.trunc(raw));
   }
   return set;
+}
+
+function isWeekendWithMask(serial: number, weekendDays: ReadonlySet<number>): boolean {
+  return weekendDays.has(weekendSerialDay(serial));
 }
 
 function createWorkdayBuiltin(): Builtin {
@@ -901,6 +1010,100 @@ function createNetworkdaysBuiltin(): Builtin {
 
     const isWorkday = (value: number): boolean =>
       !isWeekendSerial(value) && !holidays.has(Math.trunc(value));
+    const step = start <= end ? 1 : -1;
+    let count = 0;
+    for (let cursor = Math.trunc(start); ; cursor += step) {
+      if (isWorkday(cursor)) {
+        count += step;
+      }
+      if (cursor === Math.trunc(end)) {
+        break;
+      }
+    }
+    return numberResult(count);
+  };
+}
+
+function createWorkdayIntlBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 2 || args.length > 4) {
+      return valueError();
+    }
+
+    const start = truncArg(args[0]!);
+    const offset = truncArg(args[1]!);
+    if (typeof start !== "number") {
+      return start;
+    }
+    if (typeof offset !== "number") {
+      return offset;
+    }
+
+    const weekendDays = normalizeWeekendMask(args[2]);
+    if (isErrorValue(weekendDays)) {
+      return weekendDays;
+    }
+
+    const holidays = normalizeHolidayDateSet(args[3] === undefined ? undefined : [args[3]]);
+    if (isErrorValue(holidays)) {
+      return holidays;
+    }
+
+    const isWorkday = (value: number): boolean =>
+      !isWeekendWithMask(value, weekendDays) && !holidays.has(Math.trunc(value));
+    let cursor = Math.trunc(start);
+    const direction = offset >= 0 ? 1 : -1;
+
+    while (!isWorkday(cursor)) {
+      cursor += direction;
+    }
+
+    let remaining = Math.abs(offset);
+    while (remaining > 0) {
+      cursor += direction;
+      if (isWorkday(cursor)) {
+        remaining -= 1;
+      }
+    }
+    return numberResult(cursor);
+  };
+}
+
+function createNetworkdaysIntlBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length < 2 || args.length > 4) {
+      return valueError();
+    }
+
+    const start = truncArg(args[0]!);
+    const end = truncArg(args[1]!);
+    if (typeof start !== "number") {
+      return start;
+    }
+    if (typeof end !== "number") {
+      return end;
+    }
+
+    const weekendDays = normalizeWeekendMask(args[2]);
+    if (isErrorValue(weekendDays)) {
+      return weekendDays;
+    }
+
+    const holidays = normalizeHolidayDateSet(args[3] === undefined ? undefined : [args[3]]);
+    if (isErrorValue(holidays)) {
+      return holidays;
+    }
+
+    const isWorkday = (value: number): boolean =>
+      !isWeekendWithMask(value, weekendDays) && !holidays.has(Math.trunc(value));
     const step = start <= end ? 1 : -1;
     let count = 0;
     for (let cursor = Math.trunc(start); ; cursor += step) {
@@ -1003,6 +1206,26 @@ export function createEomonthBuiltin(): Builtin {
   };
 }
 
+export function createDatedifBuiltin(): Builtin {
+  return (...args) => {
+    const error = firstError(args);
+    if (error) {
+      return error;
+    }
+    if (args.length !== 3) {
+      return valueError();
+    }
+    const startSerial = truncArg(args[0]!);
+    const endSerial = truncArg(args[1]!);
+    const unit = coerceText(args[2]!)?.trim().toUpperCase();
+    if (typeof startSerial !== "number" || typeof endSerial !== "number" || !unit) {
+      return valueError();
+    }
+    const value = datedifValue(startSerial, endSerial, unit);
+    return value === undefined ? valueError() : numberResult(value);
+  };
+}
+
 const datetimePlaceholderBuiltins = createBlockedBuiltinMap(datetimePlaceholderBuiltinNames);
 
 export const datetimeBuiltins: Record<string, Builtin> = {
@@ -1023,11 +1246,14 @@ export const datetimeBuiltins: Record<string, Builtin> = {
   TIMEVALUE: createTimeValueBuiltin(),
   YEARFRAC: createYearfracBuiltin(),
   WORKDAY: createWorkdayBuiltin(),
+  "WORKDAY.INTL": createWorkdayIntlBuiltin(),
   NETWORKDAYS: createNetworkdaysBuiltin(),
+  "NETWORKDAYS.INTL": createNetworkdaysIntlBuiltin(),
   TODAY: createTodayBuiltin(),
   NOW: createNowBuiltin(),
   RAND: createRandBuiltin(),
   EDATE: createEdateBuiltin(),
   EOMONTH: createEomonthBuiltin(),
+  DATEDIF: createDatedifBuiltin(),
   ...datetimePlaceholderBuiltins,
 };

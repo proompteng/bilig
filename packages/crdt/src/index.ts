@@ -3,6 +3,7 @@ import type {
   LiteralInput,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
+  WorkbookDefinedNameValueSnapshot,
   WorkbookPivotValueSnapshot,
   WorkbookVolatileContextSnapshot,
 } from "@bilig/protocol";
@@ -85,7 +86,7 @@ export type WorkbookOp =
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
   | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
   | { kind: "clearCell"; sheetName: string; address: string }
-  | { kind: "upsertDefinedName"; name: string; value: LiteralInput }
+  | { kind: "upsertDefinedName"; name: string; value: WorkbookDefinedNameValueSnapshot }
   | { kind: "deleteDefinedName"; name: string }
   | { kind: "upsertTable"; table: WorkbookTableOp }
   | { kind: "deleteTable"; name: string }

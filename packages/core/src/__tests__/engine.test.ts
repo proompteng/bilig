@@ -296,6 +296,45 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "A1").mode).toBe(FormulaMode.WasmFastPath);
   });
 
+  it("evaluates reference metadata functions through the JS runtime fallback", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.createSheet("Summary");
+    engine.createSheet("Sheet2");
+    engine.setCellValue("Sheet1", "A1", 4);
+    engine.setCellValue("Sheet1", "A2", "text");
+    engine.setCellFormula("Sheet2", "B1", "A1*2");
+    engine.setCellFormula("Sheet1", "C1", "ROW()");
+    engine.setCellFormula("Sheet1", "D1", "COLUMN()");
+    engine.setCellFormula("Sheet1", "E1", "FORMULATEXT(Sheet2!B1)");
+    engine.setCellFormula("Sheet1", "F1", "SHEET()");
+    engine.setCellFormula("Sheet1", "G1", "SHEETS()");
+    engine.setCellFormula("Sheet1", "H1", 'CELL("address",B3)');
+    engine.setCellFormula("Sheet1", "I1", 'CELL("contents",A1)');
+    engine.setCellFormula("Sheet1", "J1", 'CELL("type",A2)');
+
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getCellValue("Sheet1", "E1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "=A1*2",
+    });
+    expect(engine.getCellValue("Sheet1", "F1")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "G1")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "H1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "$B$3",
+    });
+    expect(engine.getCellValue("Sheet1", "I1")).toEqual({ tag: ValueTag.Number, value: 4 });
+    expect(engine.getCellValue("Sheet1", "J1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "l",
+    });
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
+  });
+
   it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -1400,6 +1439,47 @@ describe("SpreadsheetEngine", () => {
     ]);
   });
 
+  it("supports explicit range-ref and formula defined-name metadata values", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "A3" }, [
+      [1],
+      [2],
+      [3],
+    ]);
+    engine.setCellValue("Sheet1", "B1", 10);
+    engine.setDefinedName("SalesRange", {
+      kind: "range-ref",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "A3",
+    });
+    engine.setDefinedName("TaxExpr", { kind: "formula", formula: "=B1*0.1" });
+    engine.setCellFormula("Sheet1", "C1", "SUM(SalesRange)+TaxExpr");
+
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 7 });
+
+    const snapshot = engine.exportSnapshot();
+    expect(snapshot.workbook.metadata?.definedNames).toEqual([
+      {
+        name: "SalesRange",
+        value: {
+          kind: "range-ref",
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A3",
+        },
+      },
+      { name: "TaxExpr", value: { kind: "formula", formula: "=B1*0.1" } },
+    ]);
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+    expect(restored.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 7 });
+  });
+
   it("replicates structural workbook metadata through authoritative op batches", async () => {
     const primary = new SpreadsheetEngine({ workbookName: "spec", replicaId: "a" });
     const replica = new SpreadsheetEngine({ workbookName: "spec", replicaId: "b" });
@@ -1849,7 +1929,7 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "A1", 2);
     engine.setCellValue("Sheet1", "B1", 3);
     engine.setCellFormula("Sheet1", "C1", "SUM(A1:B1)");
-    engine.setCalculationSettings({ mode: "manual" });
+    engine.setCalculationSettings({ mode: "manual", compatibilityMode: "odf-1.4" });
 
     engine.insertColumns("Sheet1", 1, 1);
 
@@ -1858,6 +1938,7 @@ describe("SpreadsheetEngine", () => {
     engine.recalculateNow();
     expect(engine.exportSnapshot().workbook.metadata?.calculationSettings).toEqual({
       mode: "manual",
+      compatibilityMode: "odf-1.4",
     });
     expect(engine.exportSnapshot().workbook.metadata?.volatileContext?.recalcEpoch).toBeGreaterThan(
       0,
@@ -1866,7 +1947,10 @@ describe("SpreadsheetEngine", () => {
     const restored = new SpreadsheetEngine({ workbookName: "restored" });
     await restored.ready();
     restored.importSnapshot(engine.exportSnapshot());
-    expect(restored.getCalculationSettings()).toEqual({ mode: "manual" });
+    expect(restored.getCalculationSettings()).toEqual({
+      mode: "manual",
+      compatibilityMode: "odf-1.4",
+    });
   });
 
   it("rewrites formulas and axis identities for structural column deletes and moves", async () => {

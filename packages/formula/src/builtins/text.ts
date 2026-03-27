@@ -1,7 +1,8 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { createBlockedBuiltinMap, textPlaceholderBuiltinNames } from "./placeholder.js";
+import type { EvaluationResult } from "../runtime-values.js";
 
-export type TextBuiltin = (...args: CellValue[]) => CellValue;
+export type TextBuiltin = (...args: CellValue[]) => EvaluationResult;
 
 function error(code: ErrorCode): CellValue {
   return { tag: ValueTag.Error, code };
@@ -13,6 +14,10 @@ function stringResult(value: string): CellValue {
 
 function numberResult(value: number): CellValue {
   return { tag: ValueTag.Number, value };
+}
+
+function booleanResult(value: boolean): CellValue {
+  return { tag: ValueTag.Boolean, value };
 }
 
 function firstError(args: readonly CellValue[]): CellValue | undefined {
@@ -91,6 +96,34 @@ function midBytes(text: string, start: number, byteCount: number): string {
   return utf8Text(bytes.slice(zeroBasedStart, zeroBasedEnd));
 }
 
+function replaceBytes(text: string, start: number, byteCount: number, replacement: string): string {
+  const bytes = utf8Bytes(text);
+  const replacementBytes = utf8Bytes(replacement);
+  const zeroBasedStart = Math.max(0, start - 1);
+  if (zeroBasedStart >= bytes.length) {
+    return text;
+  }
+  const zeroBasedEnd = Math.min(bytes.length, zeroBasedStart + Math.max(0, byteCount));
+  return utf8Text(
+    new Uint8Array([
+      ...bytes.slice(0, zeroBasedStart),
+      ...replacementBytes,
+      ...bytes.slice(zeroBasedEnd),
+    ]),
+  );
+}
+
+function bytePositionToCharPosition(text: string, startByte: number): number {
+  if (startByte <= 1) {
+    return 1;
+  }
+  return utf8Text(utf8Bytes(text).slice(0, startByte - 1)).length + 1;
+}
+
+function charPositionToBytePosition(text: string, charPosition: number): number {
+  return utf8Bytes(text.slice(0, Math.max(0, charPosition - 1))).length + 1;
+}
+
 function coerceNumber(value: CellValue): number | undefined {
   switch (value.tag) {
     case ValueTag.Number:
@@ -121,6 +154,17 @@ function coerceBoolean(value: CellValue, fallback: boolean): boolean | CellValue
   }
   const numeric = coerceNumber(value);
   return numeric === undefined ? error(ErrorCode.Value) : numeric !== 0;
+}
+
+function coerceInteger(value: CellValue | undefined, defaultValue: number): number | CellValue {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  const numeric = coerceNumber(value);
+  if (numeric === undefined || !Number.isInteger(numeric)) {
+    return error(ErrorCode.Value);
+  }
+  return numeric;
 }
 
 function coercePositiveStart(
@@ -202,6 +246,133 @@ function substituteText(text: string, oldText: string, newText: string, instance
     searchIndex = foundAt + oldText.length;
   }
   return text;
+}
+
+function regexFlags(caseSensitivity: number, global = false): string {
+  return `${global ? "g" : ""}${caseSensitivity === 1 ? "i" : ""}`;
+}
+
+function compileRegex(
+  pattern: string,
+  caseSensitivity: number,
+  global = false,
+): RegExp | CellValue {
+  try {
+    return new RegExp(pattern, regexFlags(caseSensitivity, global));
+  } catch {
+    return error(ErrorCode.Value);
+  }
+}
+
+function isRegexError(value: RegExp | CellValue): value is CellValue {
+  return !(value instanceof RegExp);
+}
+
+function applyReplacementTemplate(
+  template: string,
+  match: string,
+  captures: readonly (string | undefined)[],
+): string {
+  return template.replace(/\$(\$|&|[0-9]{1,2})/g, (_whole, token: string) => {
+    if (token === "$") {
+      return "$";
+    }
+    if (token === "&") {
+      return match;
+    }
+    const index = Number(token);
+    if (!Number.isInteger(index) || index <= 0) {
+      return "";
+    }
+    return captures[index - 1] ?? "";
+  });
+}
+
+function valueToTextResult(value: CellValue, format: number): CellValue {
+  if (format !== 0 && format !== 1) {
+    return error(ErrorCode.Value);
+  }
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return stringResult("");
+    case ValueTag.Number:
+      return stringResult(String(value.value));
+    case ValueTag.Boolean:
+      return stringResult(value.value ? "TRUE" : "FALSE");
+    case ValueTag.String:
+      return stringResult(format === 1 ? JSON.stringify(value.value) : value.value);
+    case ValueTag.Error: {
+      const label =
+        value.code === ErrorCode.Div0
+          ? "#DIV/0!"
+          : value.code === ErrorCode.Ref
+            ? "#REF!"
+            : value.code === ErrorCode.Value
+              ? "#VALUE!"
+              : value.code === ErrorCode.Name
+                ? "#NAME?"
+                : value.code === ErrorCode.NA
+                  ? "#N/A"
+                  : value.code === ErrorCode.Cycle
+                    ? "#CYCLE!"
+                    : value.code === ErrorCode.Spill
+                      ? "#SPILL!"
+                      : value.code === ErrorCode.Blocked
+                        ? "#BLOCKED!"
+                        : "#ERROR!";
+      return stringResult(label);
+    }
+  }
+}
+
+function parseNumberValueText(
+  input: string,
+  decimalSeparator: string,
+  groupSeparator: string,
+): number | undefined {
+  const compact = input.replaceAll(/\s+/g, "");
+  if (compact === "") {
+    return 0;
+  }
+
+  const percentMatch = compact.match(/%+$/);
+  const percentCount = percentMatch?.[0].length ?? 0;
+  const core = percentCount === 0 ? compact : compact.slice(0, -percentCount);
+  if (core.includes("%")) {
+    return undefined;
+  }
+  if (decimalSeparator !== "" && groupSeparator !== "" && decimalSeparator === groupSeparator) {
+    return undefined;
+  }
+
+  const decimal = decimalSeparator === "" ? "." : decimalSeparator[0]!;
+  const group = groupSeparator === "" ? "" : groupSeparator[0]!;
+
+  const decimalIndex = decimal === "" ? -1 : core.indexOf(decimal);
+  if (decimalIndex !== -1 && core.indexOf(decimal, decimalIndex + 1) !== -1) {
+    return undefined;
+  }
+
+  let normalized = core;
+  if (group !== "") {
+    const groupAfterDecimal =
+      decimalIndex === -1 ? -1 : normalized.indexOf(group, decimalIndex + decimal.length);
+    if (groupAfterDecimal !== -1) {
+      return undefined;
+    }
+    normalized = normalized.replaceAll(group, "");
+  }
+  if (decimal !== "." && decimal !== "") {
+    normalized = normalized.replace(decimal, ".");
+  }
+  if (normalized === "" || normalized === "." || normalized === "+" || normalized === "-") {
+    return undefined;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return parsed / 100 ** percentCount;
 }
 
 function createReplaceBuiltin(): TextBuiltin {
@@ -463,6 +634,17 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     }
     return numberResult(coerceText(value).length);
   },
+  LENB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [value] = args;
+    if (value === undefined) {
+      return error(ErrorCode.Value);
+    }
+    return numberResult(utf8Bytes(coerceText(value)).length);
+  },
   CHAR: (...args) => {
     const [codeValue] = args;
     const codePoint = charCodeFromArgument(codeValue);
@@ -688,6 +870,32 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     );
     return isErrorValue(found) ? found : numberResult(found);
   },
+  SEARCHB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [findTextValue, withinTextValue, startValue] = args;
+    if (findTextValue === undefined || withinTextValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const text = coerceText(withinTextValue);
+    const start = coercePositiveStart(startValue, 1);
+    if (isErrorValue(start)) {
+      return start;
+    }
+    if (start > utf8Bytes(text).length + 1) {
+      return error(ErrorCode.Value);
+    }
+    const found = findPosition(
+      coerceText(findTextValue),
+      text,
+      bytePositionToCharPosition(text, start),
+      false,
+      true,
+    );
+    return isErrorValue(found) ? found : numberResult(charPositionToBytePosition(text, found));
+  },
   ENCODEURL: (...args) => {
     const existingError = firstError(args);
     if (existingError) {
@@ -780,6 +988,168 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     }
     const coerced = coerceNumber(value);
     return coerced === undefined ? error(ErrorCode.Value) : numberResult(coerced);
+  },
+  NUMBERVALUE: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, decimalSeparatorValue, groupSeparatorValue] = args;
+    if (textValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const text = coerceText(textValue);
+    const decimalSeparator =
+      decimalSeparatorValue === undefined ? "." : coerceText(decimalSeparatorValue);
+    const groupSeparator =
+      groupSeparatorValue === undefined ? "," : coerceText(groupSeparatorValue);
+    const parsed = parseNumberValueText(text, decimalSeparator, groupSeparator);
+    return parsed === undefined ? error(ErrorCode.Value) : numberResult(parsed);
+  },
+  VALUETOTEXT: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return valueToTextResult(existingError, 0);
+    }
+    const [value, formatValue] = args;
+    if (value === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const format = coerceInteger(formatValue, 0);
+    if (isErrorValue(format)) {
+      return format;
+    }
+    return valueToTextResult(value, format);
+  },
+  REGEXTEST: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, patternValue, caseSensitivityValue] = args;
+    if (textValue === undefined || patternValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const caseSensitivity = coerceInteger(caseSensitivityValue, 0);
+    if (isErrorValue(caseSensitivity) || (caseSensitivity !== 0 && caseSensitivity !== 1)) {
+      return error(ErrorCode.Value);
+    }
+    const pattern = coerceText(patternValue);
+    const regex = compileRegex(pattern, caseSensitivity);
+    if (isRegexError(regex)) {
+      return regex;
+    }
+    return booleanResult(regex.test(coerceText(textValue)));
+  },
+  REGEXREPLACE: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, patternValue, replacementValue, occurrenceValue, caseSensitivityValue] = args;
+    if (textValue === undefined || patternValue === undefined || replacementValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const occurrence = coerceInteger(occurrenceValue, 0);
+    const caseSensitivity = coerceInteger(caseSensitivityValue, 0);
+    if (
+      isErrorValue(occurrence) ||
+      isErrorValue(caseSensitivity) ||
+      (caseSensitivity !== 0 && caseSensitivity !== 1)
+    ) {
+      return error(ErrorCode.Value);
+    }
+    const text = coerceText(textValue);
+    const replacement = coerceText(replacementValue);
+    const regex = compileRegex(coerceText(patternValue), caseSensitivity, true);
+    if (isRegexError(regex)) {
+      return regex;
+    }
+    if (occurrence === 0) {
+      return stringResult(text.replace(regex, replacement));
+    }
+    const matches = [...text.matchAll(regex)];
+    if (matches.length === 0) {
+      return stringResult(text);
+    }
+    const targetIndex = occurrence > 0 ? occurrence - 1 : matches.length + occurrence;
+    if (targetIndex < 0 || targetIndex >= matches.length) {
+      return stringResult(text);
+    }
+    let currentIndex = -1;
+    return stringResult(
+      text.replace(regex, (match, ...rest) => {
+        currentIndex += 1;
+        if (currentIndex !== targetIndex) {
+          return match;
+        }
+        const captures = rest
+          .slice(0, -2)
+          .map((value) => (typeof value === "string" ? value : undefined));
+        return applyReplacementTemplate(replacement, match, captures);
+      }),
+    );
+  },
+  REGEXEXTRACT: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, patternValue, returnModeValue, caseSensitivityValue] = args;
+    if (textValue === undefined || patternValue === undefined) {
+      return error(ErrorCode.Value);
+    }
+    const returnMode = coerceInteger(returnModeValue, 0);
+    const caseSensitivity = coerceInteger(caseSensitivityValue, 0);
+    if (
+      isErrorValue(returnMode) ||
+      isErrorValue(caseSensitivity) ||
+      ![0, 1, 2].includes(returnMode) ||
+      (caseSensitivity !== 0 && caseSensitivity !== 1)
+    ) {
+      return error(ErrorCode.Value);
+    }
+
+    const text = coerceText(textValue);
+    const pattern = coerceText(patternValue);
+    if (returnMode === 1) {
+      const regex = compileRegex(pattern, caseSensitivity, true);
+      if (isRegexError(regex)) {
+        return regex;
+      }
+      const matches = [...text.matchAll(regex)].map((entry) => entry[0]);
+      if (matches.length === 0) {
+        return error(ErrorCode.NA);
+      }
+      return {
+        kind: "array",
+        rows: matches.length,
+        cols: 1,
+        values: matches.map((match) => stringResult(match)),
+      };
+    }
+
+    const regex = compileRegex(pattern, caseSensitivity, false);
+    if (isRegexError(regex)) {
+      return regex;
+    }
+    const match = text.match(regex);
+    if (!match) {
+      return error(ErrorCode.NA);
+    }
+    if (returnMode === 0) {
+      return stringResult(match[0]);
+    }
+    const groups = match.slice(1);
+    if (groups.length === 0) {
+      return error(ErrorCode.NA);
+    }
+    return {
+      kind: "array",
+      rows: 1,
+      cols: groups.length,
+      values: groups.map((group) => stringResult(group ?? "")),
+    };
   },
   TEXTBEFORE: (...args) => {
     const existingError = firstError(args);
@@ -948,6 +1318,32 @@ export const textBuiltins: Record<string, TextBuiltin> = {
     return stringResult(valuesJoined.join(delimiter));
   },
   REPLACE: createReplaceBuiltin(),
+  REPLACEB: (...args) => {
+    const existingError = firstError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const [textValue, startValue, countValue, replacementValue] = args;
+    if (
+      textValue === undefined ||
+      startValue === undefined ||
+      countValue === undefined ||
+      replacementValue === undefined
+    ) {
+      return error(ErrorCode.Value);
+    }
+    const start = coercePositiveStart(startValue, 1);
+    if (isErrorValue(start)) {
+      return start;
+    }
+    const count = coerceLength(countValue, 0);
+    if (isErrorValue(count)) {
+      return count;
+    }
+    return stringResult(
+      replaceBytes(coerceText(textValue), start, count, coerceText(replacementValue)),
+    );
+  },
   SUBSTITUTE: createSubstituteBuiltin(),
   REPT: createReptBuiltin(),
   ...textPlaceholderBuiltins,

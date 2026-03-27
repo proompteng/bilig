@@ -98,10 +98,12 @@ describe("renderer root error handling", () => {
   it("rejects unmount when the compat callback surfaces an async error", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (element, callback, container) => {
-        if (element === null) {
-          container.lastError = new Error("async unmount failed");
-        }
         callback();
+        if (element === null) {
+          queueMicrotask(() => {
+            container.lastError = new Error("async unmount failed");
+          });
+        }
       },
     );
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-unmount-async-error" });

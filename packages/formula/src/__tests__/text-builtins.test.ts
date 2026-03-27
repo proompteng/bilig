@@ -88,9 +88,16 @@ describe("text builtins", () => {
   it("supports FINDB, LEFTB, MIDB, and RIGHTB with byte boundaries", () => {
     expect(getTextBuiltin("FINDB")?.(text("b"), text("abc"))).toEqual(number(2));
     expect(getTextBuiltin("FINDB")?.(text("d"), text("abcd"), number(3))).toEqual(number(4));
+    expect(getTextBuiltin("LENB")?.(text("abc"))).toEqual(number(3));
+    expect(getTextBuiltin("LENB")?.(text("é"))).toEqual(number(2));
     expect(getTextBuiltin("LEFTB")?.(text("abcdef"), number(2))).toEqual(text("ab"));
     expect(getTextBuiltin("MIDB")?.(text("abcdef"), number(3), number(2))).toEqual(text("cd"));
     expect(getTextBuiltin("RIGHTB")?.(text("abcdef"), number(3))).toEqual(text("def"));
+    expect(getTextBuiltin("SEARCHB")?.(text("ph"), text("alphabet"))).toEqual(number(3));
+    expect(getTextBuiltin("SEARCHB")?.(text("b?d"), text("ABCD"))).toEqual(number(2));
+    expect(getTextBuiltin("REPLACEB")?.(text("alphabet"), number(3), number(2), text("Z"))).toEqual(
+      text("alZabet"),
+    );
   });
 
   it("validates FINDB/LEFTB/MIDB/RIGHTB argument bounds as VALUE errors", () => {
@@ -102,6 +109,11 @@ describe("text builtins", () => {
     expect(getTextBuiltin("LEFTB")?.()).toEqual(valueError());
     expect(getTextBuiltin("MIDB")?.(text("abc"), number(1))).toEqual(valueError());
     expect(getTextBuiltin("RIGHTB")?.()).toEqual(valueError());
+    expect(getTextBuiltin("SEARCHB")?.(text("a"))).toEqual(valueError());
+    expect(getTextBuiltin("SEARCHB")?.(text("a"), text("abc"), number(0))).toEqual(valueError());
+    expect(getTextBuiltin("REPLACEB")?.(text("abc"), number(0), number(1), text("z"))).toEqual(
+      valueError(),
+    );
     expect(getTextBuiltin("LEFTB")?.(err(ErrorCode.Ref), number(1))).toEqual(err(ErrorCode.Ref));
     expect(getTextBuiltin("MIDB")?.(text("abc"), err(ErrorCode.Name), number(1))).toEqual(
       err(ErrorCode.Name),
@@ -109,6 +121,7 @@ describe("text builtins", () => {
     expect(getTextBuiltin("RIGHTB")?.(text("abc"), err(ErrorCode.Div0))).toEqual(
       err(ErrorCode.Div0),
     );
+    expect(getTextBuiltin("LENB")?.(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
   });
 
   it("supports CLEAN, CONCATENATE, and PROPER text cleanup functions", () => {
@@ -236,6 +249,100 @@ describe("text builtins", () => {
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
+  });
+
+  it("supports NUMBERVALUE locale-independent numeric parsing", () => {
+    const NUMBERVALUE = getTextBuiltin("NUMBERVALUE")!;
+
+    expect(NUMBERVALUE(text("2.500,27"), text(","), text("."))).toEqual(number(2500.27));
+    expect(NUMBERVALUE(text(" 3 000 "))).toEqual(number(3000));
+    expect(NUMBERVALUE(text("9%%"))).toEqual(number(0.0009));
+    expect(NUMBERVALUE(text(""))).toEqual(number(0));
+    expect(NUMBERVALUE(text("1,2,3"), text(","), text("."))).toEqual(valueError());
+    expect(NUMBERVALUE(text("1.2.3"), text("."), text(","))).toEqual(valueError());
+  });
+
+  it("supports REGEXTEST, REGEXREPLACE, and REGEXEXTRACT modes", () => {
+    const REGEXTEST = getTextBuiltin("REGEXTEST")!;
+    const REGEXREPLACE = getTextBuiltin("REGEXREPLACE")!;
+    const REGEXEXTRACT = getTextBuiltin("REGEXEXTRACT")!;
+
+    expect(REGEXTEST(text("Alpha-42"), text("[a-z]+-[0-9]+"), number(1))).toEqual({
+      tag: ValueTag.Boolean,
+      value: true,
+    });
+    expect(REGEXTEST(text("Alpha-42"), text("^[a-z]+-[0-9]+$"))).toEqual({
+      tag: ValueTag.Boolean,
+      value: false,
+    });
+
+    expect(REGEXREPLACE(text("a1 b2 c3"), text("[0-9]"), text("X"))).toEqual(text("aX bX cX"));
+    expect(REGEXREPLACE(text("a1 b2 c3"), text("[0-9]"), text("X"), number(2))).toEqual(
+      text("a1 bX c3"),
+    );
+    expect(REGEXREPLACE(text("abc123"), text("([a-z]+)([0-9]+)"), text("$2-$1"))).toEqual(
+      text("123-abc"),
+    );
+
+    expect(REGEXEXTRACT(text("DylanWilliams"), text("[A-Z][a-z]+"))).toEqual(text("Dylan"));
+    expect(REGEXEXTRACT(text("a1 b2 c3"), text("[a-z][0-9]"), number(1))).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 1,
+      values: [text("a1"), text("b2"), text("c3")],
+    });
+    expect(REGEXEXTRACT(text("abc-123"), text("([a-z]+)-([0-9]+)"), number(2))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [text("abc"), text("123")],
+    });
+    expect(REGEXEXTRACT(text("abc"), text("[0-9]+"))).toEqual(err(ErrorCode.NA));
+    expect(REGEXTEST(text("abc"), text("("))).toEqual(valueError());
+  });
+
+  it("supports VALUETOTEXT concise and strict string rendering", () => {
+    const VALUETOTEXT = getTextBuiltin("VALUETOTEXT")!;
+
+    expect(VALUETOTEXT(number(42))).toEqual(text("42"));
+    expect(VALUETOTEXT(text("alpha"))).toEqual(text("alpha"));
+    expect(VALUETOTEXT(text("alpha"), number(1))).toEqual(text('"alpha"'));
+    expect(VALUETOTEXT({ tag: ValueTag.Boolean, value: true })).toEqual(text("TRUE"));
+    expect(VALUETOTEXT(err(ErrorCode.Ref))).toEqual(text("#REF!"));
+    expect(VALUETOTEXT(text("alpha"), number(2))).toEqual(valueError());
+  });
+
+  it("covers remaining VALUETOTEXT and regex validation branches", () => {
+    const VALUETOTEXT = getTextBuiltin("VALUETOTEXT")!;
+    const REGEXTEST = getTextBuiltin("REGEXTEST")!;
+    const REGEXREPLACE = getTextBuiltin("REGEXREPLACE")!;
+    const REGEXEXTRACT = getTextBuiltin("REGEXEXTRACT")!;
+
+    expect(VALUETOTEXT()).toEqual(valueError());
+    expect(VALUETOTEXT(number(42), text("bad"))).toEqual(valueError());
+
+    expect(REGEXTEST()).toEqual(valueError());
+    expect(REGEXTEST(text("abc"), text("a"), number(2))).toEqual(valueError());
+    expect(REGEXTEST(err(ErrorCode.Ref), text("a"))).toEqual(err(ErrorCode.Ref));
+
+    expect(REGEXREPLACE()).toEqual(valueError());
+    expect(REGEXREPLACE(text("abc"), text("a"), text("x"), text("bad"))).toEqual(valueError());
+    expect(REGEXREPLACE(text("abc"), text("a"), text("x"), number(1), number(9))).toEqual(
+      valueError(),
+    );
+    expect(REGEXREPLACE(text("abc"), text("("), text("x"))).toEqual(valueError());
+    expect(REGEXREPLACE(text("abc"), text("z"), text("x"), number(1))).toEqual(text("abc"));
+    expect(REGEXREPLACE(text("a1 b2 c3"), text("[0-9]"), text("X"), number(-1))).toEqual(
+      text("a1 b2 cX"),
+    );
+
+    expect(REGEXEXTRACT()).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("([a-z]+)"), number(3))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("([a-z]+)"), number(0), number(9))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("("))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("[0-9]+"), number(1))).toEqual(err(ErrorCode.NA));
+    expect(REGEXEXTRACT(text("abc"), text("[a-z]+"), number(2))).toEqual(err(ErrorCode.NA));
+    expect(REGEXEXTRACT(err(ErrorCode.Name), text("[a-z]+"))).toEqual(err(ErrorCode.Name));
   });
 
   it("returns TEXTBEFORE validation and lookup errors when arguments are invalid", () => {
