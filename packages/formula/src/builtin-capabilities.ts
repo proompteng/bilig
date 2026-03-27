@@ -45,6 +45,7 @@ const jsSpecialBuiltinNames = new Set([
   "SHEET",
   "SHEETS",
   "TEXTSPLIT",
+  "TRIMRANGE",
 ]);
 
 const wasmProductionBuiltinNames = new Set([
@@ -348,6 +349,7 @@ const dynamicArrayBuiltinNames = new Set([
   "HSTACK",
   "VSTACK",
   "TEXTSPLIT",
+  "TRIMRANGE",
 ]);
 const lambdaBuiltinNames = new Set([
   "LET",

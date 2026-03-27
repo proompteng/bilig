@@ -64,6 +64,7 @@ function producesSpillResult(node: FormulaNode): boolean {
         "FILTER",
         "UNIQUE",
         "TEXTSPLIT",
+        "TRIMRANGE",
         "MAKEARRAY",
         "MAP",
         "SCAN",

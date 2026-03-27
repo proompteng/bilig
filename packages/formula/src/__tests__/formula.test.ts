@@ -169,6 +169,7 @@ describe("formula", () => {
   it("keeps JS-only dynamic array and indirection formulas off the wasm path while preserving spill metadata", () => {
     expect(compileFormula('TEXTSPLIT(A1,",")')).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula("EXPAND(A1:B2,3,3)")).toMatchObject({ mode: 0, producesSpill: true });
+    expect(compileFormula("TRIMRANGE(A1:C4)")).toMatchObject({ mode: 0, producesSpill: true });
     expect(compileFormula('INDIRECT("A1")').mode).toBe(0);
     expect(compileFormula("FORMULA(A1)").mode).toBe(0);
   });

@@ -692,6 +692,36 @@ function coerceOptionalPositiveIntegerArgument(
   return integer >= 1 ? integer : error(ErrorCode.Value);
 }
 
+function coerceOptionalTrimModeArgument(
+  value: StackValue | undefined,
+  fallback: 0 | 1 | 2 | 3,
+): 0 | 1 | 2 | 3 | CellValue {
+  if (value === undefined) {
+    return fallback;
+  }
+  const scalar = isSingleCellValue(value);
+  if (!scalar) {
+    return error(ErrorCode.Value);
+  }
+  if (scalar.tag === ValueTag.Error) {
+    return scalar;
+  }
+  const numeric = toNumber(scalar);
+  if (numeric === undefined || !Number.isFinite(numeric)) {
+    return error(ErrorCode.Value);
+  }
+  const integer = Math.trunc(numeric);
+  switch (integer) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+      return integer;
+    default:
+      return error(ErrorCode.Value);
+  }
+}
+
 function isCellValueError(value: number | boolean | string | CellValue): value is CellValue {
   return typeof value === "object" && value !== null && "tag" in value;
 }
@@ -728,6 +758,10 @@ function splitTextByDelimiter(text: string, delimiter: string, matchMode: 0 | 1)
 
 function makeArrayStack(rows: number, cols: number, values: CellValue[]): StackValue {
   return { kind: "array", rows, cols, values };
+}
+
+function isTrimRangeEmptyCell(value: CellValue): boolean {
+  return value.tag === ValueTag.Empty;
 }
 
 function applyLambda(
@@ -1061,6 +1095,112 @@ function evaluateSpecialCall(
         const row = matrix[rowIndex] ?? [];
         for (let colIndex = 0; colIndex < cols; colIndex += 1) {
           values.push(colIndex < row.length ? stringValue(row[colIndex]!) : padValue);
+        }
+      }
+      return makeArrayStack(rows, cols, values);
+    }
+    case "TRIMRANGE": {
+      if (rawArgs.length < 1 || rawArgs.length > 3) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const source = toRangeLike(rawArgs[0]!);
+      const trimRows = coerceOptionalTrimModeArgument(rawArgs[1], 3);
+      const trimCols = coerceOptionalTrimModeArgument(rawArgs[2], 3);
+      if (isCellValueError(trimRows)) {
+        return stackScalar(trimRows);
+      }
+      if (isCellValueError(trimCols)) {
+        return stackScalar(trimCols);
+      }
+
+      let startRow = 0;
+      let endRow = source.rows - 1;
+      let startCol = 0;
+      let endCol = source.cols - 1;
+
+      const trimLeadingRows = trimRows === 1 || trimRows === 3;
+      const trimTrailingRows = trimRows === 2 || trimRows === 3;
+      const trimLeadingCols = trimCols === 1 || trimCols === 3;
+      const trimTrailingCols = trimCols === 2 || trimCols === 3;
+
+      if (trimLeadingRows) {
+        while (startRow <= endRow) {
+          let hasNonEmpty = false;
+          for (let col = 0; col < source.cols; col += 1) {
+            if (!isTrimRangeEmptyCell(getRangeCell(source, startRow, col))) {
+              hasNonEmpty = true;
+              break;
+            }
+          }
+          if (hasNonEmpty) {
+            break;
+          }
+          startRow += 1;
+        }
+      }
+
+      if (trimTrailingRows) {
+        while (endRow >= startRow) {
+          let hasNonEmpty = false;
+          for (let col = 0; col < source.cols; col += 1) {
+            if (!isTrimRangeEmptyCell(getRangeCell(source, endRow, col))) {
+              hasNonEmpty = true;
+              break;
+            }
+          }
+          if (hasNonEmpty) {
+            break;
+          }
+          endRow -= 1;
+        }
+      }
+
+      if (startRow > endRow) {
+        return makeArrayStack(1, 1, [emptyValue()]);
+      }
+
+      if (trimLeadingCols) {
+        while (startCol <= endCol) {
+          let hasNonEmpty = false;
+          for (let row = startRow; row <= endRow; row += 1) {
+            if (!isTrimRangeEmptyCell(getRangeCell(source, row, startCol))) {
+              hasNonEmpty = true;
+              break;
+            }
+          }
+          if (hasNonEmpty) {
+            break;
+          }
+          startCol += 1;
+        }
+      }
+
+      if (trimTrailingCols) {
+        while (endCol >= startCol) {
+          let hasNonEmpty = false;
+          for (let row = startRow; row <= endRow; row += 1) {
+            if (!isTrimRangeEmptyCell(getRangeCell(source, row, endCol))) {
+              hasNonEmpty = true;
+              break;
+            }
+          }
+          if (hasNonEmpty) {
+            break;
+          }
+          endCol -= 1;
+        }
+      }
+
+      if (startCol > endCol) {
+        return makeArrayStack(1, 1, [emptyValue()]);
+      }
+
+      const rows = endRow - startRow + 1;
+      const cols = endCol - startCol + 1;
+      const values: CellValue[] = [];
+      for (let row = startRow; row <= endRow; row += 1) {
+        for (let col = startCol; col <= endCol; col += 1) {
+          values.push(getRangeCell(source, row, col));
         }
       }
       return makeArrayStack(rows, cols, values);

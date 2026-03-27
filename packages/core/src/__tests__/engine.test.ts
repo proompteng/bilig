@@ -335,7 +335,7 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
   });
 
-  it("spills TEXTSPLIT and EXPAND and resolves INDIRECT through the JS runtime fallback", async () => {
+  it("spills TEXTSPLIT, EXPAND, and TRIMRANGE and resolves INDIRECT through the JS runtime fallback", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
     engine.createSheet("Sheet1");
@@ -343,12 +343,16 @@ describe("SpreadsheetEngine", () => {
     engine.setCellValue("Sheet1", "A1", "red,blue|green");
     engine.setCellValue("Sheet1", "B1", 10);
     engine.setCellValue("Sheet1", "B2", 20);
+    engine.setCellValue("Sheet1", "L2", 1);
+    engine.setCellValue("Sheet1", "M2", 2);
+    engine.setCellValue("Sheet1", "L3", 3);
     engine.setCellFormula("Sheet2", "A1", "B1*2");
     engine.setCellFormula("Sheet1", "C1", 'TEXTSPLIT(A1,",","|")');
     engine.setCellFormula("Sheet1", "E1", "EXPAND(B1:B2,3,2,0)");
     engine.setCellFormula("Sheet1", "G1", 'INDIRECT("B1:B2")');
     engine.setCellFormula("Sheet1", "H1", 'INDIRECT("B2")');
     engine.setCellFormula("Sheet1", "I1", "FORMULA(Sheet2!A1)");
+    engine.setCellFormula("Sheet1", "K6", "TRIMRANGE(K1:N4)");
 
     expect(engine.getCellValue("Sheet1", "C1")).toMatchObject({
       tag: ValueTag.String,
@@ -379,10 +383,15 @@ describe("SpreadsheetEngine", () => {
       tag: ValueTag.String,
       value: "=B1*2",
     });
+    expect(engine.getCellValue("Sheet1", "K6")).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(engine.getCellValue("Sheet1", "L6")).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(engine.getCellValue("Sheet1", "K7")).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(engine.getCellValue("Sheet1", "L7")).toEqual({ tag: ValueTag.Empty });
     expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.JsOnly);
     expect(engine.explainCell("Sheet1", "I1").mode).toBe(FormulaMode.JsOnly);
+    expect(engine.explainCell("Sheet1", "K6").mode).toBe(FormulaMode.JsOnly);
   });
 
   it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {

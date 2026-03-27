@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import { evaluatePlan, lowerToPlan, optimizeFormula, parseFormula } from "../index.js";
+import {
+  evaluatePlan,
+  evaluatePlanResult,
+  lowerToPlan,
+  optimizeFormula,
+  parseFormula,
+} from "../index.js";
 import type { FormulaNode } from "../ast.js";
 
 const context = {
@@ -220,6 +226,63 @@ describe("js evaluator", () => {
     expect(
       evaluatePlan(lowerToPlan(parseFormula("SCAN(0,A1:B2,LAMBDA(a,x,a+x))")), context),
     ).toEqual(num(2));
+  });
+
+  it("trims outer empty rows and columns for TRIMRANGE", () => {
+    const trimContext = {
+      ...context,
+      resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+        if (start === "A1" && end === "D4") {
+          return [
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            num(1),
+            num(2),
+            empty(),
+            empty(),
+            num(3),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+          ];
+        }
+        if (start === "F1" && end === "G2") {
+          return [empty(), empty(), empty(), empty()];
+        }
+        return [];
+      },
+    };
+
+    expect(evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(A1:D4)")), trimContext)).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(2), num(3), empty()],
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,1,1)")), trimContext),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 3,
+      values: [num(1), num(2), empty(), num(3), empty(), empty(), empty(), empty(), empty()],
+    });
+    expect(evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(F1:G2)")), trimContext)).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [empty()],
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,4)")), trimContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
   });
 
   it("covers special-call rewrites and evaluator guard rails", () => {
@@ -664,4 +727,8 @@ describe("js evaluator", () => {
 
 function num(value: number): CellValue {
   return { tag: ValueTag.Number, value };
+}
+
+function empty(): CellValue {
+  return { tag: ValueTag.Empty };
 }

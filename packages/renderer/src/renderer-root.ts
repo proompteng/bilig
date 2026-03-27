@@ -11,10 +11,14 @@ export interface WorkbookRendererRoot {
 
 function scheduleCommitSettlement(finish: () => void): void {
   // React/compat can surface commit errors after the update callback returns.
-  // Wait through microtasks and one macrotask turn before reading lastError.
+  // Wait through microtasks and two macrotask turns before reading lastError.
+  // This keeps render()/unmount() aligned with compat callbacks that surface
+  // errors in a later microtask or in the next queued task.
   queueMicrotask(() => {
     setTimeout(() => {
-      queueMicrotask(finish);
+      setTimeout(() => {
+        queueMicrotask(finish);
+      }, 0);
     }, 0);
   });
 }

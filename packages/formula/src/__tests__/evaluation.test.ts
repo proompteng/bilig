@@ -564,6 +564,40 @@ describe("formula builtins and JS evaluator", () => {
     });
 
     expect(
+      evaluateAstResult(parseFormula("TRIMRANGE(A1:D4)"), {
+        ...context,
+        resolveRange: (): CellValue[] => [
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Number, value: 1 },
+          { tag: ValueTag.Number, value: 2 },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Number, value: 3 },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+          { tag: ValueTag.Empty },
+        ],
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Empty },
+      ],
+    });
+
+    expect(
       evaluateAstResult(parseFormula('INDIRECT("A1:A3")'), {
         ...context,
         resolveRange: (): CellValue[] => [

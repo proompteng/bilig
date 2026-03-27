@@ -21,7 +21,7 @@
 ## Current code coverage snapshot
 - Registered in codebase: **515**
 - Not yet registered in codebase: **10**
-- Placeholder-backed registrations: **130**
+- Placeholder-backed registrations: **129**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
 ## Full unified function list (ODF 1.4 mandatory + Office category)

@@ -147,6 +147,7 @@ const implementedScalarBuiltinNames = new Set<string>([
   "TAKE",
   "T",
   "TEXTSPLIT",
+  "TRIMRANGE",
   "TOCOL",
   "TOROW",
   "TYPE",
