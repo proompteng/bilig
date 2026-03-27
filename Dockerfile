@@ -1,15 +1,17 @@
+FROM oven/bun:1.3.10 AS bun
+
 FROM node:24-bookworm-slim AS build
 
 ENV PNPM_HOME="/pnpm"
-ENV BUN_INSTALL="/root/.bun"
-ENV PATH="$BUN_INSTALL/bin:$PNPM_HOME:$PATH"
+ENV PATH="/usr/local/bin:$PNPM_HOME:$PATH"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl ca-certificates unzip \
+  && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+
 RUN corepack enable
-RUN curl -fsSL https://bun.sh/install | bash
 
 WORKDIR /app
 
