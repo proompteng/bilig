@@ -9,7 +9,6 @@ on:
 env:
   REGISTRY: registry.ide-newton.ts.net
   IMAGE_NAMESPACE: lab
-  IMAGE_PLATFORM: linux/arm64
 
 jobs:
   build-and-push:
@@ -34,8 +33,7 @@ jobs:
           if ! command -v docker >/dev/null 2>&1; then
             if command -v apt-get >/dev/null 2>&1; then
               ${SUDO} apt-get update
-              DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y docker.io docker-buildx || \
-                DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y docker.io
+              DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y docker.io
             else
               echo "docker is not installed and apt-get is unavailable"
               exit 1
@@ -62,40 +60,45 @@ jobs:
           }
 
           docker version
-          docker buildx version
-
-      - name: Enable buildx
-        run: |
-          set -eu
-          docker buildx inspect bilig-buildx >/dev/null 2>&1 || docker buildx create --name bilig-buildx --use
-          docker buildx use bilig-buildx
 
       - name: Build and push bilig-web
         run: |
           set -eu
           SHA="$(git rev-parse HEAD)"
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
-          docker buildx build \
-            --platform "$IMAGE_PLATFORM" \
+          IMAGE_SHA="$REGISTRY/$IMAGE_NAMESPACE/bilig-web:$SHA"
+          IMAGE_SHORT="$REGISTRY/$IMAGE_NAMESPACE/bilig-web:$SHORT_SHA"
+          IMAGE_LATEST="$REGISTRY/$IMAGE_NAMESPACE/bilig-web:latest"
+
+          docker build \
             --file ./Dockerfile \
             --target web-runtime \
-            --push \
-            --tag "$REGISTRY/$IMAGE_NAMESPACE/bilig-web:$SHA" \
-            --tag "$REGISTRY/$IMAGE_NAMESPACE/bilig-web:$SHORT_SHA" \
-            --tag "$REGISTRY/$IMAGE_NAMESPACE/bilig-web:latest" \
+            --tag "$IMAGE_SHA" \
             .
+
+          docker tag "$IMAGE_SHA" "$IMAGE_SHORT"
+          docker tag "$IMAGE_SHA" "$IMAGE_LATEST"
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_SHORT"
+          docker push "$IMAGE_LATEST"
 
       - name: Build and push bilig-sync
         run: |
           set -eu
           SHA="$(git rev-parse HEAD)"
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
-          docker buildx build \
-            --platform "$IMAGE_PLATFORM" \
+          IMAGE_SHA="$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:$SHA"
+          IMAGE_SHORT="$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:$SHORT_SHA"
+          IMAGE_LATEST="$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:latest"
+
+          docker build \
             --file ./Dockerfile \
             --target sync-runtime \
-            --push \
-            --tag "$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:$SHA" \
-            --tag "$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:$SHORT_SHA" \
-            --tag "$REGISTRY/$IMAGE_NAMESPACE/bilig-sync:latest" \
+            --tag "$IMAGE_SHA" \
             .
+
+          docker tag "$IMAGE_SHA" "$IMAGE_SHORT"
+          docker tag "$IMAGE_SHA" "$IMAGE_LATEST"
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_SHORT"
+          docker push "$IMAGE_LATEST"
