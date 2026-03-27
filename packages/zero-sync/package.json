@@ -1,0 +1,51 @@
+{
+  "name": "@bilig/zero-sync",
+  "version": "0.1.0",
+  "description": "Shared Zero schema, queries, mutators, and workbook projection helpers for bilig.",
+  "keywords": [
+    "bilig",
+    "rocicorp",
+    "spreadsheet",
+    "sync",
+    "zero"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/zero-sync#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/zero-sync"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/protocol": "workspace:*",
+    "@rocicorp/zero": "1.0.0",
+    "zod": "^4.3.6"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

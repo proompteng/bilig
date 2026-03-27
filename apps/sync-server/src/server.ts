@@ -6,10 +6,12 @@ import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 
 import { DocumentSessionManager } from "./document-session-manager.js";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
+import type { ZeroSyncService } from "./zero/service.js";
 
 export interface SyncServerOptions {
   sessionManager?: DocumentSessionManager;
   worksheetExecutor?: WorksheetExecutor | null;
+  zeroSyncService?: ZeroSyncService;
   logger?: boolean;
 }
 
@@ -28,6 +30,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   const sessionManager =
     options.sessionManager ??
     new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
+  const zeroSyncService = options.zeroSyncService;
   const app = Fastify({ logger: options.logger ?? true });
   app.register(websocket);
 
@@ -42,6 +45,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.get("/healthz", async () => ({
     ok: true,
     service: "bilig-sync-server",
+    zeroSync: zeroSyncService?.enabled ?? false,
   }));
 
   app.get(
@@ -72,6 +76,26 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     const response = await sessionManager.handleSyncFrame(decodeFrame(request.body));
     reply.header("content-type", "application/octet-stream");
     return Buffer.from(encodeFrame(response));
+  });
+
+  app.post("/api/zero/query", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!zeroSyncService?.enabled) {
+      reply.code(503);
+      return {
+        error: "ZERO_SYNC_DISABLED",
+      };
+    }
+    return await zeroSyncService.handleQuery(request);
+  });
+
+  app.post("/api/zero/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!zeroSyncService?.enabled) {
+      reply.code(503);
+      return {
+        error: "ZERO_SYNC_DISABLED",
+      };
+    }
+    return await zeroSyncService.handleMutate(request);
   });
 
   app.post(

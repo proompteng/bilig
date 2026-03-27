@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
-    "preview": "vite preview",
-    "preview:ci": "pnpm -w build && vite preview --host 127.0.0.1 --port 4180 --strictPort"
+    "dev": "node ../../node_modules/vite/bin/vite.js",
+    "build": "tsc -p tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
+    "preview": "node ../../node_modules/vite/bin/vite.js preview",
+    "preview:ci": "pnpm -w build && node ../../node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4180 --strictPort"
   },
   "dependencies": {
     "@bilig/benchmarks": "workspace:*",
@@ -20,6 +20,8 @@
     "@bilig/renderer": "workspace:*",
     "@bilig/storage-browser": "workspace:*",
     "@bilig/worker-transport": "workspace:*",
+    "@bilig/zero-sync": "workspace:*",
+    "@rocicorp/zero": "1.0.0",
     "lucide-react": "^1.7.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"

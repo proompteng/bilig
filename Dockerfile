@@ -1,9 +1,15 @@
 FROM node:24-bookworm-slim AS build
 
 ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="$BUN_INSTALL/bin:$PNPM_HOME:$PATH"
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates unzip \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
+RUN curl -fsSL https://bun.sh/install | bash
 
 WORKDIR /app
 
@@ -19,7 +25,7 @@ RUN pnpm --filter @bilig/sync-server deploy --prod --legacy /out/sync-server
 FROM nginx:1.29-alpine AS web-runtime
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/apps/playground/dist /usr/share/nginx/html
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 
 EXPOSE 3000
 

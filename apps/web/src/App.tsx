@@ -1,5 +1,13 @@
+import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 import { WorkerWorkbookApp } from "./WorkerWorkbookApp";
 
-export function App() {
-  return <WorkerWorkbookApp />;
+const FALLBACK_CONFIG: BiligRuntimeConfig = {
+  apiBaseUrl: "http://127.0.0.1:4321",
+  zeroCacheUrl: "http://127.0.0.1:4848",
+  defaultDocumentId: "bilig-demo",
+  persistState: true,
+};
+
+export function App({ config = FALLBACK_CONFIG }: { config?: BiligRuntimeConfig }) {
+  return <WorkerWorkbookApp config={config} />;
 }

@@ -30,7 +30,7 @@
     "hooks:pre-commit": "lint-staged",
     "hooks:pre-push": "pnpm lint",
     "prepare": "node scripts/install-git-hooks.mjs",
-    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/excel-import build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
+    "build": "pnpm --filter @bilig/protocol build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/crdt build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/excel-import build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/zero-sync build && pnpm --filter @bilig/local-server build && pnpm --filter @bilig/sync-server build && pnpm --filter @bilig/web build && pnpm --filter @bilig/playground build",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
@@ -47,6 +47,7 @@
   "devDependencies": {
     "@playwright/test": "1.56.1",
     "@types/node": "24.10.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/react-reconciler": "^0.33.0",

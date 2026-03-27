@@ -16,6 +16,7 @@
     { "path": "./packages/renderer" },
     { "path": "./packages/grid" },
     { "path": "./packages/benchmarks" },
+    { "path": "./packages/zero-sync" },
     { "path": "./apps/local-server" },
     { "path": "./apps/sync-server" },
     { "path": "./apps/web" },
