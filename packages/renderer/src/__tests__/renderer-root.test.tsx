@@ -4,6 +4,10 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { Cell, Sheet, Workbook } from "../components.js";
 import { createWorkbookRendererRoot } from "../renderer-root.js";
 
+function PassthroughWrapper({ children }: { children?: React.ReactNode }) {
+  return <>{children}</>;
+}
+
 describe("createWorkbookRendererRoot", () => {
   it("commits workbook DSL trees into the engine and clears on unmount", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-test" });
@@ -224,6 +228,56 @@ describe("createWorkbookRendererRoot", () => {
       version: 1,
       workbook: { name: "clearable" },
       sheets: [],
+    });
+  });
+
+  it("accepts string host tags and non-DSL wrapper components", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-string-tags" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    const MemoWrapper = React.memo(function MemoWrapper({
+      children,
+    }: {
+      children?: React.ReactNode;
+    }) {
+      return <>{children}</>;
+    });
+
+    await root.render(
+      React.createElement(
+        PassthroughWrapper,
+        null,
+        React.createElement(
+          "Workbook",
+          { name: "string-book" },
+          React.createElement(
+            MemoWrapper,
+            null,
+            React.createElement(
+              "Sheet",
+              { name: "Sheet1" },
+              React.createElement(
+                PassthroughWrapper,
+                null,
+                React.createElement("Cell", { addr: "A1", value: 9 }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(engine.exportSnapshot()).toEqual({
+      version: 1,
+      workbook: { name: "string-book" },
+      sheets: [
+        {
+          name: "Sheet1",
+          order: 0,
+          cells: [{ address: "A1", value: 9 }],
+        },
+      ],
     });
   });
 });

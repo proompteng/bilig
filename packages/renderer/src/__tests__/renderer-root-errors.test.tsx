@@ -95,6 +95,39 @@ describe("renderer root error handling", () => {
     expect(renderCommit).toHaveBeenCalledWith([{ kind: "deleteSheet", name: "Sheet1" }]);
   });
 
+  it("unmounts without emitting delete ops when the committed root has no deletable children", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-empty-unmount" });
+    await engine.ready();
+    const renderCommit = vi.spyOn(engine, "renderCommit");
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (_element, callback) => {
+        callback();
+      },
+    );
+    const root = createWorkbookRendererRoot(engine);
+
+    const container = vi.mocked((await import("../compat.js")).createFiberRoot).mock
+      .calls[0]?.[0] as
+      | {
+          root: unknown;
+        }
+      | undefined;
+    if (!container) {
+      throw new Error("Expected mocked container");
+    }
+    container.root = {
+      kind: "Workbook",
+      parent: null,
+      container,
+      props: { name: "book" },
+      children: [],
+    };
+
+    await root.unmount();
+
+    expect(renderCommit).not.toHaveBeenCalled();
+  });
+
   it("rejects unmount when the compat callback surfaces an async error", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (element, callback, container) => {
@@ -121,6 +154,63 @@ describe("renderer root error handling", () => {
     await expect(root.unmount()).rejects.toThrow("async unmount failed");
   });
 
+  it("rejects render when the compat callback surfaces an async error", async () => {
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (element, callback, container) => {
+        callback();
+        if (element !== null) {
+          queueMicrotask(() => {
+            container.lastError = new Error("async render failed");
+          });
+        }
+      },
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-render-async-error" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("async render failed");
+  });
+
+  it("rejects render and unmount when compat throws synchronously", async () => {
+    const syncRenderError = new Error("sync render failed");
+    const syncUnmountError = new Error("sync unmount failed");
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (element, callback) => {
+        if (element === null) {
+          throw syncUnmountError;
+        }
+        if (React.isValidElement(element)) {
+          throw syncRenderError;
+        }
+        callback();
+      },
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-sync-throws" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toBe(syncRenderError);
+
+    await expect(root.unmount()).rejects.toBe(syncUnmountError);
+  });
+
   it("rejects root text nodes before commit", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(() => {});
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-text-node-error" });
@@ -128,5 +218,65 @@ describe("renderer root error handling", () => {
     const root = createWorkbookRendererRoot(engine);
 
     await expect(root.render("bad")).rejects.toThrow("Workbook DSL does not support text nodes.");
+  });
+
+  it("treats non-DSL string tags as wrappers during validation", async () => {
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (_element, callback) => {
+        callback();
+      },
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-dom-wrapper" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <div>
+            <Sheet name="Sheet1">
+              <Cell addr="A1" value={1} />
+            </Sheet>
+          </div>
+        </Workbook>,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("ignores non-element bigint children and rejects workbook text nodes", async () => {
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (_element, callback) => {
+        callback();
+      },
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-bigint-children" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <>
+          {1n}
+          <Workbook name="book">
+            {2n}
+            <Sheet name="Sheet1">
+              {3n}
+              <Cell addr="A1" value={1} />
+            </Sheet>
+          </Workbook>
+        </>,
+      ),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      root.render(
+        <Workbook name="bad">
+          {"bad text"}
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Workbook DSL does not support text nodes.");
   });
 });

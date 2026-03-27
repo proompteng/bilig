@@ -95,4 +95,8 @@ describe("renderer commit log", () => {
       { kind: "deleteSheet", name: "Sheet2" },
     ]);
   });
+
+  it("returns no delete ops for orphaned cells", () => {
+    expect(collectDeleteOps(cell({ addr: "A1", value: 1 }))).toEqual([]);
+  });
 });

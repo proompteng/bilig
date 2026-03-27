@@ -19,6 +19,15 @@ function batchEvent(changedCellIndices: Uint32Array = new Uint32Array()): Engine
   };
 }
 
+function getListenerEpochs(events: EngineEventBus): Uint32Array {
+  const listenerEpochs = Reflect.get(events, "listenerEpochs");
+  expect(listenerEpochs).toBeInstanceOf(Uint32Array);
+  if (!(listenerEpochs instanceof Uint32Array)) {
+    throw new TypeError("listenerEpochs should be a Uint32Array");
+  }
+  return listenerEpochs;
+}
+
 describe("EngineEventBus", () => {
   it("tracks listener presence, handles skipped address resolution, and grows watcher ids", () => {
     const events = new EngineEventBus();
@@ -94,5 +103,33 @@ describe("EngineEventBus", () => {
     events.emitAllWatched(batchEvent());
 
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("tolerates duplicate unsubscription and resets listener epochs on rollover", () => {
+    const events = new EngineEventBus();
+    const indexed = vi.fn();
+    const addressed = vi.fn();
+
+    const unsubscribeIndex = events.subscribeCellIndex(2, indexed);
+    const unsubscribeAddress = events.subscribeCellAddress("Sheet1!A1", addressed);
+
+    unsubscribeIndex();
+    unsubscribeIndex();
+    unsubscribeAddress();
+    unsubscribeAddress();
+
+    expect(events.hasCellListeners()).toBe(false);
+    expect(events.hasAddressListeners()).toBe(false);
+
+    const listenerEpochs = getListenerEpochs(events);
+    Reflect.set(events, "listenerEpoch", 0xffff_fffe);
+    listenerEpochs[0] = 99;
+
+    events.subscribeCellIndex(3, indexed);
+    events.emitAllWatched(batchEvent());
+
+    expect(Reflect.get(events, "listenerEpoch")).toBe(1);
+    expect(listenerEpochs[0]).toBe(0);
+    expect(indexed).toHaveBeenCalledTimes(1);
   });
 });
