@@ -1,8 +1,17 @@
 import {
+  buildCellNumberFormatCode,
+  getCellNumberFormatKind,
+  type CellHorizontalAlignment,
+  type CellVerticalAlignment,
+  type CellBorderSideSnapshot,
+  type CellNumberFormatRecord,
+  type CellStyleRecord,
   MAX_COLS,
   MAX_ROWS,
   type CellRangeRef,
   type LiteralInput,
+  type SheetFormatRangeSnapshot,
+  type SheetStyleRangeSnapshot,
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
   type WorkbookDefinedNameValueSnapshot,
@@ -52,6 +61,20 @@ export interface WorkbookAxisEntryRecord {
   id: string;
   size: number | null;
   hidden: boolean | null;
+}
+
+export interface WorkbookCellStyleRecord extends CellStyleRecord {}
+
+export interface WorkbookStyleRangeRecord {
+  range: CellRangeRef;
+  styleId: string;
+}
+
+export interface WorkbookCellNumberFormatRecord extends CellNumberFormatRecord {}
+
+export interface WorkbookFormatRangeRecord {
+  range: CellRangeRef;
+  formatId: string;
 }
 
 export interface WorkbookCalculationSettingsRecord extends WorkbookCalculationSettingsSnapshot {}
@@ -114,6 +137,8 @@ export interface SheetRecord {
   grid: SheetGrid;
   rowAxis: Array<WorkbookAxisEntryRecord | undefined>;
   columnAxis: Array<WorkbookAxisEntryRecord | undefined>;
+  styleRanges: WorkbookStyleRangeRecord[];
+  formatRanges: WorkbookFormatRangeRecord[];
 }
 
 export interface EnsuredCell {
@@ -122,11 +147,17 @@ export interface EnsuredCell {
 }
 
 export class WorkbookStore {
+  static readonly defaultStyleId = "style-0";
+  static readonly defaultFormatId = "format-0";
   readonly cellStore = new CellStore();
   readonly sheetsByName = new Map<string, SheetRecord>();
   readonly sheetsById = new Map<number, SheetRecord>();
   readonly cellKeyToIndex = new Map<number, number>();
   readonly cellFormats = new Map<number, string>();
+  readonly cellStyles = new Map<string, WorkbookCellStyleRecord>();
+  readonly styleKeys = new Map<string, string>();
+  readonly cellNumberFormats = new Map<string, WorkbookCellNumberFormatRecord>();
+  readonly numberFormatKeys = new Map<string, string>();
   readonly metadata: WorkbookMetadataRecord = {
     properties: new Map(),
     definedNames: new Map(),
@@ -145,9 +176,13 @@ export class WorkbookStore {
   private nextSheetId = 1;
   private nextRowAxisId = 1;
   private nextColumnAxisId = 1;
+  private nextStyleId = 1;
+  private nextFormatId = 1;
 
   constructor(workbookName = "Workbook") {
     this.workbookName = workbookName;
+    this.ensureDefaultStyle();
+    this.ensureDefaultNumberFormat();
   }
 
   createSheet(name: string, order = this.sheetsByName.size): SheetRecord {
@@ -163,6 +198,8 @@ export class WorkbookStore {
       grid: new SheetGrid(),
       rowAxis: [],
       columnAxis: [],
+      styleRanges: [],
+      formatRanges: [],
     };
     this.sheetsByName.set(name, sheet);
     this.sheetsById.set(sheet.id, sheet);
@@ -248,11 +285,215 @@ export class WorkbookStore {
       this.cellFormats.delete(index);
       return;
     }
+    this.internCellNumberFormat(format);
     this.cellFormats.set(index, format);
   }
 
   getCellFormat(index: number): string | undefined {
     return this.cellFormats.get(index);
+  }
+
+  upsertCellStyle(style: CellStyleRecord): WorkbookCellStyleRecord {
+    const normalized = normalizeCellStyleRecord(style);
+    const existing = this.cellStyles.get(normalized.id);
+    if (existing) {
+      this.styleKeys.delete(cellStyleKey(existing));
+    }
+    this.cellStyles.set(normalized.id, normalized);
+    this.styleKeys.set(cellStyleKey(normalized), normalized.id);
+    this.bumpStyleId(normalized.id);
+    return normalized;
+  }
+
+  internCellStyle(style: Omit<WorkbookCellStyleRecord, "id">): WorkbookCellStyleRecord {
+    const normalized = normalizeCellStyleRecord({
+      id: WorkbookStore.defaultStyleId,
+      ...style,
+    });
+    const key = cellStyleKey(normalized);
+    const existingId = this.styleKeys.get(key);
+    if (existingId) {
+      return this.cellStyles.get(existingId)!;
+    }
+    return { ...normalized, id: cellStyleIdForKey(key) };
+  }
+
+  getCellStyle(id: string | undefined): WorkbookCellStyleRecord | undefined {
+    if (!id) {
+      return this.cellStyles.get(WorkbookStore.defaultStyleId);
+    }
+    return this.cellStyles.get(id) ?? this.cellStyles.get(WorkbookStore.defaultStyleId);
+  }
+
+  listCellStyles(): WorkbookCellStyleRecord[] {
+    return [...this.cellStyles.values()].toSorted((left, right) => left.id.localeCompare(right.id));
+  }
+
+  upsertCellNumberFormat(format: CellNumberFormatRecord): WorkbookCellNumberFormatRecord {
+    const normalized = normalizeCellNumberFormatRecord(format);
+    const existing = this.cellNumberFormats.get(normalized.id);
+    if (existing) {
+      this.numberFormatKeys.delete(existing.code);
+    }
+    this.cellNumberFormats.set(normalized.id, normalized);
+    this.numberFormatKeys.set(normalized.code, normalized.id);
+    this.bumpFormatId(normalized.id);
+    return normalized;
+  }
+
+  internCellNumberFormat(format: string | CellNumberFormatRecord): WorkbookCellNumberFormatRecord {
+    const normalized =
+      typeof format === "string"
+        ? normalizeCellNumberFormatRecord({
+            id: WorkbookStore.defaultFormatId,
+            code: format,
+            kind: getCellNumberFormatKind(format),
+          })
+        : normalizeCellNumberFormatRecord(format);
+    const existingId = this.numberFormatKeys.get(normalized.code);
+    if (existingId) {
+      return this.cellNumberFormats.get(existingId)!;
+    }
+    return { ...normalized, id: cellNumberFormatIdForCode(normalized.code) };
+  }
+
+  getCellNumberFormat(id: string | undefined): WorkbookCellNumberFormatRecord | undefined {
+    if (!id) {
+      return this.cellNumberFormats.get(WorkbookStore.defaultFormatId);
+    }
+    return (
+      this.cellNumberFormats.get(id) ?? this.cellNumberFormats.get(WorkbookStore.defaultFormatId)
+    );
+  }
+
+  listCellNumberFormats(): WorkbookCellNumberFormatRecord[] {
+    return [...this.cellNumberFormats.values()].toSorted((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+  }
+
+  setStyleRange(range: CellRangeRef, styleId: string): WorkbookStyleRangeRecord {
+    if (!this.cellStyles.has(styleId)) {
+      throw new Error(`Unknown cell style: ${styleId}`);
+    }
+    const sheet = this.getOrCreateSheet(range.sheetName);
+    const normalizedRange = normalizeRangeRef(range);
+    sheet.styleRanges = sheet.styleRanges.flatMap((record) =>
+      subtractRangeRecord(record.range, normalizedRange).map((remainder) => ({
+        range: remainder,
+        styleId: record.styleId,
+      })),
+    );
+    const stored: WorkbookStyleRangeRecord = {
+      range: normalizedRange,
+      styleId,
+    };
+    if (styleId !== WorkbookStore.defaultStyleId) {
+      sheet.styleRanges.push(stored);
+    }
+    return stored;
+  }
+
+  listStyleRanges(sheetName: string): WorkbookStyleRangeRecord[] {
+    return (
+      this.getSheet(sheetName)?.styleRanges.map((record) => ({
+        range: { ...record.range },
+        styleId: record.styleId,
+      })) ?? []
+    );
+  }
+
+  setStyleRanges(
+    sheetName: string,
+    ranges: readonly SheetStyleRangeSnapshot[],
+  ): WorkbookStyleRangeRecord[] {
+    const sheet = this.getOrCreateSheet(sheetName);
+    sheet.styleRanges = ranges.map((entry) => ({
+      range: { ...entry.range },
+      styleId: entry.styleId,
+    }));
+    sheet.styleRanges.forEach((entry) => {
+      if (!this.cellStyles.has(entry.styleId)) {
+        throw new Error(`Unknown cell style: ${entry.styleId}`);
+      }
+    });
+    return this.listStyleRanges(sheetName);
+  }
+
+  getStyleId(sheetName: string, row: number, col: number): string {
+    const sheet = this.getSheet(sheetName);
+    if (!sheet) {
+      return WorkbookStore.defaultStyleId;
+    }
+    for (let index = sheet.styleRanges.length - 1; index >= 0; index -= 1) {
+      const record = sheet.styleRanges[index]!;
+      if (rangeContainsCell(record.range, row, col)) {
+        return record.styleId;
+      }
+    }
+    return WorkbookStore.defaultStyleId;
+  }
+
+  setFormatRange(range: CellRangeRef, formatId: string): WorkbookFormatRangeRecord {
+    if (!this.cellNumberFormats.has(formatId)) {
+      throw new Error(`Unknown cell number format: ${formatId}`);
+    }
+    const sheet = this.getOrCreateSheet(range.sheetName);
+    const normalizedRange = normalizeRangeRef(range);
+    sheet.formatRanges = sheet.formatRanges.flatMap((record) =>
+      subtractRangeRecord(record.range, normalizedRange).map((remainder) => ({
+        range: remainder,
+        formatId: record.formatId,
+      })),
+    );
+    const stored: WorkbookFormatRangeRecord = {
+      range: normalizedRange,
+      formatId,
+    };
+    if (formatId !== WorkbookStore.defaultFormatId) {
+      sheet.formatRanges.push(stored);
+    }
+    return stored;
+  }
+
+  listFormatRanges(sheetName: string): WorkbookFormatRangeRecord[] {
+    return (
+      this.getSheet(sheetName)?.formatRanges.map((record) => ({
+        range: { ...record.range },
+        formatId: record.formatId,
+      })) ?? []
+    );
+  }
+
+  setFormatRanges(
+    sheetName: string,
+    ranges: readonly SheetFormatRangeSnapshot[],
+  ): WorkbookFormatRangeRecord[] {
+    const sheet = this.getOrCreateSheet(sheetName);
+    sheet.formatRanges = ranges.map((entry) => ({
+      range: { ...entry.range },
+      formatId: entry.formatId,
+    }));
+    sheet.formatRanges.forEach((entry) => {
+      if (!this.cellNumberFormats.has(entry.formatId)) {
+        throw new Error(`Unknown cell number format: ${entry.formatId}`);
+      }
+    });
+    return this.listFormatRanges(sheetName);
+  }
+
+  getRangeFormatId(sheetName: string, row: number, col: number): string {
+    const sheet = this.getSheet(sheetName);
+    if (!sheet) {
+      return WorkbookStore.defaultFormatId;
+    }
+    for (let index = sheet.formatRanges.length - 1; index >= 0; index -= 1) {
+      const record = sheet.formatRanges[index]!;
+      if (rangeContainsCell(record.range, row, col)) {
+        return record.formatId;
+      }
+    }
+    return WorkbookStore.defaultFormatId;
   }
 
   setWorkbookProperty(key: string, value: LiteralInput): WorkbookPropertyRecord | undefined {
@@ -645,6 +886,10 @@ export class WorkbookStore {
     this.sheetsById.clear();
     this.cellKeyToIndex.clear();
     this.cellFormats.clear();
+    this.cellStyles.clear();
+    this.styleKeys.clear();
+    this.cellNumberFormats.clear();
+    this.numberFormatKeys.clear();
     this.metadata.properties.clear();
     this.metadata.definedNames.clear();
     this.metadata.tables.clear();
@@ -660,7 +905,49 @@ export class WorkbookStore {
     this.nextSheetId = 1;
     this.nextRowAxisId = 1;
     this.nextColumnAxisId = 1;
+    this.nextStyleId = 1;
+    this.nextFormatId = 1;
     this.cellStore.reset();
+    this.ensureDefaultStyle();
+    this.ensureDefaultNumberFormat();
+  }
+
+  private ensureDefaultStyle(): void {
+    const defaultStyle: WorkbookCellStyleRecord = { id: WorkbookStore.defaultStyleId };
+    this.cellStyles.set(defaultStyle.id, defaultStyle);
+    this.styleKeys.set(cellStyleKey(defaultStyle), defaultStyle.id);
+  }
+
+  private ensureDefaultNumberFormat(): void {
+    const defaultFormat: WorkbookCellNumberFormatRecord = {
+      id: WorkbookStore.defaultFormatId,
+      code: "general",
+      kind: "general",
+    };
+    this.cellNumberFormats.set(defaultFormat.id, defaultFormat);
+    this.numberFormatKeys.set(defaultFormat.code, defaultFormat.id);
+  }
+
+  private bumpStyleId(id: string): void {
+    const match = /^style-(\d+)$/.exec(id);
+    if (!match) {
+      return;
+    }
+    const numericId = Number.parseInt(match[1]!, 10);
+    if (Number.isFinite(numericId)) {
+      this.nextStyleId = Math.max(this.nextStyleId, numericId + 1);
+    }
+  }
+
+  private bumpFormatId(id: string): void {
+    const match = /^format-(\d+)$/.exec(id);
+    if (!match) {
+      return;
+    }
+    const numericId = Number.parseInt(match[1]!, 10);
+    if (Number.isFinite(numericId)) {
+      this.nextFormatId = Math.max(this.nextFormatId, numericId + 1);
+    }
   }
 
   private setAxisMetadata(
@@ -714,6 +1001,8 @@ export class WorkbookStore {
     if (sheet) {
       sheet.rowAxis.length = 0;
       sheet.columnAxis.length = 0;
+      sheet.styleRanges.length = 0;
+      sheet.formatRanges.length = 0;
     }
   }
 
@@ -930,6 +1219,288 @@ function deleteRecordsBySheet<T>(
       bucket.delete(key);
     }
   }
+}
+
+function normalizeCellStyleRecord(style: CellStyleRecord): WorkbookCellStyleRecord {
+  const record: WorkbookCellStyleRecord = { id: style.id.trim() };
+  if (record.id.length === 0) {
+    throw new Error("Cell style id must be non-empty");
+  }
+  const fillColor = normalizeBackgroundColor(style.fill?.backgroundColor);
+  if (fillColor) {
+    record.fill = { backgroundColor: fillColor };
+  }
+  const fontFamily = normalizeFontFamily(style.font?.family);
+  const fontColor = normalizeColor(style.font?.color);
+  const fontSize =
+    typeof style.font?.size === "number" && Number.isFinite(style.font.size)
+      ? Math.max(1, Math.min(144, style.font.size))
+      : undefined;
+  if (
+    fontFamily ||
+    fontColor ||
+    fontSize !== undefined ||
+    style.font?.bold === true ||
+    style.font?.italic === true ||
+    style.font?.underline === true
+  ) {
+    record.font = {
+      ...(fontFamily ? { family: fontFamily } : {}),
+      ...(fontColor ? { color: fontColor } : {}),
+      ...(fontSize !== undefined ? { size: fontSize } : {}),
+      ...(style.font?.bold ? { bold: true } : {}),
+      ...(style.font?.italic ? { italic: true } : {}),
+      ...(style.font?.underline ? { underline: true } : {}),
+    };
+  }
+  const horizontal = normalizeHorizontalAlignment(style.alignment?.horizontal);
+  const vertical = normalizeVerticalAlignment(style.alignment?.vertical);
+  const wrap = style.alignment?.wrap === true ? true : undefined;
+  const indent =
+    typeof style.alignment?.indent === "number" && Number.isFinite(style.alignment.indent)
+      ? Math.max(0, Math.min(16, Math.trunc(style.alignment.indent)))
+      : undefined;
+  if (horizontal || vertical || wrap || indent !== undefined) {
+    record.alignment = {
+      ...(horizontal ? { horizontal } : {}),
+      ...(vertical ? { vertical } : {}),
+      ...(wrap ? { wrap: true } : {}),
+      ...(indent !== undefined ? { indent } : {}),
+    };
+  }
+  const borders = normalizeBorders(style.borders);
+  if (borders) {
+    record.borders = borders;
+  }
+  return record;
+}
+
+function normalizeBackgroundColor(color: string | undefined): string | undefined {
+  return normalizeColor(color);
+}
+
+function normalizeColor(color: string | undefined): string | undefined {
+  if (!color) {
+    return undefined;
+  }
+  const trimmed = color.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^#[0-9a-f]{3}$/.test(trimmed)) {
+    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
+  }
+  throw new Error(`Unsupported background color: ${color}`);
+}
+
+function normalizeFontFamily(family: string | undefined): string | undefined {
+  if (!family) {
+    return undefined;
+  }
+  const trimmed = family.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
+function normalizeHorizontalAlignment(
+  value: CellHorizontalAlignment | undefined,
+): CellHorizontalAlignment | undefined {
+  switch (value) {
+    case undefined:
+      return undefined;
+    case "general":
+    case "left":
+    case "center":
+    case "right":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeVerticalAlignment(
+  value: CellVerticalAlignment | undefined,
+): CellVerticalAlignment | undefined {
+  switch (value) {
+    case undefined:
+      return undefined;
+    case "top":
+    case "middle":
+    case "bottom":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeBorderStyle(
+  value: CellBorderSideSnapshot["style"] | undefined,
+): CellBorderSideSnapshot["style"] | undefined {
+  switch (value) {
+    case undefined:
+      return undefined;
+    case "solid":
+    case "dashed":
+    case "dotted":
+    case "double":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeBorderWeight(
+  value: CellBorderSideSnapshot["weight"] | undefined,
+): CellBorderSideSnapshot["weight"] | undefined {
+  switch (value) {
+    case undefined:
+      return undefined;
+    case "thin":
+    case "medium":
+    case "thick":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeBorderSide(
+  side: CellBorderSideSnapshot | undefined,
+): CellBorderSideSnapshot | undefined {
+  if (!side) {
+    return undefined;
+  }
+  const color = normalizeColor(side.color);
+  const style = normalizeBorderStyle(side.style);
+  const weight = normalizeBorderWeight(side.weight);
+  if (!color || !style || !weight) {
+    return undefined;
+  }
+  return { color, style, weight };
+}
+
+function normalizeBorders(
+  style: CellStyleRecord["borders"],
+): CellStyleRecord["borders"] | undefined {
+  if (!style) {
+    return undefined;
+  }
+  const top = normalizeBorderSide(style.top);
+  const right = normalizeBorderSide(style.right);
+  const bottom = normalizeBorderSide(style.bottom);
+  const left = normalizeBorderSide(style.left);
+  if (!top && !right && !bottom && !left) {
+    return undefined;
+  }
+  return {
+    ...(top ? { top } : {}),
+    ...(right ? { right } : {}),
+    ...(bottom ? { bottom } : {}),
+    ...(left ? { left } : {}),
+  };
+}
+
+function normalizeCellNumberFormatRecord(
+  format: CellNumberFormatRecord,
+): WorkbookCellNumberFormatRecord {
+  const id = format.id.trim();
+  if (id.length === 0) {
+    throw new Error("Cell number format id must be non-empty");
+  }
+  const code = buildCellNumberFormatCode(format.code);
+  return {
+    id,
+    code,
+    kind: format.kind ?? getCellNumberFormatKind(code),
+  };
+}
+
+function cellStyleKey(style: CellStyleRecord): string {
+  return JSON.stringify({
+    fill: style.fill?.backgroundColor ?? null,
+    font: style.font ?? null,
+    alignment: style.alignment ?? null,
+    borders: style.borders ?? null,
+  });
+}
+
+function cellStyleIdForKey(key: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `style-${(hash >>> 0).toString(16)}`;
+}
+
+function cellNumberFormatIdForCode(code: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < code.length; index += 1) {
+    hash ^= code.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `format-${(hash >>> 0).toString(16)}`;
+}
+
+function rangeContainsCell(range: CellRangeRef, row: number, col: number): boolean {
+  const { startRow, endRow, startCol, endCol } = normalizeRangeRef(range);
+  return row >= startRow && row <= endRow && col >= startCol && col <= endCol;
+}
+
+function normalizeRangeRef(range: CellRangeRef): CellRangeRef & {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+} {
+  const start = parseCellAddress(range.startAddress, range.sheetName);
+  const end = parseCellAddress(range.endAddress, range.sheetName);
+  const startRow = Math.min(start.row, end.row);
+  const endRow = Math.max(start.row, end.row);
+  const startCol = Math.min(start.col, end.col);
+  const endCol = Math.max(start.col, end.col);
+  return {
+    sheetName: range.sheetName,
+    startAddress: formatAddress(startRow, startCol),
+    endAddress: formatAddress(endRow, endCol),
+    startRow,
+    endRow,
+    startCol,
+    endCol,
+  };
+}
+
+function subtractRangeRecord(existing: CellRangeRef, cut: CellRangeRef): CellRangeRef[] {
+  if (existing.sheetName !== cut.sheetName) {
+    return [{ ...existing }];
+  }
+  const source = normalizeRangeRef(existing);
+  const removal = normalizeRangeRef(cut);
+  const startRow = Math.max(source.startRow, removal.startRow);
+  const endRow = Math.min(source.endRow, removal.endRow);
+  const startCol = Math.max(source.startCol, removal.startCol);
+  const endCol = Math.min(source.endCol, removal.endCol);
+  if (startRow > endRow || startCol > endCol) {
+    return [{ ...source }];
+  }
+
+  const remainders: CellRangeRef[] = [];
+  const pushRemainder = (rowStart: number, rowEnd: number, colStart: number, colEnd: number) => {
+    if (rowStart > rowEnd || colStart > colEnd) {
+      return;
+    }
+    remainders.push({
+      sheetName: source.sheetName,
+      startAddress: formatAddress(rowStart, colStart),
+      endAddress: formatAddress(rowEnd, colEnd),
+    });
+  };
+
+  pushRemainder(source.startRow, startRow - 1, source.startCol, source.endCol);
+  pushRemainder(endRow + 1, source.endRow, source.startCol, source.endCol);
+  pushRemainder(startRow, endRow, source.startCol, startCol - 1);
+  pushRemainder(startRow, endRow, endCol + 1, source.endCol);
+
+  return remainders;
 }
 
 function normalizeMetadataKey(key: string): string {

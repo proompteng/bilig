@@ -2565,6 +2565,160 @@ describe("SpreadsheetEngine", () => {
     unsubscribe();
   });
 
+  it("persists pooled cell styles and style ranges without materializing empty cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+      {
+        fill: { backgroundColor: "#ABCDEF" },
+        font: { family: "Fira Sans" },
+      },
+    );
+
+    expect(engine.workbook.getCellIndex("Sheet1", "B2")).toBeUndefined();
+    const styled = engine.getCell("Sheet1", "B2");
+    expect(styled.styleId).toBeDefined();
+
+    const snapshot = engine.exportSnapshot();
+    expect(snapshot.sheets[0]?.cells).toEqual([]);
+    expect(snapshot.workbook.metadata?.styles).toHaveLength(1);
+    expect(snapshot.workbook.metadata?.styles?.[0]).toMatchObject({
+      fill: { backgroundColor: "#abcdef" },
+      font: { family: "Fira Sans" },
+    });
+    expect(snapshot.sheets[0]?.metadata?.styleRanges).toEqual([
+      {
+        range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+        styleId: styled.styleId,
+      },
+    ]);
+
+    const restored = new SpreadsheetEngine({ workbookName: "restored" });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+
+    expect(restored.getCell("Sheet1", "C3").styleId).toBe(styled.styleId);
+    expect(restored.getCellStyle(styled.styleId)).toMatchObject({
+      fill: { backgroundColor: "#abcdef" },
+      font: { family: "Fira Sans" },
+    });
+  });
+
+  it("interns identical cell styles across ranges", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const patch = {
+      fill: { backgroundColor: "#ff0000" },
+      font: { family: "IBM Plex Sans" },
+    } as const;
+    engine.setRangeStyle({ sheetName: "Sheet1", startAddress: "A1", endAddress: "A2" }, patch);
+    engine.setRangeStyle({ sheetName: "Sheet1", startAddress: "C1", endAddress: "C2" }, patch);
+
+    const snapshot = engine.exportSnapshot();
+    expect(snapshot.workbook.metadata?.styles).toHaveLength(1);
+    expect(snapshot.sheets[0]?.metadata?.styleRanges).toHaveLength(2);
+    expect(snapshot.sheets[0]?.metadata?.styleRanges?.[0]?.styleId).toBe(
+      snapshot.sheets[0]?.metadata?.styleRanges?.[1]?.styleId,
+    );
+  });
+
+  it("merges and clears style fields independently", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      {
+        fill: { backgroundColor: "#ff0000" },
+        font: { family: "Inter" },
+      },
+    );
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+      { font: { family: "IBM Plex Sans" } },
+    );
+
+    const mergedStyle = engine.getCellStyle(engine.getCell("Sheet1", "A1").styleId);
+    expect(mergedStyle).toMatchObject({
+      fill: { backgroundColor: "#ff0000" },
+      font: { family: "IBM Plex Sans" },
+    });
+
+    engine.clearRangeStyle({ sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" }, [
+      "fontFamily",
+    ]);
+    const clearedStyle = engine.getCellStyle(engine.getCell("Sheet1", "A1").styleId);
+    expect(clearedStyle).toMatchObject({
+      fill: { backgroundColor: "#ff0000" },
+    });
+    expect(clearedStyle?.font).toBeUndefined();
+  });
+
+  it("notifies address listeners for style-only edits on empty cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    let notified = 0;
+    const unsubscribe = engine.subscribeCell("Sheet1", "D4", () => {
+      notified += 1;
+    });
+
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "D4", endAddress: "D4" },
+      { fill: { backgroundColor: "#00ff00" } },
+    );
+
+    expect(notified).toBe(1);
+    unsubscribe();
+  });
+
+  it("persists pooled number formats and sparse format ranges", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setRangeNumberFormat(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "B4" },
+      { kind: "accounting", currency: "USD", decimals: 2, useGrouping: true },
+    );
+
+    const snapshot = engine.exportSnapshot();
+    expect(snapshot.workbook.metadata?.formats).toHaveLength(1);
+    expect(snapshot.sheets[0]?.metadata?.formatRanges).toHaveLength(1);
+    expect(engine.getCell("Sheet1", "B3").format).toContain("accounting:USD:2");
+  });
+
+  it("merges advanced style fields including borders and font weight", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "C5", endAddress: "C5" },
+      {
+        font: { bold: true, color: "#111827", size: 14 },
+        alignment: { horizontal: "right", wrap: true },
+        borders: {
+          bottom: { style: "double", weight: "medium", color: "#111827" },
+        },
+      },
+    );
+
+    const style = engine.getCellStyle(engine.getCell("Sheet1", "C5").styleId);
+    expect(style).toMatchObject({
+      font: { bold: true, color: "#111827", size: 14 },
+      alignment: { horizontal: "right", wrap: true },
+      borders: {
+        bottom: { style: "double", weight: "medium", color: "#111827" },
+      },
+    });
+  });
+
   it("replaces existing sheet contents on CSV import", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

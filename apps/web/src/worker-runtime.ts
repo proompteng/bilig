@@ -5,10 +5,13 @@ import { formatAddress, indexToColumn } from "@bilig/formula";
 import { createBrowserPersistence, type BrowserPersistence } from "@bilig/storage-browser";
 import {
   type CellRangeRef,
+  type CellNumberFormatInput,
+  type CellStyleField,
+  type CellStylePatch,
+  type CellStyleRecord,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
-  formatErrorCode,
   type CellSnapshot,
   type EngineEvent,
   type LiteralInput,
@@ -16,6 +19,7 @@ import {
   type SyncState,
   type WorkbookAxisEntrySnapshot,
   type WorkbookSnapshot,
+  formatCellDisplayValue,
 } from "@bilig/protocol";
 import {
   createWebSocketSyncClient,
@@ -50,8 +54,13 @@ interface WorkerEngine {
   getLastMetrics(): RecalcMetrics;
   getSyncState(): SyncState;
   getCell(sheetName: string, address: string): CellSnapshot;
+  getCellStyle(styleId: string | undefined): CellStyleRecord | undefined;
+  setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void;
+  clearRangeNumberFormat(range: CellRangeRef): void;
   setCellValue(sheetName: string, address: string, value: LiteralInput): unknown;
   setCellFormula(sheetName: string, address: string, formula: string): unknown;
+  setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void;
+  clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void;
   clearCell(sheetName: string, address: string): void;
   renderCommit(ops: CommitOp[]): void;
   fillRange(source: CellRangeRef, target: CellRangeRef): void;
@@ -79,6 +88,7 @@ const MIN_COLUMN_WIDTH = 44;
 const MAX_COLUMN_WIDTH = 480;
 const AUTOFIT_PADDING = 28;
 const AUTOFIT_CHAR_WIDTH = 8;
+const DEFAULT_STYLE_ID = "style-0";
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
@@ -139,6 +149,7 @@ interface ViewportSubscriptionState {
   subscription: ViewportPatchSubscription;
   listener: (patch: Uint8Array) => void;
   nextVersion: number;
+  knownStyleIds: Set<string>;
   lastCellSignatures: Map<string, string>;
   lastColumnSignatures: Map<number, string>;
   lastRowSignatures: Map<number, string>;
@@ -174,6 +185,9 @@ export class WorkbookWorkerRuntime {
   private engineSubscription: (() => void) | null = null;
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionState>();
   private readonly formatIds = new Map<string, number>([["", 0]]);
+  private readonly styles = new Map<string, CellStyleRecord>([
+    [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
+  ]);
   private nextFormatId = 1;
 
   constructor(
@@ -193,11 +207,12 @@ export class WorkbookWorkerRuntime {
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerStateSnapshot> {
     this.cleanup();
     this.bootstrapOptions = options;
-    this.engine = new SpreadsheetEngine({
+    const engine = new SpreadsheetEngine({
       workbookName: options.documentId,
       replicaId: options.replicaId,
     });
-    await this.engine.ready();
+    this.engine = engine;
+    await engine.ready();
     let initialServerSnapshot: ServerSnapshotSeed | null = null;
 
     if (options.persistState) {
@@ -206,8 +221,8 @@ export class WorkbookWorkerRuntime {
         parsePersistedWorkbookState,
       );
       if (persisted) {
-        this.engine.importSnapshot(persisted.snapshot);
-        this.engine.importReplicaSnapshot(persisted.replica);
+        engine.importSnapshot(persisted.snapshot);
+        engine.importReplicaSnapshot(persisted.replica);
       }
     }
     if (options.baseUrl) {
@@ -217,17 +232,17 @@ export class WorkbookWorkerRuntime {
           options.documentId,
         );
         if (initialServerSnapshot) {
-          this.engine.importSnapshot(initialServerSnapshot.snapshot);
+          engine.importSnapshot(initialServerSnapshot.snapshot);
         }
       } catch {
         initialServerSnapshot = null;
       }
     }
-    if (this.engine.workbook.sheetsByName.size === 0) {
-      this.engine.createSheet("Sheet1");
+    if (engine.workbook.sheetsByName.size === 0) {
+      engine.createSheet("Sheet1");
     }
 
-    this.engineSubscription = this.engine.subscribe((event) => {
+    this.engineSubscription = engine.subscribe((event) => {
       void this.persistState();
       this.broadcastViewportPatches(event.metrics);
     });
@@ -235,7 +250,7 @@ export class WorkbookWorkerRuntime {
 
     if (options.baseUrl) {
       try {
-        await this.engine.connectSyncClient(
+        await engine.connectSyncClient(
           this.createSyncClient({
             documentId: options.documentId,
             replicaId: options.replicaId,
@@ -244,7 +259,7 @@ export class WorkbookWorkerRuntime {
           }),
         );
       } catch {
-        await this.engine.disconnectSyncClient();
+        await engine.disconnectSyncClient();
       }
     }
 
@@ -277,6 +292,22 @@ export class WorkbookWorkerRuntime {
   setCellFormula(sheetName: string, address: string, formula: string): CellSnapshot {
     this.requireEngine().setCellFormula(sheetName, address, formula);
     return this.getCell(sheetName, address);
+  }
+
+  setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void {
+    this.requireEngine().setRangeStyle(range, patch);
+  }
+
+  clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
+    this.requireEngine().clearRangeStyle(range, fields);
+  }
+
+  setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
+    this.requireEngine().setRangeNumberFormat(range, format);
+  }
+
+  clearRangeNumberFormat(range: CellRangeRef): void {
+    this.requireEngine().clearRangeNumberFormat(range);
   }
 
   clearCell(sheetName: string, address: string): CellSnapshot {
@@ -334,6 +365,7 @@ export class WorkbookWorkerRuntime {
       subscription: this.normalizeViewport(subscription),
       listener,
       nextVersion: 1,
+      knownStyleIds: new Set(),
       lastCellSignatures: new Map<string, string>(),
       lastColumnSignatures: new Map<number, string>(),
       lastRowSignatures: new Map<number, string>(),
@@ -349,6 +381,8 @@ export class WorkbookWorkerRuntime {
     this.engineSubscription?.();
     this.engineSubscription = null;
     this.viewportSubscriptions.clear();
+    this.styles.clear();
+    this.styles.set(DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID });
     this.engine = null;
   }
 
@@ -428,6 +462,7 @@ export class WorkbookWorkerRuntime {
     const engine = this.requireEngine();
     const viewport = state.subscription;
     const nextCellSignatures = new Map<string, string>();
+    const styles: CellStyleRecord[] = [];
     const cells: ViewportPatchedCell[] = [];
 
     for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
@@ -438,12 +473,18 @@ export class WorkbookWorkerRuntime {
           ? engine.getCell(viewport.sheetName, address)
           : this.emptyCellSnapshot(viewport.sheetName, address);
         const formatId = this.getFormatId(snapshot.format);
-        const patchedCell = this.buildPatchedCell(snapshot, row, col, formatId);
+        const style = this.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID);
+        if (full || !state.knownStyleIds.has(style.id)) {
+          state.knownStyleIds.add(style.id);
+          styles.push(style);
+        }
+        const patchedCell = this.buildPatchedCell(snapshot, row, col, formatId, style.id);
         const signature = JSON.stringify([
           patchedCell.snapshot.version,
           patchedCell.snapshot.formula ?? "",
           patchedCell.snapshot.input ?? null,
           patchedCell.snapshot.format ?? "",
+          patchedCell.snapshot.styleId ?? "",
           patchedCell.snapshot.value,
           patchedCell.displayText,
           patchedCell.copyText,
@@ -485,6 +526,7 @@ export class WorkbookWorkerRuntime {
       full,
       viewport,
       metrics: { ...metrics },
+      styles,
       cells,
       columns,
       rows,
@@ -496,6 +538,7 @@ export class WorkbookWorkerRuntime {
     row: number,
     col: number,
     formatId: number,
+    styleId: string,
   ): ViewportPatchedCell {
     const editorText = this.toEditorText(snapshot);
     const displayText = this.toDisplayText(snapshot);
@@ -507,8 +550,18 @@ export class WorkbookWorkerRuntime {
       copyText: snapshot.formula ? editorText : displayText,
       editorText,
       formatId,
-      styleId: formatId,
+      styleId,
     };
+  }
+
+  private getStyleRecord(styleId: string): CellStyleRecord {
+    const existing = this.styles.get(styleId);
+    if (existing) {
+      return existing;
+    }
+    const resolved = this.requireEngine().getCellStyle(styleId) ?? { id: DEFAULT_STYLE_ID };
+    this.styles.set(resolved.id, resolved);
+    return resolved;
   }
 
   private buildAxisPatches(
@@ -579,20 +632,7 @@ export class WorkbookWorkerRuntime {
   }
 
   private toDisplayText(snapshot: CellSnapshot): string {
-    switch (snapshot.value.tag) {
-      case ValueTag.Number:
-        return String(snapshot.value.value);
-      case ValueTag.Boolean:
-        return snapshot.value.value ? "TRUE" : "FALSE";
-      case ValueTag.String:
-        return snapshot.value.value;
-      case ValueTag.Error:
-        return formatErrorCode(snapshot.value.code);
-      case ValueTag.Empty:
-        return "";
-    }
-    const exhaustiveValue: never = snapshot.value;
-    return String(exhaustiveValue);
+    return formatCellDisplayValue(snapshot.value, snapshot.format);
   }
 
   private emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {

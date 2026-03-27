@@ -93,10 +93,82 @@ export function WorkbookView({
   onVisibleViewportChange,
 }: WorkbookViewProps) {
   const showWorkbookHeader = variant !== "product";
+  const product = variant === "product";
+  if (product) {
+    return (
+      <section className="flex h-screen flex-col overflow-hidden bg-[#f8f9fa]">
+        {ribbon ? <div className="shrink-0">{ribbon}</div> : null}
+        <div className="flex min-h-0 flex-1 flex-col bg-white">
+          <FormulaBar
+            address={selectedAddr}
+            isEditing={isEditing}
+            onBeginEdit={onBeginFormulaEdit}
+            onAddressCommit={onAddressCommit}
+            onCancel={onCancelEdit}
+            onChange={onEditorChange}
+            onClear={onClearCell}
+            onCommit={() => onCommitEdit()}
+            resolvedValue={resolvedValue}
+            sheetName={sheetName}
+            value={editorValue}
+            variant={variant}
+          />
+          <SheetGridView
+            editorValue={editorValue}
+            editorSelectionBehavior={editorSelectionBehavior}
+            engine={engine}
+            isEditingCell={isEditingCell}
+            onBeginEdit={onBeginEdit}
+            onCancelEdit={onCancelEdit}
+            onClearCell={onClearCell}
+            onCommitEdit={onCommitEdit}
+            onCopyRange={onCopyRange}
+            onEditorChange={onEditorChange}
+            onFillRange={onFillRange}
+            onPaste={onPaste}
+            onSelectionLabelChange={onSelectionLabelChange}
+            onSelect={onSelect}
+            subscribeViewport={subscribeViewport}
+            columnWidths={columnWidths}
+            onColumnWidthChange={onColumnWidthChange}
+            onAutofitColumn={onAutofitColumn}
+            onVisibleViewportChange={onVisibleViewportChange}
+            resolvedValue={resolvedValue}
+            selectedAddr={selectedAddr}
+            sheetName={sheetName}
+            variant={variant}
+          />
+          <div className="flex min-h-8 items-center justify-between gap-3 border-t border-[#dadce0] bg-[#f8f9fa] px-2">
+            <div aria-label="Sheets" className="flex items-end gap-1" role="tablist">
+              {sheetNames.map((name) => (
+                <button
+                  aria-selected={name === sheetName}
+                  className={`inline-flex h-7 items-center rounded-t-[3px] border border-b-0 px-3 text-[12px] ${
+                    name === sheetName
+                      ? "border-[#dadce0] bg-white text-[#202124]"
+                      : "border-transparent bg-transparent text-[#5f6368] hover:bg-[#eef2f6]"
+                  }`}
+                  key={name}
+                  onClick={() => onSelectSheet(name)}
+                  role="tab"
+                  type="button"
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            {statusBar ? (
+              <div className="inline-flex flex-wrap items-center gap-3 text-[11px] text-[#5f6368]">
+                {statusBar}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    );
+  }
   return (
-    <section
-      className={variant === "product" ? "workbook-shell workbook-shell-product" : "workbook-shell"}
-    >
+    <section className="workbook-shell">
       {ribbon ? <div className="workbook-ribbon">{ribbon}</div> : null}
       <div className="workbook-content">
         <div className="workbook-main">

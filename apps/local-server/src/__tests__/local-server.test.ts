@@ -242,9 +242,20 @@ describe("local-server", () => {
 
     expect(helloFrames).toEqual([
       {
+        kind: "appendBatch",
+        documentId: "book-2",
+        cursor: 1,
+        batch: {
+          id: "local-server:book-2:1",
+          replicaId: "local-server:book-2",
+          clock: { counter: 1 },
+          ops: [{ kind: "upsertSheet", name: "Sheet1", order: 0 }],
+        },
+      },
+      {
         kind: "cursorWatermark",
         documentId: "book-2",
-        cursor: 0,
+        cursor: 1,
         compactedCursor: 0,
       },
     ]);
@@ -265,13 +276,13 @@ describe("local-server", () => {
     const committed = broadcasts[0];
     expect(committed.kind).toBe("appendBatch");
     if (committed.kind !== "appendBatch") throw new Error("Expected appendBatch broadcast");
-    expect(committed.cursor).toBe(1);
+    expect(committed.cursor).toBe(2);
 
     expect(responses).toHaveLength(1);
     const ack = responses[0];
     expect(ack.kind).toBe("ack");
     if (ack.kind !== "ack") throw new Error("Expected ack frame");
-    expect(ack.cursor).toBe(1);
+    expect(ack.cursor).toBe(2);
     detach();
   });
 

@@ -1,5 +1,7 @@
 import type {
   CellRangeRef,
+  CellNumberFormatRecord,
+  CellStyleRecord,
   LiteralInput,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
@@ -34,6 +36,8 @@ export interface WorkbookSortKey {
 }
 
 export interface WorkbookAxisEntryOp extends WorkbookAxisEntrySnapshot {}
+export interface WorkbookCellStyleOp extends CellStyleRecord {}
+export interface WorkbookCellNumberFormatOp extends CellNumberFormatRecord {}
 
 export type WorkbookOp =
   | { kind: "upsertWorkbook"; name: string }
@@ -85,6 +89,10 @@ export type WorkbookOp =
   | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
   | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
   | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
+  | { kind: "upsertCellStyle"; style: WorkbookCellStyleOp }
+  | { kind: "upsertCellNumberFormat"; format: WorkbookCellNumberFormatOp }
+  | { kind: "setStyleRange"; range: CellRangeRef; styleId: string }
+  | { kind: "setFormatRange"; range: CellRangeRef; formatId: string }
   | { kind: "clearCell"; sheetName: string; address: string }
   | { kind: "upsertDefinedName"; name: string; value: WorkbookDefinedNameValueSnapshot }
   | { kind: "deleteDefinedName"; name: string }
@@ -271,6 +279,14 @@ function entityKeyForOp(op: EngineOp): string {
       return `cell:${op.sheetName}!${op.address}`;
     case "setCellFormat":
       return `format:${op.sheetName}!${op.address}`;
+    case "upsertCellStyle":
+      return `style:${op.style.id}`;
+    case "upsertCellNumberFormat":
+      return `number-format:${op.format.id}`;
+    case "setStyleRange":
+      return `style-range:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
+    case "setFormatRange":
+      return `format-range:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
     case "upsertDefinedName":
     case "deleteDefinedName":
       return `defined-name:${normalizedDefinedName(op.name)}`;
@@ -328,6 +344,13 @@ function sheetDeleteBarrierForOp(
     case "deleteSpillRange":
     case "deletePivotTable":
       return latestSheetDeletes.get(op.sheetName);
+    case "setStyleRange":
+    case "setFormatRange":
+      return latestSheetDeletes.get(op.range.sheetName);
+    case "upsertCellNumberFormat":
+      return undefined;
+    case "upsertCellStyle":
+      return undefined;
     case "upsertPivotTable":
       return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
   }

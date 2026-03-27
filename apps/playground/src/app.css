@@ -31,7 +31,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -148,6 +149,29 @@ input {
   display: inline-flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.ribbon-strip-compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ribbon-strip-compact .ribbon-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.ribbon-strip-compact select,
+.ribbon-strip-compact button,
+.ribbon-strip-compact input[type="color"] {
+  min-height: 28px;
+}
+
+.workbook-shell-product .workbook-ribbon {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
 }
 
 .workbook-content {

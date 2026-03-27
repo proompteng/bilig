@@ -66,6 +66,7 @@ const fakeClient = {
           recalcMs: 0,
           compileMs: 0,
         },
+        styles: [],
         cells: [],
         columns: [],
         rows: [],

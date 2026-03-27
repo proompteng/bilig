@@ -38,4 +38,17 @@ describe("FormulaTable", () => {
     expect(formulas.size).toBe(2);
     expect([...formulas.values()].map((formula) => formula.source)).toEqual(["3", "2"]);
   });
+
+  it("updates an existing formula record in place without allocating a new id", () => {
+    const store = new CellStore();
+    const cellIndex = store.allocate(0, 0, 0);
+    const formulas = new FormulaTable<{ cellIndex: number; source: string }>(store);
+
+    const originalId = formulas.set(cellIndex, { cellIndex, source: "A1*2" });
+    const updatedId = formulas.set(cellIndex, { cellIndex, source: "A1*3" });
+
+    expect(updatedId).toBe(originalId);
+    expect(formulas.get(cellIndex)).toEqual({ cellIndex, source: "A1*3" });
+    expect(formulas.size).toBe(1);
+  });
 });

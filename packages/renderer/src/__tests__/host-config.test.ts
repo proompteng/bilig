@@ -222,6 +222,24 @@ describe("workbook host config", () => {
     );
   });
 
+  it("rejects invalid workbook, sheet, and cell props when creating instances", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "host-config-invalid-props" });
+    await engine.ready();
+    const container = createContainer(engine);
+
+    expect(() =>
+      workbookHostConfig.createInstance("Workbook", { addr: "A1" } satisfies CellProps, container),
+    ).toThrow("Workbook props must not include cell fields.");
+
+    expect(() =>
+      workbookHostConfig.createInstance("Sheet", {} satisfies WorkbookProps, container),
+    ).toThrow("Sheet props require a sheet name.");
+
+    expect(() =>
+      workbookHostConfig.createInstance("Cell", { name: "Sheet1" } satisfies SheetProps, container),
+    ).toThrow("Cell props require an address.");
+  });
+
   it("guards descriptor parenting, container attachment, and prop updates", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "host-config-guards" });
     await engine.ready();
@@ -355,5 +373,64 @@ describe("workbook host config", () => {
 
     workbookHostConfig.clearContainer(container);
     expect(container.root).toBeNull();
+  });
+
+  it("inserts before an existing sibling using the splice path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "host-config-insert-before" });
+    await engine.ready();
+    const container = createContainer(engine);
+
+    const workbook = workbookHostConfig.createInstance(
+      "Workbook",
+      { name: "Book" } satisfies WorkbookProps,
+      container,
+    );
+    const firstSheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet1" } satisfies SheetProps,
+      container,
+    );
+    const secondSheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Sheet2" } satisfies SheetProps,
+      container,
+    );
+    const insertedSheet = workbookHostConfig.createInstance(
+      "Sheet",
+      { name: "Inserted" } satisfies SheetProps,
+      container,
+    );
+
+    workbookHostConfig.appendInitialChild(workbook, firstSheet);
+    workbookHostConfig.appendInitialChild(workbook, secondSheet);
+    workbookHostConfig.insertBefore(workbook, insertedSheet, secondSheet);
+
+    expect(expectWorkbookDescriptor(workbook).children.map((sheet) => sheet.props.name)).toEqual([
+      "Sheet1",
+      "Inserted",
+      "Sheet2",
+    ]);
+
+    const firstCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "A1", value: 1 } satisfies CellProps,
+      container,
+    );
+    const secondCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "B1", value: 2 } satisfies CellProps,
+      container,
+    );
+    const insertedCell = workbookHostConfig.createInstance(
+      "Cell",
+      { addr: "A2", value: 3 } satisfies CellProps,
+      container,
+    );
+
+    workbookHostConfig.appendInitialChild(firstSheet, firstCell);
+    workbookHostConfig.appendInitialChild(firstSheet, secondCell);
+    workbookHostConfig.insertBefore(firstSheet, insertedCell, secondCell);
+
+    expect(firstSheet.children.map((cell) => cell.props.addr)).toEqual(["A1", "A2", "B1"]);
   });
 });

@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 
 import "@glideapps/glide-data-grid/index.css";
-import "../../playground/src/app.css";
+import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

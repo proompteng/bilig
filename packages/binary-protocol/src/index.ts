@@ -1,6 +1,13 @@
 import type {
+  CellBorderStyle,
+  CellBorderWeight,
+  CellHorizontalAlignment,
+  CellNumberFormatKind,
+  CellNumberFormatRecord,
   CellRangeRef,
   CompatibilityMode,
+  CellStyleRecord,
+  CellVerticalAlignment,
   PivotAggregation,
   LiteralInput,
   WorkbookAxisEntrySnapshot,
@@ -153,23 +160,27 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   setCellValue: 13,
   setCellFormula: 14,
   setCellFormat: 15,
-  clearCell: 16,
-  upsertDefinedName: 17,
-  deleteDefinedName: 18,
-  upsertTable: 19,
-  deleteTable: 20,
-  upsertSpillRange: 21,
-  deleteSpillRange: 22,
-  upsertPivotTable: 23,
-  deletePivotTable: 24,
-  setCalculationSettings: 25,
-  setVolatileContext: 26,
-  insertRows: 27,
-  deleteRows: 28,
-  moveRows: 29,
-  insertColumns: 30,
-  deleteColumns: 31,
-  moveColumns: 32,
+  upsertCellStyle: 16,
+  setStyleRange: 17,
+  upsertCellNumberFormat: 35,
+  setFormatRange: 36,
+  clearCell: 18,
+  upsertDefinedName: 19,
+  deleteDefinedName: 20,
+  upsertTable: 21,
+  deleteTable: 22,
+  upsertSpillRange: 23,
+  deleteSpillRange: 24,
+  upsertPivotTable: 25,
+  deletePivotTable: 26,
+  setCalculationSettings: 27,
+  setVolatileContext: 28,
+  insertRows: 29,
+  deleteRows: 30,
+  moveRows: 31,
+  insertColumns: 32,
+  deleteColumns: 33,
+  moveColumns: 34,
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
@@ -442,6 +453,233 @@ function decodeCellRangeRef(reader: BinaryReader): CellRangeRef {
   };
 }
 
+function encodeCellStyleRecord(writer: BinaryWriter, style: CellStyleRecord): void {
+  writer.string(style.id);
+  writer.bool(style.fill !== undefined);
+  if (style.fill) {
+    writer.string(style.fill.backgroundColor);
+  }
+  writer.bool(style.font !== undefined);
+  if (style.font) {
+    writer.bool(style.font.family !== undefined);
+    if (style.font.family !== undefined) {
+      writer.string(style.font.family);
+    }
+    writer.bool(style.font.size !== undefined);
+    if (style.font.size !== undefined) {
+      writer.f64(style.font.size);
+    }
+    writer.bool(style.font.bold !== undefined);
+    if (style.font.bold !== undefined) {
+      writer.bool(style.font.bold);
+    }
+    writer.bool(style.font.italic !== undefined);
+    if (style.font.italic !== undefined) {
+      writer.bool(style.font.italic);
+    }
+    writer.bool(style.font.underline !== undefined);
+    if (style.font.underline !== undefined) {
+      writer.bool(style.font.underline);
+    }
+    writer.bool(style.font.color !== undefined);
+    if (style.font.color !== undefined) {
+      writer.string(style.font.color);
+    }
+  }
+  writer.bool(style.alignment !== undefined);
+  if (style.alignment) {
+    writer.bool(style.alignment.horizontal !== undefined);
+    if (style.alignment.horizontal !== undefined) {
+      writer.string(style.alignment.horizontal);
+    }
+    writer.bool(style.alignment.vertical !== undefined);
+    if (style.alignment.vertical !== undefined) {
+      writer.string(style.alignment.vertical);
+    }
+    writer.bool(style.alignment.wrap !== undefined);
+    if (style.alignment.wrap !== undefined) {
+      writer.bool(style.alignment.wrap);
+    }
+    writer.bool(style.alignment.indent !== undefined);
+    if (style.alignment.indent !== undefined) {
+      writer.u32(style.alignment.indent);
+    }
+  }
+  writer.bool(style.borders !== undefined);
+  if (style.borders) {
+    encodeBorderSide(writer, style.borders.top);
+    encodeBorderSide(writer, style.borders.right);
+    encodeBorderSide(writer, style.borders.bottom);
+    encodeBorderSide(writer, style.borders.left);
+  }
+}
+
+function encodeCellNumberFormatRecord(writer: BinaryWriter, format: CellNumberFormatRecord): void {
+  writer.string(format.id);
+  writer.string(format.code);
+  writer.string(format.kind);
+}
+
+function decodeCellNumberFormatRecord(reader: BinaryReader): CellNumberFormatRecord {
+  const id = reader.string();
+  const code = reader.string();
+  const kind = decodeCellNumberFormatKind(reader.string());
+  return {
+    id,
+    code,
+    kind,
+  };
+}
+
+function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
+  const style: CellStyleRecord = { id: reader.string() };
+  if (reader.bool()) {
+    style.fill = { backgroundColor: reader.string() };
+  }
+  if (reader.bool()) {
+    const font: NonNullable<CellStyleRecord["font"]> = {};
+    if (reader.bool()) {
+      font.family = reader.string();
+    }
+    if (reader.bool()) {
+      font.size = reader.f64();
+    }
+    if (reader.bool()) {
+      font.bold = reader.bool();
+    }
+    if (reader.bool()) {
+      font.italic = reader.bool();
+    }
+    if (reader.bool()) {
+      font.underline = reader.bool();
+    }
+    if (reader.bool()) {
+      font.color = reader.string();
+    }
+    style.font = font;
+  }
+  if (reader.bool()) {
+    const alignment: NonNullable<CellStyleRecord["alignment"]> = {};
+    if (reader.bool()) {
+      const horizontal = decodeHorizontalAlignment(reader.string());
+      if (horizontal !== undefined) {
+        alignment.horizontal = horizontal;
+      }
+    }
+    if (reader.bool()) {
+      const vertical = decodeVerticalAlignment(reader.string());
+      if (vertical !== undefined) {
+        alignment.vertical = vertical;
+      }
+    }
+    if (reader.bool()) {
+      alignment.wrap = reader.bool();
+    }
+    if (reader.bool()) {
+      alignment.indent = reader.u32();
+    }
+    style.alignment = alignment;
+  }
+  if (reader.bool()) {
+    const top = decodeBorderSide(reader);
+    const right = decodeBorderSide(reader);
+    const bottom = decodeBorderSide(reader);
+    const left = decodeBorderSide(reader);
+    style.borders = {
+      ...(top ? { top } : {}),
+      ...(right ? { right } : {}),
+      ...(bottom ? { bottom } : {}),
+      ...(left ? { left } : {}),
+    };
+  }
+  return style;
+}
+
+type EncodedBorderSide = NonNullable<NonNullable<CellStyleRecord["borders"]>["top"]>;
+
+function encodeBorderSide(writer: BinaryWriter, side: EncodedBorderSide | undefined): void {
+  writer.bool(side !== undefined);
+  if (!side) {
+    return;
+  }
+  writer.string(side.style);
+  writer.string(side.weight);
+  writer.string(side.color);
+}
+
+function decodeBorderSide(reader: BinaryReader): EncodedBorderSide | undefined {
+  if (!reader.bool()) {
+    return undefined;
+  }
+  const style = decodeBorderStyle(reader.string());
+  const weight = decodeBorderWeight(reader.string());
+  return {
+    style,
+    weight,
+    color: reader.string(),
+  };
+}
+
+function decodeCellNumberFormatKind(value: string): CellNumberFormatKind {
+  switch (value) {
+    case "number":
+    case "currency":
+    case "accounting":
+    case "percent":
+    case "date":
+    case "time":
+    case "datetime":
+    case "text":
+      return value;
+    default:
+      return "general";
+  }
+}
+
+function decodeHorizontalAlignment(value: string): CellHorizontalAlignment | undefined {
+  switch (value) {
+    case "general":
+    case "left":
+    case "center":
+    case "right":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function decodeVerticalAlignment(value: string): CellVerticalAlignment | undefined {
+  switch (value) {
+    case "top":
+    case "middle":
+    case "bottom":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function decodeBorderStyle(value: string): CellBorderStyle {
+  switch (value) {
+    case "dashed":
+    case "dotted":
+    case "double":
+      return value;
+    default:
+      return "solid";
+  }
+}
+
+function decodeBorderWeight(value: string): CellBorderWeight {
+  switch (value) {
+    case "medium":
+    case "thick":
+      return value;
+    default:
+      return "thin";
+  }
+}
+
 function encodeSortDirection(writer: BinaryWriter, direction: WorkbookSortDirection): void {
   switch (direction) {
     case "asc":
@@ -686,6 +924,20 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
         writer.string(op.format);
       }
       return;
+    case "upsertCellStyle":
+      encodeCellStyleRecord(writer, op.style);
+      return;
+    case "setStyleRange":
+      encodeCellRangeRef(writer, op.range);
+      writer.string(op.styleId);
+      return;
+    case "upsertCellNumberFormat":
+      encodeCellNumberFormatRecord(writer, op.format);
+      return;
+    case "setFormatRange":
+      encodeCellRangeRef(writer, op.range);
+      writer.string(op.formatId);
+      return;
     case "clearCell":
       writer.string(op.sheetName);
       writer.string(op.address);
@@ -739,7 +991,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       return { kind: "upsertWorkbook", name: reader.string() };
     case 2:
       return { kind: "setWorkbookMetadata", key: reader.string(), value: decodeLiteral(reader) };
-    case 25:
+    case 27:
       return {
         kind: "setCalculationSettings",
         settings: {
@@ -747,13 +999,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
           compatibilityMode: decodeCompatibilityMode(reader),
         },
       };
-    case 26:
+    case 28:
       return { kind: "setVolatileContext", context: { recalcEpoch: reader.u32() } };
     case 3:
       return { kind: "upsertSheet", name: reader.string(), order: reader.u32() };
     case 4:
       return { kind: "deleteSheet", name: reader.string() };
-    case 27:
+    case 29:
       return {
         kind: "insertRows",
         sheetName: reader.string(),
@@ -761,14 +1013,14 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         count: reader.u32(),
         entries: decodeAxisEntries(reader),
       };
-    case 28:
+    case 30:
       return {
         kind: "deleteRows",
         sheetName: reader.string(),
         start: reader.u32(),
         count: reader.u32(),
       };
-    case 29:
+    case 31:
       return {
         kind: "moveRows",
         sheetName: reader.string(),
@@ -776,7 +1028,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         count: reader.u32(),
         target: reader.u32(),
       };
-    case 30:
+    case 32:
       return {
         kind: "insertColumns",
         sheetName: reader.string(),
@@ -784,14 +1036,14 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         count: reader.u32(),
         entries: decodeAxisEntries(reader),
       };
-    case 31:
+    case 33:
       return {
         kind: "deleteColumns",
         sheetName: reader.string(),
         start: reader.u32(),
         count: reader.u32(),
       };
-    case 32:
+    case 34:
       return {
         kind: "moveColumns",
         sheetName: reader.string(),
@@ -884,20 +1136,36 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       };
     }
     case 16:
-      return { kind: "clearCell", sheetName: reader.string(), address: reader.string() };
+      return { kind: "upsertCellStyle", style: decodeCellStyleRecord(reader) };
     case 17:
+      return {
+        kind: "setStyleRange",
+        range: decodeCellRangeRef(reader),
+        styleId: reader.string(),
+      };
+    case 35:
+      return { kind: "upsertCellNumberFormat", format: decodeCellNumberFormatRecord(reader) };
+    case 36:
+      return {
+        kind: "setFormatRange",
+        range: decodeCellRangeRef(reader),
+        formatId: reader.string(),
+      };
+    case 18:
+      return { kind: "clearCell", sheetName: reader.string(), address: reader.string() };
+    case 19:
       return {
         kind: "upsertDefinedName",
         name: reader.string(),
         value: decodeDefinedNameValue(reader),
       };
-    case 18:
-      return { kind: "deleteDefinedName", name: reader.string() };
-    case 19:
-      return { kind: "upsertTable", table: decodeTable(reader) };
     case 20:
-      return { kind: "deleteTable", name: reader.string() };
+      return { kind: "deleteDefinedName", name: reader.string() };
     case 21:
+      return { kind: "upsertTable", table: decodeTable(reader) };
+    case 22:
+      return { kind: "deleteTable", name: reader.string() };
+    case 23:
       return {
         kind: "upsertSpillRange",
         sheetName: reader.string(),
@@ -905,13 +1173,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         rows: reader.u32(),
         cols: reader.u32(),
       };
-    case 22:
+    case 24:
       return {
         kind: "deleteSpillRange",
         sheetName: reader.string(),
         address: reader.string(),
       };
-    case 23:
+    case 25:
       return {
         kind: "upsertPivotTable",
         name: reader.string(),
@@ -928,7 +1196,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
         rows: reader.u32(),
         cols: reader.u32(),
       };
-    case 24:
+    case 26:
       return {
         kind: "deletePivotTable",
         sheetName: reader.string(),

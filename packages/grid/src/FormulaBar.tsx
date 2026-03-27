@@ -30,6 +30,7 @@ export function FormulaBar({
   onClear,
 }: FormulaBarProps) {
   const [addressValue, setAddressValue] = useState(address);
+  const product = variant === "product";
 
   useEffect(() => {
     setAddressValue(address);
@@ -38,13 +39,25 @@ export function FormulaBar({
   const showResolvedValue = variant !== "product";
 
   return (
-    <div className="formula-bar" data-testid="formula-bar">
-      <div className="name-box-shell">
-        <label className="formula-meta-label" htmlFor="name-box-input">
+    <div
+      className={
+        product
+          ? "formula-bar flex items-center gap-2 border-b border-[#dadce0] bg-white px-3 py-2"
+          : "formula-bar"
+      }
+      data-testid="formula-bar"
+    >
+      <div className={product ? "w-[112px] shrink-0" : "name-box-shell"}>
+        <label className={product ? "sr-only" : "formula-meta-label"} htmlFor="name-box-input">
           Name
         </label>
         <input
           aria-label="Name box"
+          className={
+            product
+              ? "box-border h-8 w-full rounded-[2px] border border-[#dadce0] bg-white px-3 text-[14px] leading-none text-[#202124] outline-none focus:border-[#1a73e8]"
+              : undefined
+          }
           data-testid="name-box"
           id="name-box-input"
           value={addressValue}
@@ -66,16 +79,35 @@ export function FormulaBar({
           }}
         />
       </div>
-      <div className="formula-input-shell">
-        <label className="formula-meta-label" htmlFor="formula-input">
+      <div className={product ? "min-w-0 flex-1" : "formula-input-shell"}>
+        <label className={product ? "sr-only" : "formula-meta-label"} htmlFor="formula-input">
           Formula
         </label>
-        <div className="formula-input-frame">
-          <span aria-hidden="true" className="formula-fx">
+        <div
+          className={
+            product
+              ? "box-border flex h-8 items-center rounded-[2px] border border-[#dadce0] bg-white"
+              : "formula-input-frame"
+          }
+          data-testid={product ? "formula-input-frame" : undefined}
+        >
+          <span
+            aria-hidden="true"
+            className={
+              product
+                ? "inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[#dadce0] text-[16px] font-semibold leading-none text-[#5f6368]"
+                : "formula-fx"
+            }
+          >
             fx
           </span>
           <input
             aria-label="Formula"
+            className={
+              product
+                ? "h-full min-w-0 flex-1 border-0 bg-white px-3 text-[14px] leading-none text-[#202124] outline-none"
+                : undefined
+            }
             data-testid="formula-input"
             id="formula-input"
             placeholder="Type a literal or =formula"
@@ -119,14 +151,21 @@ export function FormulaBar({
         </div>
       </div>
       {showResolvedValue ? (
-        <div className="formula-result-shell">
-          <span className="formula-meta-label">Value</span>
-          <div className="formula-result" data-testid="formula-resolved-value">
+        <div className={product ? "grid gap-0" : "formula-result-shell"}>
+          <span className={product ? "sr-only" : "formula-meta-label"}>Value</span>
+          <div
+            className={
+              product
+                ? "inline-flex min-h-8 items-center justify-end rounded-[2px] border border-[#dadce0] bg-white px-3 text-[13px] font-medium text-[#202124]"
+                : "formula-result"
+            }
+            data-testid="formula-resolved-value"
+          >
             {resolvedValue || "∅"}
           </div>
         </div>
       ) : (
-        <span className="visually-hidden" data-testid="formula-resolved-value">
+        <span className="sr-only" data-testid="formula-resolved-value">
           {resolvedValue || "∅"}
         </span>
       )}
