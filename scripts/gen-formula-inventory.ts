@@ -73,6 +73,10 @@ function escapeTsString(value: string): string {
   return JSON.stringify(value);
 }
 
+function escapeTsPropertyName(value: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(value) ? value : escapeTsString(value);
+}
+
 function escapeMd(value: string): string {
   return value.replaceAll("|", "\\|");
 }
@@ -331,13 +335,19 @@ async function renderInventoryReport(source: FormulaInventorySource): Promise<st
   }`;
   });
 
+  const summaryLines = Object.entries(summary).map(
+    ([key, value]) => `  ${escapeTsPropertyName(key)}: ${value},`,
+  );
+
   return `// GENERATED FILE. DO NOT EDIT DIRECTLY.
 // Source: scripts/gen-formula-inventory.ts
 
-export const formulaInventorySummary = ${JSON.stringify(summary, null, 2)} as const;
+export const formulaInventorySummary = {
+${summaryLines.join("\n")}
+} as const;
 
 export const formulaInventory = [
-${lines.join(",\n")}
+${lines.length === 0 ? "" : `${lines.join(",\n")},`}
 ] as const;
 `;
 }
