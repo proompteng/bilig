@@ -35,6 +35,12 @@ const jsSpecialBuiltinNames = new Set([
   "SCAN",
   "BYROW",
   "BYCOL",
+  "CELL",
+  "COLUMN",
+  "FORMULATEXT",
+  "ROW",
+  "SHEET",
+  "SHEETS",
 ]);
 
 const wasmProductionBuiltinNames = new Set([
@@ -181,7 +187,18 @@ const wasmProductionBuiltinNames = new Set([
 
 const aggregationBuiltinNames = new Set(["SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTA"]);
 const logicalBuiltinNames = new Set(["IF", "AND", "OR", "NOT", "IFERROR", "IFNA", "NA"]);
-const informationBuiltinNames = new Set(["ISBLANK", "ISNUMBER", "ISTEXT", "T", "N", "TYPE"]);
+const informationBuiltinNames = new Set([
+  "CELL",
+  "FORMULATEXT",
+  "ISBLANK",
+  "ISNUMBER",
+  "ISTEXT",
+  "N",
+  "SHEET",
+  "SHEETS",
+  "T",
+  "TYPE",
+]);
 const textBuiltinNames = new Set([
   "LEN",
   "CONCAT",
@@ -221,6 +238,7 @@ const dateTimeBuiltinNames = new Set([
   "NETWORKDAYS",
 ]);
 const lookupBuiltinNames = new Set([
+  "COLUMN",
   "MATCH",
   "XMATCH",
   "XLOOKUP",
@@ -229,6 +247,7 @@ const lookupBuiltinNames = new Set([
   "HLOOKUP",
   "LOOKUP",
   "OFFSET",
+  "ROW",
 ]);
 const statisticalBuiltinNames = new Set([
   "COUNTIF",

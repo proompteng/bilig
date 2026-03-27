@@ -1,9 +1,11 @@
 import type {
   CellRangeRef,
+  CompatibilityMode,
   PivotAggregation,
   LiteralInput,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationMode,
+  WorkbookDefinedNameValueSnapshot,
   WorkbookPivotValueSnapshot,
 } from "@bilig/protocol";
 import type {
@@ -171,6 +173,7 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
 };
 
 type LiteralTag = 0 | 1 | 2 | 3;
+type DefinedNameValueTag = 0 | 1 | 2 | 3 | 4 | 5;
 
 function assertNever(value: never): never {
   throw new BinaryProtocolError(`Unsupported value: ${String(value)}`);
@@ -185,6 +188,20 @@ function decodeLiteralTag(tag: number): LiteralTag {
       return tag;
     default:
       throw new BinaryProtocolError(`Unknown literal tag ${tag}`);
+  }
+}
+
+function decodeDefinedNameValueTag(tag: number): DefinedNameValueTag {
+  switch (tag) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+      return tag;
+    default:
+      throw new BinaryProtocolError(`Unknown defined-name value tag ${tag}`);
   }
 }
 
@@ -329,6 +346,60 @@ function decodeLiteral(reader: BinaryReader): LiteralInput {
   }
 }
 
+function encodeDefinedNameValue(
+  writer: BinaryWriter,
+  value: WorkbookDefinedNameValueSnapshot,
+): void {
+  if (typeof value !== "object" || value === null || !("kind" in value)) {
+    writer.u8(0 satisfies DefinedNameValueTag);
+    encodeLiteral(writer, value);
+    return;
+  }
+  switch (value.kind) {
+    case "scalar":
+      writer.u8(1 satisfies DefinedNameValueTag);
+      encodeLiteral(writer, value.value);
+      return;
+    case "cell-ref":
+      writer.u8(2 satisfies DefinedNameValueTag);
+      writer.string(value.sheetName);
+      writer.string(value.address);
+      return;
+    case "range-ref":
+      writer.u8(3 satisfies DefinedNameValueTag);
+      encodeCellRangeRef(writer, value);
+      return;
+    case "structured-ref":
+      writer.u8(4 satisfies DefinedNameValueTag);
+      writer.string(value.tableName);
+      writer.string(value.columnName);
+      return;
+    case "formula":
+      writer.u8(5 satisfies DefinedNameValueTag);
+      writer.string(value.formula);
+      return;
+  }
+}
+
+function decodeDefinedNameValue(reader: BinaryReader): WorkbookDefinedNameValueSnapshot {
+  switch (decodeDefinedNameValueTag(reader.u8())) {
+    case 0:
+      return decodeLiteral(reader);
+    case 1:
+      return { kind: "scalar", value: decodeLiteral(reader) };
+    case 2:
+      return { kind: "cell-ref", sheetName: reader.string(), address: reader.string() };
+    case 3:
+      return { kind: "range-ref", ...decodeCellRangeRef(reader) };
+    case 4:
+      return { kind: "structured-ref", tableName: reader.string(), columnName: reader.string() };
+    case 5:
+      return { kind: "formula", formula: reader.string() };
+    default:
+      throw new BinaryProtocolError("Unknown defined-name value tag");
+  }
+}
+
 function encodeNullableNumber(writer: BinaryWriter, value: number | null): void {
   writer.bool(value !== null);
   if (value !== null) {
@@ -388,6 +459,14 @@ function encodeCalculationMode(writer: BinaryWriter, mode: WorkbookCalculationMo
 
 function decodeCalculationMode(reader: BinaryReader): WorkbookCalculationMode {
   return reader.u8() === 2 ? "manual" : "automatic";
+}
+
+function encodeCompatibilityMode(writer: BinaryWriter, mode: CompatibilityMode): void {
+  writer.u8(mode === "odf-1.4" ? 2 : 1);
+}
+
+function decodeCompatibilityMode(reader: BinaryReader): CompatibilityMode {
+  return reader.u8() === 2 ? "odf-1.4" : "excel-modern";
 }
 
 function encodeAxisEntries(
@@ -526,6 +605,7 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       return;
     case "setCalculationSettings":
       encodeCalculationMode(writer, op.settings.mode);
+      encodeCompatibilityMode(writer, op.settings.compatibilityMode ?? "excel-modern");
       return;
     case "setVolatileContext":
       writer.u32(op.context.recalcEpoch);
@@ -612,7 +692,7 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
       return;
     case "upsertDefinedName":
       writer.string(op.name);
-      encodeLiteral(writer, op.value);
+      encodeDefinedNameValue(writer, op.value);
       return;
     case "deleteDefinedName":
       writer.string(op.name);
@@ -660,7 +740,13 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
     case 2:
       return { kind: "setWorkbookMetadata", key: reader.string(), value: decodeLiteral(reader) };
     case 25:
-      return { kind: "setCalculationSettings", settings: { mode: decodeCalculationMode(reader) } };
+      return {
+        kind: "setCalculationSettings",
+        settings: {
+          mode: decodeCalculationMode(reader),
+          compatibilityMode: decodeCompatibilityMode(reader),
+        },
+      };
     case 26:
       return { kind: "setVolatileContext", context: { recalcEpoch: reader.u32() } };
     case 3:
@@ -803,7 +889,7 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       return {
         kind: "upsertDefinedName",
         name: reader.string(),
-        value: decodeLiteral(reader),
+        value: decodeDefinedNameValue(reader),
       };
     case 18:
       return { kind: "deleteDefinedName", name: reader.string() };

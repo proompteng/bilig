@@ -12,4 +12,5 @@ export * from "./runtime-values.js";
 export * from "./translation.js";
 export * from "./compatibility.js";
 export * from "./builtin-capabilities.js";
+export * from "./generated/formula-inventory.js";
 export * from "./builtins/datetime.js";

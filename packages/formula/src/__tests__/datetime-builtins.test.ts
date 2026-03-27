@@ -216,6 +216,149 @@ describe("datetime builtins", () => {
     ).toEqual({ tag: ValueTag.Number, value: 4 });
   });
 
+  it("supports WORKDAY.INTL and NETWORKDAYS.INTL weekend masks", () => {
+    const fridaySerial = excelDatePartsToSerial(2026, 3, 13)!;
+    const sundaySerial = excelDatePartsToSerial(2026, 3, 15)!;
+    const mondaySerial = excelDatePartsToSerial(2026, 3, 16)!;
+    const tuesdaySerial = excelDatePartsToSerial(2026, 3, 17)!;
+
+    expect(
+      datetimeBuiltins["WORKDAY.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: mondaySerial });
+    expect(
+      datetimeBuiltins["WORKDAY.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 7 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: mondaySerial });
+    expect(
+      datetimeBuiltins["WORKDAY.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "0000011", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: mondaySerial });
+    expect(
+      datetimeBuiltins["WORKDAY.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: sundaySerial },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: tuesdaySerial + 1 });
+
+    expect(
+      datetimeBuiltins["NETWORKDAYS.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: tuesdaySerial },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(
+      datetimeBuiltins["NETWORKDAYS.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: tuesdaySerial },
+        { tag: ValueTag.Number, value: 7 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(
+      datetimeBuiltins["NETWORKDAYS.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: tuesdaySerial },
+        { tag: ValueTag.String, value: "1000001", stringId: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 3 });
+    expect(
+      datetimeBuiltins["NETWORKDAYS.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: tuesdaySerial },
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: sundaySerial },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
+
+    expect(
+      datetimeBuiltins["WORKDAY.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 99 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins["NETWORKDAYS.INTL"](
+        { tag: ValueTag.Number, value: fridaySerial },
+        { tag: ValueTag.Number, value: tuesdaySerial },
+        { tag: ValueTag.String, value: "1111111", stringId: 3 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("supports DATEDIF units", () => {
+    const start = excelDatePartsToSerial(2020, 1, 15)!;
+    const end = excelDatePartsToSerial(2021, 3, 20)!;
+
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "D", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: end - start });
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "M", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 14 });
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "Y", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "YM", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "YD", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 64 });
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "MD", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 5 });
+
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.String, value: "D", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      datetimeBuiltins.DATEDIF(
+        { tag: ValueTag.Number, value: start },
+        { tag: ValueTag.Number, value: end },
+        { tag: ValueTag.String, value: "BAD", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
   it("creates deterministic TODAY and NOW builtins from injected UTC dates", () => {
     const fixedNow = new Date("2026-03-19T15:45:30.000Z");
     const TODAY = createTodayBuiltin(() => fixedNow);

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
+import {
+  ErrorCode,
+  ValueTag,
+  type CellValue,
+  type LiteralInput,
+  type WorkbookDefinedNameValueSnapshot,
+} from "@bilig/protocol";
 import {
   canonicalFormulaFixtures,
   canonicalWorkbookSemanticsFixtures,
@@ -363,7 +369,33 @@ function resolveFixtureMetadataReferences(
   }
 }
 
-function definedNameValueToFormulaNode(value: LiteralInput): FormulaNode | undefined {
+function definedNameValueToFormulaNode(
+  value: WorkbookDefinedNameValueSnapshot,
+): FormulaNode | undefined {
+  if (typeof value === "object" && value !== null && "kind" in value) {
+    switch (value.kind) {
+      case "scalar":
+        return definedNameValueToFormulaNode(value.value);
+      case "cell-ref":
+        return { kind: "CellRef", ref: value.address, sheetName: value.sheetName };
+      case "range-ref":
+        return {
+          kind: "RangeRef",
+          refKind: "cells",
+          start: value.startAddress,
+          end: value.endAddress,
+          sheetName: value.sheetName,
+        };
+      case "structured-ref":
+        return {
+          kind: "StructuredRef",
+          tableName: value.tableName,
+          columnName: value.columnName,
+        };
+      case "formula":
+        return parseFormula(value.formula);
+    }
+  }
   if (value === null) {
     return { kind: "ErrorLiteral", code: ErrorCode.Ref };
   }

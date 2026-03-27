@@ -184,6 +184,17 @@ describe("js evaluator", () => {
         value: 5,
       },
     );
+
+    expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,ISOMITTED(x))()")), context)).toEqual({
+      tag: ValueTag.Boolean,
+      value: true,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("LAMBDA(x,IF(ISOMITTED(x),9,x))(4)")), context),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    });
   });
 
   it("covers special-call rewrites and evaluator guard rails", () => {

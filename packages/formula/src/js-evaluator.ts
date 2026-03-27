@@ -1,6 +1,6 @@
 import { ErrorCode, ValueTag, formatErrorCode, type CellValue } from "@bilig/protocol";
 import type { FormulaNode } from "./ast.js";
-import { parseRangeAddress } from "./addressing.js";
+import { indexToColumn, parseCellAddress, parseRangeAddress } from "./addressing.js";
 import { getBuiltin, hasBuiltin } from "./builtins.js";
 import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
 import {
@@ -14,6 +14,7 @@ import { rewriteSpecialCall } from "./special-call-rewrites.js";
 
 export interface EvaluationContext {
   sheetName: string;
+  currentAddress?: string;
   resolveCell: (sheetName: string, address: string) => CellValue;
   resolveRange: (
     sheetName: string,
@@ -22,7 +23,18 @@ export interface EvaluationContext {
     refKind: "cells" | "rows" | "cols",
   ) => CellValue[];
   resolveName?: (name: string) => CellValue;
+  resolveFormula?: (sheetName: string, address: string) => string | undefined;
+  listSheetNames?: () => string[];
   resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
+}
+
+interface ReferenceOperand {
+  kind: "cell" | "range" | "row" | "col";
+  sheetName?: string;
+  address?: string;
+  start?: string;
+  end?: string;
+  refKind?: "cells" | "rows" | "cols";
 }
 
 export type JsPlanInstruction =
@@ -45,7 +57,12 @@ export type JsPlanInstruction =
       opcode: "binary";
       operator: "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | ">" | ">=" | "<" | "<=";
     }
-  | { opcode: "call"; callee: string; argc: number }
+  | {
+      opcode: "call";
+      callee: string;
+      argc: number;
+      argRefs?: Array<ReferenceOperand | undefined>;
+    }
   | { opcode: "invoke"; argc: number }
   | { opcode: "begin-scope" }
   | { opcode: "bind-name"; name: string }
@@ -80,6 +97,14 @@ function emptyValue(): CellValue {
 
 function error(code: ErrorCode): CellValue {
   return { tag: ValueTag.Error, code };
+}
+
+function numberValue(value: number): CellValue {
+  return { tag: ValueTag.Number, value };
+}
+
+function stringValue(value: string): CellValue {
+  return { tag: ValueTag.String, value, stringId: 0 };
 }
 
 function toNumber(value: CellValue): number | undefined {
@@ -374,7 +399,7 @@ function isSingleCellValue(value: StackValue): CellValue | undefined {
     return value.value;
   }
   if (value.kind === "omitted") {
-    return error(ErrorCode.Value);
+    return undefined;
   }
   if (value.kind === "lambda") {
     return undefined;
@@ -414,6 +439,163 @@ function toPositiveInteger(value: StackValue | undefined): number | undefined {
   return integer >= 1 ? integer : undefined;
 }
 
+function referenceOperandFromNode(node: FormulaNode): ReferenceOperand | undefined {
+  switch (node.kind) {
+    case "CellRef":
+      return {
+        kind: "cell",
+        ...(node.sheetName === undefined ? {} : { sheetName: node.sheetName }),
+        address: node.ref,
+      };
+    case "RangeRef":
+      return {
+        kind: "range",
+        ...(node.sheetName === undefined ? {} : { sheetName: node.sheetName }),
+        start: node.start,
+        end: node.end,
+        refKind: node.refKind,
+      };
+    case "RowRef":
+      return {
+        kind: "row",
+        ...(node.sheetName === undefined ? {} : { sheetName: node.sheetName }),
+        address: node.ref,
+      };
+    case "ColumnRef":
+      return {
+        kind: "col",
+        ...(node.sheetName === undefined ? {} : { sheetName: node.sheetName }),
+        address: node.ref,
+      };
+    case "BinaryExpr":
+    case "BooleanLiteral":
+    case "CallExpr":
+    case "ErrorLiteral":
+    case "InvokeExpr":
+    case "NameRef":
+    case "NumberLiteral":
+    case "SpillRef":
+    case "StringLiteral":
+    case "StructuredRef":
+    case "UnaryExpr":
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+function currentCellReference(context: EvaluationContext): ReferenceOperand | undefined {
+  return context.currentAddress
+    ? { kind: "cell", sheetName: context.sheetName, address: context.currentAddress }
+    : undefined;
+}
+
+function referenceSheetName(
+  ref: ReferenceOperand | undefined,
+  context: EvaluationContext,
+): string | undefined {
+  return ref?.sheetName ?? context.sheetName;
+}
+
+function referenceTopLeftAddress(ref: ReferenceOperand | undefined): string | undefined {
+  if (!ref) {
+    return undefined;
+  }
+  switch (ref.kind) {
+    case "cell":
+    case "row":
+    case "col":
+      return ref.address;
+    case "range":
+      return ref.start;
+  }
+}
+
+function referenceRowNumber(
+  ref: ReferenceOperand | undefined,
+  context: EvaluationContext,
+): number | undefined {
+  const target = ref ?? currentCellReference(context);
+  if (!target) {
+    return undefined;
+  }
+  switch (target.kind) {
+    case "cell":
+      return parseCellAddress(target.address!, referenceSheetName(target, context)).row + 1;
+    case "range":
+      if (target.refKind === "rows") {
+        return Number.parseInt(target.start!, 10);
+      }
+      if (target.refKind === "cells") {
+        return parseCellAddress(target.start!, referenceSheetName(target, context)).row + 1;
+      }
+      return undefined;
+    case "row":
+      return Number.parseInt(target.address!, 10);
+    case "col":
+      return undefined;
+  }
+}
+
+function referenceColumnNumber(
+  ref: ReferenceOperand | undefined,
+  context: EvaluationContext,
+): number | undefined {
+  const target = ref ?? currentCellReference(context);
+  if (!target) {
+    return undefined;
+  }
+  switch (target.kind) {
+    case "cell":
+      return parseCellAddress(target.address!, referenceSheetName(target, context)).col + 1;
+    case "range":
+      if (target.refKind === "cols") {
+        return parseCellAddress(`${target.start!}1`, referenceSheetName(target, context)).col + 1;
+      }
+      if (target.refKind === "cells") {
+        return parseCellAddress(target.start!, referenceSheetName(target, context)).col + 1;
+      }
+      return undefined;
+    case "row":
+      return undefined;
+    case "col":
+      return parseCellAddress(`${target.address!}1`, referenceSheetName(target, context)).col + 1;
+  }
+}
+
+function absoluteAddress(
+  ref: ReferenceOperand | undefined,
+  context: EvaluationContext,
+): string | undefined {
+  const row = referenceRowNumber(ref, context);
+  const col = referenceColumnNumber(ref, context);
+  return row === undefined || col === undefined ? undefined : `$${indexToColumn(col - 1)}$${row}`;
+}
+
+function cellTypeCode(value: CellValue): string {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return "b";
+    case ValueTag.String:
+      return "l";
+    case ValueTag.Number:
+    case ValueTag.Boolean:
+    case ValueTag.Error:
+      return "v";
+  }
+}
+
+function sheetNames(context: EvaluationContext): string[] {
+  return context.listSheetNames?.() ?? [context.sheetName];
+}
+
+function sheetIndexByName(name: string, context: EvaluationContext): number | undefined {
+  const index = sheetNames(context).findIndex(
+    (sheetName) => sheetName.trim().toUpperCase() === name.trim().toUpperCase(),
+  );
+  return index === -1 ? undefined : index + 1;
+}
+
 function getRangeCell(range: RangeLikeValue, row: number, col: number): CellValue {
   return range.values[row * range.cols + col] ?? emptyValue();
 }
@@ -450,7 +632,7 @@ function applyLambda(
   lambdaValue.params.forEach((name, index) => {
     parameterScope.set(
       normalizeScopeName(name),
-      cloneStackValue(args[index] ?? { kind: "omitted" }),
+      index < args.length ? cloneStackValue(args[index]!) : { kind: "omitted" },
     );
   });
   return (
@@ -463,13 +645,135 @@ function evaluateSpecialCall(
   callee: string,
   rawArgs: StackValue[],
   context: EvaluationContext,
+  argRefs: readonly (ReferenceOperand | undefined)[] = [],
 ): StackValue | undefined {
   switch (callee) {
-    case "ISOMITTED":
+    case "ROW": {
+      if (rawArgs.length > 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const row = referenceRowNumber(argRefs[0], context);
+      return stackScalar(row === undefined ? error(ErrorCode.Value) : numberValue(row));
+    }
+    case "COLUMN": {
+      if (rawArgs.length > 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const column = referenceColumnNumber(argRefs[0], context);
+      return stackScalar(column === undefined ? error(ErrorCode.Value) : numberValue(column));
+    }
+    case "ISOMITTED": {
       if (rawArgs.length !== 1) {
         return stackScalar(error(ErrorCode.Value));
       }
       return stackScalar({ tag: ValueTag.Boolean, value: rawArgs[0]?.kind === "omitted" });
+    }
+    case "FORMULATEXT": {
+      if (rawArgs.length !== 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const address = referenceTopLeftAddress(argRefs[0]);
+      const sheetName = referenceSheetName(argRefs[0], context);
+      if (!address || !sheetName) {
+        return stackScalar(error(ErrorCode.Ref));
+      }
+      const formula = context.resolveFormula?.(sheetName, address);
+      return stackScalar(
+        formula
+          ? stringValue(formula.startsWith("=") ? formula : `=${formula}`)
+          : error(ErrorCode.NA),
+      );
+    }
+    case "SHEET": {
+      if (rawArgs.length > 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      if (rawArgs.length === 0) {
+        const index = sheetIndexByName(context.sheetName, context);
+        return stackScalar(index === undefined ? error(ErrorCode.NA) : numberValue(index));
+      }
+      if (argRefs[0]) {
+        const index = sheetIndexByName(
+          referenceSheetName(argRefs[0], context) ?? context.sheetName,
+          context,
+        );
+        return stackScalar(index === undefined ? error(ErrorCode.NA) : numberValue(index));
+      }
+      const scalar = isSingleCellValue(rawArgs[0]!);
+      if (scalar?.tag !== ValueTag.String) {
+        return stackScalar(error(ErrorCode.NA));
+      }
+      const index = sheetIndexByName(scalar.value, context);
+      return stackScalar(index === undefined ? error(ErrorCode.NA) : numberValue(index));
+    }
+    case "SHEETS": {
+      if (rawArgs.length > 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      if (rawArgs.length === 0) {
+        return stackScalar(numberValue(sheetNames(context).length));
+      }
+      if (argRefs[0]) {
+        return stackScalar(numberValue(1));
+      }
+      const scalar = isSingleCellValue(rawArgs[0]!);
+      if (scalar?.tag !== ValueTag.String) {
+        return stackScalar(error(ErrorCode.NA));
+      }
+      return stackScalar(
+        sheetIndexByName(scalar.value, context) === undefined
+          ? error(ErrorCode.NA)
+          : numberValue(1),
+      );
+    }
+    case "CELL": {
+      if (rawArgs.length < 1 || rawArgs.length > 2) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const infoType = isSingleCellValue(rawArgs[0]!);
+      if (infoType?.tag !== ValueTag.String) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const ref = rawArgs.length === 2 ? argRefs[1] : currentCellReference(context);
+      if (!ref) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const normalizedInfoType = infoType.value.trim().toLowerCase();
+      switch (normalizedInfoType) {
+        case "address": {
+          const address = absoluteAddress(ref, context);
+          return stackScalar(address ? stringValue(address) : error(ErrorCode.Value));
+        }
+        case "row": {
+          const row = referenceRowNumber(ref, context);
+          return stackScalar(row === undefined ? error(ErrorCode.Value) : numberValue(row));
+        }
+        case "col": {
+          const column = referenceColumnNumber(ref, context);
+          return stackScalar(column === undefined ? error(ErrorCode.Value) : numberValue(column));
+        }
+        case "contents": {
+          const address = referenceTopLeftAddress(ref);
+          const sheetName = referenceSheetName(ref, context);
+          if (!address || !sheetName) {
+            return stackScalar(error(ErrorCode.Value));
+          }
+          return stackScalar(context.resolveCell(sheetName, address));
+        }
+        case "type": {
+          const address = referenceTopLeftAddress(ref);
+          const sheetName = referenceSheetName(ref, context);
+          if (!address || !sheetName) {
+            return stackScalar(error(ErrorCode.Value));
+          }
+          return stackScalar(stringValue(cellTypeCode(context.resolveCell(sheetName, address))));
+        }
+        case "filename":
+          return stackScalar(stringValue(""));
+        default:
+          return stackScalar(error(ErrorCode.Value));
+      }
+    }
     case "MAKEARRAY": {
       if (rawArgs.length !== 3) {
         return stackScalar(error(ErrorCode.Value));
@@ -734,7 +1038,12 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       }
 
       node.args.forEach((arg) => lowerNode(arg, plan));
-      plan.push({ opcode: "call", callee, argc: node.args.length });
+      plan.push({
+        opcode: "call",
+        callee,
+        argc: node.args.length,
+        argRefs: node.args.map((arg) => referenceOperandFromNode(arg)),
+      });
       return;
     }
   }
@@ -884,7 +1193,12 @@ function executePlan(
         for (let index = 0; index < instruction.argc; index += 1) {
           rawArgs.unshift(popArgument(stack));
         }
-        const specialResult = evaluateSpecialCall(instruction.callee, rawArgs, context);
+        const specialResult = evaluateSpecialCall(
+          instruction.callee,
+          rawArgs,
+          context,
+          instruction.argRefs,
+        );
         if (specialResult) {
           stack.push(specialResult);
           break;

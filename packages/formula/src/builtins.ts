@@ -680,6 +680,312 @@ function decimalValue(textArg: CellValue, radixArg: CellValue): CellValue {
   return numberResult(Number.parseInt(raw, radixValue));
 }
 
+function toPositivePlaces(value: CellValue | undefined): number | undefined {
+  const places = nonNegativeIntegerValue(value, 0);
+  return places;
+}
+
+function parseSignedRadixText(
+  textArg: CellValue,
+  radix: 2 | 8 | 16,
+  width: number,
+): number | undefined {
+  if (textArg.tag === ValueTag.Error) {
+    return undefined;
+  }
+  const raw =
+    textArg.tag === ValueTag.String
+      ? textArg.value.trim().toUpperCase()
+      : String(Math.trunc(toNumber(textArg) ?? Number.NaN)).toUpperCase();
+  if (raw === "" || raw === "NAN" || raw.length > width || !isValidBaseDigits(raw, radix)) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw, radix);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const fullRange = radix ** width;
+  const negativeThreshold = fullRange / 2;
+  return raw.length === width && parsed >= negativeThreshold ? parsed - fullRange : parsed;
+}
+
+function formatSignedRadixValue(
+  numeric: number,
+  radix: 2 | 8 | 16,
+  minLength: number,
+  negativeWidth: number,
+  min: number,
+  max: number,
+): CellValue {
+  if (!Number.isSafeInteger(numeric) || numeric < min || numeric > max) {
+    return valueError();
+  }
+  if (numeric < 0) {
+    const encoded = numeric + radix ** negativeWidth;
+    return {
+      tag: ValueTag.String,
+      value: encoded.toString(radix).toUpperCase().padStart(negativeWidth, "0"),
+      stringId: 0,
+    };
+  }
+  const raw = numeric.toString(radix).toUpperCase();
+  if (minLength < raw.length) {
+    return valueError();
+  }
+  return {
+    tag: ValueTag.String,
+    value: raw.padStart(minLength, "0"),
+    stringId: 0,
+  };
+}
+
+function convertSignedRadixToRadix(
+  textArg: CellValue,
+  fromRadix: 2 | 8 | 16,
+  toRadix: 2 | 8 | 16,
+  inputWidth: number,
+  negativeWidth: number,
+  min: number,
+  max: number,
+  placesArg?: CellValue,
+): CellValue {
+  const numeric = parseSignedRadixText(textArg, fromRadix, inputWidth);
+  const places = toPositivePlaces(placesArg);
+  if (numeric === undefined || places === undefined) {
+    return valueError();
+  }
+  return formatSignedRadixValue(numeric, toRadix, places, negativeWidth, min, max);
+}
+
+type ComplexSuffix = "i" | "j";
+
+interface ComplexNumber {
+  real: number;
+  imaginary: number;
+  suffix: ComplexSuffix;
+}
+
+function normalizeSignedZero(value: number): number {
+  return Object.is(value, -0) || Math.abs(value) < 1e-12 ? 0 : value;
+}
+
+function parseComplexNumber(value: CellValue): ComplexNumber | undefined {
+  if (value.tag === ValueTag.Error) {
+    return undefined;
+  }
+  if (
+    value.tag === ValueTag.Number ||
+    value.tag === ValueTag.Boolean ||
+    value.tag === ValueTag.Empty
+  ) {
+    const numeric = toNumber(value);
+    return numeric === undefined
+      ? undefined
+      : { real: normalizeSignedZero(numeric), imaginary: 0, suffix: "i" };
+  }
+  const raw = value.value.trim();
+  if (raw === "") {
+    return undefined;
+  }
+  const normalized = raw.toLowerCase();
+  const suffix = normalized.endsWith("j") ? "j" : normalized.endsWith("i") ? "i" : undefined;
+  if (!suffix) {
+    const real = Number(raw);
+    return Number.isFinite(real)
+      ? { real: normalizeSignedZero(real), imaginary: 0, suffix: "i" }
+      : undefined;
+  }
+  const body = normalized.slice(0, -1);
+  let splitIndex = -1;
+  for (let index = 1; index < body.length; index += 1) {
+    const char = body[index]!;
+    const previous = body[index - 1]!;
+    if ((char === "+" || char === "-") && previous !== "e") {
+      splitIndex = index;
+    }
+  }
+  if (splitIndex !== -1) {
+    const real = Number(body.slice(0, splitIndex));
+    const imaginaryToken = body.slice(splitIndex);
+    const imaginary =
+      imaginaryToken === "+" ? 1 : imaginaryToken === "-" ? -1 : Number(imaginaryToken);
+    if (!Number.isFinite(real) || !Number.isFinite(imaginary)) {
+      return undefined;
+    }
+    return {
+      real: normalizeSignedZero(real),
+      imaginary: normalizeSignedZero(imaginary),
+      suffix,
+    };
+  }
+  const imaginary = body === "" || body === "+" ? 1 : body === "-" ? -1 : Number(body);
+  if (!Number.isFinite(imaginary)) {
+    return undefined;
+  }
+  return { real: 0, imaginary: normalizeSignedZero(imaginary), suffix };
+}
+
+function complexToString(value: ComplexNumber): string {
+  const real = normalizeSignedZero(value.real);
+  const imaginary = normalizeSignedZero(value.imaginary);
+  if (imaginary === 0) {
+    return `${real}`;
+  }
+  const imagMagnitude = Math.abs(imaginary);
+  const imagPart = imagMagnitude === 1 ? value.suffix : `${imagMagnitude}${value.suffix}`;
+  if (real === 0) {
+    return imaginary < 0 ? `-${imagPart}` : imagPart;
+  }
+  return `${real}${imaginary < 0 ? "-" : "+"}${imagPart}`;
+}
+
+function complexResult(value: ComplexNumber): CellValue {
+  return { tag: ValueTag.String, value: complexToString(value), stringId: 0 };
+}
+
+function commonComplexSuffix(values: readonly ComplexNumber[]): ComplexSuffix {
+  return values.some((value) => value.suffix === "j") ? "j" : "i";
+}
+
+function addComplex(left: ComplexNumber, right: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(left.real + right.real),
+    imaginary: normalizeSignedZero(left.imaginary + right.imaginary),
+    suffix: commonComplexSuffix([left, right]),
+  };
+}
+
+function subtractComplex(left: ComplexNumber, right: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(left.real - right.real),
+    imaginary: normalizeSignedZero(left.imaginary - right.imaginary),
+    suffix: commonComplexSuffix([left, right]),
+  };
+}
+
+function multiplyComplex(left: ComplexNumber, right: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(left.real * right.real - left.imaginary * right.imaginary),
+    imaginary: normalizeSignedZero(left.real * right.imaginary + left.imaginary * right.real),
+    suffix: commonComplexSuffix([left, right]),
+  };
+}
+
+function divideComplex(left: ComplexNumber, right: ComplexNumber): ComplexNumber | undefined {
+  const denominator = right.real ** 2 + right.imaginary ** 2;
+  if (denominator === 0) {
+    return undefined;
+  }
+  return {
+    real: normalizeSignedZero(
+      (left.real * right.real + left.imaginary * right.imaginary) / denominator,
+    ),
+    imaginary: normalizeSignedZero(
+      (left.imaginary * right.real - left.real * right.imaginary) / denominator,
+    ),
+    suffix: commonComplexSuffix([left, right]),
+  };
+}
+
+function reciprocalComplex(value: ComplexNumber): ComplexNumber | undefined {
+  return divideComplex({ real: 1, imaginary: 0, suffix: value.suffix }, value);
+}
+
+function complexMagnitude(value: ComplexNumber): number {
+  return Math.hypot(value.real, value.imaginary);
+}
+
+function complexArgument(value: ComplexNumber): number {
+  return Math.atan2(value.imaginary, value.real);
+}
+
+function complexConjugate(value: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(value.real),
+    imaginary: normalizeSignedZero(-value.imaginary),
+    suffix: value.suffix,
+  };
+}
+
+function complexExp(value: ComplexNumber): ComplexNumber {
+  const scale = Math.exp(value.real);
+  return {
+    real: normalizeSignedZero(scale * Math.cos(value.imaginary)),
+    imaginary: normalizeSignedZero(scale * Math.sin(value.imaginary)),
+    suffix: value.suffix,
+  };
+}
+
+function complexLn(value: ComplexNumber): ComplexNumber | undefined {
+  const magnitude = complexMagnitude(value);
+  if (magnitude === 0) {
+    return undefined;
+  }
+  return {
+    real: normalizeSignedZero(Math.log(magnitude)),
+    imaginary: normalizeSignedZero(complexArgument(value)),
+    suffix: value.suffix,
+  };
+}
+
+function complexPower(value: ComplexNumber, exponent: number): ComplexNumber | undefined {
+  const magnitude = complexMagnitude(value);
+  if (magnitude === 0) {
+    return exponent === 0 ? undefined : { real: 0, imaginary: 0, suffix: value.suffix };
+  }
+  const angle = complexArgument(value);
+  const scaledMagnitude = magnitude ** exponent;
+  return {
+    real: normalizeSignedZero(scaledMagnitude * Math.cos(exponent * angle)),
+    imaginary: normalizeSignedZero(scaledMagnitude * Math.sin(exponent * angle)),
+    suffix: value.suffix,
+  };
+}
+
+function complexSqrt(value: ComplexNumber): ComplexNumber {
+  const magnitude = complexMagnitude(value);
+  const real = Math.sqrt((magnitude + value.real) / 2);
+  const imaginarySign = value.imaginary < 0 ? -1 : 1;
+  const imaginary = imaginarySign * Math.sqrt(Math.max(0, (magnitude - value.real) / 2));
+  return {
+    real: normalizeSignedZero(real),
+    imaginary: normalizeSignedZero(imaginary),
+    suffix: value.suffix,
+  };
+}
+
+function complexSin(value: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(Math.sin(value.real) * Math.cosh(value.imaginary)),
+    imaginary: normalizeSignedZero(Math.cos(value.real) * Math.sinh(value.imaginary)),
+    suffix: value.suffix,
+  };
+}
+
+function complexCos(value: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(Math.cos(value.real) * Math.cosh(value.imaginary)),
+    imaginary: normalizeSignedZero(-Math.sin(value.real) * Math.sinh(value.imaginary)),
+    suffix: value.suffix,
+  };
+}
+
+function complexSinh(value: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(Math.sinh(value.real) * Math.cos(value.imaginary)),
+    imaginary: normalizeSignedZero(Math.cosh(value.real) * Math.sin(value.imaginary)),
+    suffix: value.suffix,
+  };
+}
+
+function complexCosh(value: ComplexNumber): ComplexNumber {
+  return {
+    real: normalizeSignedZero(Math.cosh(value.real) * Math.cos(value.imaginary)),
+    imaginary: normalizeSignedZero(Math.sinh(value.real) * Math.sin(value.imaginary)),
+    suffix: value.suffix,
+  };
+}
+
 function sampleVariance(numbers: number[]): number {
   if (numbers.length <= 1) {
     return 0;
@@ -1159,6 +1465,156 @@ function totalPeriods(
     return undefined;
   }
   return Math.log(numerator / denominator) / Math.log(1 + rate);
+}
+
+function fixedDecliningBalanceRate(
+  cost: number,
+  salvage: number,
+  life: number,
+): number | undefined {
+  if (
+    !Number.isFinite(cost) ||
+    !Number.isFinite(salvage) ||
+    !Number.isFinite(life) ||
+    cost <= 0 ||
+    salvage < 0 ||
+    life <= 0
+  ) {
+    return undefined;
+  }
+  const ratio = salvage / cost;
+  if (ratio < 0) {
+    return undefined;
+  }
+  return Math.round((1 - ratio ** (1 / life)) * 1000) / 1000;
+}
+
+function dbDepreciation(
+  cost: number,
+  salvage: number,
+  life: number,
+  period: number,
+  month: number,
+): number | undefined {
+  const rate = fixedDecliningBalanceRate(cost, salvage, life);
+  if (rate === undefined || month < 1 || month > 12 || period < 1 || period > life + 1) {
+    return undefined;
+  }
+
+  let bookValue = cost;
+  let depreciation = 0;
+  for (let currentPeriod = 1; currentPeriod <= period; currentPeriod += 1) {
+    const raw =
+      currentPeriod === 1
+        ? bookValue * rate * (month / 12)
+        : currentPeriod === Math.floor(life) + 1
+          ? bookValue * rate * ((12 - month) / 12)
+          : bookValue * rate;
+    depreciation = Math.min(Math.max(raw, 0), Math.max(0, bookValue - salvage));
+    bookValue -= depreciation;
+  }
+  return depreciation;
+}
+
+function ddbPeriodDepreciation(
+  bookValue: number,
+  salvage: number,
+  life: number,
+  factor: number,
+  remainingLife: number,
+  noSwitch: boolean,
+): number {
+  const declining = (bookValue * factor) / life;
+  const straightLine = remainingLife <= 0 ? 0 : (bookValue - salvage) / remainingLife;
+  const base = noSwitch ? declining : Math.max(declining, straightLine);
+  return Math.min(Math.max(base, 0), Math.max(0, bookValue - salvage));
+}
+
+function ddbDepreciation(
+  cost: number,
+  salvage: number,
+  life: number,
+  period: number,
+  factor: number,
+): number | undefined {
+  if (
+    !Number.isFinite(cost) ||
+    !Number.isFinite(salvage) ||
+    !Number.isFinite(life) ||
+    !Number.isFinite(period) ||
+    !Number.isFinite(factor) ||
+    cost <= 0 ||
+    salvage < 0 ||
+    life <= 0 ||
+    period <= 0 ||
+    factor <= 0
+  ) {
+    return undefined;
+  }
+  let bookValue = cost;
+  let current = 0;
+  let depreciation = 0;
+  while (current < period && bookValue > salvage) {
+    const segment = Math.min(1, period - current);
+    const full = Math.min(
+      Math.max((bookValue * factor) / life, 0),
+      Math.max(0, bookValue - salvage),
+    );
+    depreciation = Math.min(full * segment, Math.max(0, bookValue - salvage));
+    bookValue -= depreciation;
+    current += segment;
+  }
+  return depreciation;
+}
+
+function vdbDepreciation(
+  cost: number,
+  salvage: number,
+  life: number,
+  startPeriod: number,
+  endPeriod: number,
+  factor: number,
+  noSwitch: boolean,
+): number | undefined {
+  if (
+    !Number.isFinite(cost) ||
+    !Number.isFinite(salvage) ||
+    !Number.isFinite(life) ||
+    !Number.isFinite(startPeriod) ||
+    !Number.isFinite(endPeriod) ||
+    !Number.isFinite(factor) ||
+    cost <= 0 ||
+    salvage < 0 ||
+    life <= 0 ||
+    startPeriod < 0 ||
+    endPeriod < startPeriod ||
+    factor <= 0
+  ) {
+    return undefined;
+  }
+
+  let bookValue = cost;
+  let total = 0;
+  for (let current = 0; current < endPeriod && bookValue > salvage; current += 1) {
+    const overlap = Math.max(0, Math.min(endPeriod, current + 1) - Math.max(startPeriod, current));
+    if (overlap <= 0) {
+      const full = ddbPeriodDepreciation(
+        bookValue,
+        salvage,
+        life,
+        factor,
+        life - current,
+        noSwitch,
+      );
+      bookValue -= full;
+      continue;
+    }
+    const full = ddbPeriodDepreciation(bookValue, salvage, life, factor, life - current, noSwitch);
+    const applied = Math.min(full * overlap, Math.max(0, bookValue - salvage));
+    total += applied;
+    bookValue -= full;
+  }
+  return total;
 }
 
 function interestPayment(
@@ -2069,6 +2525,269 @@ const scalarBuiltins: Record<string, Builtin> = {
   },
   BASE: (numberArg, radixArg, minLengthArg) => baseString(numberArg, radixArg, minLengthArg),
   DECIMAL: (textArg, radixArg) => decimalValue(textArg, radixArg),
+  BIN2DEC: (valueArg) => {
+    const numeric = parseSignedRadixText(valueArg, 2, 10);
+    return numeric === undefined ? valueError() : numberResult(numeric);
+  },
+  BIN2HEX: (valueArg, placesArg) =>
+    convertSignedRadixToRadix(valueArg, 2, 16, 10, 10, -549755813888, 549755813887, placesArg),
+  BIN2OCT: (valueArg, placesArg) =>
+    convertSignedRadixToRadix(valueArg, 2, 8, 10, 10, -536870912, 536870911, placesArg),
+  DEC2BIN: (valueArg, placesArg) => {
+    const numeric = integerValue(valueArg);
+    const places = toPositivePlaces(placesArg);
+    if (numeric === undefined || places === undefined) {
+      return valueError();
+    }
+    return formatSignedRadixValue(numeric, 2, places, 10, -512, 511);
+  },
+  DEC2HEX: (valueArg, placesArg) => {
+    const numeric = integerValue(valueArg);
+    const places = toPositivePlaces(placesArg);
+    if (numeric === undefined || places === undefined) {
+      return valueError();
+    }
+    return formatSignedRadixValue(numeric, 16, places, 10, -549755813888, 549755813887);
+  },
+  DEC2OCT: (valueArg, placesArg) => {
+    const numeric = integerValue(valueArg);
+    const places = toPositivePlaces(placesArg);
+    if (numeric === undefined || places === undefined) {
+      return valueError();
+    }
+    return formatSignedRadixValue(numeric, 8, places, 10, -536870912, 536870911);
+  },
+  HEX2BIN: (valueArg, placesArg) =>
+    convertSignedRadixToRadix(valueArg, 16, 2, 10, 10, -512, 511, placesArg),
+  HEX2DEC: (valueArg) => {
+    const numeric = parseSignedRadixText(valueArg, 16, 10);
+    return numeric === undefined ? valueError() : numberResult(numeric);
+  },
+  HEX2OCT: (valueArg, placesArg) =>
+    convertSignedRadixToRadix(valueArg, 16, 8, 10, 10, -536870912, 536870911, placesArg),
+  OCT2BIN: (valueArg, placesArg) =>
+    convertSignedRadixToRadix(valueArg, 8, 2, 10, 10, -512, 511, placesArg),
+  OCT2DEC: (valueArg) => {
+    const numeric = parseSignedRadixText(valueArg, 8, 10);
+    return numeric === undefined ? valueError() : numberResult(numeric);
+  },
+  OCT2HEX: (valueArg, placesArg) =>
+    convertSignedRadixToRadix(valueArg, 8, 16, 10, 10, -549755813888, 549755813887, placesArg),
+  COMPLEX: (realArg, imaginaryArg = { tag: ValueTag.Number, value: 0 }, suffixArg) => {
+    const real = toNumber(realArg);
+    const imaginary = toNumber(imaginaryArg);
+    if (real === undefined || imaginary === undefined) {
+      return valueError();
+    }
+    let suffix: ComplexSuffix = "i";
+    if (suffixArg !== undefined) {
+      if (suffixArg.tag !== ValueTag.String) {
+        return valueError();
+      }
+      const normalized = suffixArg.value.trim().toLowerCase();
+      if (normalized !== "i" && normalized !== "j") {
+        return valueError();
+      }
+      suffix = normalized;
+    }
+    return complexResult({
+      real: normalizeSignedZero(real),
+      imaginary: normalizeSignedZero(imaginary),
+      suffix,
+    });
+  },
+  IMREAL: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : numberResult(parsed.real);
+  },
+  IMAGINARY: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : numberResult(parsed.imaginary);
+  },
+  IMABS: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : numberResult(complexMagnitude(parsed));
+  },
+  IMARGUMENT: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : numberResult(complexArgument(parsed));
+  },
+  IMCONJUGATE: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexConjugate(parsed));
+  },
+  IMSUM: (...args) => {
+    const parsed = args.map(parseComplexNumber);
+    if (parsed.length === 0 || parsed.some((value) => value === undefined)) {
+      return valueError();
+    }
+    const values: ComplexNumber[] = [];
+    for (const value of parsed) {
+      if (value === undefined) {
+        return valueError();
+      }
+      values.push(value);
+    }
+    return complexResult(
+      values.reduce((sum, value) => addComplex(sum, value), {
+        real: 0,
+        imaginary: 0,
+        suffix: commonComplexSuffix(values),
+      }),
+    );
+  },
+  IMSUB: (leftArg, rightArg) => {
+    const left = parseComplexNumber(leftArg);
+    const right = parseComplexNumber(rightArg);
+    return left === undefined || right === undefined
+      ? valueError()
+      : complexResult(subtractComplex(left, right));
+  },
+  IMPRODUCT: (...args) => {
+    const parsed = args.map(parseComplexNumber);
+    if (parsed.length === 0 || parsed.some((value) => value === undefined)) {
+      return valueError();
+    }
+    const values: ComplexNumber[] = [];
+    for (const value of parsed) {
+      if (value === undefined) {
+        return valueError();
+      }
+      values.push(value);
+    }
+    return complexResult(
+      values.reduce((product, value) => multiplyComplex(product, value), {
+        real: 1,
+        imaginary: 0,
+        suffix: commonComplexSuffix(values),
+      }),
+    );
+  },
+  IMDIV: (leftArg, rightArg) => {
+    const left = parseComplexNumber(leftArg);
+    const right = parseComplexNumber(rightArg);
+    const quotient =
+      left === undefined || right === undefined ? undefined : divideComplex(left, right);
+    return quotient === undefined
+      ? left !== undefined && right !== undefined
+        ? { tag: ValueTag.Error, code: ErrorCode.Div0 }
+        : valueError()
+      : complexResult(quotient);
+  },
+  IMEXP: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexExp(parsed));
+  },
+  IMLN: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const logged = parsed === undefined ? undefined : complexLn(parsed);
+    return logged === undefined ? valueError() : complexResult(logged);
+  },
+  IMLOG10: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const logged = parsed === undefined ? undefined : complexLn(parsed);
+    return logged === undefined
+      ? valueError()
+      : complexResult({
+          real: normalizeSignedZero(logged.real / Math.log(10)),
+          imaginary: normalizeSignedZero(logged.imaginary / Math.log(10)),
+          suffix: logged.suffix,
+        });
+  },
+  IMLOG2: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const logged = parsed === undefined ? undefined : complexLn(parsed);
+    return logged === undefined
+      ? valueError()
+      : complexResult({
+          real: normalizeSignedZero(logged.real / Math.log(2)),
+          imaginary: normalizeSignedZero(logged.imaginary / Math.log(2)),
+          suffix: logged.suffix,
+        });
+  },
+  IMPOWER: (valueArg, powerArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const exponent = toNumber(powerArg);
+    const powered =
+      parsed === undefined || exponent === undefined ? undefined : complexPower(parsed, exponent);
+    return powered === undefined ? valueError() : complexResult(powered);
+  },
+  IMSQRT: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexSqrt(parsed));
+  },
+  IMSIN: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexSin(parsed));
+  },
+  IMCOS: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexCos(parsed));
+  },
+  IMTAN: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    if (parsed === undefined) {
+      return valueError();
+    }
+    const quotient = divideComplex(complexSin(parsed), complexCos(parsed));
+    return quotient === undefined
+      ? { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : complexResult(quotient);
+  },
+  IMSINH: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexSinh(parsed));
+  },
+  IMCOSH: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    return parsed === undefined ? valueError() : complexResult(complexCosh(parsed));
+  },
+  IMSEC: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const reciprocal = parsed === undefined ? undefined : reciprocalComplex(complexCos(parsed));
+    return reciprocal === undefined
+      ? parsed === undefined
+        ? valueError()
+        : { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : complexResult(reciprocal);
+  },
+  IMCSC: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const reciprocal = parsed === undefined ? undefined : reciprocalComplex(complexSin(parsed));
+    return reciprocal === undefined
+      ? parsed === undefined
+        ? valueError()
+        : { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : complexResult(reciprocal);
+  },
+  IMCOT: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    if (parsed === undefined) {
+      return valueError();
+    }
+    const quotient = divideComplex(complexCos(parsed), complexSin(parsed));
+    return quotient === undefined
+      ? { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : complexResult(quotient);
+  },
+  IMSECH: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const reciprocal = parsed === undefined ? undefined : reciprocalComplex(complexCosh(parsed));
+    return reciprocal === undefined
+      ? parsed === undefined
+        ? valueError()
+        : { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : complexResult(reciprocal);
+  },
+  IMCSCH: (valueArg) => {
+    const parsed = parseComplexNumber(valueArg);
+    const reciprocal = parsed === undefined ? undefined : reciprocalComplex(complexSinh(parsed));
+    return reciprocal === undefined
+      ? parsed === undefined
+        ? valueError()
+        : { tag: ValueTag.Error, code: ErrorCode.Div0 }
+      : complexResult(reciprocal);
+  },
   ROMAN: (value) => {
     const roman = romanValue(toNumber(value) ?? Number.NaN);
     return roman === undefined ? valueError() : { tag: ValueTag.String, value: roman, stringId: 0 };
@@ -2085,6 +2804,12 @@ const scalarBuiltins: Record<string, Builtin> = {
       return value;
     }
     return value.tag === ValueTag.String ? value : { tag: ValueTag.Empty };
+  },
+  ISOMITTED: (...args) => {
+    if (args.length !== 1) {
+      return valueError();
+    }
+    return { tag: ValueTag.Boolean, value: false };
   },
   N: (value = { tag: ValueTag.Empty }) => {
     if (value.tag === ValueTag.Error) {
@@ -2255,6 +2980,9 @@ const scalarBuiltins: Record<string, Builtin> = {
     const skew = skewPopulation(collectStatNumericArgs(args));
     return skew === undefined ? valueError() : numberResult(skew);
   },
+  SKEWP: (...args) => {
+    return scalarBuiltins["SKEW.P"]!(...args);
+  },
   KURT: (...args) => {
     const error = firstError(args);
     if (error) return error;
@@ -2306,6 +3034,9 @@ const scalarBuiltins: Record<string, Builtin> = {
     const numeric = toNumber(value);
     return numeric === undefined ? valueError() : numberResult(standardNormalCdf(numeric));
   },
+  "LEGACY.NORMSDIST": (value) => {
+    return scalarBuiltins["NORMSDIST"]!(value);
+  },
   "NORM.S.DIST": (value, cumulativeArg = { tag: ValueTag.Boolean, value: true }) => {
     const numeric = toNumber(value);
     const cumulative = coerceBoolean(cumulativeArg, true);
@@ -2321,6 +3052,9 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     const result = inverseStandardNormal(numeric);
     return result === undefined ? valueError() : numberResult(result);
+  },
+  "LEGACY.NORMSINV": (value) => {
+    return scalarBuiltins["NORMSINV"]!(value);
   },
   "NORM.S.INV": (value) => {
     return scalarBuiltins["NORMSINV"]!(value);
@@ -2447,6 +3181,79 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     return numberResult(futureValue(rate, periods, payment, present, type));
   },
+  FVSCHEDULE: (principalArg, ...scheduleArgs) => {
+    const principal = toNumber(principalArg);
+    if (principal === undefined) {
+      return valueError();
+    }
+    let result = principal;
+    for (const scheduleArg of scheduleArgs) {
+      const rate = toNumber(scheduleArg);
+      if (rate === undefined) {
+        return valueError();
+      }
+      result *= 1 + rate;
+    }
+    return numberResult(result);
+  },
+  DB: (costArg, salvageArg, lifeArg, periodArg, monthArg) => {
+    const cost = toNumber(costArg);
+    const salvage = toNumber(salvageArg);
+    const life = toNumber(lifeArg);
+    const period = toNumber(periodArg);
+    const month = coerceNumber(monthArg, 12);
+    if (
+      cost === undefined ||
+      salvage === undefined ||
+      life === undefined ||
+      period === undefined ||
+      month === undefined
+    ) {
+      return valueError();
+    }
+    const depreciation = dbDepreciation(cost, salvage, life, period, month);
+    return depreciation === undefined ? valueError() : numberResult(depreciation);
+  },
+  DDB: (costArg, salvageArg, lifeArg, periodArg, factorArg) => {
+    const cost = toNumber(costArg);
+    const salvage = toNumber(salvageArg);
+    const life = toNumber(lifeArg);
+    const period = toNumber(periodArg);
+    const factor = coerceNumber(factorArg, 2);
+    if (
+      cost === undefined ||
+      salvage === undefined ||
+      life === undefined ||
+      period === undefined ||
+      factor === undefined
+    ) {
+      return valueError();
+    }
+    const depreciation = ddbDepreciation(cost, salvage, life, period, factor);
+    return depreciation === undefined ? valueError() : numberResult(depreciation);
+  },
+  VDB: (costArg, salvageArg, lifeArg, startArg, endArg, factorArg, noSwitchArg) => {
+    const cost = toNumber(costArg);
+    const salvage = toNumber(salvageArg);
+    const life = toNumber(lifeArg);
+    const start = toNumber(startArg);
+    const end = toNumber(endArg);
+    const factor = coerceNumber(factorArg, 2);
+    const noSwitch = coerceBoolean(noSwitchArg, false);
+    if (
+      cost === undefined ||
+      salvage === undefined ||
+      life === undefined ||
+      start === undefined ||
+      end === undefined ||
+      factor === undefined ||
+      noSwitch === undefined
+    ) {
+      return valueError();
+    }
+    const depreciation = vdbDepreciation(cost, salvage, life, start, end, factor, noSwitch);
+    return depreciation === undefined ? valueError() : numberResult(depreciation);
+  },
   PV: (rateArg, periodsArg, paymentArg, futureArg, typeArg) => {
     const rate = toNumber(rateArg);
     const periods = toNumber(periodsArg);
@@ -2481,6 +3288,33 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     const payment = periodicPayment(rate, periods, present, future, type);
     return payment === undefined ? valueError() : numberResult(payment);
+  },
+  SLN: (costArg, salvageArg, lifeArg) => {
+    const cost = toNumber(costArg);
+    const salvage = toNumber(salvageArg);
+    const life = toNumber(lifeArg);
+    if (cost === undefined || salvage === undefined || life === undefined || life <= 0) {
+      return valueError();
+    }
+    return numberResult((cost - salvage) / life);
+  },
+  SYD: (costArg, salvageArg, lifeArg, periodArg) => {
+    const cost = toNumber(costArg);
+    const salvage = toNumber(salvageArg);
+    const life = toNumber(lifeArg);
+    const period = toNumber(periodArg);
+    if (
+      cost === undefined ||
+      salvage === undefined ||
+      life === undefined ||
+      period === undefined ||
+      life <= 0 ||
+      period <= 0 ||
+      period > life
+    ) {
+      return valueError();
+    }
+    return numberResult(((cost - salvage) * (life - period + 1) * 2) / (life * (life + 1)));
   },
   NPER: (rateArg, paymentArg, presentArg, futureArg, typeArg) => {
     const rate = toNumber(rateArg);
@@ -2760,6 +3594,9 @@ const scalarBuiltins: Record<string, Builtin> = {
       return valueError();
     }
     return numericResultOrError(regularizedUpperGamma(degrees / 2, x / 2));
+  },
+  "LEGACY.CHIDIST": (xArg, degreesArg) => {
+    return scalarBuiltins["CHIDIST"]!(xArg, degreesArg);
   },
   "CHISQ.DIST.RT": (xArg, degreesArg) => {
     return scalarBuiltins["CHIDIST"]!(xArg, degreesArg);

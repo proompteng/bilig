@@ -1,0 +1,2630 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "name": "ABS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ACCRINT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ACCRINTM",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ACOS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ACOSH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ACOT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ACOTH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ADDRESS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "AGGREGATE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "AMORDEGRC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "AMORLINC",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "AND",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ARABIC",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "AREAS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ARRAYTOTEXT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ASC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ASIN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ASINH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ATAN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ATAN2",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ATANH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "AVEDEV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "AVERAGE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "AVERAGEA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "AVERAGEIF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "AVERAGEIFS",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "BAHTTEXT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "BASE",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "BESSELI",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BESSELJ",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BESSELK",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BESSELY",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BETA.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "BETA.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "BETADIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BETAINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BIN2DEC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BIN2HEX",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BIN2OCT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BINOM.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "BINOM.DIST.RANGE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BINOM.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "BINOMDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BITAND",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BITLSHIFT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BITOR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BITRSHIFT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BITXOR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "BYCOL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "BYROW",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CALL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CEILING",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "CEILING.MATH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CEILING.PRECISE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CELL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHAR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHIDIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHIINV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHISQ.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHISQ.DIST.RT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHISQ.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHISQ.INV.RT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHISQ.TEST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHISQDIST",
+      "odfStatus": "Missing",
+      "inOfficeList": false
+    },
+    {
+      "name": "CHISQINV",
+      "odfStatus": "Missing",
+      "inOfficeList": false
+    },
+    {
+      "name": "CHITEST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHOOSE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHOOSECOLS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CHOOSEROWS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CLEAN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CODE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COLUMN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COLUMNS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COMBIN",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "COMBINA",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "COMPLEX",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CONCAT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CONCATENATE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CONFIDENCE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CONFIDENCE.NORM",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CONFIDENCE.T",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CONVERT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CORREL",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COSH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "COT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "COTH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUNT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUNTA",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUNTBLANK",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUNTIF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUNTIFS",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUPDAYBS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUPDAYS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUPDAYSNC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUPNCD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUPNUM",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COUPPCD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COVAR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "COVARIANCE.P",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "COVARIANCE.S",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CRITBINOM",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CSC",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "CSCH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBEKPIMEMBER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBEMEMBER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBEMEMBERPROPERTY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBERANKEDMEMBER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBESET",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBESETCOUNT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUBEVALUE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUMIPMT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "CUMPRINC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DATE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DATEDIF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DATEVALUE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DAVERAGE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DAY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DAYS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DAYS360",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DB",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DBCS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DCOUNT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DCOUNTA",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DDB",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DDE",
+      "odfStatus": "Missing",
+      "inOfficeList": false
+    },
+    {
+      "name": "DEC2BIN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DEC2HEX",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DEC2OCT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DECIMAL",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "DEGREES",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DELTA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DETECTLANGUAGE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DEVSQ",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DGET",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DISC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DMAX",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DMIN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DOLLAR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DOLLARDE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DOLLARFR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DPRODUCT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DROP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DSTDEV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DSTDEVP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DSUM",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DURATION",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "DVAR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "DVARP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EDATE",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "EFFECT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ENCODEURL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EOMONTH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ERF",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ERF.PRECISE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ERFC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ERFC.PRECISE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ERROR.TYPE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "EUROCONVERT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "EVEN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EXACT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EXP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EXPAND",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EXPON.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "EXPONDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "F.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "F.DIST.RT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "F.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "F.INV.RT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "F.TEST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FACT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FACTDOUBLE",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "FALSE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FILTER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FILTERXML",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FIND",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FINDB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "FINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FISHER",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FISHERINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FIXED",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FLOOR",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "FLOOR.MATH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FLOOR.PRECISE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FORECAST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": false
+    },
+    {
+      "name": "FORMULA",
+      "odfStatus": "Missing",
+      "inOfficeList": false
+    },
+    {
+      "name": "FORMULATEXT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FREQUENCY",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FTEST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "FV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "FVSCHEDULE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMA.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMA.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMADIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMAINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMALN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAMMALN.PRECISE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "GAUSS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GCD",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "GEOMEAN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GESTEP",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GETPIVOTDATA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "GROUPBY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "GROWTH",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "HARMEAN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "HEX2BIN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "HEX2DEC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "HEX2OCT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "HLOOKUP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "HOUR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "HSTACK",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "HYPERLINK",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "HYPGEOM.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "HYPGEOMDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "IFERROR",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "IFNA",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "IFS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMABS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMAGE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMAGINARY",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMARGUMENT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMCONJUGATE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMCOS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMCOSH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMCOT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMCSC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMCSCH",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMDIV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMEXP",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMLN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMLOG10",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMLOG2",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMPOWER",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMPRODUCT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMREAL",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSEC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSECH",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSIN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSINH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSQRT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSUB",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMSUM",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IMTAN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "INDEX",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "INDIRECT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "INFO",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "INT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "INTERCEPT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "INTRATE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IPMT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "IRR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISBLANK",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISEVEN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISFORMULA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISNUMBER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISO.CEILING",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISODD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": false
+    },
+    {
+      "name": "ISOMITTED",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISOWEEKNUM",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISPMT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ISREF",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": false
+    },
+    {
+      "name": "ISTEXT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "JIS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": false
+    },
+    {
+      "name": "KURT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LAMBDA",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LARGE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LCM",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "LEFT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LEFTB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "LEGACY.CHIDIST",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEGACY.CHIINV",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEGACY.CHITEST",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEGACY.FDIST",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEGACY.FINV",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEGACY.NORMSDIST",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEGACY.NORMSINV",
+      "odfStatus": "Legacy not implemented",
+      "inOfficeList": false
+    },
+    {
+      "name": "LEN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LENB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "LET",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LINEST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOG",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOG10",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOGEST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOGINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOGNORM.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOGNORM.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOGNORMDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOOKUP",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "LOWER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MAKEARRAY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MAP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MATCH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MAX",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MAXA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "MAXIFS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MDETERM",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "MDURATION",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "MEDIAN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "MID",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MIDB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "MIN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MINA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "MINIFS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MINUTE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MINVERSE",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "MIRR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "MMULT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "MOD",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MODE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "MODE.MULT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MODE.SNGL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MONTH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "MROUND",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "MULTINOMIAL",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "MULTIPLE.OPERATIONS",
+      "odfStatus": "Missing",
+      "inOfficeList": false
+    },
+    {
+      "name": "MUNIT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "N",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NA",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NEGBINOM.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NEGBINOMDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "NETWORKDAYS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "NETWORKDAYS.INTL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NOMINAL",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORM.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORM.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORM.S.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORM.S.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORMDIST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORMINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORMSDIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NORMSINV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NOT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NOW",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NPER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NPV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "NUMBERVALUE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "OCT2BIN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "OCT2DEC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "OCT2HEX",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ODD",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ODDFPRICE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ODDFYIELD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ODDLPRICE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ODDLYIELD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "OFFSET",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "OR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PDURATION",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PEARSON",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTILE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTILE.EXC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTILE.INC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTOF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTRANK",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTRANK.EXC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERCENTRANK.INC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERMUT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PERMUTATIONA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PHI",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PHONETIC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PI",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PIVOTBY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PMT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "POISSON",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "POISSON.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "POWER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PPMT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PRICE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PRICEDISC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PRICEMAT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PROB",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "PRODUCT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PROPER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "PV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "QUARTILE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "QUARTILE.EXC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "QUARTILE.INC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "QUOTIENT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "RADIANS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RAND",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "RANDARRAY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RANDBETWEEN",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "RANK",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "RANK.AVG",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RANK.EQ",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RATE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RECEIVED",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "REDUCE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "REGEXEXTRACT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "REGEXREPLACE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "REGEXTEST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "REGISTER.ID",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "REPLACE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "REPLACEB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "REPT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RIGHT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RIGHTB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "ROMAN",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ROUND",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ROUNDDOWN",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ROUNDUP",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "ROW",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "ROWS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "RRI",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "RSQ",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "RTD",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SCAN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SEARCH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SEARCHB",
+      "odfStatus": "Missing",
+      "inOfficeList": true
+    },
+    {
+      "name": "SEC",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SECH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SECOND",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SEQUENCE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SERIESSUM",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SHEET",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "SHEETS",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "SIGN",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SIN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SINH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SKEW",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "SKEW.P",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SKEWP",
+      "odfStatus": "Missing",
+      "inOfficeList": false
+    },
+    {
+      "name": "SLN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SLOPE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "SMALL",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "SORT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SORTBY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SQRT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SQRTPI",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "STANDARDIZE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "STDEV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "STDEV.P",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "STDEV.S",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "STDEVA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "STDEVP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "STDEVPA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "STEYX",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "STOCKHISTORY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUBSTITUTE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUBTOTAL",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUM",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMIF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMIFS",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMPRODUCT",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMSQ",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMX2MY2",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMX2PY2",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SUMXMY2",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "SWITCH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "SYD",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T.DIST.2T",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T.DIST.RT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T.INV",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T.INV.2T",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "T.TEST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TAKE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TAN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TANH",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "TBILLEQ",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TBILLPRICE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TBILLYIELD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TDIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TEXT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TEXTAFTER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TEXTBEFORE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TEXTJOIN",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TEXTSPLIT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TIME",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TIMEVALUE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TINV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TOCOL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TODAY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TOROW",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRANSLATE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRANSPOSE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TREND",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRIM",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRIMMEAN",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRIMRANGE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRUE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TRUNC",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "TTEST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "TYPE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "UNICHAR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "UNICODE",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "UNIQUE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "UPPER",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "USE.THE.COUNTIF",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VALUE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VALUETOTEXT",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VAR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VAR.P",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VAR.S",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VARA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "VARP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VARPA",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "VDB",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VLOOKUP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "VSTACK",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "WEBSERVICE",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "WEEKDAY",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "WEEKNUM",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "WEIBULL",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "WEIBULL.DIST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "WORKDAY",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "WORKDAY.INTL",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "WRAPCOLS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "WRAPROWS",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "XIRR",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "XLOOKUP",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "XMATCH",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "XNPV",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "XOR",
+      "odfStatus": "Implemented",
+      "inOfficeList": true
+    },
+    {
+      "name": "YEAR",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "YEARFRAC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "YIELD",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "YIELDDISC",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "YIELDMAT",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    },
+    {
+      "name": "Z.TEST",
+      "odfStatus": "Not in ODF 1.4 mandatory",
+      "inOfficeList": true
+    },
+    {
+      "name": "ZTEST",
+      "odfStatus": "Placeholder (blocked)",
+      "inOfficeList": true
+    }
+  ]
+}

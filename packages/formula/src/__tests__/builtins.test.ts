@@ -287,6 +287,100 @@ describe("formula builtins", () => {
     );
   });
 
+  it("supports radix conversion and complex engineering builtins", () => {
+    expect(
+      getBuiltin("BIN2DEC")?.({ tag: ValueTag.String, value: "1111111111", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: -1 });
+    expect(
+      getBuiltin("DEC2BIN")?.(
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 8 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "00001010", stringId: 0 });
+    expect(
+      getBuiltin("BIN2HEX")?.({ tag: ValueTag.String, value: "1111111111", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.String, value: "FFFFFFFFFF", stringId: 0 });
+    expect(
+      getBuiltin("HEX2BIN")?.(
+        { tag: ValueTag.String, value: "A", stringId: 1 },
+        { tag: ValueTag.Number, value: 8 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "00001010", stringId: 0 });
+    expect(
+      getBuiltin("HEX2DEC")?.({ tag: ValueTag.String, value: "FFFFFFFFFF", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.Number, value: -1 });
+    expect(
+      getBuiltin("OCT2HEX")?.(
+        { tag: ValueTag.String, value: "17", stringId: 1 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "000F", stringId: 0 });
+
+    expect(
+      getBuiltin("COMPLEX")?.(
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: -4 },
+        { tag: ValueTag.String, value: "j", stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "3-4j", stringId: 0 });
+    expect(getBuiltin("IMREAL")?.({ tag: ValueTag.String, value: "3+4i", stringId: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: 3,
+    });
+    expect(getBuiltin("IMAGINARY")?.({ tag: ValueTag.String, value: "3+4i", stringId: 1 })).toEqual(
+      { tag: ValueTag.Number, value: 4 },
+    );
+    expect(getBuiltin("IMABS")?.({ tag: ValueTag.String, value: "3+4i", stringId: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    });
+    expect(getBuiltin("IMARGUMENT")?.({ tag: ValueTag.String, value: "i", stringId: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: Math.PI / 2,
+    });
+    expect(
+      getBuiltin("IMCONJUGATE")?.({ tag: ValueTag.String, value: "3+4i", stringId: 1 }),
+    ).toEqual({ tag: ValueTag.String, value: "3-4i", stringId: 0 });
+    expect(
+      getBuiltin("IMSUM")?.(
+        { tag: ValueTag.String, value: "3+4i", stringId: 1 },
+        { tag: ValueTag.String, value: "-1+2i", stringId: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "2+6i", stringId: 0 });
+    expect(
+      getBuiltin("IMPRODUCT")?.(
+        { tag: ValueTag.String, value: "1+i", stringId: 1 },
+        { tag: ValueTag.String, value: "1-i", stringId: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "2", stringId: 0 });
+    expect(
+      getBuiltin("IMDIV")?.(
+        { tag: ValueTag.String, value: "3+4i", stringId: 1 },
+        { tag: ValueTag.String, value: "1-i", stringId: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.String, value: "-0.5+3.5i", stringId: 0 });
+    expect(getBuiltin("IMSQRT")?.({ tag: ValueTag.String, value: "-4", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "2i",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMSIN")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "0",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMCOS")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "1",
+      stringId: 0,
+    });
+    expect(getBuiltin("IMSECH")?.({ tag: ValueTag.String, value: "0", stringId: 1 })).toEqual({
+      tag: ValueTag.String,
+      value: "1",
+      stringId: 0,
+    });
+  });
+
   it("supports expanded math and numeric utility builtins", () => {
     expect(getBuiltin("SIN")?.({ tag: ValueTag.Number, value: Math.PI / 2 })).toEqual({
       tag: ValueTag.Number,
@@ -2884,6 +2978,12 @@ describe("formula builtins", () => {
     const IPMT = getBuiltin("IPMT")!;
     const PPMT = getBuiltin("PPMT")!;
     const ISPMT = getBuiltin("ISPMT")!;
+    const FVSCHEDULE = getBuiltin("FVSCHEDULE")!;
+    const DB = getBuiltin("DB")!;
+    const DDB = getBuiltin("DDB")!;
+    const VDB = getBuiltin("VDB")!;
+    const SLN = getBuiltin("SLN")!;
+    const SYD = getBuiltin("SYD")!;
 
     expect(
       EFFECT({ tag: ValueTag.Number, value: 0.12 }, { tag: ValueTag.Number, value: 12 }),
@@ -2931,6 +3031,51 @@ describe("formula builtins", () => {
     ).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(1420, 12),
+    });
+    expect(
+      FVSCHEDULE(
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0.09 },
+        { tag: ValueTag.Number, value: 0.11 },
+        { tag: ValueTag.Number, value: 0.1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1330.89, 12),
+    });
+    expect(
+      DB(
+        { tag: ValueTag.Number, value: 10000 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(3690, 12),
+    });
+    expect(
+      DDB(
+        { tag: ValueTag.Number, value: 2400 },
+        { tag: ValueTag.Number, value: 300 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(384, 12),
+    });
+    expect(
+      VDB(
+        { tag: ValueTag.Number, value: 2400 },
+        { tag: ValueTag.Number, value: 300 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(691.2, 12),
     });
     expect(
       PV(
@@ -3030,6 +3175,27 @@ describe("formula builtins", () => {
       tag: ValueTag.Number,
       value: -50,
     });
+    expect(
+      SLN(
+        { tag: ValueTag.Number, value: 10000 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 9 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1000,
+    });
+    expect(
+      SYD(
+        { tag: ValueTag.Number, value: 10000 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 9 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1800,
+    });
 
     expect(
       EFFECT({ tag: ValueTag.Number, value: 0.1 }, { tag: ValueTag.Number, value: 0 }),
@@ -3093,6 +3259,50 @@ describe("formula builtins", () => {
       code: ErrorCode.Value,
     });
     expect(
+      FVSCHEDULE(
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.String, value: "bad", stringId: 18 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      DB(
+        { tag: ValueTag.Number, value: 10000 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      DDB(
+        { tag: ValueTag.Number, value: 2400 },
+        { tag: ValueTag.Number, value: 300 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      VDB(
+        { tag: ValueTag.Number, value: 2400 },
+        { tag: ValueTag.Number, value: 300 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       IPMT(
         { tag: ValueTag.Number, value: 0.1 },
         { tag: ValueTag.Number, value: 3 },
@@ -3126,6 +3336,59 @@ describe("formula builtins", () => {
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
+    });
+    expect(
+      SLN(
+        { tag: ValueTag.Number, value: 10000 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      SYD(
+        { tag: ValueTag.Number, value: 10000 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 9 },
+        { tag: ValueTag.Number, value: 10 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
+  it("supports legacy statistical aliases", () => {
+    const legacyNormsDist = getBuiltin("LEGACY.NORMSDIST")?.({ tag: ValueTag.Number, value: 0 });
+    expect(legacyNormsDist).toMatchObject({ tag: ValueTag.Number });
+    if (legacyNormsDist?.tag !== ValueTag.Number) {
+      throw new Error("LEGACY.NORMSDIST should return a number");
+    }
+    expect(legacyNormsDist.value).toBeCloseTo(0.5, 8);
+    expect(getBuiltin("LEGACY.NORMSINV")?.({ tag: ValueTag.Number, value: 0.5 })).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0, 12),
+    });
+    expect(
+      getBuiltin("LEGACY.CHIDIST")?.(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(Math.exp(-0.5), 12),
+    });
+    expect(
+      getBuiltin("SKEWP")?.(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
     });
   });
 

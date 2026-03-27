@@ -19,6 +19,7 @@ import {
   type WorkbookAxisEntrySnapshot,
   type WorkbookAxisMetadataSnapshot,
   type WorkbookCalculationSettingsSnapshot,
+  type WorkbookDefinedNameValueSnapshot,
   type WorkbookFreezePaneSnapshot,
   type WorkbookPivotSnapshot,
   type WorkbookSortSnapshot,
@@ -235,7 +236,37 @@ function literalToFormulaNode(input: LiteralInput): FormulaNode | null {
   return null;
 }
 
-function definedNameValueToFormulaNode(input: LiteralInput): FormulaNode | null {
+function definedNameValueToFormulaNode(
+  input: WorkbookDefinedNameValueSnapshot,
+): FormulaNode | null {
+  if (typeof input === "object" && input !== null && "kind" in input) {
+    switch (input.kind) {
+      case "scalar":
+        return literalToFormulaNode(input.value);
+      case "cell-ref":
+        return { kind: "CellRef", ref: input.address, sheetName: input.sheetName };
+      case "range-ref":
+        return {
+          kind: "RangeRef",
+          refKind: "cells",
+          start: input.startAddress,
+          end: input.endAddress,
+          sheetName: input.sheetName,
+        };
+      case "structured-ref":
+        return {
+          kind: "StructuredRef",
+          tableName: input.tableName,
+          columnName: input.columnName,
+        };
+      case "formula":
+        try {
+          return parseFormula(input.formula);
+        } catch {
+          return { kind: "ErrorLiteral", code: ErrorCode.Value };
+        }
+    }
+  }
   if (typeof input === "string" && input.startsWith("=")) {
     try {
       return parseFormula(input);
@@ -247,12 +278,35 @@ function definedNameValueToFormulaNode(input: LiteralInput): FormulaNode | null 
 }
 
 interface MetadataResolutionContext {
-  resolveName: (name: string) => LiteralInput | undefined;
+  resolveName: (name: string) => WorkbookDefinedNameValueSnapshot | undefined;
   resolveStructuredReference: (tableName: string, columnName: string) => FormulaNode | undefined;
   resolveSpillReference: (
     sheetName: string | undefined,
     address: string,
   ) => FormulaNode | undefined;
+}
+
+function definedNameValuesEqual(
+  left: WorkbookDefinedNameValueSnapshot,
+  right: WorkbookDefinedNameValueSnapshot,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function definedNameValueToCellValue(
+  input: WorkbookDefinedNameValueSnapshot,
+  stringPool: StringPool,
+): CellValue {
+  if (typeof input === "object" && input !== null && "kind" in input) {
+    if (input.kind === "scalar") {
+      return literalToValue(input.value, stringPool);
+    }
+    return errorValue(ErrorCode.Value);
+  }
+  return literalToValue(input, stringPool);
 }
 
 function resolveMetadataReferencesInAst(
@@ -627,11 +681,11 @@ export class SpreadsheetEngine {
     this.executeLocalTransaction([{ kind: "setCellFormat", sheetName, address, format }]);
   }
 
-  setDefinedName(name: string, value: LiteralInput): void {
+  setDefinedName(name: string, value: WorkbookDefinedNameValueSnapshot): void {
     const normalizedName = normalizeDefinedName(name);
     const previous = this.workbook.getDefinedName(normalizedName);
     const trimmedName = name.trim();
-    if (previous?.name === trimmedName && previous.value === value) {
+    if (previous?.name === trimmedName && definedNameValuesEqual(previous.value, value)) {
       return;
     }
     this.executeLocalTransaction([{ kind: "upsertDefinedName", name: trimmedName, value }]);
@@ -671,10 +725,14 @@ export class SpreadsheetEngine {
 
   setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): void {
     const current = this.workbook.getCalculationSettings();
-    if (current.mode === settings.mode) {
+    const nextSettings = { compatibilityMode: "excel-modern" as const, ...settings };
+    if (
+      current.mode === nextSettings.mode &&
+      current.compatibilityMode === nextSettings.compatibilityMode
+    ) {
       return;
     }
-    this.executeLocalTransaction([{ kind: "setCalculationSettings", settings: { ...settings } }]);
+    this.executeLocalTransaction([{ kind: "setCalculationSettings", settings: nextSettings }]);
   }
 
   getCalculationSettings(): WorkbookCalculationSettingsRecord {
@@ -1361,6 +1419,7 @@ export class SpreadsheetEngine {
       spills.length > 0 ||
       pivots.length > 0 ||
       calculationSettings.mode !== "automatic" ||
+      calculationSettings.compatibilityMode !== "excel-modern" ||
       volatileContext.recalcEpoch !== 0
     ) {
       workbook.metadata = {};
@@ -1379,7 +1438,10 @@ export class SpreadsheetEngine {
       if (pivots.length > 0) {
         workbook.metadata.pivots = pivots;
       }
-      if (calculationSettings.mode !== "automatic") {
+      if (
+        calculationSettings.mode !== "automatic" ||
+        calculationSettings.compatibilityMode !== "excel-modern"
+      ) {
         workbook.metadata.calculationSettings = calculationSettings;
       }
       if (volatileContext.recalcEpoch !== 0) {
@@ -4258,6 +4320,7 @@ export class SpreadsheetEngine {
 
     const result = evaluatePlanResult(formula.compiled.jsPlan, {
       sheetName,
+      currentAddress: this.workbook.getAddress(cellIndex),
       resolveCell: (targetSheetName, address) => this.readCellValue(targetSheetName, address),
       resolveRange: (targetSheetName, start, end, refKind) =>
         this.readRangeValues(targetSheetName, start, end, refKind),
@@ -4266,8 +4329,14 @@ export class SpreadsheetEngine {
         if (!definedName) {
           return errorValue(ErrorCode.Name);
         }
-        return literalToValue(definedName.value, this.strings);
+        return definedNameValueToCellValue(definedName.value, this.strings);
       },
+      resolveFormula: (targetSheetName: string, address: string) =>
+        this.getCell(targetSheetName, address).formula,
+      listSheetNames: () =>
+        [...this.workbook.sheetsByName.values()]
+          .toSorted((left, right) => left.order - right.order)
+          .map((sheet) => sheet.name),
     });
 
     const materialization = isArrayValue(result)

@@ -202,6 +202,30 @@ describe("formula", () => {
     expect(compileFormula("SUM(1:10)").mode).toBe(1);
   });
 
+  it("keeps contextual metadata functions on the JS path without constant-folding them to errors", () => {
+    const rowCompiled = compileFormula("ROW()");
+    const sheetCompiled = compileFormula('SHEET("Sheet2")');
+
+    expect(rowCompiled.mode).toBe(0);
+    expect(sheetCompiled.mode).toBe(0);
+    expect(
+      evaluatePlan(rowCompiled.jsPlan, {
+        sheetName: "Sheet1",
+        currentAddress: "C7",
+        resolveCell: (): CellValue => ({ tag: ValueTag.Empty }),
+        resolveRange: (): CellValue[] => [],
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(
+      evaluatePlan(sheetCompiled.jsPlan, {
+        sheetName: "Sheet1",
+        resolveCell: (): CellValue => ({ tag: ValueTag.Empty }),
+        resolveRange: (): CellValue[] => [],
+        listSheetNames: (): string[] => ["Sheet1", "Sheet2"],
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
+  });
+
   it("compiles IF, IFERROR, IFNA, and NA onto the wasm-safe path alongside exact-parity logical formulas", () => {
     const compiled = compileFormula("IF(A1>0,A1*2,A2-1)");
     expect(compiled.mode).toBe(1);
