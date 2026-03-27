@@ -265,5 +265,12 @@ export enum BuiltinId {
   Ddb = 210,
   Vdb = 211,
   Sln = 212,
-  Syd = 213
+  Syd = 213,
+  LegacyChidist = 214,
+  Chiinv = 215,
+  ChisqInvRt = 216,
+  ChisqInv = 217,
+  Chisqdist = 218,
+  Chisqinv = 219,
+  LegacyChiinv = 220
 }

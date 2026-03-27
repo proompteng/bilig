@@ -263,10 +263,18 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "GAMMA":
       return argc === 1;
     case "CHIDIST":
+    case "LEGACY.CHIDIST":
+    case "CHIINV":
     case "CHISQ.DIST.RT":
+    case "CHISQ.INV.RT":
+    case "CHISQDIST":
+    case "CHISQINV":
+    case "LEGACY.CHIINV":
       return argc === 2;
     case "CHISQ.DIST":
       return argc === 3;
+    case "CHISQ.INV":
+      return argc === 2;
     case "WEIBULL":
     case "WEIBULL.DIST":
     case "GAMMADIST":
@@ -1038,8 +1046,15 @@ export function encodeBuiltin(name: string): BuiltinId {
     GAMMADIST: BuiltinId.Gammadist,
     "GAMMA.DIST": BuiltinId.GammaDist,
     CHIDIST: BuiltinId.Chidist,
+    "LEGACY.CHIDIST": BuiltinId.LegacyChidist,
+    CHIINV: BuiltinId.Chiinv,
     "CHISQ.DIST.RT": BuiltinId.ChisqDistRt,
     "CHISQ.DIST": BuiltinId.ChisqDist,
+    "CHISQ.INV.RT": BuiltinId.ChisqInvRt,
+    "CHISQ.INV": BuiltinId.ChisqInv,
+    CHISQDIST: BuiltinId.Chisqdist,
+    CHISQINV: BuiltinId.Chisqinv,
+    "LEGACY.CHIINV": BuiltinId.LegacyChiinv,
     BINOMDIST: BuiltinId.Binomdist,
     "BINOM.DIST": BuiltinId.BinomDist,
     "BINOM.DIST.RANGE": BuiltinId.BinomDistRange,

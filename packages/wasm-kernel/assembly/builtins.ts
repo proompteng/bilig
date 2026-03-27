@@ -2742,6 +2742,75 @@ function chiSquareCdf(x: f64, degreesFreedom: f64): f64 {
   return gammaDistributionCdf(x, degreesFreedom / 2.0, 2.0);
 }
 
+function inverseChiSquare(probability: f64, degreesFreedom: f64): f64 {
+  if (
+    !isFinite(probability) ||
+    !isFinite(degreesFreedom) ||
+    !(probability > 0.0 && probability < 1.0) ||
+    !(degreesFreedom >= 1.0)
+  ) {
+    return NaN;
+  }
+
+  const z = inverseStandardNormal(probability);
+  const approximationFactor = isNaN(z)
+    ? NaN
+    : 1.0 - 2.0 / (9.0 * degreesFreedom) + z * Math.sqrt(2.0 / (9.0 * degreesFreedom));
+  let estimate =
+    isFinite(approximationFactor) && approximationFactor > 0.0
+      ? degreesFreedom * Math.pow(approximationFactor, 3.0)
+      : degreesFreedom;
+  if (!(estimate > 0.0) || !isFinite(estimate)) {
+    estimate = max<f64>(degreesFreedom, 1.0);
+  }
+
+  let lower = 0.0;
+  let upper = max<f64>(estimate, 1.0);
+  let upperCdf = chiSquareCdf(upper, degreesFreedom);
+  for (let iteration = 0; iteration < 64 && upperCdf < probability; iteration += 1) {
+    upper *= 2.0;
+    upperCdf = chiSquareCdf(upper, degreesFreedom);
+  }
+  if (!(upperCdf >= probability)) {
+    return NaN;
+  }
+
+  let current = min<f64>(max<f64>(estimate, lower), upper);
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    const cdf = chiSquareCdf(current, degreesFreedom);
+    if (!isFinite(cdf)) {
+      break;
+    }
+    if (cdf < probability) {
+      lower = current;
+    } else {
+      upper = current;
+    }
+    const density = chiSquareDensity(current, degreesFreedom);
+    if (!(density > 0.0) || !isFinite(density)) {
+      current = (lower + upper) / 2.0;
+      continue;
+    }
+    const next = current - (cdf - probability) / density;
+    current = isFinite(next) && next > lower && next < upper ? next : (lower + upper) / 2.0;
+  }
+
+  for (let iteration = 0; iteration < 60; iteration += 1) {
+    const midpoint = (lower + upper) / 2.0;
+    const cdf = chiSquareCdf(midpoint, degreesFreedom);
+    if (!isFinite(cdf)) {
+      return NaN;
+    }
+    if (cdf < probability) {
+      lower = midpoint;
+    } else {
+      upper = midpoint;
+    }
+  }
+
+  return (lower + upper) / 2.0;
+}
+
 function isNumericResult(value: f64): bool {
   return !isNaN(value);
 }
@@ -10882,7 +10951,13 @@ export function applyBuiltin(
     );
   }
 
-  if ((builtinId == BuiltinId.Chidist || builtinId == BuiltinId.ChisqDistRt) && argc == 2) {
+  if (
+    (builtinId == BuiltinId.Chidist ||
+      builtinId == BuiltinId.LegacyChidist ||
+      builtinId == BuiltinId.ChisqDistRt ||
+      builtinId == BuiltinId.Chisqdist) &&
+    argc == 2
+  ) {
     if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
       return writeResult(
         base,
@@ -10966,6 +11041,116 @@ export function applyBuiltin(
       STACK_KIND_SCALAR,
       isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error,
       isNumericResult(result) ? result : ErrorCode.Value,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (
+    (builtinId == BuiltinId.Chiinv ||
+      builtinId == BuiltinId.ChisqInvRt ||
+      builtinId == BuiltinId.Chisqinv ||
+      builtinId == BuiltinId.LegacyChiinv) &&
+    argc == 2
+  ) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const probability = toNumberExact(tagStack[base], valueStack[base]);
+    const degrees = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const valid =
+      !isNaN(probability) &&
+      !isNaN(degrees) &&
+      probability > 0.0 &&
+      probability < 1.0 &&
+      degrees >= 1.0;
+    let result = NaN;
+    if (valid) {
+      result = inverseChiSquare(1.0 - probability, degrees);
+    }
+    const resultTag = isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error;
+    const resultValue = isNumericResult(result) ? result : valid ? ErrorCode.NA : ErrorCode.Value;
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      resultTag,
+      resultValue,
+      rangeIndexStack,
+      valueStack,
+      tagStack,
+      kindStack,
+    );
+  }
+
+  if (builtinId == BuiltinId.ChisqInv && argc == 2) {
+    if (!rangeSupportedScalarOnly(base, argc, kindStack)) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        ErrorCode.Value,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
+    if (scalarError >= 0) {
+      return writeResult(
+        base,
+        STACK_KIND_SCALAR,
+        <u8>ValueTag.Error,
+        scalarError,
+        rangeIndexStack,
+        valueStack,
+        tagStack,
+        kindStack,
+      );
+    }
+    const probability = toNumberExact(tagStack[base], valueStack[base]);
+    const degrees = toNumberExact(tagStack[base + 1], valueStack[base + 1]);
+    const valid =
+      !isNaN(probability) &&
+      !isNaN(degrees) &&
+      probability > 0.0 &&
+      probability < 1.0 &&
+      degrees >= 1.0;
+    let result = NaN;
+    if (valid) {
+      result = inverseChiSquare(probability, degrees);
+    }
+    const resultTag = isNumericResult(result) ? <u8>ValueTag.Number : <u8>ValueTag.Error;
+    const resultValue = isNumericResult(result) ? result : valid ? ErrorCode.NA : ErrorCode.Value;
+    return writeResult(
+      base,
+      STACK_KIND_SCALAR,
+      resultTag,
+      resultValue,
       rangeIndexStack,
       valueStack,
       tagStack,

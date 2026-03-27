@@ -11,6 +11,8 @@ describe("builtin capabilities", () => {
     expect(builtinWasmEnabledNames.has("COUNTIFS")).toBe(true);
     expect(builtinWasmEnabledNames.has("DATEDIF")).toBe(true);
     expect(builtinWasmEnabledNames.has("FVSCHEDULE")).toBe(true);
+    expect(builtinWasmEnabledNames.has("CHISQ.INV.RT")).toBe(true);
+    expect(builtinWasmEnabledNames.has("CHIINV")).toBe(true);
     expect(builtinWasmEnabledNames.has("LET")).toBe(false);
   });
 
@@ -51,6 +53,11 @@ describe("builtin capabilities", () => {
     });
     expect(getBuiltinCapability("DATEDIF")).toMatchObject({
       category: "date-time",
+      jsStatus: "implemented",
+      wasmStatus: "production",
+    });
+    expect(getBuiltinCapability("CHISQ.INV")).toMatchObject({
+      category: "statistical",
       jsStatus: "implemented",
       wasmStatus: "production",
     });

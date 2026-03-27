@@ -111,7 +111,14 @@ const BUILTIN = {
   WEIBULL: BuiltinId.Weibull,
   GAMMADIST: BuiltinId.Gammadist,
   CHIDIST: BuiltinId.Chidist,
+  LEGACY_CHIDIST: BuiltinId.LegacyChidist,
+  CHIINV: BuiltinId.Chiinv,
+  CHISQ_INV_RT: BuiltinId.ChisqInvRt,
+  CHISQ_INV: BuiltinId.ChisqInv,
   CHISQ_DIST: BuiltinId.ChisqDist,
+  CHISQDIST: BuiltinId.Chisqdist,
+  CHISQINV: BuiltinId.Chisqinv,
+  LEGACY_CHIINV: BuiltinId.LegacyChiinv,
   BINOMDIST: BuiltinId.Binomdist,
   BINOM_DIST_RANGE: BuiltinId.BinomDistRange,
   CRITBINOM: BuiltinId.Critbinom,
@@ -2456,6 +2463,70 @@ describe("wasm kernel", () => {
     expect(Array.from(kernel.readSpillNumbers().slice(0, kernel.getSpillValueCount()))).toEqual([
       1, 2, 3,
     ]);
+  });
+
+  it("evaluates chi-square inverse functions and aliases on the wasm path", async () => {
+    const kernel = await createKernel();
+    const width = 8;
+    kernel.init(width, 1, 8, 8, 1);
+    kernel.writeCells(
+      new Uint8Array(width),
+      new Float64Array(width),
+      new Uint32Array(width),
+      new Uint16Array(width),
+    );
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHIDIST, 2), encodeRet()],
+      [
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.LEGACY_CHIDIST, 2),
+        encodeRet(),
+      ],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHISQDIST, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHIINV, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHISQ_INV_RT, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHISQINV, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.LEGACY_CHIINV, 2), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.CHISQ_INV, 2), encodeRet()],
+    ]);
+    const constants = packConstants([
+      [18.307, 10],
+      [18.307, 10],
+      [18.307, 10],
+      [0.050001, 10],
+      [0.050001, 10],
+      [0.050001, 10],
+      [0.050001, 10],
+      [0.93, 1],
+    ]);
+    const outputCells = Uint32Array.from([
+      cellIndex(0, 0, width),
+      cellIndex(0, 1, width),
+      cellIndex(0, 2, width),
+      cellIndex(0, 3, width),
+      cellIndex(0, 4, width),
+      cellIndex(0, 5, width),
+      cellIndex(0, 6, width),
+      cellIndex(0, 7, width),
+    ]);
+    kernel.uploadPrograms(packed.programs, packed.offsets, packed.lengths, outputCells);
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths);
+
+    kernel.evalBatch(outputCells);
+
+    const tags = kernel.readTags();
+    const numbers = kernel.readNumbers();
+    expect(tags[cellIndex(0, 0, width)]).toBe(ValueTag.Number);
+    expect(numbers[cellIndex(0, 0, width)]).toBeCloseTo(0.0500006, 6);
+    expect(numbers[cellIndex(0, 1, width)]).toBeCloseTo(0.0500006, 6);
+    expect(numbers[cellIndex(0, 2, width)]).toBeCloseTo(0.0500006, 6);
+    expect(numbers[cellIndex(0, 3, width)]).toBeCloseTo(18.306973, 6);
+    expect(numbers[cellIndex(0, 4, width)]).toBeCloseTo(18.306973, 6);
+    expect(numbers[cellIndex(0, 5, width)]).toBeCloseTo(18.306973, 6);
+    expect(numbers[cellIndex(0, 6, width)]).toBeCloseTo(18.306973, 6);
+    expect(numbers[cellIndex(0, 7, width)]).toBeCloseTo(3.2830202867594993, 12);
   });
 
   it("evaluates FILTER and UNIQUE spill builtins on the wasm path", async () => {

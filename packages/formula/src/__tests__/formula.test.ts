@@ -191,6 +191,17 @@ describe("formula", () => {
     expect(compileFormula("SYD(10000,1000,9,1)").mode).toBe(1);
   });
 
+  it("routes accelerated chi-square inverse functions and aliases to the wasm path", () => {
+    expect(compileFormula("CHIDIST(18.307,10)").mode).toBe(1);
+    expect(compileFormula("LEGACY.CHIDIST(18.307,10)").mode).toBe(1);
+    expect(compileFormula("CHISQDIST(18.307,10)").mode).toBe(1);
+    expect(compileFormula("CHIINV(0.050001,10)").mode).toBe(1);
+    expect(compileFormula("CHISQ.INV.RT(0.050001,10)").mode).toBe(1);
+    expect(compileFormula("CHISQINV(0.050001,10)").mode).toBe(1);
+    expect(compileFormula("LEGACY.CHIINV(0.050001,10)").mode).toBe(1);
+    expect(compileFormula("CHISQ.INV(0.93,1)").mode).toBe(1);
+  });
+
   it("routes accelerated array-shape and conditional aggregate builtins by public compile contract", () => {
     expect(compileFormula("TRANSPOSE(A1:B4)").mode).toBe(1);
     expect(compileFormula("HSTACK(A1:B2,C1:D2)").mode).toBe(1);

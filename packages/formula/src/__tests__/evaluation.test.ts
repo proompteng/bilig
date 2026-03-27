@@ -408,6 +408,29 @@ describe("formula builtins and JS evaluator", () => {
       tag: ValueTag.Number,
       value: 1800,
     });
+    const chisqDist = evaluateAst(parseFormula("CHISQDIST(18.307,10)"), context);
+    expect(chisqDist).toMatchObject({ tag: ValueTag.Number });
+    expect(chisqDist.value).toBeCloseTo(0.05000058909139826, 12);
+
+    const chiInv = evaluateAst(parseFormula("CHIINV(0.050001,10)"), context);
+    expect(chiInv).toMatchObject({ tag: ValueTag.Number });
+    expect(chiInv.value).toBeCloseTo(18.30697345696106, 12);
+
+    const chisqInvRt = evaluateAst(parseFormula("CHISQ.INV.RT(0.050001,10)"), context);
+    expect(chisqInvRt).toMatchObject({ tag: ValueTag.Number });
+    expect(chisqInvRt.value).toBeCloseTo(18.30697345696106, 12);
+
+    const chisqInvAlias = evaluateAst(parseFormula("CHISQINV(0.050001,10)"), context);
+    expect(chisqInvAlias).toMatchObject({ tag: ValueTag.Number });
+    expect(chisqInvAlias.value).toBeCloseTo(18.30697345696106, 12);
+
+    const legacyChiInv = evaluateAst(parseFormula("LEGACY.CHIINV(0.050001,10)"), context);
+    expect(legacyChiInv).toMatchObject({ tag: ValueTag.Number });
+    expect(legacyChiInv.value).toBeCloseTo(18.30697345696106, 12);
+
+    const chisqInv = evaluateAst(parseFormula("CHISQ.INV(0.93,1)"), context);
+    expect(chisqInv).toMatchObject({ tag: ValueTag.Number });
+    expect(chisqInv.value).toBeCloseTo(3.2830202867594993, 12);
     expect(evaluateAst(parseFormula('LENB("é")'), context)).toEqual({
       tag: ValueTag.Number,
       value: 2,

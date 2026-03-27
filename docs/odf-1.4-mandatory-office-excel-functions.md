@@ -19,9 +19,9 @@
 - Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **515**
-- Not yet registered in codebase: **10**
-- Placeholder-backed registrations: **129**
+- Registered in codebase: **518**
+- Not yet registered in codebase: **7**
+- Placeholder-backed registrations: **126**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
 ## Full unified function list (ODF 1.4 mandatory + Office category)
@@ -91,8 +91,8 @@
 | CHISQ.INV | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHISQ.INV.RT | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHISQ.TEST | Not in ODF 1.4 mandatory | Yes | Yes |
-| CHISQDIST | Missing | No | No |
-| CHISQINV | Missing | No | No |
+| CHISQDIST | Missing | No | Yes |
+| CHISQINV | Missing | No | Yes |
 | CHITEST | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHOOSE | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHOOSECOLS | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -301,7 +301,7 @@
 | LEFT | Not in ODF 1.4 mandatory | Yes | Yes |
 | LEFTB | Missing | Yes | Yes |
 | LEGACY.CHIDIST | Legacy not implemented | No | Yes |
-| LEGACY.CHIINV | Legacy not implemented | No | No |
+| LEGACY.CHIINV | Legacy not implemented | No | Yes |
 | LEGACY.CHITEST | Legacy not implemented | No | No |
 | LEGACY.FDIST | Legacy not implemented | No | No |
 | LEGACY.FINV | Legacy not implemented | No | No |

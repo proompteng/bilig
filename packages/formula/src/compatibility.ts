@@ -222,6 +222,36 @@ export const formulaCompatibilityRegistry: readonly FormulaCompatibilityEntry[] 
     '=COUNTIF(A1:A4,">0")',
     "implemented-wasm-production",
   ),
+  entry(
+    "statistical:chisqdist-basic",
+    "statistical",
+    "=CHISQDIST(18.307,10)",
+    "implemented-wasm-production",
+  ),
+  entry(
+    "statistical:chiinv-basic",
+    "statistical",
+    "=CHIINV(0.050001,10)",
+    "implemented-wasm-production",
+  ),
+  entry(
+    "statistical:chisq-inv-rt-basic",
+    "statistical",
+    "=CHISQ.INV.RT(0.050001,10)",
+    "implemented-wasm-production",
+  ),
+  entry(
+    "statistical:chisqinv-basic",
+    "statistical",
+    "=CHISQINV(0.050001,10)",
+    "implemented-wasm-production",
+  ),
+  entry(
+    "statistical:chisq-inv-basic",
+    "statistical",
+    "=CHISQ.INV(0.93,1)",
+    "implemented-wasm-production",
+  ),
   entry("information:isblank-basic", "information", "=ISBLANK(A1)", "implemented-wasm-production"),
   entry(
     "information:isnumber-basic",

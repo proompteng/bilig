@@ -1285,6 +1285,76 @@ function chiSquareCdf(x: number, degreesFreedom: number): number {
   return gammaDistributionCdf(x, degreesFreedom / 2, 2);
 }
 
+function inverseChiSquare(probability: number, degreesFreedom: number): number | undefined {
+  if (
+    !Number.isFinite(probability) ||
+    !Number.isFinite(degreesFreedom) ||
+    !(probability > 0 && probability < 1) ||
+    !(degreesFreedom >= 1)
+  ) {
+    return undefined;
+  }
+
+  const z = inverseStandardNormal(probability);
+  const approximationFactor =
+    z === undefined
+      ? Number.NaN
+      : 1 - 2 / (9 * degreesFreedom) + z * Math.sqrt(2 / (9 * degreesFreedom));
+  let estimate =
+    Number.isFinite(approximationFactor) && approximationFactor > 0
+      ? degreesFreedom * approximationFactor ** 3
+      : degreesFreedom;
+  if (!(estimate > 0) || !Number.isFinite(estimate)) {
+    estimate = Math.max(degreesFreedom, 1);
+  }
+
+  let lower = 0;
+  let upper = Math.max(estimate, 1);
+  let upperCdf = chiSquareCdf(upper, degreesFreedom);
+  for (let iteration = 0; iteration < 64 && upperCdf < probability; iteration += 1) {
+    upper *= 2;
+    upperCdf = chiSquareCdf(upper, degreesFreedom);
+  }
+  if (!(upperCdf >= probability)) {
+    return undefined;
+  }
+
+  let current = Math.min(Math.max(estimate, lower), upper);
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    const cdf = chiSquareCdf(current, degreesFreedom);
+    if (!Number.isFinite(cdf)) {
+      break;
+    }
+    if (cdf < probability) {
+      lower = current;
+    } else {
+      upper = current;
+    }
+    const density = chiSquareDensity(current, degreesFreedom);
+    if (!(density > 0) || !Number.isFinite(density)) {
+      current = (lower + upper) / 2;
+      continue;
+    }
+    const next = current - (cdf - probability) / density;
+    current = Number.isFinite(next) && next > lower && next < upper ? next : (lower + upper) / 2;
+  }
+
+  for (let iteration = 0; iteration < 60; iteration += 1) {
+    const midpoint = (lower + upper) / 2;
+    const cdf = chiSquareCdf(midpoint, degreesFreedom);
+    if (!Number.isFinite(cdf)) {
+      return undefined;
+    }
+    if (cdf < probability) {
+      lower = midpoint;
+    } else {
+      upper = midpoint;
+    }
+  }
+
+  return (lower + upper) / 2;
+}
+
 function standardNormalPdf(value: number): number {
   return Math.exp(-(value * value) / 2) / Math.sqrt(2 * Math.PI);
 }
@@ -3598,8 +3668,14 @@ const scalarBuiltins: Record<string, Builtin> = {
   "LEGACY.CHIDIST": (xArg, degreesArg) => {
     return scalarBuiltins["CHIDIST"]!(xArg, degreesArg);
   },
+  CHIINV: (probabilityArg, degreesArg) => {
+    return scalarBuiltins["CHISQ.INV.RT"]!(probabilityArg, degreesArg);
+  },
   "CHISQ.DIST.RT": (xArg, degreesArg) => {
     return scalarBuiltins["CHIDIST"]!(xArg, degreesArg);
+  },
+  CHISQDIST: (xArg, degreesArg) => {
+    return scalarBuiltins["CHISQ.DIST.RT"]!(xArg, degreesArg);
   },
   "CHISQ.DIST": (xArg, degreesArg, cumulativeArg) => {
     const x = toNumber(xArg);
@@ -3615,6 +3691,44 @@ const scalarBuiltins: Record<string, Builtin> = {
       return valueError();
     }
     return numberResult(cumulative ? chiSquareCdf(x, degrees) : chiSquareDensity(x, degrees));
+  },
+  "CHISQ.INV.RT": (probabilityArg, degreesArg) => {
+    const probability = toNumber(probabilityArg);
+    const degrees = toNumber(degreesArg);
+    if (
+      probability === undefined ||
+      degrees === undefined ||
+      !(probability > 0 && probability < 1) ||
+      !(degrees >= 1)
+    ) {
+      return valueError();
+    }
+    const result = inverseChiSquare(1 - probability, degrees);
+    return result === undefined
+      ? { tag: ValueTag.Error, code: ErrorCode.NA }
+      : numberResult(result);
+  },
+  CHISQINV: (probabilityArg, degreesArg) => {
+    return scalarBuiltins["CHISQ.INV.RT"]!(probabilityArg, degreesArg);
+  },
+  "LEGACY.CHIINV": (probabilityArg, degreesArg) => {
+    return scalarBuiltins["CHISQ.INV.RT"]!(probabilityArg, degreesArg);
+  },
+  "CHISQ.INV": (probabilityArg, degreesArg) => {
+    const probability = toNumber(probabilityArg);
+    const degrees = toNumber(degreesArg);
+    if (
+      probability === undefined ||
+      degrees === undefined ||
+      !(probability > 0 && probability < 1) ||
+      !(degrees >= 1)
+    ) {
+      return valueError();
+    }
+    const result = inverseChiSquare(probability, degrees);
+    return result === undefined
+      ? { tag: ValueTag.Error, code: ErrorCode.NA }
+      : numberResult(result);
   },
   BINOMDIST: (successesArg, trialsArg, probabilityArg, cumulativeArg) => {
     const successes = nonNegativeIntegerValue(successesArg);

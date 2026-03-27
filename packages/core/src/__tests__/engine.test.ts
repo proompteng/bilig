@@ -435,6 +435,61 @@ describe("SpreadsheetEngine", () => {
     expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.WasmFastPath);
   });
 
+  it("routes chi-square inverse functions and compatibility aliases through the wasm path", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "CHIDIST(18.307,10)");
+    engine.setCellFormula("Sheet1", "B1", "LEGACY.CHIDIST(18.307,10)");
+    engine.setCellFormula("Sheet1", "C1", "CHISQDIST(18.307,10)");
+    engine.setCellFormula("Sheet1", "D1", "CHIINV(0.050001,10)");
+    engine.setCellFormula("Sheet1", "E1", "CHISQ.INV.RT(0.050001,10)");
+    engine.setCellFormula("Sheet1", "F1", "CHISQINV(0.050001,10)");
+    engine.setCellFormula("Sheet1", "G1", "LEGACY.CHIINV(0.050001,10)");
+    engine.setCellFormula("Sheet1", "H1", "CHISQ.INV(0.93,1)");
+
+    const a1 = engine.getCellValue("Sheet1", "A1");
+    expect(a1).toMatchObject({ tag: ValueTag.Number });
+    expect(a1.value).toBeCloseTo(0.05000058909139826, 12);
+
+    const b1 = engine.getCellValue("Sheet1", "B1");
+    expect(b1).toMatchObject({ tag: ValueTag.Number });
+    expect(b1.value).toBeCloseTo(0.05000058909139826, 12);
+
+    const c1 = engine.getCellValue("Sheet1", "C1");
+    expect(c1).toMatchObject({ tag: ValueTag.Number });
+    expect(c1.value).toBeCloseTo(0.05000058909139826, 12);
+
+    const d1 = engine.getCellValue("Sheet1", "D1");
+    expect(d1).toMatchObject({ tag: ValueTag.Number });
+    expect(d1.value).toBeCloseTo(18.30697345696106, 12);
+
+    const e1 = engine.getCellValue("Sheet1", "E1");
+    expect(e1).toMatchObject({ tag: ValueTag.Number });
+    expect(e1.value).toBeCloseTo(18.30697345696106, 12);
+
+    const f1 = engine.getCellValue("Sheet1", "F1");
+    expect(f1).toMatchObject({ tag: ValueTag.Number });
+    expect(f1.value).toBeCloseTo(18.30697345696106, 12);
+
+    const g1 = engine.getCellValue("Sheet1", "G1");
+    expect(g1).toMatchObject({ tag: ValueTag.Number });
+    expect(g1.value).toBeCloseTo(18.30697345696106, 12);
+
+    const h1 = engine.getCellValue("Sheet1", "H1");
+    expect(h1).toMatchObject({ tag: ValueTag.Number });
+    expect(h1.value).toBeCloseTo(3.2830202867594993, 12);
+
+    expect(engine.explainCell("Sheet1", "A1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "B1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "C1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "D1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "E1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "F1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "G1").mode).toBe(FormulaMode.WasmFastPath);
+    expect(engine.explainCell("Sheet1", "H1").mode).toBe(FormulaMode.WasmFastPath);
+  });
+
   it("spills FILTER with a computed comparison mask and UNIQUE through the wasm fast path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
