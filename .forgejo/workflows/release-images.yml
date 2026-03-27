@@ -14,29 +14,15 @@ jobs:
   build-and-push:
     runs-on: bilig-ci
     timeout-minutes: 45
-    env:
-      INTERNAL_REGISTRY_USERNAME: ${{ secrets.INTERNAL_REGISTRY_USERNAME }}
-      INTERNAL_REGISTRY_PASSWORD: ${{ secrets.INTERNAL_REGISTRY_PASSWORD }}
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v4
-
-      - name: Validate registry credentials
-        run: |
-          set -eu
-          test -n "$INTERNAL_REGISTRY_USERNAME"
-          test -n "$INTERNAL_REGISTRY_PASSWORD"
 
       - name: Enable buildx
         run: |
           set -eu
           docker buildx inspect bilig-buildx >/dev/null 2>&1 || docker buildx create --name bilig-buildx --use
           docker buildx use bilig-buildx
-
-      - name: Log in to internal registry
-        run: |
-          set -eu
-          echo "$INTERNAL_REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$INTERNAL_REGISTRY_USERNAME" --password-stdin
 
       - name: Build and push bilig-web
         run: |
