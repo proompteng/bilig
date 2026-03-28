@@ -44,7 +44,7 @@
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/workbook-domain": "workspace:*",
-    "@rocicorp/zero": "1.0.0",
+    "@rocicorp/zero": "1.1.1",
     "zod": "^4.3.6"
   },
   "engines": {
