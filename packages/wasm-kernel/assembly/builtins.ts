@@ -4,19 +4,7 @@ import {
   getTrackedArrayRows as getDynamicArrayRows,
   registerTrackedArrayShape as registerTrackedArrayShapeImpl,
 } from "./dynamic-arrays";
-import {
-  leftBytesText,
-  midBytesText,
-  poolString,
-  replaceBytesText,
-  rightBytesText,
-  scalarText,
-  textLength,
-  trimAsciiWhitespace,
-  utf8ByteLength,
-  bytePositionToCharPositionUtf8,
-  charPositionToBytePositionUtf8,
-} from "./text-codec";
+import { poolString, scalarText, trimAsciiWhitespace } from "./text-codec";
 import {
   arrayToTextCell,
   coerceScalarNumberLikeText,
@@ -28,6 +16,7 @@ import {
   toJapaneseFullWidth,
   toJapaneseHalfWidth,
 } from "./text-special";
+import { coerceLength, coercePositiveStart } from "./text-foundation";
 import {
   coerceWeekendMask,
   isHolidaySerial,
@@ -38,13 +27,10 @@ import {
 import {
   indexOfTextWithMode,
   lastIndexOfTextWithMode,
-  repeatText,
-  replaceText,
   splitTextByDelimiterWithMode,
-  substituteNthText,
-  substituteText,
 } from "./text-ops";
 import { compareScalarValues, valueNumber } from "./comparison";
+import { tryApplyTextMutationBuiltin } from "./dispatch-text-mutation";
 import {
   copyInputCellToSpill,
   materializeSlotResult,
@@ -197,6 +183,7 @@ import {
   tTestPValue,
   zTestPValue,
 } from "./statistics-tests";
+import { tryApplyScalarTextBuiltin } from "./dispatch-text-scalar";
 import {
   inputCellNumeric,
   inputCellScalarValue,
@@ -954,30 +941,6 @@ function signedRadixInputText(
   return (<i64>numeric).toString().toUpperCase();
 }
 
-function coerceLength(tag: u8, value: f64, defaultValue: i32): i32 {
-  if (tag == ValueTag.Empty) {
-    return defaultValue;
-  }
-  const numeric = toNumberExact(tag, value);
-  if (isNaN(numeric)) {
-    return i32.MIN_VALUE;
-  }
-  const truncated = <i32>numeric;
-  return truncated >= 0 ? truncated : i32.MIN_VALUE;
-}
-
-function coercePositiveStart(tag: u8, value: f64, defaultValue: i32): i32 {
-  if (tag == ValueTag.Empty) {
-    return defaultValue;
-  }
-  const numeric = toNumberExact(tag, value);
-  if (isNaN(numeric)) {
-    return i32.MIN_VALUE;
-  }
-  const truncated = <i32>numeric;
-  return truncated >= 1 ? truncated : i32.MIN_VALUE;
-}
-
 function roundToPlacesNative(value: f64, places: i32): f64 {
   const scale = Math.pow(10.0, <f64>places);
   return Math.round(value * scale) / scale;
@@ -1033,122 +996,6 @@ function euroCalculationPrecisionNative(code: string): i32 {
     return 2;
   }
   return i32.MIN_VALUE;
-}
-
-function excelTrim(input: string): string {
-  let start = 0;
-  let end = input.length;
-  while (start < end && input.charCodeAt(start) == 32) {
-    start += 1;
-  }
-  while (end > start && input.charCodeAt(end - 1) == 32) {
-    end -= 1;
-  }
-  let result = "";
-  let previousSpace = false;
-  for (let index = start; index < end; index++) {
-    const char = input.charCodeAt(index);
-    if (char == 32) {
-      if (!previousSpace) {
-        result += " ";
-      }
-      previousSpace = true;
-      continue;
-    }
-    previousSpace = false;
-    result += String.fromCharCode(char);
-  }
-  return result;
-}
-
-function hasSearchSyntax(pattern: string): bool {
-  for (let index = 0; index < pattern.length; index++) {
-    const char = pattern.charCodeAt(index);
-    if (char == 126 || char == 42 || char == 63) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function wildcardMatchAt(
-  pattern: string,
-  haystack: string,
-  patternIndex: i32,
-  haystackIndex: i32,
-): bool {
-  let p = patternIndex;
-  let h = haystackIndex;
-  while (p < pattern.length) {
-    const char = pattern.charCodeAt(p);
-    if (char == 126) {
-      const nextIndex = p + 1;
-      const nextChar = nextIndex < pattern.length ? pattern.charCodeAt(nextIndex) : 126;
-      if (h >= haystack.length || haystack.charCodeAt(h) != nextChar) {
-        return false;
-      }
-      p = nextIndex < pattern.length ? nextIndex + 1 : nextIndex;
-      h += 1;
-      continue;
-    }
-    if (char == 42) {
-      let nextPatternIndex = p + 1;
-      while (nextPatternIndex < pattern.length && pattern.charCodeAt(nextPatternIndex) == 42) {
-        nextPatternIndex += 1;
-      }
-      if (nextPatternIndex >= pattern.length) {
-        return true;
-      }
-      for (let scan = h; scan <= haystack.length; scan++) {
-        if (wildcardMatchAt(pattern, haystack, nextPatternIndex, scan)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    if (h >= haystack.length) {
-      return false;
-    }
-    if (char == 63) {
-      p += 1;
-      h += 1;
-      continue;
-    }
-    if (haystack.charCodeAt(h) != char) {
-      return false;
-    }
-    p += 1;
-    h += 1;
-  }
-  return true;
-}
-
-function findPosition(
-  needle: string,
-  haystack: string,
-  start: i32,
-  caseSensitive: bool,
-  wildcardAware: bool,
-): i32 {
-  const startIndex = start - 1;
-  if (needle.length == 0) {
-    return start;
-  }
-  if (startIndex > haystack.length) {
-    return i32.MIN_VALUE;
-  }
-  const normalizedHaystack = caseSensitive ? haystack : haystack.toLowerCase();
-  const normalizedNeedle = caseSensitive ? needle : needle.toLowerCase();
-  if (wildcardAware && hasSearchSyntax(normalizedNeedle)) {
-    for (let index = startIndex; index <= normalizedHaystack.length; index++) {
-      if (wildcardMatchAt(normalizedNeedle, normalizedHaystack, 0, index)) {
-        return index + 1;
-      }
-    }
-    return i32.MIN_VALUE;
-  }
-  const found = normalizedHaystack.indexOf(normalizedNeedle, startIndex);
-  return found < 0 ? i32.MIN_VALUE : found + 1;
 }
 
 const BAHTTEXT_MAX_SATANG: f64 = 9007199254740991.0;
@@ -1394,15 +1241,6 @@ function jsonQuoteText(input: string): string {
     }
   }
   return result + '"';
-}
-
-function coerceNonNegativeLength(tag: u8, value: f64): i32 {
-  const numeric = toNumberExact(tag, value);
-  if (isNaN(numeric)) {
-    return i32.MIN_VALUE;
-  }
-  const truncated = <i32>numeric;
-  return truncated >= 0 ? truncated : i32.MIN_VALUE;
 }
 
 function coerceTrimMode(tag: u8, value: f64): i32 {
@@ -12862,573 +12700,23 @@ export function applyBuiltin(
     );
   }
 
-  if (builtinId == BuiltinId.Concat) {
-    let scalarError = -1;
-    for (let index = 0; index < argc; index++) {
-      if (tagStack[base + index] == ValueTag.Error) {
-        scalarError = <i32>valueStack[base + index];
-        break;
-      }
-    }
-    if (scalarError >= 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        scalarError,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-
-    for (let index = 0; index < argc; index++) {
-      const len = textLength(
-        tagStack[base + index],
-        valueStack[base + index],
-        stringLengths,
-        outputStringLengths,
-      );
-      if (len < 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-    }
-
-    let text = "";
-    for (let index = 0; index < argc; index++) {
-      const part = scalarText(
-        tagStack[base + index],
-        valueStack[base + index],
-        stringOffsets,
-        stringLengths,
-        stringData,
-        outputStringOffsets,
-        outputStringLengths,
-        outputStringData,
-      );
-      if (part != null) {
-        text += part;
-      }
-    }
-    return writeStringResult(base, text, rangeIndexStack, valueStack, tagStack, kindStack);
-  }
-
-  if (builtinId == BuiltinId.Len && argc == 1) {
-    const length = textLength(tagStack[base], valueStack[base], stringLengths, outputStringLengths);
-    if (length < 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>length,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Lenb && argc == 1) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (text == null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>utf8ByteLength(text),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Exact && argc == 2) {
-    const left = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const right = scalarText(
-      tagStack[base + 1],
-      valueStack[base + 1],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (left === null || right === null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      left == right ? 1 : 0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if ((builtinId == BuiltinId.Left || builtinId == BuiltinId.Right) && (argc == 1 || argc == 2)) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const count = argc == 2 ? coerceLength(tagStack[base + 1], valueStack[base + 1], 1) : 1;
-    if (text == null || count == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const result =
-      builtinId == BuiltinId.Left
-        ? text.slice(0, count)
-        : count == 0
-          ? ""
-          : count >= text.length
-            ? text
-            : text.slice(text.length - count);
-    return writeStringResult(base, result, rangeIndexStack, valueStack, tagStack, kindStack);
-  }
-
-  if ((builtinId == BuiltinId.Leftb || builtinId == BuiltinId.Rightb) && (argc == 1 || argc == 2)) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const count = argc == 2 ? coerceLength(tagStack[base + 1], valueStack[base + 1], 1) : 1;
-    if (text == null || count == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const result =
-      builtinId == BuiltinId.Leftb ? leftBytesText(text, count) : rightBytesText(text, count);
-    return writeStringResult(base, result, rangeIndexStack, valueStack, tagStack, kindStack);
-  }
-
-  if (builtinId == BuiltinId.Mid && argc == 3) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const start = coercePositiveStart(tagStack[base + 1], valueStack[base + 1], 1);
-    const count = coerceLength(tagStack[base + 2], valueStack[base + 2], 0);
-    if (text == null || start == i32.MIN_VALUE || count == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      text.slice(start - 1, start - 1 + count),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Midb && argc == 3) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const start = coercePositiveStart(tagStack[base + 1], valueStack[base + 1], 1);
-    const count = coerceLength(tagStack[base + 2], valueStack[base + 2], 0);
-    if (text == null || start == i32.MIN_VALUE || count == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      midBytesText(text, start, count),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Trim && argc == 1) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (text == null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      excelTrim(text),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if ((builtinId == BuiltinId.Upper || builtinId == BuiltinId.Lower) && argc == 1) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (text == null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      builtinId == BuiltinId.Upper ? text.toUpperCase() : text.toLowerCase(),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Find && (argc == 2 || argc == 3)) {
-    const needle = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const haystack = scalarText(
-      tagStack[base + 1],
-      valueStack[base + 1],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const start = argc == 3 ? coercePositiveStart(tagStack[base + 2], valueStack[base + 2], 1) : 1;
-    if (needle == null || haystack == null || start == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const found = findPosition(needle, haystack, start, true, false);
-    if (found == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>found,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (
-    (builtinId == BuiltinId.Findb || builtinId == BuiltinId.Searchb) &&
-    (argc == 2 || argc == 3)
-  ) {
-    const needle = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const haystack = scalarText(
-      tagStack[base + 1],
-      valueStack[base + 1],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (needle == null || haystack == null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    let start = 1;
-    if (argc == 3) {
-      const startByte = coercePositiveStart(tagStack[base + 2], valueStack[base + 2], 1);
-      if (startByte == i32.MIN_VALUE || startByte > utf8ByteLength(haystack) + 1) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      start = bytePositionToCharPositionUtf8(haystack, startByte);
-    }
-    const found = findPosition(
-      needle,
-      haystack,
-      start,
-      builtinId == BuiltinId.Findb,
-      builtinId == BuiltinId.Searchb,
-    );
-    if (found == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>charPositionToBytePositionUtf8(haystack, found),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Search && (argc == 2 || argc == 3)) {
-    const needle = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const haystack = scalarText(
-      tagStack[base + 1],
-      valueStack[base + 1],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const start = argc == 3 ? coercePositiveStart(tagStack[base + 2], valueStack[base + 2], 1) : 1;
-    if (needle == null || haystack == null || start == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const found = findPosition(needle, haystack, start, false, true);
-    if (found == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>found,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
+  const scalarTextResult = tryApplyScalarTextBuiltin(
+    builtinId,
+    argc,
+    base,
+    rangeIndexStack,
+    valueStack,
+    tagStack,
+    kindStack,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  );
+  if (scalarTextResult >= 0) {
+    return scalarTextResult;
   }
 
   if (builtinId == BuiltinId.Textsplit && argc >= 2 && argc <= 6) {
@@ -13847,49 +13135,23 @@ export function applyBuiltin(
     );
   }
 
-  if (builtinId == BuiltinId.Replaceb && argc == 4) {
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const start = coercePositiveStart(tagStack[base + 1], valueStack[base + 1], 1);
-    const count = coerceLength(tagStack[base + 2], valueStack[base + 2], 0);
-    const replacement = scalarText(
-      tagStack[base + 3],
-      valueStack[base + 3],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (text == null || start == i32.MIN_VALUE || count == i32.MIN_VALUE || replacement == null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      replaceBytesText(text, start, count, replacement),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
+  const textMutationResult = tryApplyTextMutationBuiltin(
+    builtinId,
+    argc,
+    base,
+    rangeIndexStack,
+    valueStack,
+    tagStack,
+    kindStack,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  );
+  if (textMutationResult >= 0) {
+    return textMutationResult;
   }
 
   if (builtinId == BuiltinId.Char && argc == 1) {
@@ -18435,200 +17697,6 @@ export function applyBuiltin(
       STACK_KIND_SCALAR,
       <u8>ValueTag.Number,
       value,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Replace && argc == 4) {
-    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
-    if (scalarError >= 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        scalarError,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const start = coercePositiveStart(tagStack[base + 1], valueStack[base + 1], 1);
-    const count = coerceLength(tagStack[base + 2], valueStack[base + 2], 0);
-    const replacement = scalarText(
-      tagStack[base + 3],
-      valueStack[base + 3],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (text == null || start == i32.MIN_VALUE || count == i32.MIN_VALUE || replacement == null) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      replaceText(text, start, count, replacement),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Substitute && (argc == 3 || argc == 4)) {
-    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
-    if (scalarError >= 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        scalarError,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const oldText = scalarText(
-      tagStack[base + 1],
-      valueStack[base + 1],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const newText = scalarText(
-      tagStack[base + 2],
-      valueStack[base + 2],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    if (text == null || oldText == null || newText == null || oldText.length == 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    if (argc == 3) {
-      return writeStringResult(
-        base,
-        substituteText(text, oldText, newText),
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const instance = coercePositiveStart(tagStack[base + 3], valueStack[base + 3], 1);
-    if (instance == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      substituteNthText(text, oldText, newText, instance),
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Rept && argc == 2) {
-    const scalarError = scalarErrorAt(base, argc, kindStack, tagStack, valueStack);
-    if (scalarError >= 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        scalarError,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const text = scalarText(
-      tagStack[base],
-      valueStack[base],
-      stringOffsets,
-      stringLengths,
-      stringData,
-      outputStringOffsets,
-      outputStringLengths,
-      outputStringData,
-    );
-    const count = coerceNonNegativeLength(tagStack[base + 1], valueStack[base + 1]);
-    if (text == null || count == i32.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeStringResult(
-      base,
-      repeatText(text, count),
       rangeIndexStack,
       valueStack,
       tagStack,
