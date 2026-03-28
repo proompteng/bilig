@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
-import { evaluatePlan, lowerToPlan, optimizeFormula, parseFormula } from "../index.js";
+import {
+  evaluatePlan,
+  evaluatePlanResult,
+  lowerToPlan,
+  optimizeFormula,
+  parseFormula,
+} from "../index.js";
 import type { FormulaNode } from "../ast.js";
 
 const context = {
@@ -113,6 +119,26 @@ describe("js evaluator", () => {
         context,
       ),
     ).toEqual({ tag: ValueTag.Empty });
+
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("CHOOSE(1,A1:B2,C1:D2)")), {
+        ...context,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === "A1" && end === "B2") {
+            return [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()];
+          }
+          if (start === "C1" && end === "D2") {
+            return [num(10), num(11), num(12), num(13)];
+          }
+          return [];
+        },
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()],
+    });
   });
 
   it("lowers row and column refs into NaN sentinels for the JS path", () => {
@@ -222,6 +248,81 @@ describe("js evaluator", () => {
     ).toEqual(num(2));
   });
 
+  it("trims outer empty rows and columns for TRIMRANGE", () => {
+    const trimContext = {
+      ...context,
+      resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+        if (start === "A1" && end === "D4") {
+          return [
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            num(1),
+            num(2),
+            empty(),
+            empty(),
+            num(3),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+            empty(),
+          ];
+        }
+        if (start === "F1" && end === "G2") {
+          return [empty(), empty(), empty(), empty()];
+        }
+        return [];
+      },
+    };
+
+    expect(evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(A1:D4)")), trimContext)).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(1), num(2), num(3), empty()],
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,1,1)")), trimContext),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 3,
+      values: [num(1), num(2), empty(), num(3), empty(), empty(), empty(), empty(), empty()],
+    });
+    expect(evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(F1:G2)")), trimContext)).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [empty()],
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(F1:G2,0,3)")), trimContext),
+    ).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [empty()],
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,4)")), trimContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE(A1:D4,3,"bad")')), trimContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(1,1)")), trimContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("covers special-call rewrites and evaluator guard rails", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("IFS(FALSE,1,TRUE,2)")), context)).toEqual({
       tag: ValueTag.Number,
@@ -275,7 +376,15 @@ describe("js evaluator", () => {
       currentAddress: "C4",
       listSheetNames: () => ["Sheet1", "Sheet2", "Summary"],
       resolveFormula: (sheetName: string, address: string): string | undefined =>
-        sheetName === "Sheet2" && address === "B1" ? "SUM(A1:A2)" : undefined,
+        sheetName === "Sheet2" && address === "B1"
+          ? "SUM(A1:A2)"
+          : sheetName === "Sheet2" && address === "C1"
+            ? "A1*2"
+            : undefined,
+      resolveName: (name: string): CellValue =>
+        name === "TaxRate"
+          ? { tag: ValueTag.Number, value: 0.085 }
+          : { tag: ValueTag.Error, code: ErrorCode.Name },
     };
 
     expect(evaluatePlan(lowerToPlan(parseFormula("ROW()")), metadataContext)).toEqual({
@@ -291,6 +400,11 @@ describe("js evaluator", () => {
     ).toEqual({
       tag: ValueTag.String,
       value: "=SUM(A1:A2)",
+      stringId: 0,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("FORMULA(Sheet2!C1)")), metadataContext)).toEqual({
+      tag: ValueTag.String,
+      value: "=A1*2",
       stringId: 0,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula("FORMULATEXT(1)")), metadataContext)).toEqual({
@@ -311,6 +425,10 @@ describe("js evaluator", () => {
       tag: ValueTag.Number,
       value: 3,
     });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET(A1)")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Missing")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.NA,
@@ -318,6 +436,10 @@ describe("js evaluator", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS()")), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 3,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS(A1)")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEETS("Summary")')), metadataContext)).toEqual({
       tag: ValueTag.Number,
@@ -327,6 +449,15 @@ describe("js evaluator", () => {
       tag: ValueTag.String,
       value: "",
       stringId: 0,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), {
+        ...metadataContext,
+        currentAddress: undefined,
+      }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula('CELL("bogus",A1)')), metadataContext)).toEqual({
       tag: ValueTag.Error,
@@ -338,6 +469,26 @@ describe("js evaluator", () => {
         currentAddress: undefined,
       }),
     ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("row",A1)')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("col",B1)')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    const missingSheetContext = { ...metadataContext };
+    Reflect.set(missingSheetContext, "sheetName", undefined);
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("contents")')), missingSheetContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), missingSheetContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
@@ -353,7 +504,22 @@ describe("js evaluator", () => {
       code: ErrorCode.Value,
     });
     expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,SEQUENCE(2)))")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,SEQUENCE(2)))")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,A1:A3,LAMBDA(x,y,x+y))")), metadataContext),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
@@ -364,6 +530,14 @@ describe("js evaluator", () => {
         metadataContext,
       ),
     ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("BYROW(A1:B2)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("BYCOL(A1:B2)")), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
@@ -383,6 +557,505 @@ describe("js evaluator", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("LAMBDA(1,1)")), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("A1")')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('INDIRECT("TaxRate")+1')), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1.085,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('INDIRECT("R1C1",FALSE())')), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("INDIRECT()")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("MAP(LAMBDA(x,x))")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("BYCOL(A1:B2,LAMBDA(c,SEQUENCE(2)))")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("REDUCE(A1:B2)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "INDIRECT", argc: 1 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "A1" },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "INDIRECT", argc: 2 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('INDIRECT("A:A")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula('INDIRECT("A1:B2")')), metadataContext),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(2), num(3), { tag: ValueTag.Boolean, value: true }, { tag: ValueTag.Empty }],
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("a,b,,c",",","",TRUE(),0,"-")')),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.String,
+      value: "a",
+      stringId: 0,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha","")')), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('TEXTSPLIT("alpha")')), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "push-string", value: "," },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 2 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "alpha" },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 2 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "alpha" },
+          { opcode: "push-string", value: "," },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 3 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        [
+          { opcode: "push-string", value: "alpha" },
+          { opcode: "push-string", value: "," },
+          { opcode: "push-string", value: "" },
+          { opcode: "push-error", code: ErrorCode.Ref },
+          { opcode: "call", callee: "TEXTSPLIT", argc: 4 },
+          { opcode: "return" },
+        ],
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),2)')),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula('TEXTSPLIT("alpha",",","",TRUE(),0,SEQUENCE(2))')),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,0)")), metadataContext)).toEqual(
+      {
+        tag: ValueTag.Number,
+        value: 2,
+      },
+    );
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,1,1)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,0,3)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,0)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE()")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:B2,1,1,1)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,3,SEQUENCE(2))")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("GROUPBY(A1:B5,C1:D5,SUM,3,1,-3,E1:E5)")), {
+        ...metadataContext,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === "A1" && end === "B5") {
+            return [
+              { tag: ValueTag.String, value: "Region", stringId: 0 },
+              { tag: ValueTag.String, value: "Product", stringId: 0 },
+              { tag: ValueTag.String, value: "East", stringId: 0 },
+              { tag: ValueTag.String, value: "Widget", stringId: 0 },
+              { tag: ValueTag.String, value: "West", stringId: 0 },
+              { tag: ValueTag.String, value: "Widget", stringId: 0 },
+              { tag: ValueTag.String, value: "East", stringId: 0 },
+              { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+              { tag: ValueTag.String, value: "West", stringId: 0 },
+              { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+            ];
+          }
+          if (start === "C1" && end === "D5") {
+            return [
+              { tag: ValueTag.String, value: "Sales", stringId: 0 },
+              { tag: ValueTag.String, value: "Units", stringId: 0 },
+              { tag: ValueTag.Number, value: 10 },
+              { tag: ValueTag.Number, value: 2 },
+              { tag: ValueTag.Number, value: 7 },
+              { tag: ValueTag.Number, value: 1 },
+              { tag: ValueTag.Number, value: 5 },
+              { tag: ValueTag.Number, value: 3 },
+              { tag: ValueTag.Number, value: 4 },
+              { tag: ValueTag.Number, value: 2 },
+            ];
+          }
+          if (start === "E1" && end === "E5") {
+            return [
+              { tag: ValueTag.String, value: "Include", stringId: 0 },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: false },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: true },
+            ];
+          }
+          return [];
+        },
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 5,
+      cols: 4,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Product", stringId: 0 },
+        { tag: ValueTag.String, value: "Sales", stringId: 0 },
+        { tag: ValueTag.String, value: "Units", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.String, value: "Widget", stringId: 0 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Number, value: 19 },
+        { tag: ValueTag.Number, value: 7 },
+      ],
+    });
+    expect(
+      evaluatePlanResult(
+        lowerToPlan(parseFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1,0,D1:D5)")),
+        {
+          ...metadataContext,
+          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+            if (start === "A1" && end === "A5") {
+              return [
+                { tag: ValueTag.String, value: "Region", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+              ];
+            }
+            if (start === "B1" && end === "B5") {
+              return [
+                { tag: ValueTag.String, value: "Product", stringId: 0 },
+                { tag: ValueTag.String, value: "Widget", stringId: 0 },
+                { tag: ValueTag.String, value: "Widget", stringId: 0 },
+                { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+                { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+              ];
+            }
+            if (start === "C1" && end === "C5") {
+              return [
+                { tag: ValueTag.String, value: "Sales", stringId: 0 },
+                { tag: ValueTag.Number, value: 10 },
+                { tag: ValueTag.Number, value: 7 },
+                { tag: ValueTag.Number, value: 5 },
+                { tag: ValueTag.Number, value: 4 },
+              ];
+            }
+            if (start === "D1" && end === "D5") {
+              return [
+                { tag: ValueTag.String, value: "Include", stringId: 0 },
+                { tag: ValueTag.Boolean, value: true },
+                { tag: ValueTag.Boolean, value: true },
+                { tag: ValueTag.Boolean, value: true },
+                { tag: ValueTag.Boolean, value: true },
+              ];
+            }
+            return [];
+          },
+        },
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 4,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Widget", stringId: 0 },
+        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 15 },
+        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 11 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Number, value: 17 },
+        { tag: ValueTag.Number, value: 9 },
+        { tag: ValueTag.Number, value: 26 },
+      ],
+    });
+    expect(
+      evaluatePlanResult(
+        lowerToPlan(parseFormula("GROUPBY(A1:A5,C1:C5,LAMBDA(s,COUNTA(s)),3,1)")),
+        {
+          ...metadataContext,
+          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+            if (start === "A1" && end === "A5") {
+              return [
+                { tag: ValueTag.String, value: "Region", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+              ];
+            }
+            if (start === "C1" && end === "C5") {
+              return [
+                { tag: ValueTag.String, value: "Sales", stringId: 0 },
+                { tag: ValueTag.Number, value: 10 },
+                { tag: ValueTag.Number, value: 7 },
+                { tag: ValueTag.Number, value: 5 },
+                { tag: ValueTag.Number, value: 4 },
+              ];
+            }
+            return [];
+          },
+        },
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 2,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Sales", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Number, value: 4 },
+      ],
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("GROUPBY(A1:A2,B1:B2)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("GROUPBY(A1:A2,B1:B2,1)")), {
+        ...metadataContext,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === "A1" && end === "A2") {
+            return [
+              { tag: ValueTag.String, value: "Region", stringId: 0 },
+              { tag: ValueTag.String, value: "East", stringId: 0 },
+            ];
+          }
+          if (start === "B1" && end === "B2") {
+            return [
+              { tag: ValueTag.String, value: "Sales", stringId: 0 },
+              { tag: ValueTag.Number, value: 10 },
+            ];
+          }
+          return [];
+        },
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 2,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Sales", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.Error, code: ErrorCode.Value },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Error, code: ErrorCode.Value },
+      ],
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("PIVOTBY(A1:A2,B1:B2,C1:C2)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4)")), {
+        ...metadataContext,
+        resolveMultipleOperations: ({
+          formulaAddress,
+          rowCellAddress,
+          rowReplacementAddress,
+          columnCellAddress,
+        }) =>
+          formulaAddress === "B5" &&
+          rowCellAddress === "B3" &&
+          rowReplacementAddress === "C4" &&
+          columnCellAddress === undefined
+            ? { tag: ValueTag.Number, value: 17 }
+            : { tag: ValueTag.Error, code: ErrorCode.Ref },
+      }),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,D3,E4)")), {
+        ...metadataContext,
+        resolveMultipleOperations: ({
+          formulaAddress,
+          rowCellAddress,
+          rowReplacementAddress,
+          columnCellAddress,
+          columnReplacementAddress,
+        }) =>
+          formulaAddress === "B5" &&
+          rowCellAddress === "B3" &&
+          rowReplacementAddress === "C4" &&
+          columnCellAddress === "D3" &&
+          columnReplacementAddress === "E4"
+            ? { tag: ValueTag.Number, value: 19 }
+            : { tag: ValueTag.Error, code: ErrorCode.Ref },
+      }),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 19,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(1,B3,C4)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,1,E4)")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
     });
   });
 
@@ -462,4 +1135,8 @@ describe("js evaluator", () => {
 
 function num(value: number): CellValue {
   return { tag: ValueTag.Number, value };
+}
+
+function empty(): CellValue {
+  return { tag: ValueTag.Empty };
 }

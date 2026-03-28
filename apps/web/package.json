@@ -7,7 +7,7 @@
     "dev": "node ../../node_modules/vite/bin/vite.js",
     "build": "tsc -p tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
     "preview": "node ../../node_modules/vite/bin/vite.js preview",
-    "preview:ci": "pnpm -w build && node ../../node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4180 --strictPort"
+    "preview:ci": "pnpm -w build && bun ../../scripts/run-vite-preview.ts 4180"
   },
   "dependencies": {
     "@bilig/benchmarks": "workspace:*",

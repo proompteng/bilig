@@ -3,45 +3,76 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Cell, Sheet, Workbook } from "../components.js";
 
+type CompatContainer = {
+  lastError: unknown;
+  root?: unknown;
+};
+
 type CompatMocks = {
   createFiberRoot: ReturnType<typeof vi.fn>;
   updateFiberRoot: ReturnType<typeof vi.fn>;
 };
 
-async function loadRendererRootWithCompatMock(
-  updateImpl: (
-    element: React.ReactNode,
-    callback: () => void,
-    container: { lastError: unknown },
-  ) => void,
-): Promise<
+function isMockContainer(value: unknown): value is {
+  root: unknown;
+} {
+  return typeof value === "object" && value !== null && "root" in value;
+}
+
+type UpdateImpl = (
+  element: React.ReactNode,
+  callback: () => void,
+  container: CompatContainer,
+) => void;
+
+let capturedContainer: CompatContainer | undefined;
+let compatUpdateImpl: UpdateImpl = (_element, callback) => {
+  callback();
+};
+
+const createFiberRootMock = vi.fn((container: CompatContainer) => {
+  capturedContainer = container;
+  return { kind: "fiber-root" };
+});
+
+const updateFiberRootMock = vi.fn(
+  (_root: unknown, element: React.ReactNode, callback: () => void) => {
+    compatUpdateImpl(element, callback, capturedContainer ?? { lastError: null });
+  },
+);
+
+vi.mock("../compat.js", () => ({
+  createFiberRoot: createFiberRootMock,
+  updateFiberRoot: updateFiberRootMock,
+}));
+
+async function loadRendererRootWithCompatMock(updateImpl: UpdateImpl): Promise<
   CompatMocks & {
     createWorkbookRendererRoot: typeof import("../renderer-root.js").createWorkbookRendererRoot;
+    getCapturedContainer: () => CompatContainer | undefined;
   }
 > {
-  vi.resetModules();
-  let capturedContainer: { lastError: unknown } | undefined;
-  const createFiberRoot = vi.fn((container: { lastError: unknown }) => {
-    capturedContainer = container;
-    return { kind: "fiber-root" };
-  });
-  const updateFiberRoot = vi.fn(
-    (_root: unknown, element: React.ReactNode, callback: () => void) => {
-      updateImpl(element, callback, capturedContainer ?? { lastError: null });
-    },
-  );
-  vi.doMock("../compat.js", () => ({
-    createFiberRoot,
-    updateFiberRoot,
-  }));
+  compatUpdateImpl = updateImpl;
+  capturedContainer = undefined;
+  createFiberRootMock.mockClear();
+  updateFiberRootMock.mockClear();
   const { createWorkbookRendererRoot } = await import("../renderer-root.js");
-  return { createWorkbookRendererRoot, createFiberRoot, updateFiberRoot };
+  return {
+    createWorkbookRendererRoot,
+    createFiberRoot: createFiberRootMock,
+    updateFiberRoot: updateFiberRootMock,
+    getCapturedContainer: () => capturedContainer,
+  };
 }
 
 afterEach(() => {
-  vi.resetModules();
-  vi.doUnmock("../compat.js");
-  vi.clearAllMocks();
+  vi.useRealTimers();
+  compatUpdateImpl = (_element, callback) => {
+    callback();
+  };
+  capturedContainer = undefined;
+  createFiberRootMock.mockClear();
+  updateFiberRootMock.mockClear();
 });
 
 describe("renderer root error handling", () => {
@@ -49,12 +80,11 @@ describe("renderer root error handling", () => {
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-double-callback" });
     await engine.ready();
     const renderCommit = vi.spyOn(engine, "renderCommit");
-    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
-      (_element, callback) => {
+    const { createWorkbookRendererRoot, getCapturedContainer } =
+      await loadRendererRootWithCompatMock((_element, callback) => {
         callback();
         callback();
-      },
-    );
+      });
     const root = createWorkbookRendererRoot(engine);
 
     await root.render(
@@ -65,15 +95,11 @@ describe("renderer root error handling", () => {
       </Workbook>,
     );
 
-    const container = vi.mocked((await import("../compat.js")).createFiberRoot).mock
-      .calls[0]?.[0] as
-      | {
-          root: unknown;
-        }
-      | undefined;
-    if (!container) {
+    const maybeContainer = getCapturedContainer();
+    if (!isMockContainer(maybeContainer)) {
       throw new Error("Expected mocked container");
     }
+    const container = maybeContainer;
     container.root = {
       kind: "Workbook",
       parent: null,
@@ -99,22 +125,17 @@ describe("renderer root error handling", () => {
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-empty-unmount" });
     await engine.ready();
     const renderCommit = vi.spyOn(engine, "renderCommit");
-    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
-      (_element, callback) => {
+    const { createWorkbookRendererRoot, getCapturedContainer } =
+      await loadRendererRootWithCompatMock((_element, callback) => {
         callback();
-      },
-    );
+      });
     const root = createWorkbookRendererRoot(engine);
 
-    const container = vi.mocked((await import("../compat.js")).createFiberRoot).mock
-      .calls[0]?.[0] as
-      | {
-          root: unknown;
-        }
-      | undefined;
-    if (!container) {
+    const maybeContainer = getCapturedContainer();
+    if (!isMockContainer(maybeContainer)) {
       throw new Error("Expected mocked container");
     }
+    const container = maybeContainer;
     container.root = {
       kind: "Workbook",
       parent: null,
@@ -131,12 +152,12 @@ describe("renderer root error handling", () => {
   it("rejects unmount when the compat callback surfaces an async error", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (element, callback, container) => {
-        callback();
         if (element === null) {
-          queueMicrotask(() => {
+          setTimeout(() => {
             container.lastError = new Error("async unmount failed");
-          });
+          }, 0);
         }
+        callback();
       },
     );
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-unmount-async-error" });
@@ -159,9 +180,9 @@ describe("renderer root error handling", () => {
       (element, callback, container) => {
         callback();
         if (element !== null) {
-          queueMicrotask(() => {
+          setTimeout(() => {
             container.lastError = new Error("async render failed");
-          });
+          }, 0);
         }
       },
     );
@@ -183,17 +204,12 @@ describe("renderer root error handling", () => {
   it("rejects render and unmount when compat throws synchronously", async () => {
     const syncRenderError = new Error("sync render failed");
     const syncUnmountError = new Error("sync unmount failed");
-    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
-      (element, callback) => {
-        if (element === null) {
-          throw syncUnmountError;
-        }
-        if (React.isValidElement(element)) {
-          throw syncRenderError;
-        }
-        callback();
-      },
-    );
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock((element) => {
+      if (element === null) {
+        throw syncUnmountError;
+      }
+      throw syncRenderError;
+    });
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-sync-throws" });
     await engine.ready();
     const root = createWorkbookRendererRoot(engine);
@@ -220,6 +236,97 @@ describe("renderer root error handling", () => {
     await expect(root.render("bad")).rejects.toThrow("Workbook DSL does not support text nodes.");
   });
 
+  it("rejects invalid workbook DSL shapes before compat commits begin", async () => {
+    const { createWorkbookRendererRoot, updateFiberRoot } = await loadRendererRootWithCompatMock(
+      () => {},
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-shape-errors" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Sheet name="Sheet1">
+          <Cell addr="A1" value={1} />
+        </Sheet>,
+      ),
+    ).rejects.toThrow("Root descriptor must be a Workbook.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Cell addr="A1" value={1} />
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Only <Sheet> nodes can exist under <Workbook>.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet>
+            <Cell addr="A1" value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("<Sheet> requires a name prop.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">bad</Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Workbook DSL does not support text nodes.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Sheet name="Nested" />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Only <Cell> can be nested inside <Sheet>.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("<Cell> requires an addr prop.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={1} formula="A2" />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("<Cell> cannot specify both value and formula.");
+
+    expect(updateFiberRoot).not.toHaveBeenCalled();
+  });
+
+  it("routes null renders through unmount and surfaces sync compat unmount errors", async () => {
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (element, callback) => {
+        if (element === null) {
+          throw new Error("sync compat failure");
+        }
+        callback();
+      },
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-sync-error" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(root.render(null)).rejects.toThrow("sync compat failure");
+  });
+
   it("treats non-DSL string tags as wrappers during validation", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (_element, callback) => {
@@ -243,7 +350,7 @@ describe("renderer root error handling", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("ignores non-element bigint children and rejects workbook text nodes", async () => {
+  it("ignores nullish children and rejects workbook text nodes", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (_element, callback) => {
         callback();
@@ -256,11 +363,11 @@ describe("renderer root error handling", () => {
     await expect(
       root.render(
         <>
-          {1n}
+          {null}
           <Workbook name="book">
-            {2n}
+            {false}
             <Sheet name="Sheet1">
-              {3n}
+              {undefined}
               <Cell addr="A1" value={1} />
             </Sheet>
           </Workbook>

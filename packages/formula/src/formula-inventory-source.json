@@ -933,7 +933,7 @@
     },
     {
       "name": "FORMULA",
-      "odfStatus": "Missing",
+      "odfStatus": "Implemented",
       "inOfficeList": false
     },
     {
@@ -1238,7 +1238,7 @@
     },
     {
       "name": "INDIRECT",
-      "odfStatus": "Placeholder (blocked)",
+      "odfStatus": "Implemented",
       "inOfficeList": true
     },
     {

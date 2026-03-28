@@ -20,6 +20,7 @@ async function clearWorkspace(page: Page) {
 async function jumpTo(page: Page, target: string) {
   const normalizedTarget = target.toUpperCase();
   const nameBox = page.getByTestId("name-box");
+  await nameBox.click();
   await nameBox.fill(normalizedTarget);
   await expect(nameBox).toHaveValue(normalizedTarget);
   await nameBox.press("Enter");

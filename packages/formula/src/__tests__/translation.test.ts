@@ -452,4 +452,34 @@ describe("translateFormulaReferences", () => {
       }),
     ).toBe("'It''s a sheet'!A2");
   });
+
+  it("serializes fallback errors, nested invoke callees, and quoted sheet names", () => {
+    const unknownErrorNode: { kind: "ErrorLiteral"; code: ErrorCode } = {
+      kind: "ErrorLiteral",
+      code: ErrorCode.Value,
+    };
+    Reflect.set(unknownErrorNode, "code", 999);
+    expect(serializeFormula(unknownErrorNode)).toBe("#ERROR!");
+    expect(
+      serializeFormula({
+        kind: "InvokeExpr",
+        callee: {
+          kind: "CallExpr",
+          callee: "LAMBDA",
+          args: [
+            { kind: "NameRef", name: "x" },
+            { kind: "NameRef", name: "x" },
+          ],
+        },
+        args: [{ kind: "NumberLiteral", value: 4 }],
+      }),
+    ).toBe("LAMBDA(x,x)(4)");
+    expect(
+      serializeFormula({
+        kind: "CellRef",
+        sheetName: "Sales.Q1",
+        ref: "$C$5",
+      }),
+    ).toBe("Sales.Q1!$C$5");
+  });
 });

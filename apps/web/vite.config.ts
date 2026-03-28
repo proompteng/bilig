@@ -37,6 +37,9 @@ export default defineConfig({
       "@bilig/storage-browser": fileURLToPath(
         new URL("../../packages/storage-browser/src/index.ts", import.meta.url),
       ),
+      "@bilig/zero-sync": fileURLToPath(
+        new URL("../../packages/zero-sync/src/index.ts", import.meta.url),
+      ),
       "@bilig/wasm-kernel": fileURLToPath(
         new URL("../../packages/wasm-kernel/src/index.ts", import.meta.url),
       ),

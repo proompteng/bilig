@@ -12,16 +12,16 @@
 
 ## Coverage Summary
 - Unified function count: **525**
-- ODF mandatory function count: **57**
+- ODF mandatory function count: **59**
 - Office function count (cleaned scrape): **508**
-- Overlap (present in both): **57**
-- ODF-only (mandatory, not listed by Office): **0**
-- Office-only (not in ODF 1.4 mandatory): **451**
+- Overlap (present in both): **58**
+- ODF-only (mandatory, not listed by Office): **1**
+- Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **514**
-- Not yet registered in codebase: **11**
-- Placeholder-backed registrations: **133**
+- Registered in codebase: **525**
+- Not yet registered in codebase: **0**
+- Placeholder-backed registrations: **0**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
 ## Full unified function list (ODF 1.4 mandatory + Office category)
@@ -61,7 +61,7 @@
 | BESSELK | Placeholder (blocked) | Yes | Yes |
 | BESSELY | Placeholder (blocked) | Yes | Yes |
 | BETA.DIST | Not in ODF 1.4 mandatory | Yes | Yes |
-| BETA.INV | Not in ODF 1.4 mandatory | Yes | No |
+| BETA.INV | Not in ODF 1.4 mandatory | Yes | Yes |
 | BETADIST | Placeholder (blocked) | Yes | Yes |
 | BETAINV | Placeholder (blocked) | Yes | Yes |
 | BIN2DEC | Placeholder (blocked) | Yes | Yes |
@@ -91,8 +91,8 @@
 | CHISQ.INV | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHISQ.INV.RT | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHISQ.TEST | Not in ODF 1.4 mandatory | Yes | Yes |
-| CHISQDIST | Missing | No | No |
-| CHISQINV | Missing | No | No |
+| CHISQDIST | Missing | No | Yes |
+| CHISQINV | Missing | No | Yes |
 | CHITEST | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHOOSE | Not in ODF 1.4 mandatory | Yes | Yes |
 | CHOOSECOLS | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -153,7 +153,7 @@
 | DCOUNT | Not in ODF 1.4 mandatory | Yes | Yes |
 | DCOUNTA | Not in ODF 1.4 mandatory | Yes | Yes |
 | DDB | Not in ODF 1.4 mandatory | Yes | Yes |
-| DDE | Missing | No | No |
+| DDE | Missing | No | Yes |
 | DEC2BIN | Placeholder (blocked) | Yes | Yes |
 | DEC2HEX | Placeholder (blocked) | Yes | Yes |
 | DEC2OCT | Placeholder (blocked) | Yes | Yes |
@@ -214,7 +214,7 @@
 | FLOOR.MATH | Not in ODF 1.4 mandatory | Yes | Yes |
 | FLOOR.PRECISE | Not in ODF 1.4 mandatory | Yes | Yes |
 | FORECAST | Placeholder (blocked) | No | Yes |
-| FORMULA | Missing | No | No |
+| FORMULA | Implemented | No | Yes |
 | FORMULATEXT | Not in ODF 1.4 mandatory | Yes | Yes |
 | FREQUENCY | Placeholder (blocked) | Yes | Yes |
 | FTEST | Placeholder (blocked) | Yes | Yes |
@@ -275,7 +275,7 @@
 | IMSUM | Placeholder (blocked) | Yes | Yes |
 | IMTAN | Placeholder (blocked) | Yes | Yes |
 | INDEX | Not in ODF 1.4 mandatory | Yes | Yes |
-| INDIRECT | Placeholder (blocked) | Yes | Yes |
+| INDIRECT | Implemented | Yes | Yes |
 | INFO | Placeholder (blocked) | Yes | Yes |
 | INT | Not in ODF 1.4 mandatory | Yes | Yes |
 | INTERCEPT | Placeholder (blocked) | Yes | Yes |
@@ -301,10 +301,10 @@
 | LEFT | Not in ODF 1.4 mandatory | Yes | Yes |
 | LEFTB | Missing | Yes | Yes |
 | LEGACY.CHIDIST | Legacy not implemented | No | Yes |
-| LEGACY.CHIINV | Legacy not implemented | No | No |
-| LEGACY.CHITEST | Legacy not implemented | No | No |
-| LEGACY.FDIST | Legacy not implemented | No | No |
-| LEGACY.FINV | Legacy not implemented | No | No |
+| LEGACY.CHIINV | Legacy not implemented | No | Yes |
+| LEGACY.CHITEST | Legacy not implemented | No | Yes |
+| LEGACY.FDIST | Legacy not implemented | No | Yes |
+| LEGACY.FINV | Legacy not implemented | No | Yes |
 | LEGACY.NORMSDIST | Legacy not implemented | No | Yes |
 | LEGACY.NORMSINV | Legacy not implemented | No | Yes |
 | LEN | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -346,7 +346,7 @@
 | MONTH | Not in ODF 1.4 mandatory | Yes | Yes |
 | MROUND | Implemented | Yes | Yes |
 | MULTINOMIAL | Implemented | Yes | Yes |
-| MULTIPLE.OPERATIONS | Missing | No | No |
+| MULTIPLE.OPERATIONS | Missing | No | Yes |
 | MUNIT | Implemented | Yes | Yes |
 | N | Not in ODF 1.4 mandatory | Yes | Yes |
 | NA | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -520,7 +520,7 @@
 | UNICODE | Placeholder (blocked) | Yes | Yes |
 | UNIQUE | Not in ODF 1.4 mandatory | Yes | Yes |
 | UPPER | Not in ODF 1.4 mandatory | Yes | Yes |
-| USE.THE.COUNTIF | Not in ODF 1.4 mandatory | Yes | No |
+| USE.THE.COUNTIF | Not in ODF 1.4 mandatory | Yes | Yes |
 | VALUE | Not in ODF 1.4 mandatory | Yes | Yes |
 | VALUETOTEXT | Not in ODF 1.4 mandatory | Yes | Yes |
 | VAR | Not in ODF 1.4 mandatory | Yes | Yes |

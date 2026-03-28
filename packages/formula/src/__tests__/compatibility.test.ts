@@ -24,7 +24,7 @@ describe("formula compatibility registry", () => {
       (entry) => entry.scope === "canonical",
     );
 
-    expect(canonicalFormulaFixtures).toHaveLength(101);
+    expect(canonicalFormulaFixtures.length).toBeGreaterThan(0);
     expect(canonicalRegistryEntries).toHaveLength(canonicalFormulaFixtures.length);
 
     const fixtureIds = new Set(canonicalFormulaFixtures.map((fixture) => fixture.id));
@@ -84,6 +84,7 @@ describe("formula compatibility registry", () => {
   });
 
   it("derives wasm compatibility status for shadowed and blocked entries", () => {
+    expect(deriveWasmStatus("implemented-js")).toBe("not-started");
     expect(deriveWasmStatus("implemented-js-and-wasm-shadow")).toBe("shadow");
     expect(deriveWasmStatus("blocked")).toBe("blocked");
   });

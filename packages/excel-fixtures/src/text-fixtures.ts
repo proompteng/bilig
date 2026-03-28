@@ -17,16 +17,30 @@ export interface TextFixtureCase {
 export interface TextFixtureGroup {
   builtin:
     | "LEN"
+    | "LENB"
     | "CONCAT"
     | "LEFT"
+    | "LEFTB"
     | "RIGHT"
+    | "RIGHTB"
     | "MID"
+    | "MIDB"
     | "TRIM"
     | "UPPER"
     | "LOWER"
     | "FIND"
+    | "FINDB"
     | "SEARCH"
-    | "VALUE";
+    | "SEARCHB"
+    | "REPLACEB"
+    | "ASC"
+    | "JIS"
+    | "DBCS"
+    | "VALUE"
+    | "TEXTBEFORE"
+    | "TEXTAFTER"
+    | "TEXTJOIN"
+    | "TEXTSPLIT";
   cases: readonly TextFixtureCase[];
 }
 
@@ -47,6 +61,10 @@ function numberExpected(value: number): ExcelExpectedValue {
 
 function stringExpected(value: string): ExcelExpectedValue {
   return { kind: "string", value };
+}
+
+function errorExpected(code: ErrorCode, display: string): ExcelExpectedValue {
+  return { kind: "error", code, display };
 }
 
 function input(
@@ -87,19 +105,33 @@ function fixture(
 
 export const TEXT_FIXTURE_METADATA = {
   source: "excel-web-like text builtin tranche",
-  version: 1,
+  version: 2,
   builtins: [
     "LEN",
+    "LENB",
     "CONCAT",
     "LEFT",
+    "LEFTB",
     "RIGHT",
+    "RIGHTB",
     "MID",
+    "MIDB",
     "TRIM",
     "UPPER",
     "LOWER",
     "FIND",
+    "FINDB",
     "SEARCH",
+    "SEARCHB",
+    "REPLACEB",
+    "ASC",
+    "JIS",
+    "DBCS",
     "VALUE",
+    "TEXTBEFORE",
+    "TEXTAFTER",
+    "TEXTJOIN",
+    "TEXTSPLIT",
   ] as const,
 } as const;
 
@@ -110,6 +142,13 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
       { name: "counts plain string length", args: [text("hello")], expected: number(5) },
       { name: "coerces booleans to text", args: [bool(true)], expected: number(4) },
       { name: "treats empty as empty string", args: [empty()], expected: number(0) },
+    ],
+  },
+  {
+    builtin: "LENB",
+    cases: [
+      { name: "counts ASCII bytes", args: [text("hello")], expected: number(5) },
+      { name: "counts UTF-8 bytes", args: [text("é")], expected: number(2) },
     ],
   },
   {
@@ -144,6 +183,16 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
     ],
   },
   {
+    builtin: "LEFTB",
+    cases: [
+      {
+        name: "takes requested byte prefix length",
+        args: [text("alpha"), number(3)],
+        expected: text("alp"),
+      },
+    ],
+  },
+  {
     builtin: "RIGHT",
     cases: [
       { name: "defaults to one character", args: [text("alpha")], expected: text("a") },
@@ -156,6 +205,16 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
         name: "large suffix returns whole string",
         args: [text("alpha"), number(99)],
         expected: text("alpha"),
+      },
+    ],
+  },
+  {
+    builtin: "RIGHTB",
+    cases: [
+      {
+        name: "takes requested byte suffix length",
+        args: [text("alpha"), number(2)],
+        expected: text("ha"),
       },
     ],
   },
@@ -176,6 +235,16 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
         name: "zero count returns empty string",
         args: [text("alpha"), number(2), empty()],
         expected: text(""),
+      },
+    ],
+  },
+  {
+    builtin: "MIDB",
+    cases: [
+      {
+        name: "extracts byte-based substring from one-based start",
+        args: [text("alphabet"), number(2), number(3)],
+        expected: text("lph"),
       },
     ],
   },
@@ -223,6 +292,21 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
     ],
   },
   {
+    builtin: "FINDB",
+    cases: [
+      {
+        name: "finds first byte-based position",
+        args: [text("ph"), text("alphabet")],
+        expected: number(3),
+      },
+      {
+        name: "respects byte-based one-based start",
+        args: [text("d"), text("abcdef"), number(3)],
+        expected: number(4),
+      },
+    ],
+  },
+  {
     builtin: "SEARCH",
     cases: [
       {
@@ -239,11 +323,121 @@ export const TEXT_FIXTURES: readonly TextFixtureGroup[] = [
     ],
   },
   {
+    builtin: "SEARCHB",
+    cases: [
+      {
+        name: "searches case-insensitively with byte positions",
+        args: [text("PH"), text("alphabet")],
+        expected: number(3),
+      },
+      {
+        name: "supports wildcard question mark",
+        args: [text("b?d"), text("ABCD")],
+        expected: number(2),
+      },
+    ],
+  },
+  {
+    builtin: "REPLACEB",
+    cases: [
+      {
+        name: "replaces a byte-based span",
+        args: [text("alphabet"), number(3), number(2), text("Z")],
+        expected: text("alZabet"),
+      },
+    ],
+  },
+  {
+    builtin: "ASC",
+    cases: [
+      {
+        name: "converts full-width latin text to half-width",
+        args: [text("ＡＢＣ　１２３")],
+        expected: text("ABC 123"),
+      },
+      {
+        name: "converts full-width katakana to half-width pairs",
+        args: [text("ガギグゲゴ")],
+        expected: text("ｶﾞｷﾞｸﾞｹﾞｺﾞ"),
+      },
+    ],
+  },
+  {
+    builtin: "JIS",
+    cases: [
+      {
+        name: "converts half-width latin text to full-width",
+        args: [text("ABC 123")],
+        expected: text("ＡＢＣ　１２３"),
+      },
+      {
+        name: "converts half-width katakana pairs to full-width",
+        args: [text("ｶﾞｷﾞｸﾞｹﾞｺﾞ")],
+        expected: text("ガギグゲゴ"),
+      },
+    ],
+  },
+  {
+    builtin: "DBCS",
+    cases: [
+      {
+        name: "converts half-width latin text to double-byte full-width",
+        args: [text("ABC 123")],
+        expected: text("ＡＢＣ　１２３"),
+      },
+    ],
+  },
+  {
     builtin: "VALUE",
     cases: [
       { name: "parses trimmed numeric text", args: [text(" 42 ")], expected: number(42) },
       { name: "coerces booleans to numbers", args: [bool(true)], expected: number(1) },
       { name: "treats empty as zero", args: [empty()], expected: number(0) },
+    ],
+  },
+  {
+    builtin: "TEXTBEFORE",
+    cases: [
+      {
+        name: "returns text before the first delimiter",
+        args: [text("alpha-beta"), text("-")],
+        expected: text("alpha"),
+      },
+      {
+        name: "supports negative instance search",
+        args: [text("alpha-beta-gamma"), text("-"), number(-1)],
+        expected: text("alpha-beta"),
+      },
+    ],
+  },
+  {
+    builtin: "TEXTAFTER",
+    cases: [
+      {
+        name: "returns text after the first delimiter",
+        args: [text("alpha-beta"), text("-")],
+        expected: text("beta"),
+      },
+      {
+        name: "supports negative instance search",
+        args: [text("alpha-beta-gamma"), text("-"), number(-1)],
+        expected: text("gamma"),
+      },
+    ],
+  },
+  {
+    builtin: "TEXTJOIN",
+    cases: [
+      {
+        name: "joins text with a delimiter while ignoring empty items",
+        args: [text("-"), bool(true), text("alpha"), empty(), text("beta")],
+        expected: text("alpha-beta"),
+      },
+      {
+        name: "retains empty strings when ignore-empty is false",
+        args: [text("|"), bool(false), text("a"), text(""), text("b")],
+        expected: text("a||b"),
+      },
     ],
   },
 ];
@@ -418,6 +612,27 @@ export const canonicalTextFixtures: readonly ExcelFixtureCase[] = [
     [output("A1", numberExpected(2))],
   ),
   fixture(
+    "asc-basic",
+    "ASC converts full-width text to half-width",
+    '=ASC("ＡＢＣ　１２３")',
+    [],
+    [output("A1", stringExpected("ABC 123"))],
+  ),
+  fixture(
+    "jis-basic",
+    "JIS converts half-width text to full-width",
+    '=JIS("ABC 123")',
+    [],
+    [output("A1", stringExpected("ＡＢＣ　１２３"))],
+  ),
+  fixture(
+    "dbcs-basic",
+    "DBCS converts half-width text to double-byte full-width",
+    '=DBCS("ABC 123")',
+    [],
+    [output("A1", stringExpected("ＡＢＣ　１２３"))],
+  ),
+  fixture(
     "value-parses-trimmed-numeric-text",
     "VALUE parses trimmed numeric text",
     '=VALUE(" 42 ")',
@@ -437,6 +652,39 @@ export const canonicalTextFixtures: readonly ExcelFixtureCase[] = [
     "=VALUE(A1)",
     [input("A1", null)],
     [output("A2", numberExpected(0))],
+  ),
+  fixture(
+    "textbefore-basic",
+    "TEXTBEFORE returns the substring before the delimiter",
+    '=TEXTBEFORE("alpha-beta","-")',
+    [],
+    [output("A1", stringExpected("alpha"))],
+  ),
+  fixture(
+    "textafter-basic",
+    "TEXTAFTER returns the substring after the delimiter",
+    '=TEXTAFTER("alpha-beta","-")',
+    [],
+    [output("A1", stringExpected("beta"))],
+  ),
+  fixture(
+    "textjoin-basic",
+    "TEXTJOIN joins scalar and empty values with ignore-empty enabled",
+    '=TEXTJOIN("-",TRUE,A1:A3)',
+    [input("A1", "alpha"), input("A2", null), input("A3", "beta")],
+    [output("A4", stringExpected("alpha-beta"))],
+  ),
+  fixture(
+    "textsplit-basic",
+    "TEXTSPLIT spills a ragged row/column split with #N/A padding",
+    '=TEXTSPLIT(A1,",","|")',
+    [input("A1", "red,blue|green")],
+    [
+      output("A2", stringExpected("red")),
+      output("B2", stringExpected("blue")),
+      output("A3", stringExpected("green")),
+      output("B3", errorExpected(ErrorCode.NA, "#N/A")),
+    ],
   ),
 ];
 

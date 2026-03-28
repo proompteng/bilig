@@ -17,6 +17,49 @@ function createContainer(engine: SpreadsheetEngine): WorkbookContainer {
 }
 
 describe("renderer root", () => {
+  it("renders workbook DSL components even when function names are minified", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-minified-components" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    const MinifiedWorkbook = Object.assign(
+      function a(props: React.ComponentProps<typeof Workbook>) {
+        return React.createElement(Workbook, props);
+      },
+      { __biligRendererKind: "Workbook" as const },
+    );
+    const MinifiedSheet = Object.assign(
+      function b(props: React.ComponentProps<typeof Sheet>) {
+        return React.createElement(Sheet, props);
+      },
+      { __biligRendererKind: "Sheet" as const },
+    );
+    const MinifiedCell = Object.assign(
+      function c(props: React.ComponentProps<typeof Cell>) {
+        return React.createElement(Cell, props);
+      },
+      { __biligRendererKind: "Cell" as const },
+    );
+
+    await root.render(
+      React.createElement(
+        MinifiedWorkbook,
+        { name: "Book" },
+        React.createElement(
+          MinifiedSheet,
+          { name: "Sheet1" },
+          React.createElement(MinifiedCell, { addr: "A1", value: 10 }),
+          React.createElement(MinifiedCell, { addr: "B1", formula: "A1*2" }),
+        ),
+      ),
+    );
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: 1, value: 10 });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: 1, value: 20 });
+
+    await root.unmount();
+  });
+
   it("renders, updates, clears, and unmounts workbook trees through the public root", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root" });
     await engine.ready();

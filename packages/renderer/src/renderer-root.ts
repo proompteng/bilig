@@ -3,24 +3,53 @@ import type { SpreadsheetEngine } from "@bilig/core";
 import type { WorkbookContainer } from "./host-config.js";
 import { collectDeleteOps } from "./commit-log.js";
 import { createFiberRoot, updateFiberRoot } from "./compat.js";
+import { RENDERER_KIND_PROP, type RendererKind } from "./renderer-kind.js";
 
 export interface WorkbookRendererRoot {
   render(element: ReactNode): Promise<void>;
   unmount(): Promise<void>;
 }
 
-function scheduleCommitSettlement(finish: () => void): void {
-  // React/compat can surface commit errors after the update callback returns.
-  // Wait through microtasks and one macrotask turn before reading lastError.
+const COMMIT_SETTLEMENT_TURNS = 5;
+
+function scheduleCommitSettlement(
+  container: WorkbookContainer,
+  finish: () => void,
+  remainingTurns = COMMIT_SETTLEMENT_TURNS,
+): void {
+  // React/compat can surface commit errors after the update callback returns,
+  // and the exact turn count is not stable under the full repo test load.
+  // Wait through a bounded macrotask quiet window so deferred microtask errors
+  // from compat land before we resolve the render/unmount promise.
+  setTimeout(() => {
+    if (container.lastError !== null || remainingTurns === 0) {
+      finish();
+      return;
+    }
+    scheduleCommitSettlement(container, finish, remainingTurns - 1);
+  });
+}
+
+function schedulePostCommitObservation(container: WorkbookContainer, finish: () => void): void {
+  // Let compat finish queuing any synchronous post-callback work before we start
+  // watching the macrotask window for deferred errors.
   queueMicrotask(() => {
-    setTimeout(() => {
-      queueMicrotask(finish);
-    }, 0);
+    scheduleCommitSettlement(container, finish);
   });
 }
 
 function isNamedComponentType(value: unknown): value is { displayName?: string; name?: string } {
   return typeof value === "function";
+}
+
+function rendererKindOf(value: unknown): RendererKind | null {
+  if (typeof value === "function") {
+    const marker = Reflect.get(value, RENDERER_KIND_PROP);
+    if (marker === "Workbook" || marker === "Sheet" || marker === "Cell") {
+      return marker;
+    }
+  }
+  return null;
 }
 
 function kindOfNode(node: React.ReactElement): "Workbook" | "Sheet" | "Cell" | "wrapper" | null {
@@ -29,6 +58,11 @@ function kindOfNode(node: React.ReactElement): "Workbook" | "Sheet" | "Cell" | "
       return node.type;
     }
     return "wrapper";
+  }
+
+  const markedKind = rendererKindOf(node.type);
+  if (markedKind !== null) {
+    return markedKind;
   }
 
   if (node.type === React.Fragment || node.type === React.StrictMode) {
@@ -131,6 +165,45 @@ function validateRootElement(node: ReactNode): void {
   }
 }
 
+function normalizeNodeForRenderer(node: ReactNode): ReactNode {
+  if (!isRendererElement(node)) {
+    return node;
+  }
+  const kind = kindOfNode(node);
+  const normalizedChildren = normalizeChildrenForRenderer(node.props.children);
+  if (kind === "wrapper") {
+    return null;
+  }
+  return React.cloneElement(node, undefined, ...normalizedChildren);
+}
+
+function normalizeChildrenForRenderer(node: ReactNode): React.ReactNode[] {
+  const normalized: React.ReactNode[] = [];
+  for (const child of toRenderableChildren(node)) {
+    if (isRendererElement(child) && kindOfNode(child) === "wrapper") {
+      normalized.push(...normalizeChildrenForRenderer(child.props.children));
+      continue;
+    }
+    const next = normalizeNodeForRenderer(child);
+    if (next === null || next === undefined || next === false) {
+      continue;
+    }
+    normalized.push(next);
+  }
+  return normalized;
+}
+
+function normalizeRootElement(node: ReactNode): ReactNode {
+  const normalizedChildren = normalizeChildrenForRenderer(node);
+  if (normalizedChildren.length === 0) {
+    return null;
+  }
+  if (normalizedChildren.length === 1) {
+    return normalizedChildren[0];
+  }
+  return React.createElement(React.Fragment, null, ...normalizedChildren);
+}
+
 export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookRendererRoot {
   const container: WorkbookContainer = {
     engine,
@@ -153,6 +226,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
       } catch (error) {
         return Promise.reject(error);
       }
+      const normalizedElement = normalizeRootElement(element);
       return new Promise<void>((resolve, reject) => {
         let settled = false;
         const finish = () => {
@@ -169,8 +243,8 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
           resolve();
         };
         try {
-          updateFiberRoot(fiberRoot, element, () => {
-            scheduleCommitSettlement(finish);
+          updateFiberRoot(fiberRoot, normalizedElement, () => {
+            schedulePostCommitObservation(container, finish);
           });
         } catch (error) {
           settled = true;
@@ -204,7 +278,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, null, () => {
-            scheduleCommitSettlement(finish);
+            schedulePostCommitObservation(container, finish);
           });
         } catch (error) {
           settled = true;

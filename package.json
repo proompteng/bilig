@@ -42,7 +42,7 @@
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

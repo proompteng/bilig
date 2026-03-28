@@ -225,7 +225,7 @@ async function advanceTaskCycles(remaining: number): Promise<void> {
 
 async function settleRendererBoundary(operation: Promise<void>): Promise<void> {
   let capturedError: unknown = null;
-  void operation.catch((error) => {
+  await operation.catch((error) => {
     capturedError = error;
   });
   await waitForTaskCycles();
@@ -293,6 +293,7 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   const relayQueueRef = useRef<RelayEntry[]>([]);
   const relayTimerRef = useRef<number | null>(null);
   const captureRelayBatchesRef = useRef(false);
+  const presetLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const syncMirrorFromPrimary = useCallback(() => {
     mirrorEngine.importSnapshot(engine.exportSnapshot());
     const replicaSnapshot = engine.exportReplicaSnapshot();
@@ -327,40 +328,46 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
   });
 
   const loadPreset = useCallback(
-    async (presetId: PlaygroundPresetId, syncMirror = true) => {
-      startTransition(() => {
-        setLoadingPresetId(presetId);
-        setPresetError(null);
-      });
-      await waitForTaskCycles(1);
-      const previousCaptureState = captureRelayBatchesRef.current;
-      captureRelayBatchesRef.current = false;
+    (presetId: PlaygroundPresetId, syncMirror = true) => {
+      const run = async () => {
+        startTransition(() => {
+          setLoadingPresetId(presetId);
+          setPresetError(null);
+        });
+        await waitForTaskCycles(1);
+        const previousCaptureState = captureRelayBatchesRef.current;
+        captureRelayBatchesRef.current = false;
 
-      try {
-        const preset = await loadPlaygroundPreset(presetId);
-        relayQueueRef.current = [];
-        setRelayQueue([]);
-        setEditingMode("idle");
+        try {
+          const preset = await loadPlaygroundPreset(presetId);
+          relayQueueRef.current = [];
+          setRelayQueue([]);
+          setEditingMode("idle");
 
-        if (preset.kind === "renderer") {
-          await settleRendererBoundary(rendererRoot.render(preset.element));
-        } else {
-          await settleRendererBoundary(rendererRoot.unmount());
-          engine.importSnapshot(preset.snapshot);
+          if (preset.kind === "renderer") {
+            await settleRendererBoundary(rendererRoot.render(preset.element));
+          } else {
+            await settleRendererBoundary(rendererRoot.unmount());
+            engine.importSnapshot(preset.snapshot);
+          }
+
+          if (syncMirror) {
+            syncMirrorFromPrimary();
+            captureRelayBatchesRef.current = true;
+          }
+          selectCell(preset.defaultSheet, preset.defaultAddress);
+          setActivePresetId(presetId);
+        } catch (error) {
+          captureRelayBatchesRef.current = previousCaptureState;
+          setPresetError(error instanceof Error ? error.message : String(error));
+        } finally {
+          setLoadingPresetId(null);
         }
+      };
 
-        if (syncMirror) {
-          syncMirrorFromPrimary();
-          captureRelayBatchesRef.current = true;
-        }
-        selectCell(preset.defaultSheet, preset.defaultAddress);
-        setActivePresetId(presetId);
-      } catch (error) {
-        captureRelayBatchesRef.current = previousCaptureState;
-        setPresetError(error instanceof Error ? error.message : String(error));
-      } finally {
-        setLoadingPresetId(null);
-      }
+      const nextLoad = presetLoadQueueRef.current.then(run, run);
+      presetLoadQueueRef.current = nextLoad.catch(() => {});
+      return nextLoad;
     },
     [engine, rendererRoot, selectCell, syncMirrorFromPrimary],
   );
@@ -709,6 +716,8 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       if (editingMode === "formula") {
         const nextValue = editorValue;
         applyParsedInput(engine, selection.sheetName, selectedAddr, parseEditorInput(nextValue));
+      }
+      if (editingMode !== "idle") {
         setEditingMode("idle");
       }
       selection.select(nextSheetName, nextAddress);

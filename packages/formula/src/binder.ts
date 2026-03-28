@@ -18,7 +18,39 @@ export interface BoundFormula {
   mode: FormulaMode;
 }
 
-const RANGE_SAFE_BUILTINS = new Set(["SUM", "AVG", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA"]);
+const RANGE_SAFE_BUILTINS = new Set([
+  "SUM",
+  "AVG",
+  "AVERAGE",
+  "MIN",
+  "MAX",
+  "COUNT",
+  "COUNTA",
+  "COUNTBLANK",
+  "PRODUCT",
+  "GEOMEAN",
+  "HARMEAN",
+  "SUMSQ",
+  "GCD",
+  "LCM",
+  "MODE",
+  "MODE.SNGL",
+  "STDEV",
+  "STDEV.P",
+  "STDEV.S",
+  "STDEVA",
+  "STDEVP",
+  "STDEVPA",
+  "VAR",
+  "VAR.P",
+  "VAR.S",
+  "VARA",
+  "VARP",
+  "VARPA",
+  "SKEW",
+  "SKEW.P",
+  "KURT",
+]);
 
 const AXIS_AGGREGATE_CODES = new Map<string, number>([
   ["SUM", 1],
@@ -168,6 +200,8 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc === 0;
     case "IF":
       return argc === 3;
+    case "IFS":
+      return argc >= 2 && argc % 2 === 0;
     case "IFERROR":
     case "IFNA":
       return argc === 2;
@@ -175,28 +209,238 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc === 1 || argc === 2;
     case "DAYS":
       return argc === 2;
+    case "COUNTBLANK":
+      return argc >= 1;
+    case "CHOOSE":
+      return argc >= 2;
+    case "DAYS360":
+    case "YEARFRAC":
+      return argc === 2 || argc === 3;
+    case "DISC":
+    case "INTRATE":
+    case "RECEIVED":
+    case "PRICEDISC":
+    case "YIELDDISC":
+      return argc === 4 || argc === 5;
+    case "COUPDAYBS":
+    case "COUPDAYS":
+    case "COUPDAYSNC":
+    case "COUPNCD":
+    case "COUPNUM":
+    case "COUPPCD":
+      return argc === 3 || argc === 4;
+    case "PRICEMAT":
+    case "YIELDMAT":
+    case "DURATION":
+    case "MDURATION":
+      return argc === 5 || argc === 6;
+    case "ODDFPRICE":
+    case "ODDFYIELD":
+    case "ODDLPRICE":
+    case "ODDLYIELD":
+      return argc === 7 || argc === 8;
+    case "TBILLPRICE":
+    case "TBILLYIELD":
+    case "TBILLEQ":
+      return argc === 3;
+    case "IRR":
+      return argc === 1 || argc === 2;
+    case "MIRR":
+      return argc === 3;
+    case "XNPV":
+      return argc === 3;
+    case "XIRR":
+      return argc === 2 || argc === 3;
+    case "PRICE":
+    case "YIELD":
+      return argc === 6 || argc === 7;
+    case "ISOWEEKNUM":
+    case "TIMEVALUE":
+      return argc === 1;
     case "WEEKNUM":
       return argc === 1 || argc === 2;
     case "WORKDAY":
     case "NETWORKDAYS":
       return argc === 2 || argc === 3;
+    case "WORKDAY.INTL":
+    case "NETWORKDAYS.INTL":
+      return argc >= 2 && argc <= 4;
+    case "COUNTIF":
+    case "USE.THE.COUNTIF":
+      return argc === 2;
+    case "COUNTIFS":
+      return argc >= 2 && argc % 2 === 0;
+    case "DAVERAGE":
+    case "DCOUNT":
+    case "DCOUNTA":
+    case "DGET":
+    case "DMAX":
+    case "DMIN":
+    case "DPRODUCT":
+    case "DSTDEV":
+    case "DSTDEVP":
+    case "DSUM":
+    case "DVAR":
+    case "DVARP":
+      return argc === 3;
+    case "ADDRESS":
+      return argc >= 2 && argc <= 5;
+    case "SUMIF":
+    case "AVERAGEIF":
+      return argc === 2 || argc === 3;
+    case "SUMIFS":
+    case "AVERAGEIFS":
+      return argc >= 3 && argc % 2 === 1;
     case "REPLACE":
       return argc === 4;
     case "SUBSTITUTE":
       return argc === 3 || argc === 4;
     case "REPT":
       return argc === 2;
+    case "TEXT":
+      return argc === 2;
+    case "PHONETIC":
+      return argc === 1;
+    case "TEXTBEFORE":
+    case "TEXTAFTER":
+      return argc >= 2 && argc <= 6;
+    case "TEXTSPLIT":
+      return argc >= 2 && argc <= 6;
+    case "TEXTJOIN":
+      return argc >= 3;
+    case "POWER":
+    case "CONVERT":
+      return argc === 3;
     case "EXACT":
     case "ATAN2":
-    case "POWER":
       return argc === 2;
+    case "BESSELI":
+    case "BESSELJ":
+    case "BESSELK":
+    case "BESSELY":
+      return argc === 2;
+    case "EUROCONVERT":
+      return argc >= 3 && argc <= 5;
     case "UPPER":
     case "LOWER":
     case "TRIM":
     case "VALUE":
+    case "CHAR":
+    case "CODE":
+    case "UNICODE":
+    case "UNICHAR":
+    case "CLEAN":
+    case "ASC":
+    case "JIS":
+    case "DBCS":
+    case "BAHTTEXT":
+    case "LENB":
+    case "SINH":
+    case "COSH":
+    case "TANH":
+    case "ASINH":
+    case "ACOSH":
+    case "ATANH":
+    case "ACOT":
+    case "ACOTH":
+    case "COT":
+    case "COTH":
+    case "CSC":
+    case "CSCH":
+    case "SEC":
+    case "SECH":
+    case "SIGN":
+    case "EVEN":
+    case "ODD":
+    case "FACT":
+    case "FACTDOUBLE":
       return argc === 1;
+    case "NUMBERVALUE":
+      return argc >= 1 && argc <= 3;
+    case "VALUETOTEXT":
+      return argc === 1 || argc === 2;
+    case "DOLLAR":
+      return argc >= 1 && argc <= 3;
+    case "DOLLARDE":
+    case "DOLLARFR":
+    case "COMBIN":
+    case "COMBINA":
+    case "QUOTIENT":
+      return argc === 2;
+    case "BASE":
+      return argc === 2 || argc === 3;
+    case "DECIMAL":
+      return argc === 2;
+    case "BIN2DEC":
+    case "HEX2DEC":
+    case "OCT2DEC":
+      return argc === 1;
+    case "BIN2HEX":
+    case "BIN2OCT":
+    case "DEC2BIN":
+    case "DEC2HEX":
+    case "DEC2OCT":
+    case "HEX2BIN":
+    case "HEX2OCT":
+    case "OCT2BIN":
+    case "OCT2HEX":
+      return argc === 1 || argc === 2;
+    case "BITAND":
+    case "BITOR":
+    case "BITXOR":
+      return argc >= 2;
+    case "BITLSHIFT":
+    case "BITRSHIFT":
+      return argc === 2;
     case "MATCH":
       return argc === 2 || argc === 3;
+    case "CORREL":
+    case "COVAR":
+    case "PEARSON":
+    case "COVARIANCE.P":
+    case "COVARIANCE.S":
+    case "PERCENTRANK":
+    case "PERCENTRANK.INC":
+    case "PERCENTRANK.EXC":
+    case "SMALL":
+    case "LARGE":
+    case "PERCENTILE":
+    case "PERCENTILE.INC":
+    case "PERCENTILE.EXC":
+    case "QUARTILE":
+    case "QUARTILE.INC":
+    case "QUARTILE.EXC":
+    case "RANK":
+    case "RANK.EQ":
+    case "RANK.AVG":
+    case "INTERCEPT":
+    case "RSQ":
+    case "SLOPE":
+    case "STEYX":
+      return argc === 2 || argc === 3;
+    case "MEDIAN":
+    case "MODE.MULT":
+    case "GCD":
+    case "LCM":
+    case "PRODUCT":
+    case "GEOMEAN":
+    case "HARMEAN":
+    case "SUMSQ":
+      return argc >= 1;
+    case "FREQUENCY":
+      return argc === 2;
+    case "PROB":
+      return argc === 3 || argc === 4;
+    case "TRIMMEAN":
+      return argc === 2;
+    case "FORECAST":
+    case "FORECAST.LINEAR":
+      return argc === 3;
+    case "TREND":
+    case "GROWTH":
+    case "LINEST":
+    case "LOGEST":
+      return argc >= 1 && argc <= 4;
     case "XMATCH":
       return argc >= 2 && argc <= 4;
     case "XLOOKUP":
@@ -208,12 +452,19 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
       return argc === 3 || argc === 4;
     case "LEFT":
     case "RIGHT":
+    case "LEFTB":
+    case "RIGHTB":
       return argc === 1 || argc === 2;
     case "MID":
+    case "MIDB":
       return argc === 3;
     case "FIND":
     case "SEARCH":
+    case "FINDB":
+    case "SEARCHB":
       return argc === 2 || argc === 3;
+    case "REPLACEB":
+      return argc === 4;
     case "ISBLANK":
     case "ISNUMBER":
     case "ISTEXT":
@@ -232,7 +483,7 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "PHI":
     case "NORMSDIST":
     case "NORMSINV":
-      return argc === 1;
+      return argc === 1 || (argc === 0 && (callee === "T" || callee === "N" || callee === "TYPE"));
     case "DELTA":
     case "GESTEP":
     case "LOGNORMDIST":
@@ -248,6 +499,7 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "PDURATION":
     case "CONFIDENCE.NORM":
     case "CONFIDENCE":
+    case "CONFIDENCE.T":
     case "CRITBINOM":
     case "BINOM.INV":
       return argc === 3;
@@ -262,10 +514,60 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "GAMMALN.PRECISE":
     case "GAMMA":
       return argc === 1;
+    case "GAMMA.INV":
+    case "GAMMAINV":
+      return argc === 3;
     case "CHIDIST":
+    case "LEGACY.CHIDIST":
+    case "CHIINV":
     case "CHISQ.DIST.RT":
+    case "CHISQ.INV.RT":
+    case "CHISQDIST":
+    case "CHISQINV":
+    case "LEGACY.CHIINV":
+    case "CHISQ.TEST":
+    case "CHITEST":
+    case "LEGACY.CHITEST":
+    case "F.TEST":
+    case "FTEST":
+      return argc === 2;
+    case "Z.TEST":
+    case "ZTEST":
+      return argc === 2 || argc === 3;
+    case "F.DIST.RT":
+    case "FDIST":
+    case "LEGACY.FDIST":
+      return argc === 3;
+    case "CHISQ.INV":
       return argc === 2;
     case "CHISQ.DIST":
+      return argc === 3;
+    case "BETA.INV":
+    case "BETAINV":
+      return argc >= 3 && argc <= 5;
+    case "BETA.DIST":
+      return argc >= 4 && argc <= 6;
+    case "BETADIST":
+      return argc >= 3 && argc <= 5;
+    case "F.DIST":
+      return argc === 4;
+    case "T.DIST":
+      return argc === 3;
+    case "T.DIST.RT":
+    case "T.DIST.2T":
+    case "T.INV":
+    case "T.INV.2T":
+    case "TINV":
+      return argc === 2;
+    case "TDIST":
+      return argc === 3;
+    case "T.TEST":
+    case "TTEST":
+      return argc === 4;
+    case "F.INV":
+    case "F.INV.RT":
+    case "FINV":
+    case "LEGACY.FINV":
       return argc === 3;
     case "WEIBULL":
     case "WEIBULL.DIST":
@@ -325,25 +627,49 @@ function isWasmSafeBuiltinArity(callee: string, argc: number): boolean {
     case "PMT":
     case "NPER":
       return argc >= 3 && argc <= 5;
+    case "RATE":
+      return argc >= 3 && argc <= 6;
     case "IPMT":
     case "PPMT":
       return argc >= 4 && argc <= 6;
     case "ISPMT":
       return argc === 4;
+    case "CUMIPMT":
+    case "CUMPRINC":
+      return argc === 6;
     case "DATE":
     case "TIME":
+    case "DATEDIF":
       return argc === 3;
+    case "FVSCHEDULE":
+      return argc >= 2;
+    case "SLN":
+      return argc === 3;
+    case "DB":
+    case "DDB":
+      return argc === 4 || argc === 5;
+    case "SYD":
+      return argc === 4;
+    case "VDB":
+      return argc >= 5 && argc <= 7;
     case "EDATE":
     case "EOMONTH":
       return argc === 2;
     case "AND":
     case "OR":
+    case "XOR":
       return argc >= 1;
+    case "SWITCH":
+      return argc >= 3;
     case "SEQUENCE":
       return argc >= 1 && argc <= 4;
+    case "EXPAND":
+      return argc >= 2 && argc <= 4;
     case "FILTER":
       return argc === 2 || argc === 3;
     case "UNIQUE":
+      return argc >= 1 && argc <= 3;
+    case "TRIMRANGE":
       return argc >= 1 && argc <= 3;
     case "OFFSET":
       return argc >= 3 && argc <= 5;
@@ -464,7 +790,11 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         if (!hasBuiltin(callee) && !localNames.has(node.callee)) {
           symbolicNames.add(node.callee);
         }
-        node.args.forEach((arg) => {
+        const aggregateArgumentIndex = callee === "GROUPBY" ? 2 : callee === "PIVOTBY" ? 3 : -1;
+        node.args.forEach((arg, index) => {
+          if (index === aggregateArgumentIndex && arg.kind === "NameRef") {
+            return;
+          }
           collectDeps(arg, localNames);
         });
         break;
@@ -604,8 +934,16 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case "MAX":
       case "COUNT":
       case "COUNTA":
+      case "COUNTBLANK":
         return args.every((arg) => isWasmSafe(arg, true) || isNativeSequenceArg(arg));
+      case "CHOOSE":
+        return (
+          argc >= 2 &&
+          isScalarArg(args[0]!) &&
+          args.slice(1).every((arg) => isWasmSafe(arg, true) || isNativeSequenceArg(arg))
+        );
       case "COUNTIF":
+      case "USE.THE.COUNTIF":
         return args.length === 2 && isCellRangeArg(args[0]!) && isScalarArg(args[1]!);
       case "COUNTIFS":
         if (args.length === 0 || args.length % 2 !== 0) {
@@ -614,6 +952,42 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         return args.every((arg, index) =>
           index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg),
         );
+      case "DAVERAGE":
+      case "DCOUNT":
+      case "DCOUNTA":
+      case "DGET":
+      case "DMAX":
+      case "DMIN":
+      case "DPRODUCT":
+      case "DSTDEV":
+      case "DSTDEVP":
+      case "DSUM":
+      case "DVAR":
+      case "DVARP":
+        return (
+          argc === 3 &&
+          isCellRangeArg(args[0]!) &&
+          isWasmSafe(args[1]!, true) &&
+          isCellRangeArg(args[2]!)
+        );
+      case "CHISQ.TEST":
+      case "CHITEST":
+      case "LEGACY.CHITEST":
+      case "F.TEST":
+      case "FTEST":
+        return argc === 2 && args.every((arg) => isWasmSafe(arg, true));
+      case "T.TEST":
+      case "TTEST":
+        return (
+          argc === 4 &&
+          isCellRangeArg(args[0]!) &&
+          isCellRangeArg(args[1]!) &&
+          isScalarArg(args[2]!) &&
+          isScalarArg(args[3]!)
+        );
+      case "Z.TEST":
+      case "ZTEST":
+        return (argc === 2 || argc === 3) && args.every((arg) => isWasmSafe(arg, true));
       case "SUMIF":
       case "AVERAGEIF":
         if (args.length !== 2 && args.length !== 3) {
@@ -643,6 +1017,74 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           isScalarArg(args[0]!) &&
           isCellVectorArg(args[1]!) &&
           (args.length === 2 || isScalarArg(args[2]!))
+        );
+      case "CORREL":
+      case "COVAR":
+      case "PEARSON":
+      case "COVARIANCE.P":
+      case "COVARIANCE.S":
+      case "INTERCEPT":
+      case "RSQ":
+      case "SLOPE":
+      case "STEYX":
+        return args.length === 2 && args.every((arg) => isWasmSafe(arg, true));
+      case "MEDIAN":
+        return args.length >= 1 && args.every((arg) => isWasmSafe(arg, true));
+      case "MODE.MULT":
+        return args.length >= 1 && args.every((arg) => isWasmSafe(arg, true));
+      case "FREQUENCY":
+        return args.length === 2 && isWasmSafe(args[0]!, true) && isWasmSafe(args[1]!, true);
+      case "BESSELI":
+      case "BESSELJ":
+      case "BESSELK":
+      case "BESSELY":
+        return args.length === 2 && isScalarArg(args[0]!) && isScalarArg(args[1]!);
+      case "SMALL":
+      case "LARGE":
+      case "PERCENTILE":
+      case "PERCENTILE.INC":
+      case "PERCENTILE.EXC":
+      case "QUARTILE":
+      case "QUARTILE.INC":
+      case "QUARTILE.EXC":
+        return args.length === 2 && isWasmSafe(args[0]!, true) && isScalarArg(args[1]!);
+      case "PERCENTRANK":
+      case "PERCENTRANK.INC":
+      case "PERCENTRANK.EXC":
+        return (
+          (args.length === 2 || args.length === 3) &&
+          isWasmSafe(args[0]!, true) &&
+          isScalarArg(args[1]!) &&
+          (args.length === 2 || isScalarArg(args[2]!))
+        );
+      case "RANK":
+      case "RANK.EQ":
+      case "RANK.AVG":
+        return (
+          (args.length === 2 || args.length === 3) &&
+          isScalarArg(args[0]!) &&
+          isWasmSafe(args[1]!, true) &&
+          (args.length === 2 || isScalarArg(args[2]!))
+        );
+      case "FORECAST":
+      case "FORECAST.LINEAR":
+        return (
+          args.length === 3 &&
+          isScalarArg(args[0]!) &&
+          isWasmSafe(args[1]!, true) &&
+          isWasmSafe(args[2]!, true)
+        );
+      case "TREND":
+      case "GROWTH":
+      case "LINEST":
+      case "LOGEST":
+        return (
+          args.length >= 1 &&
+          args.length <= 4 &&
+          isWasmSafe(args[0]!, true) &&
+          (args.length < 2 || isWasmSafe(args[1]!, true)) &&
+          (args.length < 3 || isWasmSafe(args[2]!, true)) &&
+          (args.length < 4 || isScalarArg(args[3]!))
         );
       case "XMATCH":
         return (
@@ -685,8 +1127,45 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           (args.length === 3 || isScalarArg(args[3]!))
         );
       case "DAYS":
+      case "DAYS360":
+      case "YEARFRAC":
+      case "DISC":
+      case "INTRATE":
+      case "RECEIVED":
+      case "PRICEDISC":
+      case "YIELDDISC":
+      case "COUPDAYBS":
+      case "COUPDAYS":
+      case "COUPDAYSNC":
+      case "COUPNCD":
+      case "COUPNUM":
+      case "COUPPCD":
+      case "PRICEMAT":
+      case "YIELDMAT":
+      case "ODDFPRICE":
+      case "ODDFYIELD":
+      case "ODDLPRICE":
+      case "ODDLYIELD":
+      case "PRICE":
+      case "YIELD":
+      case "DURATION":
+      case "MDURATION":
+      case "TBILLPRICE":
+      case "TBILLYIELD":
+      case "TBILLEQ":
+      case "ISOWEEKNUM":
+      case "TIMEVALUE":
       case "WEEKNUM":
         return args.every((arg) => isScalarArg(arg));
+      case "EXPAND":
+        return (
+          argc >= 2 &&
+          argc <= 4 &&
+          isWasmSafe(args[0]!, true) &&
+          isScalarArg(args[1]!) &&
+          (argc < 3 || isScalarArg(args[2]!)) &&
+          (argc < 4 || isScalarArg(args[3]!))
+        );
       case "WORKDAY":
         return args.length === 2
           ? args.every((arg) => isScalarArg(arg))
@@ -695,6 +1174,56 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         return args.length === 2
           ? args.every((arg) => isScalarArg(arg))
           : args.every((arg) => isScalarArg(arg));
+      case "WORKDAY.INTL":
+      case "NETWORKDAYS.INTL":
+        return args.every((arg) => isScalarArg(arg));
+      case "NUMBERVALUE":
+      case "TEXT":
+        return args.every((arg) => isScalarArg(arg));
+      case "PHONETIC":
+        return argc === 1 && (isScalarArg(args[0]!) || isCellRangeNode(args[0]!));
+      case "VALUETOTEXT":
+      case "TEXTBEFORE":
+      case "TEXTAFTER":
+      case "CHAR":
+      case "CODE":
+      case "UNICODE":
+      case "UNICHAR":
+      case "CLEAN":
+      case "ASC":
+      case "JIS":
+      case "DBCS":
+      case "BAHTTEXT":
+      case "TEXTSPLIT":
+      case "CONVERT":
+      case "EUROCONVERT":
+      case "BASE":
+      case "DECIMAL":
+      case "BIN2DEC":
+      case "BIN2HEX":
+      case "BIN2OCT":
+      case "DEC2BIN":
+      case "DEC2HEX":
+      case "DEC2OCT":
+      case "HEX2BIN":
+      case "HEX2DEC":
+      case "HEX2OCT":
+      case "OCT2BIN":
+      case "OCT2DEC":
+      case "OCT2HEX":
+      case "BITAND":
+      case "BITOR":
+      case "BITXOR":
+      case "BITLSHIFT":
+      case "BITRSHIFT":
+        return args.every((arg) => isScalarArg(arg));
+      case "TEXTJOIN":
+        return (
+          argc >= 3 &&
+          isScalarArg(args[0]!) &&
+          isScalarArg(args[1]!) &&
+          args.slice(2).every((arg) => isWasmSafe(arg, true) || isNativeSequenceArg(arg))
+        );
       case "REPLACE":
       case "SUBSTITUTE":
       case "REPT":
@@ -727,6 +1256,23 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           isCellRangeArg(args[0]!) &&
           args.slice(1).every((arg) => isScalarArg(arg))
         );
+      case "TRIMRANGE":
+        return (
+          argc >= 1 &&
+          argc <= 3 &&
+          isWasmSafe(args[0]!, true) &&
+          args.slice(1).every((arg) => isScalarArg(arg))
+        );
+      case "PROB":
+        return (
+          (argc === 3 || argc === 4) &&
+          isWasmSafe(args[0]!, true) &&
+          isWasmSafe(args[1]!, true) &&
+          isScalarArg(args[2]!) &&
+          (argc === 3 || isScalarArg(args[3]!))
+        );
+      case "TRIMMEAN":
+        return argc === 2 && isWasmSafe(args[0]!, true) && isScalarArg(args[1]!);
       case "LOOKUP":
         if (argc < 2 || argc > 3) {
           return false;
@@ -759,6 +1305,30 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
         return args
           .slice(1)
           .every((arg, index) => (index % 2 === 0 ? isCellRangeArg(arg) : isScalarArg(arg)));
+      case "IRR":
+        return (
+          (argc === 1 || argc === 2) &&
+          isCellRangeArg(args[0]!) &&
+          (argc === 1 || isScalarArg(args[1]!))
+        );
+      case "MIRR":
+        return (
+          argc === 3 && isCellRangeArg(args[0]!) && isScalarArg(args[1]!) && isScalarArg(args[2]!)
+        );
+      case "XNPV":
+        return (
+          argc === 3 &&
+          isScalarArg(args[0]!) &&
+          isCellRangeArg(args[1]!) &&
+          isCellRangeArg(args[2]!)
+        );
+      case "XIRR":
+        return (
+          (argc === 2 || argc === 3) &&
+          isCellRangeArg(args[0]!) &&
+          isCellRangeArg(args[1]!) &&
+          (argc === 2 || isScalarArg(args[2]!))
+        );
       case "SORTBY":
         if (args.length < 2) {
           return false;
@@ -818,10 +1388,12 @@ export function encodeBuiltin(name: string): BuiltinId {
   const builtins: Record<string, BuiltinId> = {
     SUM: BuiltinId.Sum,
     AVG: BuiltinId.Avg,
+    CHOOSE: BuiltinId.Choose,
     MIN: BuiltinId.Min,
     MAX: BuiltinId.Max,
     COUNT: BuiltinId.Count,
     COUNTA: BuiltinId.CountA,
+    COUNTBLANK: BuiltinId.Countblank,
     ABS: BuiltinId.Abs,
     SIN: BuiltinId.Sin,
     COS: BuiltinId.Cos,
@@ -844,12 +1416,15 @@ export function encodeBuiltin(name: string): BuiltinId {
     CEILING: BuiltinId.Ceiling,
     MOD: BuiltinId.Mod,
     IF: BuiltinId.If,
+    IFS: BuiltinId.Ifs,
     IFERROR: BuiltinId.Iferror,
     IFNA: BuiltinId.Ifna,
     NA: BuiltinId.Na,
     AND: BuiltinId.And,
     OR: BuiltinId.Or,
     NOT: BuiltinId.Not,
+    SWITCH: BuiltinId.Switch,
+    XOR: BuiltinId.Xor,
     LEN: BuiltinId.Len,
     CONCAT: BuiltinId.Concat,
     ISBLANK: BuiltinId.IsBlank,
@@ -859,15 +1434,22 @@ export function encodeBuiltin(name: string): BuiltinId {
     YEAR: BuiltinId.Year,
     MONTH: BuiltinId.Month,
     DAY: BuiltinId.Day,
+    DATEDIF: BuiltinId.Datedif,
     TIME: BuiltinId.Time,
     HOUR: BuiltinId.Hour,
     MINUTE: BuiltinId.Minute,
     SECOND: BuiltinId.Second,
     WEEKDAY: BuiltinId.Weekday,
     DAYS: BuiltinId.Days,
+    DAYS360: BuiltinId.Days360,
+    YEARFRAC: BuiltinId.Yearfrac,
+    ISOWEEKNUM: BuiltinId.Isoweeknum,
+    TIMEVALUE: BuiltinId.Timevalue,
     WEEKNUM: BuiltinId.Weeknum,
     WORKDAY: BuiltinId.Workday,
     NETWORKDAYS: BuiltinId.Networkdays,
+    "WORKDAY.INTL": BuiltinId.WorkdayIntl,
+    "NETWORKDAYS.INTL": BuiltinId.NetworkdaysIntl,
     EDATE: BuiltinId.Edate,
     EOMONTH: BuiltinId.Eomonth,
     REPLACE: BuiltinId.Replace,
@@ -880,23 +1462,160 @@ export function encodeBuiltin(name: string): BuiltinId {
     LEFT: BuiltinId.Left,
     RIGHT: BuiltinId.Right,
     MID: BuiltinId.Mid,
+    LEFTB: BuiltinId.Leftb,
+    RIGHTB: BuiltinId.Rightb,
+    MIDB: BuiltinId.Midb,
     TRIM: BuiltinId.Trim,
     UPPER: BuiltinId.Upper,
     LOWER: BuiltinId.Lower,
     FIND: BuiltinId.Find,
     SEARCH: BuiltinId.Search,
+    FINDB: BuiltinId.Findb,
+    LENB: BuiltinId.Lenb,
+    SEARCHB: BuiltinId.Searchb,
+    REPLACEB: BuiltinId.Replaceb,
+    ADDRESS: BuiltinId.Address,
+    DOLLAR: BuiltinId.Dollar,
+    DOLLARDE: BuiltinId.Dollarde,
+    DOLLARFR: BuiltinId.Dollarfr,
+    BASE: BuiltinId.Base,
+    DECIMAL: BuiltinId.Decimal,
+    BIN2DEC: BuiltinId.Bin2dec,
+    BIN2HEX: BuiltinId.Bin2hex,
+    BIN2OCT: BuiltinId.Bin2oct,
+    DEC2BIN: BuiltinId.Dec2bin,
+    DEC2HEX: BuiltinId.Dec2hex,
+    DEC2OCT: BuiltinId.Dec2oct,
+    HEX2BIN: BuiltinId.Hex2bin,
+    HEX2DEC: BuiltinId.Hex2dec,
+    HEX2OCT: BuiltinId.Hex2oct,
+    OCT2BIN: BuiltinId.Oct2bin,
+    OCT2DEC: BuiltinId.Oct2dec,
+    OCT2HEX: BuiltinId.Oct2hex,
+    BITAND: BuiltinId.Bitand,
+    BITOR: BuiltinId.Bitor,
+    BITXOR: BuiltinId.Bitxor,
+    BITLSHIFT: BuiltinId.Bitlshift,
+    BITRSHIFT: BuiltinId.Bitrshift,
+    CONVERT: BuiltinId.Convert,
+    EUROCONVERT: BuiltinId.Euroconvert,
+    BESSELI: BuiltinId.Besseli,
+    BESSELJ: BuiltinId.Besselj,
+    BESSELK: BuiltinId.Besselk,
+    BESSELY: BuiltinId.Bessely,
     VALUE: BuiltinId.Value,
+    CHAR: BuiltinId.Char,
+    CODE: BuiltinId.Code,
+    UNICODE: BuiltinId.Unicode,
+    UNICHAR: BuiltinId.Unichar,
+    CLEAN: BuiltinId.Clean,
+    ASC: BuiltinId.Asc,
+    JIS: BuiltinId.Jis,
+    DBCS: BuiltinId.Dbcs,
+    BAHTTEXT: BuiltinId.Bahttext,
+    SINH: BuiltinId.Sinh,
+    COSH: BuiltinId.Cosh,
+    TANH: BuiltinId.Tanh,
+    ASINH: BuiltinId.Asinh,
+    ACOSH: BuiltinId.Acosh,
+    ATANH: BuiltinId.Atanh,
+    ACOT: BuiltinId.Acot,
+    ACOTH: BuiltinId.Acoth,
+    COT: BuiltinId.Cot,
+    COTH: BuiltinId.Coth,
+    CSC: BuiltinId.Csc,
+    CSCH: BuiltinId.Csch,
+    SEC: BuiltinId.Sec,
+    SECH: BuiltinId.Sech,
+    SIGN: BuiltinId.Sign,
+    EVEN: BuiltinId.Even,
+    ODD: BuiltinId.Odd,
+    FACT: BuiltinId.Fact,
+    FACTDOUBLE: BuiltinId.Factdouble,
+    COMBIN: BuiltinId.Combin,
+    COMBINA: BuiltinId.Combina,
+    GCD: BuiltinId.Gcd,
+    LCM: BuiltinId.Lcm,
+    PRODUCT: BuiltinId.Product,
+    QUOTIENT: BuiltinId.Quotient,
+    GEOMEAN: BuiltinId.Geomean,
+    HARMEAN: BuiltinId.Harmean,
+    SUMSQ: BuiltinId.Sumsq,
+    "FLOOR.MATH": BuiltinId.FloorMath,
+    "FLOOR.PRECISE": BuiltinId.FloorPrecise,
+    "CEILING.MATH": BuiltinId.CeilingMath,
+    "CEILING.PRECISE": BuiltinId.CeilingPrecise,
+    "ISO.CEILING": BuiltinId.IsoCeiling,
+    TRUNC: BuiltinId.Trunc,
+    MROUND: BuiltinId.Mround,
+    SQRTPI: BuiltinId.Sqrtpi,
+    SERIESSUM: BuiltinId.Seriessum,
+    TEXTBEFORE: BuiltinId.Textbefore,
+    TEXTAFTER: BuiltinId.Textafter,
+    TEXTJOIN: BuiltinId.Textjoin,
+    TEXTSPLIT: BuiltinId.Textsplit,
+    TEXT: BuiltinId.Text,
+    PHONETIC: BuiltinId.Phonetic,
+    NUMBERVALUE: BuiltinId.Numbervalue,
+    VALUETOTEXT: BuiltinId.Valuetotext,
     TODAY: BuiltinId.Today,
     NOW: BuiltinId.Now,
     RAND: BuiltinId.Rand,
     MATCH: BuiltinId.Match,
+    CORREL: BuiltinId.Correl,
+    COVAR: BuiltinId.Covar,
+    PEARSON: BuiltinId.Pearson,
+    "COVARIANCE.P": BuiltinId.CovarianceP,
+    "COVARIANCE.S": BuiltinId.CovarianceS,
+    MEDIAN: BuiltinId.Median,
+    "MODE.MULT": BuiltinId.ModeMult,
+    FREQUENCY: BuiltinId.Frequency,
+    PROB: BuiltinId.Prob,
+    TRIMMEAN: BuiltinId.Trimmean,
+    SMALL: BuiltinId.Small,
+    LARGE: BuiltinId.Large,
+    PERCENTILE: BuiltinId.Percentile,
+    "PERCENTILE.INC": BuiltinId.PercentileInc,
+    "PERCENTILE.EXC": BuiltinId.PercentileExc,
+    PERCENTRANK: BuiltinId.Percentrank,
+    "PERCENTRANK.INC": BuiltinId.PercentrankInc,
+    "PERCENTRANK.EXC": BuiltinId.PercentrankExc,
+    QUARTILE: BuiltinId.Quartile,
+    "QUARTILE.INC": BuiltinId.QuartileInc,
+    "QUARTILE.EXC": BuiltinId.QuartileExc,
+    RANK: BuiltinId.Rank,
+    "RANK.EQ": BuiltinId.RankEq,
+    "RANK.AVG": BuiltinId.RankAvg,
+    FORECAST: BuiltinId.Forecast,
+    "FORECAST.LINEAR": BuiltinId.Forecast,
+    LINEST: BuiltinId.Linest,
+    LOGEST: BuiltinId.Logest,
+    INTERCEPT: BuiltinId.Intercept,
+    RSQ: BuiltinId.Rsq,
+    SLOPE: BuiltinId.Slope,
+    STEYX: BuiltinId.Steyx,
+    TREND: BuiltinId.Trend,
+    GROWTH: BuiltinId.Growth,
     INDEX: BuiltinId.Index,
     VLOOKUP: BuiltinId.Vlookup,
     HLOOKUP: BuiltinId.Hlookup,
     XMATCH: BuiltinId.Xmatch,
     XLOOKUP: BuiltinId.Xlookup,
     COUNTIF: BuiltinId.Countif,
+    "USE.THE.COUNTIF": BuiltinId.Countif,
     COUNTIFS: BuiltinId.Countifs,
+    DAVERAGE: BuiltinId.Daverage,
+    DCOUNT: BuiltinId.Dcount,
+    DCOUNTA: BuiltinId.Dcounta,
+    DGET: BuiltinId.Dget,
+    DMAX: BuiltinId.Dmax,
+    DMIN: BuiltinId.Dmin,
+    DPRODUCT: BuiltinId.Dproduct,
+    DSTDEV: BuiltinId.Dstdev,
+    DSTDEVP: BuiltinId.Dstdevp,
+    DSUM: BuiltinId.Dsum,
+    DVAR: BuiltinId.Dvar,
+    DVARP: BuiltinId.Dvarp,
     SUMIF: BuiltinId.Sumif,
     SUMIFS: BuiltinId.Sumifs,
     AVERAGEIF: BuiltinId.Averageif,
@@ -905,6 +1624,8 @@ export function encodeBuiltin(name: string): BuiltinId {
     SEQUENCE: BuiltinId.Sequence,
     FILTER: BuiltinId.Filter,
     UNIQUE: BuiltinId.Unique,
+    EXPAND: BuiltinId.Expand,
+    TRIMRANGE: BuiltinId.Trimrange,
     OFFSET: BuiltinId.Offset,
     TAKE: BuiltinId.Take,
     DROP: BuiltinId.Drop,
@@ -965,18 +1686,56 @@ export function encodeBuiltin(name: string): BuiltinId {
     "LOGNORM.INV": BuiltinId.LognormInv,
     "CONFIDENCE.NORM": BuiltinId.ConfidenceNorm,
     CONFIDENCE: BuiltinId.Confidence,
+    "CONFIDENCE.T": BuiltinId.ConfidenceT,
     EFFECT: BuiltinId.Effect,
     NOMINAL: BuiltinId.Nominal,
     PDURATION: BuiltinId.Pduration,
     RRI: BuiltinId.Rri,
     FV: BuiltinId.Fv,
+    FVSCHEDULE: BuiltinId.Fvschedule,
+    DB: BuiltinId.Db,
+    DDB: BuiltinId.Ddb,
+    VDB: BuiltinId.Vdb,
     PV: BuiltinId.Pv,
     PMT: BuiltinId.Pmt,
     NPER: BuiltinId.Nper,
+    RATE: BuiltinId.Rate,
     NPV: BuiltinId.Npv,
+    IRR: BuiltinId.Irr,
+    MIRR: BuiltinId.Mirr,
+    XNPV: BuiltinId.Xnpv,
+    XIRR: BuiltinId.Xirr,
     IPMT: BuiltinId.Ipmt,
     PPMT: BuiltinId.Ppmt,
     ISPMT: BuiltinId.Ispmt,
+    CUMIPMT: BuiltinId.Cumipmt,
+    CUMPRINC: BuiltinId.Cumprinc,
+    SLN: BuiltinId.Sln,
+    SYD: BuiltinId.Syd,
+    DISC: BuiltinId.Disc,
+    INTRATE: BuiltinId.Intrate,
+    RECEIVED: BuiltinId.Received,
+    COUPDAYBS: BuiltinId.Coupdaybs,
+    COUPDAYS: BuiltinId.Coupdays,
+    COUPDAYSNC: BuiltinId.Coupdaysnc,
+    COUPNCD: BuiltinId.Coupncd,
+    COUPNUM: BuiltinId.Coupnum,
+    COUPPCD: BuiltinId.Couppcd,
+    PRICEDISC: BuiltinId.Pricedisc,
+    YIELDDISC: BuiltinId.Yielddisc,
+    PRICEMAT: BuiltinId.Pricemat,
+    YIELDMAT: BuiltinId.Yieldmat,
+    ODDFPRICE: BuiltinId.Oddfprice,
+    ODDFYIELD: BuiltinId.Oddfyield,
+    ODDLPRICE: BuiltinId.Oddlprice,
+    ODDLYIELD: BuiltinId.Oddlyield,
+    PRICE: BuiltinId.Price,
+    YIELD: BuiltinId.Yield,
+    DURATION: BuiltinId.Duration,
+    MDURATION: BuiltinId.Mduration,
+    TBILLPRICE: BuiltinId.Tbillprice,
+    TBILLYIELD: BuiltinId.Tbillyield,
+    TBILLEQ: BuiltinId.Tbilleq,
     PERMUT: BuiltinId.Permut,
     PERMUTATIONA: BuiltinId.Permutationa,
     ERF: BuiltinId.Erf,
@@ -988,6 +1747,8 @@ export function encodeBuiltin(name: string): BuiltinId {
     GAMMALN: BuiltinId.Gammaln,
     "GAMMALN.PRECISE": BuiltinId.GammalnPrecise,
     GAMMA: BuiltinId.Gamma,
+    "GAMMA.INV": BuiltinId.GammaInv,
+    GAMMAINV: BuiltinId.Gammainv,
     EXPONDIST: BuiltinId.Expondist,
     "EXPON.DIST": BuiltinId.ExponDist,
     POISSON: BuiltinId.Poisson,
@@ -997,8 +1758,43 @@ export function encodeBuiltin(name: string): BuiltinId {
     GAMMADIST: BuiltinId.Gammadist,
     "GAMMA.DIST": BuiltinId.GammaDist,
     CHIDIST: BuiltinId.Chidist,
+    "LEGACY.CHIDIST": BuiltinId.LegacyChidist,
+    CHIINV: BuiltinId.Chiinv,
     "CHISQ.DIST.RT": BuiltinId.ChisqDistRt,
     "CHISQ.DIST": BuiltinId.ChisqDist,
+    "CHISQ.INV.RT": BuiltinId.ChisqInvRt,
+    "CHISQ.INV": BuiltinId.ChisqInv,
+    CHISQDIST: BuiltinId.Chisqdist,
+    CHISQINV: BuiltinId.Chisqinv,
+    "LEGACY.CHIINV": BuiltinId.LegacyChiinv,
+    "BETA.DIST": BuiltinId.BetaDist,
+    "BETA.INV": BuiltinId.BetaInv,
+    BETADIST: BuiltinId.Betadist,
+    BETAINV: BuiltinId.Betainv,
+    "F.DIST": BuiltinId.FDist,
+    "F.DIST.RT": BuiltinId.FDistRt,
+    "F.INV": BuiltinId.FInv,
+    "F.INV.RT": BuiltinId.FInvRt,
+    FDIST: BuiltinId.Fdist,
+    FINV: BuiltinId.Finv,
+    "LEGACY.FDIST": BuiltinId.LegacyFdist,
+    "LEGACY.FINV": BuiltinId.LegacyFinv,
+    "T.DIST": BuiltinId.TDist,
+    "T.DIST.RT": BuiltinId.TDistRt,
+    "T.DIST.2T": BuiltinId.TDist2T,
+    "T.INV": BuiltinId.TInv,
+    "T.INV.2T": BuiltinId.TInv2T,
+    TDIST: BuiltinId.Tdist,
+    TINV: BuiltinId.Tinv,
+    "CHISQ.TEST": BuiltinId.ChisqTest,
+    CHITEST: BuiltinId.Chitest,
+    "LEGACY.CHITEST": BuiltinId.LegacyChitest,
+    "F.TEST": BuiltinId.FTest,
+    FTEST: BuiltinId.Ftest,
+    "T.TEST": BuiltinId.TTest,
+    TTEST: BuiltinId.Ttest,
+    "Z.TEST": BuiltinId.ZTest,
+    ZTEST: BuiltinId.Ztest,
     BINOMDIST: BuiltinId.Binomdist,
     "BINOM.DIST": BuiltinId.BinomDist,
     "BINOM.DIST.RANGE": BuiltinId.BinomDistRange,
