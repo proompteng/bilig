@@ -1,0 +1,32 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+`bilig` is a `pnpm` monorepo. `apps/web` is the Vite/React shell, `apps/local-server` hosts local workbook sessions, and `apps/sync-server` handles sync services. Shared libraries live in `packages/`. Unit tests are usually in `src/__tests__/`, browser E2E tests in `e2e/tests`, architecture notes in `docs/`, and automation in `scripts/`.
+
+## Build, Test, and Development Commands
+Use Node `24+`, Bun, and `pnpm@10.32.1`.
+
+- `pnpm dev:web`: run the web shell.
+- `pnpm dev:web-local`: run the web shell and local server together.
+- `pnpm dev:sync`: run the sync server.
+- `pnpm build`: build all packages.
+- `pnpm lint`, `pnpm format`, `pnpm typecheck`: lint, format, and type-check.
+- `pnpm test`, `pnpm coverage`, `pnpm test:browser`: unit, coverage, and Playwright E2E runs.
+- `pnpm run ci`: full preflight, including generated-file and browser checks.
+
+## Coding Style & Naming Conventions
+Write strict TypeScript with ESM imports and explicit `.js` suffixes where the codebase already uses them. `oxfmt` enforces 2-space indentation, double quotes, and semicolons. Use `PascalCase` for React components and follow nearby filename conventions elsewhere. Avoid `any`; lint also fails on floating promises.
+
+## AssemblyScript & WASM
+`packages/wasm-kernel` is the repo’s AssemblyScript/WebAssembly fast path. AssemblyScript is TypeScript-like, but it compiles ahead-of-time to a static WebAssembly binary and exposes WebAssembly-native types such as `i32` and `f64`, so do not treat `assembly/` code like general app TypeScript. Keep kernel code deterministic, numeric, and explicit about value shapes. In this repo, JS remains the semantic source of truth; AssemblyScript is used to accelerate closed, computation-heavy formula families only after JS parity and differential tests are green. Build the kernel with `pnpm wasm:build`.
+
+## Testing Guidelines
+Add colocated unit tests as `*.test.ts` or `*.test.tsx`; keep browser flows in `e2e/tests/*.pw.ts`. Coverage gates apply to `packages/core`, `packages/formula`, and `packages/renderer`: 90% lines, statements, and functions, 70% branches. For targeted work, use filters such as `pnpm --filter @bilig/web test`.
+
+## Infra & Cluster Operations
+Cluster infrastructure for `bilig` does not live in this repo. The GitOps source of truth is the sibling repo at `~/github.com/lab`, especially `argocd/applications/bilig`, with supporting infra automation under `ansible/`. Make infra changes there and let Argo CD reconcile; use direct cluster mutation only for debugging or emergencies.
+
+From `~/github.com/lab`, validate with `bun run lint:argocd`, `bun run tf:plan`, and `bun run ansible` as needed. Use `kubectl config current-context`, then inspect with `kubectl -n bilig get deploy,svc,pods`, `kubectl -n bilig logs -f deploy/bilig-web`, and `kubectl -n bilig rollout status deployment/bilig-sync`. For Argo CD, use `argocd context`, `argocd app get bilig`, `argocd app diff bilig`, and, when intentionally rolling out GitOps changes, `argocd app sync bilig && argocd app wait bilig --sync --health`.
+
+## Commit & Pull Request Guidelines
+Use Conventional Commits: `type(scope): summary`, for example `feat(grid): add fill-handle drag selection`. Keep commits focused and imperative. By default, you may commit and push directly to `main` once local CI is green, preferably via `pnpm run ci`. When a PR is used, include scope, risk, linked issues, commands run, and screenshots for `apps/web` UI changes. If you edit protocol or formula inventory sources, regenerate and commit the outputs, because CI fails on dirty tracked files.

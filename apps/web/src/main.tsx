@@ -4,6 +4,7 @@ import { ZeroProvider } from "@rocicorp/zero/react";
 import { loadRuntimeConfig, mutators, schema } from "@bilig/zero-sync";
 import { App } from "./App";
 import { loadRuntimeSession } from "./session";
+import { ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-connection";
 
 import "@glideapps/glide-data-grid/index.css";
 import "./index.css";
@@ -16,9 +17,11 @@ void Promise.all([loadRuntimeConfig(), loadRuntimeSession()])
       <React.StrictMode>
         <ZeroProvider
           cacheURL={config.zeroCacheUrl}
+          auth={session.authToken}
           userID={session.userId}
           schema={schema}
           mutators={mutators}
+          maxHeaderLength={ZERO_CONNECT_MAX_HEADER_LENGTH}
         >
           <App config={config} />
         </ZeroProvider>
