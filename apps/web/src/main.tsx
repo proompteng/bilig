@@ -16,6 +16,7 @@ void Promise.all([loadRuntimeConfig(), loadRuntimeSession()])
       <React.StrictMode>
         <ZeroProvider
           cacheURL={config.zeroCacheUrl}
+          auth={session.authToken}
           userID={session.userId}
           schema={schema}
           mutators={mutators}
