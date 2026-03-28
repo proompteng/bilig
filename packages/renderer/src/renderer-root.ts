@@ -148,13 +148,7 @@ function normalizeNodeForRenderer(node: ReactNode): ReactNode {
   const kind = kindOfNode(node);
   const normalizedChildren = normalizeChildrenForRenderer(node.props.children);
   if (kind === "wrapper") {
-    if (normalizedChildren.length === 0) {
-      return null;
-    }
-    if (normalizedChildren.length === 1) {
-      return normalizedChildren[0];
-    }
-    return React.createElement(React.Fragment, null, ...normalizedChildren);
+    return null;
   }
   return React.cloneElement(node, undefined, ...normalizedChildren);
 }
@@ -162,6 +156,10 @@ function normalizeNodeForRenderer(node: ReactNode): ReactNode {
 function normalizeChildrenForRenderer(node: ReactNode): React.ReactNode[] {
   const normalized: React.ReactNode[] = [];
   for (const child of toRenderableChildren(node)) {
+    if (isRendererElement(child) && kindOfNode(child) === "wrapper") {
+      normalized.push(...normalizeChildrenForRenderer(child.props.children));
+      continue;
+    }
     const next = normalizeNodeForRenderer(child);
     if (next === null || next === undefined || next === false) {
       continue;
