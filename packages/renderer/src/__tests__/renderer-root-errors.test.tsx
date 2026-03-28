@@ -186,17 +186,12 @@ describe("renderer root error handling", () => {
   it("rejects render and unmount when compat throws synchronously", async () => {
     const syncRenderError = new Error("sync render failed");
     const syncUnmountError = new Error("sync unmount failed");
-    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
-      (element, callback) => {
-        if (element === null) {
-          throw syncUnmountError;
-        }
-        if (React.isValidElement(element)) {
-          throw syncRenderError;
-        }
-        callback();
-      },
-    );
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock((element) => {
+      if (element === null) {
+        throw syncUnmountError;
+      }
+      throw syncRenderError;
+    });
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-sync-throws" });
     await engine.ready();
     const root = createWorkbookRendererRoot(engine);

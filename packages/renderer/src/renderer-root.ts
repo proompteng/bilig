@@ -30,6 +30,14 @@ function scheduleCommitSettlement(
   });
 }
 
+function schedulePostCommitObservation(container: WorkbookContainer, finish: () => void): void {
+  // Let compat finish queuing any synchronous post-callback work before we start
+  // watching the macrotask window for deferred errors.
+  queueMicrotask(() => {
+    scheduleCommitSettlement(container, finish);
+  });
+}
+
 function isNamedComponentType(value: unknown): value is { displayName?: string; name?: string } {
   return typeof value === "function";
 }
@@ -236,7 +244,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, normalizedElement, () => {
-            scheduleCommitSettlement(container, finish);
+            schedulePostCommitObservation(container, finish);
           });
         } catch (error) {
           settled = true;
@@ -270,7 +278,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, null, () => {
-            scheduleCommitSettlement(container, finish);
+            schedulePostCommitObservation(container, finish);
           });
         } catch (error) {
           settled = true;
