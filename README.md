@@ -356,6 +356,7 @@ pnpm run ci
 
 - Forgejo Actions is the primary CI surface for this repo via `.forgejo/workflows/forgejo-ci.yml`.
 - GitHub Actions mirrors the verification contract in `.github/workflows/ci.yml`.
+- Image publishing does not run on GitHub Actions for this repo.
 - The workflow is strict: frozen lockfile install, full `pnpm run ci`, artifact budget checks, browser smoke, and a tracked-file cleanliness check.
 - Forgejo runners must expose the `bilig-ci` label, provide Node `24.x`, and allow Corepack to activate `pnpm 10.32.1` during the job.
 - GitHub Actions runs the same repository contract on Node 22 and Node 24.11.1 so compatibility drift is visible before release.
