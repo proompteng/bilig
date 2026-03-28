@@ -41,7 +41,9 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
+    "@bilig/workbook-domain": "workspace:*",
     "@rocicorp/zero": "1.0.0",
     "zod": "^4.3.6"
   },

@@ -43,8 +43,8 @@
   "dependencies": {
     "@bilig/binary-protocol": "workspace:*",
     "@bilig/core": "workspace:*",
-    "@bilig/crdt": "workspace:*",
-    "@bilig/protocol": "workspace:*"
+    "@bilig/protocol": "workspace:*",
+    "@bilig/workbook-domain": "workspace:*"
   },
   "engines": {
     "node": ">=24.0.0"

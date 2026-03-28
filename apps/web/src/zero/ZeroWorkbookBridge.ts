@@ -1,7 +1,7 @@
-/* oxlint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-type-assertion */
+/* oxlint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { parseCellAddress } from "@bilig/formula";
 import type { CellSnapshot, Viewport } from "@bilig/protocol";
-import type { Zero } from "@rocicorp/zero";
+import type { TypedView, Zero } from "@rocicorp/zero";
 import { queries } from "@bilig/zero-sync";
 import type { WorkerViewportCache } from "../viewport-cache.js";
 import { TileSubscriptionManager, type TileViewportAttachment } from "./tile-subscriptions.js";
@@ -11,7 +11,9 @@ import {
   buildStylesById,
   createViewportProjectionState,
   projectViewportPatch,
+  type NumberFormatRow,
   type SheetRow,
+  type StyleRow,
   type ViewportProjectionState,
   type WorkbookRow,
 } from "./viewport-projector.js";
@@ -32,15 +34,19 @@ interface ViewportSubscriptionHandle {
   dispose(): void;
 }
 
-function bindView(view: any, listener: (value: any) => void): () => void {
+function bindView<T>(view: TypedView<T>, listener: (value: T) => void): () => void {
   listener(view.data);
-  const unsubscribe = view.addListener((value: any) => {
-    listener(value);
+  const unsubscribe = view.addListener((value) => {
+    listener(value as T);
   });
   return () => {
     unsubscribe();
     view.destroy();
   };
+}
+
+function asTypedView<T>(view: unknown): TypedView<T> {
+  return view as TypedView<T>;
 }
 
 export class ZeroWorkbookBridge {
@@ -61,17 +67,19 @@ export class ZeroWorkbookBridge {
   private readonly selectionProjectionState = createViewportProjectionState();
 
   constructor(
-    zero: Zero,
+    private readonly zero: Zero,
     private readonly documentId: string,
     private readonly cache: WorkerViewportCache,
     private readonly onError: (error: unknown) => void,
   ) {
-    this.tileManager = new TileSubscriptionManager(zero, documentId, onError);
+    this.tileManager = new TileSubscriptionManager(this.zero, documentId, onError);
 
     this.destroyers.push(
       bindView(
-        zero.materialize(queries.workbooks.get({ documentId })),
-        (value: any) => {
+        asTypedView<WorkbookRow | undefined>(
+          this.zero.materialize(queries.workbooks.get({ documentId })),
+        ),
+        (value) => {
           this.workbookRow = value ?? null;
           this.emitWorkbook();
         },
@@ -79,18 +87,22 @@ export class ZeroWorkbookBridge {
     );
     this.destroyers.push(
       bindView(
-        zero.materialize(queries.sheets.byWorkbook({ documentId })),
-        (value: any) => {
+        asTypedView<readonly SheetRow[]>(
+          this.zero.materialize(queries.sheets.byWorkbook({ documentId })),
+        ),
+        (value) => {
           this.sheetRows = value;
-          this.cache.setKnownSheets(value.map((sheet: any) => sheet.name));
+          this.cache.setKnownSheets(value.map((sheet) => sheet.name));
           this.emitWorkbook();
         },
       ),
     );
     this.destroyers.push(
       bindView(
-        zero.materialize(queries.styles.byWorkbook({ documentId })),
-        (value: any) => {
+        asTypedView<readonly StyleRow[]>(
+          this.zero.materialize(queries.styles.byWorkbook({ documentId })),
+        ),
+        (value) => {
           this.stylesById = buildStylesById(value);
           this.reprojectAll();
         },
@@ -98,8 +110,10 @@ export class ZeroWorkbookBridge {
     );
     this.destroyers.push(
       bindView(
-        zero.materialize(queries.numberFormats.byWorkbook({ documentId })),
-        (value: any) => {
+        asTypedView<readonly NumberFormatRow[]>(
+          this.zero.materialize(queries.numberFormats.byWorkbook({ documentId })),
+        ),
+        (value) => {
           this.numberFormatCodeById = buildNumberFormatCodeById(value);
           this.reprojectAll();
         },
@@ -141,6 +155,7 @@ export class ZeroWorkbookBridge {
     ) {
       return;
     }
+
     this.selection = { sheetName, address };
     this.selectionAttachment?.dispose();
     const parsed = parseCellAddress(address, sheetName);
@@ -251,10 +266,12 @@ export class ZeroWorkbookBridge {
 
   private currentSelectedCell(): CellSnapshot | null {
     const selectedSource =
-      this.selectionAttachment?.getData().sourceCells.find(
-        (cell) =>
-          cell.sheetName === this.selection.sheetName && cell.address === this.selection.address,
-      ) ?? null;
+      this.selectionAttachment
+        ?.getData()
+        .sourceCells.find(
+          (cell) =>
+            cell.sheetName === this.selection.sheetName && cell.address === this.selection.address,
+        ) ?? null;
     return buildSelectedCellSnapshot(
       this.selection.sheetName,
       this.selection.address,

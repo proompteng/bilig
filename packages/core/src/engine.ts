@@ -60,13 +60,12 @@ import {
   hydrateReplicaState,
   markBatchApplied,
   shouldApplyBatch,
-  type EngineOp,
-  type EngineOpBatch,
   type OpOrder,
   type ReplicaSnapshot,
   type ReplicaVersionSnapshot,
   type ReplicaState,
 } from "@bilig/crdt";
+import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { CellFlags } from "./cell-store.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";

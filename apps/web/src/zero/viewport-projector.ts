@@ -179,18 +179,11 @@ function pointInRange(
   range: Pick<StyleRangeRow, "startRow" | "endRow" | "startCol" | "endCol">,
 ): boolean {
   return (
-    row >= range.startRow &&
-    row <= range.endRow &&
-    col >= range.startCol &&
-    col <= range.endCol
+    row >= range.startRow && row <= range.endRow && col >= range.startCol && col <= range.endCol
   );
 }
 
-function resolveStyleId(
-  row: number,
-  col: number,
-  styleRanges: readonly StyleRangeRow[],
-): string {
+function resolveStyleId(row: number, col: number, styleRanges: readonly StyleRangeRow[]): string {
   let styleId = DEFAULT_STYLE_ID;
   for (const range of styleRanges) {
     if (pointInRange(row, col, range)) {
@@ -291,7 +284,11 @@ function buildAxisEntries(
     if (entryEnd < start || entry.startIndex > end) {
       continue;
     }
-    for (let index = Math.max(start, entry.startIndex); index <= Math.min(end, entryEnd); index += 1) {
+    for (
+      let index = Math.max(start, entry.startIndex);
+      index <= Math.min(end, entryEnd);
+      index += 1
+    ) {
       const axisEntry: AxisViewportEntry = { index, size: entry.size ?? defaultSize };
       if (entry.hidden !== undefined) {
         axisEntry.hidden = entry.hidden;
@@ -309,7 +306,10 @@ function buildAxisPatches(
   defaultSize: number,
   previous: Map<number, string>,
   full: boolean,
-): { patches: Array<{ index: number; size: number; hidden: boolean }>; signatures: Map<number, string> } {
+): {
+  patches: Array<{ index: number; size: number; hidden: boolean }>;
+  signatures: Map<number, string>;
+} {
   const signatures = new Map<number, string>();
   const patches: Array<{ index: number; size: number; hidden: boolean }> = [];
   for (let index = start; index <= end; index += 1) {
@@ -399,8 +399,8 @@ export function projectViewportPatch(
   const nextCellSignatures = new Map<string, string>();
   const sourceByAddress = new Map(input.sourceCells.map((row) => [row.address, row]));
   const computedByAddress = new Map(input.computedCells.map((row) => [row.address, row]));
-  const sortedStyleRanges = [...input.styleRanges].sort(compareRectRanges);
-  const sortedFormatRanges = [...input.formatRanges].sort(compareRectRanges);
+  const sortedStyleRanges = input.styleRanges.toSorted(compareRectRanges);
+  const sortedFormatRanges = input.formatRanges.toSorted(compareRectRanges);
 
   for (let row = input.viewport.rowStart; row <= input.viewport.rowEnd; row += 1) {
     for (let col = input.viewport.colStart; col <= input.viewport.colEnd; col += 1) {

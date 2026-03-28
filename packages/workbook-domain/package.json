@@ -1,15 +1,14 @@
 {
-  "name": "@bilig/storage-server",
+  "name": "@bilig/workbook-domain",
   "version": "0.1.0",
-  "description": "Server-side storage abstractions for bilig snapshots, logs, and sync persistence.",
+  "description": "Transport-neutral workbook domain ops and batch types for bilig.",
   "keywords": [
     "bilig",
-    "server",
+    "domain",
     "spreadsheet",
-    "storage",
-    "sync"
+    "workbook"
   ],
-  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/storage-server#readme",
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/workbook-domain#readme",
   "bugs": {
     "url": "https://github.com/proompteng/bilig/issues"
   },
@@ -17,7 +16,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/proompteng/bilig.git",
-    "directory": "packages/storage-server"
+    "directory": "packages/workbook-domain"
   },
   "files": [
     "dist",
@@ -41,7 +40,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bilig/workbook-domain": "workspace:*"
+    "@bilig/protocol": "workspace:*"
   },
   "engines": {
     "node": ">=24.0.0"

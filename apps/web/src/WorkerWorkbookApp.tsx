@@ -55,10 +55,7 @@ import type {
   WorkbookWorkerBootstrapOptions,
   WorkbookWorkerStateSnapshot,
 } from "./worker-runtime.js";
-import {
-  ZeroWorkbookBridge,
-  type ZeroWorkbookBridgeState,
-} from "./zero/ZeroWorkbookBridge.js";
+import { ZeroWorkbookBridge, type ZeroWorkbookBridgeState } from "./zero/ZeroWorkbookBridge.js";
 
 type EditingMode = "idle" | "cell" | "formula";
 
@@ -390,23 +387,6 @@ function formatSyncStateLabel(state: WorkbookWorkerStateSnapshot["syncState"]): 
   }
   const exhaustiveState: never = state;
   return exhaustiveState;
-}
-
-function formatConnectionStateLabel(state: ReturnType<typeof useConnectionState>): string {
-  switch (state.name) {
-    case "connected":
-      return "Live";
-    case "connecting":
-      return "Connecting";
-    case "disconnected":
-      return "Read-only";
-    case "needs-auth":
-      return "Auth required";
-    case "error":
-      return "Error";
-    case "closed":
-      return "Closed";
-  }
 }
 
 function toErrorMessage(error: unknown): string {
@@ -1045,7 +1025,10 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       switch (method) {
         case "setCellValue": {
           const [sheetName, address, value] = args;
-          await runZeroMutation(mutators.workbook.setCellValue({ documentId, sheetName, address, value }));
+          await runZeroMutation(
+            mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
+          );
+          await refreshSelectedCell();
           return undefined;
         }
         case "setCellFormula": {
@@ -1058,26 +1041,31 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               formula,
             }),
           );
+          await refreshSelectedCell();
           return undefined;
         }
         case "clearCell": {
           const [sheetName, address] = args;
           await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
+          await refreshSelectedCell();
           return undefined;
         }
         case "renderCommit": {
           const [ops] = args;
           await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
+          await refreshSelectedCell();
           return undefined;
         }
         case "fillRange": {
           const [source, target] = args;
           await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
+          await refreshSelectedCell();
           return undefined;
         }
         case "copyRange": {
           const [source, target] = args;
           await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
+          await refreshSelectedCell();
           return undefined;
         }
         case "updateColumnWidth": {
@@ -1090,6 +1078,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               width,
             }),
           );
+          await refreshSelectedCell();
           return undefined;
         }
         case "autofitColumn": {
@@ -1106,16 +1095,19 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               width,
             }),
           );
+          await refreshSelectedCell();
           return width;
         }
         case "setRangeStyle": {
           const [range, patch] = args;
           await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
+          await refreshSelectedCell();
           return undefined;
         }
         case "clearRangeStyle": {
           const [range, fields] = args;
           await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
+          await refreshSelectedCell();
           return undefined;
         }
         case "setRangeNumberFormat": {
@@ -1127,11 +1119,13 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               format,
             }),
           );
+          await refreshSelectedCell();
           return undefined;
         }
         case "clearRangeNumberFormat": {
           const [range] = args;
           await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
+          await refreshSelectedCell();
           return undefined;
         }
         default:
@@ -1275,10 +1269,11 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
     applyOptimisticCellEdit(selection.sheetName, selection.address, { kind: "clear" });
     setEditorValue("");
     setEditingMode("idle");
-    void invokeMutation("clearCell", selection.sheetName, selection.address)
-      .catch((error: unknown) => {
+    void invokeMutation("clearCell", selection.sheetName, selection.address).catch(
+      (error: unknown) => {
         setRuntimeError(error instanceof Error ? error.message : String(error));
-      });
+      },
+    );
   }, [
     applyOptimisticCellEdit,
     invokeMutation,
@@ -1325,10 +1320,9 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (ops.length === 0) {
         return;
       }
-      void invokeMutation("renderCommit", ops)
-        .catch((error: unknown) => {
-          setRuntimeError(error instanceof Error ? error.message : String(error));
-        });
+      void invokeMutation("renderCommit", ops).catch((error: unknown) => {
+        setRuntimeError(error instanceof Error ? error.message : String(error));
+      });
       setEditorSelectionBehavior("select-all");
       setEditingMode("idle");
     },
@@ -1458,7 +1452,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
 
   const statusModeLabel = runtimeConfig.baseUrl
     ? formatSyncStateLabel(runtimeState?.syncState ?? "local-only")
-    : formatConnectionStateLabel(connectionState);
+    : "Local";
 
   const statusBar = (
     <>
@@ -1943,7 +1937,8 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       ) : null}
       {bridgeEnabled && !writesAllowed ? (
         <div className="border-b border-[#d2e3fc] bg-[#eef4ff] px-3 py-2 text-sm text-[#174ea6]">
-          Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection recovers.
+          Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection
+          recovers.
         </div>
       ) : null}
       {loading || !workerHandle || !runtimeState || bridgeLoading ? (
@@ -1987,10 +1982,14 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           onClearCell={clearSelectedCell}
           onColumnWidthChange={(columnIndex: number, newSize: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, newSize);
-            void invokeMutation("updateColumnWidth", selection.sheetName, columnIndex, newSize)
-              .catch((error: unknown) => {
-                setRuntimeError(error instanceof Error ? error.message : String(error));
-              });
+            void invokeMutation(
+              "updateColumnWidth",
+              selection.sheetName,
+              columnIndex,
+              newSize,
+            ).catch((error: unknown) => {
+              setRuntimeError(error instanceof Error ? error.message : String(error));
+            });
           }}
           onCommitEdit={commitEditor}
           onCopyRange={copySelectionRange}

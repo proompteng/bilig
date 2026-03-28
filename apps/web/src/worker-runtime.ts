@@ -1,6 +1,6 @@
 import type { CommitOp, EngineReplicaSnapshot, EngineSyncClient } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
-import type { EngineOpBatch } from "@bilig/crdt";
+import type { EngineOpBatch } from "@bilig/workbook-domain";
 import { formatAddress, indexToColumn } from "@bilig/formula";
 import { createBrowserPersistence, type BrowserPersistence } from "@bilig/storage-browser";
 import {

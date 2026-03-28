@@ -21,7 +21,7 @@ import type {
   WorkbookSortDirection,
   WorkbookSortKey,
   WorkbookTableOp,
-} from "@bilig/crdt";
+} from "@bilig/workbook-domain";
 
 export const PROTOCOL_MAGIC = 0x424c4731;
 export const PROTOCOL_VERSION = 1;

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../../node_modules/vite/bin/vite.js",
-    "build": "tsc -p tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
-    "preview": "node ../../node_modules/vite/bin/vite.js preview",
-    "preview:ci": "pnpm -w build && bun ../../scripts/run-vite-preview.ts 4179"
+    "dev": "node -e \"console.error('@bilig/playground is deprecated. Use @bilig/web instead.'); process.exit(1)\"",
+    "build": "node -e \"console.error('@bilig/playground is deprecated. Use @bilig/web instead.'); process.exit(1)\"",
+    "preview": "node -e \"console.error('@bilig/playground is deprecated. Use @bilig/web instead.'); process.exit(1)\"",
+    "preview:ci": "node -e \"console.error('@bilig/playground is deprecated. Use @bilig/web instead.'); process.exit(1)\""
   },
   "dependencies": {
     "@bilig/benchmarks": "workspace:*",

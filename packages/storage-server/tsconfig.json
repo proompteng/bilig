@@ -6,7 +6,7 @@
   },
   "references": [
     {
-      "path": "../crdt"
+      "path": "../workbook-domain"
     }
   ],
   "include": ["src/**/*"],

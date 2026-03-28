@@ -1,5 +1,5 @@
 import { decodeFrame, encodeFrame, type ProtocolFrame } from "@bilig/binary-protocol";
-import type { EngineOpBatch } from "@bilig/crdt";
+import type { EngineOpBatch } from "@bilig/workbook-domain";
 
 export interface UpstreamSyncRelay {
   send(batch: EngineOpBatch): Promise<void>;

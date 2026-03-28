@@ -1,5 +1,5 @@
-/* oxlint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-type-assertion */
-import type { Zero } from "@rocicorp/zero";
+/* oxlint-disable @typescript-eslint/no-unsafe-type-assertion */
+import type { TypedView, Zero } from "@rocicorp/zero";
 import type { Viewport } from "@bilig/protocol";
 import { queries } from "@bilig/zero-sync";
 import type {
@@ -46,9 +46,9 @@ export interface TileViewportAttachment {
   dispose(): void;
 }
 
-function bindView(view: any, onData: (data: any) => void): () => void {
-  const unsubscribe = view.addListener((data: any) => {
-    onData(data);
+function bindView<T>(view: TypedView<T>, onData: (data: T) => void): () => void {
+  const unsubscribe = view.addListener((data) => {
+    onData(data as T);
   });
   return () => {
     unsubscribe();
@@ -89,6 +89,72 @@ function toTileDescriptors(sheetName: string, viewport: Viewport): TileDescripto
   return descriptors;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value as Record<string, unknown>;
+}
+
+function normalizeCellSourceRow(value: unknown): CellSourceRow {
+  const row = asRecord(value);
+  const normalized: CellSourceRow = {
+    workbookId: String(row["workbookId"]),
+    sheetName: String(row["sheetName"]),
+    address: String(row["address"]),
+    inputValue: row["inputValue"],
+  };
+  if (typeof row["rowNum"] === "number") {
+    normalized.rowNum = row["rowNum"];
+  }
+  if (typeof row["colNum"] === "number") {
+    normalized.colNum = row["colNum"];
+  }
+  if (typeof row["formula"] === "string") {
+    normalized.formula = row["formula"];
+  }
+  if (typeof row["format"] === "string") {
+    normalized.format = row["format"];
+  }
+  if (typeof row["explicitFormatId"] === "string") {
+    normalized.explicitFormatId = row["explicitFormatId"];
+  }
+  return normalized;
+}
+
+function normalizeComputedCellRow(value: unknown): ComputedCellRow {
+  const row = asRecord(value);
+  const normalized: ComputedCellRow = {
+    workbookId: String(row["workbookId"]),
+    sheetName: String(row["sheetName"]),
+    address: String(row["address"]),
+    value: row["value"] as ComputedCellRow["value"],
+    flags: Number(row["flags"] ?? 0),
+    version: Number(row["version"] ?? 0),
+  };
+  if (typeof row["rowNum"] === "number") {
+    normalized.rowNum = row["rowNum"];
+  }
+  if (typeof row["colNum"] === "number") {
+    normalized.colNum = row["colNum"];
+  }
+  return normalized;
+}
+
+function normalizeAxisMetadataRow(value: unknown): AxisMetadataRow {
+  const row = asRecord(value);
+  const normalized: AxisMetadataRow = {
+    workbookId: String(row["workbookId"]),
+    sheetName: String(row["sheetName"]),
+    startIndex: Number(row["startIndex"] ?? 0),
+    count: Number(row["count"] ?? 0),
+  };
+  if (typeof row["size"] === "number") {
+    normalized.size = row["size"];
+  }
+  if (typeof row["hidden"] === "boolean") {
+    normalized.hidden = row["hidden"];
+  }
+  return normalized;
+}
+
 export class TileSubscriptionManager {
   private readonly tiles = new Map<string, TileHandle>();
 
@@ -98,20 +164,23 @@ export class TileSubscriptionManager {
     private readonly onError: (error: unknown) => void,
   ) {}
 
-  subscribeViewport(sheetName: string, viewport: Viewport, listener: () => void): TileViewportAttachment {
+  subscribeViewport(
+    sheetName: string,
+    viewport: Viewport,
+    listener: () => void,
+  ): TileViewportAttachment {
     const descriptors = toTileDescriptors(sheetName, viewport);
     const detachments = descriptors.map((descriptor) => this.attachTile(descriptor, listener));
     return {
       getData: () =>
         detachments.reduce<TileData>(
           (aggregate, handle) => {
-            const data = handle.data;
-            aggregate.sourceCells.push(...data.sourceCells);
-            aggregate.computedCells.push(...data.computedCells);
-            aggregate.rowMetadata.push(...data.rowMetadata);
-            aggregate.columnMetadata.push(...data.columnMetadata);
-            aggregate.styleRanges.push(...data.styleRanges);
-            aggregate.formatRanges.push(...data.formatRanges);
+            aggregate.sourceCells.push(...handle.data.sourceCells);
+            aggregate.computedCells.push(...handle.data.computedCells);
+            aggregate.rowMetadata.push(...handle.data.rowMetadata);
+            aggregate.columnMetadata.push(...handle.data.columnMetadata);
+            aggregate.styleRanges.push(...handle.data.styleRanges);
+            aggregate.formatRanges.push(...handle.data.formatRanges);
             return aggregate;
           },
           {
@@ -172,10 +241,10 @@ export class TileSubscriptionManager {
     };
 
     const destroyers: Array<() => void> = [];
-    const pushView = (view: any, assign: (value: any) => void) => {
+    const pushView = <T>(view: TypedView<T>, assign: (value: T) => void) => {
       assign(view.data);
       destroyers.push(
-        bindView(view, (value: any) => {
+        bindView(view, (value) => {
           assign(value);
           notifyListeners();
         }),
@@ -192,9 +261,9 @@ export class TileSubscriptionManager {
           colStart: descriptor.colStart,
           colEnd: descriptor.colEnd,
         }),
-      ),
-      (value: any) => {
-        data.sourceCells = [...value];
+      ) as unknown as TypedView<readonly unknown[]>,
+      (value) => {
+        data.sourceCells = value.map((row) => normalizeCellSourceRow(row));
       },
     );
     pushView(
@@ -207,9 +276,9 @@ export class TileSubscriptionManager {
           colStart: descriptor.colStart,
           colEnd: descriptor.colEnd,
         }),
-      ),
-      (value: any) => {
-        data.computedCells = [...value];
+      ) as unknown as TypedView<readonly unknown[]>,
+      (value) => {
+        data.computedCells = value.map((row) => normalizeComputedCellRow(row));
       },
     );
     pushView(
@@ -220,9 +289,9 @@ export class TileSubscriptionManager {
           rowStart: descriptor.rowStart,
           rowEnd: descriptor.rowEnd,
         }),
-      ),
-      (value: any) => {
-        data.rowMetadata = [...value];
+      ) as unknown as TypedView<readonly unknown[]>,
+      (value) => {
+        data.rowMetadata = value.map((row) => normalizeAxisMetadataRow(row));
       },
     );
     pushView(
@@ -233,9 +302,9 @@ export class TileSubscriptionManager {
           colStart: descriptor.colStart,
           colEnd: descriptor.colEnd,
         }),
-      ),
-      (value: any) => {
-        data.columnMetadata = [...value];
+      ) as unknown as TypedView<readonly unknown[]>,
+      (value) => {
+        data.columnMetadata = value.map((row) => normalizeAxisMetadataRow(row));
       },
     );
     pushView(
@@ -248,8 +317,8 @@ export class TileSubscriptionManager {
           colStart: descriptor.colStart,
           colEnd: descriptor.colEnd,
         }),
-      ),
-      (value: any) => {
+      ) as unknown as TypedView<readonly StyleRangeRow[]>,
+      (value) => {
         data.styleRanges = [...value];
       },
     );
@@ -263,8 +332,8 @@ export class TileSubscriptionManager {
           colStart: descriptor.colStart,
           colEnd: descriptor.colEnd,
         }),
-      ),
-      (value: any) => {
+      ) as unknown as TypedView<readonly FormatRangeRow[]>,
+      (value) => {
         data.formatRanges = [...value];
       },
     );

@@ -1,4 +1,4 @@
-import type { EngineOpBatch } from "@bilig/crdt";
+import type { EngineOpBatch } from "@bilig/workbook-domain";
 
 export interface StoredBatch {
   documentId: string;

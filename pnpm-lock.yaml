@@ -86,6 +86,9 @@ importers:
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../../packages/workbook-domain
       '@fastify/websocket':
         specifier: 11.2.0
         version: 11.2.0
@@ -195,9 +198,6 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../../packages/crdt
       '@bilig/formula':
         specifier: workspace:*
         version: link:../../packages/formula
@@ -213,6 +213,9 @@ importers:
       '@bilig/storage-browser':
         specifier: workspace:*
         version: link:../../packages/storage-browser
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../../packages/workbook-domain
       '@bilig/worker-transport':
         specifier: workspace:*
         version: link:../../packages/worker-transport
@@ -268,12 +271,12 @@ importers:
 
   packages/binary-protocol:
     dependencies:
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../crdt
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/core:
     dependencies:
@@ -289,12 +292,18 @@ importers:
       '@bilig/wasm-kernel':
         specifier: workspace:*
         version: link:../wasm-kernel
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/crdt:
     dependencies:
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/excel-fixtures:
     dependencies:
@@ -356,9 +365,9 @@ importers:
 
   packages/storage-server:
     dependencies:
-      '@bilig/crdt':
+      '@bilig/workbook-domain':
         specifier: workspace:*
-        version: link:../crdt
+        version: link:../workbook-domain
 
   packages/wasm-kernel:
     dependencies:
@@ -370,6 +379,12 @@ importers:
         specifier: 0.28.10
         version: 0.28.10
 
+  packages/workbook-domain:
+    dependencies:
+      '@bilig/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/worker-transport:
     dependencies:
       '@bilig/binary-protocol':
@@ -378,18 +393,24 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../core
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../crdt
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/zero-sync:
     dependencies:
+      '@bilig/formula':
+        specifier: workspace:*
+        version: link:../formula
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
       '@rocicorp/zero':
         specifier: 1.0.0
         version: 1.0.0(@opentelemetry/core@2.6.1(@opentelemetry/api@1.9.1))

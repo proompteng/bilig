@@ -16,7 +16,7 @@ The current unresolved architecture items are:
 
 - `9` canonical rows are not `implemented-wasm-production`
 - `@bilig/crdt` does not yet model rename sheet, reorder sheets, explicit range ops, or explicit structured-reference and spill-owner ops
-- `apps/web` imports `apps/playground` CSS and TS sources
+- `apps/web` no longer depends on playground CSS or TS sources
 - `packages/storage-server` is in-memory only
 
 ## Runtime layers
@@ -43,7 +43,7 @@ flowchart LR
 - `@bilig/agent-api` uses binary framing around JSON payloads.
 - `apps/local-server` is a live worksheet host with range read/write/fill/copy/paste, export/import, and subscription support.
 - `apps/sync-server` returns `NOT_IMPLEMENTED` for most remote worksheet requests unless a worksheet executor is injected.
-- `apps/web` imports `apps/playground` CSS and includes playground sources in its TS config.
+- `apps/web` no longer depends on playground source or styling in its TS config.
 - viewport patch payloads are JSON inside a `Uint8Array` rather than a dedicated typed binary channel.
 
 ## Formula architecture
@@ -102,7 +102,7 @@ Next work in code order:
 2. add `renameSheet`, `reorderSheets`, first-class range ops where needed, and explicit metadata-binding ops
 3. replace in-memory-only remote storage and partial remote worksheet execution with a closed sync-server path
 4. replace JSON-in-binary-envelope viewport and agent payloads with typed codecs
-5. packageize the browser shell away from `apps/playground`
+5. retire the deprecated playground shell from active product flows
 6. finish remaining product-shell grid parity such as row resize, hide/unhide, context menus, and frozen-pane UX
 
 ## Repo boundary

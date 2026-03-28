@@ -14,11 +14,5 @@
     { "path": "../../packages/binary-protocol" },
     { "path": "../../packages/zero-sync" }
   ],
-  "include": [
-    "src/**/*",
-    "vite.config.ts",
-    "../playground/src/**/*.ts",
-    "../playground/src/**/*.tsx"
-  ],
-  "exclude": ["../playground/src/**/*.test.ts", "../playground/src/**/*.test.tsx"]
+  "include": ["src/**/*", "vite.config.ts"]
 }

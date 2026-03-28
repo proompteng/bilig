@@ -1,7 +1,11 @@
 import type { GridEngineLike } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport } from "@bilig/protocol";
-import { decodeViewportPatch, type WorkerEngineClient } from "@bilig/worker-transport";
+import {
+  decodeViewportPatch,
+  type ViewportPatch,
+  type WorkerEngineClient,
+} from "@bilig/worker-transport";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const DEFAULT_STYLE_ID = "style-0";
@@ -16,12 +20,12 @@ interface CellSubscription {
 export class WorkerViewportCache implements GridEngineLike {
   readonly workbook = {
     getSheet: (sheetName: string) => {
+      if (!this.knownSheets.has(sheetName)) {
+        return undefined;
+      }
       const entries = [...this.cellSnapshots.values()].filter(
         (snapshot) => snapshot.sheetName === sheetName,
       );
-      if (entries.length === 0) {
-        return undefined;
-      }
       return {
         grid: {
           forEachCellEntry: (listener: (cellIndex: number, row: number, col: number) => void) => {
@@ -43,6 +47,7 @@ export class WorkerViewportCache implements GridEngineLike {
   private readonly listeners = new Set<() => void>();
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>();
+  private readonly knownSheets = new Set<string>();
 
   constructor(private readonly client: WorkerEngineClient) {}
 
@@ -74,15 +79,23 @@ export class WorkerViewportCache implements GridEngineLike {
 
   setCellSnapshot(snapshot: CellSnapshot): void {
     const key = `${snapshot.sheetName}!${snapshot.address}`;
+    this.knownSheets.add(snapshot.sheetName);
     this.cellSnapshots.set(key, snapshot);
     this.notifyCellSubscriptions(new Set([key]));
     this.listeners.forEach((listener) => listener());
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
+    this.knownSheets.add(sheetName);
     const widths = { ...this.columnWidthsBySheet.get(sheetName) };
     widths[columnIndex] = width;
     this.columnWidthsBySheet.set(sheetName, widths);
+    this.listeners.forEach((listener) => listener());
+  }
+
+  setKnownSheets(sheetNames: readonly string[]): void {
+    this.knownSheets.clear();
+    sheetNames.forEach((sheetName) => this.knownSheets.add(sheetName));
     this.listeners.forEach((listener) => listener());
   }
 
@@ -113,7 +126,12 @@ export class WorkerViewportCache implements GridEngineLike {
     });
   }
 
+  applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
+    return this.applyPatch(patch);
+  }
+
   private applyPatch(patch: ReturnType<typeof decodeViewportPatch>): readonly { cell: CellItem }[] {
+    this.knownSheets.add(patch.viewport.sheetName);
     if (patch.full) {
       this.clearViewportRegion(patch.viewport.sheetName, patch.viewport);
       this.clearAxisRange(

@@ -44,7 +44,8 @@
     "@bilig/crdt": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
-    "@bilig/wasm-kernel": "workspace:*"
+    "@bilig/wasm-kernel": "workspace:*",
+    "@bilig/workbook-domain": "workspace:*"
   },
   "engines": {
     "node": ">=24.0.0"

@@ -1,14 +1,26 @@
 export { mutators } from "./mutators.js";
 export {
+  applyBatchArgsSchema,
+  clearRangeNumberFormatArgsSchema,
+  clearRangeStyleArgsSchema,
   clearCellArgsSchema,
   rangeMutationArgsSchema,
   replaceSnapshotArgsSchema,
   renderCommitArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
+  setRangeNumberFormatArgsSchema,
+  setRangeStyleArgsSchema,
   updateColumnWidthArgsSchema,
 } from "./mutators.js";
-export { queries, workbookQueryArgsSchema } from "./queries.js";
+export {
+  queries,
+  workbookCellArgsSchema,
+  workbookColumnTileArgsSchema,
+  workbookQueryArgsSchema,
+  workbookRowTileArgsSchema,
+  workbookTileArgsSchema,
+} from "./queries.js";
 export {
   loadRuntimeConfig,
   parseRuntimeConfig,

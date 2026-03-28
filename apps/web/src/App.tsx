@@ -6,6 +6,7 @@ const FALLBACK_CONFIG: BiligRuntimeConfig = {
   zeroCacheUrl: "http://127.0.0.1:4848",
   defaultDocumentId: "bilig-demo",
   persistState: true,
+  zeroViewportBridge: true,
 };
 
 export function App({ config = FALLBACK_CONFIG }: { config?: BiligRuntimeConfig }) {

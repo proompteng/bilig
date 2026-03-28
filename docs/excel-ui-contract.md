@@ -5,7 +5,7 @@
 - the default `apps/web` surface renders a product shell with name box, formula bar, worksheet grid, sheet tabs, and status bar only
 - the product shell no longer renders playground preset chrome, replica panels, or metrics panels
 - the product shell is worker-backed by default
-- browser smoke exists for both `apps/playground` and `apps/web`
+- browser smoke exists for the `apps/web` product shell
 - the product shell uses a single visible formula-input row and a compact footer and status treatment
 - type-to-replace, F2 edit, Enter and Tab commit movement, product-shell clipboard copy and paste, fill handle propagation, column resize, and column autofit are now shipped in the product shell
 - structural rows that are not closed:

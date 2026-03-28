@@ -15,6 +15,7 @@
     "@bilig/crdt": "workspace:*",
     "@bilig/excel-import": "workspace:*",
     "@bilig/protocol": "workspace:*",
+    "@bilig/workbook-domain": "workspace:*",
     "@fastify/websocket": "11.2.0",
     "fastify": "5.6.0"
   }

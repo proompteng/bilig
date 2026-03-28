@@ -9,7 +9,7 @@
 - the UI consumes worker-derived viewport patches and worker-sourced sync state
 - the browser can target a local app server runtime and fall back to local-only worker execution
 - current browser-runtime gaps:
-  - `apps/web` imports `apps/playground` CSS and includes playground sources in its TS config
+  - `apps/web` no longer depends on playground CSS or sources
   - the viewport patch payload is JSON inside a byte envelope rather than a dedicated typed binary codec
   - remote catch-up and durable multiplayer depend on unfinished sync-server work
 
@@ -43,7 +43,7 @@ The browser runtime should not become the place where workbook semantics are re-
 - the worker owns engine, authoritative ops, WASM, persistence, and live sync
 - the worker derives viewport and render patches for visible ranges instead of exposing raw engine state directly to the grid
 - the browser defaults to the local app server loop when available and falls back cleanly to local-only worker execution when it is not
-- `apps/web` no longer depends on `apps/playground` source or styling
+- `apps/web` no longer depends on deprecated playground source or styling
 - viewport patch payloads and agent payloads use typed codecs instead of JSON-in-binary wrappers
 
 ## Exit gate

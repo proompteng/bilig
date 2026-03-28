@@ -3,6 +3,7 @@ export interface BiligRuntimeConfig {
   zeroCacheUrl: string;
   defaultDocumentId: string;
   persistState: boolean;
+  zeroViewportBridge: boolean;
 }
 
 const DEFAULT_CONFIG: BiligRuntimeConfig = {
@@ -10,6 +11,7 @@ const DEFAULT_CONFIG: BiligRuntimeConfig = {
   zeroCacheUrl: "http://127.0.0.1:4848",
   defaultDocumentId: "bilig-demo",
   persistState: true,
+  zeroViewportBridge: true,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,6 +40,10 @@ export function parseRuntimeConfig(value: unknown): BiligRuntimeConfig {
       typeof value["persistState"] === "boolean"
         ? value["persistState"]
         : DEFAULT_CONFIG.persistState,
+    zeroViewportBridge:
+      typeof value["zeroViewportBridge"] === "boolean"
+        ? value["zeroViewportBridge"]
+        : DEFAULT_CONFIG.zeroViewportBridge,
   };
 }
 

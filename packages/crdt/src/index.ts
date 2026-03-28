@@ -1,128 +1,53 @@
 import type {
-  CellRangeRef,
-  CellNumberFormatRecord,
-  CellStyleRecord,
-  LiteralInput,
-  WorkbookAxisEntrySnapshot,
-  WorkbookCalculationSettingsSnapshot,
-  WorkbookDefinedNameValueSnapshot,
-  WorkbookPivotValueSnapshot,
-  WorkbookVolatileContextSnapshot,
-} from "@bilig/protocol";
+  Clock as WorkbookDomainClock,
+  EngineOp as WorkbookDomainEngineOp,
+  EngineOpBatch as WorkbookDomainEngineOpBatch,
+  OpId as WorkbookDomainOpId,
+  ReplicaId as WorkbookDomainReplicaId,
+  WorkbookAxisEntryOp as WorkbookDomainWorkbookAxisEntryOp,
+  WorkbookCellNumberFormatOp as WorkbookDomainWorkbookCellNumberFormatOp,
+  WorkbookCellStyleOp as WorkbookDomainWorkbookCellStyleOp,
+  WorkbookOp as WorkbookDomainWorkbookOp,
+  WorkbookOpBatch as WorkbookDomainWorkbookOpBatch,
+  WorkbookSortDirection as WorkbookDomainWorkbookSortDirection,
+  WorkbookSortKey as WorkbookDomainWorkbookSortKey,
+  WorkbookStructuralAxis as WorkbookDomainWorkbookStructuralAxis,
+  WorkbookTableOp as WorkbookDomainWorkbookTableOp,
+  WorkbookTxn as WorkbookDomainWorkbookTxn,
+} from "@bilig/workbook-domain";
 
-export type ReplicaId = string;
-export type OpId = string;
-
-export interface Clock {
-  counter: number;
-}
-
-export type WorkbookStructuralAxis = "row" | "column";
-export type WorkbookSortDirection = "asc" | "desc";
-
-export interface WorkbookTableOp {
-  name: string;
-  sheetName: string;
-  startAddress: string;
-  endAddress: string;
-  columnNames: string[];
-  headerRow: boolean;
-  totalsRow: boolean;
-}
-
-export interface WorkbookSortKey {
-  keyAddress: string;
-  direction: WorkbookSortDirection;
-}
-
-export interface WorkbookAxisEntryOp extends WorkbookAxisEntrySnapshot {}
-export interface WorkbookCellStyleOp extends CellStyleRecord {}
-export interface WorkbookCellNumberFormatOp extends CellNumberFormatRecord {}
-
-export type WorkbookOp =
-  | { kind: "upsertWorkbook"; name: string }
-  | { kind: "setWorkbookMetadata"; key: string; value: LiteralInput }
-  | { kind: "setCalculationSettings"; settings: WorkbookCalculationSettingsSnapshot }
-  | { kind: "setVolatileContext"; context: WorkbookVolatileContextSnapshot }
-  | { kind: "upsertSheet"; name: string; order: number }
-  | { kind: "deleteSheet"; name: string }
-  | {
-      kind: "insertRows";
-      sheetName: string;
-      start: number;
-      count: number;
-      entries?: WorkbookAxisEntryOp[];
-    }
-  | { kind: "deleteRows"; sheetName: string; start: number; count: number }
-  | { kind: "moveRows"; sheetName: string; start: number; count: number; target: number }
-  | {
-      kind: "insertColumns";
-      sheetName: string;
-      start: number;
-      count: number;
-      entries?: WorkbookAxisEntryOp[];
-    }
-  | { kind: "deleteColumns"; sheetName: string; start: number; count: number }
-  | { kind: "moveColumns"; sheetName: string; start: number; count: number; target: number }
-  | {
-      kind: "updateRowMetadata";
-      sheetName: string;
-      start: number;
-      count: number;
-      size: number | null;
-      hidden: boolean | null;
-    }
-  | {
-      kind: "updateColumnMetadata";
-      sheetName: string;
-      start: number;
-      count: number;
-      size: number | null;
-      hidden: boolean | null;
-    }
-  | { kind: "setFreezePane"; sheetName: string; rows: number; cols: number }
-  | { kind: "clearFreezePane"; sheetName: string }
-  | { kind: "setFilter"; sheetName: string; range: CellRangeRef }
-  | { kind: "clearFilter"; sheetName: string; range: CellRangeRef }
-  | { kind: "setSort"; sheetName: string; range: CellRangeRef; keys: WorkbookSortKey[] }
-  | { kind: "clearSort"; sheetName: string; range: CellRangeRef }
-  | { kind: "setCellValue"; sheetName: string; address: string; value: LiteralInput }
-  | { kind: "setCellFormula"; sheetName: string; address: string; formula: string }
-  | { kind: "setCellFormat"; sheetName: string; address: string; format: string | null }
-  | { kind: "upsertCellStyle"; style: WorkbookCellStyleOp }
-  | { kind: "upsertCellNumberFormat"; format: WorkbookCellNumberFormatOp }
-  | { kind: "setStyleRange"; range: CellRangeRef; styleId: string }
-  | { kind: "setFormatRange"; range: CellRangeRef; formatId: string }
-  | { kind: "clearCell"; sheetName: string; address: string }
-  | { kind: "upsertDefinedName"; name: string; value: WorkbookDefinedNameValueSnapshot }
-  | { kind: "deleteDefinedName"; name: string }
-  | { kind: "upsertTable"; table: WorkbookTableOp }
-  | { kind: "deleteTable"; name: string }
-  | { kind: "upsertSpillRange"; sheetName: string; address: string; rows: number; cols: number }
-  | { kind: "deleteSpillRange"; sheetName: string; address: string }
-  | {
-      kind: "upsertPivotTable";
-      name: string;
-      sheetName: string;
-      address: string;
-      source: CellRangeRef;
-      groupBy: string[];
-      values: WorkbookPivotValueSnapshot[];
-      rows: number;
-      cols: number;
-    }
-  | { kind: "deletePivotTable"; sheetName: string; address: string };
-
-export type EngineOp = WorkbookOp;
-
-export interface WorkbookOpBatch {
-  id: OpId;
-  replicaId: ReplicaId;
-  clock: Clock;
-  ops: WorkbookOp[];
-}
-
-export type EngineOpBatch = WorkbookOpBatch;
+// Replica-state helpers remain in this package. Workbook semantic op types now live in
+// `@bilig/workbook-domain` and are re-exported here only as a compatibility bridge.
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type Clock = WorkbookDomainClock;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type EngineOp = WorkbookDomainEngineOp;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type EngineOpBatch = WorkbookDomainEngineOpBatch;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type OpId = WorkbookDomainOpId;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type ReplicaId = WorkbookDomainReplicaId;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookAxisEntryOp = WorkbookDomainWorkbookAxisEntryOp;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookCellNumberFormatOp = WorkbookDomainWorkbookCellNumberFormatOp;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookCellStyleOp = WorkbookDomainWorkbookCellStyleOp;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookOp = WorkbookDomainWorkbookOp;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookOpBatch = WorkbookDomainWorkbookOpBatch;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookSortDirection = WorkbookDomainWorkbookSortDirection;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookSortKey = WorkbookDomainWorkbookSortKey;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookStructuralAxis = WorkbookDomainWorkbookStructuralAxis;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookTableOp = WorkbookDomainWorkbookTableOp;
+/** @deprecated Import from `@bilig/workbook-domain` instead. */
+export type WorkbookTxn = WorkbookDomainWorkbookTxn;
 
 export interface ReplicaState {
   replicaId: ReplicaId;

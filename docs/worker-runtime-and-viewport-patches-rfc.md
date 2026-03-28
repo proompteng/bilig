@@ -10,7 +10,7 @@ The current browser runtime implements these RFC items:
 
 The remaining runtime items are:
 
-- package cleanliness between `apps/web` and `apps/playground`
+- retire the deprecated `apps/playground` package from active product flows
 - stronger region-oriented patch subscriptions and rollout hardening
 - typed patch codecs instead of JSON payloads inside a byte envelope
 - full reconnect and remote-catch-up behavior once sync-server closes more of the multiplayer path
@@ -103,7 +103,7 @@ The remaining improvement is codec quality and region-subscription hardening.
 1. finish worker boot and reconnect contract cleanup
 2. harden region-based subscriptions for the visible grid
 3. replace JSON patch payloads with typed codecs
-4. packageize `apps/web` away from `apps/playground`
+4. retire the deprecated playground shell and keep `apps/web` as the product surface
 5. harden reconnect, restore, and browser test coverage
 
 ## Exit gate

@@ -41,8 +41,8 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bilig/crdt": "workspace:*",
-    "@bilig/protocol": "workspace:*"
+    "@bilig/protocol": "workspace:*",
+    "@bilig/workbook-domain": "workspace:*"
   },
   "engines": {
     "node": ">=24.0.0"

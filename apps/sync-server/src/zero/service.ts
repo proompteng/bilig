@@ -1,7 +1,15 @@
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { schema } from "@bilig/zero-sync";
-import { queries, workbookQueryArgsSchema } from "@bilig/zero-sync";
+import {
+  queries,
+  workbookCellArgsSchema,
+  workbookColumnTileArgsSchema,
+  workbookQueryArgsSchema,
+  workbookRowTileArgsSchema,
+  workbookTileArgsSchema,
+} from "@bilig/zero-sync";
 import type { FastifyRequest } from "fastify";
+import { resolveSessionIdentity } from "../session.js";
 import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./db.js";
 import { handleServerMutator } from "./server-mutators.js";
 import { ensureZeroSyncSchema } from "./store.js";
@@ -80,8 +88,56 @@ class EnabledZeroSyncService implements ZeroSyncService {
   }
 
   async handleQuery(request: FastifyRequest): Promise<unknown> {
+    const session = resolveSessionIdentity(request);
     const queryLookup = {
-      "workbooks.byId": queries.workbooks.byId,
+      "workbooks.get": {
+        query: queries.workbooks.get,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbooks.byId": {
+        query: queries.workbooks.byId,
+        schema: workbookQueryArgsSchema,
+      },
+      "sheets.byWorkbook": {
+        query: queries.sheets.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "cells.one": {
+        query: queries.cells.one,
+        schema: workbookCellArgsSchema,
+      },
+      "cells.tile": {
+        query: queries.cells.tile,
+        schema: workbookTileArgsSchema,
+      },
+      "computedCells.tile": {
+        query: queries.computedCells.tile,
+        schema: workbookTileArgsSchema,
+      },
+      "rowMetadata.tile": {
+        query: queries.rowMetadata.tile,
+        schema: workbookRowTileArgsSchema,
+      },
+      "columnMetadata.tile": {
+        query: queries.columnMetadata.tile,
+        schema: workbookColumnTileArgsSchema,
+      },
+      "styleRanges.intersectTile": {
+        query: queries.styleRanges.intersectTile,
+        schema: workbookTileArgsSchema,
+      },
+      "formatRanges.intersectTile": {
+        query: queries.formatRanges.intersectTile,
+        schema: workbookTileArgsSchema,
+      },
+      "styles.byWorkbook": {
+        query: queries.styles.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "numberFormats.byWorkbook": {
+        query: queries.numberFormats.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
     } as const;
 
     return await handleQueryRequest(
@@ -90,7 +146,12 @@ class EnabledZeroSyncService implements ZeroSyncService {
           throw new Error(`Unknown Zero query: ${name}`);
         }
         const query = queryLookup[name];
-        return query.fn({ args: workbookQueryArgsSchema.parse(args), ctx: {} });
+        return query.query.fn({
+          // Zero's query registry erases the specific arg type when accessed through the name map.
+          // oxlint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+          args: query.schema.parse(args) as never,
+          ctx: { userID: session.userID },
+        });
       },
       schema,
       fastifyRequestToWebRequest(request),
@@ -98,11 +159,12 @@ class EnabledZeroSyncService implements ZeroSyncService {
   }
 
   async handleMutate(request: FastifyRequest): Promise<unknown> {
+    const session = resolveSessionIdentity(request);
     return await handleMutateRequest(
       this.dbProvider,
       (transact) =>
         transact(async (tx, name, args) => {
-          return await handleServerMutator(tx, name, args);
+          return await handleServerMutator(tx, name, args, session);
         }),
       fastifyRequestToWebRequest(request),
     );
