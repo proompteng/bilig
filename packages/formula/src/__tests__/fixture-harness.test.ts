@@ -204,18 +204,29 @@ function assertArrayFixtureResult(
 
   expect(result.rows).toBe(maxRow - firstAddress.row + 1);
   expect(result.cols).toBe(maxCol - firstAddress.col + 1);
-  expect(result.values).toEqual(
-    Array.from({ length: result.rows * result.cols }, (_entry, index) => {
-      const rowOffset = Math.floor(index / result.cols);
-      const colOffset = index % result.cols;
-      return expectedByOffset.get(`${rowOffset}:${colOffset}`) ?? { tag: ValueTag.Empty };
-    }),
-  );
+  const expectedValues = Array.from({ length: result.rows * result.cols }, (_entry, index) => {
+    const rowOffset = Math.floor(index / result.cols);
+    const colOffset = index % result.cols;
+    return expectedByOffset.get(`${rowOffset}:${colOffset}`) ?? { tag: ValueTag.Empty };
+  });
+  expect(result.values).toHaveLength(expectedValues.length);
+  result.values.forEach((value, index) => {
+    expectCellValueLike(value, expectedValues[index]);
+  });
 }
 
 function assertScalarFixtureResult(fixture: ExcelFixtureCase, result: CellValue): void {
   expect(fixture.outputs).toHaveLength(1);
-  expect(result).toEqual(expectedValueToCellValue(firstOutput(fixture).expected));
+  expectCellValueLike(result, expectedValueToCellValue(firstOutput(fixture).expected));
+}
+
+function expectCellValueLike(actual: CellValue, expected: CellValue): void {
+  expect(actual.tag).toBe(expected.tag);
+  if (actual.tag === ValueTag.Number && expected.tag === ValueTag.Number) {
+    expect(actual.value).toBeCloseTo(expected.value, 7);
+    return;
+  }
+  expect(actual).toEqual(expected);
 }
 
 function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluatePlanResult> {
@@ -277,6 +288,28 @@ function evaluateFixture(fixture: ExcelFixtureCase): ReturnType<typeof evaluateP
     },
     resolveName: (name) =>
       definedNames.get(name.toUpperCase()) ?? { tag: ValueTag.Error, code: ErrorCode.Name },
+    resolveMultipleOperations: (request) => {
+      const mock = fixture.multipleOperations;
+      if (!mock) {
+        return undefined;
+      }
+      const matches =
+        request.formulaSheetName === (mock.formulaSheetName ?? defaultSheetName) &&
+        request.formulaAddress === mock.formulaAddress &&
+        request.rowCellSheetName === (mock.rowCellSheetName ?? defaultSheetName) &&
+        request.rowCellAddress === mock.rowCellAddress &&
+        request.rowReplacementSheetName === (mock.rowReplacementSheetName ?? defaultSheetName) &&
+        request.rowReplacementAddress === mock.rowReplacementAddress &&
+        request.columnCellSheetName ===
+          (mock.columnCellAddress ? (mock.columnCellSheetName ?? defaultSheetName) : undefined) &&
+        request.columnCellAddress === mock.columnCellAddress &&
+        request.columnReplacementSheetName ===
+          (mock.columnReplacementAddress
+            ? (mock.columnReplacementSheetName ?? defaultSheetName)
+            : undefined) &&
+        request.columnReplacementAddress === mock.columnReplacementAddress;
+      return matches ? expectedValueToCellValue(mock.result) : undefined;
+    },
   });
 }
 

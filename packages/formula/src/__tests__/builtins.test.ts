@@ -1,11 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import { getBuiltin, getBuiltinId } from "../builtins.js";
+import { getLookupBuiltin } from "../builtins/lookup.js";
 import type { ArrayValue } from "../runtime-values.js";
 import {
   placeholderBuiltinNames,
   protocolPlaceholderBuiltinNames,
 } from "../builtins/placeholder.js";
+import {
+  clearExternalFunctionAdapters,
+  installExternalFunctionAdapter,
+} from "../external-function-adapter.js";
+
+afterEach(() => {
+  clearExternalFunctionAdapters();
+});
 
 describe("formula builtins", () => {
   it("supports CHOOSE, COUNTBLANK, and bitwise builtins", () => {
@@ -110,6 +119,169 @@ describe("formula builtins", () => {
     });
   });
 
+  it("supports Bessel engineering builtins", () => {
+    const BESSELI = getBuiltin("BESSELI")!;
+    const BESSELJ = getBuiltin("BESSELJ")!;
+    const BESSELK = getBuiltin("BESSELK")!;
+    const BESSELY = getBuiltin("BESSELY")!;
+    const expectNumeric = (value: CellValue, expected: number) => {
+      expect(value).toMatchObject({ tag: ValueTag.Number });
+      if (value.tag !== ValueTag.Number) {
+        throw new Error("Expected numeric builtin result");
+      }
+      expect(value.value).toBeCloseTo(expected, 7);
+    };
+
+    const besseli = BESSELI(
+      { tag: ValueTag.Number, value: 1.5 },
+      { tag: ValueTag.Number, value: 1 },
+    );
+    expectNumeric(besseli, 0.981666428);
+    const besselj = BESSELJ(
+      { tag: ValueTag.Number, value: 1.9 },
+      { tag: ValueTag.Number, value: 2 },
+    );
+    expectNumeric(besselj, 0.329925728);
+    const besselk = BESSELK(
+      { tag: ValueTag.Number, value: 1.5 },
+      { tag: ValueTag.Number, value: 1 },
+    );
+    expectNumeric(besselk, 0.277387804);
+    const bessely = BESSELY(
+      { tag: ValueTag.Number, value: 2.5 },
+      { tag: ValueTag.Number, value: 1 },
+    );
+    expectNumeric(bessely, 0.145918138);
+    expect(
+      BESSELK({ tag: ValueTag.Number, value: -1 }, { tag: ValueTag.Number, value: 1 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
+  it("supports CONVERT and EUROCONVERT", () => {
+    const CONVERT = getBuiltin("CONVERT")!;
+    const EUROCONVERT = getBuiltin("EUROCONVERT")!;
+
+    expect(
+      CONVERT(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.String, value: "mi", stringId: 1 },
+        { tag: ValueTag.String, value: "km", stringId: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 9.656064,
+    });
+    expect(
+      CONVERT(
+        { tag: ValueTag.Number, value: 68 },
+        { tag: ValueTag.String, value: "F", stringId: 3 },
+        { tag: ValueTag.String, value: "C", stringId: 4 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 20,
+    });
+    expect(
+      CONVERT(
+        { tag: ValueTag.Number, value: 2.5 },
+        { tag: ValueTag.String, value: "ft", stringId: 5 },
+        { tag: ValueTag.String, value: "sec", stringId: 6 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+
+    expect(
+      EUROCONVERT(
+        { tag: ValueTag.Number, value: 1.2 },
+        { tag: ValueTag.String, value: "DEM", stringId: 7 },
+        { tag: ValueTag.String, value: "EUR", stringId: 8 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 0.61,
+    });
+    const triangulated = EUROCONVERT(
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.String, value: "FRF", stringId: 9 },
+      { tag: ValueTag.String, value: "DEM", stringId: 7 },
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.Number, value: 3 },
+    );
+    expect(triangulated).toMatchObject({ tag: ValueTag.Number });
+    if (triangulated.tag !== ValueTag.Number) {
+      throw new Error("Expected EUROCONVERT result to be numeric");
+    }
+    expect(triangulated.value).toBeCloseTo(0.29728616, 12);
+    expect(
+      EUROCONVERT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "BAD", stringId: 10 },
+        { tag: ValueTag.String, value: "EUR", stringId: 8 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+
+    expect(
+      CONVERT(
+        { tag: ValueTag.Number, value: 32 },
+        { tag: ValueTag.String, value: "F", stringId: 11 },
+        { tag: ValueTag.String, value: "K", stringId: 12 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 273.15,
+    });
+    expect(
+      CONVERT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "F", stringId: 11 },
+        { tag: ValueTag.String, value: "m", stringId: 13 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(
+      CONVERT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "??", stringId: 14 },
+        { tag: ValueTag.String, value: "m", stringId: 13 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    });
+    expect(
+      EUROCONVERT(
+        { tag: ValueTag.Number, value: 3.5 },
+        { tag: ValueTag.String, value: "EUR", stringId: 8 },
+        { tag: ValueTag.String, value: "EUR", stringId: 8 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 3.5,
+    });
+    expect(
+      EUROCONVERT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "FRF", stringId: 9 },
+        { tag: ValueTag.String, value: "DEM", stringId: 7 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("supports boolean and string builtins and builtin ids", () => {
     expect(
       getBuiltin("AND")?.({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Empty }),
@@ -190,6 +362,75 @@ describe("formula builtins", () => {
 
     expect(getBuiltinId("sum")).toBe(BuiltinId.Sum);
     expect(getBuiltinId("concat")).toBe(BuiltinId.Concat);
+    expect(getBuiltinId("choose")).toBe(BuiltinId.Choose);
+    expect(getBuiltinId("countblank")).toBe(BuiltinId.Countblank);
+    expect(getBuiltinId("lenb")).toBe(BuiltinId.Lenb);
+    expect(getBuiltinId("leftb")).toBe(BuiltinId.Leftb);
+    expect(getBuiltinId("midb")).toBe(BuiltinId.Midb);
+    expect(getBuiltinId("rightb")).toBe(BuiltinId.Rightb);
+    expect(getBuiltinId("findb")).toBe(BuiltinId.Findb);
+    expect(getBuiltinId("searchb")).toBe(BuiltinId.Searchb);
+    expect(getBuiltinId("replaceb")).toBe(BuiltinId.Replaceb);
+    expect(getBuiltinId("address")).toBe(BuiltinId.Address);
+    expect(getBuiltinId("days360")).toBe(BuiltinId.Days360);
+    expect(getBuiltinId("dollar")).toBe(BuiltinId.Dollar);
+    expect(getBuiltinId("dollarde")).toBe(BuiltinId.Dollarde);
+    expect(getBuiltinId("dollarfr")).toBe(BuiltinId.Dollarfr);
+    expect(getBuiltinId("yearfrac")).toBe(BuiltinId.Yearfrac);
+    expect(getBuiltinId("isoweeknum")).toBe(BuiltinId.Isoweeknum);
+    expect(getBuiltinId("timevalue")).toBe(BuiltinId.Timevalue);
+    expect(getBuiltinId("textbefore")).toBe(BuiltinId.Textbefore);
+    expect(getBuiltinId("textafter")).toBe(BuiltinId.Textafter);
+    expect(getBuiltinId("textjoin")).toBe(BuiltinId.Textjoin);
+    expect(getBuiltinId("textsplit")).toBe(BuiltinId.Textsplit);
+    expect(getBuiltinId("correl")).toBe(BuiltinId.Correl);
+    expect(getBuiltinId("covar")).toBe(BuiltinId.Covar);
+    expect(getBuiltinId("pearson")).toBe(BuiltinId.Pearson);
+    expect(getBuiltinId("covariance.p")).toBe(BuiltinId.CovarianceP);
+    expect(getBuiltinId("covariance.s")).toBe(BuiltinId.CovarianceS);
+    expect(getBuiltinId("forecast")).toBe(BuiltinId.Forecast);
+    expect(getBuiltinId("intercept")).toBe(BuiltinId.Intercept);
+    expect(getBuiltinId("median")).toBe(BuiltinId.Median);
+    expect(getBuiltinId("small")).toBe(BuiltinId.Small);
+    expect(getBuiltinId("large")).toBe(BuiltinId.Large);
+    expect(getBuiltinId("percentile")).toBe(BuiltinId.Percentile);
+    expect(getBuiltinId("percentile.inc")).toBe(BuiltinId.PercentileInc);
+    expect(getBuiltinId("percentile.exc")).toBe(BuiltinId.PercentileExc);
+    expect(getBuiltinId("percentrank")).toBe(BuiltinId.Percentrank);
+    expect(getBuiltinId("percentrank.inc")).toBe(BuiltinId.PercentrankInc);
+    expect(getBuiltinId("percentrank.exc")).toBe(BuiltinId.PercentrankExc);
+    expect(getBuiltinId("quartile")).toBe(BuiltinId.Quartile);
+    expect(getBuiltinId("quartile.inc")).toBe(BuiltinId.QuartileInc);
+    expect(getBuiltinId("quartile.exc")).toBe(BuiltinId.QuartileExc);
+    expect(getBuiltinId("mode.mult")).toBe(BuiltinId.ModeMult);
+    expect(getBuiltinId("frequency")).toBe(BuiltinId.Frequency);
+    expect(getBuiltinId("rank")).toBe(BuiltinId.Rank);
+    expect(getBuiltinId("rank.eq")).toBe(BuiltinId.RankEq);
+    expect(getBuiltinId("rank.avg")).toBe(BuiltinId.RankAvg);
+    expect(getBuiltinId("rsq")).toBe(BuiltinId.Rsq);
+    expect(getBuiltinId("slope")).toBe(BuiltinId.Slope);
+    expect(getBuiltinId("steyx")).toBe(BuiltinId.Steyx);
+    expect(getBuiltinId("disc")).toBe(BuiltinId.Disc);
+    expect(getBuiltinId("intrate")).toBe(BuiltinId.Intrate);
+    expect(getBuiltinId("received")).toBe(BuiltinId.Received);
+    expect(getBuiltinId("irr")).toBe(BuiltinId.Irr);
+    expect(getBuiltinId("mirr")).toBe(BuiltinId.Mirr);
+    expect(getBuiltinId("xnpv")).toBe(BuiltinId.Xnpv);
+    expect(getBuiltinId("xirr")).toBe(BuiltinId.Xirr);
+    expect(getBuiltinId("base")).toBe(BuiltinId.Base);
+    expect(getBuiltinId("decimal")).toBe(BuiltinId.Decimal);
+    expect(getBuiltinId("convert")).toBe(BuiltinId.Convert);
+    expect(getBuiltinId("euroconvert")).toBe(BuiltinId.Euroconvert);
+    expect(getBuiltinId("bitand")).toBe(BuiltinId.Bitand);
+    expect(getBuiltinId("bitor")).toBe(BuiltinId.Bitor);
+    expect(getBuiltinId("bitxor")).toBe(BuiltinId.Bitxor);
+    expect(getBuiltinId("bitlshift")).toBe(BuiltinId.Bitlshift);
+    expect(getBuiltinId("bitrshift")).toBe(BuiltinId.Bitrshift);
+    expect(getBuiltinId("besseli")).toBe(BuiltinId.Besseli);
+    expect(getBuiltinId("besselj")).toBe(BuiltinId.Besselj);
+    expect(getBuiltinId("besselk")).toBe(BuiltinId.Besselk);
+    expect(getBuiltinId("bessely")).toBe(BuiltinId.Bessely);
+    expect(getBuiltinId("use.the.countif")).toBe(BuiltinId.Countif);
     expect(getBuiltinId("")).toBeUndefined();
     expect(getBuiltin("missing")).toBeUndefined();
   });
@@ -624,6 +865,15 @@ describe("formula builtins", () => {
         { tag: ValueTag.Number, value: 16 },
       ),
     ).toEqual({ tag: ValueTag.Number, value: 31 });
+    expect(
+      getBuiltin("BASE")?.({ tag: ValueTag.Number, value: 15 }, { tag: ValueTag.Number, value: 2 }),
+    ).toEqual({ tag: ValueTag.String, value: "1111", stringId: 0 });
+    expect(
+      getBuiltin("DECIMAL")?.(
+        { tag: ValueTag.String, value: "  1111  ", stringId: 2 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 15 });
     expect(getBuiltin("ROMAN")?.({ tag: ValueTag.Number, value: 14 })).toEqual({
       tag: ValueTag.String,
       value: "XIV",
@@ -774,6 +1024,12 @@ describe("formula builtins", () => {
         { tag: ValueTag.Number, value: 10 },
       ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      getBuiltin("DECIMAL")?.(
+        { tag: ValueTag.Error, code: ErrorCode.Ref },
+        { tag: ValueTag.Number, value: 16 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref });
     expect(getBuiltin("ROMAN")?.({ tag: ValueTag.Number, value: 0 })).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
@@ -1481,6 +1737,12 @@ describe("formula builtins", () => {
         { tag: ValueTag.String, value: "bad", stringId: 3 },
       ),
     ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      getBuiltin("BITLSHIFT")?.(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 33 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2 });
     expect(
       getBuiltin("BITRSHIFT")?.(
         { tag: ValueTag.String, value: "bad", stringId: 4 },
@@ -2621,7 +2883,41 @@ describe("formula builtins", () => {
     expect(getBuiltinId("norm.dist")).toBe(BuiltinId.NormDist);
     expect(getBuiltinId("norm.s.inv")).toBe(BuiltinId.NormSInv);
     expect(getBuiltinId("confidence.norm")).toBe(BuiltinId.ConfidenceNorm);
+    expect(getBuiltinId("confidence.t")).toBe(BuiltinId.ConfidenceT);
+    expect(getBuiltinId("gamma.inv")).toBe(BuiltinId.GammaInv);
+    expect(getBuiltinId("gammainv")).toBe(BuiltinId.Gammainv);
     expect(getBuiltinId("permutationa")).toBe(BuiltinId.Permutationa);
+    expect(getBuiltinId("chisq.test")).toBe(BuiltinId.ChisqTest);
+    expect(getBuiltinId("chitest")).toBe(BuiltinId.Chitest);
+    expect(getBuiltinId("legacy.chitest")).toBe(BuiltinId.LegacyChitest);
+    expect(getBuiltinId("f.test")).toBe(BuiltinId.FTest);
+    expect(getBuiltinId("ftest")).toBe(BuiltinId.Ftest);
+    expect(getBuiltinId("z.test")).toBe(BuiltinId.ZTest);
+    expect(getBuiltinId("ztest")).toBe(BuiltinId.Ztest);
+    expect(getBuiltinId("workday.intl")).toBe(BuiltinId.WorkdayIntl);
+    expect(getBuiltinId("networkdays.intl")).toBe(BuiltinId.NetworkdaysIntl);
+    expect(getBuiltinId("numbervalue")).toBe(BuiltinId.Numbervalue);
+    expect(getBuiltinId("valuetotext")).toBe(BuiltinId.Valuetotext);
+    expect(getBuiltinId("asc")).toBe(BuiltinId.Asc);
+    expect(getBuiltinId("jis")).toBe(BuiltinId.Jis);
+    expect(getBuiltinId("dbcs")).toBe(BuiltinId.Dbcs);
+    expect(getBuiltinId("daverage")).toBe(BuiltinId.Daverage);
+    expect(getBuiltinId("dcount")).toBe(BuiltinId.Dcount);
+    expect(getBuiltinId("dcounta")).toBe(BuiltinId.Dcounta);
+    expect(getBuiltinId("dget")).toBe(BuiltinId.Dget);
+    expect(getBuiltinId("dmax")).toBe(BuiltinId.Dmax);
+    expect(getBuiltinId("dmin")).toBe(BuiltinId.Dmin);
+    expect(getBuiltinId("dproduct")).toBe(BuiltinId.Dproduct);
+    expect(getBuiltinId("dstdev")).toBe(BuiltinId.Dstdev);
+    expect(getBuiltinId("dstdevp")).toBe(BuiltinId.Dstdevp);
+    expect(getBuiltinId("dsum")).toBe(BuiltinId.Dsum);
+    expect(getBuiltinId("dvar")).toBe(BuiltinId.Dvar);
+    expect(getBuiltinId("dvarp")).toBe(BuiltinId.Dvarp);
+    expect(getBuiltinId("prob")).toBe(BuiltinId.Prob);
+    expect(getBuiltinId("trimmean")).toBe(BuiltinId.Trimmean);
+    expect(getBuiltinId("growth")).toBe(BuiltinId.Growth);
+    expect(getBuiltinId("trend")).toBe(BuiltinId.Trend);
+    expect(getBuiltinId("forecast.linear")).toBe(BuiltinId.Forecast);
   });
 
   it("supports the new statistical distribution builtins and aliases", () => {
@@ -2643,9 +2939,33 @@ describe("formula builtins", () => {
     const WEIBULL_DIST = getBuiltin("WEIBULL.DIST")!;
     const GAMMADIST = getBuiltin("GAMMADIST")!;
     const GAMMA_DIST = getBuiltin("GAMMA.DIST")!;
+    const GAMMA_INV = getBuiltin("GAMMA.INV")!;
+    const GAMMAINV = getBuiltin("GAMMAINV")!;
     const CHIDIST = getBuiltin("CHIDIST")!;
     const CHISQ_DIST_RT = getBuiltin("CHISQ.DIST.RT")!;
     const CHISQ_DIST = getBuiltin("CHISQ.DIST")!;
+    const BETA_DIST = getBuiltin("BETA.DIST")!;
+    const BETA_INV = getBuiltin("BETA.INV")!;
+    const BETADIST = getBuiltin("BETADIST")!;
+    const BETAINV = getBuiltin("BETAINV")!;
+    const F_DIST = getBuiltin("F.DIST")!;
+    const F_DIST_RT = getBuiltin("F.DIST.RT")!;
+    const F_INV = getBuiltin("F.INV")!;
+    const F_INV_RT = getBuiltin("F.INV.RT")!;
+    const FDIST = getBuiltin("FDIST")!;
+    const FINV = getBuiltin("FINV")!;
+    const LEGACY_FDIST = getBuiltin("LEGACY.FDIST")!;
+    const LEGACY_FINV = getBuiltin("LEGACY.FINV")!;
+    const T_DIST = getBuiltin("T.DIST")!;
+    const T_DIST_RT = getBuiltin("T.DIST.RT")!;
+    const T_DIST_2T = getBuiltin("T.DIST.2T")!;
+    const TDIST = getBuiltin("TDIST")!;
+    const T_INV = getBuiltin("T.INV")!;
+    const T_INV_2T = getBuiltin("T.INV.2T")!;
+    const TINV = getBuiltin("TINV")!;
+    const T_TEST = getLookupBuiltin("T.TEST")!;
+    const TTEST = getLookupBuiltin("TTEST")!;
+    const CONFIDENCE_T = getBuiltin("CONFIDENCE.T")!;
     const BINOMDIST = getBuiltin("BINOMDIST")!;
     const BINOM_DIST = getBuiltin("BINOM.DIST")!;
     const BINOM_DIST_RANGE = getBuiltin("BINOM.DIST.RANGE")!;
@@ -2715,6 +3035,36 @@ describe("formula builtins", () => {
     ).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(0.2939945976810081, 9),
+    });
+    expect(
+      CONFIDENCE_T(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.764892328404345, 12),
+    });
+    expect(
+      CONFIDENCE_T(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CONFIDENCE_T(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
     expect(
       EXPONDIST(
@@ -2840,6 +3190,46 @@ describe("formula builtins", () => {
       value: expect.closeTo(0.08030139707139418, 12),
     });
     expect(
+      GAMMA_INV(
+        { tag: ValueTag.Number, value: 0.08030139707139418 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2, 10),
+    });
+    expect(
+      GAMMA_INV(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      GAMMA_INV(
+        { tag: ValueTag.Number, value: 0.08030139707139418 },
+        { tag: ValueTag.Number, value: -1 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      GAMMAINV(
+        { tag: ValueTag.Number, value: 0.08030139707139418 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2, 10),
+    });
+    expect(
       HYPGEOM_DIST(
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 4 },
@@ -2883,6 +3273,272 @@ describe("formula builtins", () => {
     ).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(0.4421745996289252, 12),
+    });
+    expect(
+      BETA_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.6854705810117458, 10),
+    });
+    expect(
+      BETA_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Boolean, value: false },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1.4837646, 7),
+    });
+    expect(
+      BETADIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.6854705810117458, 10),
+    });
+    expect(
+      BETA_INV(
+        { tag: ValueTag.Number, value: 0.6854705810117458 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2, 10),
+    });
+    expect(
+      BETAINV(
+        { tag: ValueTag.Number, value: 0.6854705810117458 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(2, 10),
+    });
+    expect(
+      F_DIST(
+        { tag: ValueTag.Number, value: 15.2068649 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.99, 9),
+    });
+    expect(
+      F_DIST(
+        { tag: ValueTag.Number, value: 15.2068649 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Boolean, value: false },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.0012238, 9),
+    });
+    expect(
+      F_DIST_RT(
+        { tag: ValueTag.Number, value: 15.2068649 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.01, 9),
+    });
+    expect(
+      FDIST(
+        { tag: ValueTag.Number, value: 15.2068649 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.01, 9),
+    });
+    expect(
+      LEGACY_FDIST(
+        { tag: ValueTag.Number, value: 15.2068649 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.01, 9),
+    });
+    expect(
+      F_INV(
+        { tag: ValueTag.Number, value: 0.01 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.10930991466299911, 8),
+    });
+    expect(
+      F_INV_RT(
+        { tag: ValueTag.Number, value: 0.01 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(15.206864870947697, 7),
+    });
+    expect(
+      FINV(
+        { tag: ValueTag.Number, value: 0.01 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(15.206864870947697, 7),
+    });
+    expect(
+      LEGACY_FINV(
+        { tag: ValueTag.Number, value: 0.01 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(15.206864870947697, 7),
+    });
+    expect(
+      T_DIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.75, 12),
+    });
+    expect(
+      T_DIST_RT({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.25, 12),
+    });
+    expect(
+      T_DIST_2T({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.5, 12),
+    });
+    expect(
+      TDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.25, 12),
+    });
+    expect(
+      T_INV({ tag: ValueTag.Number, value: 0.75 }, { tag: ValueTag.Number, value: 1 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 9),
+    });
+    expect(
+      T_INV_2T({ tag: ValueTag.Number, value: 0.5 }, { tag: ValueTag.Number, value: 1 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 9),
+    });
+    expect(
+      TINV({ tag: ValueTag.Number, value: 0.5 }, { tag: ValueTag.Number, value: 1 }),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1, 9),
+    });
+    expect(
+      T_TEST(
+        {
+          kind: "range",
+          refKind: "cells",
+          rows: 3,
+          cols: 1,
+          values: [
+            { tag: ValueTag.Number, value: 1 },
+            { tag: ValueTag.Number, value: 2 },
+            { tag: ValueTag.Number, value: 4 },
+          ],
+        },
+        {
+          kind: "range",
+          refKind: "cells",
+          rows: 3,
+          cols: 1,
+          values: [
+            { tag: ValueTag.Number, value: 1 },
+            { tag: ValueTag.Number, value: 3 },
+            { tag: ValueTag.Number, value: 3 },
+          ],
+        },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      TTEST(
+        {
+          kind: "range",
+          refKind: "cells",
+          rows: 3,
+          cols: 1,
+          values: [
+            { tag: ValueTag.Number, value: 1 },
+            { tag: ValueTag.Number, value: 2 },
+            { tag: ValueTag.Number, value: 4 },
+          ],
+        },
+        {
+          kind: "range",
+          refKind: "cells",
+          rows: 3,
+          cols: 1,
+          values: [
+            { tag: ValueTag.Number, value: 1 },
+            { tag: ValueTag.Number, value: 3 },
+            { tag: ValueTag.Number, value: 3 },
+          ],
+        },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 1 });
+    expect(
+      T_DIST_2T({ tag: ValueTag.Number, value: -1 }, { tag: ValueTag.Number, value: 1 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
     });
     expect(
       BINOMDIST(
@@ -3030,6 +3686,49 @@ describe("formula builtins", () => {
       code: ErrorCode.Value,
     });
     expect(
+      BETA_DIST(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 8 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Boolean, value: true },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      F_DIST_RT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      F_INV(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.String, value: "bad", stringId: 71 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      F_INV_RT(
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.String, value: "bad", stringId: 72 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       BINOMDIST(
         { tag: ValueTag.Number, value: 5 },
         { tag: ValueTag.Number, value: 4 },
@@ -3119,16 +3818,34 @@ describe("formula builtins", () => {
     const PV = getBuiltin("PV")!;
     const PMT = getBuiltin("PMT")!;
     const NPER = getBuiltin("NPER")!;
+    const RATE = getBuiltin("RATE")!;
     const NPV = getBuiltin("NPV")!;
     const IPMT = getBuiltin("IPMT")!;
     const PPMT = getBuiltin("PPMT")!;
     const ISPMT = getBuiltin("ISPMT")!;
+    const CUMIPMT = getBuiltin("CUMIPMT")!;
+    const CUMPRINC = getBuiltin("CUMPRINC")!;
+    const DATE = getBuiltin("DATE")!;
     const FVSCHEDULE = getBuiltin("FVSCHEDULE")!;
     const DB = getBuiltin("DB")!;
     const DDB = getBuiltin("DDB")!;
     const VDB = getBuiltin("VDB")!;
     const SLN = getBuiltin("SLN")!;
     const SYD = getBuiltin("SYD")!;
+    const DISC = getBuiltin("DISC")!;
+    const INTRATE = getBuiltin("INTRATE")!;
+    const RECEIVED = getBuiltin("RECEIVED")!;
+    const PRICEDISC = getBuiltin("PRICEDISC")!;
+    const YIELDDISC = getBuiltin("YIELDDISC")!;
+    const PRICEMAT = getBuiltin("PRICEMAT")!;
+    const YIELDMAT = getBuiltin("YIELDMAT")!;
+    const ODDFPRICE = getBuiltin("ODDFPRICE")!;
+    const ODDFYIELD = getBuiltin("ODDFYIELD")!;
+    const ODDLPRICE = getBuiltin("ODDLPRICE")!;
+    const ODDLYIELD = getBuiltin("ODDLYIELD")!;
+    const TBILLPRICE = getBuiltin("TBILLPRICE")!;
+    const TBILLYIELD = getBuiltin("TBILLYIELD")!;
+    const TBILLEQ = getBuiltin("TBILLEQ")!;
 
     expect(
       EFFECT({ tag: ValueTag.Number, value: 0.12 }, { tag: ValueTag.Number, value: 12 }),
@@ -3234,6 +3951,16 @@ describe("formula builtins", () => {
       value: expect.closeTo(-1000, 12),
     });
     expect(
+      PV(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: -100 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 1000,
+    });
+    expect(
       PMT(
         { tag: ValueTag.Number, value: 0.1 },
         { tag: ValueTag.Number, value: 2 },
@@ -3244,6 +3971,49 @@ describe("formula builtins", () => {
       value: expect.closeTo(-576.1904761904761, 12),
     });
     expect(
+      PMT(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: -100,
+    });
+    expect(
+      RATE(
+        { tag: ValueTag.Number, value: 48 },
+        { tag: ValueTag.Number, value: -200 },
+        { tag: ValueTag.Number, value: 8000 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.007701472488246008, 12),
+    });
+    expect(
+      RATE(
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: -100 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(
+      RATE(
+        { tag: ValueTag.Number, value: 48 },
+        { tag: ValueTag.Number, value: -200 },
+        { tag: ValueTag.Number, value: 8000 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.007701472488246008, 12),
+    });
+    expect(
       NPER(
         { tag: ValueTag.Number, value: 0.1 },
         { tag: ValueTag.Number, value: -576.1904761904761 },
@@ -3252,6 +4022,16 @@ describe("formula builtins", () => {
     ).toMatchObject({
       tag: ValueTag.Number,
       value: expect.closeTo(2, 12),
+    });
+    expect(
+      NPER(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: -100 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 10,
     });
     expect(
       NPV(
@@ -3321,6 +4101,58 @@ describe("formula builtins", () => {
       value: -50,
     });
     expect(
+      CUMIPMT(
+        { tag: ValueTag.Number, value: 0.09 / 12 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 24 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-11135.232130750845, 12),
+    });
+    expect(
+      CUMIPMT(
+        { tag: ValueTag.Number, value: 0.09 / 12 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 0,
+    });
+    expect(
+      CUMPRINC(
+        { tag: ValueTag.Number, value: 0.09 / 12 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 24 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-934.1071234208765, 12),
+    });
+    expect(
+      CUMPRINC(
+        { tag: ValueTag.Number, value: 0.09 / 12 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(-998.2910880208206, 12),
+    });
+    expect(
       SLN(
         { tag: ValueTag.Number, value: 10000 },
         { tag: ValueTag.Number, value: 1000 },
@@ -3340,6 +4172,461 @@ describe("formula builtins", () => {
     ).toEqual({
       tag: ValueTag.Number,
       value: 1800,
+    });
+    expect(
+      DISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 97 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.12, 12),
+    });
+    expect(
+      INTRATE(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 1030 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.12, 12),
+    });
+    expect(
+      RECEIVED(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0.12 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(1030.9278350515465, 12),
+    });
+    expect(
+      PRICEDISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 16,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0525 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(99.79583333333333, 12),
+    });
+    expect(
+      YIELDDISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 16,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 99.795 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.05282257198685834, 12),
+    });
+    expect(
+      PRICEMAT(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 13,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 11,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.061 },
+        { tag: ValueTag.Number, value: 0.061 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(99.98449887555694, 12),
+    });
+    expect(
+      YIELDMAT(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 3,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 8,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0625 },
+        { tag: ValueTag.Number, value: 100.0123 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.060954333691538576, 12),
+    });
+    expect(
+      ODDFPRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 11,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2021 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 10 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2009 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0785 },
+        { tag: ValueTag.Number, value: 0.0625 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(113.597717474079, 12),
+    });
+    expect(
+      ODDFYIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 11,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2021 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 10 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2009 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0575 },
+        { tag: ValueTag.Number, value: 84.5 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.0772455415972989, 11),
+    });
+    expect(
+      ODDLPRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 7,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 10 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0375 },
+        { tag: ValueTag.Number, value: 0.0405 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(99.8782860147213, 12),
+    });
+    expect(
+      ODDLYIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 20,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 12 },
+          {
+            tag: ValueTag.Number,
+            value: 24,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0375 },
+        { tag: ValueTag.Number, value: 99.875 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.0451922356291692, 12),
+    });
+    expect(
+      TBILLPRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 31,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.09 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(98.45, 12),
+    });
+    expect(
+      TBILLYIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 31,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 98.45 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.09141696292534264, 12),
+    });
+    expect(
+      TBILLEQ(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 31,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0914 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.09415149356594302, 12),
+    });
+    expect(
+      DISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 97 },
+        { tag: ValueTag.Number, value: 100 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.12, 12),
     });
 
     expect(
@@ -3385,9 +4672,59 @@ describe("formula builtins", () => {
       code: ErrorCode.Value,
     });
     expect(
+      PV(
+        { tag: ValueTag.String, value: "bad", stringId: 39 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: -100 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      PMT(
+        { tag: ValueTag.String, value: "bad", stringId: 40 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      RATE(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      RATE(
+        { tag: ValueTag.String, value: "bad", stringId: 41 },
+        { tag: ValueTag.Number, value: -200 },
+        { tag: ValueTag.Number, value: 8000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       NPER(
         { tag: ValueTag.Number, value: 0 },
         { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1000 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NPER(
+        { tag: ValueTag.String, value: "bad", stringId: 42 },
+        { tag: ValueTag.Number, value: -100 },
         { tag: ValueTag.Number, value: 1000 },
       ),
     ).toEqual({
@@ -3404,9 +4741,28 @@ describe("formula builtins", () => {
       code: ErrorCode.Value,
     });
     expect(
+      FV(
+        { tag: ValueTag.String, value: "bad", stringId: 17 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: -100 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       FVSCHEDULE(
         { tag: ValueTag.Number, value: 1000 },
         { tag: ValueTag.String, value: "bad", stringId: 18 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      FVSCHEDULE(
+        { tag: ValueTag.String, value: "bad", stringId: 43 },
+        { tag: ValueTag.Number, value: 0.09 },
       ),
     ).toEqual({
       tag: ValueTag.Error,
@@ -3417,6 +4773,17 @@ describe("formula builtins", () => {
         { tag: ValueTag.Number, value: 10000 },
         { tag: ValueTag.Number, value: 1000 },
         { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      DB(
+        { tag: ValueTag.String, value: "bad", stringId: 44 },
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 5 },
         { tag: ValueTag.Number, value: 1 },
       ),
     ).toEqual({
@@ -3436,12 +4803,35 @@ describe("formula builtins", () => {
       code: ErrorCode.Value,
     });
     expect(
+      DDB(
+        { tag: ValueTag.String, value: "bad", stringId: 45 },
+        { tag: ValueTag.Number, value: 300 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       VDB(
         { tag: ValueTag.Number, value: 2400 },
         { tag: ValueTag.Number, value: 300 },
         { tag: ValueTag.Number, value: 10 },
         { tag: ValueTag.Number, value: 3 },
         { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      VDB(
+        { tag: ValueTag.String, value: "bad", stringId: 46 },
+        { tag: ValueTag.Number, value: 300 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
       ),
     ).toEqual({
       tag: ValueTag.Error,
@@ -3483,6 +4873,58 @@ describe("formula builtins", () => {
       code: ErrorCode.Value,
     });
     expect(
+      CUMIPMT(
+        { tag: ValueTag.Number, value: 0.09 / 12 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 24 },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CUMIPMT(
+        { tag: ValueTag.String, value: "bad", stringId: 47 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 24 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CUMPRINC(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 24 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      CUMPRINC(
+        { tag: ValueTag.String, value: "bad", stringId: 48 },
+        { tag: ValueTag.Number, value: 30 * 12 },
+        { tag: ValueTag.Number, value: 125000 },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 24 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       SLN(
         { tag: ValueTag.Number, value: 10000 },
         { tag: ValueTag.Number, value: 1000 },
@@ -3498,6 +4940,488 @@ describe("formula builtins", () => {
         { tag: ValueTag.Number, value: 1000 },
         { tag: ValueTag.Number, value: 9 },
         { tag: ValueTag.Number, value: 10 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      DISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 97 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      INTRATE(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1030 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      INTRATE(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 1030 },
+        { tag: ValueTag.Number, value: 5 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      RECEIVED(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      PRICEDISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 16,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0525 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      YIELDDISC(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 16,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      PRICEMAT(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 13,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.061 },
+        { tag: ValueTag.Number, value: 0.061 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      YIELDMAT(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 3,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 8,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0625 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      ODDFPRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2021 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 11,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 10 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2009 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0785 },
+        { tag: ValueTag.Number, value: 0.0625 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      ODDFYIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 11,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2021 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 10 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2009 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: -0.0575 },
+        { tag: ValueTag.Number, value: 84.5 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      ODDLPRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 7,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 10 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0375 },
+        { tag: ValueTag.Number, value: 0.0405 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      ODDLYIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 4 },
+          {
+            tag: ValueTag.Number,
+            value: 20,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2007 },
+          { tag: ValueTag.Number, value: 12 },
+          {
+            tag: ValueTag.Number,
+            value: 24,
+          },
+        ),
+        { tag: ValueTag.Number, value: -0.0375 },
+        { tag: ValueTag.Number, value: 99.875 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      TBILLPRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 31,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2009 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.09 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      TBILLYIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 31,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      TBILLEQ(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 3 },
+          {
+            tag: ValueTag.Number,
+            value: 31,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 6 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      RECEIVED(
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2023 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 1000 },
+        { tag: ValueTag.Number, value: 0.12 },
+        { tag: ValueTag.Number, value: 2 },
       ),
     ).toEqual({
       tag: ValueTag.Error,
@@ -3537,6 +5461,318 @@ describe("formula builtins", () => {
     });
   });
 
+  it("covers coupon-date and periodic bond helpers with accelerated semantics", () => {
+    const DATE = getBuiltin("DATE")!;
+    const COUPDAYBS = getBuiltin("COUPDAYBS")!;
+    const COUPDAYS = getBuiltin("COUPDAYS")!;
+    const COUPDAYSNC = getBuiltin("COUPDAYSNC")!;
+    const COUPNCD = getBuiltin("COUPNCD")!;
+    const COUPNUM = getBuiltin("COUPNUM")!;
+    const COUPPCD = getBuiltin("COUPPCD")!;
+    const PRICE = getBuiltin("PRICE")!;
+    const YIELD = getBuiltin("YIELD")!;
+    const DURATION = getBuiltin("DURATION")!;
+    const MDURATION = getBuiltin("MDURATION")!;
+
+    const couponSettlement = DATE(
+      { tag: ValueTag.Number, value: 2007 },
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Number, value: 25 },
+    );
+    const couponMaturity = DATE(
+      { tag: ValueTag.Number, value: 2009 },
+      { tag: ValueTag.Number, value: 11 },
+      { tag: ValueTag.Number, value: 15 },
+    );
+
+    expect(
+      COUPDAYBS(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 70 });
+    expect(
+      COUPDAYS(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 180 });
+    expect(
+      COUPDAYSNC(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 110 });
+    expect(
+      COUPNCD(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 39217 });
+    expect(
+      COUPNUM(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 6 });
+    expect(
+      COUPPCD(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 39036 });
+
+    expect(
+      PRICE(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2017 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0575 },
+        { tag: ValueTag.Number, value: 0.065 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(94.63436162132213, 12),
+    });
+    expect(
+      YIELD(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 2 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2016 },
+          { tag: ValueTag.Number, value: 11 },
+          {
+            tag: ValueTag.Number,
+            value: 15,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.0575 },
+        { tag: ValueTag.Number, value: 95.04287 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(0.065, 7),
+    });
+    expect(
+      DURATION(
+        DATE(
+          { tag: ValueTag.Number, value: 2018 },
+          { tag: ValueTag.Number, value: 7 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2048 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.08 },
+        { tag: ValueTag.Number, value: 0.09 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(10.919145281591925, 12),
+    });
+    expect(
+      MDURATION(
+        DATE(
+          { tag: ValueTag.Number, value: 2008 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        DATE(
+          { tag: ValueTag.Number, value: 2016 },
+          { tag: ValueTag.Number, value: 1 },
+          {
+            tag: ValueTag.Number,
+            value: 1,
+          },
+        ),
+        { tag: ValueTag.Number, value: 0.08 },
+        { tag: ValueTag.Number, value: 0.09 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(5.735669813918838, 12),
+    });
+
+    expect(
+      COUPDAYBS(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 4 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      PRICE(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 0.05 },
+        { tag: ValueTag.Number, value: -0.01 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      YIELD(
+        couponSettlement,
+        couponMaturity,
+        { tag: ValueTag.Number, value: 0.05 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 0 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+    expect(
+      DURATION(
+        couponMaturity,
+        couponSettlement,
+        { tag: ValueTag.Number, value: 0.08 },
+        { tag: ValueTag.Number, value: 0.09 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value });
+  });
+
+  it("covers remaining complex and distribution error branches", () => {
+    const IMPRODUCT = getBuiltin("IMPRODUCT")!;
+    const IMSUB = getBuiltin("IMSUB")!;
+    const IMTAN = getBuiltin("IMTAN")!;
+    const IMSEC = getBuiltin("IMSEC")!;
+    const IMCSC = getBuiltin("IMCSC")!;
+    const IMCOT = getBuiltin("IMCOT")!;
+    const NORMDIST = getBuiltin("NORMDIST")!;
+    const LOGNORM_DOT_DIST = getBuiltin("LOGNORM.DIST")!;
+    const LOGNORMDIST = getBuiltin("LOGNORMDIST")!;
+    const NPV = getBuiltin("NPV")!;
+
+    expect(IMPRODUCT()).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      IMSUB(
+        { tag: ValueTag.String, value: "bad", stringId: 89 },
+        { tag: ValueTag.String, value: "1+i", stringId: 94 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(IMTAN({ tag: ValueTag.String, value: "bad", stringId: 90 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(IMSEC({ tag: ValueTag.String, value: "bad", stringId: 92 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(IMCSC({ tag: ValueTag.String, value: "bad", stringId: 93 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(IMCOT({ tag: ValueTag.String, value: "bad", stringId: 91 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NORMDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      LOGNORMDIST(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      LOGNORM_DOT_DIST(
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 0 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      NPV(
+        { tag: ValueTag.Number, value: 0.1 },
+        { tag: ValueTag.Number, value: 100 },
+        { tag: ValueTag.String, value: "bad", stringId: 95 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("registers protocol-declared placeholder builtins as blocked", () => {
     for (const name of placeholderBuiltinNames) {
       expect(getBuiltin(name)?.()).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
@@ -3551,6 +5787,157 @@ describe("formula builtins", () => {
     expect(getBuiltinId("rept")).toBe(BuiltinId.Rept);
     expect(getBuiltinId("filter")).toBe(BuiltinId.Filter);
     expect(getBuiltinId("let")).toBeUndefined();
-    expect(getBuiltinId("textjoin")).toBeUndefined();
+    expect(getBuiltinId("textjoin")).toBe(BuiltinId.Textjoin);
+  });
+
+  it("routes provider-backed formulas through external adapters and blocks when none are installed", () => {
+    const TRANSLATE = getBuiltin("TRANSLATE")!;
+    const HYPERLINK = getBuiltin("HYPERLINK")!;
+    const DDE = getBuiltin("DDE")!;
+    const INFO = getBuiltin("INFO")!;
+    const REGISTER_ID = getBuiltin("REGISTER.ID")!;
+    const FILTERXML = getLookupBuiltin("FILTERXML")!;
+    const STOCKHISTORY = getLookupBuiltin("STOCKHISTORY")!;
+
+    const hello = { tag: ValueTag.String, value: "hello", stringId: 1 } as const;
+    const sourceLang = { tag: ValueTag.String, value: "en", stringId: 2 } as const;
+    const targetLang = { tag: ValueTag.String, value: "es", stringId: 3 } as const;
+
+    expect(placeholderBuiltinNames).not.toContain("TRANSLATE");
+    expect(placeholderBuiltinNames).not.toContain("FILTERXML");
+    expect(placeholderBuiltinNames).not.toContain("STOCKHISTORY");
+
+    expect(TRANSLATE(hello, sourceLang, targetLang)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(HYPERLINK(hello, sourceLang)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(DDE(hello, sourceLang, targetLang)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(INFO(hello)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(REGISTER_ID(hello, sourceLang)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+    expect(FILTERXML(hello, sourceLang)).toEqual({ tag: ValueTag.Error, code: ErrorCode.Blocked });
+    expect(STOCKHISTORY(hello, sourceLang)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Blocked,
+    });
+
+    const translateImpl = vi.fn(() => ({
+      tag: ValueTag.String,
+      value: "hola",
+      stringId: 0,
+    }));
+    const hyperlinkImpl = vi.fn(() => ({
+      tag: ValueTag.String,
+      value: "linked",
+      stringId: 0,
+    }));
+    const ddeImpl = vi.fn(() => ({ tag: ValueTag.Number, value: 42 }));
+    const infoImpl = vi.fn(() => ({ tag: ValueTag.String, value: "mac", stringId: 0 }));
+    const registerIdImpl = vi.fn(() => ({ tag: ValueTag.Number, value: 17 }));
+    const filterXmlImpl = vi.fn(() => ({
+      kind: "array" as const,
+      rows: 2,
+      cols: 1,
+      values: [
+        { tag: ValueTag.String, value: "one", stringId: 0 },
+        { tag: ValueTag.String, value: "two", stringId: 0 },
+      ],
+    }));
+    const stockHistoryImpl = vi.fn(() => ({
+      kind: "array" as const,
+      rows: 2,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 11 },
+      ],
+    }));
+
+    installExternalFunctionAdapter({
+      surface: "web",
+      resolveFunction(name) {
+        if (name === "TRANSLATE") {
+          return { kind: "scalar", implementation: translateImpl };
+        }
+        if (name === "HYPERLINK") {
+          return { kind: "scalar", implementation: hyperlinkImpl };
+        }
+        if (name === "INFO") {
+          return { kind: "scalar", implementation: infoImpl };
+        }
+        if (name === "FILTERXML") {
+          return { kind: "lookup", implementation: filterXmlImpl };
+        }
+        if (name === "STOCKHISTORY") {
+          return { kind: "lookup", implementation: stockHistoryImpl };
+        }
+        return undefined;
+      },
+    });
+    installExternalFunctionAdapter({
+      surface: "external-data",
+      resolveFunction(name) {
+        if (name === "DDE") {
+          return { kind: "scalar", implementation: ddeImpl };
+        }
+        if (name === "REGISTER.ID") {
+          return { kind: "scalar", implementation: registerIdImpl };
+        }
+        return undefined;
+      },
+    });
+
+    expect(TRANSLATE(hello, sourceLang, targetLang)).toEqual({
+      tag: ValueTag.String,
+      value: "hola",
+      stringId: 0,
+    });
+    expect(HYPERLINK(hello, sourceLang)).toEqual({
+      tag: ValueTag.String,
+      value: "linked",
+      stringId: 0,
+    });
+    expect(DDE(hello, sourceLang, targetLang)).toEqual({ tag: ValueTag.Number, value: 42 });
+    expect(INFO(hello)).toEqual({
+      tag: ValueTag.String,
+      value: "mac",
+      stringId: 0,
+    });
+    expect(REGISTER_ID(hello, sourceLang)).toEqual({ tag: ValueTag.Number, value: 17 });
+    expect(FILTERXML(hello, sourceLang)).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [
+        { tag: ValueTag.String, value: "one", stringId: 0 },
+        { tag: ValueTag.String, value: "two", stringId: 0 },
+      ],
+    });
+    expect(STOCKHISTORY(hello, sourceLang)).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 11 },
+      ],
+    });
+
+    expect(translateImpl).toHaveBeenCalledWith(hello, sourceLang, targetLang);
+    expect(filterXmlImpl).toHaveBeenCalledWith(hello, sourceLang);
+    expect(stockHistoryImpl).toHaveBeenCalledWith(hello, sourceLang);
   });
 });

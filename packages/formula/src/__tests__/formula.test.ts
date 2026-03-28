@@ -72,12 +72,17 @@ describe("formula", () => {
     expect(compiled.mode).toBe(1);
     expect([...compiled.symbolicRefs]).toEqual([]);
     expect([...compiled.symbolicRanges]).toEqual(["A1:B2"]);
+    expect(compileFormula("COUNTBLANK(A1:B2)").mode).toBe(1);
   });
 
   it("compiles exact-parity logical and rounding builtins onto the wasm-safe path", () => {
     expect(compileFormula("AND(A1,TRUE)").mode).toBe(1);
     expect(compileFormula("OR(A1,FALSE)").mode).toBe(1);
     expect(compileFormula("NOT(A1)").mode).toBe(1);
+    expect(compileFormula("DELTA(4,4)").mode).toBe(1);
+    expect(compileFormula("GESTEP(4,2)").mode).toBe(1);
+    expect(compileFormula("GAUSS(0)").mode).toBe(1);
+    expect(compileFormula("PHI(0)").mode).toBe(1);
     expect(compileFormula("ROUND(A1,1)").mode).toBe(1);
     expect(compileFormula("FLOOR(A1,2)").mode).toBe(1);
     expect(compileFormula("CEILING(A1,2)").mode).toBe(1);
@@ -94,6 +99,12 @@ describe("formula", () => {
     expect(compileFormula("ISNUMBER(A1)").mode).toBe(1);
     expect(compileFormula("ISTEXT()").mode).toBe(1);
     expect(compileFormula("ISTEXT(A1)").mode).toBe(1);
+    expect(compileFormula("T()").mode).toBe(1);
+    expect(compileFormula('T("alpha")').mode).toBe(1);
+    expect(compileFormula("N()").mode).toBe(1);
+    expect(compileFormula("N(A1)").mode).toBe(1);
+    expect(compileFormula("TYPE()").mode).toBe(1);
+    expect(compileFormula("TYPE(A1)").mode).toBe(1);
     expect(compileFormula("LEN(A1)").mode).toBe(1);
     expect(compileFormula("DATE(2024,2,29)").mode).toBe(1);
     expect(compileFormula("TIME(12,30,0)").mode).toBe(1);
@@ -106,6 +117,8 @@ describe("formula", () => {
     expect(compileFormula("WEEKDAY(A1)").mode).toBe(1);
     expect(compileFormula("WEEKDAY(A1,2)").mode).toBe(1);
     expect(compileFormula("DAYS(A1,A2)").mode).toBe(1);
+    expect(compileFormula("ISOWEEKNUM(A1)").mode).toBe(1);
+    expect(compileFormula('TIMEVALUE("1:30 PM")').mode).toBe(1);
     expect(compileFormula("WEEKNUM(A1)").mode).toBe(1);
     expect(compileFormula("WORKDAY(A1,1)").mode).toBe(1);
     expect(compileFormula("WORKDAY(A1,1,B1)").mode).toBe(1);
@@ -166,10 +179,25 @@ describe("formula", () => {
     expect(compileFormula("WRAPCOLS(A1:B4,2)")).toMatchObject({ mode: 1, producesSpill: true });
   });
 
-  it("keeps JS-only text-splitting and indirection formulas off the wasm path while preserving spill metadata", () => {
-    expect(compileFormula('TEXTSPLIT(A1,",")')).toMatchObject({ mode: 0, producesSpill: true });
+  it("routes accelerated text-splitting formulas to the wasm path while keeping indirection helpers on JS", () => {
+    expect(compileFormula('TEXTSPLIT(A1,",")')).toMatchObject({ mode: 1, producesSpill: true });
     expect(compileFormula('INDIRECT("A1")').mode).toBe(0);
     expect(compileFormula("FORMULA(A1)").mode).toBe(0);
+    expect(compileFormula('GETPIVOTDATA("Sales",A1)').mode).toBe(0);
+  });
+
+  it("keeps workbook-shape grouping formulas on the JS-special path without inventing symbolic aggregate names", () => {
+    const groupBy = compileFormula("GROUPBY(A1:A5,B1:B5,SUM)");
+    expect(groupBy.mode).toBe(0);
+    expect(groupBy.producesSpill).toBe(true);
+    expect([...groupBy.symbolicNames]).toEqual([]);
+
+    const pivotBy = compileFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM)");
+    expect(pivotBy.mode).toBe(0);
+    expect(pivotBy.producesSpill).toBe(true);
+    expect([...pivotBy.symbolicNames]).toEqual([]);
+
+    expect(compileFormula("MULTIPLE.OPERATIONS(A1,B1,C1)").mode).toBe(0);
   });
 
   it("routes accelerated array-shape helpers to the wasm path", () => {
@@ -183,12 +211,260 @@ describe("formula", () => {
 
   it("routes accelerated date and financial scalar helpers to the wasm path", () => {
     expect(compileFormula('DATEDIF(DATE(2020,1,15),DATE(2021,3,20),"YM")').mode).toBe(1);
+    expect(compileFormula("DAYS360(DATE(2024,1,29),DATE(2024,3,31))").mode).toBe(1);
+    expect(compileFormula("DAYS360(DATE(2024,1,29),DATE(2024,3,31),TRUE)").mode).toBe(1);
+    expect(compileFormula("YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),3)").mode).toBe(1);
+    expect(compileFormula("FV(0.1,2,-100,-1000)").mode).toBe(1);
     expect(compileFormula("FVSCHEDULE(1000,0.09,0.11,0.1)").mode).toBe(1);
+    expect(compileFormula("PV(0.1,2,-576.1904761904761)").mode).toBe(1);
+    expect(compileFormula("PMT(0.1,2,1000)").mode).toBe(1);
+    expect(compileFormula("NPER(0.1,-576.1904761904761,1000)").mode).toBe(1);
+    expect(compileFormula("NPV(0.1,100,200,300)").mode).toBe(1);
+    expect(compileFormula("RATE(48,-200,8000)").mode).toBe(1);
+    expect(compileFormula("IPMT(0.1,1,2,1000)").mode).toBe(1);
+    expect(compileFormula("PPMT(0.1,1,2,1000)").mode).toBe(1);
+    expect(compileFormula("ISPMT(0.1,1,2,1000)").mode).toBe(1);
+    expect(compileFormula("CUMIPMT(9%/12,30*12,125000,13,24,0)").mode).toBe(1);
+    expect(compileFormula("CUMPRINC(9%/12,30*12,125000,13,24,0)").mode).toBe(1);
     expect(compileFormula("DB(10000,1000,5,1)").mode).toBe(1);
     expect(compileFormula("DDB(2400,300,10,2)").mode).toBe(1);
     expect(compileFormula("VDB(2400,300,10,1,3)").mode).toBe(1);
     expect(compileFormula("SLN(10000,1000,9)").mode).toBe(1);
     expect(compileFormula("SYD(10000,1000,9,1)").mode).toBe(1);
+    expect(compileFormula("DISC(DATE(2023,1,1),DATE(2023,4,1),97,100,2)").mode).toBe(1);
+    expect(compileFormula("INTRATE(DATE(2023,1,1),DATE(2023,4,1),1000,1030,2)").mode).toBe(1);
+    expect(compileFormula("RECEIVED(DATE(2023,1,1),DATE(2023,4,1),1000,0.12,2)").mode).toBe(1);
+    expect(compileFormula("PRICEDISC(DATE(2008,2,16),DATE(2008,3,1),0.0525,100,2)").mode).toBe(1);
+    expect(compileFormula("YIELDDISC(DATE(2008,2,16),DATE(2008,3,1),99.795,100,2)").mode).toBe(1);
+    expect(
+      compileFormula("PRICEMAT(DATE(2008,2,15),DATE(2008,4,13),DATE(2007,11,11),0.061,0.061,0)")
+        .mode,
+    ).toBe(1);
+    expect(
+      compileFormula("YIELDMAT(DATE(2008,3,15),DATE(2008,11,3),DATE(2007,11,8),0.0625,100.0123,0)")
+        .mode,
+    ).toBe(1);
+    expect(
+      compileFormula(
+        "ODDFPRICE(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0785,0.0625,100,2,1)",
+      ).mode,
+    ).toBe(1);
+    expect(
+      compileFormula(
+        "ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.5,100,2,0)",
+      ).mode,
+    ).toBe(1);
+    expect(
+      compileFormula(
+        "ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)",
+      ).mode,
+    ).toBe(1);
+    expect(
+      compileFormula(
+        "ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)",
+      ).mode,
+    ).toBe(1);
+    expect(compileFormula("COUPDAYBS(DATE(2007,1,25),DATE(2009,11,15),2,4)").mode).toBe(1);
+    expect(compileFormula("COUPDAYS(DATE(2007,1,25),DATE(2009,11,15),2,4)").mode).toBe(1);
+    expect(compileFormula("COUPDAYSNC(DATE(2007,1,25),DATE(2009,11,15),2,4)").mode).toBe(1);
+    expect(compileFormula("COUPNCD(DATE(2007,1,25),DATE(2009,11,15),2,4)").mode).toBe(1);
+    expect(compileFormula("COUPNUM(DATE(2007,1,25),DATE(2009,11,15),2,4)").mode).toBe(1);
+    expect(compileFormula("COUPPCD(DATE(2007,1,25),DATE(2009,11,15),2,4)").mode).toBe(1);
+    expect(
+      compileFormula("PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,0)").mode,
+    ).toBe(1);
+    expect(
+      compileFormula("YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,0)").mode,
+    ).toBe(1);
+    expect(compileFormula("DURATION(DATE(2018,7,1),DATE(2048,1,1),0.08,0.09,2,1)").mode).toBe(1);
+    expect(compileFormula("MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)").mode).toBe(1);
+    expect(compileFormula("TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),0.09)").mode).toBe(1);
+    expect(compileFormula("TBILLYIELD(DATE(2008,3,31),DATE(2008,6,1),98.45)").mode).toBe(1);
+    expect(compileFormula("TBILLEQ(DATE(2008,3,31),DATE(2008,6,1),0.0914)").mode).toBe(1);
+    expect(compileFormula("EFFECT(0.12,12)").mode).toBe(1);
+    expect(compileFormula("NOMINAL(0.12682503013196977,12)").mode).toBe(1);
+    expect(compileFormula("PDURATION(0.1,100,121)").mode).toBe(1);
+    expect(compileFormula("RRI(2,100,121)").mode).toBe(1);
+    expect(compileFormula("IRR(A1:A6)").mode).toBe(1);
+    expect(compileFormula("MIRR(A1:A6,10%,12%)").mode).toBe(1);
+    expect(compileFormula("XNPV(0.09,A1:A5,B1:B5)").mode).toBe(1);
+    expect(compileFormula("XIRR(A1:A5,B1:B5)").mode).toBe(1);
+  });
+
+  it("routes accelerated regression and covariance helpers to the wasm path", () => {
+    expect(compileFormula("CORREL(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("COVAR(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("COVARIANCE.P(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("COVARIANCE.S(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("PEARSON(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("INTERCEPT(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("SLOPE(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("RSQ(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("STEYX(A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("FORECAST(4,A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("FORECAST.LINEAR(4,A1:A3,B1:B3)").mode).toBe(1);
+    expect(compileFormula("TREND(A1:A3,B1:B3,C1:C2)")).toMatchObject({
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("TREND(A1:A3,B1:B3,4)")).toMatchObject({ mode: 1, producesSpill: false });
+    expect(compileFormula("GROWTH(A1:A3,B1:B3,C1:C2)")).toMatchObject({
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("GROWTH(A1:A3,B1:B3,4)")).toMatchObject({
+      mode: 1,
+      producesSpill: false,
+    });
+    expect(compileFormula("LINEST(A1:A3,B1:B3)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("LOGEST(A1:A3,B1:B3)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("LINEST(A1:A3,B1:B3,TRUE,TRUE)")).toMatchObject({
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("LOGEST(A1:A3,B1:B3,TRUE,TRUE)")).toMatchObject({
+      mode: 1,
+      producesSpill: true,
+    });
+  });
+
+  it("routes accelerated rank helpers to the wasm path", () => {
+    expect(compileFormula("RANK(20,A1:A4)").mode).toBe(1);
+    expect(compileFormula("RANK.EQ(20,A1:A4)").mode).toBe(1);
+    expect(compileFormula("RANK.AVG(20,A1:A4)").mode).toBe(1);
+    expect(compileFormula("RANK.AVG(20,A1:A4,1)").mode).toBe(1);
+  });
+
+  it("routes accelerated mode and confidence helpers to the wasm path", () => {
+    expect(compileFormula("MODE(A1:A6)").mode).toBe(1);
+    expect(compileFormula("MODE.SNGL(A1:A6)").mode).toBe(1);
+    expect(compileFormula("CONFIDENCE.NORM(0.05,1,100)").mode).toBe(1);
+  });
+
+  it("keeps the promoted statistical distribution surface on the wasm path", () => {
+    const nativeFormulas = [
+      "CONFIDENCE(0.05,1,100)",
+      "CONFIDENCE.NORM(0.05,1,100)",
+      "CONFIDENCE.T(0.05,1,100)",
+      "CHIDIST(18.307,10)",
+      "LEGACY.CHIDIST(18.307,10)",
+      "CHIINV(0.01,10)",
+      "CHISQ.DIST.RT(18.307,10)",
+      "CHISQ.DIST(0.5,1,TRUE)",
+      "CHISQ.INV.RT(0.01,10)",
+      "CHISQ.INV(0.95,1)",
+      "CHISQDIST(18.307,10)",
+      "CHISQINV(0.01,10)",
+      "LEGACY.CHIINV(0.01,10)",
+      "CHISQ.TEST(A1:B2,C1:D2)",
+      "CHITEST(A1:B2,C1:D2)",
+      "LEGACY.CHITEST(A1:B2,C1:D2)",
+      "F.TEST(A1:A3,B1:B3)",
+      "FTEST(A1:A3,B1:B3)",
+      "Z.TEST(A1:A3,2)",
+      "ZTEST(A1:A3,2)",
+      "BETA.DIST(2,8,10,TRUE,1,3)",
+      "BETA.INV(0.6854705810117458,8,10,1,3)",
+      "BETADIST(2,8,10,1,3)",
+      "BETAINV(0.6854705810117458,8,10,1,3)",
+      "F.DIST(1,2,3,TRUE)",
+      "F.DIST.RT(1,2,3)",
+      "FDIST(1,2,3)",
+      "F.INV(0.5,2,3)",
+      "F.INV.RT(0.5,2,3)",
+      "FINV(0.5,2,3)",
+      "LEGACY.FDIST(1,2,3)",
+      "LEGACY.FINV(0.5,2,3)",
+      "T.DIST(1,1,TRUE)",
+      "T.DIST.RT(1,1)",
+      "T.DIST.2T(1,1)",
+      "T.INV(0.75,1)",
+      "T.INV.2T(0.5,1)",
+      "TDIST(1,1,2)",
+      "TINV(0.5,1)",
+      "T.TEST(A1:A3,B1:B3,2,1)",
+      "TTEST(A1:A3,B1:B3,2,1)",
+      "BINOMDIST(1,3,0.5,TRUE)",
+      "BINOM.DIST(1,3,0.5,TRUE)",
+      "BINOM.DIST.RANGE(10,0.5,3,6)",
+      "CRITBINOM(10,0.5,0.8)",
+      "BINOM.INV(10,0.5,0.8)",
+      "HYPGEOMDIST(1,4,8,20)",
+      "HYPGEOM.DIST(1,4,8,20,TRUE)",
+      "NEGBINOMDIST(10,5,0.25)",
+      "NEGBINOM.DIST(10,5,0.25,TRUE)",
+    ] as const;
+
+    for (const formula of nativeFormulas) {
+      expect(compileFormula(formula).mode).toBe(1);
+    }
+  });
+
+  it("keeps the promoted financial helper surface on the wasm path", () => {
+    const nativeFormulas = [
+      "FV(0.1,2,-576.1904761904761)",
+      "PV(0.1,2,-576.1904761904761)",
+      "PMT(0.1,2,1000)",
+      "NPER(0.1,-576.1904761904761,1000)",
+      "RATE(48,-200,8000)",
+      "NPV(0.08,100,200,300)",
+      "IPMT(0.1,1,2,1000)",
+      "PPMT(0.1,1,2,1000)",
+      "ISPMT(0.1,1,2,1000)",
+      "CUMIPMT(9%/12,30*12,125000,13,24,0)",
+      "CUMPRINC(9%/12,30*12,125000,13,24,0)",
+      "DISC(DATE(2023,1,1),DATE(2023,4,1),97,100,2)",
+      "INTRATE(DATE(2023,1,1),DATE(2023,4,1),1000,1030,2)",
+      "RECEIVED(DATE(2023,1,1),DATE(2023,4,1),1000,0.12,2)",
+      "COUPDAYBS(DATE(2024,1,15),DATE(2025,1,15),2,0)",
+      "COUPDAYS(DATE(2024,1,15),DATE(2025,1,15),2,0)",
+      "COUPDAYSNC(DATE(2024,1,15),DATE(2025,1,15),2,0)",
+      "COUPNCD(DATE(2024,1,15),DATE(2025,1,15),2,0)",
+      "COUPNUM(DATE(2024,1,15),DATE(2025,1,15),2,0)",
+      "COUPPCD(DATE(2024,1,15),DATE(2025,1,15),2,0)",
+      "PRICEDISC(DATE(2008,2,16),DATE(2008,3,1),0.0525,100,2)",
+      "YIELDDISC(DATE(2008,2,16),DATE(2008,3,1),99.795,100,2)",
+      "PRICEMAT(DATE(2008,2,15),DATE(2008,4,13),DATE(2007,11,11),0.061,0.061,0)",
+      "YIELDMAT(DATE(2008,3,15),DATE(2008,11,3),DATE(2007,11,8),0.0625,100.0123,0)",
+      "ODDFPRICE(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0785,0.0625,100,2,1)",
+      "ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.5,100,2,0)",
+      "ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)",
+      "ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)",
+      "PRICE(DATE(2024,1,15),DATE(2026,1,15),0.05,0.04,100,2,0)",
+      "YIELD(DATE(2024,1,15),DATE(2026,1,15),0.05,101,100,2,0)",
+      "DURATION(DATE(2024,1,15),DATE(2026,1,15),0.05,0.04,2,0)",
+      "MDURATION(DATE(2024,1,15),DATE(2026,1,15),0.05,0.04,2,0)",
+      "TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),0.09)",
+      "TBILLYIELD(DATE(2008,3,31),DATE(2008,6,1),98.45)",
+      "TBILLEQ(DATE(2008,3,31),DATE(2008,6,1),0.0914)",
+    ] as const;
+
+    for (const formula of nativeFormulas) {
+      expect(compileFormula(formula).mode).toBe(1);
+    }
+  });
+
+  it("routes accelerated order-statistics helpers to the wasm path", () => {
+    expect(compileFormula("MEDIAN(A1:A8)").mode).toBe(1);
+    expect(compileFormula("MEDIAN(A1:A4,9)").mode).toBe(1);
+    expect(compileFormula("MODE.MULT(A1:A6)")).toMatchObject({ mode: 1, producesSpill: true });
+    expect(compileFormula("FREQUENCY(A1:A6,C1:C3)")).toMatchObject({
+      mode: 1,
+      producesSpill: true,
+    });
+    expect(compileFormula("SMALL(A1:A8,3)").mode).toBe(1);
+    expect(compileFormula("LARGE(A1:A8,2)").mode).toBe(1);
+    expect(compileFormula("PERCENTILE(A1:A8,0.25)").mode).toBe(1);
+    expect(compileFormula("PERCENTILE.INC(A1:A8,0.25)").mode).toBe(1);
+    expect(compileFormula("PERCENTILE.EXC(A1:A8,0.25)").mode).toBe(1);
+    expect(compileFormula("PERCENTRANK(A1:A8,8)").mode).toBe(1);
+    expect(compileFormula("PERCENTRANK.INC(A1:A8,8)").mode).toBe(1);
+    expect(compileFormula("PERCENTRANK.EXC(A1:A8,8)").mode).toBe(1);
+    expect(compileFormula("PROB(A1:A4,B1:B4,2,3)").mode).toBe(1);
+    expect(compileFormula("QUARTILE(A1:A8,1)").mode).toBe(1);
+    expect(compileFormula("QUARTILE.INC(A1:A8,1)").mode).toBe(1);
+    expect(compileFormula("QUARTILE.EXC(A1:A8,1)").mode).toBe(1);
+    expect(compileFormula("TRIMMEAN(A1:A8,0.25)").mode).toBe(1);
   });
 
   it("routes accelerated chi-square inverse functions and aliases to the wasm path", () => {
@@ -200,6 +476,47 @@ describe("formula", () => {
     expect(compileFormula("CHISQINV(0.050001,10)").mode).toBe(1);
     expect(compileFormula("LEGACY.CHIINV(0.050001,10)").mode).toBe(1);
     expect(compileFormula("CHISQ.INV(0.93,1)").mode).toBe(1);
+  });
+
+  it("routes accelerated chi-square test functions and aliases to the wasm path", () => {
+    expect(compileFormula("CHISQ.TEST(A1:B3,D1:E3)").mode).toBe(1);
+    expect(compileFormula("CHITEST(A1:B3,D1:E3)").mode).toBe(1);
+    expect(compileFormula("LEGACY.CHITEST(A1:B3,D1:E3)").mode).toBe(1);
+    expect(compileFormula("CHISQ.TEST(SEQUENCE(3,2),SEQUENCE(3,2))").mode).toBe(1);
+  });
+
+  it("routes accelerated beta and f distribution functions and aliases to the wasm path", () => {
+    expect(compileFormula("BETA.DIST(2,8,10,TRUE,1,3)").mode).toBe(1);
+    expect(compileFormula("BETADIST(2,8,10,1,3)").mode).toBe(1);
+    expect(compileFormula("BETA.INV(0.6854705810117458,8,10,1,3)").mode).toBe(1);
+    expect(compileFormula("BETAINV(0.6854705810117458,8,10,1,3)").mode).toBe(1);
+    expect(compileFormula("F.DIST(15.2068649,6,4,TRUE)").mode).toBe(1);
+    expect(compileFormula("F.DIST.RT(15.2068649,6,4)").mode).toBe(1);
+    expect(compileFormula("FDIST(15.2068649,6,4)").mode).toBe(1);
+    expect(compileFormula("LEGACY.FDIST(15.2068649,6,4)").mode).toBe(1);
+    expect(compileFormula("F.INV(0.01,6,4)").mode).toBe(1);
+    expect(compileFormula("F.INV.RT(0.01,6,4)").mode).toBe(1);
+    expect(compileFormula("FINV(0.01,6,4)").mode).toBe(1);
+    expect(compileFormula("LEGACY.FINV(0.01,6,4)").mode).toBe(1);
+    expect(compileFormula("F.TEST(A1:A5,B1:B5)").mode).toBe(1);
+    expect(compileFormula("FTEST(A1:A5,B1:B5)").mode).toBe(1);
+    expect(compileFormula("Z.TEST(A1:A5,2,1)").mode).toBe(1);
+    expect(compileFormula("ZTEST(A1:A5,2,1)").mode).toBe(1);
+  });
+
+  it("routes accelerated student-t distribution functions and aliases to the wasm path", () => {
+    expect(compileFormula("T.DIST(1,1,TRUE)").mode).toBe(1);
+    expect(compileFormula("T.DIST.RT(1,1)").mode).toBe(1);
+    expect(compileFormula("T.DIST.2T(1,1)").mode).toBe(1);
+    expect(compileFormula("TDIST(1,1,2)").mode).toBe(1);
+    expect(compileFormula("T.INV(0.75,1)").mode).toBe(1);
+    expect(compileFormula("T.INV.2T(0.5,1)").mode).toBe(1);
+    expect(compileFormula("TINV(0.5,1)").mode).toBe(1);
+    expect(compileFormula("CONFIDENCE.T(0.5,2,4)").mode).toBe(1);
+    expect(compileFormula("GAMMA.INV(0.08030139707139418,3,2)").mode).toBe(1);
+    expect(compileFormula("GAMMAINV(0.08030139707139418,3,2)").mode).toBe(1);
+    expect(compileFormula("T.TEST(A1:A3,B1:B3,2,1)").mode).toBe(1);
+    expect(compileFormula("TTEST(A1:A3,B1:B3,2,1)").mode).toBe(1);
   });
 
   it("routes accelerated array-shape and conditional aggregate builtins by public compile contract", () => {
@@ -308,12 +625,92 @@ describe("formula", () => {
     expect(compileFormula('SWITCH(A1,1,"yes")').mode).toBe(1);
     expect(compileFormula("WORKDAY(A1,1,B1:B3)").mode).toBe(0);
     expect(compileFormula("NETWORKDAYS(A1,A2,B1:B3)").mode).toBe(0);
-    expect(compileFormula("T.DIST(A1,2,TRUE)").mode).toBe(0);
-    expect(compileFormula('TEXTJOIN(",",TRUE,A1,A2)').mode).toBe(0);
-    expect(compileFormula("WORKDAY.INTL(A1,1)").mode).toBe(0);
+    expect(compileFormula("T.DIST(A1,2)").mode).toBe(0);
+    expect(compileFormula('TEXT(1234.567,"#,##0.00")').mode).toBe(1);
+    expect(compileFormula("PHONETIC(A1:B2)").mode).toBe(1);
+    expect(compileFormula('TEXTJOIN(",",TRUE,A1,A2)').mode).toBe(1);
+    expect(compileFormula('NUMBERVALUE("2.500,27",",",".")').mode).toBe(1);
+    expect(compileFormula('VALUETOTEXT("alpha",1)').mode).toBe(1);
+    expect(compileFormula('LENB("é")').mode).toBe(1);
+    expect(compileFormula("CHAR(65)").mode).toBe(1);
+    expect(compileFormula('CODE("A")').mode).toBe(1);
+    expect(compileFormula('UNICODE("A")').mode).toBe(1);
+    expect(compileFormula("UNICHAR(66)").mode).toBe(1);
+    expect(compileFormula("CLEAN(CHAR(97)&CHAR(1)&CHAR(98))").mode).toBe(1);
+    expect(compileFormula('ASC("ＡＢＣ　１２３")').mode).toBe(1);
+    expect(compileFormula('JIS("ABC 123")').mode).toBe(1);
+    expect(compileFormula('DBCS("ABC 123")').mode).toBe(1);
+    expect(compileFormula("BAHTTEXT(1234)").mode).toBe(1);
+    expect(compileFormula('DAVERAGE(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DCOUNT(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DCOUNTA(A1:C5,"Height",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DGET(A1:C5,"Height",F1:F2)').mode).toBe(1);
+    expect(compileFormula('DMAX(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DMIN(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DPRODUCT(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DSTDEV(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DSTDEVP(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DSUM(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DVAR(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula('DVARP(A1:C5,"Yield",E1:E2)').mode).toBe(1);
+    expect(compileFormula("STANDARDIZE(1,0,1)").mode).toBe(1);
+    expect(compileFormula("STDEV(A1:A4)").mode).toBe(1);
+    expect(compileFormula('STDEVA(2,TRUE(),"skip")').mode).toBe(1);
+    expect(compileFormula("VAR(A1:A4)").mode).toBe(1);
+    expect(compileFormula('VARA(2,TRUE(),"skip")').mode).toBe(1);
+    expect(compileFormula("SKEW(A1:A5)").mode).toBe(1);
+    expect(compileFormula("KURT(A1:A5)").mode).toBe(1);
+    expect(compileFormula("NORMDIST(1,0,1,TRUE)").mode).toBe(1);
+    expect(compileFormula("NORMINV(0.8413447460685429,0,1)").mode).toBe(1);
+    expect(compileFormula("NORMSDIST(1)").mode).toBe(1);
+    expect(compileFormula("NORMSINV(0.001)").mode).toBe(1);
+    expect(compileFormula("LOGINV(0.5,0,1)").mode).toBe(1);
+    expect(compileFormula("LOGNORMDIST(1,0,1)").mode).toBe(1);
+    expect(compileFormula('LEFTB("abcdef",2)').mode).toBe(1);
+    expect(compileFormula('MIDB("abcdef",3,2)').mode).toBe(1);
+    expect(compileFormula('RIGHTB("abcdef",3)').mode).toBe(1);
+    expect(compileFormula('FINDB("d","abcdef",3)').mode).toBe(1);
+    expect(compileFormula('SEARCHB("ph","alphabet")').mode).toBe(1);
+    expect(compileFormula('REPLACEB("alphabet",3,2,"Z")').mode).toBe(1);
+    expect(compileFormula("ADDRESS(12,3)").mode).toBe(1);
+    expect(compileFormula("DOLLAR(-1234.5,1)").mode).toBe(1);
+    expect(compileFormula("DOLLARDE(1.08,16)").mode).toBe(1);
+    expect(compileFormula("DOLLARFR(1.5,16)").mode).toBe(1);
+    expect(compileFormula("BASE(255,16,4)").mode).toBe(1);
+    expect(compileFormula('DECIMAL("00FF",16)').mode).toBe(1);
+    expect(compileFormula('BIN2DEC("1111111111")').mode).toBe(1);
+    expect(compileFormula('BIN2HEX("1111111111")').mode).toBe(1);
+    expect(compileFormula('BIN2OCT("1111111111")').mode).toBe(1);
+    expect(compileFormula("DEC2BIN(10,8)").mode).toBe(1);
+    expect(compileFormula("DEC2HEX(255,4)").mode).toBe(1);
+    expect(compileFormula("DEC2OCT(15,4)").mode).toBe(1);
+    expect(compileFormula('HEX2BIN("A",8)').mode).toBe(1);
+    expect(compileFormula('HEX2DEC("FFFFFFFFFF")').mode).toBe(1);
+    expect(compileFormula('HEX2OCT("F",4)').mode).toBe(1);
+    expect(compileFormula('OCT2BIN("12",8)').mode).toBe(1);
+    expect(compileFormula('OCT2DEC("17")').mode).toBe(1);
+    expect(compileFormula('OCT2HEX("17",4)').mode).toBe(1);
+    expect(compileFormula('CONVERT(6,"mi","km")').mode).toBe(1);
+    expect(compileFormula('EUROCONVERT(1.2,"DEM","EUR")').mode).toBe(1);
+    expect(compileFormula('EUROCONVERT(1,"FRF","DEM",TRUE,3)').mode).toBe(1);
+    expect(compileFormula("BESSELI(1.5,1)").mode).toBe(1);
+    expect(compileFormula("BESSELJ(1.9,2)").mode).toBe(1);
+    expect(compileFormula("BESSELK(1.5,1)").mode).toBe(1);
+    expect(compileFormula("BESSELY(2.5,1)").mode).toBe(1);
+    expect(compileFormula("BITAND(6,3)").mode).toBe(1);
+    expect(compileFormula("BITOR(6,3)").mode).toBe(1);
+    expect(compileFormula("BITXOR(6,3)").mode).toBe(1);
+    expect(compileFormula("BITLSHIFT(1,4)").mode).toBe(1);
+    expect(compileFormula("BITRSHIFT(16,4)").mode).toBe(1);
+    expect(compileFormula('USE.THE.COUNTIF(A1:A3,">0")').mode).toBe(1);
+    expect(compileFormula("WORKDAY.INTL(A1,1)").mode).toBe(1);
+    expect(compileFormula("NETWORKDAYS.INTL(A1,A2,7)").mode).toBe(1);
     expect(compileFormula("LET(x,2,x+3)").mode).toBe(1);
     expect(compileFormula("LET(x,A1*2,x+3)").mode).toBe(1);
-    expect(compileFormula('TEXTBEFORE(A1,"-")').mode).toBe(0);
+    expect(compileFormula('TEXTBEFORE(A1,"-")').mode).toBe(1);
+    expect(compileFormula('TEXTAFTER(A1,"-")').mode).toBe(1);
+    expect(compileFormula('CHOOSE(2,"red","blue","green")').mode).toBe(1);
+    expect(compileFormula("CHOOSE(1,A1:B2,C1:D2)")).toMatchObject({ mode: 1, producesSpill: true });
     expect(compileFormula("FILTER(A1:A4,A1:A4>2)")).toMatchObject({ mode: 1, producesSpill: true });
     expect(compileFormula("UNIQUE(A1:A4)")).toMatchObject({ mode: 1, producesSpill: true });
     expect(compileFormula("FILTER(A1:A4,B1:B4)")).toMatchObject({ mode: 1, producesSpill: true });
@@ -323,6 +720,7 @@ describe("formula", () => {
   it("accelerates rewritten logical calls while keeping higher-order lambda families on the JS path", () => {
     expect(compileFormula("TRUE()").mode).toBe(1);
     expect(compileFormula("FALSE()").mode).toBe(1);
+    expect(compileFormula("SEQUENCE(3,1,1,1)")).toMatchObject({ mode: 1, producesSpill: true });
     expect(compileFormula("IFS(A1>0,1,TRUE(),2)").mode).toBe(1);
     expect(compileFormula('SWITCH(A1,1,"yes","no")').mode).toBe(1);
     expect(compileFormula("XOR(A1>0,B1>0)").mode).toBe(1);
@@ -371,10 +769,31 @@ describe("formula", () => {
     expect(compileFormula("REDUCE(1,A1:A3,LAMBDA(acc,x,acc*x))").mode).toBe(1);
   });
 
-  it("keeps newly added JS math families on the JS path while marking spill producers", () => {
-    expect(compileFormula("TRUNC(A1,1)").mode).toBe(0);
-    expect(compileFormula("ACOSH(A1)").mode).toBe(0);
-    expect(compileFormula("PRODUCT(A1:A3)").mode).toBe(0);
+  it("routes promoted scalar and reducer math families through wasm while keeping matrix-only families on JS", () => {
+    expect(compileFormula("TRUNC(A1,1)").mode).toBe(1);
+    expect(compileFormula("FLOOR.MATH(-5.5,2)").mode).toBe(1);
+    expect(compileFormula("FLOOR.PRECISE(-5.5,2)").mode).toBe(1);
+    expect(compileFormula("CEILING.MATH(-5.5,2)").mode).toBe(1);
+    expect(compileFormula("CEILING.PRECISE(-5.5,2)").mode).toBe(1);
+    expect(compileFormula("ISO.CEILING(-5.5,2)").mode).toBe(1);
+    expect(compileFormula("MROUND(10,4)").mode).toBe(1);
+    expect(compileFormula("PERMUT(5,3)").mode).toBe(1);
+    expect(compileFormula("PERMUTATIONA(2,3)").mode).toBe(1);
+    expect(compileFormula("SERIESSUM(2,1,2,1,2)").mode).toBe(1);
+    expect(compileFormula("SQRTPI(2)").mode).toBe(1);
+    expect(compileFormula("ACOSH(A1)").mode).toBe(1);
+    expect(compileFormula("ASINH(A1)").mode).toBe(1);
+    expect(compileFormula("ATANH(A1)").mode).toBe(1);
+    expect(compileFormula("COT(A1)").mode).toBe(1);
+    expect(compileFormula("SEC(A1)").mode).toBe(1);
+    expect(compileFormula("PRODUCT(A1:A3)").mode).toBe(1);
+    expect(compileFormula("SUMSQ(A1:A3)").mode).toBe(1);
+    expect(compileFormula("GEOMEAN(A1:A3)").mode).toBe(1);
+    expect(compileFormula("HARMEAN(A1:A3)").mode).toBe(1);
+    expect(compileFormula("GCD(A1:A3)").mode).toBe(1);
+    expect(compileFormula("LCM(A1:A3)").mode).toBe(1);
+    expect(compileFormula("COMBIN(8,3)").mode).toBe(1);
+    expect(compileFormula("QUOTIENT(7,3)").mode).toBe(1);
     expect(compileFormula("SUMXMY2(A1:A3,B1:B3)").mode).toBe(0);
     expect(compileFormula("MDETERM(A1:B2)").mode).toBe(0);
     expect(compileFormula("MMULT(A1:B2,C1:D2)")).toMatchObject({ mode: 0, producesSpill: true });
@@ -386,6 +805,22 @@ describe("formula", () => {
       volatile: true,
     });
     expect(compileFormula("RANDBETWEEN(1,10)").volatile).toBe(true);
+  });
+
+  it("keeps unsupported promoted argument shapes on JS while preserving native routing for valid helpers", () => {
+    expect(compileFormula("ATAN2(A1)").mode).toBe(0);
+    expect(compileFormula("EXACT(A1)").mode).toBe(0);
+    expect(compileFormula('CONVERT(A1:A2,"m","s")').mode).toBe(0);
+    expect(compileFormula('EUROCONVERT(A1:A2,"DEM","EUR")').mode).toBe(0);
+    expect(compileFormula('ISO.CEILING("bad")').mode).toBe(1);
+
+    expect(compileFormula('BIN2HEX("111",4)').mode).toBe(1);
+    expect(compileFormula('HEX2DEC("FF")').mode).toBe(1);
+    expect(compileFormula("CHAR(65)").mode).toBe(1);
+    expect(compileFormula('UNICODE("A")').mode).toBe(1);
+    expect(compileFormula("PRODUCT(A1:A3,A4:A6)").mode).toBe(1);
+    expect(compileFormula("GCD(18,24,30)").mode).toBe(1);
+    expect(compileFormula("LCM(3,4,5)").mode).toBe(1);
   });
 
   it("evaluates AST against a context", () => {

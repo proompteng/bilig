@@ -35,6 +35,7 @@ describe("text builtins", () => {
     expect(getTextBuiltin("SEARCH")?.(text("a"))).toEqual(valueError());
     expect(getTextBuiltin("ENCODEURL")?.()).toEqual(valueError());
     expect(getTextBuiltin("FINDB")?.()).toEqual(valueError());
+    expect(getTextBuiltin("FINDB")?.(err(ErrorCode.Ref), text("abc"))).toEqual(err(ErrorCode.Ref));
   });
 
   it("supports Excel-like SEARCH wildcards and FIND case sensitivity", () => {
@@ -83,6 +84,7 @@ describe("text builtins", () => {
     );
     expect(getTextBuiltin("ENCODEURL")?.(text("a&b=c?x=y"))).toEqual(text("a&b=c?x=y"));
     expect(getTextBuiltin("ENCODEURL")?.(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
+    expect(getTextBuiltin("LOWER")?.()).toEqual(valueError());
   });
 
   it("supports FINDB, LEFTB, MIDB, and RIGHTB with byte boundaries", () => {
@@ -105,15 +107,27 @@ describe("text builtins", () => {
     expect(getTextBuiltin("FINDB")?.(text("x"), text("abc"), number(5))).toEqual(valueError());
     expect(getTextBuiltin("LEFTB")?.(text("abc"), number(-1))).toEqual(valueError());
     expect(getTextBuiltin("MIDB")?.(text("abc"), number(0), number(2))).toEqual(valueError());
+    expect(getTextBuiltin("MIDB")?.(text("abc"), number(1), text("bad"))).toEqual(valueError());
     expect(getTextBuiltin("RIGHTB")?.(text("abc"), number(-1))).toEqual(valueError());
     expect(getTextBuiltin("LEFTB")?.()).toEqual(valueError());
     expect(getTextBuiltin("MIDB")?.(text("abc"), number(1))).toEqual(valueError());
     expect(getTextBuiltin("RIGHTB")?.()).toEqual(valueError());
     expect(getTextBuiltin("SEARCHB")?.(text("a"))).toEqual(valueError());
     expect(getTextBuiltin("SEARCHB")?.(text("a"), text("abc"), number(0))).toEqual(valueError());
+    expect(getTextBuiltin("SEARCHB")?.(text("a"), text("abc"), number(5))).toEqual(valueError());
     expect(getTextBuiltin("REPLACEB")?.(text("abc"), number(0), number(1), text("z"))).toEqual(
       valueError(),
     );
+    expect(getTextBuiltin("REPLACEB")?.(text("abc"), number(1), number(-1), text("z"))).toEqual(
+      valueError(),
+    );
+    expect(getTextBuiltin("REPLACEB")?.(text("abc"), number(1), text("bad"), text("z"))).toEqual(
+      valueError(),
+    );
+    expect(getTextBuiltin("REPLACEB")?.(text("abc"), number(1), number(1))).toEqual(valueError());
+    expect(
+      getTextBuiltin("REPLACEB")?.(err(ErrorCode.Ref), number(1), number(1), text("z")),
+    ).toEqual(err(ErrorCode.Ref));
     expect(getTextBuiltin("LEFTB")?.(err(ErrorCode.Ref), number(1))).toEqual(err(ErrorCode.Ref));
     expect(getTextBuiltin("MIDB")?.(text("abc"), err(ErrorCode.Name), number(1))).toEqual(
       err(ErrorCode.Name),
@@ -130,6 +144,42 @@ describe("text builtins", () => {
     expect(getTextBuiltin("PROPER")?.(text("hello world"))).toEqual(text("Hello World"));
     expect(getTextBuiltin("PROPER")?.(text("hELLO, wORLD"))).toEqual(text("Hello, World"));
     expect(getTextBuiltin("CONCATENATE")?.()).toEqual(valueError());
+  });
+
+  it("supports BAHTTEXT for Thai baht currency text", () => {
+    expect(getTextBuiltin("BAHTTEXT")?.(number(1234))).toEqual(text("หนึ่งพันสองร้อยสามสิบสี่บาทถ้วน"));
+    expect(getTextBuiltin("BAHTTEXT")?.(number(21.25))).toEqual(text("ยี่สิบเอ็ดบาทยี่สิบห้าสตางค์"));
+    expect(getTextBuiltin("BAHTTEXT")?.(text("bad"))).toEqual(valueError());
+  });
+
+  it("supports TEXT for numeric, percent, date, and text-section formatting", () => {
+    const TEXT = getTextBuiltin("TEXT")!;
+
+    expect(TEXT(number(1234.567), text("#,##0.00"))).toEqual(text("1,234.57"));
+    expect(TEXT(number(0.1234), text("0.0%"))).toEqual(text("12.3%"));
+    expect(TEXT(number(1234.567), text("0.00E+00"))).toEqual(text("1.23E+03"));
+    expect(TEXT(number(45356), text("yyyy-mm-dd"))).toEqual(text("2024-03-05"));
+    expect(TEXT(number(0.5), text("h:mm AM/PM"))).toEqual(text("12:00 PM"));
+    expect(TEXT(text("alpha"), text("prefix @"))).toEqual(text("prefix alpha"));
+    expect(TEXT(text("alpha"), text('"literal"'))).toEqual(text("literal"));
+  });
+
+  it("returns #VALUE! for unsupported TEXT coercions and missing args", () => {
+    const TEXT = getTextBuiltin("TEXT")!;
+
+    expect(TEXT()).toEqual(valueError());
+    expect(TEXT(text("alpha"), text("0.00"))).toEqual(valueError());
+    expect(TEXT(err(ErrorCode.Ref), text("0.00"))).toEqual(err(ErrorCode.Ref));
+    expect(TEXT(number(42), err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+  });
+
+  it("supports PHONETIC as a scalar text passthrough", () => {
+    const PHONETIC = getTextBuiltin("PHONETIC")!;
+
+    expect(PHONETIC(text("カタカナ"))).toEqual(text("カタカナ"));
+    expect(PHONETIC(number(42))).toEqual(text("42"));
+    expect(PHONETIC()).toEqual(valueError());
+    expect(PHONETIC(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
   });
 
   it("supports TEXTAFTER search modes, negative instances, and fallback values", () => {
@@ -157,6 +207,13 @@ describe("text builtins", () => {
       TEXTJOIN(text(","), { tag: ValueTag.Boolean, value: false }, text("a"), text("b")),
     ).toEqual(text("a,b"));
     expect(
+      TEXTJOIN(text("|"), { tag: ValueTag.Boolean, value: false }, text("a"), text(""), text("b")),
+    ).toEqual(text("a||b"));
+    expect(
+      TEXTJOIN(text("|"), { tag: ValueTag.Boolean, value: true }, undefined, text("a")),
+    ).toEqual(text("a"));
+    expect(TEXTJOIN(text("|"), text("bad"), text("a"))).toEqual(valueError());
+    expect(
       TEXTJOIN(
         text("|"),
         { tag: ValueTag.Boolean, value: false },
@@ -165,6 +222,9 @@ describe("text builtins", () => {
         text("b"),
       ),
     ).toEqual(text("a||b"));
+    expect(
+      TEXTJOIN(text("|"), { tag: ValueTag.Boolean, value: false }, text("a"), text(""), text("")),
+    ).toEqual(text("a||"));
     expect(
       TEXTJOIN(
         text("|"),
@@ -251,9 +311,22 @@ describe("text builtins", () => {
     });
   });
 
+  it("supports ASC, JIS, and DBCS width conversions", () => {
+    expect(getTextBuiltin("ASC")?.(text("ＡＢＣ　１２３"))).toEqual(text("ABC 123"));
+    expect(getTextBuiltin("ASC")?.(text("ガギグゲゴ"))).toEqual(text("ｶﾞｷﾞｸﾞｹﾞｺﾞ"));
+    expect(getTextBuiltin("JIS")?.(text("ABC 123"))).toEqual(text("ＡＢＣ　１２３"));
+    expect(getTextBuiltin("JIS")?.(text("ｶﾞｷﾞｸﾞｹﾞｺﾞ"))).toEqual(text("ガギグゲゴ"));
+    expect(getTextBuiltin("DBCS")?.(text("ABC 123"))).toEqual(text("ＡＢＣ　１２３"));
+    expect(getTextBuiltin("ASC")?.()).toEqual(valueError());
+    expect(getTextBuiltin("JIS")?.(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
+    expect(getTextBuiltin("DBCS")?.(err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+  });
+
   it("supports NUMBERVALUE locale-independent numeric parsing", () => {
     const NUMBERVALUE = getTextBuiltin("NUMBERVALUE")!;
 
+    expect(NUMBERVALUE()).toEqual(valueError());
+    expect(NUMBERVALUE(err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
     expect(NUMBERVALUE(text("2.500,27"), text(","), text("."))).toEqual(number(2500.27));
     expect(NUMBERVALUE(text(" 3 000 "))).toEqual(number(3000));
     expect(NUMBERVALUE(text("9%%"))).toEqual(number(0.0009));
@@ -326,12 +399,19 @@ describe("text builtins", () => {
     expect(REGEXTEST(err(ErrorCode.Ref), text("a"))).toEqual(err(ErrorCode.Ref));
 
     expect(REGEXREPLACE()).toEqual(valueError());
+    expect(REGEXREPLACE(err(ErrorCode.Ref), text("a"), text("x"))).toEqual(err(ErrorCode.Ref));
     expect(REGEXREPLACE(text("abc"), text("a"), text("x"), text("bad"))).toEqual(valueError());
     expect(REGEXREPLACE(text("abc"), text("a"), text("x"), number(1), number(9))).toEqual(
       valueError(),
     );
     expect(REGEXREPLACE(text("abc"), text("("), text("x"))).toEqual(valueError());
     expect(REGEXREPLACE(text("abc"), text("z"), text("x"), number(1))).toEqual(text("abc"));
+    expect(
+      REGEXREPLACE(text("abc123"), text("([a-z]+)([0-9]+)"), text("$2-$1"), number(3)),
+    ).toEqual(text("abc123"));
+    expect(REGEXREPLACE(text("abc"), text("([a-z]+)([0-9]+)?"), text("$2-$1"), number(1))).toEqual(
+      text("-abc"),
+    );
     expect(REGEXREPLACE(text("a1 b2 c3"), text("[0-9]"), text("X"), number(-1))).toEqual(
       text("a1 b2 cX"),
     );
@@ -340,6 +420,7 @@ describe("text builtins", () => {
     expect(REGEXEXTRACT(text("abc"), text("([a-z]+)"), number(3))).toEqual(valueError());
     expect(REGEXEXTRACT(text("abc"), text("([a-z]+)"), number(0), number(9))).toEqual(valueError());
     expect(REGEXEXTRACT(text("abc"), text("("))).toEqual(valueError());
+    expect(REGEXEXTRACT(text("abc"), text("("), number(1))).toEqual(valueError());
     expect(REGEXEXTRACT(text("abc"), text("[0-9]+"), number(1))).toEqual(err(ErrorCode.NA));
     expect(REGEXEXTRACT(text("abc"), text("[a-z]+"), number(2))).toEqual(err(ErrorCode.NA));
     expect(REGEXEXTRACT(err(ErrorCode.Name), text("[a-z]+"))).toEqual(err(ErrorCode.Name));

@@ -9,17 +9,23 @@ export interface WorkbookRendererRoot {
   unmount(): Promise<void>;
 }
 
-function scheduleCommitSettlement(finish: () => void): void {
-  // React/compat can surface commit errors after the update callback returns.
-  // Wait through microtasks and two macrotask turns before reading lastError.
-  // This keeps render()/unmount() aligned with compat callbacks that surface
-  // errors in a later microtask or in the next queued task.
-  queueMicrotask(() => {
-    setTimeout(() => {
-      setTimeout(() => {
-        queueMicrotask(finish);
-      }, 0);
-    }, 0);
+const COMMIT_SETTLEMENT_TURNS = 5;
+
+function scheduleCommitSettlement(
+  container: WorkbookContainer,
+  finish: () => void,
+  remainingTurns = COMMIT_SETTLEMENT_TURNS,
+): void {
+  // React/compat can surface commit errors after the update callback returns,
+  // and the exact turn count is not stable under the full repo test load.
+  // Wait through a bounded macrotask quiet window so deferred microtask errors
+  // from compat land before we resolve the render/unmount promise.
+  setTimeout(() => {
+    if (container.lastError !== null || remainingTurns === 0) {
+      finish();
+      return;
+    }
+    scheduleCommitSettlement(container, finish, remainingTurns - 1);
   });
 }
 
@@ -174,7 +180,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, element, () => {
-            scheduleCommitSettlement(finish);
+            scheduleCommitSettlement(container, finish);
           });
         } catch (error) {
           settled = true;
@@ -208,7 +214,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
         };
         try {
           updateFiberRoot(fiberRoot, null, () => {
-            scheduleCommitSettlement(finish);
+            scheduleCommitSettlement(container, finish);
           });
         } catch (error) {
           settled = true;

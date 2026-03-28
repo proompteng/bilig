@@ -119,6 +119,26 @@ describe("js evaluator", () => {
         context,
       ),
     ).toEqual({ tag: ValueTag.Empty });
+
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("CHOOSE(1,A1:B2,C1:D2)")), {
+        ...context,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === "A1" && end === "B2") {
+            return [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()];
+          }
+          if (start === "C1" && end === "D2") {
+            return [num(10), num(11), num(12), num(13)];
+          }
+          return [];
+        },
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(2), num(3), { tag: ValueTag.Boolean, value: true }, empty()],
+    });
   });
 
   it("lowers row and column refs into NaN sentinels for the JS path", () => {
@@ -438,7 +458,22 @@ describe("js evaluator", () => {
       code: ErrorCode.Value,
     });
     expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("MAKEARRAY(2,2,LAMBDA(r,c,SEQUENCE(2)))")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,LAMBDA(x,SEQUENCE(2)))")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MAP(A1:B2,A1:A3,LAMBDA(x,y,x+y))")), metadataContext),
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
@@ -449,6 +484,14 @@ describe("js evaluator", () => {
         metadataContext,
       ),
     ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("BYROW(A1:B2)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("BYCOL(A1:B2)")), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
@@ -486,6 +529,23 @@ describe("js evaluator", () => {
       code: ErrorCode.Value,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula("INDIRECT()")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("MAP(LAMBDA(x,x))")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("BYCOL(A1:B2,LAMBDA(c,SEQUENCE(2)))")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("REDUCE(A1:B2)")), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
@@ -648,6 +708,290 @@ describe("js evaluator", () => {
     ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("GROUPBY(A1:B5,C1:D5,SUM,3,1,-3,E1:E5)")), {
+        ...metadataContext,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === "A1" && end === "B5") {
+            return [
+              { tag: ValueTag.String, value: "Region", stringId: 0 },
+              { tag: ValueTag.String, value: "Product", stringId: 0 },
+              { tag: ValueTag.String, value: "East", stringId: 0 },
+              { tag: ValueTag.String, value: "Widget", stringId: 0 },
+              { tag: ValueTag.String, value: "West", stringId: 0 },
+              { tag: ValueTag.String, value: "Widget", stringId: 0 },
+              { tag: ValueTag.String, value: "East", stringId: 0 },
+              { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+              { tag: ValueTag.String, value: "West", stringId: 0 },
+              { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+            ];
+          }
+          if (start === "C1" && end === "D5") {
+            return [
+              { tag: ValueTag.String, value: "Sales", stringId: 0 },
+              { tag: ValueTag.String, value: "Units", stringId: 0 },
+              { tag: ValueTag.Number, value: 10 },
+              { tag: ValueTag.Number, value: 2 },
+              { tag: ValueTag.Number, value: 7 },
+              { tag: ValueTag.Number, value: 1 },
+              { tag: ValueTag.Number, value: 5 },
+              { tag: ValueTag.Number, value: 3 },
+              { tag: ValueTag.Number, value: 4 },
+              { tag: ValueTag.Number, value: 2 },
+            ];
+          }
+          if (start === "E1" && end === "E5") {
+            return [
+              { tag: ValueTag.String, value: "Include", stringId: 0 },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: false },
+              { tag: ValueTag.Boolean, value: true },
+              { tag: ValueTag.Boolean, value: true },
+            ];
+          }
+          return [];
+        },
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 5,
+      cols: 4,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Product", stringId: 0 },
+        { tag: ValueTag.String, value: "Sales", stringId: 0 },
+        { tag: ValueTag.String, value: "Units", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.String, value: "Widget", stringId: 0 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Number, value: 19 },
+        { tag: ValueTag.Number, value: 7 },
+      ],
+    });
+    expect(
+      evaluatePlanResult(
+        lowerToPlan(parseFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1,0,D1:D5)")),
+        {
+          ...metadataContext,
+          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+            if (start === "A1" && end === "A5") {
+              return [
+                { tag: ValueTag.String, value: "Region", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+              ];
+            }
+            if (start === "B1" && end === "B5") {
+              return [
+                { tag: ValueTag.String, value: "Product", stringId: 0 },
+                { tag: ValueTag.String, value: "Widget", stringId: 0 },
+                { tag: ValueTag.String, value: "Widget", stringId: 0 },
+                { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+                { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+              ];
+            }
+            if (start === "C1" && end === "C5") {
+              return [
+                { tag: ValueTag.String, value: "Sales", stringId: 0 },
+                { tag: ValueTag.Number, value: 10 },
+                { tag: ValueTag.Number, value: 7 },
+                { tag: ValueTag.Number, value: 5 },
+                { tag: ValueTag.Number, value: 4 },
+              ];
+            }
+            if (start === "D1" && end === "D5") {
+              return [
+                { tag: ValueTag.String, value: "Include", stringId: 0 },
+                { tag: ValueTag.Boolean, value: true },
+                { tag: ValueTag.Boolean, value: true },
+                { tag: ValueTag.Boolean, value: true },
+                { tag: ValueTag.Boolean, value: true },
+              ];
+            }
+            return [];
+          },
+        },
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 4,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Widget", stringId: 0 },
+        { tag: ValueTag.String, value: "Gizmo", stringId: 0 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 5 },
+        { tag: ValueTag.Number, value: 15 },
+        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.Number, value: 7 },
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 11 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Number, value: 17 },
+        { tag: ValueTag.Number, value: 9 },
+        { tag: ValueTag.Number, value: 26 },
+      ],
+    });
+    expect(
+      evaluatePlanResult(
+        lowerToPlan(parseFormula("GROUPBY(A1:A5,C1:C5,LAMBDA(s,COUNTA(s)),3,1)")),
+        {
+          ...metadataContext,
+          resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+            if (start === "A1" && end === "A5") {
+              return [
+                { tag: ValueTag.String, value: "Region", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+                { tag: ValueTag.String, value: "East", stringId: 0 },
+                { tag: ValueTag.String, value: "West", stringId: 0 },
+              ];
+            }
+            if (start === "C1" && end === "C5") {
+              return [
+                { tag: ValueTag.String, value: "Sales", stringId: 0 },
+                { tag: ValueTag.Number, value: 10 },
+                { tag: ValueTag.Number, value: 7 },
+                { tag: ValueTag.Number, value: 5 },
+                { tag: ValueTag.Number, value: 4 },
+              ];
+            }
+            return [];
+          },
+        },
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 2,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Sales", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "West", stringId: 0 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Number, value: 4 },
+      ],
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("GROUPBY(A1:A2,B1:B2)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("GROUPBY(A1:A2,B1:B2,1)")), {
+        ...metadataContext,
+        resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+          if (start === "A1" && end === "A2") {
+            return [
+              { tag: ValueTag.String, value: "Region", stringId: 0 },
+              { tag: ValueTag.String, value: "East", stringId: 0 },
+            ];
+          }
+          if (start === "B1" && end === "B2") {
+            return [
+              { tag: ValueTag.String, value: "Sales", stringId: 0 },
+              { tag: ValueTag.Number, value: 10 },
+            ];
+          }
+          return [];
+        },
+      }),
+    ).toEqual({
+      kind: "array",
+      rows: 3,
+      cols: 2,
+      values: [
+        { tag: ValueTag.String, value: "Region", stringId: 0 },
+        { tag: ValueTag.String, value: "Sales", stringId: 0 },
+        { tag: ValueTag.String, value: "East", stringId: 0 },
+        { tag: ValueTag.Error, code: ErrorCode.Value },
+        { tag: ValueTag.String, value: "Total", stringId: 0 },
+        { tag: ValueTag.Error, code: ErrorCode.Value },
+      ],
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("PIVOTBY(A1:A2,B1:B2,C1:C2)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4)")), {
+        ...metadataContext,
+        resolveMultipleOperations: ({
+          formulaAddress,
+          rowCellAddress,
+          rowReplacementAddress,
+          columnCellAddress,
+        }) =>
+          formulaAddress === "B5" &&
+          rowCellAddress === "B3" &&
+          rowReplacementAddress === "C4" &&
+          columnCellAddress === undefined
+            ? { tag: ValueTag.Number, value: 17 }
+            : { tag: ValueTag.Error, code: ErrorCode.Ref },
+      }),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,D3,E4)")), {
+        ...metadataContext,
+        resolveMultipleOperations: ({
+          formulaAddress,
+          rowCellAddress,
+          rowReplacementAddress,
+          columnCellAddress,
+          columnReplacementAddress,
+        }) =>
+          formulaAddress === "B5" &&
+          rowCellAddress === "B3" &&
+          rowReplacementAddress === "C4" &&
+          columnCellAddress === "D3" &&
+          columnReplacementAddress === "E4"
+            ? { tag: ValueTag.Number, value: 19 }
+            : { tag: ValueTag.Error, code: ErrorCode.Ref },
+      }),
+    ).toEqual({
+      tag: ValueTag.Number,
+      value: 19,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(1,B3,C4)")), metadataContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    });
+    expect(
+      evaluatePlan(
+        lowerToPlan(parseFormula("MULTIPLE.OPERATIONS(B5,B3,C4,1,E4)")),
+        metadataContext,
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
     });
   });
 

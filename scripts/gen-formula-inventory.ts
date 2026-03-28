@@ -50,15 +50,21 @@ const providerBackedNames = new Set([
   "FILTERXML",
   "HYPERLINK",
   "IMAGE",
+  "INFO",
+  "REGISTER.ID",
   "RTD",
   "STOCKHISTORY",
+  "TRANSLATE",
   "WEBSERVICE",
 ]);
 
 const protocolBuiltinsByName = new Map(
   BUILTINS.map((builtin) => [builtin.name.toUpperCase(), builtin]),
 );
-const runtimeAliasByCanonicalName = new Map<string, string>([["AVERAGE", "AVG"]]);
+const runtimeAliasByCanonicalName = new Map<string, string>([
+  ["AVERAGE", "AVG"],
+  ["USE.THE.COUNTIF", "COUNTIF"],
+]);
 
 interface SourceDerivedRuntimeData {
   placeholderNames: Set<string>;
@@ -211,10 +217,12 @@ async function readSourceDerivedRuntimeData(): Promise<SourceDerivedRuntimeData>
       builtin.name.trim().toUpperCase(),
     ),
     ...extractObjectKeys(getVariableInitializer(builtinsSource, "scalarBuiltins")),
+    ...extractStringArray(getVariableInitializer(builtinsSource, "externalScalarBuiltinNames")),
     ...extractObjectKeys(getVariableInitializer(logicalSource, "logicalBuiltins")),
     ...extractObjectKeys(getVariableInitializer(textSource, "textBuiltins")),
     ...extractObjectKeys(getVariableInitializer(datetimeSource, "datetimeBuiltins")),
     ...extractObjectKeys(getVariableInitializer(lookupSource, "lookupBuiltins")),
+    ...extractStringArray(getVariableInitializer(lookupSource, "externalLookupBuiltinNames")),
   ]);
 
   const jsSpecialBuiltinNames = new Set(
@@ -431,7 +439,9 @@ async function renderMissingProtocolDoc(source: FormulaInventorySource): Promise
       };
     })
     .filter(
-      (entry) => entry.deterministic === "deterministic" && !protocolBuiltinsByName.has(entry.name),
+      (entry) =>
+        entry.deterministic === "deterministic" &&
+        !runtimeLookupNames(entry.name).some((entryName) => protocolBuiltinsByName.has(entryName)),
     )
     .toSorted((left, right) => left.name.localeCompare(right.name));
 

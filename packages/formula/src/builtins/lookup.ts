@@ -1,6 +1,7 @@
 import { ErrorCode, ValueTag, type CellValue } from "@bilig/protocol";
 import { getExternalLookupFunction } from "../external-function-adapter.js";
 import type { ArrayValue, EvaluationResult } from "../runtime-values.js";
+import { excelSerialToDateParts } from "./datetime.js";
 
 export interface RangeBuiltinArgument {
   kind: "range";
@@ -15,6 +16,10 @@ export type LookupBuiltin = (...args: LookupBuiltinArgument[]) => EvaluationResu
 
 function errorValue(code: ErrorCode): CellValue {
   return { tag: ValueTag.Error, code };
+}
+
+function numberResult(value: number): CellValue {
+  return { tag: ValueTag.Number, value };
 }
 
 function isError(
@@ -206,8 +211,437 @@ function findMatchingRowIndexes(
   return matchingRows;
 }
 
+type DatabaseCriteriaClause = {
+  columnIndex: number;
+  criteria: CellValue;
+};
+
+type DatabaseCriteriaRow = {
+  clauses: DatabaseCriteriaClause[];
+  blocked: boolean;
+};
+
+function normalizeHeaderLabel(value: CellValue): string {
+  return toStringValue(value).trim().toUpperCase();
+}
+
+function scalarFromLookupArgument(arg: LookupBuiltinArgument): CellValue {
+  if (!isRangeArg(arg)) {
+    return arg;
+  }
+  if (arg.refKind !== "cells" || arg.values.length !== 1) {
+    return errorValue(ErrorCode.Value);
+  }
+  return arg.values[0] ?? { tag: ValueTag.Empty };
+}
+
+function resolveDatabaseFieldIndex(
+  database: RangeBuiltinArgument,
+  fieldArg: LookupBuiltinArgument,
+  allowOmitted: boolean,
+): number | undefined | CellValue {
+  const field = scalarFromLookupArgument(fieldArg);
+  if (isError(field)) {
+    return field;
+  }
+  if (field.tag === ValueTag.Empty) {
+    return allowOmitted ? undefined : errorValue(ErrorCode.Value);
+  }
+
+  if (field.tag === ValueTag.Number) {
+    const position = Math.trunc(field.value);
+    return position >= 1 && position <= database.cols ? position - 1 : errorValue(ErrorCode.Value);
+  }
+
+  if (field.tag !== ValueTag.String) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const normalizedField = normalizeHeaderLabel(field);
+  if (normalizedField === "") {
+    return allowOmitted ? undefined : errorValue(ErrorCode.Value);
+  }
+  for (let col = 0; col < database.cols; col += 1) {
+    if (normalizeHeaderLabel(getRangeValue(database, 0, col)) === normalizedField) {
+      return col;
+    }
+  }
+  return errorValue(ErrorCode.Value);
+}
+
+function buildDatabaseCriteriaRows(
+  database: RangeBuiltinArgument,
+  criteria: RangeBuiltinArgument,
+): DatabaseCriteriaRow[] | CellValue {
+  if (criteria.rows < 2 || criteria.cols < 1) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const headerColumns: number[] = [];
+  const headerBlocked: boolean[] = [];
+  for (let col = 0; col < criteria.cols; col += 1) {
+    const header = getRangeValue(criteria, 0, col);
+    if (header.tag === ValueTag.Error) {
+      return header;
+    }
+    const normalized = normalizeHeaderLabel(header);
+    if (normalized === "") {
+      headerColumns.push(-1);
+      headerBlocked.push(true);
+      continue;
+    }
+    let matchedColumn = -1;
+    for (let databaseCol = 0; databaseCol < database.cols; databaseCol += 1) {
+      if (normalizeHeaderLabel(getRangeValue(database, 0, databaseCol)) === normalized) {
+        matchedColumn = databaseCol;
+        break;
+      }
+    }
+    headerColumns.push(matchedColumn);
+    headerBlocked.push(matchedColumn < 0);
+  }
+
+  const rows: DatabaseCriteriaRow[] = [];
+  for (let row = 1; row < criteria.rows; row += 1) {
+    const clauses: DatabaseCriteriaClause[] = [];
+    let blocked = false;
+    for (let col = 0; col < criteria.cols; col += 1) {
+      const value = getRangeValue(criteria, row, col);
+      if (value.tag === ValueTag.Empty) {
+        continue;
+      }
+      if (value.tag === ValueTag.Error) {
+        return value;
+      }
+      if (headerBlocked[col]) {
+        blocked = true;
+        continue;
+      }
+      const databaseColumn = headerColumns[col];
+      if (databaseColumn === undefined || databaseColumn < 0) {
+        continue;
+      }
+      clauses.push({ columnIndex: databaseColumn, criteria: value });
+    }
+    rows.push({ clauses, blocked });
+  }
+  return rows;
+}
+
+function recordMatchesDatabaseCriteria(
+  database: RangeBuiltinArgument,
+  databaseRow: number,
+  criteriaRows: readonly DatabaseCriteriaRow[],
+): boolean {
+  for (const criteriaRow of criteriaRows) {
+    if (criteriaRow.blocked) {
+      continue;
+    }
+    if (
+      criteriaRow.clauses.every((clause) =>
+        matchesCriteria(getRangeValue(database, databaseRow, clause.columnIndex), clause.criteria),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function matchingDatabaseRows(
+  databaseArg: LookupBuiltinArgument,
+  criteriaArg: LookupBuiltinArgument,
+): { database: RangeBuiltinArgument; matchingRows: number[] } | CellValue {
+  const database = requireCellRange(databaseArg);
+  if (!isRangeArg(database)) {
+    return database;
+  }
+  const criteria = requireCellRange(criteriaArg);
+  if (!isRangeArg(criteria)) {
+    return criteria;
+  }
+  if (database.rows < 1 || database.cols < 1) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const criteriaRows = buildDatabaseCriteriaRows(database, criteria);
+  if (!Array.isArray(criteriaRows)) {
+    return criteriaRows;
+  }
+
+  const matchingRows: number[] = [];
+  for (let row = 1; row < database.rows; row += 1) {
+    if (recordMatchesDatabaseCriteria(database, row, criteriaRows)) {
+      matchingRows.push(row);
+    }
+  }
+  return { database, matchingRows };
+}
+
+function selectedDatabaseFieldValues(
+  databaseArg: LookupBuiltinArgument,
+  fieldArg: LookupBuiltinArgument,
+  criteriaArg: LookupBuiltinArgument,
+  allowOmittedField: boolean,
+): { database: RangeBuiltinArgument; matchingRows: number[]; fieldIndex?: number } | CellValue {
+  const matches = matchingDatabaseRows(databaseArg, criteriaArg);
+  if ("tag" in matches) {
+    return matches;
+  }
+  const fieldIndex = resolveDatabaseFieldIndex(matches.database, fieldArg, allowOmittedField);
+  if (typeof fieldIndex !== "number" && fieldIndex !== undefined) {
+    return fieldIndex;
+  }
+  return fieldIndex === undefined
+    ? {
+        database: matches.database,
+        matchingRows: matches.matchingRows,
+      }
+    : {
+        database: matches.database,
+        matchingRows: matches.matchingRows,
+        fieldIndex,
+      };
+}
+
+function sampleVariance(numbers: readonly number[]): number | undefined {
+  if (numbers.length < 2) {
+    return undefined;
+  }
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+  return numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (numbers.length - 1);
+}
+
+function populationVariance(numbers: readonly number[]): number | undefined {
+  if (numbers.length === 0) {
+    return undefined;
+  }
+  const mean = numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+  return numbers.reduce((sum, value) => sum + (value - mean) ** 2, 0) / numbers.length;
+}
+
 function arrayResult(values: CellValue[], rows: number, cols: number): ArrayValue {
   return { kind: "array", values, rows, cols };
+}
+
+function collectNumericSeries(
+  arg: LookupBuiltinArgument,
+  mode: "lenient" | "strict",
+): number[] | CellValue {
+  const values: number[] = [];
+  const cells = isRangeArg(arg) ? arg.values : [arg];
+  if (isRangeArg(arg) && arg.refKind !== "cells") {
+    return errorValue(ErrorCode.Value);
+  }
+  for (const cell of cells) {
+    if (cell.tag === ValueTag.Error) {
+      return cell;
+    }
+    if (cell.tag === ValueTag.Number) {
+      values.push(cell.value);
+      continue;
+    }
+    if (mode === "strict") {
+      return errorValue(ErrorCode.Value);
+    }
+  }
+  return values;
+}
+
+function collectDateSerialSeries(arg: LookupBuiltinArgument): number[] | CellValue {
+  const numericValues = collectNumericSeries(arg, "strict");
+  if (!Array.isArray(numericValues)) {
+    return numericValues;
+  }
+  const serials: number[] = [];
+  for (const numeric of numericValues) {
+    const serial = Math.trunc(numeric);
+    if (!Number.isFinite(serial) || excelSerialToDateParts(serial) === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    serials.push(serial);
+  }
+  return serials;
+}
+
+function hasPositiveAndNegative(values: readonly number[]): boolean {
+  let hasPositive = false;
+  let hasNegative = false;
+  for (const value of values) {
+    if (value > 0) {
+      hasPositive = true;
+    } else if (value < 0) {
+      hasNegative = true;
+    }
+  }
+  return hasPositive && hasNegative;
+}
+
+function periodicCashflowNetPresentValue(
+  rate: number,
+  values: readonly number[],
+): number | undefined {
+  if (!Number.isFinite(rate) || rate <= -0.999999999) {
+    return undefined;
+  }
+  const base = 1 + rate;
+  let total = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    total += values[index]! / base ** index;
+  }
+  return Number.isFinite(total) ? total : undefined;
+}
+
+function periodicCashflowNetPresentValueDerivative(
+  rate: number,
+  values: readonly number[],
+): number | undefined {
+  if (!Number.isFinite(rate) || rate <= -0.999999999) {
+    return undefined;
+  }
+  const base = 1 + rate;
+  let total = 0;
+  for (let index = 1; index < values.length; index += 1) {
+    total -= (index * values[index]!) / base ** (index + 1);
+  }
+  return Number.isFinite(total) ? total : undefined;
+}
+
+function xnpvValue(
+  rate: number,
+  values: readonly number[],
+  dates: readonly number[],
+): number | undefined {
+  if (!Number.isFinite(rate) || rate <= -0.999999999 || values.length !== dates.length) {
+    return undefined;
+  }
+  const base = 1 + rate;
+  const start = dates[0];
+  if (start === undefined) {
+    return undefined;
+  }
+  let total = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    const elapsed = (dates[index]! - start) / 365;
+    total += values[index]! / base ** elapsed;
+  }
+  return Number.isFinite(total) ? total : undefined;
+}
+
+function xnpvDerivative(
+  rate: number,
+  values: readonly number[],
+  dates: readonly number[],
+): number | undefined {
+  if (!Number.isFinite(rate) || rate <= -0.999999999 || values.length !== dates.length) {
+    return undefined;
+  }
+  const base = 1 + rate;
+  const start = dates[0];
+  if (start === undefined) {
+    return undefined;
+  }
+  let total = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    const elapsed = (dates[index]! - start) / 365;
+    total -= (elapsed * values[index]!) / base ** (elapsed + 1);
+  }
+  return Number.isFinite(total) ? total : undefined;
+}
+
+function solveDiscountRate(
+  guess: number,
+  evaluate: (rate: number) => number | undefined,
+  derivative: (rate: number) => number | undefined,
+): number | undefined {
+  const zeroError = evaluate(0);
+  if (zeroError !== undefined && Math.abs(zeroError) < 1e-7) {
+    return 0;
+  }
+
+  let previousRate = Number.isFinite(guess) ? guess : 0.1;
+  if (previousRate <= -0.999999999) {
+    previousRate = -0.9;
+  }
+  let currentRate = previousRate === 0 ? 0.1 : previousRate * 1.1;
+  if (currentRate <= -0.999999999) {
+    currentRate = -0.8;
+  }
+
+  let previousError = evaluate(previousRate);
+  let currentError = evaluate(currentRate);
+  if (previousError === undefined || currentError === undefined) {
+    return undefined;
+  }
+
+  for (let iteration = 0; iteration < 100; iteration += 1) {
+    if (!Number.isFinite(currentError)) {
+      return undefined;
+    }
+    if (Math.abs(currentError) < 1e-10) {
+      return currentRate;
+    }
+
+    let nextRate: number | undefined;
+    if (Number.isFinite(previousError) && currentError !== previousError) {
+      nextRate =
+        currentRate -
+        (currentError * (currentRate - previousRate)) / (currentError - previousError);
+    }
+    if (nextRate === undefined || !Number.isFinite(nextRate) || nextRate <= -0.999999999) {
+      const slope = derivative(currentRate);
+      if (slope === undefined || !Number.isFinite(slope) || slope === 0) {
+        return undefined;
+      }
+      nextRate = currentRate - currentError / slope;
+    }
+    if (!Number.isFinite(nextRate) || nextRate <= -0.999999999) {
+      return undefined;
+    }
+
+    previousRate = currentRate;
+    previousError = currentError;
+    currentRate = nextRate;
+    const nextError = evaluate(currentRate);
+    if (nextError === undefined) {
+      return undefined;
+    }
+    currentError = nextError;
+  }
+
+  return Math.abs(currentError) < 1e-7 ? currentRate : undefined;
+}
+
+function modifiedInternalRateOfReturn(
+  values: readonly number[],
+  financeRate: number,
+  reinvestRate: number,
+): number | undefined {
+  if (
+    values.length < 2 ||
+    financeRate <= -1 ||
+    reinvestRate <= -1 ||
+    !Number.isFinite(financeRate) ||
+    !Number.isFinite(reinvestRate)
+  ) {
+    return undefined;
+  }
+  let positiveFutureValue = 0;
+  let negativePresentValue = 0;
+  const lastIndex = values.length - 1;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (value > 0) {
+      positiveFutureValue += value * (1 + reinvestRate) ** (lastIndex - index);
+    } else if (value < 0) {
+      negativePresentValue += value / (1 + financeRate) ** index;
+    }
+  }
+  if (positiveFutureValue <= 0 || negativePresentValue >= 0 || lastIndex <= 0) {
+    return undefined;
+  }
+  const result = (-positiveFutureValue / negativePresentValue) ** (1 / lastIndex) - 1;
+  return Number.isFinite(result) ? result : undefined;
 }
 
 function numericAggregateCandidate(value: CellValue): number | undefined {
@@ -242,6 +676,444 @@ function toNumericMatrix(arg: LookupBuiltinArgument): number[][] | CellValue {
     matrix.push(rowValues);
   }
   return matrix;
+}
+
+const LANCZOS_G = 7;
+const LANCZOS_COEFFICIENTS = [
+  676.5203681218851, -1259.1392167224028, 771.3234287776531, -176.6150291621406, 12.507343278686905,
+  -0.13857109526572012, 9.984369578019572e-6, 1.5056327351493116e-7,
+] as const;
+
+function logGamma(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return Number.NaN;
+  }
+  let sum = 0.9999999999998099;
+  const shifted = value - 1;
+  LANCZOS_COEFFICIENTS.forEach((coefficient, index) => {
+    sum += coefficient / (shifted + index + 1);
+  });
+  const t = shifted + LANCZOS_G + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(sum);
+}
+
+function regularizedLowerGamma(shape: number, x: number): number {
+  if (!Number.isFinite(shape) || !Number.isFinite(x) || shape <= 0 || x < 0) {
+    return Number.NaN;
+  }
+  if (x === 0) {
+    return 0;
+  }
+  const logGammaShape = logGamma(shape);
+  if (!Number.isFinite(logGammaShape)) {
+    return Number.NaN;
+  }
+  if (x < shape + 1) {
+    let term = 1 / shape;
+    let sum = term;
+    for (let iteration = 1; iteration < 1000; iteration += 1) {
+      term *= x / (shape + iteration);
+      sum += term;
+      if (Math.abs(term) <= Math.abs(sum) * 1e-14) {
+        break;
+      }
+    }
+    return sum * Math.exp(-x + shape * Math.log(x) - logGammaShape);
+  }
+
+  let b = x + 1 - shape;
+  let c = 1 / 1e-300;
+  let d = 1 / b;
+  let h = d;
+  for (let iteration = 1; iteration < 1000; iteration += 1) {
+    const factor = -iteration * (iteration - shape);
+    b += 2;
+    d = factor * d + b;
+    if (Math.abs(d) < 1e-300) {
+      d = 1e-300;
+    }
+    c = b + factor / c;
+    if (Math.abs(c) < 1e-300) {
+      c = 1e-300;
+    }
+    d = 1 / d;
+    const delta = d * c;
+    h *= delta;
+    if (Math.abs(delta - 1) <= 1e-14) {
+      break;
+    }
+  }
+  return 1 - Math.exp(-x + shape * Math.log(x) - logGammaShape) * h;
+}
+
+function regularizedUpperGamma(shape: number, x: number): number {
+  const lower = regularizedLowerGamma(shape, x);
+  return Number.isFinite(lower) ? 1 - lower : Number.NaN;
+}
+
+function erfApprox(value: number): number {
+  const sign = value < 0 ? -1 : 1;
+  const absolute = Math.abs(value);
+  const t = 1 / (1 + 0.3275911 * absolute);
+  const y =
+    1 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+      t *
+      Math.exp(-absolute * absolute);
+  return sign * y;
+}
+
+function standardNormalCdf(value: number): number {
+  return 0.5 * (1 + erfApprox(value / Math.sqrt(2)));
+}
+
+function logBeta(alpha: number, beta: number): number {
+  return logGamma(alpha) + logGamma(beta) - logGamma(alpha + beta);
+}
+
+function betaContinuedFraction(x: number, alpha: number, beta: number): number {
+  const maxIterations = 200;
+  const epsilon = 1e-14;
+  const tiny = 1e-300;
+  const qab = alpha + beta;
+  const qap = alpha + 1;
+  const qam = alpha - 1;
+  let c = 1;
+  let d = 1 - (qab * x) / qap;
+  if (Math.abs(d) < tiny) {
+    d = tiny;
+  }
+  d = 1 / d;
+  let h = d;
+  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    const step = iteration * 2;
+    let factor = (iteration * (beta - iteration) * x) / ((qam + step) * (alpha + step));
+    d = 1 + factor * d;
+    if (Math.abs(d) < tiny) {
+      d = tiny;
+    }
+    c = 1 + factor / c;
+    if (Math.abs(c) < tiny) {
+      c = tiny;
+    }
+    d = 1 / d;
+    h *= d * c;
+
+    factor = (-(alpha + iteration) * (qab + iteration) * x) / ((alpha + step) * (qap + step));
+    d = 1 + factor * d;
+    if (Math.abs(d) < tiny) {
+      d = tiny;
+    }
+    c = 1 + factor / c;
+    if (Math.abs(c) < tiny) {
+      c = tiny;
+    }
+    d = 1 / d;
+    const delta = d * c;
+    h *= delta;
+    if (Math.abs(delta - 1) <= epsilon) {
+      break;
+    }
+  }
+  return h;
+}
+
+function regularizedBeta(x: number, alpha: number, beta: number): number {
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(alpha) ||
+    !Number.isFinite(beta) ||
+    x < 0 ||
+    x > 1 ||
+    alpha <= 0 ||
+    beta <= 0
+  ) {
+    return Number.NaN;
+  }
+  if (x === 0) {
+    return 0;
+  }
+  if (x === 1) {
+    return 1;
+  }
+
+  const logTerm = alpha * Math.log(x) + beta * Math.log(1 - x) - logBeta(alpha, beta);
+  if (!Number.isFinite(logTerm)) {
+    return Number.NaN;
+  }
+  const front = Math.exp(logTerm);
+  if (x < (alpha + 1) / (alpha + beta + 2)) {
+    return (front * betaContinuedFraction(x, alpha, beta)) / alpha;
+  }
+  return 1 - (front * betaContinuedFraction(1 - x, beta, alpha)) / beta;
+}
+
+function fDistributionCdf(x: number, degreesFreedom1: number, degreesFreedom2: number): number {
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(degreesFreedom1) ||
+    !Number.isFinite(degreesFreedom2) ||
+    x < 0 ||
+    degreesFreedom1 < 1 ||
+    degreesFreedom2 < 1
+  ) {
+    return Number.NaN;
+  }
+  const alpha = degreesFreedom1 / 2;
+  const beta = degreesFreedom2 / 2;
+  const transformed = (degreesFreedom1 * x) / (degreesFreedom1 * x + degreesFreedom2);
+  return regularizedBeta(transformed, alpha, beta);
+}
+
+function studentTCdf(x: number, degreesFreedom: number): number {
+  if (!Number.isFinite(x) || !Number.isFinite(degreesFreedom) || degreesFreedom < 1) {
+    return Number.NaN;
+  }
+  if (x === 0) {
+    return 0.5;
+  }
+  const transformed = degreesFreedom / (degreesFreedom + x * x);
+  const tail = regularizedBeta(transformed, degreesFreedom / 2, 0.5);
+  if (!Number.isFinite(tail)) {
+    return Number.NaN;
+  }
+  return x > 0 ? 1 - tail / 2 : tail / 2;
+}
+
+function collectSampleNumbers(arg: LookupBuiltinArgument): number[] | CellValue {
+  if (!isRangeArg(arg)) {
+    if (isError(arg)) {
+      return arg;
+    }
+    return arg.tag === ValueTag.Number ? [arg.value] : errorValue(ErrorCode.Value);
+  }
+
+  const values: number[] = [];
+  for (const value of arg.values) {
+    if (value.tag === ValueTag.Error) {
+      return value;
+    }
+    if (value.tag === ValueTag.Number) {
+      values.push(value.value);
+    }
+  }
+  return values;
+}
+
+function chiSquareTestResult(
+  actualArg: LookupBuiltinArgument,
+  expectedArg: LookupBuiltinArgument,
+): CellValue {
+  const actual = toNumericMatrix(actualArg);
+  if (!Array.isArray(actual)) {
+    return actual;
+  }
+  const expected = toNumericMatrix(expectedArg);
+  if (!Array.isArray(expected)) {
+    return expected;
+  }
+
+  const rows = actual.length;
+  const cols = actual[0]?.length ?? 0;
+  if (rows !== expected.length || cols !== (expected[0]?.length ?? 0)) {
+    return errorValue(ErrorCode.NA);
+  }
+  if ((rows === 1 && cols === 1) || rows === 0 || cols === 0) {
+    return errorValue(ErrorCode.NA);
+  }
+
+  let statistic = 0;
+  for (let row = 0; row < rows; row += 1) {
+    const actualRow = actual[row]!;
+    const expectedRow = expected[row]!;
+    if (actualRow.length !== cols || expectedRow.length !== cols) {
+      return errorValue(ErrorCode.NA);
+    }
+    for (let col = 0; col < cols; col += 1) {
+      const actualValue = actualRow[col]!;
+      const expectedValue = expectedRow[col]!;
+      if (actualValue < 0 || expectedValue < 0) {
+        return errorValue(ErrorCode.Value);
+      }
+      if (expectedValue === 0) {
+        return errorValue(ErrorCode.Div0);
+      }
+      const delta = actualValue - expectedValue;
+      statistic += (delta * delta) / expectedValue;
+    }
+  }
+
+  const degrees = rows > 1 && cols > 1 ? (rows - 1) * (cols - 1) : rows > 1 ? rows - 1 : cols - 1;
+  if (degrees <= 0) {
+    return errorValue(ErrorCode.NA);
+  }
+  const probability = regularizedUpperGamma(degrees / 2, statistic / 2);
+  return Number.isFinite(probability)
+    ? { tag: ValueTag.Number, value: probability }
+    : errorValue(ErrorCode.Value);
+}
+
+function fTestResult(firstArg: LookupBuiltinArgument, secondArg: LookupBuiltinArgument): CellValue {
+  const first = collectSampleNumbers(firstArg);
+  if (!Array.isArray(first)) {
+    return first;
+  }
+  const second = collectSampleNumbers(secondArg);
+  if (!Array.isArray(second)) {
+    return second;
+  }
+  if (first.length < 2 || second.length < 2) {
+    return errorValue(ErrorCode.Div0);
+  }
+
+  const firstMean = first.reduce((sum, value) => sum + value, 0) / first.length;
+  const secondMean = second.reduce((sum, value) => sum + value, 0) / second.length;
+  const firstVariance =
+    first.reduce((sum, value) => sum + (value - firstMean) ** 2, 0) / (first.length - 1);
+  const secondVariance =
+    second.reduce((sum, value) => sum + (value - secondMean) ** 2, 0) / (second.length - 1);
+  if (!(firstVariance > 0) || !(secondVariance > 0)) {
+    return errorValue(ErrorCode.Div0);
+  }
+
+  const firstLeads = firstVariance >= secondVariance;
+  const numeratorVariance = firstLeads ? firstVariance : secondVariance;
+  const denominatorVariance = firstLeads ? secondVariance : firstVariance;
+  const numeratorDf = firstLeads ? first.length - 1 : second.length - 1;
+  const denominatorDf = firstLeads ? second.length - 1 : first.length - 1;
+  const upperTail =
+    1 - fDistributionCdf(numeratorVariance / denominatorVariance, numeratorDf, denominatorDf);
+  const probability = Math.min(1, upperTail * 2);
+  return Number.isFinite(probability)
+    ? { tag: ValueTag.Number, value: probability }
+    : errorValue(ErrorCode.Value);
+}
+
+function zTestResult(
+  arrayArg: LookupBuiltinArgument,
+  xArg: LookupBuiltinArgument,
+  sigmaArg?: LookupBuiltinArgument,
+): CellValue {
+  const sample = collectSampleNumbers(arrayArg);
+  if (!Array.isArray(sample)) {
+    return sample;
+  }
+  const x = !isRangeArg(xArg) ? toNumber(xArg) : undefined;
+  if (x === undefined || sample.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  let sigma: number | undefined;
+  if (sigmaArg !== undefined) {
+    sigma = !isRangeArg(sigmaArg) ? toNumber(sigmaArg) : undefined;
+  } else if (sample.length >= 2) {
+    const mean = sample.reduce((sum, value) => sum + value, 0) / sample.length;
+    const variance =
+      sample.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (sample.length - 1);
+    sigma = variance > 0 ? Math.sqrt(variance) : undefined;
+  }
+
+  if (sigma === undefined || !(sigma > 0)) {
+    return errorValue(ErrorCode.Div0);
+  }
+  const mean = sample.reduce((sum, value) => sum + value, 0) / sample.length;
+  const zScore = (mean - x) / (sigma / Math.sqrt(sample.length));
+  const probability = 1 - standardNormalCdf(zScore);
+  return Number.isFinite(probability)
+    ? { tag: ValueTag.Number, value: probability }
+    : errorValue(ErrorCode.Value);
+}
+
+function tTestResult(
+  firstArg: LookupBuiltinArgument,
+  secondArg: LookupBuiltinArgument,
+  tailsArg: LookupBuiltinArgument,
+  typeArg: LookupBuiltinArgument,
+): CellValue {
+  const first = collectSampleNumbers(firstArg);
+  if (!Array.isArray(first)) {
+    return first;
+  }
+  const second = collectSampleNumbers(secondArg);
+  if (!Array.isArray(second)) {
+    return second;
+  }
+  const tails = !isRangeArg(tailsArg) ? toNumber(tailsArg) : undefined;
+  const type = !isRangeArg(typeArg) ? toNumber(typeArg) : undefined;
+  if (
+    tails === undefined ||
+    type === undefined ||
+    !Number.isInteger(tails) ||
+    !Number.isInteger(type) ||
+    ![1, 2].includes(tails) ||
+    ![1, 2, 3].includes(type)
+  ) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  let statistic: number;
+  let degreesFreedom: number;
+  if (type === 1) {
+    if (first.length !== second.length) {
+      return errorValue(ErrorCode.NA);
+    }
+    if (first.length < 2) {
+      return errorValue(ErrorCode.Div0);
+    }
+    const deltas = first.map((value, index) => value - second[index]!);
+    const mean = deltas.reduce((sum, value) => sum + value, 0) / deltas.length;
+    const variance =
+      deltas.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (deltas.length - 1);
+    if (!(variance > 0)) {
+      return errorValue(ErrorCode.Div0);
+    }
+    statistic = mean / Math.sqrt(variance / deltas.length);
+    degreesFreedom = deltas.length - 1;
+  } else {
+    if (first.length < 2 || second.length < 2) {
+      return errorValue(ErrorCode.Div0);
+    }
+    const firstMean = first.reduce((sum, value) => sum + value, 0) / first.length;
+    const secondMean = second.reduce((sum, value) => sum + value, 0) / second.length;
+    const firstVariance =
+      first.reduce((sum, value) => sum + (value - firstMean) ** 2, 0) / (first.length - 1);
+    const secondVariance =
+      second.reduce((sum, value) => sum + (value - secondMean) ** 2, 0) / (second.length - 1);
+    if (!(firstVariance > 0) || !(secondVariance > 0)) {
+      return errorValue(ErrorCode.Div0);
+    }
+
+    if (type === 2) {
+      const pooledVariance =
+        ((first.length - 1) * firstVariance + (second.length - 1) * secondVariance) /
+        (first.length + second.length - 2);
+      if (!(pooledVariance > 0)) {
+        return errorValue(ErrorCode.Div0);
+      }
+      statistic =
+        (firstMean - secondMean) /
+        Math.sqrt(pooledVariance * (1 / first.length + 1 / second.length));
+      degreesFreedom = first.length + second.length - 2;
+    } else {
+      const firstTerm = firstVariance / first.length;
+      const secondTerm = secondVariance / second.length;
+      const denominator = Math.sqrt(firstTerm + secondTerm);
+      const welchDenominator =
+        (firstTerm * firstTerm) / (first.length - 1) +
+        (secondTerm * secondTerm) / (second.length - 1);
+      if (!(denominator > 0) || !(welchDenominator > 0)) {
+        return errorValue(ErrorCode.Div0);
+      }
+      statistic = (firstMean - secondMean) / denominator;
+      degreesFreedom = (firstTerm + secondTerm) ** 2 / welchDenominator;
+    }
+  }
+
+  const upperTail = 1 - studentTCdf(Math.abs(statistic), degreesFreedom);
+  const probability = tails === 1 ? upperTail : Math.min(1, upperTail * 2);
+  return Number.isFinite(probability)
+    ? { tag: ValueTag.Number, value: probability }
+    : errorValue(ErrorCode.Value);
 }
 
 function determinantOf(matrix: number[][]): number {
@@ -430,6 +1302,468 @@ function correlationFromPairs(
   return crossProducts / denominator;
 }
 
+function linearRegressionFromPairs(
+  knownY: readonly number[],
+  knownX: readonly number[],
+  includeIntercept = true,
+):
+  | {
+      slope: number;
+      intercept: number;
+      sumSquaresX: number;
+      sumSquaresY: number;
+      sumCrossProducts: number;
+      residualSumSquares: number;
+    }
+  | CellValue {
+  if (knownY.length !== knownX.length || knownY.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const count = knownY.length;
+  const meanY = knownY.reduce((sum, value) => sum + value, 0) / count;
+  const meanX = knownX.reduce((sum, value) => sum + value, 0) / count;
+
+  let sumSquaresX = 0;
+  let sumSquaresY = 0;
+  let sumCrossProducts = 0;
+  let slope: number;
+  let intercept: number;
+
+  if (includeIntercept) {
+    for (let index = 0; index < count; index += 1) {
+      const xDeviation = knownX[index]! - meanX;
+      const yDeviation = knownY[index]! - meanY;
+      sumSquaresX += xDeviation ** 2;
+      sumSquaresY += yDeviation ** 2;
+      sumCrossProducts += xDeviation * yDeviation;
+    }
+
+    if (sumSquaresX === 0) {
+      return errorValue(ErrorCode.Div0);
+    }
+
+    slope = sumCrossProducts / sumSquaresX;
+    intercept = meanY - slope * meanX;
+  } else {
+    for (let index = 0; index < count; index += 1) {
+      const xValue = knownX[index]!;
+      const yValue = knownY[index]!;
+      sumSquaresX += xValue ** 2;
+      sumSquaresY += (yValue - meanY) ** 2;
+      sumCrossProducts += xValue * yValue;
+    }
+    if (sumSquaresX === 0) {
+      return errorValue(ErrorCode.Div0);
+    }
+    slope = sumCrossProducts / sumSquaresX;
+    intercept = 0;
+  }
+
+  let residualSumSquares = 0;
+  for (let index = 0; index < count; index += 1) {
+    const residual = knownY[index]! - (intercept + slope * knownX[index]!);
+    residualSumSquares += residual ** 2;
+  }
+
+  return {
+    slope,
+    intercept,
+    sumSquaresX,
+    sumSquaresY,
+    sumCrossProducts,
+    residualSumSquares,
+  };
+}
+
+interface RegressionMatrix {
+  values: number[];
+  rows: number;
+  cols: number;
+}
+
+function regressionMatrixFromArg(arg: LookupBuiltinArgument): RegressionMatrix | CellValue {
+  if (!isRangeArg(arg)) {
+    if (isError(arg)) {
+      return arg;
+    }
+    const numeric = toNumber(arg);
+    return numeric === undefined
+      ? errorValue(ErrorCode.Value)
+      : { values: [numeric], rows: 1, cols: 1 };
+  }
+  if (arg.refKind !== "cells") {
+    return errorValue(ErrorCode.Value);
+  }
+  const values: number[] = [];
+  for (const value of arg.values) {
+    if (value.tag === ValueTag.Error) {
+      return value;
+    }
+    const numeric = toNumber(value);
+    if (numeric === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    values.push(numeric);
+  }
+  return { values, rows: arg.rows, cols: arg.cols };
+}
+
+function defaultRegressionSequence(rows: number, cols: number): RegressionMatrix {
+  const values: number[] = [];
+  for (let index = 0; index < rows * cols; index += 1) {
+    values.push(index + 1);
+  }
+  return { values, rows, cols };
+}
+
+function coerceRegressionConstant(arg: LookupBuiltinArgument | undefined): boolean | CellValue {
+  if (arg === undefined) {
+    return true;
+  }
+  if (isRangeArg(arg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(arg)) {
+    return arg;
+  }
+  const value = toBoolean(arg);
+  return value === undefined ? errorValue(ErrorCode.Value) : value;
+}
+
+function coerceRegressionFlag(
+  arg: LookupBuiltinArgument | undefined,
+  defaultValue: boolean,
+): boolean | CellValue {
+  if (arg === undefined) {
+    return defaultValue;
+  }
+  if (isRangeArg(arg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(arg)) {
+    return arg;
+  }
+  const value = toBoolean(arg);
+  return value === undefined ? errorValue(ErrorCode.Value) : value;
+}
+
+function predictionResultFromMatrix(
+  values: readonly number[],
+  rows: number,
+  cols: number,
+): EvaluationResult {
+  if (values.some((value) => !Number.isFinite(value))) {
+    return errorValue(ErrorCode.Value);
+  }
+  const resultValues = values.map((value) => numberResult(value));
+  return rows === 1 && cols === 1
+    ? (resultValues[0] ?? errorValue(ErrorCode.Value))
+    : {
+        kind: "array",
+        rows,
+        cols,
+        values: resultValues,
+      };
+}
+
+function forecastResult(
+  xArg: LookupBuiltinArgument,
+  knownYArg: LookupBuiltinArgument,
+  knownXArg: LookupBuiltinArgument,
+): CellValue {
+  if (isRangeArg(xArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(xArg)) {
+    return xArg;
+  }
+  const x = toNumber(xArg);
+  if (x === undefined) {
+    return errorValue(ErrorCode.Value);
+  }
+  const values = parseCorrelationOperands(knownYArg, knownXArg);
+  if (!("first" in values)) {
+    return values;
+  }
+  const regression = linearRegressionFromPairs(values.first, values.second);
+  return "intercept" in regression
+    ? { tag: ValueTag.Number, value: regression.intercept + regression.slope * x }
+    : regression;
+}
+
+function trendLikeResult(
+  mode: "trend" | "growth",
+  knownYArg: LookupBuiltinArgument,
+  knownXArg?: LookupBuiltinArgument,
+  newXArg?: LookupBuiltinArgument,
+  constArg?: LookupBuiltinArgument,
+): EvaluationResult {
+  const knownYMatrix = regressionMatrixFromArg(knownYArg);
+  if (!("values" in knownYMatrix)) {
+    return knownYMatrix;
+  }
+
+  const knownXMatrix =
+    knownXArg === undefined
+      ? defaultRegressionSequence(knownYMatrix.rows, knownYMatrix.cols)
+      : regressionMatrixFromArg(knownXArg);
+  if (!("values" in knownXMatrix)) {
+    return knownXMatrix;
+  }
+  if (
+    knownXMatrix.values.length !== knownYMatrix.values.length ||
+    knownXMatrix.values.length === 0
+  ) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const includeIntercept = coerceRegressionConstant(constArg);
+  if (typeof includeIntercept !== "boolean") {
+    return includeIntercept;
+  }
+
+  const regressionY =
+    mode === "growth"
+      ? knownYMatrix.values.map((value) => {
+          return value > 0 ? Math.log(value) : NaN;
+        })
+      : [...knownYMatrix.values];
+  if (regressionY.some((value) => !Number.isFinite(value))) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const regression = linearRegressionFromPairs(regressionY, knownXMatrix.values, includeIntercept);
+  if (!("slope" in regression)) {
+    return regression;
+  }
+
+  const newXMatrix =
+    newXArg === undefined
+      ? knownXArg === undefined
+        ? defaultRegressionSequence(knownYMatrix.rows, knownYMatrix.cols)
+        : knownXMatrix
+      : regressionMatrixFromArg(newXArg);
+  if (!("values" in newXMatrix)) {
+    return newXMatrix;
+  }
+
+  const predicted = newXMatrix.values.map((xValue) => {
+    const linear = regression.intercept + regression.slope * xValue;
+    return mode === "growth" ? Math.exp(linear) : linear;
+  });
+  return predictionResultFromMatrix(predicted, newXMatrix.rows, newXMatrix.cols);
+}
+
+interface UnivariateRegressionDataset {
+  knownY: number[];
+  knownX: number[];
+}
+
+interface UnivariateRegressionStats {
+  slope: number;
+  intercept: number;
+  slopeStandardError: number | undefined;
+  interceptStandardError: number | undefined;
+  rSquared: number | undefined;
+  standardErrorY: number | undefined;
+  fStatistic: number | undefined;
+  degreesFreedom: number | undefined;
+  regressionSumSquares: number;
+  residualSumSquares: number;
+}
+
+function parseUnivariateRegressionDataset(
+  mode: "linest" | "logest",
+  knownYArg: LookupBuiltinArgument,
+  knownXArg?: LookupBuiltinArgument,
+): UnivariateRegressionDataset | CellValue {
+  const knownYMatrix = regressionMatrixFromArg(knownYArg);
+  if (!("values" in knownYMatrix)) {
+    return knownYMatrix;
+  }
+  if (knownYMatrix.values.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const knownY =
+    mode === "logest"
+      ? knownYMatrix.values.map((value) => (value > 0 ? Math.log(value) : Number.NaN))
+      : [...knownYMatrix.values];
+  if (knownY.some((value) => !Number.isFinite(value))) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  if (knownXArg === undefined) {
+    return {
+      knownY,
+      knownX: knownY.map((_, index) => index + 1),
+    };
+  }
+
+  const knownXMatrix = regressionMatrixFromArg(knownXArg);
+  if (!("values" in knownXMatrix)) {
+    return knownXMatrix;
+  }
+  if (knownXMatrix.values.length !== knownY.length || knownXMatrix.values.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (knownXMatrix.values.some((value) => !Number.isFinite(value))) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  return {
+    knownY,
+    knownX: [...knownXMatrix.values],
+  };
+}
+
+function analyzeUnivariateRegression(
+  knownY: readonly number[],
+  knownX: readonly number[],
+  includeIntercept: boolean,
+): UnivariateRegressionStats | CellValue {
+  const regression = linearRegressionFromPairs(knownY, knownX, includeIntercept);
+  if (!("slope" in regression)) {
+    return regression;
+  }
+
+  const count = knownY.length;
+  const meanY = knownY.reduce((sum, value) => sum + value, 0) / count;
+  const totalSumSquares = includeIntercept
+    ? knownY.reduce((sum, value) => sum + (value - meanY) ** 2, 0)
+    : knownY.reduce((sum, value) => sum + value ** 2, 0);
+  const residualSumSquares = Math.max(0, regression.residualSumSquares);
+  const regressionSumSquares = Math.max(0, totalSumSquares - residualSumSquares);
+  const parameterCount = includeIntercept ? 2 : 1;
+  const degreesFreedom = count - parameterCount;
+
+  let slopeStandardError: number | undefined;
+  let interceptStandardError: number | undefined;
+  let standardErrorY: number | undefined;
+  let fStatistic: number | undefined;
+
+  if (degreesFreedom > 0) {
+    const meanSquaredError = residualSumSquares / degreesFreedom;
+    standardErrorY = Math.sqrt(meanSquaredError);
+    if (includeIntercept) {
+      const meanX = knownX.reduce((sum, value) => sum + value, 0) / count;
+      const sumSquaresX = knownX.reduce((sum, value) => {
+        const deviation = value - meanX;
+        return sum + deviation * deviation;
+      }, 0);
+      if (sumSquaresX > 0) {
+        slopeStandardError = Math.sqrt(meanSquaredError / sumSquaresX);
+        interceptStandardError = Math.sqrt(
+          meanSquaredError * (1 / count + (meanX * meanX) / sumSquaresX),
+        );
+      }
+    } else {
+      const sumSquaresX = knownX.reduce((sum, value) => sum + value * value, 0);
+      if (sumSquaresX > 0) {
+        slopeStandardError = Math.sqrt(meanSquaredError / sumSquaresX);
+        interceptStandardError = 0;
+      }
+    }
+    if (residualSumSquares === 0) {
+      fStatistic = Number.POSITIVE_INFINITY;
+    } else {
+      fStatistic = regressionSumSquares / (residualSumSquares / degreesFreedom);
+    }
+  }
+
+  let rSquared: number | undefined;
+  if (totalSumSquares === 0) {
+    rSquared = residualSumSquares === 0 ? 1 : undefined;
+  } else {
+    rSquared = 1 - residualSumSquares / totalSumSquares;
+  }
+
+  return {
+    slope: regression.slope,
+    intercept: regression.intercept,
+    slopeStandardError,
+    interceptStandardError,
+    rSquared,
+    standardErrorY,
+    fStatistic,
+    degreesFreedom: degreesFreedom > 0 ? degreesFreedom : undefined,
+    regressionSumSquares,
+    residualSumSquares,
+  };
+}
+
+function regressionStatCell(value: number | undefined): CellValue {
+  if (value === undefined || Number.isNaN(value)) {
+    return errorValue(ErrorCode.Div0);
+  }
+  return Number.isFinite(value) ? numberResult(value) : errorValue(ErrorCode.Div0);
+}
+
+function linearEstimationResult(
+  mode: "linest" | "logest",
+  knownYArg: LookupBuiltinArgument,
+  knownXArg?: LookupBuiltinArgument,
+  constArg?: LookupBuiltinArgument,
+  statsArg?: LookupBuiltinArgument,
+): EvaluationResult {
+  const dataset = parseUnivariateRegressionDataset(mode, knownYArg, knownXArg);
+  if (!("knownY" in dataset)) {
+    return dataset;
+  }
+
+  const includeIntercept = coerceRegressionFlag(constArg, true);
+  if (typeof includeIntercept !== "boolean") {
+    return includeIntercept;
+  }
+  const includeStats = coerceRegressionFlag(statsArg, false);
+  if (typeof includeStats !== "boolean") {
+    return includeStats;
+  }
+
+  const regression = analyzeUnivariateRegression(dataset.knownY, dataset.knownX, includeIntercept);
+  if (!("slope" in regression)) {
+    return regression;
+  }
+
+  const leading = mode === "logest" ? Math.exp(regression.slope) : regression.slope;
+  const trailing =
+    mode === "logest"
+      ? includeIntercept
+        ? Math.exp(regression.intercept)
+        : 1
+      : includeIntercept
+        ? regression.intercept
+        : 0;
+
+  if (!includeStats) {
+    return {
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [numberResult(leading), numberResult(trailing)],
+    };
+  }
+
+  return {
+    kind: "array",
+    rows: 5,
+    cols: 2,
+    values: [
+      numberResult(leading),
+      numberResult(trailing),
+      regressionStatCell(regression.slopeStandardError),
+      regressionStatCell(regression.interceptStandardError),
+      regressionStatCell(regression.rSquared),
+      regressionStatCell(regression.standardErrorY),
+      regressionStatCell(regression.fStatistic),
+      regressionStatCell(regression.degreesFreedom),
+      numberResult(regression.regressionSumSquares),
+      numberResult(regression.residualSumSquares),
+    ],
+  };
+}
+
 function rankFromValues(
   numberArg: LookupBuiltinArgument,
   arrayArg: LookupBuiltinArgument,
@@ -514,6 +1848,504 @@ function nthValue(
 
   const sortedValues = values.toSorted(ascending ? (a, b) => a - b : (a, b) => b - a);
   return { tag: ValueTag.Number, value: sortedValues[position - 1] ?? 0 };
+}
+
+function interpolatePercentile(
+  sortedValues: readonly number[],
+  percentile: number,
+  exclusive: boolean,
+): number | undefined {
+  const count = sortedValues.length;
+  if (count === 0 || !Number.isFinite(percentile)) {
+    return undefined;
+  }
+
+  if (exclusive) {
+    if (!(percentile > 0 && percentile < 1)) {
+      return undefined;
+    }
+    const rank = percentile * (count + 1);
+    if (rank < 1 || rank > count) {
+      return undefined;
+    }
+    const lowerRank = Math.floor(rank);
+    const upperRank = Math.ceil(rank);
+    if (lowerRank === upperRank) {
+      return sortedValues[lowerRank - 1];
+    }
+    const lower = sortedValues[lowerRank - 1];
+    const upper = sortedValues[upperRank - 1];
+    return lower !== undefined && upper !== undefined
+      ? lower + (rank - lowerRank) * (upper - lower)
+      : undefined;
+  }
+
+  if (percentile < 0 || percentile > 1) {
+    return undefined;
+  }
+  if (count === 1) {
+    return sortedValues[0];
+  }
+  const rank = percentile * (count - 1) + 1;
+  const lowerRank = Math.floor(rank);
+  const upperRank = Math.ceil(rank);
+  if (lowerRank === upperRank) {
+    return sortedValues[lowerRank - 1];
+  }
+  const lower = sortedValues[lowerRank - 1];
+  const upper = sortedValues[upperRank - 1];
+  return lower !== undefined && upper !== undefined
+    ? lower + (rank - lowerRank) * (upper - lower)
+    : undefined;
+}
+
+function percentileFromValues(
+  arrayArg: LookupBuiltinArgument,
+  percentileArg: LookupBuiltinArgument,
+  exclusive: boolean,
+): CellValue {
+  if (isRangeArg(percentileArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(arrayArg)) {
+    return arrayArg;
+  }
+  if (isError(percentileArg)) {
+    return percentileArg;
+  }
+
+  const values = flattenNumbers(arrayArg);
+  if (!Array.isArray(values)) {
+    return values;
+  }
+  if (values.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const percentile = toNumber(percentileArg);
+  if (percentile === undefined) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const sortedValues = values.toSorted((left, right) => left - right);
+  const interpolated = interpolatePercentile(sortedValues, percentile, exclusive);
+  return interpolated === undefined
+    ? errorValue(ErrorCode.Value)
+    : { tag: ValueTag.Number, value: interpolated };
+}
+
+function truncateToSignificance(value: number, significance: number): number {
+  const scale = 10 ** significance;
+  return Math.trunc(value * scale) / scale;
+}
+
+function interpolatePercentRank(
+  sortedValues: readonly number[],
+  target: number,
+  exclusive: boolean,
+): number | undefined {
+  const count = sortedValues.length;
+  if (count < 2 || !Number.isFinite(target)) {
+    return undefined;
+  }
+
+  let exactFirst = -1;
+  let exactLast = -1;
+  for (let index = 0; index < count; index += 1) {
+    const value = sortedValues[index]!;
+    if (value !== target) {
+      continue;
+    }
+    if (exactFirst === -1) {
+      exactFirst = index;
+    }
+    exactLast = index;
+  }
+
+  if (exactFirst !== -1) {
+    const averageIndex = (exactFirst + exactLast) / 2;
+    return exclusive ? (averageIndex + 1) / (count + 1) : averageIndex / (count - 1);
+  }
+
+  if (target < sortedValues[0]! || target > sortedValues[count - 1]!) {
+    return undefined;
+  }
+
+  let lowerIndex = -1;
+  for (let index = 0; index < count; index += 1) {
+    if (sortedValues[index]! < target) {
+      lowerIndex = index;
+      continue;
+    }
+    break;
+  }
+  const upperIndex = lowerIndex + 1;
+  if (lowerIndex < 0 || upperIndex >= count) {
+    return undefined;
+  }
+
+  const lower = sortedValues[lowerIndex]!;
+  const upper = sortedValues[upperIndex]!;
+  if (upper === lower) {
+    return undefined;
+  }
+
+  const lowerRank = exclusive ? (lowerIndex + 1) / (count + 1) : lowerIndex / (count - 1);
+  const upperRank = exclusive ? (upperIndex + 1) / (count + 1) : upperIndex / (count - 1);
+  const fraction = (target - lower) / (upper - lower);
+  return lowerRank + fraction * (upperRank - lowerRank);
+}
+
+function percentRankFromValues(
+  arrayArg: LookupBuiltinArgument,
+  targetArg: LookupBuiltinArgument,
+  significanceArg: LookupBuiltinArgument | undefined,
+  exclusive: boolean,
+): CellValue {
+  if (isRangeArg(targetArg) || isRangeArg(significanceArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(arrayArg)) {
+    return arrayArg;
+  }
+  if (isError(targetArg)) {
+    return targetArg;
+  }
+  if (isError(significanceArg)) {
+    return significanceArg;
+  }
+
+  const values = flattenNumbers(arrayArg);
+  if (!Array.isArray(values)) {
+    return values;
+  }
+  if (values.length < 2) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const target = toNumber(targetArg);
+  if (target === undefined) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const significance = significanceArg === undefined ? 3 : toInteger(significanceArg);
+  if (significance === undefined || significance < 1) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const sortedValues = values.toSorted((left, right) => left - right);
+  const rank = interpolatePercentRank(sortedValues, target, exclusive);
+  return rank === undefined
+    ? errorValue(ErrorCode.NA)
+    : { tag: ValueTag.Number, value: truncateToSignificance(rank, significance) };
+}
+
+function quartileFromValues(
+  arrayArg: LookupBuiltinArgument,
+  quartArg: LookupBuiltinArgument,
+  exclusive: boolean,
+): CellValue {
+  if (isRangeArg(quartArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(arrayArg)) {
+    return arrayArg;
+  }
+  if (isError(quartArg)) {
+    return quartArg;
+  }
+
+  const values = flattenNumbers(arrayArg);
+  if (!Array.isArray(values)) {
+    return values;
+  }
+  if (values.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const quartile = toInteger(quartArg);
+  if (quartile === undefined) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const sortedValues = values.toSorted((left, right) => left - right);
+  if (!exclusive && (quartile === 0 || quartile === 4)) {
+    return {
+      tag: ValueTag.Number,
+      value: sortedValues[quartile === 0 ? 0 : sortedValues.length - 1] ?? 0,
+    };
+  }
+  if (exclusive && (quartile <= 0 || quartile >= 4)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (!exclusive && (quartile < 0 || quartile > 4)) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const interpolated = interpolatePercentile(sortedValues, quartile / 4, exclusive);
+  return interpolated === undefined
+    ? errorValue(ErrorCode.Value)
+    : { tag: ValueTag.Number, value: interpolated };
+}
+
+function collectPlainNumericValues(
+  arg: LookupBuiltinArgument,
+  ignoreNonNumbersInRange: boolean,
+): number[] | CellValue {
+  if (!isRangeArg(arg)) {
+    if (isError(arg)) {
+      return arg;
+    }
+    return arg.tag === ValueTag.Number ? [arg.value] : errorValue(ErrorCode.Value);
+  }
+
+  if (arg.refKind !== "cells") {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const values: number[] = [];
+  for (const value of arg.values) {
+    if (value.tag === ValueTag.Error) {
+      return value;
+    }
+    if (value.tag === ValueTag.Number) {
+      values.push(value.value);
+      continue;
+    }
+    if (!ignoreNonNumbersInRange && value.tag !== ValueTag.Empty) {
+      return errorValue(ErrorCode.Value);
+    }
+  }
+  return values;
+}
+
+function validateProbabilityInputs(
+  xArg: LookupBuiltinArgument,
+  probabilitiesArg: LookupBuiltinArgument,
+): { xValues: number[]; probabilityValues: number[] } | CellValue {
+  const xRange = requireCellRange(xArg);
+  if (!isRangeArg(xRange)) {
+    return xRange;
+  }
+  const probabilityRange = requireCellRange(probabilitiesArg);
+  if (!isRangeArg(probabilityRange)) {
+    return probabilityRange;
+  }
+  if (
+    xRange.rows !== probabilityRange.rows ||
+    xRange.cols !== probabilityRange.cols ||
+    xRange.values.length === 0
+  ) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const xValues: number[] = [];
+  const probabilityValues: number[] = [];
+  let probabilitySum = 0;
+  for (let index = 0; index < xRange.values.length; index += 1) {
+    const xValue = xRange.values[index]!;
+    const probability = probabilityRange.values[index]!;
+    if (xValue.tag === ValueTag.Error) {
+      return xValue;
+    }
+    if (probability.tag === ValueTag.Error) {
+      return probability;
+    }
+    if (xValue.tag !== ValueTag.Number || probability.tag !== ValueTag.Number) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (!Number.isFinite(probability.value) || probability.value < 0 || probability.value > 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    xValues.push(xValue.value);
+    probabilityValues.push(probability.value);
+    probabilitySum += probability.value;
+  }
+  if (Math.abs(probabilitySum - 1) > 1e-9) {
+    return errorValue(ErrorCode.Value);
+  }
+  return { xValues, probabilityValues };
+}
+
+function probFromValues(
+  xArg: LookupBuiltinArgument,
+  probabilitiesArg: LookupBuiltinArgument,
+  lowerArg: LookupBuiltinArgument,
+  upperArg: LookupBuiltinArgument | undefined,
+): CellValue {
+  if (isRangeArg(lowerArg) || isRangeArg(upperArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(lowerArg)) {
+    return lowerArg;
+  }
+  if (isError(upperArg)) {
+    return upperArg;
+  }
+
+  const lower = toNumber(lowerArg);
+  const upper = upperArg === undefined ? lower : toNumber(upperArg);
+  if (lower === undefined || upper === undefined || upper < lower) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const values = validateProbabilityInputs(xArg, probabilitiesArg);
+  if (!("xValues" in values)) {
+    return values;
+  }
+
+  let total = 0;
+  for (let index = 0; index < values.xValues.length; index += 1) {
+    const value = values.xValues[index]!;
+    if (value >= lower && value <= upper) {
+      total += values.probabilityValues[index]!;
+    }
+  }
+  return numberResult(total);
+}
+
+function trimMeanFromValues(
+  arrayArg: LookupBuiltinArgument,
+  percentArg: LookupBuiltinArgument,
+): CellValue {
+  if (isRangeArg(percentArg)) {
+    return errorValue(ErrorCode.Value);
+  }
+  if (isError(arrayArg)) {
+    return arrayArg;
+  }
+  if (isError(percentArg)) {
+    return percentArg;
+  }
+
+  const values = collectPlainNumericValues(arrayArg, true);
+  if (!Array.isArray(values) || values.length === 0) {
+    return Array.isArray(values) ? errorValue(ErrorCode.Value) : values;
+  }
+
+  const percent = toNumber(percentArg);
+  if (percent === undefined || percent < 0 || percent >= 1) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  let excluded = Math.floor(values.length * percent);
+  if (excluded % 2 === 1) {
+    excluded -= 1;
+  }
+  const retainedCount = values.length - excluded;
+  if (retainedCount <= 0) {
+    return errorValue(ErrorCode.Value);
+  }
+
+  const sorted = values.toSorted((left, right) => left - right);
+  const trimEachSide = excluded / 2;
+  const retained = sorted.slice(trimEachSide, sorted.length - trimEachSide);
+  if (retained.length === 0) {
+    return errorValue(ErrorCode.Value);
+  }
+  const sum = retained.reduce((total, value) => total + value, 0);
+  return numberResult(sum / retained.length);
+}
+
+function flattenNumbersIgnoringNonNumeric(arg: LookupBuiltinArgument): number[] | CellValue {
+  if (!isRangeArg(arg)) {
+    if (isError(arg)) {
+      return arg;
+    }
+    const numeric = toNumber(arg);
+    return numeric === undefined ? errorValue(ErrorCode.Value) : [numeric];
+  }
+
+  const values: number[] = [];
+  for (const value of arg.values) {
+    if (value.tag === ValueTag.Error) {
+      return value;
+    }
+    if (value.tag === ValueTag.Number) {
+      values.push(value.value);
+    }
+  }
+  return values;
+}
+
+function flattenNumbersIgnoringNonNumericArgs(
+  args: readonly LookupBuiltinArgument[],
+): number[] | CellValue {
+  const values: number[] = [];
+  for (const arg of args) {
+    const flattened = flattenNumbersIgnoringNonNumeric(arg);
+    if (!Array.isArray(flattened)) {
+      return flattened;
+    }
+    values.push(...flattened);
+  }
+  return values;
+}
+
+function modeMultiFromValues(...args: LookupBuiltinArgument[]): ArrayValue | CellValue {
+  const values = flattenNumbersIgnoringNonNumericArgs(args);
+  if (!Array.isArray(values)) {
+    return values;
+  }
+  if (values.length === 0) {
+    return errorValue(ErrorCode.NA);
+  }
+
+  const counts = new Map<number, number>();
+  let maxCount = 0;
+  for (const value of values) {
+    const nextCount = (counts.get(value) ?? 0) + 1;
+    counts.set(value, nextCount);
+    if (nextCount > maxCount) {
+      maxCount = nextCount;
+    }
+  }
+  if (maxCount < 2) {
+    return errorValue(ErrorCode.NA);
+  }
+
+  const modes = Array.from(counts.entries())
+    .filter(([, count]) => count === maxCount)
+    .map(([value]) => value)
+    .toSorted((left, right) => left - right);
+  return arrayResult(
+    modes.map((value) => ({ tag: ValueTag.Number, value })),
+    modes.length,
+    1,
+  );
+}
+
+function frequencyFromValues(
+  dataArg: LookupBuiltinArgument,
+  binsArg: LookupBuiltinArgument,
+): ArrayValue | CellValue {
+  const dataValues = flattenNumbersIgnoringNonNumeric(dataArg);
+  if (!Array.isArray(dataValues)) {
+    return dataValues;
+  }
+  const binValues = flattenNumbersIgnoringNonNumeric(binsArg);
+  if (!Array.isArray(binValues)) {
+    return binValues;
+  }
+
+  const sortedBins = binValues.toSorted((left, right) => left - right);
+  const counts = Array.from({ length: sortedBins.length + 1 }, () => 0);
+  for (const value of dataValues) {
+    let bucket = sortedBins.length;
+    for (let index = 0; index < sortedBins.length; index += 1) {
+      if (value <= sortedBins[index]!) {
+        bucket = index;
+        break;
+      }
+    }
+    counts[bucket]! += 1;
+  }
+
+  return arrayResult(
+    counts.map((value) => ({ tag: ValueTag.Number, value })),
+    counts.length,
+    1,
+  );
 }
 
 function sumOfNumbers(arg: LookupBuiltinArgument): number | CellValue {
@@ -663,7 +2495,155 @@ function approximateMatchDescending(lookupValue: CellValue, range: RangeBuiltinA
   return best;
 }
 
+function firstLookupError(args: readonly LookupBuiltinArgument[]): CellValue | undefined {
+  return args.find((arg) => isError(arg));
+}
+
+const externalLookupBuiltinNames = ["FILTERXML", "STOCKHISTORY"] as const;
+
+function createExternalLookupBuiltin(name: string): LookupBuiltin {
+  return (...args) => {
+    const existingError = firstLookupError(args);
+    if (existingError) {
+      return existingError;
+    }
+    const external = getExternalLookupFunction(name);
+    return external ? external(...args) : errorValue(ErrorCode.Blocked);
+  };
+}
+
+const externalLookupBuiltins = Object.fromEntries(
+  externalLookupBuiltinNames.map((name) => [name, createExternalLookupBuiltin(name)]),
+) as Record<string, LookupBuiltin>;
+
 export const lookupBuiltins: Record<string, LookupBuiltin> = {
+  IRR: (valuesArg, guessArg = { tag: ValueTag.Number, value: 0.1 }) => {
+    if (guessArg === undefined || isRangeArg(guessArg)) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(guessArg)) {
+      return guessArg;
+    }
+    const values = collectNumericSeries(valuesArg, "lenient");
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    if (!hasPositiveAndNegative(values)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const guess = toNumber(guessArg);
+    if (guess === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    const rate = solveDiscountRate(
+      guess,
+      (candidate) => periodicCashflowNetPresentValue(candidate, values),
+      (candidate) => periodicCashflowNetPresentValueDerivative(candidate, values),
+    );
+    return rate === undefined ? errorValue(ErrorCode.Value) : numberResult(rate);
+  },
+  MIRR: (valuesArg, financeRateArg, reinvestRateArg) => {
+    if (
+      financeRateArg === undefined ||
+      reinvestRateArg === undefined ||
+      isRangeArg(financeRateArg) ||
+      isRangeArg(reinvestRateArg)
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(financeRateArg)) {
+      return financeRateArg;
+    }
+    if (isError(reinvestRateArg)) {
+      return reinvestRateArg;
+    }
+    const values = collectNumericSeries(valuesArg, "lenient");
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    if (!hasPositiveAndNegative(values)) {
+      return errorValue(ErrorCode.Div0);
+    }
+    const financeRate = toNumber(financeRateArg);
+    const reinvestRate = toNumber(reinvestRateArg);
+    if (financeRate === undefined || reinvestRate === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    const result = modifiedInternalRateOfReturn(values, financeRate, reinvestRate);
+    return result === undefined ? errorValue(ErrorCode.Div0) : numberResult(result);
+  },
+  XNPV: (rateArg, valuesArg, datesArg) => {
+    if (
+      rateArg === undefined ||
+      valuesArg === undefined ||
+      datesArg === undefined ||
+      isRangeArg(rateArg)
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(rateArg)) {
+      return rateArg;
+    }
+    const rate = toNumber(rateArg);
+    if (rate === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    const values = collectNumericSeries(valuesArg, "strict");
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    const dates = collectDateSerialSeries(datesArg);
+    if (!Array.isArray(dates)) {
+      return dates;
+    }
+    if (values.length !== dates.length || values.length === 0 || !hasPositiveAndNegative(values)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const start = dates[0]!;
+    if (dates.some((date) => date < start)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const result = xnpvValue(rate, values, dates);
+    return result === undefined ? errorValue(ErrorCode.Value) : numberResult(result);
+  },
+  XIRR: (valuesArg, datesArg, guessArg = { tag: ValueTag.Number, value: 0.1 }) => {
+    if (
+      valuesArg === undefined ||
+      datesArg === undefined ||
+      guessArg === undefined ||
+      isRangeArg(guessArg)
+    ) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (isError(guessArg)) {
+      return guessArg;
+    }
+    const values = collectNumericSeries(valuesArg, "strict");
+    if (!Array.isArray(values)) {
+      return values;
+    }
+    const dates = collectDateSerialSeries(datesArg);
+    if (!Array.isArray(dates)) {
+      return dates;
+    }
+    if (values.length !== dates.length || values.length === 0 || !hasPositiveAndNegative(values)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const start = dates[0]!;
+    if (dates.some((date) => date < start)) {
+      return errorValue(ErrorCode.Value);
+    }
+    const guess = toNumber(guessArg);
+    if (guess === undefined) {
+      return errorValue(ErrorCode.Value);
+    }
+    const result = solveDiscountRate(
+      guess,
+      (candidate) => xnpvValue(candidate, values, dates),
+      (candidate) => xnpvDerivative(candidate, values, dates),
+    );
+    return result === undefined ? errorValue(ErrorCode.Value) : numberResult(result);
+  },
   MATCH: (lookupValue, lookupArray, matchTypeValue = { tag: ValueTag.Number, value: 1 }) => {
     if (isRangeArg(lookupValue)) {
       return errorValue(ErrorCode.Value);
@@ -848,6 +2828,96 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
       ? { tag: ValueTag.Number, value: covariance }
       : covariance;
   },
+  INTERCEPT: (knownYArg, knownXArg) => {
+    const values = parseCorrelationOperands(knownYArg, knownXArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const regression = linearRegressionFromPairs(values.first, values.second);
+    return "intercept" in regression
+      ? { tag: ValueTag.Number, value: regression.intercept }
+      : regression;
+  },
+  SLOPE: (knownYArg, knownXArg) => {
+    const values = parseCorrelationOperands(knownYArg, knownXArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const regression = linearRegressionFromPairs(values.first, values.second);
+    return "slope" in regression ? { tag: ValueTag.Number, value: regression.slope } : regression;
+  },
+  RSQ: (knownYArg, knownXArg) => {
+    const values = parseCorrelationOperands(knownYArg, knownXArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    const correlation = correlationFromPairs(values.first, values.second);
+    return typeof correlation === "number"
+      ? { tag: ValueTag.Number, value: correlation * correlation }
+      : correlation;
+  },
+  STEYX: (knownYArg, knownXArg) => {
+    const values = parseCorrelationOperands(knownYArg, knownXArg);
+    if (!("first" in values)) {
+      return values;
+    }
+    if (values.first.length <= 2) {
+      return errorValue(ErrorCode.Div0);
+    }
+    const regression = linearRegressionFromPairs(values.first, values.second);
+    if (!("residualSumSquares" in regression)) {
+      return regression;
+    }
+    return {
+      tag: ValueTag.Number,
+      value: Math.sqrt(Math.max(0, regression.residualSumSquares) / (values.first.length - 2)),
+    };
+  },
+  FORECAST: (xArg, knownYArg, knownXArg) => {
+    return forecastResult(xArg, knownYArg, knownXArg);
+  },
+  "FORECAST.LINEAR": (xArg, knownYArg, knownXArg) => {
+    return forecastResult(xArg, knownYArg, knownXArg);
+  },
+  TREND: (knownYArg, knownXArg, newXArg, constArg) => {
+    return trendLikeResult("trend", knownYArg, knownXArg, newXArg, constArg);
+  },
+  GROWTH: (knownYArg, knownXArg, newXArg, constArg) => {
+    return trendLikeResult("growth", knownYArg, knownXArg, newXArg, constArg);
+  },
+  LINEST: (knownYArg, knownXArg, constArg, statsArg) => {
+    return linearEstimationResult("linest", knownYArg, knownXArg, constArg, statsArg);
+  },
+  LOGEST: (knownYArg, knownXArg, constArg, statsArg) => {
+    return linearEstimationResult("logest", knownYArg, knownXArg, constArg, statsArg);
+  },
+  "CHISQ.TEST": (actualArg, expectedArg) => {
+    return chiSquareTestResult(actualArg, expectedArg);
+  },
+  CHITEST: (actualArg, expectedArg) => {
+    return chiSquareTestResult(actualArg, expectedArg);
+  },
+  "LEGACY.CHITEST": (actualArg, expectedArg) => {
+    return chiSquareTestResult(actualArg, expectedArg);
+  },
+  "F.TEST": (firstArg, secondArg) => {
+    return fTestResult(firstArg, secondArg);
+  },
+  FTEST: (firstArg, secondArg) => {
+    return fTestResult(firstArg, secondArg);
+  },
+  "Z.TEST": (arrayArg, xArg, sigmaArg) => {
+    return zTestResult(arrayArg, xArg, sigmaArg);
+  },
+  ZTEST: (arrayArg, xArg, sigmaArg) => {
+    return zTestResult(arrayArg, xArg, sigmaArg);
+  },
+  "T.TEST": (firstArg, secondArg, tailsArg, typeArg) => {
+    return tTestResult(firstArg, secondArg, tailsArg, typeArg);
+  },
+  TTEST: (firstArg, secondArg, tailsArg, typeArg) => {
+    return tTestResult(firstArg, secondArg, tailsArg, typeArg);
+  },
   AVEDEV: (...args) => {
     const values = flattenNumericArguments(args);
     if (!Array.isArray(values)) {
@@ -897,10 +2967,31 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
   },
   SMALL: (arg, positionArg) => nthValue(arg, positionArg, true),
   LARGE: (arg, positionArg) => nthValue(arg, positionArg, false),
+  PERCENTILE: (arrayArg, percentileArg) => percentileFromValues(arrayArg, percentileArg, false),
+  "PERCENTILE.INC": (arrayArg, percentileArg) =>
+    percentileFromValues(arrayArg, percentileArg, false),
+  "PERCENTILE.EXC": (arrayArg, percentileArg) =>
+    percentileFromValues(arrayArg, percentileArg, true),
+  PERCENTRANK: (arrayArg, targetArg, significanceArg = { tag: ValueTag.Number, value: 3 }) =>
+    percentRankFromValues(arrayArg, targetArg, significanceArg, false),
+  "PERCENTRANK.INC": (arrayArg, targetArg, significanceArg = { tag: ValueTag.Number, value: 3 }) =>
+    percentRankFromValues(arrayArg, targetArg, significanceArg, false),
+  "PERCENTRANK.EXC": (arrayArg, targetArg, significanceArg = { tag: ValueTag.Number, value: 3 }) =>
+    percentRankFromValues(arrayArg, targetArg, significanceArg, true),
+  QUARTILE: (arrayArg, quartArg) => quartileFromValues(arrayArg, quartArg, false),
+  "QUARTILE.INC": (arrayArg, quartArg) => quartileFromValues(arrayArg, quartArg, false),
+  "QUARTILE.EXC": (arrayArg, quartArg) => quartileFromValues(arrayArg, quartArg, true),
+  "MODE.MULT": (...args) => modeMultiFromValues(...args),
+  FREQUENCY: (dataArg, binsArg) => frequencyFromValues(dataArg, binsArg),
+  PROB: (xArg, probabilitiesArg, lowerArg, upperArg) =>
+    probFromValues(xArg, probabilitiesArg, lowerArg, upperArg),
+  TRIMMEAN: (arrayArg, percentArg) => trimMeanFromValues(arrayArg, percentArg),
   RANK: (numberArg, arrayArg, orderArg = { tag: ValueTag.Number, value: 0 }) =>
     rankFromValues(numberArg, arrayArg, orderArg, false),
   "RANK.EQ": (numberArg, arrayArg, orderArg = { tag: ValueTag.Number, value: 0 }) =>
     rankFromValues(numberArg, arrayArg, orderArg, false),
+  "RANK.AVG": (numberArg, arrayArg, orderArg = { tag: ValueTag.Number, value: 0 }) =>
+    rankFromValues(numberArg, arrayArg, orderArg, true),
   INDEX: (array, rowNumValue, colNumValue = { tag: ValueTag.Number, value: 1 }) => {
     if (!isRangeArg(array) || array.refKind !== "cells") {
       return errorValue(ErrorCode.Value);
@@ -1743,6 +3834,185 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
     return arrayResult(wrappedValues, rows, cols);
   },
+  DAVERAGE: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+
+    let count = 0;
+    let sum = 0;
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric === undefined) {
+        continue;
+      }
+      count += 1;
+      sum += numeric;
+    }
+    return count === 0 ? errorValue(ErrorCode.Div0) : numberResult(sum / count);
+  },
+  DCOUNT: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, true);
+    if ("tag" in selection) {
+      return selection;
+    }
+    if (selection.fieldIndex === undefined) {
+      return numberResult(selection.matchingRows.length);
+    }
+    let count = 0;
+    for (const row of selection.matchingRows) {
+      if (toNumber(getRangeValue(selection.database, row, selection.fieldIndex)) !== undefined) {
+        count += 1;
+      }
+    }
+    return numberResult(count);
+  },
+  DCOUNTA: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, true);
+    if ("tag" in selection) {
+      return selection;
+    }
+    if (selection.fieldIndex === undefined) {
+      return numberResult(selection.matchingRows.length);
+    }
+    let count = 0;
+    for (const row of selection.matchingRows) {
+      if (getRangeValue(selection.database, row, selection.fieldIndex).tag !== ValueTag.Empty) {
+        count += 1;
+      }
+    }
+    return numberResult(count);
+  },
+  DGET: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    if (selection.matchingRows.length === 0) {
+      return errorValue(ErrorCode.Value);
+    }
+    if (selection.matchingRows.length > 1) {
+      return errorValue(ErrorCode.Value);
+    }
+    return getRangeValue(selection.database, selection.matchingRows[0]!, selection.fieldIndex ?? 0);
+  },
+  DMAX: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    let maximum = Number.NEGATIVE_INFINITY;
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric !== undefined) {
+        maximum = Math.max(maximum, numeric);
+      }
+    }
+    return numberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum);
+  },
+  DMIN: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    let minimum = Number.POSITIVE_INFINITY;
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric !== undefined) {
+        minimum = Math.min(minimum, numeric);
+      }
+    }
+    return numberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum);
+  },
+  DPRODUCT: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    let count = 0;
+    let product = 1;
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric === undefined) {
+        continue;
+      }
+      count += 1;
+      product *= numeric;
+    }
+    return numberResult(count === 0 ? 0 : product);
+  },
+  DSTDEV: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    const values: number[] = [];
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric !== undefined) {
+        values.push(numeric);
+      }
+    }
+    const variance = sampleVariance(values);
+    return variance === undefined ? errorValue(ErrorCode.Div0) : numberResult(Math.sqrt(variance));
+  },
+  DSTDEVP: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    const values: number[] = [];
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric !== undefined) {
+        values.push(numeric);
+      }
+    }
+    const variance = populationVariance(values);
+    return variance === undefined ? errorValue(ErrorCode.Div0) : numberResult(Math.sqrt(variance));
+  },
+  DSUM: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    let sum = 0;
+    for (const row of selection.matchingRows) {
+      sum += toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0)) ?? 0;
+    }
+    return numberResult(sum);
+  },
+  DVAR: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    const values: number[] = [];
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric !== undefined) {
+        values.push(numeric);
+      }
+    }
+    const variance = sampleVariance(values);
+    return variance === undefined ? errorValue(ErrorCode.Div0) : numberResult(variance);
+  },
+  DVARP: (databaseArg, fieldArg, criteriaArg) => {
+    const selection = selectedDatabaseFieldValues(databaseArg, fieldArg, criteriaArg, false);
+    if ("tag" in selection) {
+      return selection;
+    }
+    const values: number[] = [];
+    for (const row of selection.matchingRows) {
+      const numeric = toNumber(getRangeValue(selection.database, row, selection.fieldIndex ?? 0));
+      if (numeric !== undefined) {
+        values.push(numeric);
+      }
+    }
+    const variance = populationVariance(values);
+    return variance === undefined ? errorValue(ErrorCode.Div0) : numberResult(variance);
+  },
   COUNTIF: (rangeArg, criteriaArg) => {
     const range = requireCellRange(rangeArg);
     if (!isRangeArg(range)) {
@@ -2272,6 +4542,7 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
     return arrayResult(values, keptRows.length, array.cols);
   },
+  ...externalLookupBuiltins,
 };
 
 type CriteriaOperator = "=" | "<>" | ">" | ">=" | "<" | "<=";
@@ -2335,5 +4606,9 @@ function parseCriteriaOperand(raw: string): CellValue {
 }
 
 export function getLookupBuiltin(name: string): LookupBuiltin | undefined {
-  return lookupBuiltins[name.toUpperCase()] ?? getExternalLookupFunction(name);
+  const upper = name.toUpperCase();
+  if (upper === "USE.THE.COUNTIF") {
+    return lookupBuiltins["COUNTIF"];
+  }
+  return lookupBuiltins[upper] ?? getExternalLookupFunction(name);
 }

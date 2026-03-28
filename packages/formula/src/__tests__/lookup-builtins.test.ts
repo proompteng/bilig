@@ -49,6 +49,154 @@ describe("lookup builtins", () => {
     ).toEqual(err(ErrorCode.Value));
   });
 
+  it("maps USE.THE.COUNTIF to the COUNTIF lookup implementation", () => {
+    const COUNTIF = getLookupBuiltin("COUNTIF")!;
+    const alias = getLookupBuiltin("USE.THE.COUNTIF")!;
+    const sample = cellRange([num(1), num(0), num(3)], 3, 1);
+
+    expect(alias).toBe(COUNTIF);
+    expect(alias(sample, text(">0"))).toEqual(num(2));
+  });
+
+  it("supports database aggregation builtins on matching records", () => {
+    const DAVERAGE = getLookupBuiltin("DAVERAGE")!;
+    const DCOUNT = getLookupBuiltin("DCOUNT")!;
+    const DCOUNTA = getLookupBuiltin("DCOUNTA")!;
+    const DGET = getLookupBuiltin("DGET")!;
+    const DMAX = getLookupBuiltin("DMAX")!;
+    const DMIN = getLookupBuiltin("DMIN")!;
+    const DPRODUCT = getLookupBuiltin("DPRODUCT")!;
+    const DSTDEV = getLookupBuiltin("DSTDEV")!;
+    const DSTDEVP = getLookupBuiltin("DSTDEVP")!;
+    const DSUM = getLookupBuiltin("DSUM")!;
+    const DVAR = getLookupBuiltin("DVAR")!;
+    const DVARP = getLookupBuiltin("DVARP")!;
+
+    const database = cellRange(
+      [
+        text("Age"),
+        text("Height"),
+        text("Yield"),
+        num(10),
+        num(100),
+        num(5),
+        num(12),
+        num(110),
+        num(7),
+        num(12),
+        num(120),
+        num(9),
+        num(15),
+        num(130),
+        num(11),
+      ],
+      5,
+      3,
+    );
+    const ageIsTwelve = cellRange([text("Age"), num(12)], 2, 1);
+    const ageIsFifteen = cellRange([text("Age"), num(15)], 2, 1);
+
+    expect(DAVERAGE(database, text("Yield"), ageIsTwelve)).toEqual(num(8));
+    expect(DCOUNT(database, text("Yield"), ageIsTwelve)).toEqual(num(2));
+    expect(DCOUNT(database, { tag: ValueTag.Empty }, ageIsTwelve)).toEqual(num(2));
+    expect(DCOUNTA(database, text("Height"), ageIsTwelve)).toEqual(num(2));
+    expect(DCOUNTA(database, { tag: ValueTag.Empty }, ageIsTwelve)).toEqual(num(2));
+    expect(DGET(database, text("Height"), ageIsFifteen)).toEqual(num(130));
+    expect(DMAX(database, text("Yield"), ageIsTwelve)).toEqual(num(9));
+    expect(DMIN(database, text("Yield"), ageIsTwelve)).toEqual(num(7));
+    expect(DPRODUCT(database, text("Yield"), ageIsTwelve)).toEqual(num(63));
+    expect(DSUM(database, text("Yield"), ageIsTwelve)).toEqual(num(16));
+    expect(DVAR(database, text("Yield"), ageIsTwelve)).toEqual(num(2));
+    expect(DVARP(database, text("Yield"), ageIsTwelve)).toEqual(num(1));
+
+    const dstdev = DSTDEV(database, text("Yield"), ageIsTwelve);
+    if (dstdev.tag !== ValueTag.Number) {
+      throw new Error("DSTDEV should return a number");
+    }
+    expect(dstdev.value).toBeCloseTo(Math.SQRT2, 12);
+
+    const dstdevp = DSTDEVP(database, text("Yield"), ageIsTwelve);
+    if (dstdevp.tag !== ValueTag.Number) {
+      throw new Error("DSTDEVP should return a number");
+    }
+    expect(dstdevp.value).toBeCloseTo(1, 12);
+
+    expect(DGET(database, text("Yield"), ageIsTwelve)).toEqual(err(ErrorCode.Value));
+    expect(DAVERAGE(database, text("Missing"), ageIsTwelve)).toEqual(err(ErrorCode.Value));
+    expect(
+      DCOUNT(database, text("Yield"), cellRange([text("Age"), err(ErrorCode.Ref)], 2, 1)),
+    ).toEqual(err(ErrorCode.Ref));
+  });
+
+  it("covers database builtin validation and empty-match edge cases", () => {
+    const DAVERAGE = getLookupBuiltin("DAVERAGE")!;
+    const DCOUNT = getLookupBuiltin("DCOUNT")!;
+    const DGET = getLookupBuiltin("DGET")!;
+    const DMAX = getLookupBuiltin("DMAX")!;
+    const DPRODUCT = getLookupBuiltin("DPRODUCT")!;
+    const DSTDEVP = getLookupBuiltin("DSTDEVP")!;
+    const DVAR = getLookupBuiltin("DVAR")!;
+    const DVARP = getLookupBuiltin("DVARP")!;
+
+    const database = cellRange(
+      [
+        text("Age"),
+        text("Height"),
+        text("Yield"),
+        num(10),
+        num(100),
+        num(5),
+        num(12),
+        num(110),
+        num(7),
+        num(12),
+        num(120),
+        num(9),
+        num(15),
+        num(130),
+        num(11),
+      ],
+      5,
+      3,
+    );
+    const ageIsTwelve = cellRange([text("Age"), num(12)], 2, 1);
+    const ageMissing = cellRange([text("Age"), num(99)], 2, 1);
+
+    expect(
+      DGET(database, cellRange([text("Height")], 1, 1), cellRange([text("Age"), num(15)], 2, 1)),
+    ).toEqual(num(130));
+    expect(DCOUNT(database, text(""), ageIsTwelve)).toEqual(num(2));
+    expect(DAVERAGE(database, text(""), ageIsTwelve)).toEqual(err(ErrorCode.Value));
+    expect(DCOUNT(database, cellRange([text("Yield"), text("Height")], 1, 2), ageIsTwelve)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(DMAX(database, bool(true), ageIsTwelve)).toEqual(err(ErrorCode.Value));
+    expect(DMAX(database, num(0), ageIsTwelve)).toEqual(err(ErrorCode.Value));
+    expect(DCOUNT(database, text("Yield"), cellRange([text("Age")], 1, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(DCOUNT(database, text("Yield"), cellRange([err(ErrorCode.Ref), num(12)], 2, 1))).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(
+      DCOUNT(database, text("Yield"), cellRange([text("Age"), err(ErrorCode.Name)], 2, 1)),
+    ).toEqual(err(ErrorCode.Name));
+    expect(
+      DCOUNT(database, text("Yield"), cellRange([{ tag: ValueTag.Empty }, num(12)], 2, 1)),
+    ).toEqual(num(0));
+    expect(DCOUNT(database, text("Yield"), cellRange([text("Missing"), num(12)], 2, 1))).toEqual(
+      num(0),
+    );
+    expect(DAVERAGE(database, text("Yield"), ageMissing)).toEqual(err(ErrorCode.Div0));
+    expect(DMAX(database, text("Yield"), ageMissing)).toEqual(num(0));
+    expect(DPRODUCT(database, text("Yield"), ageMissing)).toEqual(num(0));
+    expect(DSTDEVP(database, text("Yield"), ageMissing)).toEqual(err(ErrorCode.Div0));
+    expect(
+      DVAR(database, text("Yield"), cellRange([text("Age"), err(ErrorCode.Ref)], 2, 1)),
+    ).toEqual(err(ErrorCode.Ref));
+    expect(DVARP(database, text("Missing"), ageIsTwelve)).toEqual(err(ErrorCode.Value));
+  });
+
   it("supports COVAR, COVARIANCE.P, COVARIANCE.S, AVEDEV, and DEVSQ", () => {
     const COVAR = getLookupBuiltin("COVAR")!;
     const COVARP = getLookupBuiltin("COVARIANCE.P")!;
@@ -79,14 +227,382 @@ describe("lookup builtins", () => {
     expect(DEVSQ(cellRange([text("bad")], 1, 1))).toEqual(err(ErrorCode.Value));
   });
 
-  it("supports MEDIAN, SMALL, LARGE, RANK, and RANK.EQ", () => {
+  it("supports paired regression helpers and exact linear forecasts", () => {
+    const CORREL = getLookupBuiltin("CORREL")!;
+    const PEARSON = getLookupBuiltin("PEARSON")!;
+    const INTERCEPT = getLookupBuiltin("INTERCEPT")!;
+    const SLOPE = getLookupBuiltin("SLOPE")!;
+    const RSQ = getLookupBuiltin("RSQ")!;
+    const STEYX = getLookupBuiltin("STEYX")!;
+    const FORECAST = getLookupBuiltin("FORECAST")!;
+    const FORECAST_LINEAR = getLookupBuiltin("FORECAST.LINEAR")!;
+    const TREND = getLookupBuiltin("TREND")!;
+    const GROWTH = getLookupBuiltin("GROWTH")!;
+    const LINEST = getLookupBuiltin("LINEST")!;
+    const LOGEST = getLookupBuiltin("LOGEST")!;
+
+    const knownY = cellRange([num(5), num(8), num(11)], 3, 1);
+    const knownX = cellRange([num(1), num(2), num(3)], 3, 1);
+    const newX = cellRange([num(4), num(5)], 2, 1);
+    const simpleY = cellRange([num(2), num(4), num(6)], 3, 1);
+    const simpleX = cellRange([num(1), num(2), num(3)], 3, 1);
+
+    expect(CORREL(knownY, knownX)).toEqual(num(1));
+    expect(PEARSON(knownY, knownX)).toEqual(num(1));
+    expect(INTERCEPT(knownY, knownX)).toEqual(num(2));
+    expect(SLOPE(knownY, knownX)).toEqual(num(3));
+    expect(RSQ(knownY, knownX)).toEqual(num(1));
+    expect(STEYX(knownY, knownX)).toEqual(num(0));
+    expect(FORECAST(num(4), knownY, knownX)).toEqual(num(14));
+    expect(FORECAST_LINEAR(num(4), knownY, knownX)).toEqual(num(14));
+    expect(TREND(knownY, knownX, newX)).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(14), num(17)],
+    });
+    expect(TREND(knownY, knownX, num(4))).toEqual(num(14));
+    expect(LINEST(knownY)).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [num(3), num(2)],
+    });
+    expect(LINEST(knownY, knownX)).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [num(3), num(2)],
+    });
+    expect(LINEST(simpleY, simpleX, bool(false))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [num(2), num(0)],
+    });
+
+    const growthY = cellRange([num(2), num(4), num(8)], 3, 1);
+    const growth = GROWTH(growthY, knownX, newX);
+    expect(growth).toMatchObject({ kind: "array", rows: 2, cols: 1 });
+    if (!("values" in growth)) {
+      throw new Error("GROWTH should spill an array");
+    }
+    expect(growth.values[0]).toMatchObject({ tag: ValueTag.Number, value: expect.closeTo(16, 12) });
+    expect(growth.values[1]).toMatchObject({ tag: ValueTag.Number, value: expect.closeTo(32, 12) });
+    expect(GROWTH(growthY, knownX, num(4))).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(16, 12),
+    });
+    const growthNoIntercept = GROWTH(growthY, knownX, newX, bool(false));
+    expect(growthNoIntercept).toMatchObject({ kind: "array", rows: 2, cols: 1 });
+    if (!("values" in growthNoIntercept)) {
+      throw new Error("GROWTH without intercept should spill an array");
+    }
+    expect(growthNoIntercept.values[0]).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(16, 12),
+    });
+    expect(growthNoIntercept.values[1]).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.closeTo(32, 12),
+    });
+    expect(LOGEST(growthY, knownX)).toMatchObject({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: expect.closeTo(2, 12) },
+        { tag: ValueTag.Number, value: expect.closeTo(1, 12) },
+      ],
+    });
+    expect(LOGEST(growthY)).toMatchObject({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: expect.closeTo(2, 12) },
+        { tag: ValueTag.Number, value: expect.closeTo(1, 12) },
+      ],
+    });
+    expect(LOGEST(growthY, knownX, bool(false))).toMatchObject({
+      kind: "array",
+      rows: 1,
+      cols: 2,
+      values: [
+        { tag: ValueTag.Number, value: expect.closeTo(2, 12) },
+        { tag: ValueTag.Number, value: expect.closeTo(1, 12) },
+      ],
+    });
+
+    expect(SLOPE(knownY, cellRange([num(2), num(2), num(2)], 3, 1))).toEqual(err(ErrorCode.Div0));
+    expect(STEYX(cellRange([num(5), num(8)], 2, 1), cellRange([num(1), num(2)], 2, 1))).toEqual(
+      err(ErrorCode.Div0),
+    );
+    expect(FORECAST(text("oops"), knownY, knownX)).toEqual(err(ErrorCode.Value));
+    expect(TREND(knownY, cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Value));
+    expect(TREND(knownY, knownX, newX, text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(GROWTH(cellRange([num(2), num(0), num(8)], 3, 1), knownX, newX)).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(LINEST(knownY, knownX, bool(true), bool(true))).toMatchObject({
+      kind: "array",
+      rows: 5,
+      cols: 2,
+    });
+    expect(LOGEST(growthY, knownX, bool(true), bool(true))).toMatchObject({
+      kind: "array",
+      rows: 5,
+      cols: 2,
+    });
+    const minimalLineStats = LINEST(
+      cellRange([num(1), num(2)], 2, 1),
+      cellRange([num(1), num(2)], 2, 1),
+      bool(true),
+      bool(true),
+    );
+    expect(minimalLineStats).toMatchObject({ kind: "array", rows: 5, cols: 2 });
+    if (!("values" in minimalLineStats)) {
+      throw new Error("LINEST stats should spill a matrix");
+    }
+    expect(minimalLineStats.values[2]).toEqual(err(ErrorCode.Div0));
+    expect(minimalLineStats.values[3]).toEqual(err(ErrorCode.Div0));
+    expect(minimalLineStats.values[5]).toEqual(err(ErrorCode.Div0));
+    expect(minimalLineStats.values[6]).toEqual(err(ErrorCode.Div0));
+    expect(LINEST(knownY, knownX, text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(LOGEST(growthY, knownX, text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(LINEST(knownY, knownX, bool(true), text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(LOGEST(growthY, knownX, bool(true), text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(LINEST(knownY, cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Value));
+    expect(LOGEST(cellRange([num(2), num(0), num(8)], 3, 1), knownX)).toEqual(err(ErrorCode.Value));
+  });
+
+  it("supports PROB and TRIMMEAN with validation-heavy edge cases", () => {
+    const PROB = getLookupBuiltin("PROB")!;
+    const TRIMMEAN = getLookupBuiltin("TRIMMEAN")!;
+
+    const xValues = cellRange([num(1), num(2), num(3), num(4)], 4, 1);
+    const probabilities = cellRange([num(0.1), num(0.2), num(0.3), num(0.4)], 4, 1);
+    const mixedTrimRange = cellRange(
+      [num(1), text("ignored"), num(4), num(7), bool(true), num(9), num(10), num(12)],
+      8,
+      1,
+    );
+
+    expect(PROB(xValues, probabilities, num(2))).toEqual(num(0.2));
+    expect(PROB(xValues, probabilities, num(2), num(3))).toEqual(num(0.5));
+    expect(PROB(xValues, probabilities, num(5), num(6))).toEqual(num(0));
+    expect(
+      TRIMMEAN(
+        cellRange([num(1), num(2), num(4), num(7), num(8), num(9), num(10), num(12)], 8, 1),
+        num(0.25),
+      ),
+    ).toEqual(num(40 / 6));
+    expect(TRIMMEAN(mixedTrimRange, num(0.4))).toEqual(num(7.5));
+
+    expect(PROB(cellRange([num(1), num(2)], 2, 1), cellRange([num(0.4)], 1, 1), num(1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(
+      PROB(xValues, cellRange([num(0.1), num(0.2), num(0.3), num(0.5)], 4, 1), num(1)),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      PROB(cellRange([err(ErrorCode.Ref), num(2), num(3), num(4)], 4, 1), probabilities, num(1)),
+    ).toEqual(err(ErrorCode.Ref));
+    expect(
+      PROB(xValues, cellRange([num(0.1), err(ErrorCode.NA), num(0.3), num(0.6)], 4, 1), num(1)),
+    ).toEqual(err(ErrorCode.NA));
+    expect(
+      PROB(xValues, cellRange([num(0.1), text("bad"), num(0.3), num(0.6)], 4, 1), num(1)),
+    ).toEqual(err(ErrorCode.Value));
+    expect(PROB(xValues, probabilities, text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(PROB(xValues, probabilities, num(3), num(2))).toEqual(err(ErrorCode.Value));
+    expect(PROB(xValues, probabilities, num(3), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
+    expect(PROB(xValues, probabilities, cellRange([num(2)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(TRIMMEAN(cellRange([text("bad")], 1, 1), num(0.25))).toEqual(err(ErrorCode.Value));
+    expect(TRIMMEAN(cellRange([num(1), num(2)], 2, 1), num(1))).toEqual(err(ErrorCode.Value));
+    expect(TRIMMEAN(cellRange([num(1), num(2)], 2, 1), text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(TRIMMEAN(err(ErrorCode.Ref), num(0.25))).toEqual(err(ErrorCode.Ref));
+    expect(TRIMMEAN(cellRange([num(1), num(2)], 2, 1), err(ErrorCode.NA))).toEqual(
+      err(ErrorCode.NA),
+    );
+    expect(
+      TRIMMEAN(
+        { kind: "range", refKind: "rows", values: [num(1), num(2)], rows: 2, cols: 1 },
+        num(0.25),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(TRIMMEAN(num(8), num(0))).toEqual(num(8));
+  });
+
+  it("covers order-statistics validation branches beyond the happy path", () => {
+    const SMALL = getLookupBuiltin("SMALL")!;
+    const LARGE = getLookupBuiltin("LARGE")!;
+    const PERCENTILE = getLookupBuiltin("PERCENTILE")!;
+    const PERCENTILE_EXC = getLookupBuiltin("PERCENTILE.EXC")!;
+    const PERCENTRANK = getLookupBuiltin("PERCENTRANK")!;
+    const QUARTILE = getLookupBuiltin("QUARTILE")!;
+    const QUARTILE_INC = getLookupBuiltin("QUARTILE.INC")!;
+    const QUARTILE_EXC = getLookupBuiltin("QUARTILE.EXC")!;
+
+    const ordered = cellRange(
+      [num(1), num(2), num(4), num(7), num(8), num(9), num(10), num(12)],
+      8,
+      1,
+    );
+
+    expect(SMALL(ordered, num(0))).toEqual(err(ErrorCode.Value));
+    expect(LARGE(ordered, num(99))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTILE(ordered, cellRange([num(0.5)], 1, 1))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTILE(cellRange([], 0, 0), num(0.5))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTILE_EXC(ordered, num(0))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTRANK(cellRange([num(1)], 1, 1), num(1))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTRANK(ordered, num(8), num(0))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTRANK(ordered, num(100))).toEqual(err(ErrorCode.NA));
+    expect(QUARTILE(ordered, num(0))).toEqual(num(1));
+    expect(QUARTILE_INC(ordered, num(4))).toEqual(num(12));
+    expect(QUARTILE_EXC(ordered, num(0))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("supports CHISQ.TEST and legacy aliases across actual and expected matrices", () => {
+    const CHISQ_TEST = getLookupBuiltin("CHISQ.TEST")!;
+    const CHITEST = getLookupBuiltin("CHITEST")!;
+    const LEGACY_CHITEST = getLookupBuiltin("LEGACY.CHITEST")!;
+
+    const actual = cellRange([num(58), num(35), num(11), num(25), num(10), num(23)], 3, 2);
+    const expected = cellRange(
+      [num(45.35), num(47.65), num(17.56), num(18.44), num(16.09), num(16.91)],
+      3,
+      2,
+    );
+
+    const chisqTest = CHISQ_TEST(actual, expected);
+    if (chisqTest.tag !== ValueTag.Number) {
+      throw new Error("CHISQ.TEST should return a number");
+    }
+    expect(chisqTest.value).toBeCloseTo(0.0003082, 7);
+    const chiTest = CHITEST(actual, expected);
+    if (chiTest.tag !== ValueTag.Number) {
+      throw new Error("CHITEST should return a number");
+    }
+    expect(chiTest.value).toBeCloseTo(0.0003082, 7);
+    const legacyChiTest = LEGACY_CHITEST(actual, expected);
+    if (legacyChiTest.tag !== ValueTag.Number) {
+      throw new Error("LEGACY.CHITEST should return a number");
+    }
+    expect(legacyChiTest.value).toBeCloseTo(0.0003082, 7);
+
+    expect(CHISQ_TEST(cellRange([num(1), num(2)], 2, 1), cellRange([num(1)], 1, 1))).toEqual(
+      err(ErrorCode.NA),
+    );
+    expect(CHISQ_TEST(num(1), num(1))).toEqual(err(ErrorCode.NA));
+    expect(
+      CHISQ_TEST(cellRange([num(1), num(2)], 2, 1), cellRange([num(1), num(0)], 2, 1)),
+    ).toEqual(err(ErrorCode.Div0));
+  });
+
+  it("supports F.TEST and Z.TEST legacy aliases on numeric samples", () => {
+    const F_TEST = getLookupBuiltin("F.TEST")!;
+    const FTEST = getLookupBuiltin("FTEST")!;
+    const Z_TEST = getLookupBuiltin("Z.TEST")!;
+    const ZTEST = getLookupBuiltin("ZTEST")!;
+
+    const first = cellRange([num(6), num(7), num(9), num(15), num(21)], 5, 1);
+    const second = cellRange([num(20), num(28), num(31), num(38), num(40)], 5, 1);
+    const zSample = cellRange([num(1), num(2), num(3), num(4), num(5)], 5, 1);
+
+    const fTest = F_TEST(first, second);
+    if (fTest.tag !== ValueTag.Number) {
+      throw new Error("F.TEST should return a number");
+    }
+    expect(fTest.value).toBeCloseTo(0.648317846786175, 12);
+
+    const legacyFTest = FTEST(first, second);
+    if (legacyFTest.tag !== ValueTag.Number) {
+      throw new Error("FTEST should return a number");
+    }
+    expect(legacyFTest.value).toBeCloseTo(0.648317846786175, 12);
+
+    const zTest = Z_TEST(zSample, num(2), num(1));
+    if (zTest.tag !== ValueTag.Number) {
+      throw new Error("Z.TEST should return a number");
+    }
+    expect(zTest.value).toBeCloseTo(0.012673617875446075, 12);
+
+    const legacyZTest = ZTEST(zSample, num(2), num(1));
+    if (legacyZTest.tag !== ValueTag.Number) {
+      throw new Error("ZTEST should return a number");
+    }
+    expect(legacyZTest.value).toBeCloseTo(0.012673617875446075, 12);
+
+    expect(F_TEST(cellRange([num(1), text("x")], 2, 1), cellRange([num(1)], 1, 1))).toEqual(
+      err(ErrorCode.Div0),
+    );
+    expect(F_TEST(cellRange([num(3), num(3)], 2, 1), cellRange([num(1), num(2)], 2, 1))).toEqual(
+      err(ErrorCode.Div0),
+    );
+    expect(Z_TEST(zSample, num(2), num(0))).toEqual(err(ErrorCode.Div0));
+  });
+
+  it("supports T.TEST across paired, equal-variance, and Welch modes", () => {
+    const T_TEST = getLookupBuiltin("T.TEST")!;
+    const TTEST = getLookupBuiltin("TTEST")!;
+
+    const pairedFirst = cellRange([num(1), num(2), num(4)], 3, 1);
+    const pairedSecond = cellRange([num(1), num(3), num(3)], 3, 1);
+    expect(T_TEST(pairedFirst, pairedSecond, num(2), num(1))).toEqual(num(1));
+    expect(TTEST(pairedFirst, pairedSecond, num(2), num(1))).toEqual(num(1));
+
+    const independentFirst = cellRange([num(6), num(7), num(9), num(15), num(21)], 5, 1);
+    const independentSecond = cellRange([num(20), num(28), num(31), num(38), num(40)], 5, 1);
+    const equalVariance = T_TEST(independentFirst, independentSecond, num(2), num(2));
+    if (equalVariance.tag !== ValueTag.Number) {
+      throw new Error("T.TEST equal-variance mode should return a number");
+    }
+    expect(equalVariance.value).toBeCloseTo(0.0025154774780675737, 12);
+
+    const welch = T_TEST(independentFirst, independentSecond, num(2), num(3));
+    if (welch.tag !== ValueTag.Number) {
+      throw new Error("T.TEST Welch mode should return a number");
+    }
+    expect(welch.value).toBeGreaterThan(equalVariance.value);
+    expect(welch.value).toBeLessThan(0.01);
+
+    expect(T_TEST(independentFirst, independentSecond, num(3), num(2))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(T_TEST(independentFirst, independentSecond, num(2), num(4))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(
+      T_TEST(cellRange([num(1), num(2)], 2, 1), cellRange([num(1)], 1, 1), num(2), num(1)),
+    ).toEqual(err(ErrorCode.NA));
+  });
+
+  it("supports order-statistics helpers and rank variants", () => {
     const MEDIAN = getLookupBuiltin("MEDIAN")!;
     const SMALL = getLookupBuiltin("SMALL")!;
     const LARGE = getLookupBuiltin("LARGE")!;
+    const PERCENTILE = getLookupBuiltin("PERCENTILE")!;
+    const PERCENTILE_INC = getLookupBuiltin("PERCENTILE.INC")!;
+    const PERCENTILE_EXC = getLookupBuiltin("PERCENTILE.EXC")!;
+    const PERCENTRANK = getLookupBuiltin("PERCENTRANK")!;
+    const PERCENTRANK_INC = getLookupBuiltin("PERCENTRANK.INC")!;
+    const PERCENTRANK_EXC = getLookupBuiltin("PERCENTRANK.EXC")!;
+    const QUARTILE = getLookupBuiltin("QUARTILE")!;
+    const QUARTILE_INC = getLookupBuiltin("QUARTILE.INC")!;
+    const QUARTILE_EXC = getLookupBuiltin("QUARTILE.EXC")!;
+    const MODE_MULT = getLookupBuiltin("MODE.MULT")!;
+    const FREQUENCY = getLookupBuiltin("FREQUENCY")!;
     const RANK = getLookupBuiltin("RANK")!;
     const RANKEQ = getLookupBuiltin("RANK.EQ")!;
+    const RANKAVG = getLookupBuiltin("RANK.AVG")!;
 
     const sample = cellRange([num(1), num(4), num(2), num(4), num(3)], 5, 1);
+    const percentileSample = cellRange(
+      [num(1), num(2), num(4), num(7), num(8), num(9), num(10), num(12)],
+      8,
+      1,
+    );
 
     expect(MEDIAN(sample)).toEqual(num(3));
     expect(MEDIAN(num(7))).toEqual(num(7));
@@ -99,11 +615,60 @@ describe("lookup builtins", () => {
     expect(LARGE(sample, num(4))).toEqual(num(2));
     expect(SMALL(sample, num(0))).toEqual(err(ErrorCode.Value));
     expect(LARGE(sample, num(6))).toEqual(err(ErrorCode.Value));
+    expect(PERCENTILE(percentileSample, num(0.25))).toEqual(num(3.5));
+    expect(PERCENTILE_INC(percentileSample, num(0.25))).toEqual(num(3.5));
+    expect(PERCENTILE_EXC(percentileSample, num(0.25))).toEqual(num(2.5));
+    expect(PERCENTRANK(percentileSample, num(8))).toEqual(num(0.571));
+    expect(PERCENTRANK_INC(percentileSample, num(8))).toEqual(num(0.571));
+    expect(PERCENTRANK_EXC(percentileSample, num(8))).toEqual(num(0.555));
+    expect(PERCENTRANK(percentileSample, num(5))).toEqual(num(0.333));
+    expect(PERCENTRANK(percentileSample, num(8), num(1))).toEqual(num(0.5));
+    expect(PERCENTRANK_EXC(percentileSample, num(5))).toEqual(num(0.37));
+    expect(PERCENTRANK(percentileSample, num(20))).toEqual(err(ErrorCode.NA));
+    expect(PERCENTRANK_EXC(percentileSample, num(20))).toEqual(err(ErrorCode.NA));
+    expect(PERCENTRANK(percentileSample, num(8), num(0))).toEqual(err(ErrorCode.Value));
+    expect(QUARTILE(percentileSample, num(1))).toEqual(num(3.5));
+    expect(QUARTILE_INC(percentileSample, num(1))).toEqual(num(3.5));
+    expect(QUARTILE_EXC(percentileSample, num(1))).toEqual(num(2.5));
+    expect(PERCENTILE_EXC(percentileSample, num(0))).toEqual(err(ErrorCode.Value));
+    expect(QUARTILE_EXC(percentileSample, num(4))).toEqual(err(ErrorCode.Value));
+    expect(MODE_MULT(cellRange([num(1), num(2), num(2), num(3), num(3), num(4)], 6, 1))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(2), num(3)],
+    });
+    expect(MODE_MULT(num(7), num(7), num(5))).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [num(7)],
+    });
+    expect(MODE_MULT(cellRange([num(1), num(2), num(3)], 3, 1))).toEqual(err(ErrorCode.NA));
+    expect(MODE_MULT(text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(
+      FREQUENCY(
+        cellRange([num(79), num(85), num(78), num(85), num(50), num(81)], 6, 1),
+        cellRange([num(60), num(80), num(90)], 3, 1),
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 4,
+      cols: 1,
+      values: [num(1), num(2), num(3), num(0)],
+    });
+    expect(FREQUENCY(num(5), num(4))).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 1,
+      values: [num(0), num(1)],
+    });
 
     expect(RANK(num(4), sample)).toEqual(num(1));
     expect(RANK(num(1), sample)).toEqual(num(5));
     expect(RANK(num(3), sample, num(1))).toEqual(num(3));
     expect(RANKEQ(num(4), sample)).toEqual(num(1));
+    expect(RANKAVG(num(4), sample)).toEqual(num(1.5));
     expect(RANKEQ(num(8), sample)).toEqual(err(ErrorCode.NA));
   });
 
@@ -178,6 +743,17 @@ describe("lookup builtins", () => {
     expect(PEARSON(cellRange([num(1)], 1, 1), cellRange([num(2)], 1, 1))).toEqual(
       err(ErrorCode.Div0),
     );
+  });
+
+  it("validates TOCOL and TOROW control arguments", () => {
+    const TOCOL = getLookupBuiltin("TOCOL")!;
+    const TOROW = getLookupBuiltin("TOROW")!;
+    const matrix = cellRange([num(1), num(2), num(3), num(4)], 2, 2);
+
+    expect(TOCOL(matrix, num(2))).toEqual(err(ErrorCode.Value));
+    expect(TOCOL(matrix, num(0), text("bad"))).toEqual(err(ErrorCode.Value));
+    expect(TOROW(matrix, num(2))).toEqual(err(ErrorCode.Value));
+    expect(TOROW(matrix, num(0), text("bad"))).toEqual(err(ErrorCode.Value));
   });
 
   it("supports INDEX over cell ranges", () => {
@@ -541,6 +1117,9 @@ describe("lookup builtins", () => {
       values: [num(1)],
     });
     expect(TOCOL(rowRefRange)).toEqual(err(ErrorCode.Value));
+    expect(
+      TOCOL(cellRange([num(1), num(2), num(3), num(4)], 2, 2), cellRange([num(1)], 1, 1)),
+    ).toEqual(err(ErrorCode.Value));
     expect(TOCOL(cellRange([num(1), num(2), num(3), num(4)], 2, 2), err(ErrorCode.Name))).toEqual(
       err(ErrorCode.Name),
     );
@@ -1185,6 +1764,22 @@ describe("lookup builtins", () => {
       cols: 2,
       values: [num(1), num(1), num(2), num(3)],
     });
+    expect(VSTACK()).toEqual(err(ErrorCode.Value));
+    expect(
+      VSTACK({
+        kind: "range",
+        refKind: "rows",
+        rows: 1,
+        cols: 1,
+        values: [num(1)],
+      }),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      VSTACK(
+        cellRange([num(1), num(2), num(3), num(4)], 2, 2),
+        cellRange([num(5), num(6), num(7)], 1, 3),
+      ),
+    ).toEqual(err(ErrorCode.Value));
 
     // matchesCriteria operators
     const range = cellRange([num(1), num(2), num(3), num(4)], 4, 1);
@@ -1207,5 +1802,63 @@ describe("lookup builtins", () => {
       cols: 2,
       values: [num(1), num(2)],
     });
+  });
+
+  it("supports native cash-flow rate helpers on numeric ranges", () => {
+    const IRR = getLookupBuiltin("IRR")!;
+    const MIRR = getLookupBuiltin("MIRR")!;
+    const XNPV = getLookupBuiltin("XNPV")!;
+    const XIRR = getLookupBuiltin("XIRR")!;
+
+    const irrValues = cellRange(
+      [num(-70000), num(12000), num(15000), num(18000), num(21000), num(26000)],
+      6,
+      1,
+    );
+    const mirrValues = cellRange(
+      [num(-120000), num(39000), num(30000), num(21000), num(37000), num(46000)],
+      6,
+      1,
+    );
+    const xValues = cellRange([num(-10000), num(2750), num(4250), num(3250), num(2750)], 5, 1);
+    const xDates = cellRange([num(39448), num(39508), num(39751), num(39859), num(39904)], 5, 1);
+
+    const irr = IRR(irrValues);
+    if (irr.tag !== ValueTag.Number) throw new Error(`Expected number result, received ${irr.tag}`);
+    expect(irr.value).toBeCloseTo(0.08663094803653162, 12);
+
+    const mirr = MIRR(mirrValues, num(0.1), num(0.12));
+    if (mirr.tag !== ValueTag.Number)
+      throw new Error(`Expected number result, received ${mirr.tag}`);
+    expect(mirr.value).toBeCloseTo(0.1260941303659051, 12);
+
+    const xnpv = XNPV(num(0.09), xValues, xDates);
+    if (xnpv.tag !== ValueTag.Number)
+      throw new Error(`Expected number result, received ${xnpv.tag}`);
+    expect(xnpv.value).toBeCloseTo(2086.647602031535, 9);
+
+    const xirr = XIRR(xValues, xDates);
+    if (xirr.tag !== ValueTag.Number)
+      throw new Error(`Expected number result, received ${xirr.tag}`);
+    expect(xirr.value).toBeCloseTo(0.37336253351883136, 12);
+
+    expect(IRR(cellRange([num(5), num(7)], 2, 1))).toEqual(err(ErrorCode.Value));
+    expect(MIRR(cellRange([num(5), num(7)], 2, 1), num(0.1), num(0.12))).toEqual(
+      err(ErrorCode.Div0),
+    );
+    expect(XNPV(num(0.09), xValues, cellRange([num(39448), num(39508)], 2, 1))).toEqual(
+      err(ErrorCode.Value),
+    );
+    expect(
+      XNPV(
+        num(0.09),
+        xValues,
+        cellRange([num(39448), num(39508), num(39400), num(39859), num(39904)], 5, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      XIRR(xValues, cellRange([num(39448), num(39508), num(39400), num(39859), num(39904)], 5, 1)),
+    ).toEqual(err(ErrorCode.Value));
+    expect(XIRR(xValues, xDates, text("bad"))).toEqual(err(ErrorCode.Value));
   });
 });

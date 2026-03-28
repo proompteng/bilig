@@ -6,6 +6,7 @@ import type {
   ExcelFixtureExpectedOutput,
   ExcelFixtureFamily,
   ExcelFixtureInputCell,
+  ExcelFixtureMultipleOperationsMock,
 } from "./index.js";
 
 const excelFixtureIdPattern = /^[a-z][a-z0-9-]*:[a-z0-9-]+$/;
@@ -83,6 +84,12 @@ function fixture(
     base.definedNames = options.definedNames;
   }
   return base;
+}
+
+function multipleOperations(
+  config: ExcelFixtureMultipleOperationsMock,
+): ExcelFixtureMultipleOperationsMock {
+  return config;
 }
 
 const taxRate = definedName("TaxRate", 0.085);
@@ -194,4 +201,23 @@ export const canonicalWorkbookSemanticsFixtures: readonly ExcelFixtureCase[] = [
         "Range-qualified sheet misses stay JS-authoritative until a later sheet creation can rebind them.",
     },
   ),
+  {
+    id: createExcelFixtureId("lookup-reference", "multiple-operations-basic"),
+    family: "lookup-reference",
+    title: "MULTIPLE.OPERATIONS resolves workbook-aware what-if substitutions",
+    formula: "=MULTIPLE.OPERATIONS(B5,B3,C4,B2,D2)",
+    inputs: [input("B2", 1), input("B3", 2), input("C4", 5), input("D2", 3)],
+    outputs: [output("A1", numberExpected(23))],
+    sheetName: "Sheet1",
+    notes:
+      "The fixture harness stubs the what-if request contract while the engine integration test covers recursive workbook recomputation with real dependent formulas.",
+    multipleOperations: multipleOperations({
+      formulaAddress: "B5",
+      rowCellAddress: "B3",
+      rowReplacementAddress: "C4",
+      columnCellAddress: "B2",
+      columnReplacementAddress: "D2",
+      result: numberExpected(23),
+    }),
+  },
 ];

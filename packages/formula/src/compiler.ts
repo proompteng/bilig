@@ -47,9 +47,21 @@ function producesSpillResult(node: FormulaNode): boolean {
     case "BinaryExpr":
       return producesSpillResult(node.left) || producesSpillResult(node.right);
     case "CallExpr":
+      if (node.callee.toUpperCase() === "CHOOSE") {
+        return node.args.slice(1).some((arg) => producesSpillResult(arg));
+      }
+      if (node.callee.toUpperCase() === "TREND" || node.callee.toUpperCase() === "GROWTH") {
+        const shapeArg = node.args[2] ?? node.args[1] ?? node.args[0];
+        if (shapeArg === undefined) {
+          return false;
+        }
+        return producesSpillResult(shapeArg);
+      }
       return [
         "SEQUENCE",
         "EXPAND",
+        "LINEST",
+        "LOGEST",
         "OFFSET",
         "TAKE",
         "DROP",
@@ -63,8 +75,12 @@ function producesSpillResult(node: FormulaNode): boolean {
         "WRAPCOLS",
         "FILTER",
         "UNIQUE",
+        "FREQUENCY",
+        "MODE.MULT",
         "TEXTSPLIT",
         "TRIMRANGE",
+        "GROUPBY",
+        "PIVOTBY",
         "MAKEARRAY",
         "MAP",
         "SCAN",
@@ -150,6 +166,18 @@ function emitRangeRef(
     index = state.ranges.push(qualifiedRange) - 1;
   }
   state.program.push(encodeInstruction(Opcode.PushRange, index));
+}
+
+function isCellRangeNode(node: FormulaNode): node is Extract<FormulaNode, { kind: "RangeRef" }> {
+  if (node.kind !== "RangeRef") {
+    return false;
+  }
+  try {
+    const sheetPrefix = node.sheetName ? `${node.sheetName}!` : "";
+    return parseRangeAddress(`${sheetPrefix}${node.start}:${node.end}`).kind === "cells";
+  } catch {
+    return false;
+  }
 }
 
 function emitArgument(node: FormulaNode, state: CompilerState): number {
@@ -396,6 +424,17 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
             );
             return;
           }
+        }
+        const rangeArg = node.args[0];
+        if (
+          callee === "PHONETIC" &&
+          node.args.length === 1 &&
+          rangeArg &&
+          isCellRangeNode(rangeArg)
+        ) {
+          emitCellRef(rangeArg.start, rangeArg.sheetName, state);
+          state.program.push(encodeInstruction(Opcode.CallBuiltin, (BuiltinId.Phonetic << 8) | 1));
+          return;
         }
         let argc = 0;
         node.args.forEach((arg) => {

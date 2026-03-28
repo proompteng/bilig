@@ -3,6 +3,7 @@ import type { FormulaNode } from "./ast.js";
 import { indexToColumn, parseCellAddress, parseRangeAddress } from "./addressing.js";
 import { getBuiltin, hasBuiltin } from "./builtins.js";
 import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
+import { evaluateGroupBy, evaluatePivotBy, type MatrixValue } from "./group-pivot-evaluator.js";
 import {
   isArrayValue,
   scalarFromEvaluationResult,
@@ -24,6 +25,24 @@ export interface EvaluationContext {
   ) => CellValue[];
   resolveName?: (name: string) => CellValue;
   resolveFormula?: (sheetName: string, address: string) => string | undefined;
+  resolvePivotData?: (request: {
+    dataField: string;
+    sheetName: string;
+    address: string;
+    filters: ReadonlyArray<{ field: string; item: CellValue }>;
+  }) => CellValue | undefined;
+  resolveMultipleOperations?: (request: {
+    formulaSheetName: string;
+    formulaAddress: string;
+    rowCellSheetName: string;
+    rowCellAddress: string;
+    rowReplacementSheetName: string;
+    rowReplacementAddress: string;
+    columnCellSheetName?: string;
+    columnCellAddress?: string;
+    columnReplacementSheetName?: string;
+    columnReplacementAddress?: string;
+  }) => CellValue | undefined;
   listSheetNames?: () => string[];
   resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
 }
@@ -760,6 +779,79 @@ function makeArrayStack(rows: number, cols: number, values: CellValue[]): StackV
   return { kind: "array", rows, cols, values };
 }
 
+function matrixFromStackValue(value: StackValue): MatrixValue | undefined {
+  if (value.kind === "omitted" || value.kind === "lambda") {
+    return undefined;
+  }
+  if (value.kind === "scalar") {
+    return { rows: 1, cols: 1, values: [value.value] };
+  }
+  return { rows: value.rows, cols: value.cols, values: value.values };
+}
+
+function scalarIntegerArgument(value: StackValue | undefined): number | undefined {
+  const scalar = value ? isSingleCellValue(value) : undefined;
+  const numeric = scalar ? toNumber(scalar) : undefined;
+  return numeric === undefined || !Number.isFinite(numeric) ? undefined : Math.trunc(numeric);
+}
+
+function vectorIntegerArgument(value: StackValue | undefined): number[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const matrix = matrixFromStackValue(value);
+  if (!matrix || !(matrix.rows === 1 || matrix.cols === 1)) {
+    return undefined;
+  }
+  const values: number[] = [];
+  for (let index = 0; index < matrix.rows * matrix.cols; index += 1) {
+    const numeric = toNumber(matrix.values[index] ?? emptyValue());
+    if (numeric === undefined || !Number.isFinite(numeric)) {
+      return undefined;
+    }
+    values.push(Math.trunc(numeric));
+  }
+  return values;
+}
+
+function aggregateRangeSubset(
+  functionArg: StackValue,
+  subset: readonly CellValue[],
+  context: EvaluationContext,
+  totalSet?: readonly CellValue[],
+): CellValue {
+  if (functionArg.kind === "lambda") {
+    const args: StackValue[] = [makeArrayStack(Math.max(subset.length, 1), 1, [...subset])];
+    if (functionArg.params.length >= 2) {
+      args.push(
+        makeArrayStack(Math.max(totalSet?.length ?? 0, 1), 1, [...(totalSet ?? [emptyValue()])]),
+      );
+    }
+    const result = applyLambda(functionArg, args, context);
+    return isSingleCellValue(result) ?? error(ErrorCode.Value);
+  }
+  const scalar = isSingleCellValue(functionArg);
+  if (scalar?.tag !== ValueTag.String) {
+    return scalar?.tag === ValueTag.Error ? scalar : error(ErrorCode.Value);
+  }
+  const name = scalar.value.trim().toUpperCase();
+  if (subset.length === 0) {
+    if (name === "SUM" || name === "COUNT" || name === "COUNTA") {
+      return numberValue(0);
+    }
+    if (name === "AVERAGE" || name === "AVG") {
+      return error(ErrorCode.Div0);
+    }
+    return numberValue(0);
+  }
+  const builtin = context.resolveBuiltin?.(name) ?? getBuiltin(name);
+  if (!builtin) {
+    return error(ErrorCode.Name);
+  }
+  const result = builtin(...subset);
+  return isArrayValue(result) ? scalarFromEvaluationResult(result) : result;
+}
+
 function isTrimRangeEmptyCell(value: CellValue): boolean {
   return value.tag === ValueTag.Empty;
 }
@@ -850,6 +942,179 @@ function evaluateSpecialCall(
           ? stringValue(formula.startsWith("=") ? formula : `=${formula}`)
           : error(ErrorCode.NA),
       );
+    }
+    case "PHONETIC": {
+      if (rawArgs.length !== 1) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const target = rawArgs[0]!;
+      if (target.kind === "scalar") {
+        return stackScalar(stringValue(toStringValue(target.value)));
+      }
+      if (target.kind === "range") {
+        return stackScalar(stringValue(toStringValue(target.values[0] ?? emptyValue())));
+      }
+      return stackScalar(error(ErrorCode.Value));
+    }
+    case "GETPIVOTDATA": {
+      if (rawArgs.length < 2 || (rawArgs.length - 2) % 2 !== 0) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const dataFieldValue = isSingleCellValue(rawArgs[0]!);
+      const address = referenceTopLeftAddress(argRefs[1]);
+      const sheetName = referenceSheetName(argRefs[1], context);
+      if (!dataFieldValue) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      if (!address || !sheetName) {
+        return stackScalar(error(ErrorCode.Ref));
+      }
+      const filters: Array<{ field: string; item: CellValue }> = [];
+      for (let index = 2; index < rawArgs.length; index += 2) {
+        const fieldValue = isSingleCellValue(rawArgs[index]!);
+        const itemValue = isSingleCellValue(rawArgs[index + 1]!);
+        if (!fieldValue || !itemValue) {
+          return stackScalar(error(ErrorCode.Value));
+        }
+        filters.push({ field: toStringValue(fieldValue), item: itemValue });
+      }
+      return stackScalar(
+        context.resolvePivotData?.({
+          dataField: toStringValue(dataFieldValue),
+          sheetName,
+          address,
+          filters,
+        }) ?? error(ErrorCode.Ref),
+      );
+    }
+    case "GROUPBY": {
+      if (rawArgs.length < 3 || rawArgs.length > 8) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const rowFields = matrixFromStackValue(rawArgs[0]!);
+      const values = matrixFromStackValue(rawArgs[1]!);
+      if (!rowFields || !values) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const sortOrder =
+        vectorIntegerArgument(rawArgs[5]) ??
+        (rawArgs[5] ? [scalarIntegerArgument(rawArgs[5]) ?? Number.NaN] : undefined);
+      const fieldHeadersMode = scalarIntegerArgument(rawArgs[3]);
+      const totalDepth = scalarIntegerArgument(rawArgs[4]);
+      const filterArray = rawArgs[6] ? matrixFromStackValue(rawArgs[6]) : undefined;
+      const fieldRelationship = scalarIntegerArgument(rawArgs[7]);
+      const groupByOptions = {
+        aggregate: (subset: readonly CellValue[], totalSet?: readonly CellValue[]) =>
+          aggregateRangeSubset(rawArgs[2]!, subset, context, totalSet),
+        ...(fieldHeadersMode !== undefined ? { fieldHeadersMode } : {}),
+        ...(totalDepth !== undefined ? { totalDepth } : {}),
+        ...(sortOrder?.every(Number.isFinite) ? { sortOrder } : {}),
+        ...(filterArray !== undefined ? { filterArray } : {}),
+        ...(fieldRelationship !== undefined ? { fieldRelationship } : {}),
+      };
+      const result = evaluateGroupBy(rowFields, values, groupByOptions);
+      return isArrayValue(result) ? result : stackScalar(result);
+    }
+    case "PIVOTBY": {
+      if (rawArgs.length < 4 || rawArgs.length > 11) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const rowFields = matrixFromStackValue(rawArgs[0]!);
+      const colFields = matrixFromStackValue(rawArgs[1]!);
+      const values = matrixFromStackValue(rawArgs[2]!);
+      if (!rowFields || !colFields || !values) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const rowSortOrder =
+        vectorIntegerArgument(rawArgs[6]) ??
+        (rawArgs[6] ? [scalarIntegerArgument(rawArgs[6]) ?? Number.NaN] : undefined);
+      const colSortOrder =
+        vectorIntegerArgument(rawArgs[8]) ??
+        (rawArgs[8] ? [scalarIntegerArgument(rawArgs[8]) ?? Number.NaN] : undefined);
+      const fieldHeadersMode = scalarIntegerArgument(rawArgs[4]);
+      const rowTotalDepth = scalarIntegerArgument(rawArgs[5]);
+      const colTotalDepth = scalarIntegerArgument(rawArgs[7]);
+      const filterArray = rawArgs[9] ? matrixFromStackValue(rawArgs[9]) : undefined;
+      const relativeTo = scalarIntegerArgument(rawArgs[10]);
+      const pivotByOptions = {
+        aggregate: (subset: readonly CellValue[], totalSet?: readonly CellValue[]) =>
+          aggregateRangeSubset(rawArgs[3]!, subset, context, totalSet),
+        ...(fieldHeadersMode !== undefined ? { fieldHeadersMode } : {}),
+        ...(rowTotalDepth !== undefined ? { rowTotalDepth } : {}),
+        ...(rowSortOrder?.every(Number.isFinite) ? { rowSortOrder } : {}),
+        ...(colTotalDepth !== undefined ? { colTotalDepth } : {}),
+        ...(colSortOrder?.every(Number.isFinite) ? { colSortOrder } : {}),
+        ...(filterArray !== undefined ? { filterArray } : {}),
+        ...(relativeTo !== undefined ? { relativeTo } : {}),
+      };
+      const result = evaluatePivotBy(rowFields, colFields, values, pivotByOptions);
+      return isArrayValue(result) ? result : stackScalar(result);
+    }
+    case "MULTIPLE.OPERATIONS": {
+      if (rawArgs.length !== 3 && rawArgs.length !== 5) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const formulaAddress = referenceTopLeftAddress(argRefs[0]);
+      const formulaSheetName = referenceSheetName(argRefs[0], context);
+      const rowCellAddress = referenceTopLeftAddress(argRefs[1]);
+      const rowCellSheetName = referenceSheetName(argRefs[1], context);
+      const rowReplacementAddress = referenceTopLeftAddress(argRefs[2]);
+      const rowReplacementSheetName = referenceSheetName(argRefs[2], context);
+      if (
+        !formulaAddress ||
+        !formulaSheetName ||
+        !rowCellAddress ||
+        !rowCellSheetName ||
+        !rowReplacementAddress ||
+        !rowReplacementSheetName
+      ) {
+        return stackScalar(error(ErrorCode.Ref));
+      }
+      const columnCellAddress =
+        rawArgs.length === 5 ? referenceTopLeftAddress(argRefs[3]) : undefined;
+      const columnCellSheetName =
+        rawArgs.length === 5 ? referenceSheetName(argRefs[3], context) : undefined;
+      const columnReplacementAddress =
+        rawArgs.length === 5 ? referenceTopLeftAddress(argRefs[4]) : undefined;
+      const columnReplacementSheetName =
+        rawArgs.length === 5 ? referenceSheetName(argRefs[4], context) : undefined;
+      if (
+        rawArgs.length === 5 &&
+        (!columnCellAddress ||
+          !columnCellSheetName ||
+          !columnReplacementAddress ||
+          !columnReplacementSheetName)
+      ) {
+        return stackScalar(error(ErrorCode.Ref));
+      }
+      const request = {
+        formulaSheetName,
+        formulaAddress,
+        rowCellSheetName,
+        rowCellAddress,
+        rowReplacementSheetName,
+        rowReplacementAddress,
+        ...(columnCellSheetName ? { columnCellSheetName } : {}),
+        ...(columnCellAddress ? { columnCellAddress } : {}),
+        ...(columnReplacementSheetName ? { columnReplacementSheetName } : {}),
+        ...(columnReplacementAddress ? { columnReplacementAddress } : {}),
+      };
+      return stackScalar(context.resolveMultipleOperations?.(request) ?? error(ErrorCode.Ref));
+    }
+    case "CHOOSE": {
+      if (rawArgs.length < 2) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const indexValue = isSingleCellValue(rawArgs[0]!);
+      const choice = indexValue ? toNumber(indexValue) : undefined;
+      if (choice === undefined || !Number.isFinite(choice)) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      const truncated = Math.trunc(choice);
+      if (truncated < 1 || truncated >= rawArgs.length) {
+        return stackScalar(error(ErrorCode.Value));
+      }
+      return cloneStackValue(rawArgs[truncated]!);
     }
     case "SHEET": {
       if (rawArgs.length > 1) {
@@ -1468,7 +1733,14 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
         return;
       }
 
-      node.args.forEach((arg) => lowerNode(arg, plan));
+      const aggregateArgumentIndex = callee === "GROUPBY" ? 2 : callee === "PIVOTBY" ? 3 : -1;
+      node.args.forEach((arg, index) => {
+        if (index === aggregateArgumentIndex && arg.kind === "NameRef") {
+          plan.push({ opcode: "push-string", value: arg.name });
+          return;
+        }
+        lowerNode(arg, plan);
+      });
       plan.push({
         opcode: "call",
         callee,

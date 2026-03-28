@@ -39,6 +39,7 @@ async function loadRendererRootWithCompatMock(
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.resetModules();
   vi.doUnmock("../compat.js");
   vi.clearAllMocks();
@@ -131,12 +132,12 @@ describe("renderer root error handling", () => {
   it("rejects unmount when the compat callback surfaces an async error", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (element, callback, container) => {
-        callback();
         if (element === null) {
           queueMicrotask(() => {
             container.lastError = new Error("async unmount failed");
           });
         }
+        callback();
       },
     );
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-unmount-async-error" });
@@ -218,6 +219,107 @@ describe("renderer root error handling", () => {
     const root = createWorkbookRendererRoot(engine);
 
     await expect(root.render("bad")).rejects.toThrow("Workbook DSL does not support text nodes.");
+  });
+
+  it("rejects invalid workbook DSL shapes before compat commits begin", async () => {
+    const { createWorkbookRendererRoot, updateFiberRoot } = await loadRendererRootWithCompatMock(
+      () => {},
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-shape-errors" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Sheet name="Sheet1">
+          <Cell addr="A1" value={1} />
+        </Sheet>,
+      ),
+    ).rejects.toThrow("Root descriptor must be a Workbook.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Cell addr="A1" value={1} />
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Only <Sheet> nodes can exist under <Workbook>.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet>
+            <Cell addr="A1" value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("<Sheet> requires a name prop.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">bad</Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Workbook DSL does not support text nodes.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Sheet name="Nested" />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("Only <Cell> can be nested inside <Sheet>.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("<Cell> requires an addr prop.");
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={1} formula="A2" />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("<Cell> cannot specify both value and formula.");
+
+    expect(updateFiberRoot).not.toHaveBeenCalled();
+  });
+
+  it("routes null renders through unmount and rejects sync compat update errors", async () => {
+    const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
+      (element, callback) => {
+        if (element && typeof element !== "boolean") {
+          throw new Error("sync compat failure");
+        }
+        callback();
+      },
+    );
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-sync-error" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(
+        <Workbook name="book">
+          <Sheet name="Sheet1">
+            <Cell addr="A1" value={1} />
+          </Sheet>
+        </Workbook>,
+      ),
+    ).rejects.toThrow("sync compat failure");
+
+    await expect(root.render(null)).resolves.toBeUndefined();
   });
 
   it("treats non-DSL string tags as wrappers during validation", async () => {

@@ -192,6 +192,16 @@ describe("formula parser/compiler edges", () => {
     expect(compileFormula("SUMIFS(1, A1:A2, 1)").mode).toBe(FormulaMode.JsOnly);
     expect(compileFormula("IFS(A1:A2,1,TRUE(),2)").mode).toBe(FormulaMode.JsOnly);
     expect(compileFormula("MINIFS(A1:A2)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("IRR(A1)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("MIRR(A1,1,2)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("XNPV(0.1,A1,B1:B5)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("XIRR(A1,B1:B5)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula('TEXT(A1:A2,"0.00")').mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("NUMBERVALUE(A1:A2)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("PHONETIC(LAMBDA(x,x))").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("TRANSPOSE()").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("PROB(A1:A3,B1:B3,C1:C3)").mode).toBe(FormulaMode.JsOnly);
+    expect(compileFormula("TRIMMEAN(A1:A8,A1:A2)").mode).toBe(FormulaMode.JsOnly);
   });
 
   it("tracks unknown callees as symbolic names while preserving rewritten and range-safe bindings", () => {
@@ -204,6 +214,22 @@ describe("formula parser/compiler edges", () => {
     expect(bindFormula(parseFormula("SORTBY(A1:A2,B1:B2,1)")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("AREAS(A1:A2)")).mode).toBe(FormulaMode.WasmFastPath);
     expect(bindFormula(parseFormula("ARRAYTOTEXT(A1:A2,1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("IRR(A1:A6)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("MIRR(A1:A6,10%,12%)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("XNPV(0.09,A1:A5,B1:B5)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("XIRR(A1:A5,B1:B5)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula('TEXT("42","0.00")')).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula('NUMBERVALUE("2.500,27",",",".")')).mode).toBe(
+      FormulaMode.WasmFastPath,
+    );
+    expect(bindFormula(parseFormula("PHONETIC(A1:A2)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("TRANSPOSE(A1:B2)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("HSTACK(A1:A2,B1:B2)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("VSTACK(A1:A2,B1:B2)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("PROB(A1:A4,B1:B4,2,3)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("TRIMMEAN(A1:A8,0.25)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("MINIFS(A1:A4,B1:B4,1)")).mode).toBe(FormulaMode.WasmFastPath);
+    expect(bindFormula(parseFormula("MAXIFS(A1:A4,B1:B4,1)")).mode).toBe(FormulaMode.WasmFastPath);
   });
 
   it("keeps non-call and invalid rewritten top-level nodes off the wasm fast path", () => {
