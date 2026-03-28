@@ -18,7 +18,7 @@ export function getEditorTextAlign(editorValue: string): "left" | "right" {
   return isNumericEditorSeed(editorValue) ? "right" : "left";
 }
 
-export function getGridTheme(variant: "playground" | "product") {
+export function getGridTheme() {
   return {
     accentColor: "#1f7a43",
     accentFg: "#ffffff",
@@ -26,17 +26,14 @@ export function getGridTheme(variant: "playground" | "product") {
     bgCellMedium: "#f3f5f7",
     bgHeader: "#f6f7f8",
     borderColor: "#d5d9de",
-    cellHorizontalPadding: variant === "product" ? 8 : 10,
-    cellVerticalPadding: variant === "product" ? 4 : 6,
+    cellHorizontalPadding: 8,
+    cellVerticalPadding: 4,
     drilldownBorder: "#d5d9de",
-    editorFontSize: variant === "product" ? "12px" : "13px",
+    editorFontSize: "12px",
     fontFamily: '"Aptos","Segoe UI","IBM Plex Sans",sans-serif',
-    headerFontStyle:
-      variant === "product"
-        ? "600 11px Aptos, Segoe UI, IBM Plex Sans, sans-serif"
-        : "600 12px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
+    headerFontStyle: "600 11px Aptos, Segoe UI, IBM Plex Sans, sans-serif",
     horizontalBorderColor: "#e5e7eb",
-    lineHeight: variant === "product" ? 1.2 : 1.3,
+    lineHeight: 1.2,
     textDark: "#101828",
     textHeader: "#344054",
     textLight: "#667085",

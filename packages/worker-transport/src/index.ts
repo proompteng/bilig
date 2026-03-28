@@ -1,6 +1,5 @@
 import type { EngineEvent } from "@bilig/protocol";
-
-import type { EngineOpBatch } from "@bilig/crdt";
+import type { EngineOpBatch } from "@bilig/workbook-domain";
 import type { ViewportPatchSubscription } from "./viewport-patch.js";
 
 export type WorkerTransportChannel = "events" | "batches" | "viewportPatches";

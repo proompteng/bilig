@@ -5,7 +5,7 @@ import type { WorkbookSnapshot } from "@bilig/protocol";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
 import type { EngineSyncClient } from "@bilig/core";
-import type { EngineOpBatch } from "@bilig/crdt";
+import type { EngineOpBatch } from "@bilig/workbook-domain";
 import { WorkbookWorkerRuntime } from "../worker-runtime";
 
 function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPersistence {

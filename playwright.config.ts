@@ -2,12 +2,12 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e/tests",
-  testMatch: "**/playground.pw.ts",
+  testMatch: "**/web-shell.pw.ts",
   fullyParallel: false,
   retries: 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:4179",
+    baseURL: "http://127.0.0.1:4180",
     trace: "retain-on-failure",
   },
   projects: [
@@ -19,8 +19,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm --filter @bilig/playground preview:ci",
-    port: 4179,
+    command: "pnpm --filter @bilig/web preview:ci",
+    port: 4180,
     reuseExistingServer: false,
     timeout: 120_000,
   },

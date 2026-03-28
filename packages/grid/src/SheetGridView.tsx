@@ -88,7 +88,6 @@ export type SheetGridViewportSubscription = (
 interface SheetGridViewProps {
   engine: GridEngineLike;
   sheetName: string;
-  variant?: "playground" | "product";
   selectedAddr: string;
   editorValue: string;
   editorSelectionBehavior: EditSelectionBehavior;
@@ -163,7 +162,6 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
 export function SheetGridView({
   engine,
   sheetName,
-  variant = "playground",
   selectedAddr,
   editorValue,
   editorSelectionBehavior,
@@ -221,8 +219,7 @@ export function SheetGridView({
   const [gridSelection, setGridSelection] = useState<GridSelection>(() =>
     createGridSelection(selectedCell.col, selectedCell.row),
   );
-  const gridMetrics = useMemo(() => getGridMetrics(variant), [variant]);
-  const product = variant === "product";
+  const gridMetrics = useMemo(() => getGridMetrics(), []);
   const columnWidths =
     controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
 
@@ -749,7 +746,7 @@ export function SheetGridView({
     [editorValue],
   );
 
-  const gridTheme = useMemo(() => getGridTheme(variant), [variant]);
+  const gridTheme = useMemo(() => getGridTheme(), []);
 
   const handleFillPattern = useCallback(
     (event: FillPatternEventArgs) => {
@@ -827,10 +824,7 @@ export function SheetGridView({
         measuredWidth = Math.max(measuredWidth, context.measureText(displayText).width);
       });
 
-      return Math.max(
-        MIN_COLUMN_WIDTH,
-        Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + (variant === "product" ? 28 : 32))),
-      );
+      return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + 28)));
     },
     [
       engine,
@@ -838,7 +832,6 @@ export function SheetGridView({
       gridTheme.editorFontSize,
       gridTheme.headerFontStyle,
       sheetName,
-      variant,
     ],
   );
 
@@ -863,32 +856,9 @@ export function SheetGridView({
   );
 
   return (
-    <div
-      className={product ? "relative flex min-h-0 flex-1 flex-col bg-white" : "sheet-grid-shell"}
-      data-testid="sheet-grid-shell"
-    >
-      {variant === "playground" ? (
-        <div className="sheet-grid-banner">
-          <div>
-            <p className="panel-eyebrow">Surface</p>
-            <strong>
-              {MAX_ROWS.toLocaleString()} rows x {MAX_COLS.toLocaleString()} columns
-            </strong>
-          </div>
-          <div className="viewport-meta">
-            <span data-testid="selection-chip">
-              {sheetName}!{selectionSummary}
-            </span>
-            <span>{resolvedValue || "∅"}</span>
-          </div>
-        </div>
-      ) : null}
+    <div className="relative flex min-h-0 flex-1 flex-col bg-white" data-testid="sheet-grid-shell">
       <div
-        className={
-          product
-            ? "sheet-grid-host min-h-0 flex-1 bg-white pr-2 pb-2 [--gdg-accent-color:#1a73e8]"
-            : "sheet-grid-host"
-        }
+        className="sheet-grid-host min-h-0 flex-1 bg-white pr-2 pb-2 [--gdg-accent-color:#1a73e8]"
         data-column-width-overrides={JSON.stringify(columnWidths)}
         data-default-column-width={String(gridMetrics.columnWidth)}
         data-testid="sheet-grid"
@@ -960,7 +930,6 @@ export function SheetGridView({
             return;
           }
           const doubleClickIntent = resolveBodyDoubleClickIntent({
-            variant,
             resizeTarget: resolveColumnResizeTarget(
               event.clientX,
               event.clientY,
@@ -1079,7 +1048,6 @@ export function SheetGridView({
           }
           const activeGeometry = resolvePointerGeometry(visibleRegion);
           if (
-            variant === "product" &&
             activeGeometry &&
             resolveColumnResizeTarget(
               event.clientX,
@@ -1249,41 +1217,37 @@ export function SheetGridView({
           className="glide-sheet-grid"
           columns={columns}
           drawCell={drawCell}
-          drawFocusRing={variant === "product"}
+          drawFocusRing={true}
           editOnType={false}
-          fillHandle={variant === "product"}
+          fillHandle={true}
           freezeColumns={0}
           getCellContent={getCellContent}
           getCellsForSelection={true}
           gridSelection={gridSelection}
           headerHeight={gridMetrics.headerHeight}
           height="100%"
-          {...(variant === "product"
-            ? {
-                onColumnResizeStart: () => {
-                  columnResizeActiveRef.current = true;
-                  pendingPointerCellRef.current = null;
-                  dragAnchorCellRef.current = null;
-                  dragPointerCellRef.current = null;
-                  dragHeaderSelectionRef.current = null;
-                  dragGeometryRef.current = null;
-                  dragDidMoveRef.current = false;
-                  dragViewportRef.current = null;
-                  postDragSelectionExpiryRef.current = 0;
-                },
-                onColumnResize: (_column: GridColumn, newSize: number, columnIndex: number) => {
-                  applyColumnWidth(columnIndex, newSize);
-                },
-                onColumnResizeEnd: (_column: GridColumn, newSize: number, columnIndex: number) => {
-                  applyColumnWidth(columnIndex, newSize);
-                  window.requestAnimationFrame(() => {
-                    columnResizeActiveRef.current = false;
-                  });
-                },
-                maxColumnWidth: MAX_COLUMN_WIDTH,
-                minColumnWidth: MIN_COLUMN_WIDTH,
-              }
-            : {})}
+          maxColumnWidth={MAX_COLUMN_WIDTH}
+          minColumnWidth={MIN_COLUMN_WIDTH}
+          onColumnResizeStart={() => {
+            columnResizeActiveRef.current = true;
+            pendingPointerCellRef.current = null;
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
+            dragHeaderSelectionRef.current = null;
+            dragGeometryRef.current = null;
+            dragDidMoveRef.current = false;
+            dragViewportRef.current = null;
+            postDragSelectionExpiryRef.current = 0;
+          }}
+          onColumnResize={(_column: GridColumn, newSize: number, columnIndex: number) => {
+            applyColumnWidth(columnIndex, newSize);
+          }}
+          onColumnResizeEnd={(_column: GridColumn, newSize: number, columnIndex: number) => {
+            applyColumnWidth(columnIndex, newSize);
+            window.requestAnimationFrame(() => {
+              columnResizeActiveRef.current = false;
+            });
+          }}
           onCellActivated={([col, row]) => {
             const cell = resolveActivatedCell(
               [col, row],
@@ -1304,7 +1268,6 @@ export function SheetGridView({
           onFillPattern={handleFillPattern}
           onHeaderClicked={(col, event) => {
             const headerClickIntent = resolveHeaderClickIntent({
-              variant,
               isEdge: event.isEdge,
               isDoubleClick: Boolean(event.isDoubleClick),
               columnResizeActive: columnResizeActiveRef.current,
@@ -1412,7 +1375,7 @@ export function SheetGridView({
           verticalBorder={true}
           width="100%"
         />
-        {product ? (
+        {borderSegments.length > 0 ? (
           <div
             className="pointer-events-none absolute inset-0 z-10"
             aria-hidden="true"

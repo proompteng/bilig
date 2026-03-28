@@ -1,7 +1,11 @@
 import type { GridEngineLike } from "@bilig/grid";
-import { formatAddress, parseCellAddress } from "@bilig/formula";
+import { parseCellAddress } from "@bilig/formula";
 import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport } from "@bilig/protocol";
-import { decodeViewportPatch, type WorkerEngineClient } from "@bilig/worker-transport";
+import {
+  decodeViewportPatch,
+  type ViewportPatch,
+  type WorkerEngineClient,
+} from "@bilig/worker-transport";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const DEFAULT_STYLE_ID = "style-0";
@@ -16,12 +20,12 @@ interface CellSubscription {
 export class WorkerViewportCache implements GridEngineLike {
   readonly workbook = {
     getSheet: (sheetName: string) => {
+      if (!this.knownSheets.has(sheetName)) {
+        return undefined;
+      }
       const entries = [...this.cellSnapshots.values()].filter(
         (snapshot) => snapshot.sheetName === sheetName,
       );
-      if (entries.length === 0) {
-        return undefined;
-      }
       return {
         grid: {
           forEachCellEntry: (listener: (cellIndex: number, row: number, col: number) => void) => {
@@ -42,7 +46,9 @@ export class WorkerViewportCache implements GridEngineLike {
   private readonly cellSubscriptions = new Set<CellSubscription>();
   private readonly listeners = new Set<() => void>();
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>();
+  private readonly pendingColumnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>();
+  private readonly knownSheets = new Set<string>();
 
   constructor(private readonly client: WorkerEngineClient) {}
 
@@ -74,15 +80,26 @@ export class WorkerViewportCache implements GridEngineLike {
 
   setCellSnapshot(snapshot: CellSnapshot): void {
     const key = `${snapshot.sheetName}!${snapshot.address}`;
+    this.knownSheets.add(snapshot.sheetName);
     this.cellSnapshots.set(key, snapshot);
     this.notifyCellSubscriptions(new Set([key]));
     this.listeners.forEach((listener) => listener());
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
+    this.knownSheets.add(sheetName);
     const widths = { ...this.columnWidthsBySheet.get(sheetName) };
     widths[columnIndex] = width;
     this.columnWidthsBySheet.set(sheetName, widths);
+    const pending = { ...this.pendingColumnWidthsBySheet.get(sheetName) };
+    pending[columnIndex] = width;
+    this.pendingColumnWidthsBySheet.set(sheetName, pending);
+    this.listeners.forEach((listener) => listener());
+  }
+
+  setKnownSheets(sheetNames: readonly string[]): void {
+    this.knownSheets.clear();
+    sheetNames.forEach((sheetName) => this.knownSheets.add(sheetName));
     this.listeners.forEach((listener) => listener());
   }
 
@@ -113,22 +130,12 @@ export class WorkerViewportCache implements GridEngineLike {
     });
   }
 
+  applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
+    return this.applyPatch(patch);
+  }
+
   private applyPatch(patch: ReturnType<typeof decodeViewportPatch>): readonly { cell: CellItem }[] {
-    if (patch.full) {
-      this.clearViewportRegion(patch.viewport.sheetName, patch.viewport);
-      this.clearAxisRange(
-        this.columnWidthsBySheet,
-        patch.viewport.sheetName,
-        patch.viewport.colStart,
-        patch.viewport.colEnd,
-      );
-      this.clearAxisRange(
-        this.rowHeightsBySheet,
-        patch.viewport.sheetName,
-        patch.viewport.rowStart,
-        patch.viewport.rowEnd,
-      );
-    }
+    this.knownSheets.add(patch.viewport.sheetName);
 
     const changedKeys = new Set<string>();
     const damage: { cell: CellItem }[] = [];
@@ -137,6 +144,30 @@ export class WorkerViewportCache implements GridEngineLike {
     });
     for (const cell of patch.cells) {
       const key = `${patch.viewport.sheetName}!${cell.snapshot.address}`;
+      const current = this.cellSnapshots.get(key);
+      if (current) {
+        const incoming = cell.snapshot;
+        const incomingIsEmptyDefault =
+          incoming.value.tag === ValueTag.Empty &&
+          incoming.formula === undefined &&
+          incoming.input === undefined &&
+          incoming.styleId === undefined &&
+          incoming.format === undefined &&
+          incoming.numberFormatId === undefined;
+        const currentIsEmptyDefault =
+          current.value.tag === ValueTag.Empty &&
+          current.formula === undefined &&
+          current.input === undefined &&
+          current.styleId === undefined &&
+          current.format === undefined &&
+          current.numberFormatId === undefined;
+        if (
+          current.version > incoming.version ||
+          (current.version === incoming.version && incomingIsEmptyDefault && !currentIsEmptyDefault)
+        ) {
+          continue;
+        }
+      }
       this.cellSnapshots.set(key, cell.snapshot);
       changedKeys.add(key);
       damage.push({ cell: [cell.col, cell.row] });
@@ -144,10 +175,19 @@ export class WorkerViewportCache implements GridEngineLike {
 
     if (patch.columns.length > 0) {
       const widths = { ...this.columnWidthsBySheet.get(patch.viewport.sheetName) };
+      const pendingWidths = { ...this.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) };
       patch.columns.forEach((column: { index: number; size: number }) => {
+        const pending = pendingWidths[column.index];
+        if (pending !== undefined && pending !== column.size) {
+          return;
+        }
         widths[column.index] = column.size;
+        if (pending === column.size) {
+          delete pendingWidths[column.index];
+        }
       });
       this.columnWidthsBySheet.set(patch.viewport.sheetName, widths);
+      this.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, pendingWidths);
     }
 
     if (patch.rows.length > 0) {
@@ -172,31 +212,6 @@ export class WorkerViewportCache implements GridEngineLike {
         }
       }
     });
-  }
-
-  private clearViewportRegion(sheetName: string, viewport: Viewport): void {
-    for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
-      for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
-        this.cellSnapshots.delete(`${sheetName}!${formatAddress(row, col)}`);
-      }
-    }
-  }
-
-  private clearAxisRange(
-    store: Map<string, Record<number, number>>,
-    sheetName: string,
-    start: number,
-    end: number,
-  ): void {
-    const current = store.get(sheetName);
-    if (!current) {
-      return;
-    }
-    const next = { ...current };
-    for (let index = start; index <= end; index += 1) {
-      delete next[index];
-    }
-    store.set(sheetName, next);
   }
 
   private emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {

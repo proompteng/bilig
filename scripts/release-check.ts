@@ -10,7 +10,7 @@ const budgets = {
 };
 
 async function findAssets() {
-  const assetDir = resolve("apps/playground/dist/assets");
+  const assetDir = resolve("apps/web/dist/assets");
   const entries = await readdir(assetDir, { withFileTypes: true });
   const files = entries
     .filter((entry) => entry.isFile())
@@ -20,11 +20,11 @@ async function findAssets() {
   const wasmAssets = files.filter((file) => file.endsWith(".wasm"));
 
   if (jsAssets.length === 0) {
-    throw new Error("No built JavaScript assets were found in apps/playground/dist/assets");
+    throw new Error("No built JavaScript assets were found in apps/web/dist/assets");
   }
 
   if (wasmAssets.length === 0) {
-    throw new Error("No built WASM assets were found in apps/playground/dist/assets");
+    throw new Error("No built WASM assets were found in apps/web/dist/assets");
   }
 
   return { jsAssets, wasmAssets };

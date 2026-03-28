@@ -1,6 +1,6 @@
 # bilig
 
-`bilig` is a local-first spreadsheet engine monorepo with a package-based custom workbook reconciler, a React/Vite playground shell, a framework-agnostic core engine, replication-ready mutation pipelines, and an AssemblyScript/WASM numeric fast path.
+`bilig` is a production spreadsheet engine monorepo with a worker-first web shell, a package-based custom workbook reconciler, a framework-agnostic core engine, replication-ready mutation pipelines, and an AssemblyScript/WASM numeric fast path.
 
 It already has the foundations of a serious spreadsheet/runtime stack: a real engine, a real local session loop, a real binary sync layer, a real reconciler, and a reasonably mature grid shell. The biggest remaining gap is not basic spreadsheet arithmetic; it is the seam between what the local engine can represent and what the authoritative replicated model can express.
 
@@ -91,7 +91,7 @@ The browser side already has a persistence layer and snapshot flow. The current 
 3. engine runtime
 4. sync connectivity
 
-The playground and browser shell already demonstrate local persistence and replica mirroring behavior, which means bilig is already operating as a local-first product surface, even though the final worker-first production path is still in progress.
+The browser shell already demonstrates local persistence and replica mirroring behavior, which means bilig already operates as a local-first product surface, even though the final worker-first production path is still in progress.
 
 #### 5. It has a collaboration and sync model
 
@@ -153,15 +153,14 @@ This is useful for:
 
 #### 8. It ships with a reusable spreadsheet UI
 
-The monorepo also includes a reusable grid package and browser shells. The current product surface includes:
+The monorepo also includes a reusable grid package and browser shell. The current product surface includes:
 
 - a virtualized spreadsheet grid
 - sheet tabs
 - keyboard navigation
 - dependency inspection
 - recalc metrics and inspection panels
-- a playground shell for exercising the engine
-- a web shell intended as the shipping browser wrapper
+- a worker-first web shell for exercising and shipping the engine
 
 So bilig already contains both the engine and the interactive product shell that sits on top of it.
 
@@ -188,7 +187,6 @@ A useful way to understand bilig is to think of it as five connected layers.
 #### Layer 5: runtimes and storage
 
 - `apps/web` is the browser shell
-- `apps/playground` is the developer/demo shell
 - `apps/local-server` hosts live local workbook sessions
 - `apps/sync-server` is the remote sync service surface
 - `@bilig/storage-browser` and `@bilig/storage-server` handle browser and server persistence concerns
@@ -201,8 +199,7 @@ This split is important because it allows the project to evolve into a spreadshe
 
 | Path | Role |
 | --- | --- |
-| `apps/playground` | Development and demo spreadsheet shell |
-| `apps/web` | Shipping browser shell wrapper |
+| `apps/web` | Production browser shell wrapper |
 | `apps/local-server` | Local machine workbook/session server and agent ingress |
 | `apps/sync-server` | Remote sync backend surface |
 
@@ -299,7 +296,7 @@ If this project had to be explained in one paragraph:
 
 ## Workspace layout
 
-- `apps/playground`: Vite 8 React app shell that composes the packages
+- `apps/web`: Vite 8 React app shell that composes the packages
 - `packages/protocol`: shared enums, opcodes, constants, and types
 - `packages/formula`: A1 addressing, lexer, parser, binder, compiler, JS evaluator
 - `packages/core`: spreadsheet engine, storage, scheduler, snapshots, selectors, WASM facade
@@ -336,19 +333,19 @@ pnpm run ci
 
 ## Notes
 
-- Reusable React code now lives in `packages/renderer` and `packages/grid`; `apps/playground` is a thin shell.
+- Reusable React code now lives in `packages/renderer` and `packages/grid`; `apps/web` is the thin shell.
 - The spreadsheet engine remains usable without React.
 - The custom reconciler lives under `packages/renderer`.
 - The public cell model supports `format` as a persisted attribute alongside `addr`, `value`, and `formula`.
 - The WASM kernel is a custom AssemblyScript fast path, not an embedded proprietary spreadsheet runtime.
 - The TS protocol enums/opcodes and AssemblyScript protocol mirror are generated from `scripts/gen-protocol.ts` so JS/WASM ABI drift fails fast in CI.
-- The playground includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
-- The playground operator surface now spans a 100k-row by 256-column virtualized window while keeping the engine hard limits at 1,048,576 rows by 16,384 columns.
+- The web shell includes a scroll-windowed sheet surface, sheet tabs, keyboard cell navigation, dependency inspection, and recalc metrics.
+- The web shell operator surface now spans a 100k-row by 256-column virtualized window while keeping the engine hard limits at 1,048,576 rows by 16,384 columns.
 - The demo workbook now exercises JS row/column range formulas and a WASM-backed branch formula in the visible UI so browser smoke covers both paths.
 - The cell inspector now exposes formula mode, topo rank, versioning, and dependency edges from the core engine.
-- The playground also demonstrates local-first replica mirroring through the engine’s outbound and inbound batch APIs.
-- The playground persists workbook and replica snapshots in local storage so the demo survives reloads as a local-first app surface.
-- The playground relay queue now persists paused replica traffic across reloads, so offline-style catch-up is visible instead of being memory-only.
+- The web shell also demonstrates local-first replica mirroring through the engine’s outbound and inbound batch APIs.
+- The web shell persists workbook and replica snapshots in local storage so the demo survives reloads as a local-first app surface.
+- The web shell relay queue now persists paused replica traffic across reloads, so offline-style catch-up is visible instead of being memory-only.
 - The paused relay queue is compacted with the CRDT entity-order rules, so repeated offline edits do not grow an unbounded replay backlog for the same cell or sheet entity.
 - The imperative engine now includes a single-sheet CSV bridge for import/export without pulling React into shared packages.
 - CI now enforces performance contracts for 100k snapshot load, 10k-downstream edits, and 10k-cell render commits instead of relying on a loose smoke check alone.

@@ -3,19 +3,20 @@ import ReactDOM from "react-dom/client";
 import { ZeroProvider } from "@rocicorp/zero/react";
 import { loadRuntimeConfig, mutators, schema } from "@bilig/zero-sync";
 import { App } from "./App";
+import { loadRuntimeSession } from "./session";
 
 import "@glideapps/glide-data-grid/index.css";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
-void loadRuntimeConfig()
-  .then((config) => {
+void Promise.all([loadRuntimeConfig(), loadRuntimeSession()])
+  .then(([config, session]) => {
     root.render(
       <React.StrictMode>
         <ZeroProvider
           cacheURL={config.zeroCacheUrl}
-          userID="anon"
+          userID={session.userId}
           schema={schema}
           mutators={mutators}
         >

@@ -9,6 +9,7 @@
     { "path": "../../packages/crdt" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/binary-protocol" },
+    { "path": "../../packages/workbook-domain" },
     { "path": "../../packages/agent-api" },
     { "path": "../../packages/excel-import" }
   ],

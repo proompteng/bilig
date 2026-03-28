@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { utcDateToExcelSerial } from "@bilig/formula";
 import { SpreadsheetEngine, type EngineSyncClient } from "../index.js";
 import { ErrorCode, FormulaMode, Opcode, ValueTag } from "@bilig/protocol";
-import type { EngineOpBatch } from "@bilig/crdt";
+import type { EngineOpBatch } from "@bilig/workbook-domain";
 
 type RuntimeFormulaWithDependencies = {
   dependencyIndices: Uint32Array;

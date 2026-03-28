@@ -86,13 +86,17 @@ vi.mock("@bilig/worker-transport", async (importOriginal) => {
 });
 
 vi.mock("@rocicorp/zero/react", () => ({
-  useQuery: () => [undefined],
   useZero: () => ({
     mutate: () => ({
       client: Promise.resolve({ type: "complete" }),
     }),
+    materialize: () => ({
+      data: undefined,
+      addListener: () => () => {},
+      destroy() {},
+    }),
   }),
-  useZeroOnline: () => true,
+  useConnectionState: () => ({ name: "connected" }),
 }));
 
 class ResizeObserverMock {
@@ -167,7 +171,7 @@ class WorkerMock {
 }
 
 describe("web shell", () => {
-  it("renders the minimal product shell without playground chrome", async () => {
+  it("renders the minimal product shell without legacy demo chrome", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -182,7 +186,17 @@ describe("web shell", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<App />);
+      root.render(
+        <App
+          config={{
+            apiBaseUrl: "http://127.0.0.1:4321",
+            zeroCacheUrl: "http://127.0.0.1:4848",
+            defaultDocumentId: "bilig-demo",
+            persistState: true,
+            zeroViewportBridge: false,
+          }}
+        />,
+      );
     });
 
     await act(async () => {

@@ -12,7 +12,7 @@ import {
 
 describe("gridMetrics", () => {
   test("returns the product grid contract", () => {
-    expect(getGridMetrics("product")).toEqual({
+    expect(getGridMetrics()).toEqual({
       columnWidth: PRODUCT_COLUMN_WIDTH,
       rowHeight: PRODUCT_ROW_HEIGHT,
       headerHeight: PRODUCT_HEADER_HEIGHT,

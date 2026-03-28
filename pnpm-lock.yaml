@@ -86,61 +86,15 @@ importers:
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../../packages/workbook-domain
       '@fastify/websocket':
         specifier: 11.2.0
         version: 11.2.0
       fastify:
         specifier: 5.6.0
         version: 5.6.0
-
-  apps/playground:
-    dependencies:
-      '@bilig/benchmarks':
-        specifier: workspace:*
-        version: link:../../packages/benchmarks
-      '@bilig/binary-protocol':
-        specifier: workspace:*
-        version: link:../../packages/binary-protocol
-      '@bilig/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../../packages/crdt
-      '@bilig/formula':
-        specifier: workspace:*
-        version: link:../../packages/formula
-      '@bilig/grid':
-        specifier: workspace:*
-        version: link:../../packages/grid
-      '@bilig/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@bilig/renderer':
-        specifier: workspace:*
-        version: link:../../packages/renderer
-      '@bilig/storage-browser':
-        specifier: workspace:*
-        version: link:../../packages/storage-browser
-      '@bilig/worker-transport':
-        specifier: workspace:*
-        version: link:../../packages/worker-transport
-      react:
-        specifier: 19.2.4
-        version: 19.2.4
-      react-dom:
-        specifier: 19.2.4
-        version: 19.2.4(react@19.2.4)
-    devDependencies:
-      '@types/react':
-        specifier: 19.2.2
-        version: 19.2.2
-      '@types/react-dom':
-        specifier: 19.2.2
-        version: 19.2.2(@types/react@19.2.2)
-      '@vitejs/plugin-react':
-        specifier: 6.0.0
-        version: 6.0.0(vite@8.0.0(@types/node@24.10.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
   apps/sync-server:
     dependencies:
@@ -195,9 +149,6 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../../packages/crdt
       '@bilig/formula':
         specifier: workspace:*
         version: link:../../packages/formula
@@ -213,6 +164,9 @@ importers:
       '@bilig/storage-browser':
         specifier: workspace:*
         version: link:../../packages/storage-browser
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../../packages/workbook-domain
       '@bilig/worker-transport':
         specifier: workspace:*
         version: link:../../packages/worker-transport
@@ -268,12 +222,12 @@ importers:
 
   packages/binary-protocol:
     dependencies:
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../crdt
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/core:
     dependencies:
@@ -289,12 +243,15 @@ importers:
       '@bilig/wasm-kernel':
         specifier: workspace:*
         version: link:../wasm-kernel
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/crdt:
     dependencies:
-      '@bilig/protocol':
+      '@bilig/workbook-domain':
         specifier: workspace:*
-        version: link:../protocol
+        version: link:../workbook-domain
 
   packages/excel-fixtures:
     dependencies:
@@ -356,9 +313,9 @@ importers:
 
   packages/storage-server:
     dependencies:
-      '@bilig/crdt':
+      '@bilig/workbook-domain':
         specifier: workspace:*
-        version: link:../crdt
+        version: link:../workbook-domain
 
   packages/wasm-kernel:
     dependencies:
@@ -370,6 +327,12 @@ importers:
         specifier: 0.28.10
         version: 0.28.10
 
+  packages/workbook-domain:
+    dependencies:
+      '@bilig/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/worker-transport:
     dependencies:
       '@bilig/binary-protocol':
@@ -378,18 +341,24 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../core
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../crdt
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
 
   packages/zero-sync:
     dependencies:
+      '@bilig/formula':
+        specifier: workspace:*
+        version: link:../formula
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bilig/workbook-domain':
+        specifier: workspace:*
+        version: link:../workbook-domain
       '@rocicorp/zero':
         specifier: 1.0.0
         version: 1.0.0(@opentelemetry/core@2.6.1(@opentelemetry/api@1.9.1))

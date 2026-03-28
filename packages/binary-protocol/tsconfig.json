@@ -9,7 +9,7 @@
       "path": "../protocol"
     },
     {
-      "path": "../crdt"
+      "path": "../workbook-domain"
     }
   ],
   "include": ["src/**/*"],

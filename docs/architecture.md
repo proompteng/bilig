@@ -16,7 +16,7 @@ The current unresolved architecture items are:
 
 - `9` canonical rows are not `implemented-wasm-production`
 - `@bilig/crdt` does not yet model rename sheet, reorder sheets, explicit range ops, or explicit structured-reference and spill-owner ops
-- `apps/web` imports `apps/playground` CSS and TS sources
+- `apps/web` is the only browser shell and no longer depends on retired demo-shell CSS or TS sources
 - `packages/storage-server` is in-memory only
 
 ## Runtime layers
@@ -43,7 +43,7 @@ flowchart LR
 - `@bilig/agent-api` uses binary framing around JSON payloads.
 - `apps/local-server` is a live worksheet host with range read/write/fill/copy/paste, export/import, and subscription support.
 - `apps/sync-server` returns `NOT_IMPLEMENTED` for most remote worksheet requests unless a worksheet executor is injected.
-- `apps/web` imports `apps/playground` CSS and includes playground sources in its TS config.
+- `apps/web` no longer depends on retired demo-shell source or styling in its TS config.
 - viewport patch payloads are JSON inside a `Uint8Array` rather than a dedicated typed binary channel.
 
 ## Formula architecture
@@ -102,8 +102,7 @@ Next work in code order:
 2. add `renameSheet`, `reorderSheets`, first-class range ops where needed, and explicit metadata-binding ops
 3. replace in-memory-only remote storage and partial remote worksheet execution with a closed sync-server path
 4. replace JSON-in-binary-envelope viewport and agent payloads with typed codecs
-5. packageize the browser shell away from `apps/playground`
-6. finish remaining product-shell grid parity such as row resize, hide/unhide, context menus, and frozen-pane UX
+5. finish remaining product-shell grid parity such as row resize, hide/unhide, context menus, and frozen-pane UX
 
 ## Repo boundary
 
@@ -117,6 +116,6 @@ See:
 - [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)
 - [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)
 - [workbook-metadata-runtime-rfc.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-runtime-rfc.md)
-- [worker-runtime-and-viewport-patches-rfc.md](/Users/gregkonush/github.com/bilig/docs/worker-runtime-and-viewport-patches-rfc.md)
+- [browser-runtime.md](/Users/gregkonush/github.com/bilig/docs/browser-runtime.md)
 - [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
 - [typed-agent-protocol-rfc.md](/Users/gregkonush/github.com/bilig/docs/typed-agent-protocol-rfc.md)

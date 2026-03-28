@@ -139,5 +139,3 @@ function runPlaywright(args: string[]): void {
 terminatePreviewServers();
 runPlaywright([]);
 terminatePreviewServers();
-runPlaywright(["-c", "playwright.web.config.ts"]);
-terminatePreviewServers();

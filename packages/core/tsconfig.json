@@ -12,6 +12,9 @@
       "path": "../formula"
     },
     {
+      "path": "../workbook-domain"
+    },
+    {
       "path": "../crdt"
     },
     {

@@ -1,0 +1,48 @@
+{
+  "name": "@bilig/workbook-domain",
+  "version": "0.1.0",
+  "description": "Transport-neutral workbook domain ops and batch types for bilig.",
+  "keywords": [
+    "bilig",
+    "domain",
+    "spreadsheet",
+    "workbook"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/workbook-domain#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/workbook-domain"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/protocol": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

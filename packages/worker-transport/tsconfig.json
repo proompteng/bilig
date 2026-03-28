@@ -9,7 +9,10 @@
       "path": "../protocol"
     },
     {
-      "path": "../crdt"
+      "path": "../workbook-domain"
+    },
+    {
+      "path": "../binary-protocol"
     },
     {
       "path": "../core"

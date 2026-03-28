@@ -25,7 +25,6 @@ This ledger maps the current canonical formula milestone to concrete proof point
 - server-side storage remains in-memory in the checked-in storage package
 - agent payloads use JSON inside a binary frame envelope
 - viewport patch payloads use JSON inside a byte envelope
-- `apps/web` depends on `apps/playground` CSS and TS source inclusion
 
 ## Release rule
 

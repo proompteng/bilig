@@ -5,6 +5,7 @@ import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
 
 import { DocumentSessionManager } from "./document-session-manager.js";
+import { resolveSessionIdentity } from "./session.js";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
 import type { ZeroSyncService } from "./zero/service.js";
 
@@ -78,6 +79,22 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     return Buffer.from(encodeFrame(response));
   });
 
+  const handleSessionRequest = async (request: FastifyRequest, reply: FastifyReply) => {
+    const session = resolveSessionIdentity(request, reply);
+    const guest = session.userID.startsWith("guest:");
+    return {
+      userID: session.userID,
+      userId: session.userID,
+      roles: ["editor"],
+      guest,
+      isAuthenticated: !guest,
+      source: guest ? "guest" : "header",
+      authSource: guest ? "guest" : "header",
+    };
+  };
+  app.get("/v1/session", handleSessionRequest);
+  app.get("/api/session", handleSessionRequest);
+
   app.post("/api/zero/query", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
@@ -85,6 +102,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         error: "ZERO_SYNC_DISABLED",
       };
     }
+    resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleQuery(request);
   });
 
@@ -95,6 +113,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         error: "ZERO_SYNC_DISABLED",
       };
     }
+    resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleMutate(request);
   });
 

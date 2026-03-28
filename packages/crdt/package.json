@@ -1,7 +1,7 @@
 {
   "name": "@bilig/crdt",
   "version": "0.1.0",
-  "description": "Deterministic CRDT batch and replica primitives for bilig workbook synchronization.",
+  "description": "Replica-state and batch ordering helpers for bilig workbook synchronization.",
   "keywords": [
     "bilig",
     "crdt",
@@ -41,7 +41,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bilig/protocol": "workspace:*"
+    "@bilig/workbook-domain": "workspace:*"
   },
   "engines": {
     "node": ">=24.0.0"

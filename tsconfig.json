@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/protocol" },
     { "path": "./packages/formula" },
+    { "path": "./packages/workbook-domain" },
     { "path": "./packages/crdt" },
     { "path": "./packages/binary-protocol" },
     { "path": "./packages/agent-api" },
@@ -19,7 +20,6 @@
     { "path": "./packages/zero-sync" },
     { "path": "./apps/local-server" },
     { "path": "./apps/sync-server" },
-    { "path": "./apps/web" },
-    { "path": "./apps/playground" }
+    { "path": "./apps/web" }
   ]
 }

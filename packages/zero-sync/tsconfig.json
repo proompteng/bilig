@@ -4,6 +4,17 @@
     "rootDir": "src",
     "outDir": "dist"
   },
+  "references": [
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../formula"
+    },
+    {
+      "path": "../workbook-domain"
+    }
+  ],
   "include": ["src/**/*"],
   "exclude": ["src/**/__tests__/**"]
 }
