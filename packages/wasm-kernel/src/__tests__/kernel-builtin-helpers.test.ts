@@ -104,7 +104,26 @@ function decodeStringValue(
 }
 
 function toErrorCode(rawValue: number): ErrorCode {
-  return rawValue as ErrorCode;
+  switch (rawValue) {
+    case 1:
+      return ErrorCode.Null;
+    case 2:
+      return ErrorCode.Div0;
+    case 3:
+      return ErrorCode.Value;
+    case 4:
+      return ErrorCode.Ref;
+    case 5:
+      return ErrorCode.Name;
+    case 6:
+      return ErrorCode.Num;
+    case 7:
+      return ErrorCode.NA;
+    case 8:
+      return ErrorCode.Blocked;
+    default:
+      throw new Error(`Unexpected error code: ${rawValue}`);
+  }
 }
 
 function readSpillValues(
