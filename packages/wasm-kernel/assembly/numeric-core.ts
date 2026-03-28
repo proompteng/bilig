@@ -87,6 +87,32 @@ export function roundTowardZeroDigits(value: f64, digits: i32): f64 {
   return Math.trunc(value / factor) * factor;
 }
 
+const MAX_SAFE_INTEGER_F64: f64 = 9007199254740991.0;
+
+export function coerceBitwiseUnsigned(tag: u8, value: f64): i64 {
+  const numeric = toNumberExact(tag, value);
+  if (!isFinite(numeric)) {
+    return i64.MIN_VALUE;
+  }
+  const truncated = Math.trunc(numeric);
+  if (Math.abs(truncated) > MAX_SAFE_INTEGER_F64) {
+    return i64.MIN_VALUE;
+  }
+  return <i64>(<u32>(<i64>truncated));
+}
+
+export function coerceNonNegativeShift(tag: u8, value: f64): i64 {
+  const numeric = toNumberExact(tag, value);
+  if (!isFinite(numeric)) {
+    return i64.MIN_VALUE;
+  }
+  const truncated = Math.trunc(numeric);
+  if (truncated < 0.0 || truncated > MAX_SAFE_INTEGER_F64) {
+    return i64.MIN_VALUE;
+  }
+  return <i64>truncated;
+}
+
 export function coerceInteger(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value);
   if (!isFinite(numeric)) {

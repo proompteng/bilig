@@ -24,6 +24,7 @@ import {
   uniqueScalarKey,
 } from "./array-materialize";
 import {
+  coerceNonNegativeShift,
   coerceInteger,
   doubleFactorialCalc,
   evenCalc,
@@ -210,6 +211,7 @@ import { tryApplyArrayInfoBuiltin } from "./dispatch-array-info";
 import { tryApplyLookupMatchBuiltin } from "./dispatch-lookup-match";
 import { tryApplyStatisticsSummaryBuiltin } from "./dispatch-statistics-summary";
 import { tryApplyScalarMathBuiltin } from "./dispatch-scalar-math";
+import { tryApplyLogicInfoBuiltin } from "./dispatch-logic-info";
 
 export function registerTrackedArrayShape(arrayIndex: u32, rows: i32, cols: i32): void {
   registerTrackedArrayShapeImpl(arrayIndex, rows, cols);
@@ -332,30 +334,6 @@ function dollarFractionalNumerator(value: f64): i32 {
     return 0;
   }
   return parsePositiveDigits(absoluteText.substring(dot + 1));
-}
-
-function coerceBitwiseUnsigned(tag: u8, value: f64): i64 {
-  const numeric = toNumberExact(tag, value);
-  if (!isFinite(numeric)) {
-    return i64.MIN_VALUE;
-  }
-  const truncated = Math.trunc(numeric);
-  if (Math.abs(truncated) > MAX_SAFE_INTEGER_F64) {
-    return i64.MIN_VALUE;
-  }
-  return <i64>(<u32>(<i64>truncated));
-}
-
-function coerceNonNegativeShift(tag: u8, value: f64): i64 {
-  const numeric = toNumberExact(tag, value);
-  if (!isFinite(numeric)) {
-    return i64.MIN_VALUE;
-  }
-  const truncated = Math.trunc(numeric);
-  if (truncated < 0.0 || truncated > MAX_SAFE_INTEGER_F64) {
-    return i64.MIN_VALUE;
-  }
-  return <i64>truncated;
 }
 
 function signedRadixInputText(
@@ -11075,94 +11053,6 @@ export function applyBuiltin(
     );
   }
 
-  if (
-    (builtinId == BuiltinId.Bitand ||
-      builtinId == BuiltinId.Bitor ||
-      builtinId == BuiltinId.Bitxor) &&
-    argc >= 2
-  ) {
-    let accumulatorValue = coerceBitwiseUnsigned(tagStack[base], valueStack[base]);
-    if (accumulatorValue == i64.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    let accumulator = <u32>accumulatorValue;
-    for (let index = 1; index < argc; index += 1) {
-      const currentValue = coerceBitwiseUnsigned(tagStack[base + index], valueStack[base + index]);
-      if (currentValue == i64.MIN_VALUE) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          ErrorCode.Value,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      const current = <u32>currentValue;
-      if (builtinId == BuiltinId.Bitand) {
-        accumulator &= current;
-      } else if (builtinId == BuiltinId.Bitor) {
-        accumulator |= current;
-      } else {
-        accumulator ^= current;
-      }
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>accumulator,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if ((builtinId == BuiltinId.Bitlshift || builtinId == BuiltinId.Bitrshift) && argc == 2) {
-    const value = coerceBitwiseUnsigned(tagStack[base], valueStack[base]);
-    const shift = coerceNonNegativeShift(tagStack[base + 1], valueStack[base + 1]);
-    if (value == i64.MIN_VALUE || shift == i64.MIN_VALUE) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const shiftAmount = <i32>(shift & 31);
-    const numeric = <u32>value;
-    const result =
-      builtinId == BuiltinId.Bitlshift
-        ? <u32>(numeric << shiftAmount)
-        : <u32>(numeric >>> shiftAmount);
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Number,
-      <f64>result,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
   const scalarMathResult = tryApplyScalarMathBuiltin(
     builtinId,
     argc,
@@ -11176,312 +11066,23 @@ export function applyBuiltin(
     return scalarMathResult;
   }
 
-  if (builtinId == BuiltinId.And) {
-    if (argc == 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    for (let index = 0; index < argc; index++) {
-      const coerced = coerceLogical(tagStack[base + index], valueStack[base + index]);
-      if (coerced < 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          -coerced - 1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      if (coerced == 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Boolean,
-          0,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      1,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Or) {
-    if (argc == 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    for (let index = 0; index < argc; index++) {
-      const coerced = coerceLogical(tagStack[base + index], valueStack[base + index]);
-      if (coerced < 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          -coerced - 1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      if (coerced != 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Boolean,
-          1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Xor) {
-    if (argc == 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    let parity = 0;
-    for (let index = 0; index < argc; index++) {
-      const coerced = coerceLogical(tagStack[base + index], valueStack[base + index]);
-      if (coerced < 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          -coerced - 1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      parity = parity ^ (coerced != 0 ? 1 : 0);
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      parity != 0 ? 1 : 0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Not && argc == 1) {
-    const coerced = coerceLogical(tagStack[base], valueStack[base]);
-    if (coerced < 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        -coerced - 1,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      coerced == 0 ? 1 : 0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Ifs) {
-    if (argc < 2 || argc % 2 != 0) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    for (let index = 0; index < argc; index += 2) {
-      const coerced = coerceLogical(tagStack[base + index], valueStack[base + index]);
-      if (coerced < 0) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          -coerced - 1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      if (coerced != 0) {
-        return copySlotResult(
-          base,
-          base + index + 1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Error,
-      ErrorCode.NA,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.Switch) {
-    if (argc < 3) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        ErrorCode.Value,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    if (tagStack[base] == ValueTag.Error) {
-      return writeResult(
-        base,
-        STACK_KIND_SCALAR,
-        <u8>ValueTag.Error,
-        valueStack[base],
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    const hasDefault = (argc - 1) % 2 == 1;
-    const pairLimit = hasDefault ? argc - 1 : argc;
-    for (let index = 1; index < pairLimit; index += 2) {
-      if (tagStack[base + index] == ValueTag.Error) {
-        return writeResult(
-          base,
-          STACK_KIND_SCALAR,
-          <u8>ValueTag.Error,
-          valueStack[base + index],
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-      const comparison = compareScalarValues(
-        tagStack[base],
-        valueStack[base],
-        tagStack[base + index],
-        valueStack[base + index],
-        null,
-        stringOffsets,
-        stringLengths,
-        stringData,
-        outputStringOffsets,
-        outputStringLengths,
-        outputStringData,
-      );
-      if (comparison == 0) {
-        return copySlotResult(
-          base,
-          base + index + 1,
-          rangeIndexStack,
-          valueStack,
-          tagStack,
-          kindStack,
-        );
-      }
-    }
-    if (hasDefault) {
-      return copySlotResult(
-        base,
-        base + argc - 1,
-        rangeIndexStack,
-        valueStack,
-        tagStack,
-        kindStack,
-      );
-    }
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Error,
-      ErrorCode.NA,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
+  const logicInfoResult = tryApplyLogicInfoBuiltin(
+    builtinId,
+    argc,
+    base,
+    rangeIndexStack,
+    valueStack,
+    tagStack,
+    kindStack,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  );
+  if (logicInfoResult >= 0) {
+    return logicInfoResult;
   }
 
   const scalarTextResult = tryApplyScalarTextBuiltin(
@@ -11546,84 +11147,6 @@ export function applyBuiltin(
   );
   if (textMutationResult >= 0) {
     return textMutationResult;
-  }
-
-  if (builtinId == BuiltinId.IsBlank && argc == 0) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      1,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.IsBlank && argc == 1) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      tagStack[base] == ValueTag.Empty ? 1 : 0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.IsNumber && argc == 0) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.IsNumber && argc == 1) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      tagStack[base] == ValueTag.Number ? 1 : 0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.IsText && argc == 0) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
-  }
-
-  if (builtinId == BuiltinId.IsText && argc == 1) {
-    return writeResult(
-      base,
-      STACK_KIND_SCALAR,
-      <u8>ValueTag.Boolean,
-      tagStack[base] == ValueTag.String ? 1 : 0,
-      rangeIndexStack,
-      valueStack,
-      tagStack,
-      kindStack,
-    );
   }
 
   const dateTimeResult = tryApplyDateTimeBuiltin(
