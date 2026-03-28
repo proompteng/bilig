@@ -3,6 +3,11 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Cell, Sheet, Workbook } from "../components.js";
 
+type CompatContainer = {
+  lastError: unknown;
+  root?: unknown;
+};
+
 type CompatMocks = {
   createFiberRoot: ReturnType<typeof vi.fn>;
   updateFiberRoot: ReturnType<typeof vi.fn>;
@@ -14,47 +19,60 @@ function isMockContainer(value: unknown): value is {
   return typeof value === "object" && value !== null && "root" in value;
 }
 
-async function loadRendererRootWithCompatMock(
-  updateImpl: (
-    element: React.ReactNode,
-    callback: () => void,
-    container: { lastError: unknown },
-  ) => void,
-): Promise<
+type UpdateImpl = (
+  element: React.ReactNode,
+  callback: () => void,
+  container: CompatContainer,
+) => void;
+
+let capturedContainer: CompatContainer | undefined;
+let compatUpdateImpl: UpdateImpl = (_element, callback) => {
+  callback();
+};
+
+const createFiberRootMock = vi.fn((container: CompatContainer) => {
+  capturedContainer = container;
+  return { kind: "fiber-root" };
+});
+
+const updateFiberRootMock = vi.fn(
+  (_root: unknown, element: React.ReactNode, callback: () => void) => {
+    compatUpdateImpl(element, callback, capturedContainer ?? { lastError: null });
+  },
+);
+
+vi.mock("../compat.js", () => ({
+  createFiberRoot: createFiberRootMock,
+  updateFiberRoot: updateFiberRootMock,
+}));
+
+async function loadRendererRootWithCompatMock(updateImpl: UpdateImpl): Promise<
   CompatMocks & {
     createWorkbookRendererRoot: typeof import("../renderer-root.js").createWorkbookRendererRoot;
-    getCapturedContainer: () => { lastError: unknown } | undefined;
+    getCapturedContainer: () => CompatContainer | undefined;
   }
 > {
-  vi.resetModules();
-  let capturedContainer: { lastError: unknown } | undefined;
-  const createFiberRoot = vi.fn((container: { lastError: unknown }) => {
-    capturedContainer = container;
-    return { kind: "fiber-root" };
-  });
-  const updateFiberRoot = vi.fn(
-    (_root: unknown, element: React.ReactNode, callback: () => void) => {
-      updateImpl(element, callback, capturedContainer ?? { lastError: null });
-    },
-  );
-  vi.doMock("../compat.js", () => ({
-    createFiberRoot,
-    updateFiberRoot,
-  }));
+  compatUpdateImpl = updateImpl;
+  capturedContainer = undefined;
+  createFiberRootMock.mockClear();
+  updateFiberRootMock.mockClear();
   const { createWorkbookRendererRoot } = await import("../renderer-root.js");
   return {
     createWorkbookRendererRoot,
-    createFiberRoot,
-    updateFiberRoot,
+    createFiberRoot: createFiberRootMock,
+    updateFiberRoot: updateFiberRootMock,
     getCapturedContainer: () => capturedContainer,
   };
 }
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.resetModules();
-  vi.doUnmock("../compat.js");
-  vi.clearAllMocks();
+  compatUpdateImpl = (_element, callback) => {
+    callback();
+  };
+  capturedContainer = undefined;
+  createFiberRootMock.mockClear();
+  updateFiberRootMock.mockClear();
 });
 
 describe("renderer root error handling", () => {
