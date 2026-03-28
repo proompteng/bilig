@@ -23,6 +23,7 @@ async function loadRendererRootWithCompatMock(
 ): Promise<
   CompatMocks & {
     createWorkbookRendererRoot: typeof import("../renderer-root.js").createWorkbookRendererRoot;
+    getCapturedContainer: () => { lastError: unknown } | undefined;
   }
 > {
   vi.resetModules();
@@ -41,7 +42,12 @@ async function loadRendererRootWithCompatMock(
     updateFiberRoot,
   }));
   const { createWorkbookRendererRoot } = await import("../renderer-root.js");
-  return { createWorkbookRendererRoot, createFiberRoot, updateFiberRoot };
+  return {
+    createWorkbookRendererRoot,
+    createFiberRoot,
+    updateFiberRoot,
+    getCapturedContainer: () => capturedContainer,
+  };
 }
 
 afterEach(() => {
@@ -56,12 +62,11 @@ describe("renderer root error handling", () => {
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-double-callback" });
     await engine.ready();
     const renderCommit = vi.spyOn(engine, "renderCommit");
-    const { createWorkbookRendererRoot, createFiberRoot } = await loadRendererRootWithCompatMock(
-      (_element, callback) => {
+    const { createWorkbookRendererRoot, getCapturedContainer } =
+      await loadRendererRootWithCompatMock((_element, callback) => {
         callback();
         callback();
-      },
-    );
+      });
     const root = createWorkbookRendererRoot(engine);
 
     await root.render(
@@ -72,7 +77,7 @@ describe("renderer root error handling", () => {
       </Workbook>,
     );
 
-    const maybeContainer = createFiberRoot.mock.calls[0]?.[0];
+    const maybeContainer = getCapturedContainer();
     if (!isMockContainer(maybeContainer)) {
       throw new Error("Expected mocked container");
     }
@@ -102,14 +107,13 @@ describe("renderer root error handling", () => {
     const engine = new SpreadsheetEngine({ workbookName: "renderer-root-empty-unmount" });
     await engine.ready();
     const renderCommit = vi.spyOn(engine, "renderCommit");
-    const { createWorkbookRendererRoot, createFiberRoot } = await loadRendererRootWithCompatMock(
-      (_element, callback) => {
+    const { createWorkbookRendererRoot, getCapturedContainer } =
+      await loadRendererRootWithCompatMock((_element, callback) => {
         callback();
-      },
-    );
+      });
     const root = createWorkbookRendererRoot(engine);
 
-    const maybeContainer = createFiberRoot.mock.calls[0]?.[0];
+    const maybeContainer = getCapturedContainer();
     if (!isMockContainer(maybeContainer)) {
       throw new Error("Expected mocked container");
     }
