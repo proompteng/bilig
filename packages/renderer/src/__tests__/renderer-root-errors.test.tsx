@@ -296,10 +296,10 @@ describe("renderer root error handling", () => {
     expect(updateFiberRoot).not.toHaveBeenCalled();
   });
 
-  it("routes null renders through unmount and rejects sync compat update errors", async () => {
+  it("routes null renders through unmount and surfaces sync compat unmount errors", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (element, callback) => {
-        if (element && typeof element !== "boolean") {
+        if (element === null) {
           throw new Error("sync compat failure");
         }
         callback();
@@ -309,17 +309,7 @@ describe("renderer root error handling", () => {
     await engine.ready();
     const root = createWorkbookRendererRoot(engine);
 
-    await expect(
-      root.render(
-        <Workbook name="book">
-          <Sheet name="Sheet1">
-            <Cell addr="A1" value={1} />
-          </Sheet>
-        </Workbook>,
-      ),
-    ).rejects.toThrow("sync compat failure");
-
-    await expect(root.render(null)).resolves.toBeUndefined();
+    await expect(root.render(null)).rejects.toThrow("sync compat failure");
   });
 
   it("treats non-DSL string tags as wrappers during validation", async () => {

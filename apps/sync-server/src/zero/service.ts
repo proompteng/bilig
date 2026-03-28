@@ -2,14 +2,12 @@ import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { schema } from "@bilig/zero-sync";
 import { queries, workbookQueryArgsSchema } from "@bilig/zero-sync";
 import type { FastifyRequest } from "fastify";
-import type { Pool } from "pg";
 import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./db.js";
 import { handleServerMutator } from "./server-mutators.js";
 import { ensureZeroSyncSchema } from "./store.js";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
-  readonly pool: Pool | null;
   initialize(): Promise<void>;
   close(): Promise<void>;
   handleQuery(request: FastifyRequest): Promise<unknown>;
@@ -49,7 +47,6 @@ function fastifyRequestToWebRequest(request: FastifyRequest): Request {
 
 class DisabledZeroSyncService implements ZeroSyncService {
   readonly enabled = false;
-  readonly pool = null;
 
   async initialize(): Promise<void> {}
 
@@ -66,7 +63,7 @@ class DisabledZeroSyncService implements ZeroSyncService {
 
 class EnabledZeroSyncService implements ZeroSyncService {
   readonly enabled = true;
-  readonly pool: Pool;
+  private readonly pool: ReturnType<typeof createZeroPool>;
   private readonly dbProvider;
 
   constructor(connectionString: string) {
