@@ -141,6 +141,47 @@ function validateRootElement(node: ReactNode): void {
   }
 }
 
+function normalizeNodeForRenderer(node: ReactNode): ReactNode {
+  if (!isRendererElement(node)) {
+    return node;
+  }
+  const kind = kindOfNode(node);
+  const normalizedChildren = normalizeChildrenForRenderer(node.props.children);
+  if (kind === "wrapper") {
+    if (normalizedChildren.length === 0) {
+      return null;
+    }
+    if (normalizedChildren.length === 1) {
+      return normalizedChildren[0];
+    }
+    return React.createElement(React.Fragment, null, ...normalizedChildren);
+  }
+  return React.cloneElement(node, undefined, ...normalizedChildren);
+}
+
+function normalizeChildrenForRenderer(node: ReactNode): React.ReactNode[] {
+  const normalized: React.ReactNode[] = [];
+  for (const child of toRenderableChildren(node)) {
+    const next = normalizeNodeForRenderer(child);
+    if (next === null || next === undefined || next === false) {
+      continue;
+    }
+    normalized.push(next);
+  }
+  return normalized;
+}
+
+function normalizeRootElement(node: ReactNode): ReactNode {
+  const normalizedChildren = normalizeChildrenForRenderer(node);
+  if (normalizedChildren.length === 0) {
+    return null;
+  }
+  if (normalizedChildren.length === 1) {
+    return normalizedChildren[0];
+  }
+  return React.createElement(React.Fragment, null, ...normalizedChildren);
+}
+
 export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookRendererRoot {
   const container: WorkbookContainer = {
     engine,
@@ -163,6 +204,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
       } catch (error) {
         return Promise.reject(error);
       }
+      const normalizedElement = normalizeRootElement(element);
       return new Promise<void>((resolve, reject) => {
         let settled = false;
         const finish = () => {
@@ -179,7 +221,7 @@ export function createWorkbookRendererRoot(engine: SpreadsheetEngine): WorkbookR
           resolve();
         };
         try {
-          updateFiberRoot(fiberRoot, element, () => {
+          updateFiberRoot(fiberRoot, normalizedElement, () => {
             scheduleCommitSettlement(container, finish);
           });
         } catch (error) {
