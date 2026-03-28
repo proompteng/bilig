@@ -28,5 +28,20 @@ Cluster infrastructure for `bilig` does not live in this repo. The GitOps source
 
 From `~/github.com/lab`, validate with `bun run lint:argocd`, `bun run tf:plan`, and `bun run ansible` as needed. Use `kubectl config current-context`, then inspect with `kubectl -n bilig get deploy,svc,pods`, `kubectl -n bilig logs -f deploy/bilig-web`, and `kubectl -n bilig rollout status deployment/bilig-sync`. For Argo CD, use `argocd context`, `argocd app get bilig`, `argocd app diff bilig`, and, when intentionally rolling out GitOps changes, `argocd app sync bilig && argocd app wait bilig --sync --health`.
 
+## Remotes & Source of Truth
+For `bilig`, Forgejo `origin` is the source of truth.
+Push branches to `origin`.
+Open and merge PRs in Forgejo with `tea`.
+Merge changes into `origin/main`.
+After the Forgejo merge, confirm `github/main` matches `origin/main`.
+
+## Tea CLI
+Use `tea` for Forgejo PR workflow in this repo.
+
+- `tea whoami -R origin`: confirm the active Forgejo account.
+- `tea pr ls -R origin`: inspect open PRs.
+- `tea pr create -R origin`: open a PR from the current branch.
+- `tea pr merge -R origin <number>`: merge a Forgejo PR.
+
 ## Commit & Pull Request Guidelines
 Use Conventional Commits: `type(scope): summary`, for example `feat(grid): add fill-handle drag selection`. Keep commits focused and imperative. By default, you may commit and push directly to `main` once local CI is green, preferably via `pnpm run ci`. When a PR is used, include scope, risk, linked issues, commands run, and screenshots for `apps/web` UI changes. If you edit protocol or formula inventory sources, regenerate and commit the outputs, because CI fails on dirty tracked files.
