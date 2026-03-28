@@ -17,7 +17,7 @@ jobs:
       BILIG_BENCH_TOLERANCE: "1.5"
     steps:
       - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v4
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
 
       - name: Log runner environment
         run: |
@@ -30,7 +30,7 @@ jobs:
         run: |
           set -eu
           node --version
-          node -e 'const [major] = process.versions.node.split(".").map(Number); if (major < 24) { console.error(`Node ${process.versions.node} is below the required 24.x baseline`); process.exit(1); }'
+          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
 
       - name: Enable pnpm via Corepack
         run: |

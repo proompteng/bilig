@@ -11,12 +11,186 @@ env:
   IMAGE_NAMESPACE: lab
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  build-web-amd64:
+    name: build-bilig-web-amd64
+    runs-on: docker
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v4
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Verify amd64 Docker environment
+        run: |
+          set -euxo pipefail
+          docker version
+          docker info
+          test "$(uname -m)" = "x86_64"
+
+      - name: Resolve image tags
+        id: meta
+        run: |
+          set -eu
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push amd64 image
+        run: |
+          set -euxo pipefail
+
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-web"
+          SHA="${{ steps.meta.outputs.sha }}"
+          ARCH_TAG="${IMAGE}:${SHA}-amd64"
+
+          docker build \
+            --file ./Dockerfile \
+            --target web-runtime \
+            --tag "$ARCH_TAG" \
+            .
+
+          docker push "$ARCH_TAG"
+
+  build-web-arm64:
+    name: build-bilig-web-arm64
+    runs-on: docker-arm64
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Verify arm64 Docker environment
+        run: |
+          set -euxo pipefail
+          docker version
+          docker info
+          case "$(uname -m)" in
+            aarch64|arm64)
+              ;;
+            *)
+              echo "Expected arm64 runner, got $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+      - name: Resolve image tags
+        id: meta
+        run: |
+          set -eu
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push arm64 image
+        run: |
+          set -euxo pipefail
+
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-web"
+          SHA="${{ steps.meta.outputs.sha }}"
+          ARCH_TAG="${IMAGE}:${SHA}-arm64"
+
+          docker build \
+            --file ./Dockerfile \
+            --target web-runtime \
+            --tag "$ARCH_TAG" \
+            .
+
+          docker push "$ARCH_TAG"
+
+  build-sync-amd64:
+    name: build-bilig-sync-amd64
+    runs-on: docker
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Verify amd64 Docker environment
+        run: |
+          set -euxo pipefail
+          docker version
+          docker info
+          test "$(uname -m)" = "x86_64"
+
+      - name: Resolve image tags
+        id: meta
+        run: |
+          set -eu
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push amd64 image
+        run: |
+          set -euxo pipefail
+
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-sync"
+          SHA="${{ steps.meta.outputs.sha }}"
+          ARCH_TAG="${IMAGE}:${SHA}-amd64"
+
+          docker build \
+            --file ./Dockerfile \
+            --target sync-runtime \
+            --tag "$ARCH_TAG" \
+            .
+
+          docker push "$ARCH_TAG"
+
+  build-sync-arm64:
+    name: build-bilig-sync-arm64
+    runs-on: docker-arm64
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Verify arm64 Docker environment
+        run: |
+          set -euxo pipefail
+          docker version
+          docker info
+          case "$(uname -m)" in
+            aarch64|arm64)
+              ;;
+            *)
+              echo "Expected arm64 runner, got $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+      - name: Resolve image tags
+        id: meta
+        run: |
+          set -eu
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push arm64 image
+        run: |
+          set -euxo pipefail
+
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-sync"
+          SHA="${{ steps.meta.outputs.sha }}"
+          ARCH_TAG="${IMAGE}:${SHA}-arm64"
+
+          docker build \
+            --file ./Dockerfile \
+            --target sync-runtime \
+            --tag "$ARCH_TAG" \
+            .
+
+          docker push "$ARCH_TAG"
+
+  publish-manifests:
+    name: publish-multiarch-manifests
+    needs:
+      - build-web-amd64
+      - build-web-arm64
+      - build-sync-amd64
+      - build-sync-arm64
+    runs-on: docker
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Verify Docker environment
+        run: |
+          set -euxo pipefail
+          docker version
+          docker info
 
       - name: Resolve image tags
         id: meta
@@ -25,24 +199,53 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push bilig-web
-        uses: docker://gcr.io/kaniko-project/executor:v1.23.2-debug
-        with:
-          args: >-
-            --context=${{ github.workspace }}
-            --dockerfile=${{ github.workspace }}/Dockerfile
-            --target=web-runtime
-            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-web:${{ steps.meta.outputs.sha }}
-            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-web:${{ steps.meta.outputs.short_sha }}
-            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-web:latest
+      - name: Determine latest-tag ownership
+        id: head
+        run: |
+          set -eu
+          git fetch --depth=1 origin main
 
-      - name: Build and push bilig-sync
-        uses: docker://gcr.io/kaniko-project/executor:v1.23.2-debug
-        with:
-          args: >-
-            --context=${{ github.workspace }}
-            --dockerfile=${{ github.workspace }}/Dockerfile
-            --target=sync-runtime
-            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-sync:${{ steps.meta.outputs.sha }}
-            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-sync:${{ steps.meta.outputs.short_sha }}
-            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/bilig-sync:latest
+          SHA="$(git rev-parse HEAD)"
+          MAIN_SHA="$(git rev-parse origin/main)"
+
+          if [ "$SHA" = "$MAIN_SHA" ]; then
+            echo "publish_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish multi-arch image tags
+        run: |
+          set -euxo pipefail
+
+          SHA="${{ steps.meta.outputs.sha }}"
+          SHORT_SHA="${{ steps.meta.outputs.short_sha }}"
+          PUBLISH_LATEST="${{ steps.head.outputs.publish_latest }}"
+
+          publish_tag() {
+            TARGET_TAG="$1"
+            SOURCE_AMD64="$2"
+            SOURCE_ARM64="$3"
+
+            docker manifest create "$TARGET_TAG" "$SOURCE_AMD64" "$SOURCE_ARM64"
+            docker manifest annotate "$TARGET_TAG" "$SOURCE_AMD64" --os linux --arch amd64
+            docker manifest annotate "$TARGET_TAG" "$SOURCE_ARM64" --os linux --arch arm64
+            docker manifest push "$TARGET_TAG"
+            docker manifest inspect "$TARGET_TAG" >/dev/null
+          }
+
+          publish_manifests() {
+            IMAGE="$1"
+            SOURCE_AMD64="${IMAGE}:${SHA}-amd64"
+            SOURCE_ARM64="${IMAGE}:${SHA}-arm64"
+
+            publish_tag "${IMAGE}:${SHA}" "$SOURCE_AMD64" "$SOURCE_ARM64"
+            publish_tag "${IMAGE}:${SHORT_SHA}" "$SOURCE_AMD64" "$SOURCE_ARM64"
+
+            if [ "$PUBLISH_LATEST" = "true" ]; then
+              publish_tag "${IMAGE}:latest" "$SOURCE_AMD64" "$SOURCE_ARM64"
+            fi
+          }
+
+          publish_manifests "${REGISTRY}/${IMAGE_NAMESPACE}/bilig-web"
+          publish_manifests "${REGISTRY}/${IMAGE_NAMESPACE}/bilig-sync"
