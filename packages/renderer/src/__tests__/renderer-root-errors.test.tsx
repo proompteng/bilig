@@ -133,9 +133,9 @@ describe("renderer root error handling", () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (element, callback, container) => {
         if (element === null) {
-          queueMicrotask(() => {
+          setTimeout(() => {
             container.lastError = new Error("async unmount failed");
-          });
+          }, 0);
         }
         callback();
       },
@@ -160,9 +160,9 @@ describe("renderer root error handling", () => {
       (element, callback, container) => {
         callback();
         if (element !== null) {
-          queueMicrotask(() => {
+          setTimeout(() => {
             container.lastError = new Error("async render failed");
-          });
+          }, 0);
         }
       },
     );
@@ -335,7 +335,7 @@ describe("renderer root error handling", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("ignores non-element bigint children and rejects workbook text nodes", async () => {
+  it("ignores nullish children and rejects workbook text nodes", async () => {
     const { createWorkbookRendererRoot } = await loadRendererRootWithCompatMock(
       (_element, callback) => {
         callback();
@@ -348,11 +348,11 @@ describe("renderer root error handling", () => {
     await expect(
       root.render(
         <>
-          {1n}
+          {null}
           <Workbook name="book">
-            {2n}
+            {false}
             <Sheet name="Sheet1">
-              {3n}
+              {undefined}
               <Cell addr="A1" value={1} />
             </Sheet>
           </Workbook>

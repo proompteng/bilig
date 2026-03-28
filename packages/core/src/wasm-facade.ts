@@ -242,44 +242,79 @@ export class WasmKernelFacade {
   syncToStore(store: CellStore, changedCellIndices: Uint32Array, strings: StringPool): void {
     if (!this.kernel) return;
 
-    // Read and intern new output strings from WASM before updating cells
     const newStrings = this.kernel.readOutputStrings();
-    const outputStringIdMap = new Map<number, number>();
-    for (let index = 0; index < newStrings.length; index += 1) {
-      const str = newStrings[index]!;
-      const internedId = strings.intern(str);
-      outputStringIdMap.set((index | 0x80000000) >>> 0, internedId);
-    }
-
     const tags = this.kernel.readTags();
     const numbers = this.kernel.readNumbers();
     const stringIds = this.kernel.readStringIds();
     const errors = this.kernel.readErrors();
-    changedCellIndices.forEach((cellIndex) => {
-      if (cellIndex >= store.size) return;
-      const previousTag = store.tags[cellIndex]!;
-      const previousNumber = store.numbers[cellIndex]!;
-      const previousStringId = store.stringIds[cellIndex]!;
-      const previousError = store.errors[cellIndex]!;
-      store.tags[cellIndex] = tags[cellIndex]!;
-      store.numbers[cellIndex] = numbers[cellIndex]!;
+    const storeTags = store.tags;
+    const storeNumbers = store.numbers;
+    const storeStringIds = store.stringIds;
+    const storeErrors = store.errors;
+    const storeVersions = store.versions;
 
-      let newStringId = stringIds[cellIndex]!;
-      if ((newStringId & 0x80000000) !== 0) {
-        newStringId = outputStringIdMap.get(newStringId) ?? 0;
+    if (newStrings.length === 0) {
+      for (let index = 0; index < changedCellIndices.length; index += 1) {
+        const cellIndex = changedCellIndices[index]!;
+        if (cellIndex >= store.size) {
+          continue;
+        }
+
+        const nextTag = tags[cellIndex]!;
+        const nextNumber = numbers[cellIndex]!;
+        const nextStringId = stringIds[cellIndex]!;
+        const nextError = errors[cellIndex]!;
+
+        if (
+          storeTags[cellIndex] !== nextTag ||
+          storeNumbers[cellIndex] !== nextNumber ||
+          storeStringIds[cellIndex] !== nextStringId ||
+          storeErrors[cellIndex] !== nextError
+        ) {
+          storeVersions[cellIndex] = (storeVersions[cellIndex] ?? 0) + 1;
+        }
+
+        storeTags[cellIndex] = nextTag;
+        storeNumbers[cellIndex] = nextNumber;
+        storeStringIds[cellIndex] = nextStringId;
+        storeErrors[cellIndex] = nextError;
       }
-      store.stringIds[cellIndex] = newStringId;
+      return;
+    }
 
-      store.errors[cellIndex] = errors[cellIndex]!;
+    const outputStringIdMap = new Map<number, number>();
+    for (let index = 0; index < newStrings.length; index += 1) {
+      outputStringIdMap.set((index | 0x80000000) >>> 0, strings.intern(newStrings[index]!));
+    }
+
+    for (let index = 0; index < changedCellIndices.length; index += 1) {
+      const cellIndex = changedCellIndices[index]!;
+      if (cellIndex >= store.size) {
+        continue;
+      }
+
+      const nextTag = tags[cellIndex]!;
+      const nextNumber = numbers[cellIndex]!;
+      let nextStringId = stringIds[cellIndex]!;
+      if ((nextStringId & 0x80000000) !== 0) {
+        nextStringId = outputStringIdMap.get(nextStringId) ?? 0;
+      }
+      const nextError = errors[cellIndex]!;
+
       if (
-        previousTag !== store.tags[cellIndex] ||
-        previousNumber !== store.numbers[cellIndex] ||
-        previousStringId !== store.stringIds[cellIndex] ||
-        previousError !== store.errors[cellIndex]
+        storeTags[cellIndex] !== nextTag ||
+        storeNumbers[cellIndex] !== nextNumber ||
+        storeStringIds[cellIndex] !== nextStringId ||
+        storeErrors[cellIndex] !== nextError
       ) {
-        store.versions[cellIndex] = (store.versions[cellIndex] ?? 0) + 1;
+        storeVersions[cellIndex] = (storeVersions[cellIndex] ?? 0) + 1;
       }
-    });
+
+      storeTags[cellIndex] = nextTag;
+      storeNumbers[cellIndex] = nextNumber;
+      storeStringIds[cellIndex] = nextStringId;
+      storeErrors[cellIndex] = nextError;
+    }
   }
 
   get tags(): Uint8Array {

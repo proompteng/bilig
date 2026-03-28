@@ -299,7 +299,25 @@ describe("js evaluator", () => {
       cols: 1,
       values: [empty()],
     });
+    expect(
+      evaluatePlanResult(lowerToPlan(parseFormula("TRIMRANGE(F1:G2,0,3)")), trimContext),
+    ).toEqual({
+      kind: "array",
+      rows: 1,
+      cols: 1,
+      values: [empty()],
+    });
     expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:D4,4)")), trimContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('TRIMRANGE(A1:D4,3,"bad")')), trimContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("MAKEARRAY(1,1)")), trimContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
@@ -407,6 +425,10 @@ describe("js evaluator", () => {
       tag: ValueTag.Number,
       value: 3,
     });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEET(A1)")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEET("Missing")')), metadataContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.NA,
@@ -414,6 +436,10 @@ describe("js evaluator", () => {
     expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS()")), metadataContext)).toEqual({
       tag: ValueTag.Number,
       value: 3,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("SHEETS(A1)")), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula('SHEETS("Summary")')), metadataContext)).toEqual({
       tag: ValueTag.Number,
@@ -443,6 +469,26 @@ describe("js evaluator", () => {
         currentAddress: undefined,
       }),
     ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("row",A1)')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("col",B1)')), metadataContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    });
+    const missingSheetContext = { ...metadataContext };
+    Reflect.set(missingSheetContext, "sheetName", undefined);
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('CELL("contents")')), missingSheetContext),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula('CELL("type")')), missingSheetContext)).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });
@@ -585,6 +631,14 @@ describe("js evaluator", () => {
       code: ErrorCode.Ref,
     });
     expect(
+      evaluatePlanResult(lowerToPlan(parseFormula('INDIRECT("A1:B2")')), metadataContext),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 2,
+      values: [num(2), num(3), { tag: ValueTag.Boolean, value: true }, { tag: ValueTag.Empty }],
+    });
+    expect(
       evaluatePlan(
         lowerToPlan(parseFormula('TEXTSPLIT("a,b,,c",",","",TRUE(),0,"-")')),
         metadataContext,
@@ -700,6 +754,16 @@ describe("js evaluator", () => {
       code: ErrorCode.Value,
     });
     expect(evaluatePlan(lowerToPlan(parseFormula("EXPAND(A1:B2,3,0)")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE()")), metadataContext)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("TRIMRANGE(A1:B2,1,1,1)")), metadataContext),
+    ).toEqual({
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     });

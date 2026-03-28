@@ -23,6 +23,7 @@ export default defineConfig({
         find: "@bilig/storage-browser",
         replacement: `${rootDir}packages/storage-browser/src/index.ts`,
       },
+      { find: "@bilig/zero-sync", replacement: `${rootDir}packages/zero-sync/src/index.ts` },
       {
         find: "@bilig/storage-server",
         replacement: `${rootDir}packages/storage-server/src/index.ts`,

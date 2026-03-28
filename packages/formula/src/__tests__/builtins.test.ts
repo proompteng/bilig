@@ -119,6 +119,45 @@ describe("formula builtins", () => {
     });
   });
 
+  it("supports SEQUENCE spill generation and validation", () => {
+    const SEQUENCE = getBuiltin("SEQUENCE")!;
+
+    expect(
+      SEQUENCE(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 3 },
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 2 },
+      ),
+    ).toEqual({
+      kind: "array",
+      rows: 2,
+      cols: 3,
+      values: [
+        { tag: ValueTag.Number, value: 10 },
+        { tag: ValueTag.Number, value: 12 },
+        { tag: ValueTag.Number, value: 14 },
+        { tag: ValueTag.Number, value: 16 },
+        { tag: ValueTag.Number, value: 18 },
+        { tag: ValueTag.Number, value: 20 },
+      ],
+    });
+    expect(SEQUENCE({ tag: ValueTag.Number, value: 0 })).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      SEQUENCE(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "bad", stringId: 400 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+  });
+
   it("supports Bessel engineering builtins", () => {
     const BESSELI = getBuiltin("BESSELI")!;
     const BESSELJ = getBuiltin("BESSELJ")!;
@@ -3807,6 +3846,79 @@ describe("formula builtins", () => {
     expect(getBuiltinId("gamma.dist")).toBe(BuiltinId.GammaDist);
     expect(getBuiltinId("negbinom.dist")).toBe(BuiltinId.NegbinomDist);
     expect(getBuiltinId("binom.inv")).toBe(BuiltinId.BinomInv);
+  });
+
+  it("covers remaining Student t and binomial validation guards", () => {
+    const T_DIST_RT = getBuiltin("T.DIST.RT")!;
+    const T_INV = getBuiltin("T.INV")!;
+    const T_INV_2T = getBuiltin("T.INV.2T")!;
+    const TDIST = getBuiltin("TDIST")!;
+    const BINOMDIST = getBuiltin("BINOMDIST")!;
+    const BINOM_DIST_RANGE = getBuiltin("BINOM.DIST.RANGE")!;
+
+    expect(
+      T_DIST_RT({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 0 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      T_INV(
+        { tag: ValueTag.String, value: "bad", stringId: 401 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      T_INV_2T({ tag: ValueTag.Number, value: 1 }, { tag: ValueTag.Number, value: 1 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      TDIST(
+        { tag: ValueTag.Number, value: -1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      TDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      BINOMDIST(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 1.5 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      BINOM_DIST_RANGE(
+        { tag: ValueTag.Number, value: 6 },
+        { tag: ValueTag.Number, value: 0.5 },
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Number, value: 7 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
   });
 
   it("covers the new financial builtins and their error branches", () => {

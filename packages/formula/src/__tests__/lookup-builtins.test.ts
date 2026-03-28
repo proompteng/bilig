@@ -1226,6 +1226,52 @@ describe("lookup builtins", () => {
     ).toEqual(err(ErrorCode.Value));
   });
 
+  it("covers remaining database passthrough and SUMPRODUCT scalar validation branches", () => {
+    const DSTDEVP = getLookupBuiltin("DSTDEVP")!;
+    const DSUM = getLookupBuiltin("DSUM")!;
+    const SUMPRODUCT = getLookupBuiltin("SUMPRODUCT")!;
+
+    const database = cellRange(
+      [text("Age"), text("Yield"), num(10), num(5), num(12), num(7)],
+      3,
+      2,
+    );
+
+    expect(
+      DSTDEVP(database, text("Yield"), cellRange([text("Age"), err(ErrorCode.Ref)], 2, 1)),
+    ).toEqual(err(ErrorCode.Ref));
+    expect(
+      DSUM(database, text("Yield"), cellRange([text("Age"), err(ErrorCode.Name)], 2, 1)),
+    ).toEqual(err(ErrorCode.Name));
+    expect(SUMPRODUCT(num(1), num(2))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("ignores blocked database criteria rows with missing or blank headers", () => {
+    const DCOUNT = getLookupBuiltin("DCOUNT")!;
+    const DSUM = getLookupBuiltin("DSUM")!;
+
+    const database = cellRange(
+      [text("Age"), text("Yield"), num(10), num(5), num(12), num(7), num(12), num(9)],
+      4,
+      2,
+    );
+
+    expect(
+      DCOUNT(
+        database,
+        text("Yield"),
+        cellRange([text("Age"), text("Missing"), num(12), num(1)], 2, 2),
+      ),
+    ).toEqual(num(0));
+    expect(
+      DSUM(
+        database,
+        text("Yield"),
+        cellRange([{ tag: ValueTag.Empty }, text("Yield"), num(1), num(7)], 2, 2),
+      ),
+    ).toEqual(num(0));
+  });
+
   it("covers UNIQUE by-column/row modes with duplicate and error branches", () => {
     const UNIQUE = getLookupBuiltin("UNIQUE")!;
 
@@ -1860,5 +1906,107 @@ describe("lookup builtins", () => {
       XIRR(xValues, cellRange([num(39448), num(39508), num(39400), num(39859), num(39904)], 5, 1)),
     ).toEqual(err(ErrorCode.Value));
     expect(XIRR(xValues, xDates, text("bad"))).toEqual(err(ErrorCode.Value));
+  });
+
+  it("covers remaining lookup, database, and cash-flow validation branches", () => {
+    const AREAS = getLookupBuiltin("AREAS")!;
+    const ARRAYTOTEXT = getLookupBuiltin("ARRAYTOTEXT")!;
+    const ROWS = getLookupBuiltin("ROWS")!;
+    const COLUMNS = getLookupBuiltin("COLUMNS")!;
+    const DCOUNT = getLookupBuiltin("DCOUNT")!;
+    const IRR = getLookupBuiltin("IRR")!;
+    const MIRR = getLookupBuiltin("MIRR")!;
+    const XNPV = getLookupBuiltin("XNPV")!;
+    const XIRR = getLookupBuiltin("XIRR")!;
+    const XLOOKUP = getLookupBuiltin("XLOOKUP")!;
+    const XMATCH = getLookupBuiltin("XMATCH")!;
+
+    const database = cellRange(
+      [
+        text("Age"),
+        text("Height"),
+        text("Yield"),
+        num(10),
+        num(100),
+        num(5),
+        num(12),
+        num(110),
+        num(7),
+        num(12),
+        num(120),
+        num(9),
+      ],
+      4,
+      3,
+    );
+    const ageCriteria = cellRange([text("Age"), num(12)], 2, 1);
+    const ageCriteriaWithBlankClause = cellRange(
+      [text("Age"), text("Yield"), num(12), { tag: ValueTag.Empty }],
+      2,
+      2,
+    );
+
+    expect(DCOUNT(num(1), text("Yield"), ageCriteria)).toEqual(err(ErrorCode.Value));
+    expect(DCOUNT(database, text("Yield"), num(1))).toEqual(err(ErrorCode.Value));
+    expect(DCOUNT(cellRange([], 0, 0), text("Yield"), ageCriteria)).toEqual(err(ErrorCode.Value));
+    expect(DCOUNT(database, text("Yield"), ageCriteriaWithBlankClause)).toEqual(num(2));
+
+    expect(AREAS(num(1))).toEqual(err(ErrorCode.Value));
+    expect(ROWS(num(1))).toEqual(err(ErrorCode.Value));
+    expect(COLUMNS(num(1))).toEqual(err(ErrorCode.Value));
+    expect(ARRAYTOTEXT(cellRange([err(ErrorCode.Ref)], 1, 1))).toEqual(err(ErrorCode.Value));
+
+    const xValues = cellRange([num(-10000), num(2750), num(4250), num(3250), num(2750)], 5, 1);
+    const xDates = cellRange([num(39448), num(39508), num(39751), num(39859), num(39904)], 5, 1);
+    const mirrValues = cellRange(
+      [num(-120000), num(39000), num(30000), num(21000), num(37000), num(46000)],
+      6,
+      1,
+    );
+
+    expect(IRR(cellRange([err(ErrorCode.Name), num(1)], 2, 1))).toEqual(err(ErrorCode.Name));
+    expect(
+      MIRR(
+        { kind: "range", refKind: "rows", rows: 1, cols: 2, values: [num(-1), num(2)] },
+        num(0.1),
+        num(0.12),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(MIRR(mirrValues, num(-1), num(0.12))).toEqual(err(ErrorCode.Div0));
+    expect(XNPV(err(ErrorCode.Name), xValues, xDates)).toEqual(err(ErrorCode.Name));
+    expect(
+      XNPV(
+        num(0.09),
+        { kind: "range", refKind: "rows", rows: 1, cols: 2, values: [num(-1), num(2)] },
+        cellRange([num(39448), num(39508)], 2, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(
+      XNPV(
+        num(0.09),
+        cellRange([err(ErrorCode.Ref), num(2)], 2, 1),
+        cellRange([num(39448), num(39508)], 2, 1),
+      ),
+    ).toEqual(err(ErrorCode.Ref));
+    expect(
+      XNPV(
+        num(0.09),
+        cellRange([num(-1), num(2)], 2, 1),
+        cellRange([num(39448), { tag: ValueTag.Number, value: Number.POSITIVE_INFINITY }], 2, 1),
+      ),
+    ).toEqual(err(ErrorCode.Value));
+    expect(XIRR(xValues, xDates, cellRange([num(0.1)], 1, 1))).toEqual(err(ErrorCode.Value));
+
+    const duplicateLookup = cellRange([text("pear"), text("apple"), text("pear")], 3, 1);
+    const duplicateReturn = cellRange([num(10), num(20), num(30)], 3, 1);
+
+    expect(
+      XLOOKUP(text("pear"), duplicateLookup, duplicateReturn, text("fallback"), num(0), num(-1)),
+    ).toEqual(num(30));
+    expect(
+      XLOOKUP(text("pear"), duplicateLookup, duplicateReturn, text("fallback"), num(1), num(1)),
+    ).toEqual(err(ErrorCode.Value));
+    expect(XMATCH(text("pear"), duplicateLookup, num(0), num(-1))).toEqual(num(3));
+    expect(XMATCH(text("pear"), duplicateLookup, num(2), num(1))).toEqual(err(ErrorCode.Value));
   });
 });

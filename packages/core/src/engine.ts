@@ -4665,6 +4665,8 @@ export class SpreadsheetEngine {
 
     const allChangedRoots = [...changedRoots];
     const allOrdered: number[] = [];
+    let singlePassOrdered: U32 | null = null;
+    let singlePassOrderedCount = 0;
     let passRoots = [...changedRoots];
     let passKernelRoots = [...kernelSyncRoots];
     let totalOrderedCount = 0;
@@ -4711,8 +4713,25 @@ export class SpreadsheetEngine {
       const orderedCount = scheduled.orderedFormulaCount;
       totalOrderedCount += orderedCount;
       totalRangeNodeVisits += scheduled.rangeNodeVisits;
-      for (let index = 0; index < orderedCount; index += 1) {
-        allOrdered.push(ordered[index]!);
+      if (singlePassOrdered === null && allOrdered.length === 0) {
+        singlePassOrdered = ordered;
+        singlePassOrderedCount = orderedCount;
+      } else {
+        if (singlePassOrdered !== null) {
+          const orderedChunk = singlePassOrdered;
+          for (let orderedIndex = 0; orderedIndex < singlePassOrderedCount; orderedIndex += 1) {
+            const cellIndex = orderedChunk[orderedIndex];
+            if (cellIndex === undefined) {
+              continue;
+            }
+            allOrdered.push(cellIndex);
+          }
+          singlePassOrdered = null;
+          singlePassOrderedCount = 0;
+        }
+        for (let orderedIndex = 0; orderedIndex < orderedCount; orderedIndex += 1) {
+          allOrdered.push(ordered[orderedIndex]!);
+        }
       }
 
       pendingKernelSyncCount = 0;
@@ -4833,6 +4852,18 @@ export class SpreadsheetEngine {
       if (spillChangedRoots.length === 0) {
         break;
       }
+      if (singlePassOrdered !== null) {
+        const orderedChunk = singlePassOrdered;
+        for (let orderedIndex = 0; orderedIndex < singlePassOrderedCount; orderedIndex += 1) {
+          const cellIndex = orderedChunk[orderedIndex];
+          if (cellIndex === undefined) {
+            continue;
+          }
+          allOrdered.push(cellIndex);
+        }
+        singlePassOrdered = null;
+        singlePassOrderedCount = 0;
+      }
       allChangedRoots.push(...spillChangedRoots);
       passRoots = spillChangedRoots;
       passKernelRoots = spillChangedRoots;
@@ -4843,6 +4874,15 @@ export class SpreadsheetEngine {
     this.lastMetrics.wasmFormulaCount = wasmCount;
     this.lastMetrics.rangeNodeVisits = totalRangeNodeVisits;
     this.lastMetrics.recalcMs = performance.now() - started;
+    if (singlePassOrdered !== null) {
+      return totalOrderedCount === 0 && allChangedRoots.length === 0
+        ? this.changedUnion.subarray(0, 0)
+        : this.composeChangedRootsAndOrdered(
+            allChangedRoots,
+            singlePassOrdered,
+            singlePassOrderedCount,
+          );
+    }
     return totalOrderedCount === 0 && allChangedRoots.length === 0
       ? this.changedUnion.subarray(0, 0)
       : this.composeChangedRootsAndOrdered(

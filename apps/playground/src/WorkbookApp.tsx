@@ -709,6 +709,8 @@ export function WorkbookApp({ variant = "playground" }: WorkbookAppProps) {
       if (editingMode === "formula") {
         const nextValue = editorValue;
         applyParsedInput(engine, selection.sheetName, selectedAddr, parseEditorInput(nextValue));
+      }
+      if (editingMode !== "idle") {
         setEditingMode("idle");
       }
       selection.select(nextSheetName, nextAddress);

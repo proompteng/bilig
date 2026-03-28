@@ -164,6 +164,17 @@ describe("text builtins", () => {
     expect(TEXT(text("alpha"), text('"literal"'))).toEqual(text("literal"));
   });
 
+  it("supports TEXT format sections, escapes, and text-only branches", () => {
+    const TEXT = getTextBuiltin("TEXT")!;
+
+    expect(TEXT(number(-12.3), text('0.0;[Red]-0.0;"zero"'))).toEqual(text("-12.3"));
+    expect(TEXT(number(0), text('0.0;[Red]-0.0;"zero"'))).toEqual(text("zero"));
+    expect(TEXT(number(12), text("0\\m"))).toEqual(text("12m"));
+    expect(TEXT(text("alpha"), text('0.0;[Red]-0.0;"zero";prefix @ suffix'))).toEqual(
+      text("prefix alpha suffix"),
+    );
+  });
+
   it("returns #VALUE! for unsupported TEXT coercions and missing args", () => {
     const TEXT = getTextBuiltin("TEXT")!;
 
@@ -487,6 +498,22 @@ describe("text builtins", () => {
         text("b"),
       ),
     ).toEqual(text("a,b"));
+  });
+
+  it("covers remaining case-conversion and byte-search validation paths", () => {
+    expect(getTextBuiltin("TRIM")?.()).toEqual(valueError());
+    expect(getTextBuiltin("TRIM")?.(err(ErrorCode.Div0))).toEqual(err(ErrorCode.Div0));
+    expect(getTextBuiltin("UPPER")?.()).toEqual(valueError());
+    expect(getTextBuiltin("UPPER")?.(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref));
+    expect(getTextBuiltin("LOWER")?.(err(ErrorCode.Name))).toEqual(err(ErrorCode.Name));
+    expect(getTextBuiltin("FIND")?.(text("a"), text("abc"), text("bad"))).toEqual(valueError());
+    expect(getTextBuiltin("SEARCHB")?.(err(ErrorCode.Ref), text("alphabet"))).toEqual(
+      err(ErrorCode.Ref),
+    );
+    expect(getTextBuiltin("SEARCHB")?.(text("a"), err(ErrorCode.Name))).toEqual(
+      err(ErrorCode.Name),
+    );
+    expect(getTextBuiltin("SEARCHB")?.(text("é"), text("café"))).toEqual(number(4));
   });
 });
 

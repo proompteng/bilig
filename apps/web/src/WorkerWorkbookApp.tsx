@@ -1317,11 +1317,11 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
 
   const selectAddress = useCallback(
     (sheetName: string, address: string) => {
-      setSelection({ sheetName, address });
-      selectionRef.current = { sheetName, address };
-      if (editingMode === "formula") {
+      if (editingMode !== "idle") {
         setEditingMode("idle");
       }
+      setSelection({ sheetName, address });
+      selectionRef.current = { sheetName, address };
     },
     [editingMode],
   );

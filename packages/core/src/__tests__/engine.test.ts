@@ -177,6 +177,34 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 12 });
   });
 
+  it("validates bulk range helpers and no-ops empty fills", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    expect(() =>
+      engine.setRangeValues({ sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" }, [[1]]),
+    ).toThrow("setRangeValues requires a value matrix that exactly matches the target range");
+    expect(() =>
+      engine.setRangeFormulas({ sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" }, [
+        ["A1"],
+      ]),
+    ).toThrow("setRangeFormulas requires a formula matrix that exactly matches the target range");
+
+    engine.fillRange(
+      { sheetName: "Missing", startAddress: "A1", endAddress: "A1" },
+      { sheetName: "Sheet1", startAddress: "D1", endAddress: "D2" },
+    );
+    expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Empty });
+
+    expect(() =>
+      engine.copyRange(
+        { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+        { sheetName: "Sheet1", startAddress: "B1", endAddress: "C1" },
+      ),
+    ).toThrow("copyRange requires source and target dimensions to match exactly");
+  });
+
   it("stores invalid formulas as #VALUE errors instead of throwing", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -3108,6 +3136,117 @@ describe("SpreadsheetEngine", () => {
     });
   });
 
+  it("skips no-op defined-name, sort, and table writes and reports missing clears", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const outbound: EngineOpBatch[] = [];
+    const unsubscribeBatches = engine.subscribeBatches((batch) => outbound.push(batch));
+
+    expect(engine.deleteDefinedName("MissingRate")).toBe(false);
+    expect(
+      engine.clearSort("Sheet1", {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "B2",
+      }),
+    ).toBe(false);
+    expect(engine.getCellNumberFormat(undefined)).toMatchObject({
+      kind: "general",
+      code: "general",
+    });
+    expect(engine.getWorkbookMetadata("locale")).toBeUndefined();
+    expect(engine.getCalculationSettings()).toEqual({
+      mode: "automatic",
+      compatibilityMode: "excel-modern",
+    });
+
+    engine.setDefinedName("Rate", 0.1);
+    expect(outbound.at(-1)?.ops).toEqual([{ kind: "upsertDefinedName", name: "Rate", value: 0.1 }]);
+    outbound.splice(0);
+
+    engine.setDefinedName("Rate", 0.1);
+    expect(outbound).toEqual([]);
+
+    const sortRange = { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" } as const;
+    const sortKeys = [{ keyAddress: "B1", direction: "asc" as const }];
+    engine.setSort("Sheet1", sortRange, sortKeys);
+    expect(outbound.at(-1)?.ops).toEqual([
+      { kind: "setSort", sheetName: "Sheet1", range: sortRange, keys: sortKeys },
+    ]);
+    outbound.splice(0);
+
+    engine.setSort("Sheet1", sortRange, sortKeys);
+    expect(outbound).toEqual([]);
+
+    engine.setWorkbookMetadata("locale", "en-US");
+    expect(engine.getWorkbookMetadata("locale")).toEqual({ key: "locale", value: "en-US" });
+    expect(engine.getWorkbookMetadataEntries()).toEqual([{ key: "locale", value: "en-US" }]);
+    outbound.splice(0);
+
+    engine.setWorkbookMetadata("locale", "en-US");
+    expect(outbound).toEqual([]);
+
+    engine.setCalculationSettings({ mode: "automatic" });
+    expect(outbound).toEqual([]);
+
+    const table = {
+      name: "Sales",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "B2",
+      columnNames: ["Region", "Sales"],
+      headerRow: true,
+      totalsRow: false,
+    } as const;
+    engine.setTable(table);
+    expect(outbound.at(-1)?.ops).toEqual([{ kind: "upsertTable", table }]);
+    expect(engine.getTable("Sales")).toEqual(table);
+    expect(engine.getTables()).toEqual([table]);
+    outbound.splice(0);
+
+    engine.setTable({ ...table, columnNames: [...table.columnNames] });
+    expect(outbound).toEqual([]);
+
+    expect(engine.deleteTable("MissingTable")).toBe(false);
+
+    engine.setSpillRange("Sheet1", "D4", 2, 3);
+    expect(engine.getSpillRanges()).toEqual([
+      { sheetName: "Sheet1", address: "D4", rows: 2, cols: 3 },
+    ]);
+    outbound.splice(0);
+
+    engine.setSpillRange("Sheet1", "D4", 2, 3);
+    expect(outbound).toEqual([]);
+    expect(engine.deleteSpillRange("Sheet1", "Z9")).toBe(false);
+    expect(engine.deletePivotTable("Sheet1", "A1")).toBe(false);
+
+    engine.setPivotTable("Sheet1", "F1", {
+      name: "SalesPivot",
+      source: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+      groupBy: ["Region"],
+      values: [{ sourceColumn: "Sales", summarizeBy: "sum" }],
+    });
+    expect(engine.getPivotTable("Sheet1", "F1")).toMatchObject({
+      name: "SalesPivot",
+      sheetName: "Sheet1",
+      address: "F1",
+    });
+    expect(engine.getPivotTables()).toHaveLength(1);
+
+    outbound.splice(0);
+    engine.clearCell("Sheet1", "A1");
+    expect(outbound.at(-1)?.ops).toEqual([
+      { kind: "clearCell", sheetName: "Sheet1", address: "A1" },
+    ]);
+
+    outbound.splice(0);
+    unsubscribeBatches();
+    engine.setWorkbookMetadata("timezone", "UTC");
+    expect(outbound).toEqual([]);
+  });
+
   it("persists workbook defined names through snapshot roundtrip", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -3170,6 +3309,28 @@ describe("SpreadsheetEngine", () => {
     await restored.ready();
     restored.importSnapshot(snapshot);
     expect(restored.getCellValue("Sheet1", "C1")).toEqual({ tag: ValueTag.Number, value: 7 });
+  });
+
+  it("treats invalid and cyclic formula-backed defined names as workbook metadata errors", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "defined-name-errors" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setDefinedName("BrokenExpr", { kind: "formula", formula: "=1+" });
+    engine.setDefinedName("LoopA", { kind: "formula", formula: "=LoopB" });
+    engine.setDefinedName("LoopB", { kind: "formula", formula: "=LoopA" });
+
+    engine.setCellFormula("Sheet1", "A1", "BrokenExpr");
+    engine.setCellFormula("Sheet1", "A2", "LoopA");
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(engine.getCellValue("Sheet1", "A2")).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Cycle,
+    });
   });
 
   it("replicates structural workbook metadata through authoritative op batches", async () => {
@@ -4571,6 +4732,35 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCell("Sheet1", "B3").format).toContain("accounting:USD:2");
   });
 
+  it("clears number formats, clears sorts, and tracks existing watched cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 5);
+
+    let notifications = 0;
+    const unsubscribe = engine.subscribeCells("Sheet1", ["A1", "Z9"], () => {
+      notifications += 1;
+    });
+
+    engine.setCellValue("Sheet1", "A1", 6);
+    expect(notifications).toBe(1);
+    unsubscribe();
+
+    engine.setRangeNumberFormat(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "B2" },
+      { kind: "currency", currency: "USD", decimals: 2, useGrouping: true },
+    );
+    engine.clearRangeNumberFormat({ sheetName: "Sheet1", startAddress: "B2", endAddress: "B2" });
+    expect(engine.getCell("Sheet1", "B2").format).toBeUndefined();
+
+    const sortRange = { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" } as const;
+    engine.setSort("Sheet1", sortRange, [{ keyAddress: "A1", direction: "asc" }]);
+    expect(engine.clearSort("Sheet1", sortRange)).toBe(true);
+    expect(engine.getSorts("Sheet1")).toEqual([]);
+    expect(engine.getVolatileContext()).toEqual({ recalcEpoch: 0 });
+  });
+
   it("merges advanced style fields including borders and font weight", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -4593,6 +4783,77 @@ describe("SpreadsheetEngine", () => {
       alignment: { horizontal: "right", wrap: true },
       borders: {
         bottom: { style: "double", weight: "medium", color: "#111827" },
+      },
+    });
+  });
+
+  it("removes style subfields through null patches and clearing all style fields", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "D6", endAddress: "D6" },
+      {
+        font: { family: "Inter", bold: true },
+        alignment: { horizontal: "center", wrap: true, indent: 2 },
+        borders: {
+          top: { style: "solid", weight: "thin", color: "#111111" },
+          right: { style: "double", weight: "medium", color: "#222222" },
+        },
+      },
+    );
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "D6", endAddress: "D6" },
+      {
+        alignment: { horizontal: null, wrap: null },
+        borders: {
+          top: null,
+          right: { style: "solid", weight: "thin", color: null },
+        },
+      },
+    );
+
+    const partiallyCleared = engine.getCellStyle(engine.getCell("Sheet1", "D6").styleId);
+    expect(partiallyCleared).toMatchObject({
+      font: { family: "Inter", bold: true },
+      alignment: { indent: 2 },
+    });
+    expect(partiallyCleared?.borders).toBeUndefined();
+
+    engine.clearRangeStyle({ sheetName: "Sheet1", startAddress: "D6", endAddress: "D6" });
+    expect(engine.getCell("Sheet1", "D6").styleId).toBeUndefined();
+  });
+
+  it("preserves sibling style fields when clearing only part of a section", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "E7", endAddress: "E7" },
+      {
+        font: { family: "Inter", bold: true },
+        alignment: { horizontal: "right", wrap: true },
+        borders: {
+          top: { style: "solid", weight: "thin", color: "#111111" },
+          left: { style: "double", weight: "medium", color: "#222222" },
+        },
+      },
+    );
+
+    engine.clearRangeStyle({ sheetName: "Sheet1", startAddress: "E7", endAddress: "E7" }, [
+      "fontBold",
+      "alignmentWrap",
+      "borderTop",
+    ]);
+
+    const style = engine.getCellStyle(engine.getCell("Sheet1", "E7").styleId);
+    expect(style).toMatchObject({
+      font: { family: "Inter" },
+      alignment: { horizontal: "right" },
+      borders: {
+        left: { style: "double", weight: "medium", color: "#222222" },
       },
     });
   });
