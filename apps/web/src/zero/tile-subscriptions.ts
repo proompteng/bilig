@@ -5,7 +5,7 @@ import { queries } from "@bilig/zero-sync";
 import type {
   AxisMetadataRow,
   CellSourceRow,
-  ComputedCellRow,
+  CellEvalRow,
   FormatRangeRow,
   StyleRangeRow,
 } from "./viewport-projector.js";
@@ -26,7 +26,7 @@ interface TileDescriptor {
 
 interface TileData {
   sourceCells: CellSourceRow[];
-  computedCells: ComputedCellRow[];
+  cellEval: CellEvalRow[];
   rowMetadata: AxisMetadataRow[];
   columnMetadata: AxisMetadataRow[];
   styleRanges: StyleRangeRow[];
@@ -119,13 +119,13 @@ function normalizeCellSourceRow(value: unknown): CellSourceRow {
   return normalized;
 }
 
-function normalizeComputedCellRow(value: unknown): ComputedCellRow {
+function normalizeCellEvalRow(value: unknown): CellEvalRow {
   const row = asRecord(value);
-  const normalized: ComputedCellRow = {
+  const normalized: CellEvalRow = {
     workbookId: String(row["workbookId"]),
     sheetName: String(row["sheetName"]),
     address: String(row["address"]),
-    value: row["value"] as ComputedCellRow["value"],
+    value: row["value"] as CellEvalRow["value"],
     flags: Number(row["flags"] ?? 0),
     version: Number(row["version"] ?? 0),
   };
@@ -176,7 +176,7 @@ export class TileSubscriptionManager {
         detachments.reduce<TileData>(
           (aggregate, handle) => {
             aggregate.sourceCells.push(...handle.data.sourceCells);
-            aggregate.computedCells.push(...handle.data.computedCells);
+            aggregate.cellEval.push(...handle.data.cellEval);
             aggregate.rowMetadata.push(...handle.data.rowMetadata);
             aggregate.columnMetadata.push(...handle.data.columnMetadata);
             aggregate.styleRanges.push(...handle.data.styleRanges);
@@ -185,7 +185,7 @@ export class TileSubscriptionManager {
           },
           {
             sourceCells: [],
-            computedCells: [],
+            cellEval: [],
             rowMetadata: [],
             columnMetadata: [],
             styleRanges: [],
@@ -222,7 +222,7 @@ export class TileSubscriptionManager {
 
     const data: TileData = {
       sourceCells: [],
-      computedCells: [],
+      cellEval: [],
       rowMetadata: [],
       columnMetadata: [],
       styleRanges: [],
@@ -268,7 +268,7 @@ export class TileSubscriptionManager {
     );
     pushView(
       this.zero.materialize(
-        queries.computedCells.tile({
+        queries.cellEval.tile({
           documentId: this.documentId,
           sheetName: descriptor.sheetName,
           rowStart: descriptor.rowStart,
@@ -278,7 +278,7 @@ export class TileSubscriptionManager {
         }),
       ) as unknown as TypedView<readonly unknown[]>,
       (value) => {
-        data.computedCells = value.map((row) => normalizeComputedCellRow(row));
+        data.cellEval = value.map((row) => normalizeCellEvalRow(row));
       },
     );
     pushView(

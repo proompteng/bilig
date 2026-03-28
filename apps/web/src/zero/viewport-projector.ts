@@ -40,7 +40,7 @@ export interface CellSourceRow {
   explicitFormatId?: string;
 }
 
-export interface ComputedCellRow {
+export interface CellEvalRow {
   workbookId: string;
   sheetName: string;
   address: string;
@@ -109,7 +109,7 @@ export interface ViewportProjectionInput {
   viewport: Viewport & { sheetName: string };
   metrics?: RecalcMetrics;
   sourceCells: readonly CellSourceRow[];
-  computedCells: readonly ComputedCellRow[];
+  cellEval: readonly CellEvalRow[];
   rowMetadata: readonly AxisMetadataRow[];
   columnMetadata: readonly AxisMetadataRow[];
   styleRanges: readonly StyleRangeRow[];
@@ -398,7 +398,7 @@ export function projectViewportPatch(
   const cells: ViewportPatchedCell[] = [];
   const nextCellSignatures = new Map<string, string>();
   const sourceByAddress = new Map(input.sourceCells.map((row) => [row.address, row]));
-  const computedByAddress = new Map(input.computedCells.map((row) => [row.address, row]));
+  const computedByAddress = new Map(input.cellEval.map((row) => [row.address, row]));
   const sortedStyleRanges = input.styleRanges.toSorted(compareRectRanges);
   const sortedFormatRanges = input.formatRanges.toSorted(compareRectRanges);
 

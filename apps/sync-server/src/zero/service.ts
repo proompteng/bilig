@@ -12,6 +12,7 @@ import type { FastifyRequest } from "fastify";
 import { resolveSessionIdentity } from "../session.js";
 import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./db.js";
 import { handleServerMutator } from "./server-mutators.js";
+import { ZeroRecalcWorker } from "./recalc-worker.js";
 import { ensureZeroSyncSchema } from "./store.js";
 
 export interface ZeroSyncService {
@@ -73,17 +74,21 @@ class EnabledZeroSyncService implements ZeroSyncService {
   readonly enabled = true;
   private readonly pool: ReturnType<typeof createZeroPool>;
   private readonly dbProvider;
+  private readonly recalcWorker: ZeroRecalcWorker;
 
   constructor(connectionString: string) {
     this.pool = createZeroPool(connectionString);
     this.dbProvider = createZeroDbProvider(connectionString);
+    this.recalcWorker = new ZeroRecalcWorker(this.pool);
   }
 
   async initialize(): Promise<void> {
     await ensureZeroSyncSchema(this.pool);
+    this.recalcWorker.start();
   }
 
   async close(): Promise<void> {
+    this.recalcWorker.stop();
     await this.pool.end();
   }
 
@@ -92,10 +97,6 @@ class EnabledZeroSyncService implements ZeroSyncService {
     const queryLookup = {
       "workbooks.get": {
         query: queries.workbooks.get,
-        schema: workbookQueryArgsSchema,
-      },
-      "workbooks.byId": {
-        query: queries.workbooks.byId,
         schema: workbookQueryArgsSchema,
       },
       "sheets.byWorkbook": {
@@ -110,8 +111,12 @@ class EnabledZeroSyncService implements ZeroSyncService {
         query: queries.cells.tile,
         schema: workbookTileArgsSchema,
       },
+      "cellEval.tile": {
+        query: queries.cellEval.tile,
+        schema: workbookTileArgsSchema,
+      },
       "computedCells.tile": {
-        query: queries.computedCells.tile,
+        query: queries.cellEval.tile,
         schema: workbookTileArgsSchema,
       },
       "rowMetadata.tile": {

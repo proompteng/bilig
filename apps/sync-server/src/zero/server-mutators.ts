@@ -1,5 +1,4 @@
 import { SpreadsheetEngine } from "@bilig/core";
-import { formatAddress } from "@bilig/formula";
 import type {
   CellBorderSidePatch,
   CellNumberFormatInput,
@@ -26,12 +25,13 @@ import {
   updateColumnWidthArgsSchema,
 } from "@bilig/zero-sync";
 import { z } from "zod";
+import type { WorkbookEventPayload } from "./events.js";
 import {
+  acquireWorkbookMutationLock,
   loadWorkbookState,
-  persistWorkbookProjection,
-  type WorkbookRuntimeState,
-  type MaterializedComputedCell,
+  persistWorkbookMutation,
   type Queryable,
+  type WorkbookRuntimeState,
 } from "./store.js";
 import type { SessionIdentity } from "../session.js";
 
@@ -232,49 +232,39 @@ async function createWorkbookEngine(
   return engine;
 }
 
-function materializeComputedCells(engine: SpreadsheetEngine): MaterializedComputedCell[] {
-  const entries: MaterializedComputedCell[] = [];
-
-  for (const sheet of engine.workbook.sheetsByName.values()) {
-    sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
-      const address = formatAddress(row, col);
-      const cell = engine.getCell(sheet.name, address);
-      entries.push({
-        sheetName: sheet.name,
-        rowNum: row,
-        colNum: col,
-        address,
-        value: cell.value,
-        flags: cell.flags,
-        version: cell.version,
-      });
-    });
+function resolveOwnerUserId(state: WorkbookRuntimeState, session?: SessionIdentity): string {
+  if (state.ownerUserId !== "system" || !session?.userID) {
+    return state.ownerUserId;
   }
-
-  return entries;
+  return session.userID;
 }
 
-async function applyWorkbookMutation(
+async function commitWorkbookMutation(
   documentId: string,
   tx: ServerTransactionLike,
-  apply: (engine: SpreadsheetEngine) => void,
+  eventPayload: WorkbookEventPayload,
+  mutate: (engine: SpreadsheetEngine) => void,
   session?: SessionIdentity,
+  updatedBy = session?.userID ?? "system",
 ) {
   const db = tx.dbTransaction.wrappedTransaction;
+  await acquireWorkbookMutationLock(db, documentId);
   const state = await loadWorkbookState(db, documentId);
   const engine = await createWorkbookEngine(documentId, state.snapshot, state.replicaSnapshot);
-  apply(engine);
+  mutate(engine);
   const nextSnapshot = engine.exportSnapshot();
-  const computedCells = materializeComputedCells(engine);
-  await persistWorkbookProjection(db, documentId, nextSnapshot, computedCells, {
-    replicaSnapshot: engine.exportReplicaSnapshot(),
-    revision: state.headRevision + 1,
+  const result = await persistWorkbookMutation(db, documentId, {
+    previousState: state,
+    nextSnapshot,
+    nextReplicaSnapshot: engine.exportReplicaSnapshot(),
+    updatedBy,
     ownerUserId: resolveOwnerUserId(state, session),
-    updatedBy: session?.userID ?? "system",
+    eventPayload,
   });
   return {
     documentId,
-    updatedAt: new Date().toISOString(),
+    revision: result.revision,
+    updatedAt: result.updatedAt,
   };
 }
 
@@ -285,49 +275,28 @@ async function replaceWorkbookSnapshot(
   session?: SessionIdentity,
 ) {
   const db = tx.dbTransaction.wrappedTransaction;
+  await acquireWorkbookMutationLock(db, documentId);
   const state = await loadWorkbookState(db, documentId);
   const engine = await createWorkbookEngine(documentId, snapshot, state.replicaSnapshot);
   const nextSnapshot = engine.exportSnapshot();
-  const computedCells = materializeComputedCells(engine);
-  await persistWorkbookProjection(db, documentId, nextSnapshot, computedCells, {
-    replicaSnapshot: engine.exportReplicaSnapshot(),
-    revision: state.headRevision + 1,
-    ownerUserId: resolveOwnerUserId(state, session),
+  const nextReplicaSnapshot = engine.exportReplicaSnapshot();
+  const result = await persistWorkbookMutation(db, documentId, {
+    previousState: state,
+    nextSnapshot,
+    nextReplicaSnapshot,
     updatedBy: session?.userID ?? "system",
+    ownerUserId: resolveOwnerUserId(state, session),
+    eventPayload: {
+      kind: "replaceSnapshot",
+      snapshot: nextSnapshot,
+      replicaSnapshot: nextReplicaSnapshot,
+    },
   });
   return {
     documentId,
-    updatedAt: new Date().toISOString(),
+    revision: result.revision,
+    updatedAt: result.updatedAt,
   };
-}
-
-async function applyWorkbookBatch(
-  documentId: string,
-  tx: ServerTransactionLike,
-  batch: unknown,
-  session?: SessionIdentity,
-) {
-  const db = tx.dbTransaction.wrappedTransaction;
-  const state = await loadWorkbookState(db, documentId);
-  const engine = await createWorkbookEngine(documentId, state.snapshot, state.replicaSnapshot);
-  engine.applyRemoteBatch(applyBatchArgsSchema.parse({ documentId, batch }).batch);
-  const nextSnapshot = engine.exportSnapshot();
-  const computedCells = materializeComputedCells(engine);
-  await persistWorkbookProjection(db, documentId, nextSnapshot, computedCells, {
-    replicaSnapshot: engine.exportReplicaSnapshot(),
-    revision: state.headRevision + 1,
-    ownerUserId: resolveOwnerUserId(state, session),
-    updatedBy:
-      session?.userID ??
-      (isRecord(batch) && typeof batch["replicaId"] === "string" ? batch["replicaId"] : "system"),
-  });
-}
-
-function resolveOwnerUserId(state: WorkbookRuntimeState, session?: SessionIdentity): string {
-  if (state.ownerUserId !== "system" || !session?.userID) {
-    return state.ownerUserId;
-  }
-  return session.userID;
 }
 
 export async function handleServerMutator(
@@ -341,15 +310,36 @@ export async function handleServerMutator(
   switch (name) {
     case "workbook.applyBatch": {
       const parsed = applyBatchArgsSchema.parse(args);
-      await applyWorkbookBatch(parsed.documentId, serverTx, parsed.batch, session);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "applyBatch",
+          batch: parsed.batch,
+        },
+        (engine) => {
+          engine.applyRemoteBatch(parsed.batch);
+        },
+        session,
+        session?.userID ??
+          (isRecord(parsed.batch) && typeof parsed.batch["replicaId"] === "string"
+            ? parsed.batch["replicaId"]
+            : "system"),
+      );
       return;
     }
 
     case "workbook.setCellValue": {
       const parsed = setCellValueArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "setCellValue",
+          sheetName: parsed.sheetName,
+          address: parsed.address,
+          value: parsed.value,
+        },
         (engine) => {
           engine.setCellValue(parsed.sheetName, parsed.address, parsed.value);
         },
@@ -360,9 +350,15 @@ export async function handleServerMutator(
 
     case "workbook.setCellFormula": {
       const parsed = setCellFormulaArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "setCellFormula",
+          sheetName: parsed.sheetName,
+          address: parsed.address,
+          formula: parsed.formula,
+        },
         (engine) => {
           engine.setCellFormula(parsed.sheetName, parsed.address, parsed.formula);
         },
@@ -373,9 +369,14 @@ export async function handleServerMutator(
 
     case "workbook.clearCell": {
       const parsed = clearCellArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "clearCell",
+          sheetName: parsed.sheetName,
+          address: parsed.address,
+        },
         (engine) => {
           engine.clearCell(parsed.sheetName, parsed.address);
         },
@@ -386,9 +387,13 @@ export async function handleServerMutator(
 
     case "workbook.renderCommit": {
       const parsed = renderCommitArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "renderCommit",
+          ops: parsed.ops,
+        },
         (engine) => {
           engine.renderCommit(parsed.ops);
         },
@@ -399,9 +404,14 @@ export async function handleServerMutator(
 
     case "workbook.fillRange": {
       const parsed = rangeMutationArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "fillRange",
+          source: parsed.source,
+          target: parsed.target,
+        },
         (engine) => {
           engine.fillRange(parsed.source, parsed.target);
         },
@@ -412,9 +422,14 @@ export async function handleServerMutator(
 
     case "workbook.copyRange": {
       const parsed = rangeMutationArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "copyRange",
+          source: parsed.source,
+          target: parsed.target,
+        },
         (engine) => {
           engine.copyRange(parsed.source, parsed.target);
         },
@@ -425,9 +440,15 @@ export async function handleServerMutator(
 
     case "workbook.updateColumnWidth": {
       const parsed = updateColumnWidthArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "updateColumnWidth",
+          sheetName: parsed.sheetName,
+          columnIndex: parsed.columnIndex,
+          width: parsed.width,
+        },
         (engine) => {
           engine.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
         },
@@ -438,11 +459,17 @@ export async function handleServerMutator(
 
     case "workbook.setRangeStyle": {
       const parsed = setRangeStyleArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      const patch = normalizeStylePatch(parsed.patch);
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "setRangeStyle",
+          range: parsed.range,
+          patch,
+        },
         (engine) => {
-          engine.setRangeStyle(parsed.range, normalizeStylePatch(parsed.patch));
+          engine.setRangeStyle(parsed.range, patch);
         },
         session,
       );
@@ -451,9 +478,21 @@ export async function handleServerMutator(
 
     case "workbook.clearRangeStyle": {
       const parsed = clearRangeStyleArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      const eventPayload =
+        parsed.fields === undefined
+          ? {
+              kind: "clearRangeStyle" as const,
+              range: parsed.range,
+            }
+          : {
+              kind: "clearRangeStyle" as const,
+              range: parsed.range,
+              fields: parsed.fields,
+            };
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        eventPayload,
         (engine) => {
           engine.clearRangeStyle(parsed.range, parsed.fields);
         },
@@ -464,11 +503,17 @@ export async function handleServerMutator(
 
     case "workbook.setRangeNumberFormat": {
       const parsed = setRangeNumberFormatArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      const format = normalizeNumberFormatInput(parsed.format);
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "setRangeNumberFormat",
+          range: parsed.range,
+          format,
+        },
         (engine) => {
-          engine.setRangeNumberFormat(parsed.range, normalizeNumberFormatInput(parsed.format));
+          engine.setRangeNumberFormat(parsed.range, format);
         },
         session,
       );
@@ -477,9 +522,13 @@ export async function handleServerMutator(
 
     case "workbook.clearRangeNumberFormat": {
       const parsed = clearRangeNumberFormatArgsSchema.parse(args);
-      await applyWorkbookMutation(
+      await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
+        {
+          kind: "clearRangeNumberFormat",
+          range: parsed.range,
+        },
         (engine) => {
           engine.clearRangeNumberFormat(parsed.range);
         },

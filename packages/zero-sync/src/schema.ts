@@ -10,8 +10,6 @@ const workbooks = table("workbooks")
     calcMode: string<"automatic" | "manual">().from("calc_mode"),
     compatibilityMode: string<"excel-modern" | "odf-1.4">().from("compatibility_mode"),
     recalcEpoch: number().from("recalc_epoch"),
-    snapshot: json(),
-    replicaSnapshot: json().from("replica_snapshot").optional(),
     createdAt: number().from("created_at"),
     updatedAt: number().from("updated_at"),
   })
@@ -46,7 +44,7 @@ const cells = table("cells")
   })
   .primaryKey("workbookId", "sheetName", "address");
 
-const computedCells = table("computed_cells")
+const cellEval = table("cell_eval")
   .columns({
     workbookId: string().from("workbook_id"),
     sheetName: string().from("sheet_name"),
@@ -166,7 +164,7 @@ export const schema = createSchema({
     workbooks,
     sheets,
     cells,
-    computedCells,
+    cellEval,
     rowMetadata,
     columnMetadata,
     definedNames,
@@ -221,10 +219,10 @@ export const schema = createSchema({
         destField: ["workbookId", "sheetName"],
         destSchema: cells,
       }),
-      computedCells: many({
+      cellEval: many({
         sourceField: ["workbookId", "name"],
         destField: ["workbookId", "sheetName"],
-        destSchema: computedCells,
+        destSchema: cellEval,
       }),
       rowMetadata: many({
         sourceField: ["workbookId", "name"],
@@ -254,7 +252,7 @@ export const schema = createSchema({
         destSchema: sheets,
       }),
     })),
-    relationships(computedCells, ({ one }) => ({
+    relationships(cellEval, ({ one }) => ({
       sheet: one({
         sourceField: ["workbookId", "sheetName"],
         destField: ["workbookId", "name"],

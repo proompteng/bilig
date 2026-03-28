@@ -39,30 +39,6 @@ export const queries = defineQueries({
     get: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
       zql.workbooks.where("id", documentId).one(),
     ),
-    byId: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-      zql.workbooks
-        .where("id", documentId)
-        .related("sheets", (sheet) =>
-          sheet
-            .orderBy("sortOrder", "asc")
-            .related("cells", (cell) => cell.orderBy("address", "asc"))
-            .related("computedCells", (cell) => cell.orderBy("address", "asc"))
-            .related("rowMetadata", (entry) => entry.orderBy("startIndex", "asc"))
-            .related("columnMetadata", (entry) => entry.orderBy("startIndex", "asc"))
-            .related("styleRanges", (entry) =>
-              entry.orderBy("startRow", "asc").orderBy("startCol", "asc"),
-            )
-            .related("formatRanges", (entry) =>
-              entry.orderBy("startRow", "asc").orderBy("startCol", "asc"),
-            ),
-        )
-        .related("definedNames", (entry) => entry.orderBy("name", "asc"))
-        .related("workbookMetadataEntries", (entry) => entry.orderBy("key", "asc"))
-        .related("calculationSettings", (entry) => entry.one())
-        .related("styles", (entry) => entry.orderBy("id", "asc"))
-        .related("numberFormats", (entry) => entry.orderBy("id", "asc"))
-        .one(),
-    ),
   },
   sheets: {
     byWorkbook: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
@@ -89,16 +65,36 @@ export const queries = defineQueries({
         .orderBy("colNum", "asc"),
     ),
   },
-  computedCells: {
+  cellEval: {
     one: defineQuery(workbookCellArgsSchema, ({ args }) =>
-      zql.computed_cells
+      zql.cell_eval
         .where("workbookId", args.documentId)
         .where("sheetName", args.sheetName)
         .where("address", args.address)
         .one(),
     ),
     tile: defineQuery(workbookTileArgsSchema, ({ args }) =>
-      zql.computed_cells
+      zql.cell_eval
+        .where("workbookId", args.documentId)
+        .where("sheetName", args.sheetName)
+        .where("rowNum", ">=", args.rowStart)
+        .where("rowNum", "<=", args.rowEnd)
+        .where("colNum", ">=", args.colStart)
+        .where("colNum", "<=", args.colEnd)
+        .orderBy("rowNum", "asc")
+        .orderBy("colNum", "asc"),
+    ),
+  },
+  computedCells: {
+    one: defineQuery(workbookCellArgsSchema, ({ args }) =>
+      zql.cell_eval
+        .where("workbookId", args.documentId)
+        .where("sheetName", args.sheetName)
+        .where("address", args.address)
+        .one(),
+    ),
+    tile: defineQuery(workbookTileArgsSchema, ({ args }) =>
+      zql.cell_eval
         .where("workbookId", args.documentId)
         .where("sheetName", args.sheetName)
         .where("rowNum", ">=", args.rowStart)
