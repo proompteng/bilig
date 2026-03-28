@@ -1,6 +1,7 @@
 import { ValueTag } from "./protocol";
 import { EXCEL_SECONDS_PER_DAY } from "./date-finance";
 import { scalarText, trimAsciiWhitespace } from "./text-codec";
+import { substituteText } from "./text-ops";
 
 function toNumberExactValue(tag: u8, value: f64): f64 {
   if (tag == ValueTag.Number || tag == ValueTag.Boolean) return value;
@@ -252,6 +253,39 @@ export function stringFromUnicodeCodePoint(codePoint: i32): string {
   const high = 0xd800 + (adjusted >> 10);
   const low = 0xdc00 + (adjusted & 0x3ff);
   return String.fromCharCode(high) + String.fromCharCode(low);
+}
+
+export function arrayToTextCell(
+  tag: u8,
+  value: f64,
+  strict: bool,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
+): string | null {
+  if (tag == ValueTag.Number) {
+    return value == Math.trunc(value) ? (<i64>value).toString() : value.toString();
+  }
+  const text = scalarText(
+    tag,
+    value,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  );
+  if (text == null) {
+    return null;
+  }
+  if (!strict || tag != ValueTag.String) {
+    return text;
+  }
+  return '"' + substituteText(text, '"', '""') + '"';
 }
 
 export function stripControlCharacters(text: string): string {

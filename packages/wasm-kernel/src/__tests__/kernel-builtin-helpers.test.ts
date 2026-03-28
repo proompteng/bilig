@@ -105,20 +105,22 @@ function decodeStringValue(
 
 function toErrorCode(rawValue: number): ErrorCode {
   switch (rawValue) {
+    case 0:
+      return ErrorCode.None;
     case 1:
-      return ErrorCode.Null;
-    case 2:
       return ErrorCode.Div0;
+    case 2:
+      return ErrorCode.Ref;
     case 3:
       return ErrorCode.Value;
     case 4:
-      return ErrorCode.Ref;
-    case 5:
       return ErrorCode.Name;
-    case 6:
-      return ErrorCode.Num;
-    case 7:
+    case 5:
       return ErrorCode.NA;
+    case 6:
+      return ErrorCode.Cycle;
+    case 7:
+      return ErrorCode.Spill;
     case 8:
       return ErrorCode.Blocked;
     default:
