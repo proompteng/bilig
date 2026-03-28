@@ -3490,6 +3490,31 @@ describe("formula builtins", () => {
       value: expect.closeTo(0.5, 12),
     });
     expect(
+      T_DIST(
+        { tag: ValueTag.String, value: "bad", stringId: 23 },
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Boolean, value: true },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      T_DIST_RT(
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.String, value: "bad", stringId: 24 },
+      ),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
+      T_DIST_2T({ tag: ValueTag.Number, value: -1 }, { tag: ValueTag.Number, value: 1 }),
+    ).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    });
+    expect(
       TDIST(
         { tag: ValueTag.Number, value: 1 },
         { tag: ValueTag.Number, value: 1 },

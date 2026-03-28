@@ -1,11 +1,6 @@
-import {
-  applyBuiltin,
-  registerTrackedArrayShape,
-  STACK_KIND_ARRAY,
-  STACK_KIND_RANGE,
-  STACK_KIND_SCALAR,
-} from "./builtins";
+import { applyBuiltin, registerTrackedArrayShape } from "./builtins";
 import { ErrorCode, Opcode, ValueTag } from "./protocol";
+import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR } from "./result-io";
 
 export let tags = new Uint8Array(64);
 export let numbers = new Float64Array(64);

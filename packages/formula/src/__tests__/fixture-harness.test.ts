@@ -163,6 +163,7 @@ describe("excel fixture harness", () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 

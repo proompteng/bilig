@@ -3,6 +3,7 @@ import type { SpreadsheetEngine } from "@bilig/core";
 import type { WorkbookContainer } from "./host-config.js";
 import { collectDeleteOps } from "./commit-log.js";
 import { createFiberRoot, updateFiberRoot } from "./compat.js";
+import { RENDERER_KIND_PROP, type RendererKind } from "./renderer-kind.js";
 
 export interface WorkbookRendererRoot {
   render(element: ReactNode): Promise<void>;
@@ -33,12 +34,27 @@ function isNamedComponentType(value: unknown): value is { displayName?: string; 
   return typeof value === "function";
 }
 
+function rendererKindOf(value: unknown): RendererKind | null {
+  if (typeof value === "function") {
+    const marker = Reflect.get(value, RENDERER_KIND_PROP);
+    if (marker === "Workbook" || marker === "Sheet" || marker === "Cell") {
+      return marker;
+    }
+  }
+  return null;
+}
+
 function kindOfNode(node: React.ReactElement): "Workbook" | "Sheet" | "Cell" | "wrapper" | null {
   if (typeof node.type === "string") {
     if (node.type === "Workbook" || node.type === "Sheet" || node.type === "Cell") {
       return node.type;
     }
     return "wrapper";
+  }
+
+  const markedKind = rendererKindOf(node.type);
+  if (markedKind !== null) {
+    return markedKind;
   }
 
   if (node.type === React.Fragment || node.type === React.StrictMode) {
