@@ -1028,7 +1028,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           await runZeroMutation(
             mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
           );
-          await refreshSelectedCell();
           return undefined;
         }
         case "setCellFormula": {
@@ -1041,31 +1040,26 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               formula,
             }),
           );
-          await refreshSelectedCell();
           return undefined;
         }
         case "clearCell": {
           const [sheetName, address] = args;
           await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
-          await refreshSelectedCell();
           return undefined;
         }
         case "renderCommit": {
           const [ops] = args;
           await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
-          await refreshSelectedCell();
           return undefined;
         }
         case "fillRange": {
           const [source, target] = args;
           await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
-          await refreshSelectedCell();
           return undefined;
         }
         case "copyRange": {
           const [source, target] = args;
           await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
-          await refreshSelectedCell();
           return undefined;
         }
         case "updateColumnWidth": {
@@ -1078,7 +1072,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               width,
             }),
           );
-          await refreshSelectedCell();
           return undefined;
         }
         case "autofitColumn": {
@@ -1095,19 +1088,16 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               width,
             }),
           );
-          await refreshSelectedCell();
           return width;
         }
         case "setRangeStyle": {
           const [range, patch] = args;
           await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
-          await refreshSelectedCell();
           return undefined;
         }
         case "clearRangeStyle": {
           const [range, fields] = args;
           await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
-          await refreshSelectedCell();
           return undefined;
         }
         case "setRangeNumberFormat": {
@@ -1119,13 +1109,11 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               format,
             }),
           );
-          await refreshSelectedCell();
           return undefined;
         }
         case "clearRangeNumberFormat": {
           const [range] = args;
           await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
-          await refreshSelectedCell();
           return undefined;
         }
         default:
