@@ -69,6 +69,24 @@ export function truncToInt(tag: u8, value: f64): i32 {
   return isNaN(numeric) ? i32.MIN_VALUE : <i32>numeric;
 }
 
+export function roundToDigits(value: f64, digits: i32): f64 {
+  if (digits >= 0) {
+    const factor = Math.pow(10.0, <f64>digits);
+    return Math.round(value * factor) / factor;
+  }
+  const factor = Math.pow(10.0, <f64>-digits);
+  return Math.round(value / factor) * factor;
+}
+
+export function roundTowardZeroDigits(value: f64, digits: i32): f64 {
+  if (digits >= 0) {
+    const factor = Math.pow(10.0, <f64>digits);
+    return Math.trunc(value * factor) / factor;
+  }
+  const factor = Math.pow(10.0, <f64>-digits);
+  return Math.trunc(value / factor) * factor;
+}
+
 export function coerceInteger(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value);
   if (!isFinite(numeric)) {
