@@ -12,87 +12,98 @@ const glideEntry = require.resolve("@glideapps/glide-data-grid", {
 const glidePackageRoot = resolve(dirname(glideEntry), "..", "..");
 
 function includesAny(id: string, patterns: readonly string[]): boolean {
-  return patterns.some((pattern) => id.includes(pattern));
+  const normalizedId = id.replaceAll("\\", "/");
+  return patterns.some((pattern) => normalizedId.includes(pattern));
 }
 
-function getManualChunkName(id: string): string | undefined {
-  if (id.endsWith(".css")) {
-    return undefined;
-  }
-
-  if (
-    includesAny(id, [
-      "/node_modules/react/",
-      "/node_modules/react-dom/",
-      "/node_modules/scheduler/",
-    ])
-  ) {
-    return "react-vendor";
-  }
-
-  if (
-    includesAny(id, ["/node_modules/@rocicorp/zero/", "/packages/zero-sync/", "/packages/crdt/"])
-  ) {
-    return "sync-vendor";
-  }
-
-  if (
-    includesAny(id, [
-      "/node_modules/@glideapps/glide-data-grid/",
-      "/node_modules/marked/",
-      "/node_modules/react-number-format/",
-      "/node_modules/react-responsive-carousel/",
-      "/node_modules/lodash/",
-    ])
-  ) {
-    return "grid-vendor";
-  }
-
-  if (includesAny(id, ["/node_modules/lucide-react/"])) {
-    return "icons-vendor";
-  }
-
-  if (includesAny(id, ["/packages/formula/"])) {
-    return "formula-vendor";
-  }
-
-  if (
-    includesAny(id, [
-      "/packages/binary-protocol/",
-      "/packages/protocol/",
-      "/packages/core/",
-      "/packages/wasm-kernel/",
-    ])
-  ) {
-    return "engine-vendor";
-  }
-
-  if (
-    includesAny(id, [
-      "/packages/grid/",
-      "/packages/renderer/",
-      "/packages/storage-browser/",
-      "/packages/worker-transport/",
-      "/packages/workbook-domain/",
-      "/apps/web/src/WorkerWorkbookApp.tsx",
-      "/apps/web/src/viewport-cache.ts",
-      "/apps/web/src/worker-runtime.ts",
-      "/apps/web/src/zero/",
-    ])
-  ) {
-    return "workbook-vendor";
-  }
-
-  return undefined;
-}
+const codeSplittingGroups = [
+  {
+    name: "react-vendor",
+    priority: 70,
+    test(id: string) {
+      return includesAny(id, [
+        "/node_modules/react/",
+        "/node_modules/react-dom/",
+        "/node_modules/scheduler/",
+      ]);
+    },
+  },
+  {
+    name: "sync-vendor",
+    priority: 60,
+    test(id: string) {
+      return includesAny(id, [
+        "/node_modules/@rocicorp/zero/",
+        "/packages/zero-sync/",
+        "/packages/crdt/",
+      ]);
+    },
+  },
+  {
+    name: "grid-vendor",
+    priority: 50,
+    test(id: string) {
+      return includesAny(id, [
+        "/node_modules/@glideapps/glide-data-grid/",
+        "/node_modules/marked/",
+        "/node_modules/react-number-format/",
+        "/node_modules/react-responsive-carousel/",
+        "/node_modules/lodash/",
+      ]);
+    },
+  },
+  {
+    name: "icons-vendor",
+    priority: 40,
+    test(id: string) {
+      return includesAny(id, ["/node_modules/lucide-react/"]);
+    },
+  },
+  {
+    name: "formula-vendor",
+    priority: 30,
+    test(id: string) {
+      return includesAny(id, ["/packages/formula/"]);
+    },
+  },
+  {
+    name: "engine-vendor",
+    priority: 20,
+    test(id: string) {
+      return includesAny(id, [
+        "/packages/binary-protocol/",
+        "/packages/protocol/",
+        "/packages/core/",
+        "/packages/wasm-kernel/",
+      ]);
+    },
+  },
+  {
+    name: "workbook-vendor",
+    priority: 10,
+    test(id: string) {
+      return includesAny(id, [
+        "/packages/grid/",
+        "/packages/renderer/",
+        "/packages/storage-browser/",
+        "/packages/worker-transport/",
+        "/packages/workbook-domain/",
+        "/apps/web/src/WorkerWorkbookApp.tsx",
+        "/apps/web/src/viewport-cache.ts",
+        "/apps/web/src/worker-runtime.ts",
+        "/apps/web/src/zero/",
+      ]);
+    },
+  },
+];
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     rolldownOptions: {
       output: {
-        manualChunks(id) {
-          return getManualChunkName(id);
+        codeSplitting: {
+          groups: codeSplittingGroups,
         },
       },
     },
