@@ -11,8 +11,92 @@ const glideEntry = require.resolve("@glideapps/glide-data-grid", {
 });
 const glidePackageRoot = resolve(dirname(glideEntry), "..", "..");
 
+function includesAny(id: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => id.includes(pattern));
+}
+
+function getManualChunkName(id: string): string | undefined {
+  if (id.endsWith(".css")) {
+    return undefined;
+  }
+
+  if (
+    includesAny(id, [
+      "/node_modules/react/",
+      "/node_modules/react-dom/",
+      "/node_modules/scheduler/",
+    ])
+  ) {
+    return "react-vendor";
+  }
+
+  if (
+    includesAny(id, ["/node_modules/@rocicorp/zero/", "/packages/zero-sync/", "/packages/crdt/"])
+  ) {
+    return "sync-vendor";
+  }
+
+  if (
+    includesAny(id, [
+      "/node_modules/@glideapps/glide-data-grid/",
+      "/node_modules/marked/",
+      "/node_modules/react-number-format/",
+      "/node_modules/react-responsive-carousel/",
+      "/node_modules/lodash/",
+    ])
+  ) {
+    return "grid-vendor";
+  }
+
+  if (includesAny(id, ["/node_modules/lucide-react/"])) {
+    return "icons-vendor";
+  }
+
+  if (includesAny(id, ["/packages/formula/"])) {
+    return "formula-vendor";
+  }
+
+  if (
+    includesAny(id, [
+      "/packages/binary-protocol/",
+      "/packages/protocol/",
+      "/packages/core/",
+      "/packages/wasm-kernel/",
+    ])
+  ) {
+    return "engine-vendor";
+  }
+
+  if (
+    includesAny(id, [
+      "/packages/grid/",
+      "/packages/renderer/",
+      "/packages/storage-browser/",
+      "/packages/worker-transport/",
+      "/packages/workbook-domain/",
+      "/apps/web/src/WorkerWorkbookApp.tsx",
+      "/apps/web/src/viewport-cache.ts",
+      "/apps/web/src/worker-runtime.ts",
+      "/apps/web/src/zero/",
+    ])
+  ) {
+    return "workbook-vendor";
+  }
+
+  return undefined;
+}
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          return getManualChunkName(id);
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@glideapps/glide-data-grid/index.css": resolve(glidePackageRoot, "dist/index.css"),
