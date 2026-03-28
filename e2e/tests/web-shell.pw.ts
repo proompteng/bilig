@@ -1204,7 +1204,7 @@ async function dragProductBodySelection(
   await page.mouse.up();
 }
 
-test("web app renders the minimal product shell without playground chrome", async ({ page }) => {
+test("web app renders the minimal product shell without legacy demo chrome", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByTestId("formula-bar")).toBeVisible();

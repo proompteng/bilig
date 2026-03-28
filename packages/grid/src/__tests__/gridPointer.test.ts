@@ -9,7 +9,7 @@ import {
   type VisibleRegionState,
 } from "../gridPointer.js";
 
-const gridMetrics = getGridMetrics("product");
+const gridMetrics = getGridMetrics();
 const region: VisibleRegionState = {
   range: { x: 0, y: 0, width: 12, height: 24 },
   tx: 0,

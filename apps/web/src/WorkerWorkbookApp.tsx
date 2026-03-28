@@ -1431,10 +1431,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const sheetNames = [
     ...(bridgeEnabled && bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? [])),
   ];
-  const workbookName =
-    bridgeEnabled && bridgeState
-      ? bridgeState.workbookName
-      : (runtimeState?.workbookName ?? documentId);
   const columnWidths = workerHandle
     ? workerHandle.cache.getColumnWidths(selection.sheetName)
     : undefined;
@@ -2040,8 +2036,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           statusBar={statusBar}
           subscribeViewport={subscribeViewport}
           columnWidths={columnWidths}
-          variant="product"
-          workbookName={workbookName}
         />
       )}
     </div>

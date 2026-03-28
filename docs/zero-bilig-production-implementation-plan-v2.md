@@ -125,7 +125,7 @@ The codebase already contains the right long-lived architecture seams:
     - styles
     - metrics
 
-- `docs/worker-runtime-and-viewport-patches-rfc.md`
+- `docs/browser-runtime.md`
   - already says the grid should consume derived viewport patches, not raw engine state
 
 - `docs/workbook-metadata-runtime-rfc.md`

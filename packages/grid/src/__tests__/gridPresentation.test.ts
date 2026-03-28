@@ -20,18 +20,12 @@ describe("gridPresentation", () => {
     });
   });
 
-  test("returns denser product theme values", () => {
-    const productTheme = getGridTheme("product");
-    const playgroundTheme = getGridTheme("playground");
+  test("returns the dense product theme values", () => {
+    const productTheme = getGridTheme();
 
     expect(productTheme.cellHorizontalPadding).toBe(8);
     expect(productTheme.cellVerticalPadding).toBe(4);
     expect(productTheme.editorFontSize).toBe("12px");
     expect(productTheme.headerFontStyle).toContain("11px");
-
-    expect(playgroundTheme.cellHorizontalPadding).toBe(10);
-    expect(playgroundTheme.cellVerticalPadding).toBe(6);
-    expect(playgroundTheme.editorFontSize).toBe("13px");
-    expect(playgroundTheme.headerFontStyle).toContain("12px");
   });
 });

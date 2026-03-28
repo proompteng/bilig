@@ -19,10 +19,6 @@ export interface VisibleColumnBound {
   width: number;
 }
 
-export const PLAYGROUND_COLUMN_WIDTH = 120;
-export const PLAYGROUND_ROW_HEIGHT = 28;
-export const PLAYGROUND_HEADER_HEIGHT = 30;
-export const PLAYGROUND_ROW_MARKER_WIDTH = 60;
 export const PRODUCT_COLUMN_WIDTH = 104;
 export const PRODUCT_ROW_HEIGHT = 22;
 export const PRODUCT_HEADER_HEIGHT = 24;
@@ -33,20 +29,13 @@ export const MIN_COLUMN_WIDTH = 44;
 export const MAX_COLUMN_WIDTH = 480;
 export const EMPTY_COLUMN_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 
-export function getGridMetrics(variant: "playground" | "product"): GridMetrics {
-  return variant === "product"
-    ? {
-        columnWidth: PRODUCT_COLUMN_WIDTH,
-        rowHeight: PRODUCT_ROW_HEIGHT,
-        headerHeight: PRODUCT_HEADER_HEIGHT,
-        rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH,
-      }
-    : {
-        columnWidth: PLAYGROUND_COLUMN_WIDTH,
-        rowHeight: PLAYGROUND_ROW_HEIGHT,
-        headerHeight: PLAYGROUND_HEADER_HEIGHT,
-        rowMarkerWidth: PLAYGROUND_ROW_MARKER_WIDTH,
-      };
+export function getGridMetrics(): GridMetrics {
+  return {
+    columnWidth: PRODUCT_COLUMN_WIDTH,
+    rowHeight: PRODUCT_ROW_HEIGHT,
+    headerHeight: PRODUCT_HEADER_HEIGHT,
+    rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH,
+  };
 }
 
 export function getResolvedColumnWidth(

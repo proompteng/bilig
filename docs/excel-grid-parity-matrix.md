@@ -10,7 +10,7 @@ This matrix tracks visible Excel-for-web grid behaviors for `apps/web`.
 | no extra informational band above the grid | shipped | `packages/grid/src/WorkbookView.tsx`, `e2e/tests/web-shell.pw.ts` |
 | sheet tabs and compact status bar remain visible in short viewports | shipped | `e2e/tests/web-shell.pw.ts` |
 | whole-grid browser focus outline is suppressed | shipped | `apps/web/src/__tests__/web-shell.test.tsx`, `e2e/tests/web-shell.pw.ts` |
-| product shell excludes playground chrome | shipped | `apps/web`, `apps/web/src/__tests__/web-shell.test.tsx`, `e2e/tests/web-shell.pw.ts` |
+| product shell excludes legacy demo chrome | shipped | `apps/web`, `apps/web/src/__tests__/web-shell.test.tsx`, `e2e/tests/web-shell.pw.ts` |
 
 ## Selection and headers
 

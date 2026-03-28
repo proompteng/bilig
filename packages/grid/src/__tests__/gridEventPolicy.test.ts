@@ -9,16 +9,14 @@ describe("gridEventPolicy", () => {
   test("resolves body double click into ignore, edit, or autofit intent", () => {
     expect(
       resolveBodyDoubleClickIntent({
-        variant: "playground",
         resizeTarget: null,
         bodyCell: [2, 4],
-        lastBodyClickCell: [2, 4],
+        lastBodyClickCell: [2, 3],
       }),
     ).toEqual({ kind: "ignore" });
 
     expect(
       resolveBodyDoubleClickIntent({
-        variant: "product",
         resizeTarget: 3,
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 4],
@@ -27,7 +25,6 @@ describe("gridEventPolicy", () => {
 
     expect(
       resolveBodyDoubleClickIntent({
-        variant: "product",
         resizeTarget: null,
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 4],
@@ -36,7 +33,6 @@ describe("gridEventPolicy", () => {
 
     expect(
       resolveBodyDoubleClickIntent({
-        variant: "product",
         resizeTarget: null,
         bodyCell: [2, 4],
         lastBodyClickCell: [2, 3],
@@ -47,7 +43,6 @@ describe("gridEventPolicy", () => {
   test("resolves header click into ignore, autofit, or selection intent", () => {
     expect(
       resolveHeaderClickIntent({
-        variant: "product",
         isEdge: true,
         isDoubleClick: true,
         columnResizeActive: false,
@@ -58,7 +53,6 @@ describe("gridEventPolicy", () => {
 
     expect(
       resolveHeaderClickIntent({
-        variant: "product",
         isEdge: false,
         isDoubleClick: false,
         columnResizeActive: true,
@@ -69,7 +63,6 @@ describe("gridEventPolicy", () => {
 
     expect(
       resolveHeaderClickIntent({
-        variant: "product",
         isEdge: false,
         isDoubleClick: false,
         columnResizeActive: false,

@@ -171,7 +171,7 @@ class WorkerMock {
 }
 
 describe("web shell", () => {
-  it("renders the minimal product shell without playground chrome", async () => {
+  it("renders the minimal product shell without legacy demo chrome", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;

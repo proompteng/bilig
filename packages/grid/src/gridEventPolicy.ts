@@ -2,10 +2,7 @@ import { formatAddress } from "@bilig/formula";
 import type { Item } from "@glideapps/glide-data-grid";
 import { sameItem } from "./gridSelection.js";
 
-type GridVariant = "playground" | "product";
-
 export function resolveBodyDoubleClickIntent(options: {
-  variant: GridVariant;
   resizeTarget: number | null;
   bodyCell: Item | null;
   lastBodyClickCell: Item | null;
@@ -13,10 +10,7 @@ export function resolveBodyDoubleClickIntent(options: {
   | { kind: "ignore" }
   | { kind: "autofit-column"; columnIndex: number }
   | { kind: "edit-cell"; cell: Item } {
-  const { variant, resizeTarget, bodyCell, lastBodyClickCell } = options;
-  if (variant !== "product") {
-    return { kind: "ignore" };
-  }
+  const { resizeTarget, bodyCell, lastBodyClickCell } = options;
   if (resizeTarget !== null) {
     return { kind: "autofit-column", columnIndex: resizeTarget };
   }
@@ -27,7 +21,6 @@ export function resolveBodyDoubleClickIntent(options: {
 }
 
 export function resolveHeaderClickIntent(options: {
-  variant: GridVariant;
   isEdge: boolean;
   isDoubleClick: boolean;
   columnResizeActive: boolean;
@@ -37,8 +30,8 @@ export function resolveHeaderClickIntent(options: {
   | { kind: "ignore" }
   | { kind: "autofit-column"; columnIndex: number }
   | { kind: "select-column"; columnIndex: number; selectedRow: number; addr: string } {
-  const { variant, isEdge, isDoubleClick, columnResizeActive, columnIndex, selectedRow } = options;
-  if (variant === "product" && isEdge && isDoubleClick) {
+  const { isEdge, isDoubleClick, columnResizeActive, columnIndex, selectedRow } = options;
+  if (isEdge && isDoubleClick) {
     return { kind: "autofit-column", columnIndex };
   }
   if (columnResizeActive) {

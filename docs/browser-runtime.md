@@ -9,7 +9,7 @@
 - the UI consumes worker-derived viewport patches and worker-sourced sync state
 - the browser can target a local app server runtime and fall back to local-only worker execution
 - current browser-runtime gaps:
-  - `apps/web` no longer depends on playground CSS or sources
+  - `apps/web` no longer depends on legacy demo CSS or sources
   - the viewport patch payload is JSON inside a byte envelope rather than a dedicated typed binary codec
   - remote catch-up and durable multiplayer depend on unfinished sync-server work
 
@@ -43,7 +43,7 @@ The browser runtime should not become the place where workbook semantics are re-
 - the worker owns engine, authoritative ops, WASM, persistence, and live sync
 - the worker derives viewport and render patches for visible ranges instead of exposing raw engine state directly to the grid
 - the browser defaults to the local app server loop when available and falls back cleanly to local-only worker execution when it is not
-- `apps/web` no longer depends on deprecated playground source or styling
+- `apps/web` no longer depends on deprecated demo source or styling
 - viewport patch payloads and agent payloads use typed codecs instead of JSON-in-binary wrappers
 
 ## Exit gate
@@ -53,9 +53,9 @@ The browser runtime should not become the place where workbook semantics are re-
 - live edits, restore, and reconnect flows pass browser tests without in-process engine fallback
 - visible workbook updates are painted from worker-derived viewport patches
 - the browser shell surfaces sync state sourced from the worker runtime
-- the browser shell does not depend on playground-only source or styling
+- the browser shell does not depend on retired demo-shell source or styling
 
 ## See also
 
-- [worker-runtime-and-viewport-patches-rfc.md](/Users/gregkonush/github.com/bilig/docs/worker-runtime-and-viewport-patches-rfc.md)
+- [architecture.md](/Users/gregkonush/github.com/bilig/docs/architecture.md)
 - [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)

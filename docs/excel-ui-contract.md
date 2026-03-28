@@ -3,7 +3,7 @@
 ## Current state
 
 - the default `apps/web` surface renders a product shell with name box, formula bar, worksheet grid, sheet tabs, and status bar only
-- the product shell no longer renders playground preset chrome, replica panels, or metrics panels
+- the product shell no longer renders legacy demo chrome, replica panels, or metrics panels
 - the product shell is worker-backed by default
 - browser smoke exists for the `apps/web` product shell
 - the product shell uses a single visible formula-input row and a compact footer and status treatment
@@ -53,4 +53,4 @@ Reference layout:
 - the Excel-essentials Playwright suite passes
 - default product chrome contains only essential spreadsheet controls
 - remaining diagnostics and agent panels are secondary, not default layout clutter
-- `apps/web` browser smoke proves the shell stays free of playground chrome
+- `apps/web` browser smoke proves the shell stays free of legacy demo chrome

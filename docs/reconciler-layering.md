@@ -9,8 +9,8 @@ flowchart TB
   classDef core fill:#eefbf3,stroke:#15803d,color:#052e16,stroke-width:1.5px
   classDef wasm fill:#f8fafc,stroke:#475569,color:#0f172a,stroke-width:1.5px
 
-  subgraph PG["apps/playground (deprecated)"]
-    APP["Deprecated React shell"]
+  subgraph UI["apps/web"]
+    APP["Product shell"]
   end
 
   subgraph PKG["packages"]
@@ -63,7 +63,7 @@ Rules:
 - one engine batch per React commit
 - the reconciler does not keep a parallel workbook shadow model; it validates the descriptor tree directly and flushes semantic commit ops into the engine
 - root creation and `updateContainer` calls are isolated behind a small compat layer so `react-reconciler` version drift stays contained
-- React-specific code is isolated to `@bilig/renderer`, `@bilig/grid`, and the deprecated playground shell
+- React-specific code is isolated to `@bilig/renderer`, `@bilig/grid`, and the product shell
 - React is a declarative authoring surface and operator UI only; the spreadsheet graph lives in `@bilig/core`
 - the reconciler may translate tree diffs into semantic workbook ops, but it never owns formula, dependency, or CRDT semantics
 

@@ -52,4 +52,4 @@ The oracle is considered established when:
 
 - every Excel-visible grid behavior in `docs/excel-grid-parity-matrix.md` links to either an official doc or a live probe observation
 - every shipped parity behavior has a browser acceptance test in `apps/web`
-- the product shell no longer depends on playground-only behavior or chrome for validation
+- the product shell no longer depends on legacy demo behavior or chrome for validation

@@ -141,7 +141,7 @@ function pushCellUpsert(
 }
 
 export const workbookHostConfig = {
-  rendererPackageName: "bilig-playground-reconciler",
+  rendererPackageName: "bilig-renderer",
   rendererVersion: "0.1.0",
   extraDevToolsConfig: null,
   supportsMutation: true,
