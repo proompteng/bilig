@@ -1,3 +1,4 @@
+/* oxlint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-type-assertion */
 import {
   useCallback,
   useEffect,
@@ -29,7 +30,7 @@ import {
   Underline,
   WrapText,
 } from "lucide-react";
-import { useQuery, useZero, useZeroOnline } from "@rocicorp/zero/react";
+import { useConnectionState, useZero } from "@rocicorp/zero/react";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
@@ -48,17 +49,16 @@ import {
   type MessagePortLike,
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
-import {
-  mutators,
-  projectWorkbookToSnapshot,
-  queries,
-  type BiligRuntimeConfig,
-} from "@bilig/zero-sync";
+import { mutators, type BiligRuntimeConfig } from "@bilig/zero-sync";
 import { WorkerViewportCache } from "./viewport-cache.js";
 import type {
   WorkbookWorkerBootstrapOptions,
   WorkbookWorkerStateSnapshot,
 } from "./worker-runtime.js";
+import {
+  ZeroWorkbookBridge,
+  type ZeroWorkbookBridgeState,
+} from "./zero/ZeroWorkbookBridge.js";
 
 type EditingMode = "idle" | "cell" | "formula";
 
@@ -77,6 +77,7 @@ interface RuntimeConfig {
   documentId: string;
   baseUrl: string | null;
   persistState: boolean;
+  zeroViewportBridge: boolean;
 }
 
 interface RibbonButtonProps {
@@ -391,6 +392,23 @@ function formatSyncStateLabel(state: WorkbookWorkerStateSnapshot["syncState"]): 
   return exhaustiveState;
 }
 
+function formatConnectionStateLabel(state: ReturnType<typeof useConnectionState>): string {
+  switch (state.name) {
+    case "connected":
+      return "Live";
+    case "connecting":
+      return "Connecting";
+    case "disconnected":
+      return "Read-only";
+    case "needs-auth":
+      return "Auth required";
+    case "error":
+      return "Error";
+    case "closed":
+      return "Closed";
+  }
+}
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -439,12 +457,16 @@ function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig {
   const searchParams = new URLSearchParams(window.location.search);
   const explicitDocumentId = searchParams.get("document");
   const baseUrl = searchParams.get("server");
+  const bridgeOverride = searchParams.get("zeroViewportBridge");
+  const zeroViewportBridge =
+    bridgeOverride === "off" ? false : bridgeOverride === "on" ? true : config.zeroViewportBridge;
 
   if (explicitDocumentId) {
     return {
       documentId: explicitDocumentId,
       baseUrl,
       persistState: true,
+      zeroViewportBridge,
     };
   }
 
@@ -454,6 +476,7 @@ function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig {
       : config.defaultDocumentId,
     baseUrl,
     persistState: baseUrl ? false : config.persistState,
+    zeroViewportBridge,
   };
 }
 
@@ -736,15 +759,11 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(config), [config]);
   const documentId = runtimeConfig.documentId;
   const zero = useZero();
-  const zeroOnline = useZeroOnline();
-  const [remoteWorkbook] = useQuery(queries.workbooks.byId({ documentId }));
-  const remoteSnapshot = useMemo(
-    () => projectWorkbookToSnapshot(remoteWorkbook ?? null, documentId),
-    [documentId, remoteWorkbook],
-  );
+  const connectionState = useConnectionState();
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const [workerHandle, setWorkerHandle] = useState<WorkerHandle | null>(null);
   const [runtimeState, setRuntimeState] = useState<WorkbookWorkerStateSnapshot | null>(null);
+  const [bridgeState, setBridgeState] = useState<ZeroWorkbookBridgeState | null>(null);
   const [selection, setSelection] = useState<{ sheetName: string; address: string }>({
     sheetName: "Sheet1",
     address: "A1",
@@ -764,7 +783,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const [, setCacheVersion] = useState(0);
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef<WorkerHandle | null>(null);
-  const remoteSnapshotSignatureRef = useRef<string | null>(null);
+  const bridgeRef = useRef<ZeroWorkbookBridge | null>(null);
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -900,71 +919,63 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   ]);
 
   useEffect(() => {
-    if (runtimeConfig.baseUrl) {
+    if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !workerHandle) {
       return;
     }
-    const active = workerHandleRef.current;
-    if (!active || !remoteSnapshot) {
-      return;
-    }
+    const bridge = new ZeroWorkbookBridge(zero, documentId, workerHandle.cache, (error) => {
+      setRuntimeError(error instanceof Error ? error.message : String(error));
+    });
+    bridgeRef.current = bridge;
+    const unsubscribeWorkbook = bridge.subscribeWorkbookState((state) => {
+      setBridgeState(state);
+    });
+    const unsubscribeSelection = bridge.subscribeSelectedCell((cell) => {
+      if (cell) {
+        setSelectedCell(cell);
+      }
+    });
 
-    const signature = JSON.stringify(remoteSnapshot);
-    if (remoteSnapshotSignatureRef.current === signature) {
+    return () => {
+      unsubscribeWorkbook();
+      unsubscribeSelection();
+      bridge.dispose();
+      bridgeRef.current = null;
+      setBridgeState(null);
+    };
+  }, [documentId, runtimeConfig.baseUrl, runtimeConfig.zeroViewportBridge, workerHandle, zero]);
+
+  useEffect(() => {
+    const activeSheetNames =
+      runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !bridgeState
+        ? (runtimeState?.sheetNames ?? [])
+        : bridgeState.sheetNames;
+    if (activeSheetNames.length === 0) {
       return;
     }
-    remoteSnapshotSignatureRef.current = signature;
-
-    void active.client
-      .invoke("replaceSnapshot", remoteSnapshot)
-      .then(() => Promise.all([refreshRuntimeState(active), refreshSelectedCell(active)]))
-      .catch((error: unknown) => {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      });
+    if (!activeSheetNames.includes(selection.sheetName)) {
+      const nextSelection = { sheetName: activeSheetNames[0]!, address: "A1" };
+      setSelection(nextSelection);
+      selectionRef.current = nextSelection;
+      bridgeRef.current?.setSelection(nextSelection.sheetName, nextSelection.address);
+      if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge) {
+        void refreshSelectedCell(undefined, nextSelection).catch((error: unknown) => {
+          setRuntimeError(error instanceof Error ? error.message : String(error));
+        });
+      }
+    }
   }, [
-    refreshRuntimeState,
+    bridgeState,
     refreshSelectedCell,
-    remoteSnapshot,
     runtimeConfig.baseUrl,
-    workerHandle,
+    runtimeConfig.zeroViewportBridge,
+    runtimeState,
+    selection.sheetName,
   ]);
 
   useEffect(() => {
-    const active = workerHandleRef.current;
-    if (!active) {
-      return;
-    }
+    bridgeRef.current?.setSelection(selection.sheetName, selection.address);
 
-    const syncState = runtimeConfig.baseUrl
-      ? null
-      : remoteSnapshot === null
-        ? "local-only"
-        : zeroOnline
-          ? "live"
-          : "reconnecting";
-    void active.client.invoke("setExternalSyncState", syncState).then(() => {
-      void refreshRuntimeState(active).catch((error: unknown) => {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      });
-      return undefined;
-    });
-  }, [refreshRuntimeState, remoteSnapshot, runtimeConfig.baseUrl, workerHandle, zeroOnline]);
-
-  useEffect(() => {
-    if (!runtimeState || runtimeState.sheetNames.length === 0) {
-      return;
-    }
-    if (!runtimeState.sheetNames.includes(selection.sheetName)) {
-      const nextSelection = { sheetName: runtimeState.sheetNames[0]!, address: "A1" };
-      setSelection(nextSelection);
-      selectionRef.current = nextSelection;
-      void refreshSelectedCell(undefined, nextSelection).catch((error: unknown) => {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      });
-    }
-  }, [refreshSelectedCell, runtimeState, selection.sheetName]);
-
-  useEffect(() => {
-    if (!workerHandle) {
+    if (!workerHandle || (!runtimeConfig.baseUrl && runtimeConfig.zeroViewportBridge)) {
       return;
     }
     let cancelled = false;
@@ -976,7 +987,19 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshSelectedCell, selection.address, selection.sheetName, workerHandle]);
+  }, [
+    refreshSelectedCell,
+    runtimeConfig.baseUrl,
+    runtimeConfig.zeroViewportBridge,
+    selection.address,
+    selection.sheetName,
+    workerHandle,
+  ]);
+
+  const writesAllowed =
+    Boolean(runtimeConfig.baseUrl) ||
+    connectionState.name === "connected" ||
+    connectionState.name === "connecting";
 
   const invokeWorker = useCallback(async (method: string, ...args: unknown[]): Promise<unknown> => {
     const active = workerHandleRef.current;
@@ -1008,19 +1031,123 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   );
 
   const invokeMutation = useCallback(
-    async (method: string, ...args: unknown[]) => {
-      const result = await invokeWorker(method, ...args);
-      const snapshot = await invokeWorker("exportSnapshot");
-      await runZeroMutation(
-        mutators.workbook.replaceSnapshot({
-          documentId,
-          snapshot,
-        }),
-      );
-      await Promise.all([refreshRuntimeState(), refreshSelectedCell()]);
-      return result;
+    async (method: string, ...args: any[]) => {
+      if (!runtimeConfig.baseUrl && !writesAllowed) {
+        throw new Error(`Writes are unavailable while Zero is ${connectionState.name}`);
+      }
+      if (runtimeConfig.baseUrl) {
+        const result = await invokeWorker(method, ...args);
+        await refreshRuntimeState();
+        await refreshSelectedCell();
+        return result;
+      }
+
+      switch (method) {
+        case "setCellValue": {
+          const [sheetName, address, value] = args;
+          await runZeroMutation(mutators.workbook.setCellValue({ documentId, sheetName, address, value }));
+          return undefined;
+        }
+        case "setCellFormula": {
+          const [sheetName, address, formula] = args;
+          await runZeroMutation(
+            mutators.workbook.setCellFormula({
+              documentId,
+              sheetName,
+              address,
+              formula,
+            }),
+          );
+          return undefined;
+        }
+        case "clearCell": {
+          const [sheetName, address] = args;
+          await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
+          return undefined;
+        }
+        case "renderCommit": {
+          const [ops] = args;
+          await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
+          return undefined;
+        }
+        case "fillRange": {
+          const [source, target] = args;
+          await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
+          return undefined;
+        }
+        case "copyRange": {
+          const [source, target] = args;
+          await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
+          return undefined;
+        }
+        case "updateColumnWidth": {
+          const [sheetName, columnIndex, width] = args;
+          await runZeroMutation(
+            mutators.workbook.updateColumnWidth({
+              documentId,
+              sheetName,
+              columnIndex,
+              width,
+            }),
+          );
+          return undefined;
+        }
+        case "autofitColumn": {
+          const [sheetName, columnIndex] = args;
+          const width = await invokeWorker("autofitColumn", sheetName, columnIndex);
+          if (typeof width !== "number") {
+            return width;
+          }
+          await runZeroMutation(
+            mutators.workbook.updateColumnWidth({
+              documentId,
+              sheetName,
+              columnIndex,
+              width,
+            }),
+          );
+          return width;
+        }
+        case "setRangeStyle": {
+          const [range, patch] = args;
+          await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
+          return undefined;
+        }
+        case "clearRangeStyle": {
+          const [range, fields] = args;
+          await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
+          return undefined;
+        }
+        case "setRangeNumberFormat": {
+          const [range, format] = args;
+          await runZeroMutation(
+            mutators.workbook.setRangeNumberFormat({
+              documentId,
+              range,
+              format,
+            }),
+          );
+          return undefined;
+        }
+        case "clearRangeNumberFormat": {
+          const [range] = args;
+          await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
+          return undefined;
+        }
+        default:
+          throw new Error(`Unsupported workbook mutation: ${method}`);
+      }
     },
-    [documentId, invokeWorker, refreshRuntimeState, refreshSelectedCell, runZeroMutation],
+    [
+      connectionState.name,
+      documentId,
+      invokeWorker,
+      refreshRuntimeState,
+      refreshSelectedCell,
+      runZeroMutation,
+      runtimeConfig.baseUrl,
+      writesAllowed,
+    ],
   );
 
   const applyOptimisticCellEdit = useCallback(
@@ -1073,53 +1200,36 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       selectionBehavior: EditSelectionBehavior = "select-all",
       mode: Exclude<EditingMode, "idle"> = "cell",
     ) => {
+      if (!writesAllowed) {
+        return;
+      }
       setEditorValue(seed ?? toEditorValue(selectedCell));
       setEditorSelectionBehavior(selectionBehavior);
       setEditingMode(mode);
     },
-    [selectedCell],
+    [selectedCell, writesAllowed],
   );
 
   const applyParsedInput = useCallback(
     async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
       if (parsed.kind === "formula") {
-        await invokeWorker("setCellFormula", sheetName, address, parsed.formula);
-        await runZeroMutation(
-          mutators.workbook.setCellFormula({
-            documentId,
-            sheetName,
-            address,
-            formula: parsed.formula,
-          }),
-        );
+        await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
         return;
       }
       if (parsed.kind === "clear") {
-        await invokeWorker("clearCell", sheetName, address);
-        await runZeroMutation(
-          mutators.workbook.clearCell({
-            documentId,
-            sheetName,
-            address,
-          }),
-        );
+        await invokeMutation("clearCell", sheetName, address);
         return;
       }
-      await invokeWorker("setCellValue", sheetName, address, parsed.value);
-      await runZeroMutation(
-        mutators.workbook.setCellValue({
-          documentId,
-          sheetName,
-          address,
-          value: parsed.value,
-        }),
-      );
+      await invokeMutation("setCellValue", sheetName, address, parsed.value);
     },
-    [documentId, invokeWorker, runZeroMutation],
+    [invokeMutation],
   );
 
   const commitEditor = useCallback(
     (movement?: EditMovement) => {
+      if (!writesAllowed) {
+        return;
+      }
       const nextValue = editingMode === "idle" ? toEditorValue(selectedCell) : editorValue;
       const parsed = parseEditorInput(nextValue);
       applyOptimisticCellEdit(selection.sheetName, selection.address, parsed);
@@ -1148,6 +1258,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       selectedCell,
       selection.address,
       selection.sheetName,
+      writesAllowed,
     ],
   );
 
@@ -1158,29 +1269,22 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   }, [selectedCell]);
 
   const clearSelectedCell = useCallback(() => {
+    if (!writesAllowed) {
+      return;
+    }
     applyOptimisticCellEdit(selection.sheetName, selection.address, { kind: "clear" });
     setEditorValue("");
     setEditingMode("idle");
-    void invokeWorker("clearCell", selection.sheetName, selection.address)
-      .then(() =>
-        runZeroMutation(
-          mutators.workbook.clearCell({
-            documentId,
-            sheetName: selection.sheetName,
-            address: selection.address,
-          }),
-        ),
-      )
+    void invokeMutation("clearCell", selection.sheetName, selection.address)
       .catch((error: unknown) => {
         setRuntimeError(error instanceof Error ? error.message : String(error));
       });
   }, [
     applyOptimisticCellEdit,
-    documentId,
-    invokeWorker,
-    runZeroMutation,
+    invokeMutation,
     selection.address,
     selection.sheetName,
+    writesAllowed,
   ]);
 
   const pasteIntoSelection = useCallback(
@@ -1221,22 +1325,14 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (ops.length === 0) {
         return;
       }
-      void invokeWorker("renderCommit", ops)
-        .then(() =>
-          runZeroMutation(
-            mutators.workbook.renderCommit({
-              documentId,
-              ops,
-            }),
-          ),
-        )
+      void invokeMutation("renderCommit", ops)
         .catch((error: unknown) => {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
       setEditorSelectionBehavior("select-all");
       setEditingMode("idle");
     },
-    [documentId, invokeWorker, runZeroMutation, selection.sheetName],
+    [invokeMutation, selection.sheetName],
   );
 
   const fillSelectionRange = useCallback(
@@ -1256,16 +1352,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
         startAddress: targetStartAddr,
         endAddress: targetEndAddr,
       };
-      void invokeWorker("fillRange", source, target)
-        .then(() =>
-          runZeroMutation(
-            mutators.workbook.fillRange({
-              documentId,
-              source,
-              target,
-            }),
-          ),
-        )
+      void invokeMutation("fillRange", source, target)
         .then(() => {
           setEditingMode("idle");
           return undefined;
@@ -1274,7 +1361,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
     },
-    [documentId, invokeWorker, runZeroMutation, selection.sheetName],
+    [invokeMutation, selection.sheetName],
   );
 
   const copySelectionRange = useCallback(
@@ -1294,16 +1381,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
         startAddress: targetStartAddr,
         endAddress: targetEndAddr,
       };
-      void invokeWorker("copyRange", source, target)
-        .then(() =>
-          runZeroMutation(
-            mutators.workbook.copyRange({
-              documentId,
-              source,
-              target,
-            }),
-          ),
-        )
+      void invokeMutation("copyRange", source, target)
         .then(() => {
           setEditingMode("idle");
           return undefined;
@@ -1312,7 +1390,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
     },
-    [documentId, invokeWorker, runZeroMutation, selection.sheetName],
+    [invokeMutation, selection.sheetName],
   );
 
   const selectAddress = useCallback(
@@ -1330,7 +1408,14 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
-  const sheetNames = runtimeState?.sheetNames ?? [];
+  const bridgeEnabled = !runtimeConfig.baseUrl && runtimeConfig.zeroViewportBridge;
+  const sheetNames = [
+    ...(bridgeEnabled && bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? [])),
+  ];
+  const workbookName =
+    bridgeEnabled && bridgeState
+      ? bridgeState.workbookName
+      : (runtimeState?.workbookName ?? documentId);
   const columnWidths = workerHandle
     ? workerHandle.cache.getColumnWidths(selection.sheetName)
     : undefined;
@@ -1363,20 +1448,27 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (!workerHandle) {
         return () => {};
       }
+      if (bridgeEnabled && bridgeRef.current) {
+        return bridgeRef.current.subscribeViewport(sheetName, viewport, listener);
+      }
       return workerHandle.cache.subscribeViewport(sheetName, viewport, listener);
     },
-    [workerHandle],
+    [bridgeEnabled, workerHandle],
   );
+
+  const statusModeLabel = runtimeConfig.baseUrl
+    ? formatSyncStateLabel(runtimeState?.syncState ?? "local-only")
+    : formatConnectionStateLabel(connectionState);
 
   const statusBar = (
     <>
-      <span data-testid="status-mode">
-        {formatSyncStateLabel(runtimeState?.syncState ?? "local-only")}
-      </span>
+      <span data-testid="status-mode">{statusModeLabel}</span>
       <span data-testid="status-selection">
         {selection.sheetName}!{selectionLabel}
       </span>
-      <span data-testid="status-sync">{isEditing ? "Editing" : "Ready"}</span>
+      <span data-testid="status-sync">
+        {isEditing ? "Editing" : writesAllowed ? "Ready" : "Read-only"}
+      </span>
     </>
   );
 
@@ -1837,6 +1929,8 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
     </div>
   );
 
+  const bridgeLoading = bridgeEnabled && bridgeState === null;
+
   return (
     <div className="h-screen overflow-hidden bg-[#f8f9fa] text-[#202124]">
       {runtimeError ? (
@@ -1847,12 +1941,17 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           {runtimeError}
         </div>
       ) : null}
-      {loading || !workerHandle || !runtimeState ? (
+      {bridgeEnabled && !writesAllowed ? (
+        <div className="border-b border-[#d2e3fc] bg-[#eef4ff] px-3 py-2 text-sm text-[#174ea6]">
+          Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection recovers.
+        </div>
+      ) : null}
+      {loading || !workerHandle || !runtimeState || bridgeLoading ? (
         <div
           className="border-b border-[#dadce0] bg-white px-3 py-2 text-sm text-[#5f6368]"
           data-testid="worker-loading"
         >
-          Starting worker runtime...
+          Starting workbook runtime...
         </div>
       ) : (
         <WorkbookView
@@ -1860,8 +1959,8 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           editorValue={visibleEditorValue}
           editorSelectionBehavior={editorSelectionBehavior}
           engine={workerHandle.cache}
-          isEditing={isEditing}
-          isEditingCell={isEditingCell}
+          isEditing={Boolean(writesAllowed && isEditing)}
+          isEditingCell={Boolean(writesAllowed && isEditingCell)}
           onAddressCommit={(input) => {
             const nextTarget = parseSelectionTarget(input, selection.sheetName);
             if (nextTarget) {
@@ -1870,20 +1969,13 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           }}
           onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, fallbackWidth);
-            return invokeWorker("autofitColumn", selection.sheetName, columnIndex)
+            return invokeMutation("autofitColumn", selection.sheetName, columnIndex)
               .then((width) => {
                 if (typeof width !== "number") {
                   return undefined;
                 }
                 workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
-                return runZeroMutation(
-                  mutators.workbook.updateColumnWidth({
-                    documentId,
-                    sheetName: selection.sheetName,
-                    columnIndex,
-                    width,
-                  }),
-                ).then(() => undefined);
+                return undefined;
               })
               .catch((error: unknown) => {
                 setRuntimeError(error instanceof Error ? error.message : String(error));
@@ -1895,17 +1987,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           onClearCell={clearSelectedCell}
           onColumnWidthChange={(columnIndex: number, newSize: number) => {
             workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, newSize);
-            void invokeWorker("updateColumnWidth", selection.sheetName, columnIndex, newSize)
-              .then(() =>
-                runZeroMutation(
-                  mutators.workbook.updateColumnWidth({
-                    documentId,
-                    sheetName: selection.sheetName,
-                    columnIndex,
-                    width: Math.round(newSize),
-                  }),
-                ),
-              )
+            void invokeMutation("updateColumnWidth", selection.sheetName, columnIndex, newSize)
               .catch((error: unknown) => {
                 setRuntimeError(error instanceof Error ? error.message : String(error));
               });
@@ -1929,7 +2011,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           subscribeViewport={subscribeViewport}
           columnWidths={columnWidths}
           variant="product"
-          workbookName={runtimeState.workbookName}
+          workbookName={workbookName}
         />
       )}
     </div>
