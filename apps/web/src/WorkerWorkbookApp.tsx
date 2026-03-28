@@ -32,10 +32,11 @@ import {
 } from "lucide-react";
 import { useConnectionState, useZero } from "@rocicorp/zero/react";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
-import { formatAddress, parseCellAddress } from "@bilig/formula";
+import { formatAddress, parseCellAddress, parseFormula } from "@bilig/formula";
 import {
   MAX_COLS,
   MAX_ROWS,
+  ErrorCode,
   ValueTag,
   parseCellNumberFormatCode,
   formatErrorCode,
@@ -297,6 +298,9 @@ function toResolvedValue(cell: CellSnapshot): string {
 }
 
 function toEditorValue(cell: CellSnapshot): string {
+  if (cell.value.tag === ValueTag.Error) {
+    return formatErrorCode(cell.value.code);
+  }
   if (cell.formula) {
     return `=${cell.formula}`;
   }
@@ -325,6 +329,15 @@ function parseEditorInput(rawValue: string): ParsedEditorInput {
     return { kind: "value", value: numeric };
   }
   return { kind: "value", value: normalized };
+}
+
+function isInvalidFormulaSyntax(formula: string): boolean {
+  try {
+    parseFormula(formula);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 function clampSelectionMovement(
@@ -1022,13 +1035,17 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
         return result;
       }
 
+      const localResult = await invokeWorker(method, ...args);
+      await refreshRuntimeState();
+      await refreshSelectedCell();
+
       switch (method) {
         case "setCellValue": {
           const [sheetName, address, value] = args;
           await runZeroMutation(
             mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
           );
-          return undefined;
+          return localResult;
         }
         case "setCellFormula": {
           const [sheetName, address, formula] = args;
@@ -1040,27 +1057,27 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               formula,
             }),
           );
-          return undefined;
+          return localResult;
         }
         case "clearCell": {
           const [sheetName, address] = args;
           await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
-          return undefined;
+          return localResult;
         }
         case "renderCommit": {
           const [ops] = args;
           await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
-          return undefined;
+          return localResult;
         }
         case "fillRange": {
           const [source, target] = args;
           await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
-          return undefined;
+          return localResult;
         }
         case "copyRange": {
           const [source, target] = args;
           await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
-          return undefined;
+          return localResult;
         }
         case "updateColumnWidth": {
           const [sheetName, columnIndex, width] = args;
@@ -1072,33 +1089,32 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               width,
             }),
           );
-          return undefined;
+          return localResult;
         }
         case "autofitColumn": {
           const [sheetName, columnIndex] = args;
-          const width = await invokeWorker("autofitColumn", sheetName, columnIndex);
-          if (typeof width !== "number") {
-            return width;
+          if (typeof localResult !== "number") {
+            return localResult;
           }
           await runZeroMutation(
             mutators.workbook.updateColumnWidth({
               documentId,
               sheetName,
               columnIndex,
-              width,
+              width: localResult,
             }),
           );
-          return width;
+          return localResult;
         }
         case "setRangeStyle": {
           const [range, patch] = args;
           await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
-          return undefined;
+          return localResult;
         }
         case "clearRangeStyle": {
           const [range, fields] = args;
           await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
-          return undefined;
+          return localResult;
         }
         case "setRangeNumberFormat": {
           const [range, format] = args;
@@ -1109,12 +1125,12 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               format,
             }),
           );
-          return undefined;
+          return localResult;
         }
         case "clearRangeNumberFormat": {
           const [range] = args;
           await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
-          return undefined;
+          return localResult;
         }
         default:
           throw new Error(`Unsupported workbook mutation: ${method}`);
@@ -1176,6 +1192,22 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
     [],
   );
 
+  const applyOptimisticFormulaErrorEdit = useCallback((sheetName: string, address: string) => {
+    const active = workerHandleRef.current;
+    if (!active) {
+      return;
+    }
+    const current = active.cache.getCell(sheetName, address);
+    active.cache.setCellSnapshot({
+      sheetName,
+      address,
+      value: { tag: ValueTag.Error, code: ErrorCode.Value },
+      flags: current.flags,
+      version: current.version + 1,
+      ...(current.format ? { format: current.format } : {}),
+    });
+  }, []);
+
   const beginEditing = useCallback(
     (
       seed?: string,
@@ -1214,7 +1246,11 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       }
       const nextValue = editingMode === "idle" ? toEditorValue(selectedCell) : editorValue;
       const parsed = parseEditorInput(nextValue);
-      applyOptimisticCellEdit(selection.sheetName, selection.address, parsed);
+      if (parsed.kind === "formula" && isInvalidFormulaSyntax(parsed.formula)) {
+        applyOptimisticFormulaErrorEdit(selection.sheetName, selection.address);
+      } else {
+        applyOptimisticCellEdit(selection.sheetName, selection.address, parsed);
+      }
       setEditingMode("idle");
       setEditorSelectionBehavior("select-all");
       if (movement) {
@@ -1234,6 +1270,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
     },
     [
       applyOptimisticCellEdit,
+      applyOptimisticFormulaErrorEdit,
       applyParsedInput,
       editorValue,
       editingMode,
@@ -1430,8 +1467,14 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (!workerHandle) {
         return () => {};
       }
-      if (bridgeEnabled && bridgeRef.current) {
-        return bridgeRef.current.subscribeViewport(sheetName, viewport, listener);
+      if (bridgeEnabled) {
+        const disposers = [
+          workerHandle.cache.subscribeViewport(sheetName, viewport, listener),
+          bridgeRef.current?.subscribeViewport(sheetName, viewport, listener) ?? (() => {}),
+        ];
+        return () => {
+          disposers.forEach((dispose) => dispose());
+        };
       }
       return workerHandle.cache.subscribeViewport(sheetName, viewport, listener);
     },
