@@ -1,4 +1,5 @@
 export interface BiligRuntimeSession {
+  authToken: string;
   userId: string;
   roles: string[];
   isAuthenticated: boolean;
@@ -21,6 +22,7 @@ export async function loadRuntimeSession(
 
   if (!response.ok) {
     return {
+      authToken: "guest:bootstrap-fallback",
       userId: "guest:bootstrap-fallback",
       roles: ["editor"],
       isAuthenticated: false,
@@ -32,12 +34,21 @@ export async function loadRuntimeSession(
   const payload = isRecord(rawPayload) ? rawPayload : {};
   const userId = payload["userId"];
   const userID = payload["userID"];
+  const authToken = payload["authToken"];
   const roles = payload["roles"];
   const isAuthenticated = payload["isAuthenticated"];
   const guest = payload["guest"];
   const authSource = payload["authSource"];
   const source = payload["source"];
   return {
+    authToken:
+      typeof authToken === "string" && authToken.length > 0
+        ? authToken
+        : typeof userId === "string" && userId.length > 0
+          ? userId
+          : typeof userID === "string" && userID.length > 0
+            ? userID
+            : "guest:bootstrap-fallback",
     userId:
       typeof userId === "string" && userId.length > 0
         ? userId

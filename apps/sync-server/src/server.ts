@@ -83,6 +83,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     const session = resolveSessionIdentity(request, reply);
     const guest = session.userID.startsWith("guest:");
     return {
+      authToken: session.userID,
       userID: session.userID,
       userId: session.userID,
       roles: ["editor"],
