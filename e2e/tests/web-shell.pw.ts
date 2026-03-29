@@ -2535,6 +2535,40 @@ test.describe("web app validates each toolbar formatting action individually", (
     expect(colorDistance(after, { r: 219, g: 234, b: 254 })).toBeLessThan(30);
   });
 
+  test("fill color visibly repaints populated cells in the selected range", async ({ page }) => {
+    const documentId = createToolbarActionDocumentId("fill-visual-populated-range");
+    await prepareToolbarActionDocument(page, localServer.localServerUrl, documentId, {
+      setup: async (sessionId) => {
+        await sendAgentRequest(localServer.localServerUrl, {
+          kind: "writeRange",
+          id: `write:${Date.now()}`,
+          sessionId,
+          range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+          values: [
+            ["hi", ""],
+            ["", ""],
+          ],
+        });
+      },
+    });
+
+    await dragProductBodySelection(page, 1, 1, 2, 2);
+    await setToolbarCustomColor(page, "Fill color", "#dbeafe");
+    await clickProductCell(page, 5, 5);
+
+    const grid = await getGridBox(page);
+    const populatedCellPoint = getProductCellClientPoint(grid, 1, 1, 0.82, 0.55);
+    const blankCellPoint = getProductCellClientPoint(grid, 2, 1, 0.55, 0.55);
+
+    const [populatedPixel, blankPixel] = await Promise.all([
+      sampleGridPixel(page, populatedCellPoint.x, populatedCellPoint.y),
+      sampleGridPixel(page, blankCellPoint.x, blankCellPoint.y),
+    ]);
+
+    expect(colorDistance(populatedPixel, { r: 219, g: 234, b: 254 })).toBeLessThan(30);
+    expect(colorDistance(blankPixel, { r: 219, g: 234, b: 254 })).toBeLessThan(30);
+  });
+
   test("all borders visibly remain on the grid after clicking away", async ({ page }) => {
     const documentId = createToolbarActionDocumentId("border-visual");
     await prepareToolbarActionDocument(page, localServer.localServerUrl, documentId, {

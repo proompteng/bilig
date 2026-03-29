@@ -192,10 +192,7 @@ function resolveStyleId(
   computed: CellEvalRow | undefined,
   styleRanges: readonly StyleRangeRow[],
 ): string {
-  if (computed?.styleId) {
-    return computed.styleId;
-  }
-  let styleId = DEFAULT_STYLE_ID;
+  let styleId = computed?.styleId ?? DEFAULT_STYLE_ID;
   for (const range of styleRanges) {
     if (pointInRange(row, col, range)) {
       styleId = range.styleId;
@@ -213,21 +210,6 @@ function resolveNumberFormat(
   numberFormatCodeById: ReadonlyMap<string, string>,
 ): ResolvedNumberFormat {
   const result: ResolvedNumberFormat = {};
-  if (computed?.formatCode) {
-    result.code = computed.formatCode;
-  }
-  if (computed?.formatId) {
-    result.numberFormatId = computed.formatId;
-    if (result.code === undefined) {
-      const code = numberFormatCodeById.get(computed.formatId);
-      if (code !== undefined) {
-        result.code = code;
-      }
-    }
-  }
-  if (result.code !== undefined || result.numberFormatId !== undefined) {
-    return result;
-  }
   const explicitFormatId = source?.explicitFormatId;
   const sourceFormat = source?.format;
   if (sourceFormat !== undefined) {
@@ -260,6 +242,22 @@ function resolveNumberFormat(
     result.code = code;
   }
   result.numberFormatId = numberFormatId;
+  if (result.code !== undefined || result.numberFormatId !== undefined) {
+    return result;
+  }
+
+  if (computed?.formatCode) {
+    result.code = computed.formatCode;
+  }
+  if (computed?.formatId) {
+    result.numberFormatId = computed.formatId;
+    if (result.code === undefined) {
+      const computedCode = numberFormatCodeById.get(computed.formatId);
+      if (computedCode !== undefined) {
+        result.code = computedCode;
+      }
+    }
+  }
   return result;
 }
 
