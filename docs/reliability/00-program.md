@@ -45,6 +45,30 @@ This program is a clean-break rewrite of the control plane. It is not a request 
    - remove duplicated guards and fallback behavior
    - full reliability, fuzz, and browser acceptance pass
 
+## Current Status
+
+### Completed in `main`
+
+- foundation dependencies are pinned exactly:
+  - `effect@3.21.0`
+  - `@effect/platform@0.96.0`
+  - `@effect/platform-node@0.106.0`
+  - `xstate@5.30.0`
+  - `@xstate/react@6.1.0`
+- the `docs/reliability/*` design-doc set exists and is now the control-plane source of truth
+- `@bilig/contracts`, `@bilig/runtime-kernel`, and `@bilig/actors` exist in the workspace
+- the web bootstrap path is actor-driven through `@bilig/actors`
+- `v2` session, document state, snapshot, websocket, agent, and Zero ingress routes exist in the web/local/sync path
+- shared runtime-kernel adapters now own server edge config, error envelopes, session shaping, request base-url resolution, websocket normalization, and message-byte decoding
+
+### Remaining before the rewrite is complete
+
+- replace sync/local document managers with Effect-backed services supervised by document actors
+- move worker runtime, reconnect, and transport lifecycle into XState + Effect
+- finish web-app orchestration cutover beyond bootstrap
+- delete old `v1` entrypoints and all duplicated fallback control paths
+- complete the reliability acceptance suite and failure drills from `04-cutover-and-acceptance.md`
+
 ## Repo Rules
 
 - no rewrite PR lands without updating at least one `docs/reliability/*` file

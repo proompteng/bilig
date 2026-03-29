@@ -1,6 +1,14 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
-import type { DocumentStateSummary, ErrorEnvelope, RuntimeSession } from "@bilig/contracts";
+import type { DocumentStateSummary, RuntimeSession } from "@bilig/contracts";
+import {
+  createErrorEnvelope,
+  createGuestRuntimeSession,
+  normalizeWebSocket,
+  resolveRequestBaseUrl,
+  resolveServerRuntimeConfig,
+  toMessageBytes,
+} from "@bilig/runtime-kernel";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
@@ -9,8 +17,7 @@ import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js
 
 function noop(): void {}
 
-function applyCorsHeaders(reply: FastifyReply): void {
-  const allowOrigin = process.env["BILIG_CORS_ORIGIN"] ?? "*";
+function applyCorsHeaders(reply: FastifyReply, allowOrigin: string): void {
   reply.header("access-control-allow-origin", allowOrigin);
   reply.header("access-control-allow-methods", "GET,POST,OPTIONS");
   reply.header("access-control-allow-headers", "content-type");
@@ -25,22 +32,15 @@ export interface LocalServerOptions {
   logger?: boolean;
 }
 
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function resolveServerUrl(request: FastifyRequest): string {
-  const host = request.headers.host ?? "127.0.0.1:4381";
-  return normalizeBaseUrl(`${request.protocol}://${host}`);
-}
-
 export function createLocalServer(options: LocalServerOptions = {}) {
+  const runtimeConfig = resolveServerRuntimeConfig(process.env);
+  const allowOrigin = runtimeConfig.corsOrigin ?? "*";
   const sessionManager = options.sessionManager ?? new LocalWorkbookSessionManager();
   const app = Fastify({ logger: options.logger ?? true });
   app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
-    applyCorsHeaders(reply);
+    applyCorsHeaders(reply, allowOrigin);
     if (request.method === "OPTIONS") {
       return reply.code(204).send();
     }
@@ -60,13 +60,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   }));
 
   app.get("/v2/session", async () => {
-    return {
-      authToken: "guest:local-server",
-      userId: "guest:local-server",
-      roles: ["editor"],
-      isAuthenticated: false,
-      authSource: "guest",
-    } satisfies RuntimeSession;
+    return createGuestRuntimeSession("guest:local-server") satisfies RuntimeSession;
   });
 
   app.get(
@@ -85,7 +79,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
       const snapshot = sessionManager.getLatestSnapshot(request.params.documentId);
       if (!snapshot) {
         reply.code(404);
-        return toErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
+        return createErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
       }
       reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
       reply.header("content-type", snapshot.contentType);
@@ -109,9 +103,9 @@ export function createLocalServer(options: LocalServerOptions = {}) {
             },
           }
         : await sessionManager.handleAgentFrame(frame, {
-            serverUrl: resolveServerUrl(request),
-            ...(process.env["BILIG_WEB_APP_BASE_URL"]
-              ? { browserAppBaseUrl: process.env["BILIG_WEB_APP_BASE_URL"] }
+            serverUrl: resolveRequestBaseUrl(request, "127.0.0.1:4381"),
+            ...(runtimeConfig.browserAppBaseUrl
+              ? { browserAppBaseUrl: runtimeConfig.browserAppBaseUrl }
               : {}),
           });
       reply.header("content-type", "application/octet-stream");
@@ -160,14 +154,6 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   return { app, sessionManager };
 }
 
-function toErrorEnvelope(error: string, message: string, retryable: boolean): ErrorEnvelope {
-  return {
-    error,
-    message,
-    retryable,
-  };
-}
-
 function toDocumentStateSummary(
   summary: ReturnType<LocalWorkbookSessionManager["getDocumentState"]>,
   latestSnapshotCursor: number | null,
@@ -180,100 +166,6 @@ function toDocumentStateSummary(
     sessions,
     latestSnapshotCursor,
   };
-}
-
-function toMessageBytes(raw: unknown): Uint8Array {
-  if (raw instanceof Buffer) {
-    return new Uint8Array(raw);
-  }
-  if (raw instanceof ArrayBuffer) {
-    return new Uint8Array(raw);
-  }
-  if (ArrayBuffer.isView(raw)) {
-    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-  }
-  throw new Error("Unsupported websocket payload");
-}
-
-type NormalizedWebSocket = {
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  send(data: Uint8Array): void;
-};
-
-function isNormalizedWebSocket(value: unknown): value is NormalizedWebSocket {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "on" in value &&
-    typeof value.on === "function" &&
-    "send" in value &&
-    typeof value.send === "function"
-  );
-}
-
-function hasSocket(value: unknown): value is { socket: unknown } {
-  return typeof value === "object" && value !== null && "socket" in value;
-}
-
-function hasWebSocket(value: unknown): value is { websocket: unknown } {
-  return typeof value === "object" && value !== null && "websocket" in value;
-}
-
-type EventTargetWebSocket = {
-  addEventListener(event: string, listener: (event: unknown) => void): void;
-  send(data: Uint8Array): void;
-};
-
-function isEventTargetWebSocket(value: unknown): value is EventTargetWebSocket {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "addEventListener" in value &&
-    typeof value.addEventListener === "function" &&
-    "send" in value &&
-    typeof value.send === "function"
-  );
-}
-
-function asNormalizedEventTargetSocket(socket: EventTargetWebSocket): NormalizedWebSocket {
-  return {
-    on(event, listener) {
-      socket.addEventListener(event, (payload) => {
-        if (
-          event === "message" &&
-          typeof payload === "object" &&
-          payload !== null &&
-          "data" in payload
-        ) {
-          listener(payload.data);
-          return;
-        }
-        listener(payload);
-      });
-    },
-    send(data) {
-      socket.send(data);
-    },
-  };
-}
-
-function normalizeWebSocket(candidate: unknown): NormalizedWebSocket {
-  if (isNormalizedWebSocket(candidate)) {
-    return candidate;
-  }
-  if (isEventTargetWebSocket(candidate)) {
-    return asNormalizedEventTargetSocket(candidate);
-  }
-  if (hasSocket(candidate) && isNormalizedWebSocket(candidate.socket)) {
-    return candidate.socket;
-  }
-  if (hasSocket(candidate) && isEventTargetWebSocket(candidate.socket)) {
-    return asNormalizedEventTargetSocket(candidate.socket);
-  }
-  if (hasWebSocket(candidate)) {
-    return normalizeWebSocket(candidate.websocket);
-  }
-  throw new Error("Unsupported websocket connection shape");
 }
 
 function isStreamingAgentRequest(

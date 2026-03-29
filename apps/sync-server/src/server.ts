@@ -4,11 +4,20 @@ import { Effect } from "effect";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
-import type { ErrorEnvelope, RuntimeSession } from "@bilig/contracts";
-import { runPromise, TransportError } from "@bilig/runtime-kernel";
+import type { RuntimeSession } from "@bilig/contracts";
+import {
+  createErrorEnvelope,
+  createRuntimeSession,
+  normalizeWebSocket,
+  resolveRequestBaseUrl,
+  resolveServerRuntimeConfig,
+  runPromise,
+  toMessageBytes,
+  TransportError,
+} from "@bilig/runtime-kernel";
 
 import { DocumentSessionManager } from "./document-session-manager.js";
-import { resolveSessionIdentity } from "./session.js";
+import { resolveRequestSession, resolveSessionIdentity } from "./session.js";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
 import type { ZeroSyncService } from "./zero/service.js";
 
@@ -21,16 +30,8 @@ export interface SyncServerOptions {
 
 function noop(): void {}
 
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function resolveServerUrl(request: FastifyRequest): string {
-  const host = request.headers.host ?? "127.0.0.1:4321";
-  return normalizeBaseUrl(`${request.protocol}://${host}`);
-}
-
 export function createSyncServer(options: SyncServerOptions = {}) {
+  const runtimeConfig = resolveServerRuntimeConfig(process.env);
   const sessionManager =
     options.sessionManager ??
     new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
@@ -84,7 +85,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       );
       if (!snapshot) {
         reply.code(404);
-        return toErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
+        return createErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
       }
 
       reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
@@ -101,21 +102,21 @@ export function createSyncServer(options: SyncServerOptions = {}) {
 
   const handleSessionRequest = async (request: FastifyRequest, reply: FastifyReply) => {
     const session = resolveSessionIdentity(request, reply);
-    const guest = session.userID.startsWith("guest:");
-    return {
+    const requestSession = resolveRequestSession(request);
+    return createRuntimeSession({
       authToken: session.userID,
       userId: session.userID,
-      roles: ["editor"],
-      isAuthenticated: !guest,
-      authSource: guest ? "guest" : "header",
-    } satisfies RuntimeSession;
+      roles: requestSession.roles,
+      isAuthenticated: requestSession.isAuthenticated,
+      authSource: requestSession.authSource,
+    }) satisfies RuntimeSession;
   };
   app.get("/v2/session", handleSessionRequest);
 
   app.post("/api/zero/query", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
-      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
     }
     resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleQuery(request);
@@ -124,7 +125,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.post("/api/zero/v2/query", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
-      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
     }
     resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleQuery(request);
@@ -133,7 +134,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.post("/api/zero/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
-      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
     }
     resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleMutate(request);
@@ -142,7 +143,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.post("/api/zero/v2/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
-      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
     }
     resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleMutate(request);
@@ -152,9 +153,9 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     "/v2/agent/frames",
     async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
       const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body), {
-        serverUrl: resolveServerUrl(request),
-        ...(process.env["BILIG_WEB_APP_BASE_URL"]
-          ? { browserAppBaseUrl: process.env["BILIG_WEB_APP_BASE_URL"] }
+        serverUrl: resolveRequestBaseUrl(request, "127.0.0.1:4321"),
+        ...(runtimeConfig.browserAppBaseUrl
+          ? { browserAppBaseUrl: runtimeConfig.browserAppBaseUrl }
           : {}),
       });
       reply.header("content-type", "application/octet-stream");
@@ -208,106 +209,4 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   });
 
   return { app, sessionManager };
-}
-
-function toErrorEnvelope(error: string, message: string, retryable: boolean): ErrorEnvelope {
-  return {
-    error,
-    message,
-    retryable,
-  };
-}
-
-function toMessageBytes(raw: unknown): Uint8Array {
-  if (raw instanceof Buffer) {
-    return new Uint8Array(raw);
-  }
-  if (raw instanceof ArrayBuffer) {
-    return new Uint8Array(raw);
-  }
-  if (ArrayBuffer.isView(raw)) {
-    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-  }
-  throw new Error("Unsupported websocket payload");
-}
-
-type NormalizedWebSocket = {
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  send(data: Uint8Array): void;
-};
-
-function isNormalizedWebSocket(value: unknown): value is NormalizedWebSocket {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "on" in value &&
-    typeof value.on === "function" &&
-    "send" in value &&
-    typeof value.send === "function"
-  );
-}
-
-function hasSocket(value: unknown): value is { socket: unknown } {
-  return typeof value === "object" && value !== null && "socket" in value;
-}
-
-function hasWebSocket(value: unknown): value is { websocket: unknown } {
-  return typeof value === "object" && value !== null && "websocket" in value;
-}
-
-type EventTargetWebSocket = {
-  addEventListener(event: string, listener: (event: unknown) => void): void;
-  send(data: Uint8Array): void;
-};
-
-function isEventTargetWebSocket(value: unknown): value is EventTargetWebSocket {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "addEventListener" in value &&
-    typeof value.addEventListener === "function" &&
-    "send" in value &&
-    typeof value.send === "function"
-  );
-}
-
-function asNormalizedEventTargetSocket(socket: EventTargetWebSocket): NormalizedWebSocket {
-  return {
-    on(event, listener) {
-      socket.addEventListener(event, (payload) => {
-        if (
-          event === "message" &&
-          typeof payload === "object" &&
-          payload !== null &&
-          "data" in payload
-        ) {
-          listener(payload.data);
-          return;
-        }
-        listener(payload);
-      });
-    },
-    send(data) {
-      socket.send(data);
-    },
-  };
-}
-
-function normalizeWebSocket(candidate: unknown): NormalizedWebSocket {
-  if (isNormalizedWebSocket(candidate)) {
-    return candidate;
-  }
-  if (isEventTargetWebSocket(candidate)) {
-    return asNormalizedEventTargetSocket(candidate);
-  }
-  if (hasSocket(candidate) && isNormalizedWebSocket(candidate.socket)) {
-    return candidate.socket;
-  }
-  if (hasSocket(candidate) && isEventTargetWebSocket(candidate.socket)) {
-    return asNormalizedEventTargetSocket(candidate.socket);
-  }
-  if (hasWebSocket(candidate)) {
-    return normalizeWebSocket(candidate.websocket);
-  }
-  throw new Error("Unsupported websocket connection shape");
 }
