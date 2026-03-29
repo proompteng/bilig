@@ -48,6 +48,20 @@ async function createSnapshot(
   return engine.exportSnapshot();
 }
 
+async function createSnapshotState(
+  workbookName: string,
+  apply: (engine: SpreadsheetEngine) => void | Promise<void>,
+): Promise<{ engine: SpreadsheetEngine; snapshot: WorkbookSnapshot }> {
+  const engine = new SpreadsheetEngine({ workbookName });
+  await engine.ready();
+  engine.createSheet("Sheet1");
+  await apply(engine);
+  return {
+    engine,
+    snapshot: engine.exportSnapshot(),
+  };
+}
+
 describe("persistWorkbookMutation", () => {
   it("persists single-cell edits without diffing unrelated source tables", async () => {
     const previousSnapshot = createEmptyWorkbookSnapshot("doc-1");
@@ -192,6 +206,42 @@ describe("persistWorkbookMutation", () => {
     expect(result.calculatedRevision).toBe(3);
     expect(result.recalcJobId).toBe("doc-1:recalc:6");
     expect(db.statements.some((statement) => statement.includes("INSERT INTO recalc_job"))).toBe(
+      true,
+    );
+  });
+
+  it("refreshes cell_eval rows when clearing a style range over populated cells", async () => {
+    const previousState = await createSnapshotState("doc-1", (engine) => {
+      engine.setCellValue("Sheet1", "D5", "asdf");
+      engine.setRangeStyle(
+        { sheetName: "Sheet1", startAddress: "C4", endAddress: "E8" },
+        { fill: { backgroundColor: "#ff0000" } },
+      );
+    });
+    const nextState = await createSnapshotState("doc-1", (engine) => {
+      engine.setCellValue("Sheet1", "D5", "asdf");
+    });
+    const db = createRecordingDb();
+
+    await persistWorkbookMutation(db, "doc-1", {
+      previousState: createRuntimeState(previousState.snapshot),
+      nextSnapshot: nextState.snapshot,
+      nextReplicaSnapshot: null,
+      nextEngine: nextState.engine,
+      updatedBy: "user-1",
+      ownerUserId: "owner-1",
+      eventPayload: {
+        kind: "clearRangeStyle",
+        range: { sheetName: "Sheet1", startAddress: "C4", endAddress: "E8" },
+      },
+    });
+
+    expect(
+      db.statements.some((statement) =>
+        statement.includes("DELETE FROM sheet_style_ranges WHERE id = $1"),
+      ),
+    ).toBe(true);
+    expect(db.statements.some((statement) => statement.includes("INSERT INTO cell_eval"))).toBe(
       true,
     );
   });
