@@ -188,6 +188,10 @@ export const clearRangeNumberFormatArgsSchema = baseMutationArgsSchema.extend({
   range: cellRangeRefSchema,
 });
 
+export const clearRangeArgsSchema = baseMutationArgsSchema.extend({
+  range: cellRangeRefSchema,
+});
+
 export const replaceSnapshotArgsSchema = baseMutationArgsSchema.extend({
   snapshot: z.any(),
 });
@@ -200,6 +204,7 @@ export const mutators = defineMutators({
     setCellValue: defineMutator(setCellValueArgsSchema, noop),
     setCellFormula: defineMutator(setCellFormulaArgsSchema, noop),
     clearCell: defineMutator(clearCellArgsSchema, noop),
+    clearRange: defineMutator(clearRangeArgsSchema, noop),
     renderCommit: defineMutator(renderCommitArgsSchema, noop),
     fillRange: defineMutator(rangeMutationArgsSchema, noop),
     copyRange: defineMutator(rangeMutationArgsSchema, noop),

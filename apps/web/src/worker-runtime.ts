@@ -57,6 +57,7 @@ interface WorkerEngine {
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined;
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void;
   clearRangeNumberFormat(range: CellRangeRef): void;
+  clearRange(range: CellRangeRef): void;
   setCellValue(sheetName: string, address: string, value: LiteralInput): unknown;
   setCellFormula(sheetName: string, address: string, formula: string): unknown;
   setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void;
@@ -327,6 +328,10 @@ export class WorkbookWorkerRuntime {
 
   clearRangeNumberFormat(range: CellRangeRef): void {
     this.requireEngine().clearRangeNumberFormat(range);
+  }
+
+  clearRange(range: CellRangeRef): void {
+    this.requireEngine().clearRange(range);
   }
 
   clearCell(sheetName: string, address: string): CellSnapshot {

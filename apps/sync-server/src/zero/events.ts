@@ -44,6 +44,10 @@ export type WorkbookEventPayload =
       address: string;
     }
   | {
+      kind: "clearRange";
+      range: CellRangeRef;
+    }
+  | {
       kind: "renderCommit";
       ops: CommitOp[];
     }
@@ -126,6 +130,8 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "setCellFormula":
     case "clearCell":
       return [singleCellRegion(payload.sheetName, payload.address)];
+    case "clearRange":
+      return [rangeRegion(payload.range)];
     case "fillRange":
     case "copyRange":
       return [rangeRegion(payload.source), rangeRegion(payload.target)];
@@ -159,6 +165,9 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return;
     case "clearCell":
       engine.clearCell(payload.sheetName, payload.address);
+      return;
+    case "clearRange":
+      engine.clearRange(payload.range);
       return;
     case "renderCommit":
       engine.renderCommit(payload.ops);

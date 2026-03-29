@@ -2,6 +2,7 @@ export { mutators } from "./mutators.js";
 export {
   applyBatchArgsSchema,
   clearRangeNumberFormatArgsSchema,
+  clearRangeArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
   rangeMutationArgsSchema,

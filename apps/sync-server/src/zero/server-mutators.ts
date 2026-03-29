@@ -12,6 +12,7 @@ import type {
 } from "@bilig/protocol";
 import {
   applyBatchArgsSchema,
+  clearRangeArgsSchema,
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
@@ -406,6 +407,24 @@ export async function handleServerMutator(
         runtimeManager,
         (engine) => {
           engine.clearCell(parsed.sheetName, parsed.address);
+        },
+        session,
+      );
+      return;
+    }
+
+    case "workbook.clearRange": {
+      const parsed = clearRangeArgsSchema.parse(args);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "clearRange",
+          range: parsed.range,
+        },
+        runtimeManager,
+        (engine) => {
+          engine.clearRange(parsed.range);
         },
         session,
       );

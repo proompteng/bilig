@@ -15,18 +15,24 @@ import {
   Bold,
   Check,
   ChevronDown,
-  Grid2x2,
   Grid2x2X,
+  Grid3x3,
   Italic,
   Minus,
   PaintBucket,
+  PanelBottom,
+  PanelLeft,
+  PanelLeftRightDashed,
+  PanelRight,
+  PanelTop,
+  PanelTopBottomDashed,
   Plus,
   RemoveFormatting,
   Rows3,
   Square,
-  SquareDashedBottom,
   Underline,
   WrapText,
+  type LucideIcon,
 } from "lucide-react";
 import { Popover } from "@base-ui/react/popover";
 import { Select } from "@base-ui/react/select";
@@ -121,6 +127,54 @@ interface ColorPaletteButtonProps {
   onReset(this: void): void;
   onSelectColor(this: void, color: string, source: "preset" | "custom"): void;
 }
+
+type BorderPreset =
+  | "all"
+  | "inner"
+  | "horizontal"
+  | "vertical"
+  | "outer"
+  | "left"
+  | "top"
+  | "right"
+  | "bottom"
+  | "clear";
+
+interface BorderPresetOption {
+  key: BorderPreset;
+  label: string;
+  Icon: LucideIcon;
+}
+
+const BORDER_CLEAR_FIELDS: readonly CellStyleField[] = [
+  "borderTop",
+  "borderRight",
+  "borderBottom",
+  "borderLeft",
+] as const;
+
+const DEFAULT_BORDER_SIDE = {
+  style: "solid",
+  weight: "thin",
+  color: "#111827",
+} as const;
+
+const BORDER_PRESET_ROWS: readonly (readonly BorderPresetOption[])[] = [
+  [
+    { key: "all", label: "All borders", Icon: Grid3x3 },
+    { key: "inner", label: "Inner borders", Icon: Grid3x3 },
+    { key: "horizontal", label: "Horizontal borders", Icon: PanelTopBottomDashed },
+    { key: "vertical", label: "Vertical borders", Icon: PanelLeftRightDashed },
+    { key: "outer", label: "Outer borders", Icon: Square },
+  ],
+  [
+    { key: "left", label: "Left border", Icon: PanelLeft },
+    { key: "top", label: "Top border", Icon: PanelTop },
+    { key: "right", label: "Right border", Icon: PanelRight },
+    { key: "bottom", label: "Bottom border", Icon: PanelBottom },
+    { key: "clear", label: "Clear borders", Icon: Grid2x2X },
+  ],
+] as const;
 
 const GOOGLE_SHEETS_SWATCH_ROWS: readonly (readonly ColorSwatch[])[] = [
   [
@@ -274,6 +328,7 @@ const TOOLBAR_POPUP_CLASS =
   "overflow-hidden rounded-[4px] border border-[#d0d7e2] bg-white p-2 shadow-[0_14px_30px_rgba(15,23,42,0.14)]";
 const TOOLBAR_POPUP_ACTION_CLASS =
   "inline-flex h-8 items-center rounded-[4px] px-2 text-[11px] font-semibold transition-colors";
+const MAX_OPTIMISTIC_RANGE_CLEAR_CELLS = 4_096;
 
 function normalizeHexColor(value: string): string {
   return value.trim().toLowerCase();
@@ -483,10 +538,87 @@ function parseSelectionRangeLabel(
   label: string,
   sheetName: string,
 ): { sheetName: string; startAddress: string; endAddress: string } {
-  const [startAddress = label, endAddress = startAddress] = label.includes(":")
-    ? label.split(":")
-    : [label, label];
+  const trimmed = label.trim().toUpperCase();
+  if (trimmed === "ALL") {
+    return {
+      sheetName,
+      startAddress: "A1",
+      endAddress: formatAddress(MAX_ROWS - 1, MAX_COLS - 1),
+    };
+  }
+
+  const rowSelection = /^(\d+):(\d+)$/.exec(trimmed);
+  if (rowSelection) {
+    const startRow = Math.min(Number(rowSelection[1]) - 1, Number(rowSelection[2]) - 1);
+    const endRow = Math.max(Number(rowSelection[1]) - 1, Number(rowSelection[2]) - 1);
+    return {
+      sheetName,
+      startAddress: formatAddress(startRow, 0),
+      endAddress: formatAddress(endRow, MAX_COLS - 1),
+    };
+  }
+
+  const columnSelection = /^([A-Z]+):([A-Z]+)$/.exec(trimmed);
+  if (columnSelection) {
+    const startColumn = parseCellAddress(`${columnSelection[1]}1`, sheetName).col;
+    const endColumn = parseCellAddress(`${columnSelection[2]}1`, sheetName).col;
+    return {
+      sheetName,
+      startAddress: formatAddress(0, Math.min(startColumn, endColumn)),
+      endAddress: formatAddress(MAX_ROWS - 1, Math.max(startColumn, endColumn)),
+    };
+  }
+
+  const [startAddress = label, endAddress = startAddress] = trimmed.includes(":")
+    ? trimmed.split(":")
+    : [trimmed, trimmed];
   return { sheetName, startAddress, endAddress };
+}
+
+function getNormalizedRangeBounds(range: CellRangeRef): {
+  sheetName: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+} {
+  const start = parseCellAddress(range.startAddress, range.sheetName);
+  const end = parseCellAddress(range.endAddress, range.sheetName);
+  return {
+    sheetName: range.sheetName,
+    startRow: Math.min(start.row, end.row),
+    endRow: Math.max(start.row, end.row),
+    startCol: Math.min(start.col, end.col),
+    endCol: Math.max(start.col, end.col),
+  };
+}
+
+function createRangeRef(
+  sheetName: string,
+  startRow: number,
+  startCol: number,
+  endRow: number,
+  endCol: number,
+): CellRangeRef {
+  return {
+    sheetName,
+    startAddress: formatAddress(startRow, startCol),
+    endAddress: formatAddress(endRow, endCol),
+  };
+}
+
+function forEachAddressInRange(range: CellRangeRef, visit: (address: string) => void): void {
+  const { startRow, endRow, startCol, endCol } = getNormalizedRangeBounds(range);
+  for (let row = startRow; row <= endRow; row += 1) {
+    for (let col = startCol; col <= endCol; col += 1) {
+      visit(formatAddress(row, col));
+    }
+  }
+}
+
+function getRangeCellCount(range: CellRangeRef): number {
+  const { startRow, endRow, startCol, endCol } = getNormalizedRangeBounds(range);
+  return (endRow - startRow + 1) * (endCol - startCol + 1);
 }
 
 function formatSyncStateLabel(state: WorkbookWorkerStateSnapshot["syncState"]): string {
@@ -553,6 +685,74 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
     (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function BorderPresetMenu({
+  disabled,
+  onApplyPreset,
+}: {
+  disabled?: boolean;
+  onApplyPreset(this: void, preset: BorderPreset): void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const applyPreset = useCallback(
+    (preset: BorderPreset) => {
+      onApplyPreset(preset);
+      setOpen(false);
+    },
+    [onApplyPreset],
+  );
+
+  return (
+    <Popover.Root
+      modal={false}
+      open={open}
+      onOpenChange={(nextOpen: boolean) => {
+        setOpen(nextOpen);
+      }}
+    >
+      <Popover.Trigger
+        aria-label="Borders"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-2")}
+        disabled={disabled}
+        title="Borders"
+        type="button"
+      >
+        <Square className={TOOLBAR_ICON_CLASS} />
+        <ChevronDown className="h-3 w-3 shrink-0 stroke-[1.75] text-[#5f6368]" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
+          <Popover.Popup
+            aria-label="Border presets"
+            className={classNames(TOOLBAR_POPUP_CLASS, "w-[228px]")}
+          >
+            <div className="space-y-1">
+              {BORDER_PRESET_ROWS.map((row) => (
+                <div key={row.map(({ key }) => key).join("-")} className="grid grid-cols-5 gap-1">
+                  {row.map(({ key, label, Icon }) => (
+                    <button
+                      key={key}
+                      aria-label={label}
+                      className="inline-flex h-8 items-center justify-center rounded-[4px] border border-transparent text-[#202124] outline-none transition-colors hover:bg-[#eef3fd] focus-visible:border-[#1a73e8] focus-visible:bg-[#eef3fd]"
+                      onClick={() => applyPreset(key)}
+                      title={label}
+                      type="button"
+                    >
+                      <Icon className={TOOLBAR_ICON_CLASS} />
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -1183,6 +1383,12 @@ export function WorkerWorkbookApp({
           await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
           return localResult;
         }
+        case "clearRange": {
+          const [range] = args;
+          assert(isCellRangeRef(range), "Invalid clearRange args");
+          await runZeroMutation(mutators.workbook.clearRange({ documentId, range }));
+          return localResult;
+        }
         case "renderCommit": {
           const [ops] = args;
           assert(isCommitOps(ops), "Invalid renderCommit args");
@@ -1456,23 +1662,32 @@ export function WorkerWorkbookApp({
     setEditingMode("idle");
   }, [getLiveSelectedCell]);
 
+  const clearSelectedRange = useCallback(() => {
+    if (!writesAllowed) {
+      return;
+    }
+    const targetRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
+    if (getRangeCellCount(targetRange) <= MAX_OPTIMISTIC_RANGE_CLEAR_CELLS) {
+      forEachAddressInRange(targetRange, (address) => {
+        applyOptimisticCellEdit(targetRange.sheetName, address, { kind: "clear" });
+      });
+    }
+    editorValueRef.current = "";
+    setEditorValue("");
+    editorTargetRef.current = selectionRef.current;
+    editingModeRef.current = "idle";
+    setEditingMode("idle");
+    void invokeMutation("clearRange", targetRange).catch((error: unknown) => {
+      setRuntimeError(error instanceof Error ? error.message : String(error));
+    });
+  }, [applyOptimisticCellEdit, invokeMutation, selection.sheetName, selectionLabel, writesAllowed]);
+
   const clearSelectedCell = useCallback(() => {
     if (!writesAllowed) {
       return;
     }
-    const targetSelection = selectionRef.current;
-    applyOptimisticCellEdit(targetSelection.sheetName, targetSelection.address, { kind: "clear" });
-    editorValueRef.current = "";
-    setEditorValue("");
-    editorTargetRef.current = targetSelection;
-    editingModeRef.current = "idle";
-    setEditingMode("idle");
-    void invokeMutation("clearCell", targetSelection.sheetName, targetSelection.address).catch(
-      (error: unknown) => {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      },
-    );
-  }, [applyOptimisticCellEdit, invokeMutation, writesAllowed]);
+    clearSelectedRange();
+  }, [clearSelectedRange, writesAllowed]);
 
   const pasteIntoSelection = useCallback(
     (sheetName: string, startAddr: string, values: readonly (readonly string[])[]) => {
@@ -1698,7 +1913,7 @@ export function WorkerWorkbookApp({
   );
 
   const clearRangeStyleFields = useCallback(
-    async (fields?: string[]) => {
+    async (fields?: CellStyleField[]) => {
       await invokeMutation("clearRangeStyle", selectionRange, fields);
     },
     [invokeMutation, selectionRange],
@@ -1734,59 +1949,86 @@ export function WorkerWorkbookApp({
     await applyRangeStyle({ font: { color: null } });
   }, [applyRangeStyle]);
 
-  const applyOuterBorders = useCallback(async () => {
-    const start = parseCellAddress(selectionRange.startAddress, selectionRange.sheetName);
-    const end = parseCellAddress(selectionRange.endAddress, selectionRange.sheetName);
-    const startRow = Math.min(start.row, end.row);
-    const endRow = Math.max(start.row, end.row);
-    const startCol = Math.min(start.col, end.col);
-    const endCol = Math.max(start.col, end.col);
-    const border = { style: "solid", weight: "thin", color: "#111827" } as const;
+  const applyBorderPreset = useCallback(
+    async (preset: BorderPreset) => {
+      const { sheetName, startRow, endRow, startCol, endCol } =
+        getNormalizedRangeBounds(selectionRange);
+      const applyBorders = async (
+        range: CellRangeRef,
+        borders: NonNullable<CellStylePatch["borders"]>,
+      ) => {
+        await invokeMutation("setRangeStyle", range, { borders });
+      };
+      const applyRowBorder = async (rowStart: number, rowEnd: number, side: "top" | "bottom") => {
+        if (rowStart > rowEnd) {
+          return;
+        }
+        await applyBorders(createRangeRef(sheetName, rowStart, startCol, rowEnd, endCol), {
+          [side]: DEFAULT_BORDER_SIDE,
+        });
+      };
+      const applyColumnBorder = async (
+        colStart: number,
+        colEnd: number,
+        side: "left" | "right",
+      ) => {
+        if (colStart > colEnd) {
+          return;
+        }
+        await applyBorders(createRangeRef(sheetName, startRow, colStart, endRow, colEnd), {
+          [side]: DEFAULT_BORDER_SIDE,
+        });
+      };
 
-    await invokeMutation("clearRangeStyle", selectionRange, [
-      "borderTop",
-      "borderRight",
-      "borderBottom",
-      "borderLeft",
-    ]);
+      await invokeMutation("clearRangeStyle", selectionRange, [...BORDER_CLEAR_FIELDS]);
 
-    await invokeMutation(
-      "setRangeStyle",
-      {
-        sheetName: selectionRange.sheetName,
-        startAddress: formatAddress(startRow, startCol),
-        endAddress: formatAddress(startRow, endCol),
-      },
-      { borders: { top: border } },
-    );
-    await invokeMutation(
-      "setRangeStyle",
-      {
-        sheetName: selectionRange.sheetName,
-        startAddress: formatAddress(endRow, startCol),
-        endAddress: formatAddress(endRow, endCol),
-      },
-      { borders: { bottom: border } },
-    );
-    await invokeMutation(
-      "setRangeStyle",
-      {
-        sheetName: selectionRange.sheetName,
-        startAddress: formatAddress(startRow, startCol),
-        endAddress: formatAddress(endRow, startCol),
-      },
-      { borders: { left: border } },
-    );
-    await invokeMutation(
-      "setRangeStyle",
-      {
-        sheetName: selectionRange.sheetName,
-        startAddress: formatAddress(startRow, endCol),
-        endAddress: formatAddress(endRow, endCol),
-      },
-      { borders: { right: border } },
-    );
-  }, [invokeMutation, selectionRange]);
+      switch (preset) {
+        case "clear":
+          return;
+        case "all":
+          await applyRowBorder(startRow, endRow, "top");
+          await applyColumnBorder(startCol, endCol, "left");
+          await applyRowBorder(endRow, endRow, "bottom");
+          await applyColumnBorder(endCol, endCol, "right");
+          return;
+        case "inner":
+          await applyRowBorder(startRow + 1, endRow, "top");
+          await applyColumnBorder(startCol + 1, endCol, "left");
+          return;
+        case "horizontal":
+          await applyRowBorder(startRow, endRow, "top");
+          await applyRowBorder(endRow, endRow, "bottom");
+          return;
+        case "vertical":
+          await applyColumnBorder(startCol, endCol, "left");
+          await applyColumnBorder(endCol, endCol, "right");
+          return;
+        case "outer":
+          await applyRowBorder(startRow, startRow, "top");
+          await applyRowBorder(endRow, endRow, "bottom");
+          await applyColumnBorder(startCol, startCol, "left");
+          await applyColumnBorder(endCol, endCol, "right");
+          return;
+        case "left":
+          await applyColumnBorder(startCol, startCol, "left");
+          return;
+        case "top":
+          await applyRowBorder(startRow, startRow, "top");
+          return;
+        case "right":
+          await applyColumnBorder(endCol, endCol, "right");
+          return;
+        case "bottom":
+          await applyRowBorder(endRow, endRow, "bottom");
+          return;
+        default: {
+          const exhaustive: never = preset;
+          return exhaustive;
+        }
+      }
+    },
+    [invokeMutation, selectionRange],
+  );
 
   const setNumberFormatPreset = useCallback(
     async (preset: string) => {
@@ -1932,7 +2174,7 @@ export function WorkerWorkbookApp({
 
       if (event.shiftKey && event.code === "Digit7") {
         event.preventDefault();
-        void applyOuterBorders();
+        void applyBorderPreset("outer");
         return;
       }
 
@@ -1965,7 +2207,7 @@ export function WorkerWorkbookApp({
       window.removeEventListener("keydown", handleWindowShortcut, true);
     };
   }, [
-    applyOuterBorders,
+    applyBorderPreset,
     applyRangeStyle,
     clearRangeStyleFields,
     isBoldActive,
@@ -2129,50 +2371,7 @@ export function WorkerWorkbookApp({
       <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
 
       <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Border presets">
-          <RibbonIconButton
-            ariaLabel="Bottom border"
-            onClick={() =>
-              void applyRangeStyle({
-                borders: {
-                  bottom: { style: "double", weight: "medium", color: "#111827" },
-                },
-              })
-            }
-          >
-            <SquareDashedBottom className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            ariaLabel="Outer borders"
-            shortcut="⌘/Ctrl+Shift+7"
-            onClick={() => void applyOuterBorders()}
-          >
-            <Square className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            ariaLabel="All borders"
-            onClick={() =>
-              void applyRangeStyle({
-                borders: {
-                  top: { style: "solid", weight: "thin", color: "#111827" },
-                  right: { style: "solid", weight: "thin", color: "#111827" },
-                  bottom: { style: "solid", weight: "thin", color: "#111827" },
-                  left: { style: "solid", weight: "thin", color: "#111827" },
-                },
-              })
-            }
-          >
-            <Grid2x2 className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            ariaLabel="No borders"
-            onClick={() =>
-              void clearRangeStyleFields(["borderTop", "borderRight", "borderBottom", "borderLeft"])
-            }
-          >
-            <Grid2x2X className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-        </div>
+        <BorderPresetMenu disabled={!writesAllowed} onApplyPreset={applyBorderPreset} />
       </Toolbar.Group>
 
       <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />

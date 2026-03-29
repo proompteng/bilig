@@ -461,6 +461,24 @@ async function pickToolbarPresetColor(
   await page.getByLabel(`${controlLabel} ${swatchLabel}`).click();
 }
 
+async function pickToolbarBorderPreset(
+  page: Parameters<typeof test>[0]["page"],
+  presetLabel:
+    | "All borders"
+    | "Inner borders"
+    | "Horizontal borders"
+    | "Vertical borders"
+    | "Outer borders"
+    | "Left border"
+    | "Top border"
+    | "Right border"
+    | "Bottom border"
+    | "Clear borders",
+) {
+  await page.getByLabel("Borders").click();
+  await page.getByRole("button", { name: presetLabel }).click();
+}
+
 const TOOLBAR_ACTION_CELL = {
   sheetName: "Sheet1",
   address: "B2",
@@ -1255,9 +1273,7 @@ test("web app keeps toolbar controls aligned and consistently sized", async ({ p
     page.getByLabel("Align left"),
     page.getByLabel("Align center"),
     page.getByLabel("Align right"),
-    page.getByLabel("Bottom border"),
-    page.getByLabel("All borders"),
-    page.getByLabel("No borders"),
+    page.getByLabel("Borders"),
     page.getByLabel("Wrap"),
     page.getByLabel("Clear style"),
   ];
@@ -1594,7 +1610,7 @@ test("web app persists toolbar formatting actions to the synced workbook snapsho
     await setToolbarCustomColor(page, "Fill color", "#dbeafe");
     await setToolbarCustomColor(page, "Text color", "#7c2d12");
     await page.getByLabel("Align right").click();
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
     await page.getByLabel("Wrap").click();
 
     await expect(page.getByLabel("Number format")).toHaveValue("accounting");
@@ -2136,7 +2152,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       value: "toolbar",
     });
 
-    await page.getByLabel("Bottom border").click();
+    await pickToolbarBorderPreset(page, "Bottom border");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2147,7 +2163,7 @@ test.describe("web app validates each toolbar formatting action individually", (
           TOOLBAR_ACTION_CELL.sheetName,
           TOOLBAR_ACTION_CELL.address,
         )?.borders?.bottom ?? null,
-      { style: "double", weight: "medium", color: "#111827" },
+      { style: "solid", weight: "thin", color: "#111827" },
     );
   });
 
@@ -2157,7 +2173,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       value: "toolbar",
     });
 
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2183,7 +2199,7 @@ test.describe("web app validates each toolbar formatting action individually", (
     );
   });
 
-  test("no borders removes the saved border sides", async ({ page }) => {
+  test("clear borders removes the saved border sides", async ({ page }) => {
     const documentId = createToolbarActionDocumentId("border-none");
     await prepareToolbarActionDocument(page, localServer.localServerUrl, documentId, {
       value: "toolbar",
@@ -2221,7 +2237,7 @@ test.describe("web app validates each toolbar formatting action individually", (
         );
       })
       .toBe(true);
-    await page.getByLabel("No borders").click();
+    await pickToolbarBorderPreset(page, "Clear borders");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2291,7 +2307,7 @@ test.describe("web app validates each toolbar formatting action individually", (
     await page.getByLabel("Font family").selectOption("Georgia");
     await page.getByLabel("Bold").click();
     await setToolbarCustomColor(page, "Fill color", "#dbeafe");
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2384,7 +2400,7 @@ test.describe("web app validates each toolbar formatting action individually", (
 
     await page.getByLabel("Bold").click();
     await setToolbarCustomColor(page, "Fill color", "#dbeafe");
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2449,6 +2465,56 @@ test.describe("web app validates each toolbar formatting action individually", (
     await expectToolbarColor(page.getByLabel("Fill color"), "#dbeafe");
   });
 
+  for (const key of ["Delete", "Backspace"] as const) {
+    test(`${key} clears the contents of every cell in the selected rectangle`, async ({ page }) => {
+      const documentId = createToolbarActionDocumentId(`clear-rectangle-${key.toLowerCase()}`);
+      await prepareToolbarActionDocument(page, localServer.localServerUrl, documentId, {
+        setup: async (sessionId) => {
+          await sendAgentRequest(localServer.localServerUrl, {
+            kind: "writeRange",
+            id: `write:${Date.now()}`,
+            sessionId,
+            range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+            values: [
+              ["North", "South"],
+              ["10", "20"],
+            ],
+          });
+        },
+      });
+
+      await dragProductBodySelection(page, 1, 1, 2, 2);
+      await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:C3");
+
+      await page.keyboard.press(key);
+
+      await expectToolbarSnapshotProjection(
+        localServer.localServerUrl,
+        documentId,
+        (snapshot) =>
+          ["B2", "C2", "B3", "C3"].map((address) => {
+            const cell = getSheetSnapshot(snapshot, "Sheet1").cells.find(
+              (entry) => entry.address === address,
+            );
+            return {
+              address,
+              value: cell?.value ?? null,
+              formula: cell?.formula ?? null,
+            };
+          }),
+        [
+          { address: "B2", value: null, formula: null },
+          { address: "C2", value: null, formula: null },
+          { address: "B3", value: null, formula: null },
+          { address: "C3", value: null, formula: null },
+        ],
+      );
+
+      await clickProductCell(page, 1, 1);
+      await expect(page.getByTestId("formula-input")).toHaveValue("");
+    });
+  }
+
   test("fill color visibly repaints the grid cell after clicking away", async ({ page }) => {
     const documentId = createToolbarActionDocumentId("fill-visual");
     await prepareToolbarActionDocument(page, localServer.localServerUrl, documentId);
@@ -2488,7 +2554,7 @@ test.describe("web app validates each toolbar formatting action individually", (
     });
 
     await dragProductBodySelection(page, 1, 1, 2, 2);
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
     await clickProductCell(page, 4, 4);
     await expectAllBordersVisibleForRange(page, 1, 1, 2, 2);
   });
@@ -2500,7 +2566,7 @@ test.describe("web app validates each toolbar formatting action individually", (
     await prepareToolbarActionDocument(page, localServer.localServerUrl, documentId);
 
     await dragProductBodySelection(page, 1, 1, 2, 2);
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
     await clickProductCell(page, 5, 5);
 
     await waitForRenderedBorders(page, 12);
@@ -2515,7 +2581,7 @@ test.describe("web app validates each toolbar formatting action individually", (
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:F16");
 
     await pickToolbarPresetColor(page, "Fill color", "light red 3");
-    await page.getByLabel("Outer borders").click();
+    await pickToolbarBorderPreset(page, "Outer borders");
     await clickProductCell(page, 8, 20);
 
     await waitForRenderedBorders(page);
@@ -2553,7 +2619,7 @@ test.describe("web app validates each toolbar formatting action individually", (
     await dragProductBodySelection(page, 1, 1, 5, 15);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:F16");
 
-    await page.getByLabel("All borders").click();
+    await pickToolbarBorderPreset(page, "All borders");
     await clickProductCell(page, 7, 2);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!H3");
 
@@ -3274,6 +3340,42 @@ test("web app expands the active range with shift-click", async ({ page }) => {
   await clickProductCell(page, 4, 5, { shift: true });
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:E6");
 });
+
+for (const key of ["Delete", "Backspace"] as const) {
+  test(`web app clears the full selected range with ${key.toLowerCase()}`, async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/?zeroViewportBridge=off");
+
+    const grid = page.getByTestId("sheet-grid");
+    const formulaInput = page.getByTestId("formula-input");
+
+    await clickProductCell(page, 1, 1);
+    await page.evaluate(() => navigator.clipboard.writeText("11\t12\n13\t14"));
+    await grid.press(`${PRIMARY_MODIFIER}+V`);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
+
+    await dragProductBodySelection(page, 1, 1, 2, 2);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:C3");
+
+    await grid.press(key);
+
+    await clickProductCell(page, 1, 1);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
+    await expect(formulaInput).toHaveValue("");
+    await clickProductCell(page, 2, 1);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C2");
+    await expect(formulaInput).toHaveValue("");
+    await clickProductCell(page, 1, 2);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B3");
+    await expect(formulaInput).toHaveValue("");
+    await clickProductCell(page, 2, 2);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C3");
+    await expect(formulaInput).toHaveValue("");
+  });
+}
 
 test("web app ignores right gutter clicks", async ({ page }) => {
   await page.goto("/?zeroViewportBridge=off");
