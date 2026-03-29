@@ -21,7 +21,7 @@ export function createHttpWorksheetExecutor(
 
   return {
     async execute(frame) {
-      const response = await fetchImpl(`${baseUrl}/v1/agent/frames`, {
+      const response = await fetchImpl(`${baseUrl}/v2/agent/frames`, {
         method: "POST",
         headers: {
           "content-type": "application/octet-stream",

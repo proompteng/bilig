@@ -72,7 +72,7 @@ describe("local-server", () => {
   it("opens a live workbook session and applies range writes through the agent API", async () => {
     const openResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -96,7 +96,7 @@ describe("local-server", () => {
 
     const writeResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -127,7 +127,7 @@ describe("local-server", () => {
 
     const readResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -164,7 +164,7 @@ describe("local-server", () => {
   it("adds CORS headers for browser access to document snapshots", async () => {
     const response = await app.inject({
       method: "GET",
-      url: "/v1/documents/cors-doc/snapshot/latest",
+      url: "/v2/documents/cors-doc/snapshot/latest",
       headers: {
         origin: "http://localhost:3000",
       },
@@ -177,7 +177,7 @@ describe("local-server", () => {
   it("rejects streaming subscriptions over the non-streaming HTTP agent endpoint", async () => {
     const openResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -203,7 +203,7 @@ describe("local-server", () => {
 
     const subscribeResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -356,7 +356,7 @@ describe("local-server", () => {
   it("imports xlsx uploads through the agent API and exposes the imported snapshot", async () => {
     const uploadResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -384,7 +384,7 @@ describe("local-server", () => {
 
     const snapshotResponse = await app.inject({
       method: "GET",
-      url: `/v1/documents/${encodeURIComponent(uploadFrame.response.documentId)}/snapshot/latest`,
+      url: `/v2/documents/${encodeURIComponent(uploadFrame.response.documentId)}/snapshot/latest`,
     });
     expect(snapshotResponse.statusCode).toBe(200);
     const snapshot = parseSnapshotPayload(JSON.parse(snapshotResponse.body) as unknown);

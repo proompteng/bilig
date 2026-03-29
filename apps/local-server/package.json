@@ -11,12 +11,15 @@
   "dependencies": {
     "@bilig/agent-api": "workspace:*",
     "@bilig/binary-protocol": "workspace:*",
+    "@bilig/contracts": "workspace:*",
     "@bilig/core": "workspace:*",
     "@bilig/crdt": "workspace:*",
     "@bilig/excel-import": "workspace:*",
     "@bilig/protocol": "workspace:*",
+    "@bilig/runtime-kernel": "workspace:*",
     "@bilig/workbook-domain": "workspace:*",
     "@fastify/websocket": "11.2.0",
+    "effect": "3.21.0",
     "fastify": "5.8.4"
   }
 }

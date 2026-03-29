@@ -1,0 +1,24 @@
+{
+  "name": "@bilig/actors",
+  "version": "0.1.0",
+  "description": "Shared XState v5 actor machines for bilig control-plane orchestration.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "xstate": "5.30.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

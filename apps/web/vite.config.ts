@@ -111,8 +111,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@glideapps/glide-data-grid/index.css": resolve(glidePackageRoot, "dist/index.css"),
+      "@bilig/actors": fileURLToPath(
+        new URL("../../packages/actors/src/index.ts", import.meta.url),
+      ),
       "@bilig/binary-protocol": fileURLToPath(
         new URL("../../packages/binary-protocol/src/index.ts", import.meta.url),
+      ),
+      "@bilig/contracts": fileURLToPath(
+        new URL("../../packages/contracts/src/index.ts", import.meta.url),
       ),
       "@bilig/formula/program-arena": fileURLToPath(
         new URL("../../packages/formula/src/program-arena.ts", import.meta.url),
@@ -128,6 +134,9 @@ export default defineConfig({
       ),
       "@bilig/renderer": fileURLToPath(
         new URL("../../packages/renderer/src/index.ts", import.meta.url),
+      ),
+      "@bilig/runtime-kernel": fileURLToPath(
+        new URL("../../packages/runtime-kernel/src/index.ts", import.meta.url),
       ),
       "@bilig/storage-browser": fileURLToPath(
         new URL("../../packages/storage-browser/src/index.ts", import.meta.url),

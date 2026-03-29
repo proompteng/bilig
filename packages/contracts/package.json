@@ -1,0 +1,24 @@
+{
+  "name": "@bilig/contracts",
+  "version": "0.1.0",
+  "description": "Effect Schema contracts for bilig v2 control-plane APIs and envelopes.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "effect": "3.21.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

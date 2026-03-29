@@ -65,9 +65,9 @@ function formatSelectionText(
 interface LocalDocumentStateSummary {
   documentId: string;
   cursor: number;
-  browserSessions: string[];
-  agentSessions: string[];
-  lastBatchId: string | null;
+  owner: string | null;
+  sessions: string[];
+  latestSnapshotCursor: number | null;
 }
 
 type CellRangeRef = {
@@ -321,7 +321,7 @@ async function sendAgentRequest(
   localServerUrl: string,
   request: AgentRequest,
 ): Promise<AgentResponse> {
-  const response = await fetch(`${localServerUrl}/v1/agent/frames`, {
+  const response = await fetch(`${localServerUrl}/v2/agent/frames`, {
     method: "POST",
     headers: {
       "content-type": "application/octet-stream",
@@ -644,7 +644,7 @@ async function waitForBrowserSession(localServerUrl: string, documentId: string)
     .poll(
       async () => {
         const documentState = await fetchDocumentState(localServerUrl, documentId);
-        return documentState.browserSessions.length > 0;
+        return documentState.sessions.length > 0;
       },
       {
         message: "browser should attach to the local-server document session",
@@ -718,9 +718,9 @@ function isLocalDocumentStateSummary(value: unknown): value is LocalDocumentStat
     isRecord(value) &&
     typeof value.documentId === "string" &&
     typeof value.cursor === "number" &&
-    Array.isArray(value.browserSessions) &&
-    Array.isArray(value.agentSessions) &&
-    (typeof value.lastBatchId === "string" || value.lastBatchId === null)
+    (typeof value.owner === "string" || value.owner === null) &&
+    Array.isArray(value.sessions) &&
+    (typeof value.latestSnapshotCursor === "number" || value.latestSnapshotCursor === null)
   );
 }
 
@@ -728,7 +728,7 @@ async function fetchDocumentState(
   localServerUrl: string,
   documentId: string,
 ): Promise<LocalDocumentStateSummary> {
-  const response = await fetch(`${localServerUrl}/v1/documents/${documentId}/state`);
+  const response = await fetch(`${localServerUrl}/v2/documents/${documentId}/state`);
   if (!response.ok) {
     throw new Error(`Failed to fetch local-server document state: ${response.status}`);
   }
@@ -1629,7 +1629,7 @@ test("web app hydrates toolbar controls from the selected cell style and number 
       .poll(
         async () => {
           const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
-          return documentState.browserSessions.length > 0;
+          return documentState.sessions.length > 0;
         },
         { message: "browser should attach to the local-server document session" },
       )
@@ -1696,7 +1696,7 @@ test("web app persists toolbar formatting actions to the synced workbook snapsho
       .poll(
         async () => {
           const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
-          return documentState.browserSessions.length > 0;
+          return documentState.sessions.length > 0;
         },
         { message: "browser should attach to the local-server document session" },
       )
@@ -1796,7 +1796,7 @@ test("web app clears style and number format back to workbook defaults", async (
       .poll(
         async () => {
           const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
-          return documentState.browserSessions.length > 0;
+          return documentState.sessions.length > 0;
         },
         { message: "browser should attach to the local-server document session" },
       )
@@ -2773,7 +2773,7 @@ test("web app reflects a local-server agent write in the rendered spreadsheet", 
       .poll(
         async () => {
           const documentState = await fetchDocumentState(localServer.localServerUrl, documentId);
-          return documentState.browserSessions.length > 0;
+          return documentState.sessions.length > 0;
         },
         {
           message: "browser should attach to the local-server document session",

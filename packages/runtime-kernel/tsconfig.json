@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "paths": {
+      "@bilig/contracts": ["../contracts/src/index.ts"]
+    }
+  },
+  "references": [{ "path": "../contracts" }],
+  "include": ["src/**/*"]
+}

@@ -1,69 +1,61 @@
-export interface BiligRuntimeSession {
-  authToken: string;
-  userId: string;
-  roles: string[];
-  isAuthenticated: boolean;
-  authSource: "header" | "cookie" | "guest";
-}
+import { Effect } from "effect";
+import { RuntimeSessionSchema, type RuntimeSession as BiligRuntimeSession } from "@bilig/contracts";
+import {
+  decodeWithSchema,
+  DecodeError,
+  HttpError,
+  runPromise,
+  TransportError,
+} from "@bilig/runtime-kernel";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+export type { BiligRuntimeSession };
+
+export function loadRuntimeSessionEffect(
+  baseUrl: string | null = null,
+  fetchImpl: typeof fetch = fetch,
+): Effect.Effect<BiligRuntimeSession, DecodeError | HttpError | TransportError> {
+  const url = baseUrl ? new URL("/v2/session", baseUrl).toString() : "/v2/session";
+  return Effect.tryPromise({
+    try: () =>
+      fetchImpl(url, {
+        credentials: "include",
+        headers: {
+          accept: "application/json",
+        },
+      }),
+    catch: (cause) =>
+      new TransportError({
+        message: "Failed to load the runtime session",
+        cause,
+      }),
+  }).pipe(
+    Effect.flatMap((response) =>
+      response.ok
+        ? Effect.succeed(response)
+        : Effect.fail(
+            new HttpError({
+              status: response.status,
+              message: "Runtime session request failed",
+            }),
+          ),
+    ),
+    Effect.flatMap((response) =>
+      Effect.tryPromise({
+        try: () => response.json(),
+        catch: (cause) =>
+          new TransportError({
+            message: "Failed to parse the runtime session response",
+            cause,
+          }),
+      }),
+    ),
+    Effect.flatMap((payload) => decodeWithSchema(RuntimeSessionSchema, payload)),
+  );
 }
 
 export async function loadRuntimeSession(
+  baseUrl: string | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<BiligRuntimeSession> {
-  const response = await fetchImpl("/v1/session", {
-    credentials: "include",
-    headers: {
-      accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    return {
-      authToken: "guest:bootstrap-fallback",
-      userId: "guest:bootstrap-fallback",
-      roles: ["editor"],
-      isAuthenticated: false,
-      authSource: "guest",
-    };
-  }
-
-  const rawPayload = await response.json();
-  const payload = isRecord(rawPayload) ? rawPayload : {};
-  const userId = payload["userId"];
-  const userID = payload["userID"];
-  const authToken = payload["authToken"];
-  const roles = payload["roles"];
-  const isAuthenticated = payload["isAuthenticated"];
-  const guest = payload["guest"];
-  const authSource = payload["authSource"];
-  const source = payload["source"];
-  return {
-    authToken:
-      typeof authToken === "string" && authToken.length > 0
-        ? authToken
-        : typeof userId === "string" && userId.length > 0
-          ? userId
-          : typeof userID === "string" && userID.length > 0
-            ? userID
-            : "guest:bootstrap-fallback",
-    userId:
-      typeof userId === "string" && userId.length > 0
-        ? userId
-        : typeof userID === "string" && userID.length > 0
-          ? userID
-          : "guest:bootstrap-fallback",
-    roles: Array.isArray(roles)
-      ? roles.filter((entry): entry is string => typeof entry === "string")
-      : ["editor"],
-    isAuthenticated: isAuthenticated === true || guest === false,
-    authSource:
-      authSource === "header" || authSource === "cookie" || authSource === "guest"
-        ? authSource
-        : source === "header" || source === "cookie" || source === "guest"
-          ? source
-          : "guest",
-  };
+  return await runPromise(loadRuntimeSessionEffect(baseUrl, fetchImpl));
 }

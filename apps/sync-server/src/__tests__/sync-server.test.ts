@@ -137,7 +137,7 @@ describe("sync-server", () => {
 
     const openResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -162,7 +162,7 @@ describe("sync-server", () => {
 
     const writeResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -191,7 +191,7 @@ describe("sync-server", () => {
 
     const readResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -236,7 +236,7 @@ describe("sync-server", () => {
 
     const openResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -261,7 +261,7 @@ describe("sync-server", () => {
 
     const subscribeResponse = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -300,7 +300,7 @@ describe("sync-server", () => {
     const { app } = createSyncServer({ logger: false });
     const response = await app.inject({
       method: "POST",
-      url: "/v1/agent/frames",
+      url: "/v2/agent/frames",
       headers: { "content-type": "application/octet-stream" },
       payload: Buffer.from(
         encodeAgentFrame({
@@ -333,7 +333,7 @@ describe("sync-server", () => {
 
     const snapshotResponse = await app.inject({
       method: "GET",
-      url: `/v1/documents/${encodeURIComponent(frame.response.documentId)}/snapshot/latest`,
+      url: `/v2/documents/${encodeURIComponent(frame.response.documentId)}/snapshot/latest`,
     });
     expect(snapshotResponse.statusCode).toBe(200);
     const snapshot = parseSnapshotPayload(JSON.parse(snapshotResponse.body) as unknown);

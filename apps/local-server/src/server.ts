@@ -1,5 +1,6 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
+import type { DocumentStateSummary, ErrorEnvelope, RuntimeSession } from "@bilig/contracts";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
@@ -58,22 +59,33 @@ export function createLocalServer(options: LocalServerOptions = {}) {
     service: "bilig-local-server",
   }));
 
+  app.get("/v2/session", async () => {
+    return {
+      authToken: "guest:local-server",
+      userId: "guest:local-server",
+      roles: ["editor"],
+      isAuthenticated: false,
+      authSource: "guest",
+    } satisfies RuntimeSession;
+  });
+
   app.get(
-    "/v1/documents/:documentId/state",
+    "/v2/documents/:documentId/state",
     async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-      return sessionManager.getDocumentState(request.params.documentId);
+      return toDocumentStateSummary(
+        sessionManager.getDocumentState(request.params.documentId),
+        sessionManager.getLatestSnapshot(request.params.documentId)?.cursor ?? null,
+      );
     },
   );
 
   app.get(
-    "/v1/documents/:documentId/snapshot/latest",
+    "/v2/documents/:documentId/snapshot/latest",
     async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
       const snapshot = sessionManager.getLatestSnapshot(request.params.documentId);
       if (!snapshot) {
         reply.code(404);
-        return {
-          error: "SNAPSHOT_NOT_FOUND",
-        };
+        return toErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
       }
       reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
       reply.header("content-type", snapshot.contentType);
@@ -82,7 +94,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   );
 
   app.post(
-    "/v1/agent/frames",
+    "/v2/agent/frames",
     async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
       const frame = decodeAgentFrame(request.body);
       const response = isStreamingAgentRequest(frame)
@@ -108,7 +120,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   );
 
   app.register(async (wsApp) => {
-    wsApp.get("/v1/documents/:documentId/ws", { websocket: true }, (socket) => {
+    wsApp.get("/v2/documents/:documentId/ws", { websocket: true }, (socket) => {
       const ws = normalizeWebSocket(socket);
       let documentId: string | null = null;
       const subscriberId = `browser:${Date.now()}:${Math.random().toString(36).slice(2)}`;
@@ -146,6 +158,28 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   });
 
   return { app, sessionManager };
+}
+
+function toErrorEnvelope(error: string, message: string, retryable: boolean): ErrorEnvelope {
+  return {
+    error,
+    message,
+    retryable,
+  };
+}
+
+function toDocumentStateSummary(
+  summary: ReturnType<LocalWorkbookSessionManager["getDocumentState"]>,
+  latestSnapshotCursor: number | null,
+): DocumentStateSummary {
+  const sessions = [...summary.browserSessions, ...summary.agentSessions];
+  return {
+    documentId: summary.documentId,
+    cursor: summary.cursor,
+    owner: null,
+    sessions,
+    latestSnapshotCursor,
+  };
 }
 
 function toMessageBytes(raw: unknown): Uint8Array {

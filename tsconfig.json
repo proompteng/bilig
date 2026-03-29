@@ -2,6 +2,9 @@
   "files": [],
   "references": [
     { "path": "./packages/protocol" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/runtime-kernel" },
+    { "path": "./packages/actors" },
     { "path": "./packages/formula" },
     { "path": "./packages/workbook-domain" },
     { "path": "./packages/crdt" },

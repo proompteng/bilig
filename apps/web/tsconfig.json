@@ -6,13 +6,19 @@
     "types": ["vite/client"],
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
     "paths": {
+      "@bilig/actors": ["../../packages/actors/src/index.ts"],
       "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"],
+      "@bilig/contracts": ["../../packages/contracts/src/index.ts"],
+      "@bilig/runtime-kernel": ["../../packages/runtime-kernel/src/index.ts"],
       "@bilig/zero-sync": ["../../packages/zero-sync/src/index.ts"],
       "@bilig/test-fuzz": ["../../packages/test-fuzz/src/index.ts"]
     }
   },
   "references": [
+    { "path": "../../packages/actors" },
     { "path": "../../packages/binary-protocol" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/runtime-kernel" },
     { "path": "../../packages/zero-sync" },
     { "path": "../../packages/test-fuzz" }
   ],

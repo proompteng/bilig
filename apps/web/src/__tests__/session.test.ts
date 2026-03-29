@@ -8,18 +8,20 @@ const jsonResponse = (body: unknown) =>
     },
   });
 
+const failingFetchImpl = async () => new Response("forbidden", { status: 403 });
+
 describe("loadRuntimeSession", () => {
   test("uses the server-provided auth token when present", async () => {
     const response = {
       authToken: "token-123",
-      userID: "user-123",
+      userId: "user-123",
       roles: ["editor"],
       isAuthenticated: true,
       authSource: "header",
     };
     const fetchImpl = async () => jsonResponse(response);
 
-    const session = await loadRuntimeSession(fetchImpl);
+    const session = await loadRuntimeSession(null, fetchImpl);
 
     expect(session).toEqual<BiligRuntimeSession>({
       authToken: "token-123",
@@ -34,13 +36,22 @@ describe("loadRuntimeSession", () => {
     const fetchImpl = async () =>
       jsonResponse({
         userId: "guest:abc",
+        authToken: "guest:abc",
+        roles: ["editor"],
+        isAuthenticated: false,
         authSource: "guest",
       });
 
-    const session = await loadRuntimeSession(fetchImpl);
+    const session = await loadRuntimeSession(null, fetchImpl);
 
     expect(session.authToken).toBe("guest:abc");
     expect(session.userId).toBe("guest:abc");
     expect(session.authSource).toBe("guest");
+  });
+
+  test("fails when the runtime session endpoint returns an error response", async () => {
+    await expect(loadRuntimeSession(null, failingFetchImpl)).rejects.toThrow(
+      /Runtime session request failed/,
+    );
   });
 });

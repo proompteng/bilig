@@ -449,7 +449,7 @@ export class WorkbookWorkerRuntime {
     baseUrl: string,
     documentId: string,
   ): Promise<ServerSnapshotSeed | null> {
-    const url = new URL(`/v1/documents/${encodeURIComponent(documentId)}/snapshot/latest`, baseUrl);
+    const url = new URL(`/v2/documents/${encodeURIComponent(documentId)}/snapshot/latest`, baseUrl);
     const response = await fetch(url);
     if (response.status === 404) {
       return null;

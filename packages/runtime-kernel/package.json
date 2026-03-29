@@ -1,0 +1,27 @@
+{
+  "name": "@bilig/runtime-kernel",
+  "version": "0.1.0",
+  "description": "Effect-based runtime primitives for bilig service and UI control planes.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/contracts": "workspace:*",
+    "@effect/platform": "0.96.0",
+    "@effect/platform-node": "0.106.0",
+    "effect": "3.21.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

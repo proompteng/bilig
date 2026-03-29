@@ -1,8 +1,11 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
+import { Effect } from "effect";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
+import type { ErrorEnvelope, RuntimeSession } from "@bilig/contracts";
+import { runPromise, TransportError } from "@bilig/runtime-kernel";
 
 import { DocumentSessionManager } from "./document-session-manager.js";
 import { resolveSessionIdentity } from "./session.js";
@@ -50,21 +53,38 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   }));
 
   app.get(
-    "/v1/documents/:documentId/state",
+    "/v2/documents/:documentId/state",
     async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-      return sessionManager.getDocumentState(request.params.documentId);
+      return await runPromise(
+        Effect.tryPromise({
+          try: async () => await sessionManager.getDocumentState(request.params.documentId),
+          catch: (cause) =>
+            new TransportError({
+              message: "Failed to load document state",
+              cause,
+            }),
+        }),
+      );
     },
   );
 
   app.get(
-    "/v1/documents/:documentId/snapshot/latest",
+    "/v2/documents/:documentId/snapshot/latest",
     async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
-      const snapshot = await sessionManager.persistence.snapshots.latest(request.params.documentId);
+      const snapshot = await runPromise(
+        Effect.tryPromise({
+          try: async () =>
+            await sessionManager.persistence.snapshots.latest(request.params.documentId),
+          catch: (cause) =>
+            new TransportError({
+              message: "Failed to load the latest snapshot",
+              cause,
+            }),
+        }),
+      );
       if (!snapshot) {
         reply.code(404);
-        return {
-          error: "SNAPSHOT_NOT_FOUND",
-        };
+        return toErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
       }
 
       reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));
@@ -84,24 +104,27 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     const guest = session.userID.startsWith("guest:");
     return {
       authToken: session.userID,
-      userID: session.userID,
       userId: session.userID,
       roles: ["editor"],
-      guest,
       isAuthenticated: !guest,
-      source: guest ? "guest" : "header",
       authSource: guest ? "guest" : "header",
-    };
+    } satisfies RuntimeSession;
   };
-  app.get("/v1/session", handleSessionRequest);
-  app.get("/api/session", handleSessionRequest);
+  app.get("/v2/session", handleSessionRequest);
 
   app.post("/api/zero/query", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
-      return {
-        error: "ZERO_SYNC_DISABLED",
-      };
+      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+    }
+    resolveSessionIdentity(request, reply);
+    return await zeroSyncService.handleQuery(request);
+  });
+
+  app.post("/api/zero/v2/query", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!zeroSyncService?.enabled) {
+      reply.code(503);
+      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
     }
     resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleQuery(request);
@@ -110,16 +133,23 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.post("/api/zero/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
     if (!zeroSyncService?.enabled) {
       reply.code(503);
-      return {
-        error: "ZERO_SYNC_DISABLED",
-      };
+      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+    }
+    resolveSessionIdentity(request, reply);
+    return await zeroSyncService.handleMutate(request);
+  });
+
+  app.post("/api/zero/v2/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!zeroSyncService?.enabled) {
+      reply.code(503);
+      return toErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
     }
     resolveSessionIdentity(request, reply);
     return await zeroSyncService.handleMutate(request);
   });
 
   app.post(
-    "/v1/agent/frames",
+    "/v2/agent/frames",
     async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
       const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body), {
         serverUrl: resolveServerUrl(request),
@@ -133,7 +163,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.register(async (wsApp) => {
-    wsApp.get("/v1/documents/:documentId/ws", { websocket: true }, (socket) => {
+    wsApp.get("/v2/documents/:documentId/ws", { websocket: true }, (socket) => {
       const ws = normalizeWebSocket(socket);
       let documentId: string | null = null;
       let sessionId: string | null = null;
@@ -178,6 +208,14 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   });
 
   return { app, sessionManager };
+}
+
+function toErrorEnvelope(error: string, message: string, retryable: boolean): ErrorEnvelope {
+  return {
+    error,
+    message,
+    retryable,
+  };
 }
 
 function toMessageBytes(raw: unknown): Uint8Array {

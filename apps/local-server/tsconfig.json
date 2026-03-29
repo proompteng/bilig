@@ -2,13 +2,19 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
+    "paths": {
+      "@bilig/contracts": ["../../packages/contracts/src/index.ts"],
+      "@bilig/runtime-kernel": ["../../packages/runtime-kernel/src/index.ts"]
+    }
   },
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/crdt" },
+    { "path": "../../packages/contracts" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/binary-protocol" },
+    { "path": "../../packages/runtime-kernel" },
     { "path": "../../packages/workbook-domain" },
     { "path": "../../packages/agent-api" },
     { "path": "../../packages/excel-import" }

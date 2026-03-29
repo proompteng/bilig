@@ -90,7 +90,7 @@ function createBrowserWebSocket(url: string): BrowserWebSocketLike {
 }
 
 function toWebSocketUrl(baseUrl: string, documentId: string): string {
-  const url = new URL(`/v1/documents/${encodeURIComponent(documentId)}/ws`, baseUrl);
+  const url = new URL(`/v2/documents/${encodeURIComponent(documentId)}/ws`, baseUrl);
   if (url.protocol === "http:") {
     url.protocol = "ws:";
   } else if (url.protocol === "https:") {

@@ -11,21 +11,27 @@
   },
   "dependencies": {
     "@base-ui/react": "1.3.0",
+    "@bilig/actors": "workspace:*",
     "@bilig/benchmarks": "workspace:*",
     "@bilig/binary-protocol": "workspace:*",
+    "@bilig/contracts": "workspace:*",
     "@bilig/core": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/grid": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/renderer": "workspace:*",
+    "@bilig/runtime-kernel": "workspace:*",
     "@bilig/storage-browser": "workspace:*",
     "@bilig/workbook-domain": "workspace:*",
     "@bilig/worker-transport": "workspace:*",
     "@bilig/zero-sync": "workspace:*",
     "@rocicorp/zero": "1.1.1",
+    "@xstate/react": "6.1.0",
+    "effect": "3.21.0",
     "lucide-react": "^1.7.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xstate": "5.30.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
