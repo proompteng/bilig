@@ -19,7 +19,7 @@
     "@bilig/zero-sync": "workspace:*",
     "@fastify/websocket": "11.2.0",
     "@rocicorp/zero": "1.1.1",
-    "fastify": "5.6.0",
+    "fastify": "5.8.4",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
   }

@@ -114,7 +114,12 @@ interface SheetGridViewProps {
     targetStartAddr: string,
     targetEndAddr: string,
   ): void;
-  onPaste(this: void, addr: string, values: readonly (readonly string[])[]): void;
+  onPaste(
+    this: void,
+    sheetName: string,
+    addr: string,
+    values: readonly (readonly string[])[],
+  ): void;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
@@ -197,6 +202,8 @@ export function SheetGridView({
   const postDragSelectionExpiryRef = useRef<number>(0);
   const lastBodyClickCellRef = useRef<Item | null>(null);
   const internalClipboardRef = useRef<InternalClipboardRange | null>(null);
+  const pendingKeyboardPasteSequenceRef = useRef(0);
+  const suppressNextNativePasteRef = useRef(false);
   const activeSheetRef = useRef(sheetName);
   const columnResizeActiveRef = useRef(false);
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -345,7 +352,7 @@ export function SheetGridView({
     editorRef.current?.scrollTo(selectedCell.col, selectedCell.row);
   }, [selectedCell.col, selectedCell.row, sheetName]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const sheetChanged = activeSheetRef.current !== sheetName;
     activeSheetRef.current = sheetName;
     setGridSelection((current) => {
@@ -553,9 +560,9 @@ export function SheetGridView({
         return;
       }
 
-      onPaste(formatAddress(target[1], target[0]), values);
+      onPaste(sheetName, formatAddress(target[1], target[0]), values);
     },
-    [onCopyRange, onPaste],
+    [onCopyRange, onPaste, sheetName],
   );
 
   const captureInternalClipboardSelection = useCallback(() => {
@@ -650,18 +657,31 @@ export function SheetGridView({
         case "clipboard-cut":
           captureInternalClipboardSelection();
           return;
-        case "clipboard-paste":
+        case "clipboard-paste": {
+          pendingKeyboardPasteSequenceRef.current += 1;
+          const sequence = pendingKeyboardPasteSequenceRef.current;
           if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
             void navigator.clipboard
               .readText()
               .then((rawText) => {
+                if (pendingKeyboardPasteSequenceRef.current !== sequence) {
+                  return undefined;
+                }
+                pendingKeyboardPasteSequenceRef.current = 0;
                 const values = parseClipboardPlainText(rawText);
                 applyClipboardValues(action.target, values);
+                suppressNextNativePasteRef.current = true;
                 return undefined;
               })
-              .catch(() => undefined);
+              .catch(() => {
+                if (pendingKeyboardPasteSequenceRef.current === sequence) {
+                  pendingKeyboardPasteSequenceRef.current = 0;
+                }
+                return undefined;
+              });
           }
           return;
+        }
       }
     },
     [
@@ -912,10 +932,19 @@ export function SheetGridView({
           event.preventDefault();
         }}
         onPasteCapture={(event) => {
+          if (suppressNextNativePasteRef.current) {
+            suppressNextNativePasteRef.current = false;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           const rawText = event.clipboardData?.getData("text/plain") ?? "";
           const values = parseClipboardPlainText(rawText);
           if (values.length === 0 || values[0]?.length === 0) {
             return;
+          }
+          if (pendingKeyboardPasteSequenceRef.current !== 0) {
+            pendingKeyboardPasteSequenceRef.current = 0;
           }
 
           const target = gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row];
@@ -1203,6 +1232,7 @@ export function SheetGridView({
           });
         }}
         ref={hostRef}
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
       >
         <DataEditor

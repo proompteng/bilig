@@ -42,7 +42,12 @@ interface WorkbookViewProps {
     targetStartAddr: string,
     targetEndAddr: string,
   ): void;
-  onPaste(this: void, addr: string, values: readonly (readonly string[])[]): void;
+  onPaste(
+    this: void,
+    sheetName: string,
+    addr: string,
+    values: readonly (readonly string[])[],
+  ): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
   ribbon?: React.ReactNode;
   statusBar?: React.ReactNode;

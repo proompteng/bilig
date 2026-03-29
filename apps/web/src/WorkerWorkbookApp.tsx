@@ -30,7 +30,6 @@ import {
   Underline,
   WrapText,
 } from "lucide-react";
-import { useConnectionState, useZero } from "@rocicorp/zero/react";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress, parseFormula } from "@bilig/formula";
 import {
@@ -51,6 +50,7 @@ import {
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
 import { mutators, type BiligRuntimeConfig } from "@bilig/zero-sync";
+import { resolveRuntimeConfig } from "./runtime-config.js";
 import { WorkerViewportCache } from "./viewport-cache.js";
 import type {
   WorkbookWorkerBootstrapOptions,
@@ -71,12 +71,21 @@ interface WorkerHandle {
   cache: WorkerViewportCache;
 }
 
-interface RuntimeConfig {
-  documentId: string;
-  baseUrl: string | null;
-  persistState: boolean;
-  zeroViewportBridge: boolean;
-}
+type ZeroClient = ConstructorParameters<typeof ZeroWorkbookBridge>[0];
+
+type ZeroConnectionState =
+  | { name: "connected" }
+  | { name: "connecting"; reason?: string }
+  | { name: "disconnected"; reason: string }
+  | {
+      name: "needs-auth";
+      reason:
+        | { type: "mutate"; status: 401 | 403; body?: string }
+        | { type: "query"; status: 401 | 403; body?: string }
+        | { type: "zero-cache"; reason: string };
+    }
+  | { name: "error"; reason: string }
+  | { name: "closed"; reason: string };
 
 interface RibbonButtonProps {
   active?: boolean;
@@ -439,45 +448,6 @@ function toOptimisticCellValue(value: LiteralInput, currentValue: CellValue): Ce
   };
 }
 
-function createSessionDocumentId(defaultDocumentId: string): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${defaultDocumentId}:${crypto.randomUUID()}`;
-  }
-  return `${defaultDocumentId}:${Math.random().toString(36).slice(2)}`;
-}
-
-function shouldUseEphemeralDefaultDocument(): boolean {
-  return typeof navigator !== "undefined" && navigator.webdriver;
-}
-
-function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig {
-  const searchParams = new URLSearchParams(window.location.search);
-  const explicitDocumentId = searchParams.get("document");
-  const baseUrl = searchParams.get("server");
-  const bridgeOverride = searchParams.get("zeroViewportBridge");
-  const zeroViewportBridge =
-    bridgeOverride === "off" ? false : bridgeOverride === "on" ? true : config.zeroViewportBridge;
-
-  if (explicitDocumentId) {
-    return {
-      documentId: explicitDocumentId,
-      baseUrl,
-      persistState: true,
-      zeroViewportBridge,
-    };
-  }
-
-  return {
-    documentId:
-      baseUrl || shouldUseEphemeralDefaultDocument()
-        ? createSessionDocumentId(config.defaultDocumentId)
-        : config.defaultDocumentId,
-    baseUrl,
-    persistState: baseUrl || shouldUseEphemeralDefaultDocument() ? false : config.persistState,
-    zeroViewportBridge,
-  };
-}
-
 function classNames(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
 }
@@ -753,11 +723,23 @@ function ColorPaletteButton({
   );
 }
 
-export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
+const DISABLED_CONNECTION_STATE: ZeroConnectionState = {
+  name: "disconnected",
+  reason: "Zero disabled for local runtime",
+};
+
+export function WorkerWorkbookApp({
+  config,
+  connectionState: connectionStateProp,
+  zero = null,
+}: {
+  config: BiligRuntimeConfig;
+  connectionState?: ZeroConnectionState;
+  zero?: ZeroClient | null;
+}) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(config), [config]);
   const documentId = runtimeConfig.documentId;
-  const zero = useZero();
-  const connectionState = useConnectionState();
+  const connectionState = connectionStateProp ?? DISABLED_CONNECTION_STATE;
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const [workerHandle, setWorkerHandle] = useState<WorkerHandle | null>(null);
   const [runtimeState, setRuntimeState] = useState<WorkbookWorkerStateSnapshot | null>(null);
@@ -782,10 +764,21 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef<WorkerHandle | null>(null);
   const bridgeRef = useRef<ZeroWorkbookBridge | null>(null);
+  const editorValueRef = useRef(editorValue);
+  const editingModeRef = useRef(editingMode);
+  const editorTargetRef = useRef(selection);
 
   useEffect(() => {
     selectionRef.current = selection;
   }, [selection]);
+
+  useEffect(() => {
+    editorValueRef.current = editorValue;
+  }, [editorValue]);
+
+  useEffect(() => {
+    editingModeRef.current = editingMode;
+  }, [editingMode]);
 
   const refreshRuntimeState = useCallback(async (handle?: WorkerHandle) => {
     const active = handle ?? workerHandleRef.current;
@@ -917,7 +910,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   ]);
 
   useEffect(() => {
-    if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !workerHandle) {
+    if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !workerHandle || !zero) {
       return;
     }
     const bridge = new ZeroWorkbookBridge(zero, documentId, workerHandle.cache, (error) => {
@@ -996,6 +989,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
 
   const writesAllowed =
     Boolean(runtimeConfig.baseUrl) ||
+    !runtimeConfig.zeroViewportBridge ||
     connectionState.name === "connected" ||
     connectionState.name === "connecting";
 
@@ -1008,8 +1002,8 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   }, []);
 
   const runZeroMutation = useCallback(
-    async (mutation: Parameters<typeof zero.mutate>[0]) => {
-      if (runtimeConfig.baseUrl) {
+    async (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
+      if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !zero) {
         return null;
       }
       const result = zero.mutate(mutation);
@@ -1025,7 +1019,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       }
       return result;
     },
-    [runtimeConfig.baseUrl, zero],
+    [runtimeConfig.baseUrl, runtimeConfig.zeroViewportBridge, zero],
   );
 
   const invokeMutation = useCallback(
@@ -1213,6 +1207,17 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
     });
   }, []);
 
+  const getLiveSelectedCell = useCallback(
+    (nextSelection = selectionRef.current) => {
+      const active = workerHandleRef.current;
+      if (!active) {
+        return selectedCell;
+      }
+      return active.cache.getCell(nextSelection.sheetName, nextSelection.address);
+    },
+    [selectedCell],
+  );
+
   const beginEditing = useCallback(
     (
       seed?: string,
@@ -1222,11 +1227,15 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (!writesAllowed) {
         return;
       }
-      setEditorValue(seed ?? toEditorValue(selectedCell));
+      const nextEditorValue = seed ?? toEditorValue(getLiveSelectedCell());
+      editorValueRef.current = nextEditorValue;
+      setEditorValue(nextEditorValue);
       setEditorSelectionBehavior(selectionBehavior);
+      editorTargetRef.current = selectionRef.current;
+      editingModeRef.current = mode;
       setEditingMode(mode);
     },
-    [selectedCell, writesAllowed],
+    [getLiveSelectedCell, writesAllowed],
   );
 
   const applyParsedInput = useCallback(
@@ -1249,25 +1258,34 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (!writesAllowed) {
         return;
       }
-      const nextValue = editingMode === "idle" ? toEditorValue(selectedCell) : editorValue;
+      const targetSelection =
+        editingModeRef.current === "idle" ? selectionRef.current : editorTargetRef.current;
+      const nextValue =
+        editingModeRef.current === "idle"
+          ? toEditorValue(getLiveSelectedCell(targetSelection))
+          : editorValueRef.current;
       const parsed = parseEditorInput(nextValue);
       if (parsed.kind === "formula" && isInvalidFormulaSyntax(parsed.formula)) {
-        applyOptimisticFormulaErrorEdit(selection.sheetName, selection.address);
+        applyOptimisticFormulaErrorEdit(targetSelection.sheetName, targetSelection.address);
       } else {
-        applyOptimisticCellEdit(selection.sheetName, selection.address, parsed);
+        applyOptimisticCellEdit(targetSelection.sheetName, targetSelection.address, parsed);
       }
+      editorTargetRef.current = targetSelection;
+      editingModeRef.current = "idle";
       setEditingMode("idle");
       setEditorSelectionBehavior("select-all");
       if (movement) {
         const nextAddress = clampSelectionMovement(
-          selection.address,
-          selection.sheetName,
+          targetSelection.address,
+          targetSelection.sheetName,
           movement,
         );
-        setSelection({ sheetName: selection.sheetName, address: nextAddress });
-        selectionRef.current = { sheetName: selection.sheetName, address: nextAddress };
+        const nextSelection = { sheetName: targetSelection.sheetName, address: nextAddress };
+        setSelection(nextSelection);
+        selectionRef.current = nextSelection;
       }
-      void applyParsedInput(selection.sheetName, selection.address, parsed).catch(
+      editorTargetRef.current = selectionRef.current;
+      void applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed).catch(
         (error: unknown) => {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         },
@@ -1277,44 +1295,42 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       applyOptimisticCellEdit,
       applyOptimisticFormulaErrorEdit,
       applyParsedInput,
-      editorValue,
-      editingMode,
-      selectedCell,
-      selection.address,
-      selection.sheetName,
+      getLiveSelectedCell,
       writesAllowed,
     ],
   );
 
   const cancelEditor = useCallback(() => {
-    setEditorValue(toEditorValue(selectedCell));
+    const nextEditorValue = toEditorValue(getLiveSelectedCell());
+    editorValueRef.current = nextEditorValue;
+    setEditorValue(nextEditorValue);
     setEditorSelectionBehavior("select-all");
+    editorTargetRef.current = selectionRef.current;
+    editingModeRef.current = "idle";
     setEditingMode("idle");
-  }, [selectedCell]);
+  }, [getLiveSelectedCell]);
 
   const clearSelectedCell = useCallback(() => {
     if (!writesAllowed) {
       return;
     }
-    applyOptimisticCellEdit(selection.sheetName, selection.address, { kind: "clear" });
+    const targetSelection = selectionRef.current;
+    applyOptimisticCellEdit(targetSelection.sheetName, targetSelection.address, { kind: "clear" });
+    editorValueRef.current = "";
     setEditorValue("");
+    editorTargetRef.current = targetSelection;
+    editingModeRef.current = "idle";
     setEditingMode("idle");
-    void invokeMutation("clearCell", selection.sheetName, selection.address).catch(
+    void invokeMutation("clearCell", targetSelection.sheetName, targetSelection.address).catch(
       (error: unknown) => {
         setRuntimeError(error instanceof Error ? error.message : String(error));
       },
     );
-  }, [
-    applyOptimisticCellEdit,
-    invokeMutation,
-    selection.address,
-    selection.sheetName,
-    writesAllowed,
-  ]);
+  }, [applyOptimisticCellEdit, invokeMutation, writesAllowed]);
 
   const pasteIntoSelection = useCallback(
-    (startAddr: string, values: readonly (readonly string[])[]) => {
-      const start = parseCellAddress(startAddr, selection.sheetName);
+    (sheetName: string, startAddr: string, values: readonly (readonly string[])[]) => {
+      const start = parseCellAddress(startAddr, sheetName);
       const ops: {
         kind: "upsertCell" | "deleteCell";
         sheetName: string;
@@ -1329,19 +1345,19 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           if (parsed.kind === "formula") {
             ops.push({
               kind: "upsertCell",
-              sheetName: selection.sheetName,
+              sheetName,
               addr: address,
               formula: parsed.formula,
             });
             return;
           }
           if (parsed.kind === "clear") {
-            ops.push({ kind: "deleteCell", sheetName: selection.sheetName, addr: address });
+            ops.push({ kind: "deleteCell", sheetName, addr: address });
             return;
           }
           ops.push({
             kind: "upsertCell",
-            sheetName: selection.sheetName,
+            sheetName,
             addr: address,
             value: parsed.value,
           });
@@ -1354,9 +1370,11 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
         setRuntimeError(error instanceof Error ? error.message : String(error));
       });
       setEditorSelectionBehavior("select-all");
+      editorTargetRef.current = selectionRef.current;
+      editingModeRef.current = "idle";
       setEditingMode("idle");
     },
-    [invokeMutation, selection.sheetName],
+    [invokeMutation],
   );
 
   const fillSelectionRange = useCallback(
@@ -1366,18 +1384,21 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       targetStartAddr: string,
       targetEndAddr: string,
     ) => {
+      const targetSelection = selectionRef.current;
       const source = {
-        sheetName: selection.sheetName,
+        sheetName: targetSelection.sheetName,
         startAddress: sourceStartAddr,
         endAddress: sourceEndAddr,
       };
       const target = {
-        sheetName: selection.sheetName,
+        sheetName: targetSelection.sheetName,
         startAddress: targetStartAddr,
         endAddress: targetEndAddr,
       };
       void invokeMutation("fillRange", source, target)
         .then(() => {
+          editorTargetRef.current = selectionRef.current;
+          editingModeRef.current = "idle";
           setEditingMode("idle");
           return undefined;
         })
@@ -1385,7 +1406,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
     },
-    [invokeMutation, selection.sheetName],
+    [invokeMutation],
   );
 
   const copySelectionRange = useCallback(
@@ -1395,18 +1416,21 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       targetStartAddr: string,
       targetEndAddr: string,
     ) => {
+      const targetSelection = selectionRef.current;
       const source = {
-        sheetName: selection.sheetName,
+        sheetName: targetSelection.sheetName,
         startAddress: sourceStartAddr,
         endAddress: sourceEndAddr,
       };
       const target = {
-        sheetName: selection.sheetName,
+        sheetName: targetSelection.sheetName,
         startAddress: targetStartAddr,
         endAddress: targetEndAddr,
       };
       void invokeMutation("copyRange", source, target)
         .then(() => {
+          editorTargetRef.current = selectionRef.current;
+          editingModeRef.current = "idle";
           setEditingMode("idle");
           return undefined;
         })
@@ -1414,19 +1438,29 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           setRuntimeError(error instanceof Error ? error.message : String(error));
         });
     },
-    [invokeMutation, selection.sheetName],
+    [invokeMutation],
   );
 
-  const selectAddress = useCallback(
-    (sheetName: string, address: string) => {
-      if (editingMode !== "idle") {
-        setEditingMode("idle");
-      }
-      setSelection({ sheetName, address });
-      selectionRef.current = { sheetName, address };
-    },
-    [editingMode],
-  );
+  const selectAddress = useCallback((sheetName: string, address: string) => {
+    if (editingModeRef.current !== "idle") {
+      editorTargetRef.current = { sheetName, address };
+      editingModeRef.current = "idle";
+      setEditingMode("idle");
+    }
+    setSelection({ sheetName, address });
+    selectionRef.current = { sheetName, address };
+    editorTargetRef.current = { sheetName, address };
+  }, []);
+
+  const handleEditorChange = useCallback((next: string) => {
+    editorValueRef.current = next;
+    setEditorValue(next);
+    setEditingMode((current) => {
+      const nextMode = current === "idle" ? "cell" : current;
+      editingModeRef.current = nextMode;
+      return nextMode;
+    });
+  }, []);
 
   const isEditing = editingMode !== "idle";
   const isEditingCell = editingMode === "cell";
@@ -2028,10 +2062,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
               }}
               onCommitEdit={commitEditor}
               onCopyRange={copySelectionRange}
-              onEditorChange={(next) => {
-                setEditorValue(next);
-                setEditingMode((current) => (current === "idle" ? "cell" : current));
-              }}
+              onEditorChange={handleEditorChange}
               onFillRange={fillSelectionRange}
               onPaste={pasteIntoSelection}
               onSelectionLabelChange={setSelectionLabel}

@@ -844,6 +844,7 @@ async function clickProductBodyOffset(
 }
 
 async function getBox(locator: Locator) {
+  await expect(locator).toBeVisible();
   const box = await locator.boundingBox();
   if (!box) {
     throw new Error("locator is not visible");
@@ -1205,7 +1206,7 @@ async function dragProductBodySelection(
 }
 
 test("web app renders the minimal product shell without legacy demo chrome", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await expect(page.getByTestId("formula-bar")).toBeVisible();
   await expect(page.getByTestId("name-box")).toBeVisible();
@@ -1224,7 +1225,7 @@ test("web app renders the minimal product shell without legacy demo chrome", asy
 });
 
 test("web app keeps toolbar controls aligned and consistently sized", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const toolbar = page.getByRole("toolbar", { name: "Formatting toolbar" });
   await expect(toolbar).toBeVisible();
@@ -1284,7 +1285,7 @@ test("web app keeps toolbar controls aligned and consistently sized", async ({ p
 });
 
 test("web app keeps toolbar, formula bar, grid, and footer tightly stacked", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const toolbar = page.getByRole("toolbar", { name: "Formatting toolbar" });
   const formulaBar = page.getByTestId("formula-bar");
@@ -1305,7 +1306,7 @@ test("web app keeps toolbar, formula bar, grid, and footer tightly stacked", asy
 });
 
 test("web app keeps formula bar controls aligned and consistently sized", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaFrame = page.getByTestId("formula-input-frame");
@@ -1321,7 +1322,7 @@ test("web app keeps formula bar controls aligned and consistently sized", async 
 
 test("web app keeps the toolbar compact on narrow viewports", async ({ page }) => {
   await page.setViewportSize({ width: 620, height: 760 });
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const toolbar = page.getByRole("toolbar", { name: "Formatting toolbar" });
   const firstControl = page.getByLabel("Number format");
@@ -1343,7 +1344,7 @@ test("web app keeps the toolbar compact on narrow viewports", async ({ page }) =
 test("web app shows preset color swatches first and only reveals the custom picker on demand", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await page.getByLabel("Fill color").click();
   await expect(page.getByRole("dialog", { name: "Fill color palette" })).toBeVisible();
@@ -1360,7 +1361,7 @@ test("web app shows preset color swatches first and only reveals the custom pick
 test("web app renders the fill color palette as a visible popover below the toolbar", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await page.getByLabel("Fill color").click();
 
@@ -1381,7 +1382,7 @@ test("web app renders the fill color palette as a visible popover below the tool
 });
 
 test("web app applies preset swatch colors directly from the palette", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await pickToolbarPresetColor(page, "Fill color", "light cornflower blue 3");
   await expectToolbarColor(page.getByLabel("Fill color"), "#c9daf8");
@@ -1391,7 +1392,7 @@ test("web app applies preset swatch colors directly from the palette", async ({ 
 });
 
 test("web app keeps preset fill color visible after clicking another cell", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = await getGridBox(page);
   const center = getProductCellClientPoint(grid, 0, 0, 0.55, 0.55);
@@ -2616,7 +2617,7 @@ test("web app reflects a local-server agent write in the rendered spreadsheet", 
 
 test("web app keeps sheet tabs and status bar visible in a short viewport", async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 220 });
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const sheetTab = page.getByRole("tab", { name: "Sheet1" });
   const statusSync = page.getByTestId("status-sync");
@@ -2635,7 +2636,7 @@ test("web app keeps sheet tabs and status bar visible in a short viewport", asyn
 });
 
 test("web app supports column and row header selection", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
 
@@ -2657,7 +2658,7 @@ test("web app supports column and row header selection", async ({ page }) => {
 });
 
 test("web app supports row and column header drag selection", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await dragProductHeaderSelection(page, "column", 1, 3);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B:D");
@@ -2667,7 +2668,7 @@ test("web app supports row and column header drag selection", async ({ page }) =
 });
 
 test("web app supports rectangular drag selection", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await dragProductBodySelection(page, 1, 1, 3, 3);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:D4");
@@ -2676,7 +2677,7 @@ test("web app supports rectangular drag selection", async ({ page }) => {
 test("web app keeps the active focus inside the Glide grid when clicking a cell", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await clickProductCell(page, 2, 2);
   await expect(page.getByTestId("name-box")).toHaveValue("C3");
@@ -2696,7 +2697,7 @@ test("web app keeps the active focus inside the Glide grid when clicking a cell"
 test("web app maps clicks in the upper half of a cell to that same visible cell", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await clickProductCellUpperHalf(page, 4, 11);
   await expect(page.getByTestId("name-box")).toHaveValue("E12");
@@ -2708,7 +2709,7 @@ test("web app maps clicks in the upper half of a cell to that same visible cell"
 });
 
 test("web app supports column resize without breaking hit testing", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await clickProductBodyOffset(page, 82, 0);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
@@ -2720,7 +2721,7 @@ test("web app supports column resize without breaking hit testing", async ({ pag
 });
 
 test("web app supports column edge double-click autofit", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -2740,7 +2741,7 @@ test("web app supports column edge double-click autofit", async ({ page }) => {
 });
 
 test("web app accepts string values and string comparison formulas", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -2765,7 +2766,7 @@ test("web app accepts string values and string comparison formulas", async ({ pa
 });
 
 test("web app supports type-to-replace and Enter or Tab commit movement", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -2778,6 +2779,7 @@ test("web app supports type-to-replace and Enter or Tab commit movement", async 
   await expect(cellEditor).toBeVisible();
   await expect(cellEditor).toHaveValue("h");
   await page.keyboard.press("Enter");
+  await expect(cellEditor).toBeHidden();
 
   await expect(nameBox).toHaveValue("A2");
   await nameBox.fill("A1");
@@ -2790,6 +2792,7 @@ test("web app supports type-to-replace and Enter or Tab commit movement", async 
   await expect(cellEditor).toBeVisible();
   await expect(cellEditor).toHaveValue("w");
   await page.keyboard.press("Tab");
+  await expect(cellEditor).toBeHidden();
 
   await expect(nameBox).toHaveValue("B2");
   await nameBox.fill("A2");
@@ -2803,7 +2806,7 @@ test("web app supports type-to-replace and Enter or Tab commit movement", async 
 });
 
 test("web app preserves multi-digit numeric type-to-replace input", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -2831,7 +2834,7 @@ test("web app preserves multi-digit numeric type-to-replace input", async ({ pag
 });
 
 test("web app right-aligns numeric in-cell editing like numeric view state", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const cellEditor = page.getByTestId("cell-editor-input");
@@ -2852,7 +2855,7 @@ test("web app right-aligns numeric in-cell editing like numeric view state", asy
 });
 
 test("web app accepts numpad digits for in-cell numeric entry", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -2875,7 +2878,7 @@ test("web app accepts numpad digits for in-cell numeric entry", async ({ page })
 });
 
 test("web app supports F2 edit in the product shell", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -2903,7 +2906,7 @@ test("web app supports F2 edit in the product shell", async ({ page }) => {
 });
 
 test("web app double-click edits the exact clicked cell", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -2941,7 +2944,7 @@ test("web app double-click edits the exact clicked cell", async ({ page }) => {
 });
 
 test("web app keeps the selected cell when clicking its top border", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
 
@@ -2955,7 +2958,7 @@ test("web app keeps the selected cell when clicking its top border", async ({ pa
 });
 
 test("web app supports fill-handle propagation", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -2979,7 +2982,7 @@ test("web app supports rectangular clipboard copy and external paste", async ({
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -3044,7 +3047,7 @@ test("web app relocates formulas when using rectangular clipboard paste", async 
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -3078,6 +3081,11 @@ test("web app relocates formulas when using rectangular clipboard paste", async 
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!D2");
   await grid.press(`${PRIMARY_MODIFIER}+V`);
 
+  await nameBox.fill("D2");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("3");
+  await expect(resolvedValue).toHaveText("3");
+
   await nameBox.fill("E2");
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("=D2*2");
@@ -3090,7 +3098,7 @@ test("web app relocates formulas when using rectangular clipboard paste", async 
 });
 
 test("web app supports product-shell column resize", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const baselineWidth = await getProductColumnWidth(page, 0);
   await dragProductColumnResize(page, 0, 48);
@@ -3098,7 +3106,7 @@ test("web app supports product-shell column resize", async ({ page }) => {
 });
 
 test("web app relocates relative formulas when using the fill handle", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -3129,7 +3137,7 @@ test("web app relocates relative formulas when using the fill handle", async ({ 
 });
 
 test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
@@ -3144,7 +3152,7 @@ test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
 });
 
 test("web app commits in-cell string edits when clicking away", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -3167,7 +3175,7 @@ test("web app commits in-cell string edits when clicking away", async ({ page })
 });
 
 test("web app ignores right gutter clicks", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?zeroViewportBridge=off");
 
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await clickGridRightEdge(page, 3);

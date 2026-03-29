@@ -13,11 +13,11 @@ import type { WorkbookSnapshot } from "@bilig/protocol";
 import { createWebSocketSyncClient, type BrowserWebSocketLike } from "../websocket-sync-client.js";
 
 class FakeSocket extends EventTarget implements BrowserWebSocketLike {
-  binaryType = "arraybuffer";
+  binaryType: BinaryType = "arraybuffer";
   readyState = 0;
   readonly sent: Uint8Array[] = [];
 
-  send(data: ArrayBufferLike | ArrayBufferView): void {
+  send(data: BufferSource): void {
     if (data instanceof Uint8Array) {
       this.sent.push(data);
       return;

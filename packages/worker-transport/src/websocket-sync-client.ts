@@ -45,11 +45,15 @@ function parseWorkbookSnapshot(bytes: Uint8Array): WorkbookSnapshot {
   return parsed;
 }
 
+function toBufferSource(bytes: Uint8Array): ArrayBuffer {
+  return bytes.slice().buffer;
+}
+
 export interface BrowserWebSocketLike {
-  binaryType: string;
+  binaryType: BinaryType;
   readyState: number;
   addEventListener(type: "open" | "message" | "error" | "close", listener: EventListener): void;
-  send(data: ArrayBufferLike | ArrayBufferView): void;
+  send(data: BufferSource): void;
   close(): void;
 }
 
@@ -59,6 +63,30 @@ export interface WebSocketSyncClientOptions {
   baseUrl: string;
   initialServerCursor?: number;
   createSocket?: (url: string) => BrowserWebSocketLike;
+}
+
+function createBrowserWebSocket(url: string): BrowserWebSocketLike {
+  const socket = new WebSocket(url);
+  return {
+    get binaryType() {
+      return socket.binaryType;
+    },
+    set binaryType(value: BinaryType) {
+      socket.binaryType = value;
+    },
+    get readyState() {
+      return socket.readyState;
+    },
+    addEventListener(type, listener) {
+      socket.addEventListener(type, listener);
+    },
+    send(data) {
+      socket.send(data);
+    },
+    close() {
+      socket.close();
+    },
+  };
 }
 
 function toWebSocketUrl(baseUrl: string, documentId: string): string {
@@ -90,13 +118,13 @@ async function toBytes(data: unknown): Promise<Uint8Array> {
 export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): EngineSyncClient {
   return {
     async connect(handlers) {
-      const createSocket =
+      const createSocket: (url: string) => BrowserWebSocketLike =
         options.createSocket ??
         ((url: string) => {
           if (typeof WebSocket === "undefined") {
             throw new Error("WebSocket is unavailable in this runtime");
           }
-          return new WebSocket(url);
+          return createBrowserWebSocket(url);
         });
       const socket = createSocket(toWebSocketUrl(options.baseUrl, options.documentId));
       let lastServerCursor = options.initialServerCursor ?? 0;
@@ -118,12 +146,14 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
             throw new Error("WebSocket sync client is not connected");
           }
           socket.send(
-            encodeFrame({
-              kind: "appendBatch",
-              documentId: options.documentId,
-              cursor: lastServerCursor,
-              batch,
-            }),
+            toBufferSource(
+              encodeFrame({
+                kind: "appendBatch",
+                documentId: options.documentId,
+                cursor: lastServerCursor,
+                batch,
+              }),
+            ),
           );
         },
         disconnect() {
@@ -215,15 +245,17 @@ export function createWebSocketSyncClient(options: WebSocketSyncClientOptions): 
         socket.addEventListener("open", () => {
           handlers.setState("syncing");
           socket.send(
-            encodeFrame({
-              kind: "hello",
-              documentId: options.documentId,
-              replicaId: options.replicaId,
-              sessionId: `${options.documentId}:${options.replicaId}`,
-              protocolVersion: 1,
-              lastServerCursor,
-              capabilities: ["browser-sync"],
-            }),
+            toBufferSource(
+              encodeFrame({
+                kind: "hello",
+                documentId: options.documentId,
+                replicaId: options.replicaId,
+                sessionId: `${options.documentId}:${options.replicaId}`,
+                protocolVersion: 1,
+                lastServerCursor,
+                capabilities: ["browser-sync"],
+              }),
+            ),
           );
         });
         socket.addEventListener("message", (event) => {
