@@ -85,26 +85,6 @@ export const queries = defineQueries({
         .orderBy("colNum", "asc"),
     ),
   },
-  computedCells: {
-    one: defineQuery(workbookCellArgsSchema, ({ args }) =>
-      zql.cell_eval
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("address", args.address)
-        .one(),
-    ),
-    tile: defineQuery(workbookTileArgsSchema, ({ args }) =>
-      zql.cell_eval
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("rowNum", ">=", args.rowStart)
-        .where("rowNum", "<=", args.rowEnd)
-        .where("colNum", ">=", args.colStart)
-        .where("colNum", "<=", args.colEnd)
-        .orderBy("rowNum", "asc")
-        .orderBy("colNum", "asc"),
-    ),
-  },
   rowMetadata: {
     tile: defineQuery(workbookRowTileArgsSchema, ({ args }) =>
       zql.row_metadata

@@ -59,6 +59,14 @@ describe("projection helpers", () => {
     await engine.ready();
     engine.setCellValue("Sheet1", "A1", 7);
     engine.setCellFormula("Sheet1", "B1", "A1*3");
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { fill: { backgroundColor: "#abcdef" } },
+    );
+    engine.setRangeNumberFormat(
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { kind: "number", code: "$#,##0.00" },
+    );
 
     const rows = materializeCellEvalProjection(engine, "doc-1", 9, "2026-03-28T10:02:00.000Z");
     const b1 = rows.find((row) => row.sheetName === "Sheet1" && row.address === "B1");
@@ -68,6 +76,9 @@ describe("projection helpers", () => {
         workbookId: "doc-1",
         rowNum: 0,
         colNum: 1,
+        styleId: expect.any(String),
+        formatId: expect.any(String),
+        formatCode: expect.any(String),
         calcRevision: 9,
       }),
     );

@@ -172,6 +172,15 @@ function normalizeCellEvalRow(value: unknown): CellEvalRow {
   if (typeof row["colNum"] === "number") {
     normalized.colNum = row["colNum"];
   }
+  if (typeof row["styleId"] === "string") {
+    normalized.styleId = row["styleId"];
+  }
+  if (typeof row["formatId"] === "string") {
+    normalized.formatId = row["formatId"];
+  }
+  if (typeof row["formatCode"] === "string") {
+    normalized.formatCode = row["formatCode"];
+  }
   return normalized;
 }
 

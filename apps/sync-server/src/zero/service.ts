@@ -119,10 +119,6 @@ class EnabledZeroSyncService implements ZeroSyncService {
         query: queries.cellEval.tile,
         schema: workbookTileArgsSchema,
       },
-      "computedCells.tile": {
-        query: queries.cellEval.tile,
-        schema: workbookTileArgsSchema,
-      },
       "rowMetadata.tile": {
         query: queries.rowMetadata.tile,
         schema: workbookRowTileArgsSchema,

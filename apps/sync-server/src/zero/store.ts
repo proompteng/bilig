@@ -93,6 +93,20 @@ const WORKBOOK_SNAPSHOT_RETENTION = 5;
 const WORKBOOK_SNAPSHOT_INTERVAL = 64;
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;
+const DEFAULT_ZERO_PUBLICATION = "zero_data_v2";
+const ZERO_PUBLICATION_TABLES = [
+  "workbooks",
+  "sheets",
+  "cells",
+  "cell_eval",
+  "row_metadata",
+  "column_metadata",
+  "defined_names",
+  "cell_styles",
+  "cell_number_formats",
+  "sheet_style_ranges",
+  "sheet_format_ranges",
+] as const;
 
 type FocusedCellEventPayload = Extract<
   WorkbookEventPayload,
@@ -113,6 +127,21 @@ type ColumnMetadataEventPayload = Extract<WorkbookEventPayload, { kind: "updateC
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function sqlIdentifier(value: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`Unsafe SQL identifier: ${value}`);
+  }
+  return `"${value}"`;
+}
+
+function sqlLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function zeroPublicationName(): string {
+  return process.env["BILIG_ZERO_PUBLICATION"]?.trim() || DEFAULT_ZERO_PUBLICATION;
 }
 
 function parseInteger(value: unknown): number {
@@ -286,6 +315,9 @@ function cellEvalSignature(row: CellEvalRow): string {
     row.value,
     row.flags,
     row.version,
+    row.styleId,
+    row.formatId,
+    row.formatCode,
   ]);
 }
 
@@ -1023,11 +1055,27 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
     value: unknown;
     flags: number | string | null;
     version: number | string | null;
+    style_id: string | null;
+    format_id: string | null;
+    format_code: string | null;
     calc_revision: number | string | null;
     updated_at: string | null;
   }>(
     `
-      SELECT workbook_id, sheet_name, address, row_num, col_num, value, flags, version, calc_revision, updated_at
+      SELECT
+        workbook_id,
+        sheet_name,
+        address,
+        row_num,
+        col_num,
+        value,
+        flags,
+        version,
+        style_id,
+        format_id,
+        format_code,
+        calc_revision,
+        updated_at
       FROM cell_eval
       WHERE workbook_id = $1
     `,
@@ -1042,6 +1090,9 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
     value: parseCellEvalValue(row.value),
     flags: parseInteger(row.flags),
     version: parseInteger(row.version),
+    styleId: row.style_id,
+    formatId: row.format_id,
+    formatCode: row.format_code,
     calcRevision: parseInteger(row.calc_revision),
     updatedAt: row.updated_at ?? nowIso(),
   }));
@@ -1082,10 +1133,13 @@ async function persistCellEvalDiff(
           value,
           flags,
           version,
+          style_id,
+          format_id,
+          format_code,
           calc_revision,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::timestamptz)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::timestamptz)
         ON CONFLICT (workbook_id, sheet_name, address)
         DO UPDATE SET
           row_num = EXCLUDED.row_num,
@@ -1093,6 +1147,9 @@ async function persistCellEvalDiff(
           value = EXCLUDED.value,
           flags = EXCLUDED.flags,
           version = EXCLUDED.version,
+          style_id = EXCLUDED.style_id,
+          format_id = EXCLUDED.format_id,
+          format_code = EXCLUDED.format_code,
           calc_revision = EXCLUDED.calc_revision,
           updated_at = EXCLUDED.updated_at
       `,
@@ -1105,6 +1162,9 @@ async function persistCellEvalDiff(
           JSON.stringify(row.value),
           row.flags,
           row.version,
+          row.styleId,
+          row.formatId,
+          row.formatCode,
           row.calcRevision,
           row.updatedAt,
         ],
@@ -1157,6 +1217,30 @@ async function persistWorkbookCheckpoint(
     `,
     [documentId, WORKBOOK_SNAPSHOT_RETENTION],
   );
+}
+
+async function ensureZeroSyncPublication(db: Queryable): Promise<void> {
+  const publicationName = zeroPublicationName();
+  const publicationIdentifier = sqlIdentifier(publicationName);
+  const publicationLiteral = sqlLiteral(publicationName);
+  const publishedTables = ZERO_PUBLICATION_TABLES.map((tableName) => sqlIdentifier(tableName)).join(
+    ", ",
+  );
+
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_publication
+        WHERE pubname = ${publicationLiteral}
+      ) THEN
+        EXECUTE 'CREATE PUBLICATION ${publicationIdentifier}';
+      END IF;
+    END
+    $$;
+  `);
+  await db.query(`ALTER PUBLICATION ${publicationIdentifier} SET TABLE ${publishedTables};`);
 }
 
 export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
@@ -1249,6 +1333,9 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   `);
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS row_num INTEGER;`);
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS col_num INTEGER;`);
+  await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS style_id TEXT;`);
+  await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS format_id TEXT;`);
+  await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS format_code TEXT;`);
   await db.query(
     `ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS calc_revision BIGINT NOT NULL DEFAULT 0;`,
   );
@@ -1501,6 +1588,7 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
     `,
     [WORKBOOK_SNAPSHOT_FORMAT],
   );
+  await ensureZeroSyncPublication(db);
 }
 
 export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapshot {

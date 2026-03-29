@@ -118,6 +118,9 @@ export interface CellEvalRow {
   value: CellValue;
   flags: number;
   version: number;
+  styleId: string | null;
+  formatId: string | null;
+  formatCode: string | null;
   calcRevision: number;
   updatedAt: string;
 }
@@ -556,6 +559,9 @@ export function materializeCellEvalProjection(
         value: cell.value,
         flags: cell.flags,
         version: cell.version,
+        styleId: cell.styleId ?? null,
+        formatId: cell.numberFormatId ?? null,
+        formatCode: cell.format ?? null,
         calcRevision: revision,
         updatedAt,
       });

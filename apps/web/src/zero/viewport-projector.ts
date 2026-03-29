@@ -49,6 +49,9 @@ export interface CellEvalRow {
   value: CellValue;
   flags: number;
   version: number;
+  styleId?: string | null | undefined;
+  formatId?: string | null | undefined;
+  formatCode?: string | null | undefined;
 }
 
 export interface AxisMetadataRow {
@@ -183,7 +186,15 @@ function pointInRange(
   );
 }
 
-function resolveStyleId(row: number, col: number, styleRanges: readonly StyleRangeRow[]): string {
+function resolveStyleId(
+  row: number,
+  col: number,
+  computed: CellEvalRow | undefined,
+  styleRanges: readonly StyleRangeRow[],
+): string {
+  if (computed?.styleId) {
+    return computed.styleId;
+  }
   let styleId = DEFAULT_STYLE_ID;
   for (const range of styleRanges) {
     if (pointInRange(row, col, range)) {
@@ -197,10 +208,26 @@ function resolveNumberFormat(
   row: number,
   col: number,
   source: CellSourceRow | undefined,
+  computed: CellEvalRow | undefined,
   formatRanges: readonly FormatRangeRow[],
   numberFormatCodeById: ReadonlyMap<string, string>,
 ): ResolvedNumberFormat {
   const result: ResolvedNumberFormat = {};
+  if (computed?.formatCode) {
+    result.code = computed.formatCode;
+  }
+  if (computed?.formatId) {
+    result.numberFormatId = computed.formatId;
+    if (result.code === undefined) {
+      const code = numberFormatCodeById.get(computed.formatId);
+      if (code !== undefined) {
+        result.code = code;
+      }
+    }
+  }
+  if (result.code !== undefined || result.numberFormatId !== undefined) {
+    return result;
+  }
   const explicitFormatId = source?.explicitFormatId;
   const sourceFormat = source?.format;
   if (sourceFormat !== undefined) {
@@ -407,7 +434,7 @@ export function projectViewportPatch(
       const address = formatAddress(row, col);
       const source = sourceByAddress.get(address);
       const computed = computedByAddress.get(address);
-      const styleId = resolveStyleId(row, col, sortedStyleRanges);
+      const styleId = resolveStyleId(row, col, computed, sortedStyleRanges);
       const style = input.stylesById.get(styleId) ?? { id: DEFAULT_STYLE_ID };
       if (full || !state.knownStyleIds.has(style.id)) {
         state.knownStyleIds.add(style.id);
@@ -418,6 +445,7 @@ export function projectViewportPatch(
         row,
         col,
         source,
+        computed,
         sortedFormatRanges,
         input.numberFormatCodeById,
       );

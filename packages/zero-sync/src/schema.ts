@@ -54,6 +54,9 @@ const cellEval = table("cell_eval")
     value: json(),
     flags: number(),
     version: number(),
+    styleId: string().from("style_id").optional(),
+    formatId: string().from("format_id").optional(),
+    formatCode: string().from("format_code").optional(),
     calcRevision: number().from("calc_revision"),
     updatedAt: number().from("updated_at"),
   })
@@ -92,22 +95,6 @@ const definedNames = table("defined_names")
     value: json(),
   })
   .primaryKey("workbookId", "name");
-
-const workbookMetadata = table("workbook_metadata")
-  .columns({
-    workbookId: string().from("workbook_id"),
-    key: string(),
-    value: json(),
-  })
-  .primaryKey("workbookId", "key");
-
-const calculationSettings = table("calculation_settings")
-  .columns({
-    workbookId: string().from("workbook_id"),
-    mode: string<"automatic" | "manual">(),
-    recalcEpoch: number().from("recalc_epoch"),
-  })
-  .primaryKey("workbookId");
 
 const styles = table("cell_styles")
   .columns({
@@ -168,15 +155,13 @@ export const schema = createSchema({
     rowMetadata,
     columnMetadata,
     definedNames,
-    workbookMetadata,
-    calculationSettings,
     styles,
     numberFormats,
     styleRanges,
     formatRanges,
   ],
   relationships: [
-    relationships(workbooks, ({ many, one }) => ({
+    relationships(workbooks, ({ many }) => ({
       sheets: many({
         sourceField: ["id"],
         destField: ["workbookId"],
@@ -186,16 +171,6 @@ export const schema = createSchema({
         sourceField: ["id"],
         destField: ["workbookId"],
         destSchema: definedNames,
-      }),
-      workbookMetadataEntries: many({
-        sourceField: ["id"],
-        destField: ["workbookId"],
-        destSchema: workbookMetadata,
-      }),
-      calculationSettings: one({
-        sourceField: ["id"],
-        destField: ["workbookId"],
-        destSchema: calculationSettings,
       }),
       styles: many({
         sourceField: ["id"],
@@ -288,20 +263,6 @@ export const schema = createSchema({
       }),
     })),
     relationships(definedNames, ({ one }) => ({
-      workbook: one({
-        sourceField: ["workbookId"],
-        destField: ["id"],
-        destSchema: workbooks,
-      }),
-    })),
-    relationships(workbookMetadata, ({ one }) => ({
-      workbook: one({
-        sourceField: ["workbookId"],
-        destField: ["id"],
-        destSchema: workbooks,
-      }),
-    })),
-    relationships(calculationSettings, ({ one }) => ({
       workbook: one({
         sourceField: ["workbookId"],
         destField: ["id"],
