@@ -108,12 +108,12 @@ export interface ViewportProjectionState {
 export interface ViewportProjectionInput {
   viewport: Viewport & { sheetName: string };
   metrics?: RecalcMetrics;
-  sourceCells: readonly CellSourceRow[];
-  cellEval: readonly CellEvalRow[];
-  rowMetadata: readonly AxisMetadataRow[];
-  columnMetadata: readonly AxisMetadataRow[];
-  styleRanges: readonly StyleRangeRow[];
-  formatRanges: readonly FormatRangeRow[];
+  sourceCells: ReadonlyMap<string, CellSourceRow>;
+  cellEval: ReadonlyMap<string, CellEvalRow>;
+  rowMetadata: ReadonlyMap<string, AxisMetadataRow>;
+  columnMetadata: ReadonlyMap<string, AxisMetadataRow>;
+  styleRanges: ReadonlyMap<string, StyleRangeRow>;
+  formatRanges: ReadonlyMap<string, FormatRangeRow>;
   stylesById: ReadonlyMap<string, CellStyleRecord>;
   numberFormatCodeById: ReadonlyMap<string, string>;
 }
@@ -397,10 +397,10 @@ export function projectViewportPatch(
   const styles: CellStyleRecord[] = [];
   const cells: ViewportPatchedCell[] = [];
   const nextCellSignatures = new Map<string, string>();
-  const sourceByAddress = new Map(input.sourceCells.map((row) => [row.address, row]));
-  const computedByAddress = new Map(input.cellEval.map((row) => [row.address, row]));
-  const sortedStyleRanges = input.styleRanges.toSorted(compareRectRanges);
-  const sortedFormatRanges = input.formatRanges.toSorted(compareRectRanges);
+  const sourceByAddress = input.sourceCells;
+  const computedByAddress = input.cellEval;
+  const sortedStyleRanges = [...input.styleRanges.values()].toSorted(compareRectRanges);
+  const sortedFormatRanges = [...input.formatRanges.values()].toSorted(compareRectRanges);
 
   for (let row = input.viewport.rowStart; row <= input.viewport.rowEnd; row += 1) {
     for (let col = input.viewport.colStart; col <= input.viewport.colEnd; col += 1) {
@@ -470,14 +470,14 @@ export function projectViewportPatch(
 
   const columnEntries = buildAxisEntries(
     input.viewport,
-    input.columnMetadata,
+    [...input.columnMetadata.values()],
     PRODUCT_COLUMN_WIDTH,
     "colStart",
     "colEnd",
   );
   const rowEntries = buildAxisEntries(
     input.viewport,
-    input.rowMetadata,
+    [...input.rowMetadata.values()],
     PRODUCT_ROW_HEIGHT,
     "rowStart",
     "rowEnd",

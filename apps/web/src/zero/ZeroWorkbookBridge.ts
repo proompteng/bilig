@@ -265,13 +265,7 @@ export class ZeroWorkbookBridge {
   }
 
   private currentSelectedCell(): CellSnapshot | null {
-    const selectedSource =
-      this.selectionAttachment
-        ?.getData()
-        .sourceCells.find(
-          (cell) =>
-            cell.sheetName === this.selection.sheetName && cell.address === this.selection.address,
-        ) ?? null;
+    const selectedSource = this.selectionAttachment?.getSourceCell(this.selection.address) ?? null;
     return buildSelectedCellSnapshot(
       this.selection.sheetName,
       this.selection.address,
@@ -287,6 +281,7 @@ export class ZeroWorkbookBridge {
     }
     const { sheetName, address } = this.selection;
     const { row, col } = parseCellAddress(address, sheetName);
+    const data = this.selectionAttachment.getData();
     const patch = projectViewportPatch(
       this.selectionProjectionState,
       {
@@ -299,7 +294,7 @@ export class ZeroWorkbookBridge {
         },
         stylesById: this.stylesById,
         numberFormatCodeById: this.numberFormatCodeById,
-        ...this.selectionAttachment.getData(),
+        ...data,
       },
       full,
     );
