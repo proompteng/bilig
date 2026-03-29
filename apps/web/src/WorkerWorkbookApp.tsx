@@ -753,165 +753,6 @@ function ColorPaletteButton({
   );
 }
 
-type AxPresenceMode = "observing" | "applying";
-
-interface AxPresenceState {
-  mode: AxPresenceMode;
-  message: string;
-}
-
-interface AxSideRailProps {
-  axPresence: AxPresenceState;
-  connectionStateName: string;
-  documentId: string;
-  loading: boolean;
-  runtimeState: WorkbookWorkerStateSnapshot | null;
-  selectedCell: CellSnapshot;
-  selection: { sheetName: string; address: string };
-  selectionLabel: string;
-  sheetNames: readonly string[];
-  workbookName: string;
-}
-
-function AxSideRail({
-  axPresence,
-  connectionStateName,
-  documentId,
-  loading,
-  runtimeState,
-  selectedCell,
-  selection,
-  selectionLabel,
-  sheetNames,
-  workbookName,
-}: AxSideRailProps) {
-  const selectedValue = toResolvedValue(selectedCell) || "Empty";
-  const visibleSheets = sheetNames.length > 0 ? sheetNames : (runtimeState?.sheetNames ?? []);
-  const statusTone =
-    axPresence.mode === "applying"
-      ? "border-[#f9ab00] bg-[#fef7e0] text-[#7a5c00]"
-      : "border-[#b7dfc6] bg-[#e6f4ea] text-[#137333]";
-
-  return (
-    <aside
-      aria-label="AX side pane"
-      className="pointer-events-none absolute inset-y-0 right-0 hidden w-[320px] flex-col border-l border-[#dadce0] bg-white/95 backdrop-blur md:flex"
-      data-testid="ax-rail"
-      role="complementary"
-    >
-      <div className="border-b border-[#eef1f4] px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5f6368]">
-              AX
-            </div>
-            <div className="mt-1 text-sm font-semibold text-[#202124]">Live assistant presence</div>
-          </div>
-          <span
-            className={classNames(
-              "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-              statusTone,
-            )}
-            data-testid="ax-presence-chip"
-          >
-            {axPresence.mode === "applying" ? "Applying" : "Observing"}
-          </span>
-        </div>
-        <p className="mt-2 text-xs leading-5 text-[#5f6368]">{axPresence.message}</p>
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        <section className="rounded-xl border border-[#e8eaed] bg-[#f8f9fa] p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5f6368]">
-            Context
-          </div>
-          <div className="mt-2 space-y-2 text-sm text-[#202124]">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[#5f6368]">Workbook</span>
-              <span className="truncate text-right font-medium">{workbookName}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[#5f6368]">Selection</span>
-              <span className="truncate text-right font-medium">
-                {selection.sheetName}!{selectionLabel}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[#5f6368]">Cell value</span>
-              <span className="truncate text-right font-medium">{selectedValue}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[#5f6368]">Connection</span>
-              <span className="truncate text-right font-medium">{connectionStateName}</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-[#e8eaed] bg-white p-3 shadow-[0_1px_0_rgba(60,64,67,0.06)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5f6368]">
-                Agent presence
-              </div>
-              <div className="mt-1 text-sm font-semibold text-[#202124]">AX collaborator</div>
-            </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8f0fe] text-sm font-semibold text-[#1a73e8]">
-              AX
-            </div>
-          </div>
-          <div className="mt-3 grid gap-2 text-sm">
-            <div className="rounded-lg border border-[#eef1f4] px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5f6368]">
-                Activity
-              </div>
-              <div className="mt-1 font-medium text-[#202124]">{axPresence.message}</div>
-            </div>
-            <div className="rounded-lg border border-[#eef1f4] px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5f6368]">
-                Scope
-              </div>
-              <div className="mt-1 font-medium text-[#202124]">Workbook-wide planning</div>
-            </div>
-            <div className="rounded-lg border border-[#eef1f4] px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5f6368]">
-                Visible sheets
-              </div>
-              <div className="mt-1 font-medium text-[#202124]">
-                {loading
-                  ? "Loading workbook runtime"
-                  : visibleSheets.length > 0
-                    ? visibleSheets.join(", ")
-                    : documentId}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-[#e8eaed] bg-[#f8fbff] p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5f6368]">
-            Ready for AX
-          </div>
-          <p className="mt-2 text-sm leading-5 text-[#202124]">
-            The assistant rail is now anchored in the workbook shell, with the current selection and
-            status visible while the grid stays focused on fast edits.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-[#5f6368]">
-            <span className="rounded-full border border-[#dadce0] bg-white px-2.5 py-1">
-              {axPresence.mode === "applying" ? "Applying live change" : "Tracking selection"}
-            </span>
-            <span className="rounded-full border border-[#dadce0] bg-white px-2.5 py-1">
-              {runtimeState ? "Workbook runtime ready" : "Waiting for runtime"}
-            </span>
-            <span className="rounded-full border border-[#dadce0] bg-white px-2.5 py-1">
-              {connectionStateName}
-            </span>
-          </div>
-        </section>
-      </div>
-    </aside>
-  );
-}
-
 export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(config), [config]);
   const documentId = runtimeConfig.documentId;
@@ -924,10 +765,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const [selection, setSelection] = useState<{ sheetName: string; address: string }>({
     sheetName: "Sheet1",
     address: "A1",
-  });
-  const [axPresence, setAxPresence] = useState<AxPresenceState>({
-    mode: "observing",
-    message: "Watching Sheet1!A1",
   });
   const [selectedCell, setSelectedCell] = useState<CellSnapshot>(() =>
     emptyCellSnapshot("Sheet1", "A1"),
@@ -949,17 +786,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   useEffect(() => {
     selectionRef.current = selection;
   }, [selection]);
-
-  useEffect(() => {
-    setAxPresence((current) =>
-      current.mode === "applying"
-        ? current
-        : {
-            mode: "observing",
-            message: `Watching ${selection.sheetName}!${selection.address}`,
-          },
-    );
-  }, [selection.address, selection.sheetName]);
 
   const refreshRuntimeState = useCallback(async (handle?: WorkerHandle) => {
     const active = handle ?? workerHandleRef.current;
@@ -1207,123 +1033,112 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       if (!runtimeConfig.baseUrl && !writesAllowed) {
         throw new Error(`Writes are unavailable while Zero is ${connectionState.name}`);
       }
-      setAxPresence({
-        mode: "applying",
-        message: `Applying ${method}`,
-      });
-      try {
-        if (runtimeConfig.baseUrl) {
-          const result = await invokeWorker(method, ...args);
-          await refreshRuntimeState();
-          await refreshSelectedCell();
-          return result;
-        }
-
-        const localResult = await invokeWorker(method, ...args);
+      if (runtimeConfig.baseUrl) {
+        const result = await invokeWorker(method, ...args);
         await refreshRuntimeState();
         await refreshSelectedCell();
+        return result;
+      }
 
-        switch (method) {
-          case "setCellValue": {
-            const [sheetName, address, value] = args;
-            await runZeroMutation(
-              mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
-            );
-            return localResult;
-          }
-          case "setCellFormula": {
-            const [sheetName, address, formula] = args;
-            await runZeroMutation(
-              mutators.workbook.setCellFormula({
-                documentId,
-                sheetName,
-                address,
-                formula,
-              }),
-            );
-            return localResult;
-          }
-          case "clearCell": {
-            const [sheetName, address] = args;
-            await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
-            return localResult;
-          }
-          case "renderCommit": {
-            const [ops] = args;
-            await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
-            return localResult;
-          }
-          case "fillRange": {
-            const [source, target] = args;
-            await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
-            return localResult;
-          }
-          case "copyRange": {
-            const [source, target] = args;
-            await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
-            return localResult;
-          }
-          case "updateColumnWidth": {
-            const [sheetName, columnIndex, width] = args;
-            await runZeroMutation(
-              mutators.workbook.updateColumnWidth({
-                documentId,
-                sheetName,
-                columnIndex,
-                width,
-              }),
-            );
-            return localResult;
-          }
-          case "autofitColumn": {
-            const [sheetName, columnIndex] = args;
-            if (typeof localResult !== "number") {
-              return localResult;
-            }
-            await runZeroMutation(
-              mutators.workbook.updateColumnWidth({
-                documentId,
-                sheetName,
-                columnIndex,
-                width: localResult,
-              }),
-            );
-            return localResult;
-          }
-          case "setRangeStyle": {
-            const [range, patch] = args;
-            await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
-            return localResult;
-          }
-          case "clearRangeStyle": {
-            const [range, fields] = args;
-            await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
-            return localResult;
-          }
-          case "setRangeNumberFormat": {
-            const [range, format] = args;
-            await runZeroMutation(
-              mutators.workbook.setRangeNumberFormat({
-                documentId,
-                range,
-                format,
-              }),
-            );
-            return localResult;
-          }
-          case "clearRangeNumberFormat": {
-            const [range] = args;
-            await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
-            return localResult;
-          }
-          default:
-            throw new Error(`Unsupported workbook mutation: ${method}`);
+      const localResult = await invokeWorker(method, ...args);
+      await refreshRuntimeState();
+      await refreshSelectedCell();
+
+      switch (method) {
+        case "setCellValue": {
+          const [sheetName, address, value] = args;
+          await runZeroMutation(
+            mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
+          );
+          return localResult;
         }
-      } finally {
-        setAxPresence({
-          mode: "observing",
-          message: `Watching ${selectionRef.current.sheetName}!${selectionRef.current.address}`,
-        });
+        case "setCellFormula": {
+          const [sheetName, address, formula] = args;
+          await runZeroMutation(
+            mutators.workbook.setCellFormula({
+              documentId,
+              sheetName,
+              address,
+              formula,
+            }),
+          );
+          return localResult;
+        }
+        case "clearCell": {
+          const [sheetName, address] = args;
+          await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
+          return localResult;
+        }
+        case "renderCommit": {
+          const [ops] = args;
+          await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
+          return localResult;
+        }
+        case "fillRange": {
+          const [source, target] = args;
+          await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
+          return localResult;
+        }
+        case "copyRange": {
+          const [source, target] = args;
+          await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
+          return localResult;
+        }
+        case "updateColumnWidth": {
+          const [sheetName, columnIndex, width] = args;
+          await runZeroMutation(
+            mutators.workbook.updateColumnWidth({
+              documentId,
+              sheetName,
+              columnIndex,
+              width,
+            }),
+          );
+          return localResult;
+        }
+        case "autofitColumn": {
+          const [sheetName, columnIndex] = args;
+          if (typeof localResult !== "number") {
+            return localResult;
+          }
+          await runZeroMutation(
+            mutators.workbook.updateColumnWidth({
+              documentId,
+              sheetName,
+              columnIndex,
+              width: localResult,
+            }),
+          );
+          return localResult;
+        }
+        case "setRangeStyle": {
+          const [range, patch] = args;
+          await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
+          return localResult;
+        }
+        case "clearRangeStyle": {
+          const [range, fields] = args;
+          await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
+          return localResult;
+        }
+        case "setRangeNumberFormat": {
+          const [range, format] = args;
+          await runZeroMutation(
+            mutators.workbook.setRangeNumberFormat({
+              documentId,
+              range,
+              format,
+            }),
+          );
+          return localResult;
+        }
+        case "clearRangeNumberFormat": {
+          const [range] = args;
+          await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
+          return localResult;
+        }
+        default:
+          throw new Error(`Unsupported workbook mutation: ${method}`);
       }
     },
     [
@@ -1670,10 +1485,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
   const statusModeLabel = runtimeConfig.baseUrl
     ? formatSyncStateLabel(runtimeState?.syncState ?? "local-only")
     : "Local";
-  const axStatusLabel = axPresence.mode === "applying" ? "AX applying" : "AX observing";
-  const workbookName = bridgeState?.workbookName ?? runtimeState?.workbookName ?? documentId;
-  const visibleSheetNames =
-    bridgeEnabled && bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? []);
 
   const statusBar = (
     <>
@@ -1683,17 +1494,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
       </span>
       <span data-testid="status-sync">
         {isEditing ? "Editing" : writesAllowed ? "Ready" : "Read-only"}
-      </span>
-      <span
-        className={classNames(
-          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-          axPresence.mode === "applying"
-            ? "border-[#f9ab00] bg-[#fef7e0] text-[#7a5c00]"
-            : "border-[#b7dfc6] bg-[#e6f4ea] text-[#137333]",
-        )}
-        data-testid="ax-presence-chip"
-      >
-        {axStatusLabel}
       </span>
     </>
   );
@@ -2247,18 +2047,6 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
             />
           )}
         </div>
-        <AxSideRail
-          axPresence={axPresence}
-          connectionStateName={connectionState.name}
-          documentId={documentId}
-          loading={loading || !workerHandle || !runtimeState || bridgeLoading}
-          runtimeState={runtimeState}
-          selectedCell={selectedCell}
-          selection={selection}
-          selectionLabel={selectionLabel}
-          sheetNames={visibleSheetNames}
-          workbookName={workbookName}
-        />
       </div>
     </div>
   );
