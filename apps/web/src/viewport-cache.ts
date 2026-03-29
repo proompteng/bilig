@@ -50,7 +50,7 @@ export class WorkerViewportCache implements GridEngineLike {
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>();
   private readonly knownSheets = new Set<string>();
 
-  constructor(private readonly client: WorkerEngineClient) {}
+  constructor(private readonly client?: WorkerEngineClient) {}
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -124,6 +124,9 @@ export class WorkerViewportCache implements GridEngineLike {
     viewport: Viewport,
     listener: (damage?: readonly { cell: CellItem }[]) => void,
   ): () => void {
+    if (!this.client) {
+      throw new Error("Local worker viewport subscriptions are unavailable in the Zero runtime");
+    }
     return this.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
       const damage = this.applyPatch(decodeViewportPatch(bytes));
       listener(damage);
@@ -147,24 +150,7 @@ export class WorkerViewportCache implements GridEngineLike {
       const current = this.cellSnapshots.get(key);
       if (current) {
         const incoming = cell.snapshot;
-        const incomingIsEmptyDefault =
-          incoming.value.tag === ValueTag.Empty &&
-          incoming.formula === undefined &&
-          incoming.input === undefined &&
-          incoming.styleId === undefined &&
-          incoming.format === undefined &&
-          incoming.numberFormatId === undefined;
-        const currentIsEmptyDefault =
-          current.value.tag === ValueTag.Empty &&
-          current.formula === undefined &&
-          current.input === undefined &&
-          current.styleId === undefined &&
-          current.format === undefined &&
-          current.numberFormatId === undefined;
-        if (
-          current.version > incoming.version ||
-          (current.version === incoming.version && incomingIsEmptyDefault && !currentIsEmptyDefault)
-        ) {
+        if (current.version > incoming.version) {
           continue;
         }
       }

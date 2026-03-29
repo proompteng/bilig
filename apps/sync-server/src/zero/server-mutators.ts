@@ -263,6 +263,7 @@ async function commitWorkbookMutation(
         previousState: state,
         nextSnapshot,
         nextReplicaSnapshot,
+        nextEngine: state.engine,
         updatedBy,
         ownerUserId,
         eventPayload,
@@ -305,6 +306,7 @@ async function replaceWorkbookSnapshot(
       previousState: state,
       nextSnapshot,
       nextReplicaSnapshot,
+      nextEngine: engine,
       updatedBy: session?.userID ?? "system",
       ownerUserId,
       eventPayload: {

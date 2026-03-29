@@ -1,5 +1,11 @@
-import type { EngineReplicaSnapshot } from "@bilig/core";
-import { ValueTag, type CellValue, type WorkbookSnapshot } from "@bilig/protocol";
+import type { EngineReplicaSnapshot, SpreadsheetEngine } from "@bilig/core";
+import { parseCellAddress } from "@bilig/formula";
+import {
+  ValueTag,
+  type CellRangeRef,
+  type CellValue,
+  type WorkbookSnapshot,
+} from "@bilig/protocol";
 import {
   deriveDirtyRegions,
   type DirtyRegion,
@@ -17,6 +23,7 @@ import {
   buildWorkbookSourceProjection,
   buildWorkbookStyleRows,
   diffProjectionRows,
+  materializeCellEvalProjection,
   type AxisMetadataSourceRow,
   type CellEvalRow,
   type CellSourceRow,
@@ -60,6 +67,7 @@ export interface PersistWorkbookMutationOptions {
   previousState: WorkbookRuntimeState;
   nextSnapshot: WorkbookSnapshot;
   nextReplicaSnapshot: EngineReplicaSnapshot | null;
+  nextEngine?: SpreadsheetEngine | null;
   updatedBy: string;
   ownerUserId: string;
   eventPayload: WorkbookEventPayload;
@@ -325,6 +333,38 @@ function isCellValue(value: unknown): value is CellValue {
 
 function parseCellEvalValue(value: unknown): CellValue {
   return isCellValue(value) ? value : { tag: ValueTag.Empty };
+}
+
+function normalizeRangeBounds(range: CellRangeRef): {
+  sheetName: string;
+  rowStart: number;
+  rowEnd: number;
+  colStart: number;
+  colEnd: number;
+} {
+  const start = parseCellAddress(range.startAddress, range.sheetName);
+  const end = parseCellAddress(range.endAddress, range.sheetName);
+  return {
+    sheetName: range.sheetName,
+    rowStart: Math.min(start.row, end.row),
+    rowEnd: Math.max(start.row, end.row),
+    colStart: Math.min(start.col, end.col),
+    colEnd: Math.max(start.col, end.col),
+  };
+}
+
+function cellEvalRowInRange(
+  row: Pick<CellEvalRow, "sheetName" | "rowNum" | "colNum">,
+  range: CellRangeRef,
+): boolean {
+  const bounds = normalizeRangeBounds(range);
+  return (
+    row.sheetName === bounds.sheetName &&
+    row.rowNum >= bounds.rowStart &&
+    row.rowNum <= bounds.rowEnd &&
+    row.colNum >= bounds.colStart &&
+    row.colNum <= bounds.colEnd
+  );
 }
 
 async function loadLatestWorkbookCheckpoint(
@@ -1069,12 +1109,73 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
   }));
 }
 
-async function persistCellEvalDiff(
+async function loadCellEvalRowsForRange(
   db: Queryable,
   documentId: string,
+  range: CellRangeRef,
+): Promise<CellEvalRow[]> {
+  const bounds = normalizeRangeBounds(range);
+  const result = await db.query<{
+    workbook_id: string;
+    sheet_name: string;
+    address: string;
+    row_num: number | null;
+    col_num: number | null;
+    value: unknown;
+    flags: number | string | null;
+    version: number | string | null;
+    style_id: string | null;
+    format_id: string | null;
+    format_code: string | null;
+    calc_revision: number | string | null;
+    updated_at: string | null;
+  }>(
+    `
+      SELECT
+        workbook_id,
+        sheet_name,
+        address,
+        row_num,
+        col_num,
+        value,
+        flags,
+        version,
+        style_id,
+        format_id,
+        format_code,
+        calc_revision,
+        updated_at
+      FROM cell_eval
+      WHERE workbook_id = $1
+        AND sheet_name = $2
+        AND row_num BETWEEN $3 AND $4
+        AND col_num BETWEEN $5 AND $6
+    `,
+    [documentId, bounds.sheetName, bounds.rowStart, bounds.rowEnd, bounds.colStart, bounds.colEnd],
+  );
+  return result.rows.map((row) => ({
+    workbookId: row.workbook_id,
+    sheetName: row.sheet_name,
+    address: row.address,
+    rowNum: parseInteger(row.row_num),
+    colNum: parseInteger(row.col_num),
+    value: parseCellEvalValue(row.value),
+    flags: parseInteger(row.flags),
+    version: parseInteger(row.version),
+    styleId: row.style_id,
+    formatId: row.format_id,
+    formatCode: row.format_code,
+    calcRevision: parseInteger(row.calc_revision),
+    updatedAt: row.updated_at ?? nowIso(),
+  }));
+}
+
+async function persistCellEvalRows(
+  db: Queryable,
+  documentId: string,
+  previousRows: readonly CellEvalRow[],
   nextRows: readonly CellEvalRow[],
 ): Promise<void> {
-  const previousRows = await loadCellEvalRows(db, documentId);
   const diff = diffProjectionRows(
     previousRows,
     nextRows,
@@ -1143,6 +1244,26 @@ async function persistCellEvalDiff(
     );
   }
   await Promise.all(tasks);
+}
+
+async function persistCellEvalDiff(
+  db: Queryable,
+  documentId: string,
+  nextRows: readonly CellEvalRow[],
+): Promise<void> {
+  const previousRows = await loadCellEvalRows(db, documentId);
+  await persistCellEvalRows(db, documentId, previousRows, nextRows);
+}
+
+async function persistCellEvalRangeDiff(
+  db: Queryable,
+  documentId: string,
+  range: CellRangeRef,
+  nextRows: readonly CellEvalRow[],
+): Promise<void> {
+  const previousRows = await loadCellEvalRowsForRange(db, documentId, range);
+  const nextRowsInRange = nextRows.filter((row) => cellEvalRowInRange(row, range));
+  await persistCellEvalRows(db, documentId, previousRows, nextRowsInRange);
 }
 
 async function persistWorkbookCheckpoint(
@@ -1687,6 +1808,19 @@ export async function persistWorkbookMutation(
         nextProjectionOptions,
       ),
     );
+    if (options.nextEngine) {
+      await persistCellEvalRangeDiff(
+        db,
+        documentId,
+        options.eventPayload.range,
+        materializeCellEvalProjection(
+          options.nextEngine,
+          documentId,
+          nextProjectionOptions.calculatedRevision,
+          updatedAt,
+        ),
+      );
+    }
   } else if (isNumberFormatRangeEventPayload(options.eventPayload)) {
     await applyCalculationSettings(
       db,
@@ -1716,6 +1850,19 @@ export async function persistWorkbookMutation(
         nextProjectionOptions,
       ),
     );
+    if (options.nextEngine) {
+      await persistCellEvalRangeDiff(
+        db,
+        documentId,
+        options.eventPayload.range,
+        materializeCellEvalProjection(
+          options.nextEngine,
+          documentId,
+          nextProjectionOptions.calculatedRevision,
+          updatedAt,
+        ),
+      );
+    }
   } else if (isColumnMetadataEventPayload(options.eventPayload)) {
     await applyCalculationSettings(
       db,
