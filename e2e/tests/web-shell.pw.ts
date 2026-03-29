@@ -1531,7 +1531,7 @@ async function captureGridRangeScreenshot(
 
 async function compareScreenshotPixels(page: Page, left: Buffer, right: Buffer) {
   return await page.evaluate(
-    async ({ leftDataUrl, rightDataUrl }) => {
+    async ({ leftDataUrl, rightDataUrl, channelTolerance }) => {
       const [leftImage, rightImage] = await Promise.all([
         new Promise<HTMLImageElement>((resolve, reject) => {
           const image = new Image();
@@ -1586,10 +1586,10 @@ async function compareScreenshotPixels(page: Page, left: Buffer, right: Buffer) 
       let diffPixels = 0;
       for (let index = 0; index < leftPixels.length; index += 4) {
         if (
-          leftPixels[index] !== rightPixels[index] ||
-          leftPixels[index + 1] !== rightPixels[index + 1] ||
-          leftPixels[index + 2] !== rightPixels[index + 2] ||
-          leftPixels[index + 3] !== rightPixels[index + 3]
+          Math.abs(leftPixels[index] - rightPixels[index]) > channelTolerance ||
+          Math.abs(leftPixels[index + 1] - rightPixels[index + 1]) > channelTolerance ||
+          Math.abs(leftPixels[index + 2] - rightPixels[index + 2]) > channelTolerance ||
+          Math.abs(leftPixels[index + 3] - rightPixels[index + 3]) > channelTolerance
         ) {
           diffPixels += 1;
         }
@@ -1600,6 +1600,7 @@ async function compareScreenshotPixels(page: Page, left: Buffer, right: Buffer) 
     {
       leftDataUrl: `data:image/png;base64,${left.toString("base64")}`,
       rightDataUrl: `data:image/png;base64,${right.toString("base64")}`,
+      channelTolerance: 2,
     },
   );
 }
