@@ -1,0 +1,17 @@
+services:
+  web:
+    build:
+      context: .
+      target: web-runtime
+    ports:
+      - "${BILIG_E2E_WEB_PORT:-4180}:3000"
+
+  local-server:
+    build:
+      context: .
+      target: local-runtime
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4381"
+    ports:
+      - "${BILIG_E2E_LOCAL_SERVER_PORT:-4382}:4381"

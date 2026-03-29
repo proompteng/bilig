@@ -89,6 +89,9 @@ importers:
 
   apps/local-server:
     dependencies:
+      '@bilig/actors':
+        specifier: workspace:*
+        version: link:../../packages/actors
       '@bilig/agent-api':
         specifier: workspace:*
         version: link:../../packages/agent-api
@@ -128,6 +131,9 @@ importers:
 
   apps/sync-server:
     dependencies:
+      '@bilig/actors':
+        specifier: workspace:*
+        version: link:../../packages/actors
       '@bilig/agent-api':
         specifier: workspace:*
         version: link:../../packages/agent-api
@@ -173,6 +179,9 @@ importers:
       pg:
         specifier: ^8.20.0
         version: 8.20.0
+      xstate:
+        specifier: 5.30.0
+        version: 5.30.0
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -386,6 +395,12 @@ importers:
 
   packages/runtime-kernel:
     dependencies:
+      '@bilig/agent-api':
+        specifier: workspace:*
+        version: link:../agent-api
+      '@bilig/binary-protocol':
+        specifier: workspace:*
+        version: link:../binary-protocol
       '@bilig/contracts':
         specifier: workspace:*
         version: link:../contracts

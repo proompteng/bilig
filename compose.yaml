@@ -22,7 +22,7 @@ services:
       retries: 20
       start_period: 5s
     ports:
-      - "5432:5432"
+      - "${BILIG_E2E_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/01-zero-publication.sql:/docker-entrypoint-initdb.d/01-zero-publication.sql:ro
@@ -49,7 +49,7 @@ services:
       retries: 20
       start_period: 5s
     ports:
-      - "4381:4381"
+      - "${BILIG_E2E_LOCAL_SERVER_PORT:-4381}:4381"
 
   sync-server:
     build:
@@ -65,6 +65,10 @@ services:
       BILIG_LOCAL_SERVER_URL: http://local-server:4381
       BILIG_PUBLIC_SERVER_URL: http://localhost:3000
       BILIG_WEB_APP_BASE_URL: http://localhost:3000
+    networks:
+      default:
+        aliases:
+          - bilig-sync
     healthcheck:
       test:
         - CMD
@@ -76,7 +80,7 @@ services:
       retries: 20
       start_period: 10s
     ports:
-      - "4321:4321"
+      - "${BILIG_E2E_SYNC_SERVER_PORT:-4321}:4321"
 
   zero-cache:
     image: rocicorp/zero:1.1.1
@@ -89,14 +93,19 @@ services:
       ZERO_PORT: "4848"
       ZERO_REPLICA_FILE: /data/zero.db
       ZERO_ADMIN_PASSWORD: local-zero-admin
-      ZERO_APP_PUBLICATIONS: zero_data
+      ZERO_APP_ID: bilig_v2
+      ZERO_APP_PUBLICATIONS: zero_data_v2
       ZERO_UPSTREAM_DB: postgresql://bilig:bilig@postgres:5432/bilig
       ZERO_CVR_DB: postgresql://bilig:bilig@postgres:5432/bilig
       ZERO_CHANGE_DB: postgresql://bilig:bilig@postgres:5432/bilig
-      ZERO_QUERY_URL: http://sync-server:4321/api/zero/query
-      ZERO_MUTATE_URL: http://sync-server:4321/api/zero/mutate
+      ZERO_QUERY_URL: http://bilig-sync:4321/api/zero/v2/query
+      ZERO_MUTATE_URL: http://bilig-sync:4321/api/zero/v2/mutate
+    networks:
+      default:
+        aliases:
+          - bilig-zero
     ports:
-      - "4848:4848"
+      - "${BILIG_E2E_ZERO_PORT:-4848}:4848"
     volumes:
       - zero-replica-data:/data
 
@@ -118,7 +127,7 @@ services:
       retries: 20
       start_period: 5s
     ports:
-      - "3000:3000"
+      - "${BILIG_E2E_WEB_PORT:-3000}:3000"
     volumes:
       - ./docker/runtime-config.local.json:/usr/share/nginx/html/runtime-config.json:ro
 

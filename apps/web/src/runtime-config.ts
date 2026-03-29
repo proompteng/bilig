@@ -33,9 +33,7 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
       ? false
       : bridgeOverride === "on"
         ? true
-        : ephemeralDocument
-          ? false
-          : config.zeroViewportBridge;
+        : config.zeroViewportBridge;
 
   if (explicitDocumentId) {
     return {

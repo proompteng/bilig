@@ -8,7 +8,7 @@ import type { RuntimeSession } from "@bilig/contracts";
 import { App, ZeroDisabledApp } from "./App.js";
 import { resolveRuntimeConfig, type RuntimeConfig } from "./runtime-config";
 import { loadRuntimeSession } from "./session";
-import { ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-connection";
+import { resolveZeroCacheUrl, ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-connection";
 import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 
 import "@glideapps/glide-data-grid/index.css";
@@ -83,7 +83,7 @@ function BootstrapRoot() {
 
   return (
     <ZeroProvider
-      cacheURL={config.rawConfig.zeroCacheUrl}
+      cacheURL={resolveZeroCacheUrl(config.rawConfig.zeroCacheUrl)}
       auth={session.authToken}
       userID={session.userId}
       schema={schema}

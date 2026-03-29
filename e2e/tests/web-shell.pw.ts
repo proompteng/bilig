@@ -240,6 +240,16 @@ async function stopChildProcess(process: ChildProcess) {
 }
 
 async function startLocalServer(port: number) {
+  const sharedLocalServerUrl = process.env["BILIG_E2E_LOCAL_SERVER_URL"];
+  if (sharedLocalServerUrl) {
+    await waitForLocalServerHealthy(sharedLocalServerUrl);
+    return {
+      localServerUrl: sharedLocalServerUrl,
+      stop: async () => {},
+      getLogs: () => "",
+    };
+  }
+
   const child = spawn(bunExecutable, ["apps/local-server/src/index.ts"], {
     cwd: process.cwd(),
     env: {
@@ -541,6 +551,120 @@ const TOOLBAR_ACTION_CELL = {
   columnIndex: 1,
   rowIndex: 1,
 } as const;
+
+const TOOLBAR_SYNC_ACTIONS: readonly ToolbarSyncAction[] = [
+  {
+    label: "number-format-accounting",
+    apply: async (activePage) =>
+      await selectToolbarOption(activePage, "Number format", "Accounting", "accounting"),
+  },
+  {
+    label: "increase-decimals",
+    apply: async (activePage) => await activePage.getByLabel("Increase decimals").click(),
+  },
+  {
+    label: "decrease-decimals",
+    apply: async (activePage) => await activePage.getByLabel("Decrease decimals").click(),
+  },
+  {
+    label: "toggle-grouping",
+    apply: async (activePage) => await activePage.getByLabel("Toggle grouping").click(),
+  },
+  {
+    label: "font-family-georgia",
+    apply: async (activePage) => await selectToolbarOption(activePage, "Font family", "Georgia"),
+  },
+  {
+    label: "font-size-14",
+    apply: async (activePage) => await selectToolbarOption(activePage, "Font size", "14"),
+  },
+  { label: "bold", apply: async (activePage) => await activePage.getByLabel("Bold").click() },
+  {
+    label: "italic",
+    apply: async (activePage) => await activePage.getByLabel("Italic").click(),
+  },
+  {
+    label: "underline",
+    apply: async (activePage) => await activePage.getByLabel("Underline").click(),
+  },
+  {
+    label: "fill-color",
+    apply: async (activePage) => await setToolbarCustomColor(activePage, "Fill color", "#dbeafe"),
+  },
+  {
+    label: "text-color",
+    apply: async (activePage) => await setToolbarCustomColor(activePage, "Text color", "#7c2d12"),
+  },
+  {
+    label: "align-left",
+    apply: async (activePage) => await activePage.getByLabel("Align left").click(),
+  },
+  {
+    label: "align-center",
+    apply: async (activePage) => await activePage.getByLabel("Align center").click(),
+  },
+  {
+    label: "align-right",
+    apply: async (activePage) => await activePage.getByLabel("Align right").click(),
+  },
+  {
+    label: "border-all",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "All borders"),
+  },
+  {
+    label: "border-inner",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Inner borders"),
+  },
+  {
+    label: "border-horizontal",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Horizontal borders"),
+  },
+  {
+    label: "border-vertical",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Vertical borders"),
+  },
+  {
+    label: "border-outer",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Outer borders"),
+  },
+  {
+    label: "border-left",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Left border"),
+  },
+  {
+    label: "border-top",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Top border"),
+  },
+  {
+    label: "border-right",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Right border"),
+  },
+  {
+    label: "border-bottom",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Bottom border"),
+  },
+  {
+    label: "border-clear",
+    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Clear borders"),
+  },
+  { label: "wrap", apply: async (activePage) => await activePage.getByLabel("Wrap").click() },
+  {
+    label: "clear-style",
+    apply: async (activePage) => await activePage.getByLabel("Clear style").click(),
+  },
+  {
+    label: "number-format-general",
+    apply: async (activePage) =>
+      await selectToolbarOption(activePage, "Number format", "General", "general"),
+  },
+];
+
+async function seedToolbarActionRangeViaClipboard(page: Page) {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(() => navigator.clipboard.writeText("1234.5\t6789.125\n42.25\t-7.5"));
+  await clickProductCell(page, 1, 1);
+  await page.getByTestId("sheet-grid").press(`${PRIMARY_MODIFIER}+V`);
+}
 
 function findSingleCellStyleRange(
   snapshot: WorkbookSnapshotLike,
@@ -1370,6 +1494,41 @@ async function captureWorkbookShellScreenshot(page: Page) {
   });
 }
 
+async function captureGridRangeScreenshot(
+  page: Page,
+  startColumn: number,
+  startRow: number,
+  endColumn: number,
+  endRow: number,
+) {
+  await page.bringToFront();
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const minColumn = Math.min(startColumn, endColumn);
+  const maxColumn = Math.max(startColumn, endColumn);
+  const minRow = Math.min(startRow, endRow);
+  const maxRow = Math.max(startRow, endRow);
+  const startLeft = await getProductColumnLeft(page, minColumn);
+  const endLeft = await getProductColumnLeft(page, maxColumn);
+  const endWidth = await getProductColumnWidth(page, maxColumn);
+
+  return await page.screenshot({
+    animations: "disabled",
+    caret: "hide",
+    clip: {
+      x: Math.round(grid.x + startLeft),
+      y: Math.round(grid.y + PRODUCT_HEADER_HEIGHT + minRow * PRODUCT_ROW_HEIGHT),
+      width: Math.round(endLeft + endWidth - startLeft),
+      height: Math.round((maxRow - minRow + 1) * PRODUCT_ROW_HEIGHT),
+    },
+  });
+}
+
 async function compareScreenshotPixels(page: Page, left: Buffer, right: Buffer) {
   return await page.evaluate(
     async ({ leftDataUrl, rightDataUrl }) => {
@@ -1516,11 +1675,108 @@ async function expectMatchingWorkbookShellScreenshots(
   );
 }
 
+async function pollMatchingGridRangeScreenshots(
+  primaryPage: Page,
+  mirrorPage: Page,
+  startedAt: number,
+  timeoutMs: number,
+  maxDiffPixels: number,
+  startColumn: number,
+  startRow: number,
+  endColumn: number,
+  endRow: number,
+): Promise<{
+  primaryBuffer: Buffer;
+  mirrorBuffer: Buffer;
+  diffPixels: number;
+  matched: boolean;
+}> {
+  const [primaryBuffer, mirrorBuffer] = await Promise.all([
+    captureGridRangeScreenshot(primaryPage, startColumn, startRow, endColumn, endRow),
+    captureGridRangeScreenshot(mirrorPage, startColumn, startRow, endColumn, endRow),
+  ]);
+  const comparison = await compareScreenshotPixels(primaryPage, primaryBuffer, mirrorBuffer);
+  const matched = comparison.equal || comparison.diffPixels <= maxDiffPixels;
+  if (matched || Date.now() - startedAt > timeoutMs) {
+    return {
+      primaryBuffer,
+      mirrorBuffer,
+      diffPixels: comparison.diffPixels,
+      matched,
+    };
+  }
+
+  await delay(50);
+  return await pollMatchingGridRangeScreenshots(
+    primaryPage,
+    mirrorPage,
+    startedAt,
+    timeoutMs,
+    maxDiffPixels,
+    startColumn,
+    startRow,
+    endColumn,
+    endRow,
+  );
+}
+
+async function expectMatchingGridRangeScreenshots(
+  primaryPage: Page,
+  mirrorPage: Page,
+  actionLabel: string,
+  testInfo: TestInfo,
+  startColumn: number,
+  startRow: number,
+  endColumn: number,
+  endRow: number,
+  timeoutMs = 1_500,
+  maxDiffPixels = 8,
+) {
+  const startedAt = Date.now();
+  const result = await pollMatchingGridRangeScreenshots(
+    primaryPage,
+    mirrorPage,
+    startedAt,
+    timeoutMs,
+    maxDiffPixels,
+    startColumn,
+    startRow,
+    endColumn,
+    endRow,
+  );
+  if (result.matched) {
+    return Date.now() - startedAt;
+  }
+
+  const primaryHash = createHash("sha256").update(result.primaryBuffer).digest("hex");
+  const mirrorHash = createHash("sha256").update(result.mirrorBuffer).digest("hex");
+  await writeFile(
+    testInfo.outputPath(`multiplayer-${actionLabel}-range-primary.png`),
+    result.primaryBuffer,
+  );
+  await writeFile(
+    testInfo.outputPath(`multiplayer-${actionLabel}-range-mirror.png`),
+    result.mirrorBuffer,
+  );
+
+  throw new Error(
+    `multiplayer grid range screenshots diverged for ${actionLabel} after ${timeoutMs}ms (primary=${primaryHash}, mirror=${mirrorHash}, diffPixels=${result.diffPixels}, maxDiffPixels=${maxDiffPixels})`,
+  );
+}
+
 async function openSharedWorkbookPage(page: Page, localServerUrl: string, documentId: string) {
   await page.goto(
     `/?document=${encodeURIComponent(documentId)}&server=${encodeURIComponent(localServerUrl)}`,
   );
   await waitForBrowserSession(localServerUrl, documentId);
+  await selectToolbarActionRange(page);
+}
+
+async function openZeroWorkbookPage(page: Page, documentId: string) {
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`);
+  await expect(page.getByTestId("formula-bar")).toBeVisible();
+  await expect(page.getByTestId("sheet-grid")).toBeVisible();
+  await expect(page.getByTestId("status-sync")).toHaveText("Ready");
   await selectToolbarActionRange(page);
 }
 
@@ -1539,11 +1795,15 @@ async function runToolbarSyncActions(
   await action.apply(page);
   await selectToolbarActionRange(page);
   await selectToolbarActionRange(mirrorPage);
-  const elapsed = await expectMatchingWorkbookShellScreenshots(
+  const elapsed = await expectMatchingGridRangeScreenshots(
     page,
     mirrorPage,
     action.label,
     testInfo,
+    1,
+    1,
+    2,
+    2,
     1_500,
   );
   expect(elapsed).toBeLessThanOrEqual(1_500);
@@ -1990,113 +2250,6 @@ test("web app keeps two live tabs visually converged across toolbar actions", as
     await mirrorPage.setViewportSize(viewport);
   }
 
-  const actions: readonly ToolbarSyncAction[] = [
-    {
-      label: "number-format-accounting",
-      apply: async (activePage) =>
-        await selectToolbarOption(activePage, "Number format", "Accounting", "accounting"),
-    },
-    {
-      label: "increase-decimals",
-      apply: async (activePage) => await activePage.getByLabel("Increase decimals").click(),
-    },
-    {
-      label: "decrease-decimals",
-      apply: async (activePage) => await activePage.getByLabel("Decrease decimals").click(),
-    },
-    {
-      label: "toggle-grouping",
-      apply: async (activePage) => await activePage.getByLabel("Toggle grouping").click(),
-    },
-    {
-      label: "font-family-georgia",
-      apply: async (activePage) => await selectToolbarOption(activePage, "Font family", "Georgia"),
-    },
-    {
-      label: "font-size-14",
-      apply: async (activePage) => await selectToolbarOption(activePage, "Font size", "14"),
-    },
-    { label: "bold", apply: async (activePage) => await activePage.getByLabel("Bold").click() },
-    {
-      label: "italic",
-      apply: async (activePage) => await activePage.getByLabel("Italic").click(),
-    },
-    {
-      label: "underline",
-      apply: async (activePage) => await activePage.getByLabel("Underline").click(),
-    },
-    {
-      label: "fill-color",
-      apply: async (activePage) => await setToolbarCustomColor(activePage, "Fill color", "#dbeafe"),
-    },
-    {
-      label: "text-color",
-      apply: async (activePage) => await setToolbarCustomColor(activePage, "Text color", "#7c2d12"),
-    },
-    {
-      label: "align-left",
-      apply: async (activePage) => await activePage.getByLabel("Align left").click(),
-    },
-    {
-      label: "align-center",
-      apply: async (activePage) => await activePage.getByLabel("Align center").click(),
-    },
-    {
-      label: "align-right",
-      apply: async (activePage) => await activePage.getByLabel("Align right").click(),
-    },
-    {
-      label: "border-all",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "All borders"),
-    },
-    {
-      label: "border-inner",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Inner borders"),
-    },
-    {
-      label: "border-horizontal",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Horizontal borders"),
-    },
-    {
-      label: "border-vertical",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Vertical borders"),
-    },
-    {
-      label: "border-outer",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Outer borders"),
-    },
-    {
-      label: "border-left",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Left border"),
-    },
-    {
-      label: "border-top",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Top border"),
-    },
-    {
-      label: "border-right",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Right border"),
-    },
-    {
-      label: "border-bottom",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Bottom border"),
-    },
-    {
-      label: "border-clear",
-      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Clear borders"),
-    },
-    { label: "wrap", apply: async (activePage) => await activePage.getByLabel("Wrap").click() },
-    {
-      label: "clear-style",
-      apply: async (activePage) => await activePage.getByLabel("Clear style").click(),
-    },
-    {
-      label: "number-format-general",
-      apply: async (activePage) =>
-        await selectToolbarOption(activePage, "Number format", "General", "general"),
-    },
-  ];
-
   try {
     await withAgentSession(
       localServer.localServerUrl,
@@ -2131,7 +2284,7 @@ test("web app keeps two live tabs visually converged across toolbar actions", as
     );
     expect(initialElapsed).toBeLessThanOrEqual(1_500);
 
-    await runToolbarSyncActions(page, mirrorPage, actions, testInfo);
+    await runToolbarSyncActions(page, mirrorPage, TOOLBAR_SYNC_ACTIONS, testInfo);
   } catch (error) {
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\nLocal-server logs:\n${localServer.getLogs()}`,
@@ -2140,6 +2293,194 @@ test("web app keeps two live tabs visually converged across toolbar actions", as
   } finally {
     await mirrorPage.close().catch(() => undefined);
     await localServer.stop();
+  }
+});
+
+test("web app propagates content and styling changes to the second live tab", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const port = await reserveLocalPort();
+  const documentId = `playwright-content-style-multiplayer-${Date.now()}`;
+  const localServer = await startLocalServer(port);
+  const mirrorPage = await page.context().newPage();
+  const viewport = page.viewportSize();
+  if (viewport) {
+    await mirrorPage.setViewportSize(viewport);
+  }
+
+  try {
+    await withAgentSession(
+      localServer.localServerUrl,
+      documentId,
+      `playwright-agent:${Date.now()}`,
+      async (sessionId) => {
+        await sendAgentRequest(localServer.localServerUrl, {
+          kind: "writeRange",
+          id: `write:${Date.now()}`,
+          sessionId,
+          range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+          values: [
+            ["alpha", "beta"],
+            ["gamma", "delta"],
+          ],
+        });
+      },
+    );
+
+    await Promise.all([
+      openSharedWorkbookPage(page, localServer.localServerUrl, documentId),
+      openSharedWorkbookPage(mirrorPage, localServer.localServerUrl, documentId),
+    ]);
+    await waitForBrowserSessionCount(localServer.localServerUrl, documentId, 2);
+
+    await clickProductCell(page, 1, 1);
+    await page.keyboard.type("relay");
+    await page.keyboard.press("Enter");
+    await selectToolbarActionRange(page);
+    await selectToolbarActionRange(mirrorPage);
+
+    const contentElapsed = await expectMatchingGridRangeScreenshots(
+      page,
+      mirrorPage,
+      "content-relay",
+      testInfo,
+      1,
+      1,
+      2,
+      2,
+      1_500,
+      8,
+    );
+    expect(contentElapsed).toBeLessThanOrEqual(1_500);
+
+    await page.getByLabel("Bold").click();
+    await setToolbarCustomColor(page, "Fill color", "#dbeafe");
+    await selectToolbarActionRange(page);
+    await selectToolbarActionRange(mirrorPage);
+
+    const styleElapsed = await expectMatchingGridRangeScreenshots(
+      page,
+      mirrorPage,
+      "style-relay",
+      testInfo,
+      1,
+      1,
+      2,
+      2,
+      1_500,
+      8,
+    );
+    expect(styleElapsed).toBeLessThanOrEqual(1_500);
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nLocal-server logs:\n${localServer.getLogs()}`,
+      { cause: error },
+    );
+  } finally {
+    await mirrorPage.close().catch(() => undefined);
+    await localServer.stop();
+  }
+});
+
+test("web app propagates content and styling changes across live zero tabs", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const documentId = `playwright-zero-style-multiplayer-${Date.now()}`;
+  const mirrorPage = await page.context().newPage();
+  const viewport = page.viewportSize();
+  if (viewport) {
+    await mirrorPage.setViewportSize(viewport);
+  }
+
+  try {
+    await Promise.all([
+      openZeroWorkbookPage(page, documentId),
+      openZeroWorkbookPage(mirrorPage, documentId),
+    ]);
+
+    await clickProductCell(page, 1, 1);
+    await page.keyboard.type("relay");
+    await page.keyboard.press("Enter");
+    await selectToolbarActionRange(page);
+    await selectToolbarActionRange(mirrorPage);
+
+    const contentElapsed = await expectMatchingGridRangeScreenshots(
+      page,
+      mirrorPage,
+      "zero-content-relay",
+      testInfo,
+      1,
+      1,
+      2,
+      2,
+      1_500,
+      8,
+    );
+    expect(contentElapsed).toBeLessThanOrEqual(1_500);
+
+    await page.getByLabel("Bold").click();
+    await pickToolbarPresetColor(page, "Fill color", "light cornflower blue 3");
+    await pickToolbarBorderPreset(page, "All borders");
+    await selectToolbarActionRange(page);
+    await selectToolbarActionRange(mirrorPage);
+
+    const styleElapsed = await expectMatchingGridRangeScreenshots(
+      page,
+      mirrorPage,
+      "zero-style-relay",
+      testInfo,
+      1,
+      1,
+      2,
+      2,
+      1_500,
+      8,
+    );
+    expect(styleElapsed).toBeLessThanOrEqual(1_500);
+  } finally {
+    await mirrorPage.close().catch(() => undefined);
+  }
+});
+
+test("web app keeps two live zero tabs visually converged across toolbar actions", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const documentId = `playwright-zero-toolbar-multiplayer-${Date.now()}`;
+  const mirrorPage = await page.context().newPage();
+  const viewport = page.viewportSize();
+  if (viewport) {
+    await mirrorPage.setViewportSize(viewport);
+  }
+
+  try {
+    await Promise.all([
+      openZeroWorkbookPage(page, documentId),
+      openZeroWorkbookPage(mirrorPage, documentId),
+    ]);
+    await seedToolbarActionRangeViaClipboard(page);
+    await selectToolbarActionRange(page);
+    await selectToolbarActionRange(mirrorPage);
+
+    const initialElapsed = await expectMatchingGridRangeScreenshots(
+      page,
+      mirrorPage,
+      "zero-toolbar-initial",
+      testInfo,
+      1,
+      1,
+      2,
+      2,
+      1_500,
+      8,
+    );
+    expect(initialElapsed).toBeLessThanOrEqual(1_500);
+
+    await runToolbarSyncActions(page, mirrorPage, TOOLBAR_SYNC_ACTIONS, testInfo);
+  } finally {
+    await mirrorPage.close().catch(() => undefined);
   }
 });
 

@@ -202,13 +202,14 @@ export function diffProjectionRows<Row>(
 
 function rangeId(
   prefix: "style-range" | "format-range",
+  documentId: string,
   sheetName: string,
   startRow: number,
   startCol: number,
   endRow: number,
   endCol: number,
 ): string {
-  return `${prefix}:${sheetName}:${startRow}:${startCol}:${endRow}:${endCol}`;
+  return `${prefix}:${documentId}:${sheetName}:${startRow}:${startCol}:${endRow}:${endCol}`;
 }
 
 export function buildWorkbookHeaderRow(
@@ -359,7 +360,7 @@ export function buildSheetStyleRangeRows(
     const start = parseCellAddress(entry.range.startAddress, sheetName);
     const end = parseCellAddress(entry.range.endAddress, sheetName);
     rows.push({
-      id: rangeId("style-range", sheetName, start.row, start.col, end.row, end.col),
+      id: rangeId("style-range", documentId, sheetName, start.row, start.col, end.row, end.col),
       workbookId: documentId,
       sheetName,
       startRow: start.row,
@@ -397,7 +398,7 @@ export function buildSheetFormatRangeRows(
     const start = parseCellAddress(entry.range.startAddress, sheetName);
     const end = parseCellAddress(entry.range.endAddress, sheetName);
     rows.push({
-      id: rangeId("format-range", sheetName, start.row, start.col, end.row, end.col),
+      id: rangeId("format-range", documentId, sheetName, start.row, start.col, end.row, end.col),
       workbookId: documentId,
       sheetName,
       startRow: start.row,
@@ -472,7 +473,7 @@ export function buildWorkbookSourceProjection(
       const start = parseCellAddress(entry.range.startAddress, sheet.name);
       const end = parseCellAddress(entry.range.endAddress, sheet.name);
       styleRanges.push({
-        id: rangeId("style-range", sheet.name, start.row, start.col, end.row, end.col),
+        id: rangeId("style-range", documentId, sheet.name, start.row, start.col, end.row, end.col),
         workbookId: documentId,
         sheetName: sheet.name,
         startRow: start.row,
@@ -489,7 +490,7 @@ export function buildWorkbookSourceProjection(
       const start = parseCellAddress(entry.range.startAddress, sheet.name);
       const end = parseCellAddress(entry.range.endAddress, sheet.name);
       formatRanges.push({
-        id: rangeId("format-range", sheet.name, start.row, start.col, end.row, end.col),
+        id: rangeId("format-range", documentId, sheet.name, start.row, start.col, end.row, end.col),
         workbookId: documentId,
         sheetName: sheet.name,
         startRow: start.row,

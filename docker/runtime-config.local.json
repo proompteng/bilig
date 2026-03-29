@@ -1,6 +1,6 @@
 {
-  "apiBaseUrl": "http://localhost:3000",
-  "zeroCacheUrl": "http://localhost:3000/zero",
+  "apiBaseUrl": "/",
+  "zeroCacheUrl": "/zero",
   "defaultDocumentId": "bilig-demo",
   "persistState": true,
   "zeroViewportBridge": true

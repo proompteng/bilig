@@ -1,6 +1,21 @@
 #!/usr/bin/env bun
 
 const textDecoder = new TextDecoder();
+const browserStack = process.env["BILIG_BROWSER_STACK"] ?? "compose";
+const composeFile =
+  process.env["BILIG_E2E_COMPOSE_FILE"] ??
+  (browserStack === "compose-full" ? "compose.yaml" : "compose.e2e.yml");
+const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
+const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
+const e2eLocalServerPort = process.env["BILIG_E2E_LOCAL_SERVER_PORT"] ?? "4382";
+const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
+const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
+const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
+const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
+const e2eLocalServerUrl =
+  process.env["BILIG_E2E_LOCAL_SERVER_URL"] ?? `http://127.0.0.1:${e2eLocalServerPort}`;
+const e2eSyncServerUrl =
+  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
 
 const PREVIEW_PORTS = [4179, 4180];
 
@@ -129,13 +144,121 @@ function runPlaywright(args: string[]): void {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
-    env: process.env,
+    env: {
+      ...process.env,
+      BILIG_BROWSER_STACK: browserStack,
+      BILIG_E2E_BASE_URL: e2eBaseUrl,
+      BILIG_E2E_LOCAL_SERVER_URL: e2eLocalServerUrl,
+    },
   });
   if (result.exitCode !== 0) {
     process.exit(result.exitCode ?? 1);
   }
 }
 
-terminatePreviewServers();
-runPlaywright([]);
-terminatePreviewServers();
+async function pollHttp(url: string, deadline: number, lastError = "unknown error"): Promise<void> {
+  if (Date.now() >= deadline) {
+    throw new Error(`Timed out waiting for ${url}: ${lastError}`);
+  }
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      return;
+    }
+    lastError = `HTTP ${response.status}`;
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : String(error);
+  }
+  await Bun.sleep(250);
+  await pollHttp(url, deadline, lastError);
+}
+
+async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
+  await pollHttp(url, Date.now() + timeoutMs);
+}
+
+function runDockerCompose(args: string[], env = process.env): void {
+  const result = Bun.spawnSync(
+    ["docker", "compose", "-f", composeFile, "-p", composeProject, ...args],
+    {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+      env: {
+        ...env,
+        BILIG_E2E_WEB_PORT: e2eWebPort,
+        BILIG_E2E_LOCAL_SERVER_PORT: e2eLocalServerPort,
+        BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
+        BILIG_E2E_ZERO_PORT: e2eZeroPort,
+        BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
+      },
+    },
+  );
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `docker compose ${args.join(" ")} failed with exit code ${result.exitCode ?? 1}`,
+    );
+  }
+}
+
+function collectComposeLogs(): string {
+  const services =
+    browserStack === "compose-full"
+      ? ["web", "sync-server", "zero-cache", "postgres"]
+      : ["web", "local-server"];
+  const result = Bun.spawnSync(
+    [
+      "docker",
+      "compose",
+      "-f",
+      composeFile,
+      "-p",
+      composeProject,
+      "logs",
+      "--no-color",
+      ...services,
+    ],
+    {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join("").trim();
+}
+
+async function runComposePlaywright(): Promise<void> {
+  if (!commandExists("docker")) {
+    throw new Error("docker is required for compose-based browser tests");
+  }
+  terminatePreviewServers();
+  runDockerCompose(
+    browserStack === "compose-full"
+      ? ["up", "-d", "--build"]
+      : ["up", "-d", "--build", "web", "local-server"],
+  );
+  try {
+    await waitForHttp(`${e2eBaseUrl}/healthz`);
+    if (browserStack === "compose-full") {
+      await waitForHttp(`${e2eSyncServerUrl}/healthz`);
+    } else {
+      await waitForHttp(`${e2eLocalServerUrl}/healthz`);
+    }
+    runPlaywright([]);
+  } catch (error) {
+    const logs = collectComposeLogs();
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`, {
+      cause: error,
+    });
+  } finally {
+    runDockerCompose(["down", "-v", "--remove-orphans"]);
+  }
+}
+
+if (browserStack === "compose" || browserStack === "compose-full") {
+  await runComposePlaywright();
+} else {
+  terminatePreviewServers();
+  runPlaywright([]);
+  terminatePreviewServers();
+}

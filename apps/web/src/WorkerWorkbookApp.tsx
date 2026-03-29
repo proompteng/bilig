@@ -1052,6 +1052,8 @@ function WorkerWorkbookAppInner({
   const editorValueRef = useRef(editorValue);
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
+  const zeroRef = useRef<ZeroClient | null>(zero);
+  const zeroReadyWaitersRef = useRef(new Set<(client: ZeroClient) => void>());
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -1078,6 +1080,17 @@ function WorkerWorkbookAppInner({
     editingModeRef.current = editingMode;
   }, [editingMode]);
 
+  useEffect(() => {
+    zeroRef.current = zero;
+    if (!zero) {
+      return;
+    }
+    for (const notifyReady of zeroReadyWaitersRef.current) {
+      notifyReady(zero);
+    }
+    zeroReadyWaitersRef.current.clear();
+  }, [zero]);
+
   const writesAllowed =
     Boolean(runtimeConfig.baseUrl) ||
     !runtimeConfig.zeroViewportBridge ||
@@ -1092,6 +1105,27 @@ function WorkerWorkbookAppInner({
     return await active.client.invoke(method, ...args);
   }, []);
 
+  const waitForZeroClient = useCallback(async (): Promise<ZeroClient> => {
+    const readyClient = zeroRef.current;
+    if (readyClient) {
+      return readyClient;
+    }
+    return await new Promise<ZeroClient>((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        zeroReadyWaitersRef.current.delete(handleReady);
+        reject(new Error("Zero client is not ready"));
+      }, 2_000);
+
+      const handleReady = (client: ZeroClient) => {
+        window.clearTimeout(timeoutId);
+        zeroReadyWaitersRef.current.delete(handleReady);
+        resolve(client);
+      };
+
+      zeroReadyWaitersRef.current.add(handleReady);
+    });
+  }, []);
+
   const reportRuntimeError = useCallback(
     (error: unknown) => {
       runtimeActorRef.send({
@@ -1104,10 +1138,11 @@ function WorkerWorkbookAppInner({
 
   const runZeroMutation = useCallback(
     async (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
-      if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !zero) {
+      if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge) {
         return null;
       }
-      const result = zero.mutate(mutation);
+      const zeroClient = await waitForZeroClient();
+      const result = zeroClient.mutate(mutation);
       const clientResult = await result.client;
       if (
         typeof clientResult === "object" &&
@@ -1120,7 +1155,7 @@ function WorkerWorkbookAppInner({
       }
       return result;
     },
-    [runtimeConfig.baseUrl, runtimeConfig.zeroViewportBridge, zero],
+    [runtimeConfig.baseUrl, runtimeConfig.zeroViewportBridge, waitForZeroClient],
   );
 
   const invokeMutation = useCallback(

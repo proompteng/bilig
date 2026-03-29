@@ -2,6 +2,8 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag } from "@bilig/protocol";
 import { describe, expect, it } from "vitest";
 import {
+  buildSheetFormatRangeRows,
+  buildSheetStyleRangeRows,
   diffProjectionRows,
   materializeCellEvalProjection,
   sourceProjectionKeys,
@@ -86,5 +88,58 @@ describe("projection helpers", () => {
       tag: ValueTag.Number,
       value: 21,
     });
+  });
+
+  it("names style and format range ids per workbook to avoid cross-document collisions", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "projection-test",
+    });
+    await engine.ready();
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+      { fill: { backgroundColor: "#abcdef" } },
+    );
+    engine.setRangeNumberFormat(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+      { kind: "number", code: "$#,##0.00" },
+    );
+
+    const snapshot = engine.exportSnapshot();
+    const styleRowsA = buildSheetStyleRangeRows("doc-a", snapshot, "Sheet1", {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "owner-a",
+      updatedBy: "user-a",
+      updatedAt: "2026-03-29T10:00:00.000Z",
+    });
+    const styleRowsB = buildSheetStyleRangeRows("doc-b", snapshot, "Sheet1", {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "owner-b",
+      updatedBy: "user-b",
+      updatedAt: "2026-03-29T10:00:00.000Z",
+    });
+    const formatRowsA = buildSheetFormatRangeRows("doc-a", snapshot, "Sheet1", {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "owner-a",
+      updatedBy: "user-a",
+      updatedAt: "2026-03-29T10:00:00.000Z",
+    });
+    const formatRowsB = buildSheetFormatRangeRows("doc-b", snapshot, "Sheet1", {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "owner-b",
+      updatedBy: "user-b",
+      updatedAt: "2026-03-29T10:00:00.000Z",
+    });
+
+    expect(styleRowsA.map((row) => row.id)).not.toEqual(styleRowsB.map((row) => row.id));
+    expect(formatRowsA.map((row) => row.id)).not.toEqual(formatRowsB.map((row) => row.id));
+    expect(styleRowsA[0]?.id).toContain("doc-a");
+    expect(styleRowsB[0]?.id).toContain("doc-b");
+    expect(formatRowsA[0]?.id).toContain("doc-a");
+    expect(formatRowsB[0]?.id).toContain("doc-b");
   });
 });

@@ -31,6 +31,7 @@ interface ViewportSubscriptionHandle {
   state: ViewportProjectionState;
   viewport: Viewport & { sheetName: string };
   project(full: boolean): readonly { cell: readonly [number, number] }[];
+  notify(full: boolean): void;
   dispose(): void;
 }
 
@@ -208,6 +209,9 @@ export class ZeroWorkbookBridge {
         );
         return this.cache.applyViewportPatch(patch);
       },
+      notify: (full) => {
+        listener(handle?.project(full));
+      },
       dispose: () => {
         attachment.dispose();
         if (handle) {
@@ -305,7 +309,7 @@ export class ZeroWorkbookBridge {
   private reprojectAll(): void {
     for (const subscription of this.viewportSubscriptions) {
       try {
-        subscription.project(true);
+        subscription.notify(true);
       } catch (error) {
         this.onError(error);
       }
