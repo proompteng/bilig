@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 type FuzzMode = "default" | "main" | "nightly" | "replay";
 
@@ -28,19 +28,9 @@ function runCommand(command: string[], extraEnv: Record<string, string>): void {
 }
 
 function listVitestFuzzFiles(): string[] {
-  const result = Bun.spawnSync(["rg", "--files", "-g", "*.fuzz.test.ts", "packages", "apps"], {
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "inherit",
-  });
-  if (result.exitCode !== 0) {
-    throw new Error("Failed to list Vitest fuzz files");
-  }
-  return new TextDecoder()
-    .decode(result.stdout)
-    .split("\n")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  return ["packages", "apps"]
+    .flatMap((root) => walkFuzzFiles(root))
+    .toSorted((left, right) => left.localeCompare(right));
 }
 
 function parseReplayKind(filePath: string): string | null {
@@ -78,4 +68,29 @@ if (!resolvedReplayFixture || replayKind === "browser") {
     ...env,
     BILIG_FUZZ_BROWSER: "1",
   });
+}
+
+function walkFuzzFiles(root: string): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+
+  const files: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name.startsWith(".")) {
+      continue;
+    }
+
+    const relativePath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkFuzzFiles(relativePath));
+      continue;
+    }
+
+    if (entry.isFile() && relativePath.endsWith(".fuzz.test.ts")) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
 }
