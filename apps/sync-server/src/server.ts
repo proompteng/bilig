@@ -1,6 +1,5 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
-import { Effect } from "effect";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
@@ -8,21 +7,23 @@ import type { RuntimeSession } from "@bilig/contracts";
 import {
   createErrorEnvelope,
   createRuntimeSession,
+  type DocumentControlService,
   normalizeWebSocket,
   resolveRequestBaseUrl,
   resolveServerRuntimeConfig,
   runPromise,
   toMessageBytes,
-  TransportError,
 } from "@bilig/runtime-kernel";
 
 import { DocumentSessionManager } from "./document-session-manager.js";
+import { SyncDocumentSupervisor } from "./document-supervisor.js";
 import { resolveRequestSession, resolveSessionIdentity } from "./session.js";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
 import type { ZeroSyncService } from "./zero/service.js";
 
 export interface SyncServerOptions {
   sessionManager?: DocumentSessionManager;
+  documentService?: DocumentControlService;
   worksheetExecutor?: WorksheetExecutor | null;
   zeroSyncService?: ZeroSyncService;
   logger?: boolean;
@@ -35,6 +36,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   const sessionManager =
     options.sessionManager ??
     new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
+  const documentService = options.documentService ?? new SyncDocumentSupervisor(sessionManager);
   const zeroSyncService = options.zeroSyncService;
   const app = Fastify({ logger: options.logger ?? true });
   app.register(websocket);
@@ -56,16 +58,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   app.get(
     "/v2/documents/:documentId/state",
     async (request: FastifyRequest<{ Params: { documentId: string } }>) => {
-      return await runPromise(
-        Effect.tryPromise({
-          try: async () => await sessionManager.getDocumentState(request.params.documentId),
-          catch: (cause) =>
-            new TransportError({
-              message: "Failed to load document state",
-              cause,
-            }),
-        }),
-      );
+      return await runPromise(documentService.getDocumentState(request.params.documentId));
     },
   );
 
@@ -73,15 +66,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     "/v2/documents/:documentId/snapshot/latest",
     async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
       const snapshot = await runPromise(
-        Effect.tryPromise({
-          try: async () =>
-            await sessionManager.persistence.snapshots.latest(request.params.documentId),
-          catch: (cause) =>
-            new TransportError({
-              message: "Failed to load the latest snapshot",
-              cause,
-            }),
-        }),
+        documentService.getLatestSnapshot(request.params.documentId),
       );
       if (!snapshot) {
         reply.code(404);
@@ -94,11 +79,49 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
-  app.post("/v1/frames", async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
-    const response = await sessionManager.handleSyncFrame(decodeFrame(request.body));
-    reply.header("content-type", "application/octet-stream");
-    return Buffer.from(encodeFrame(response));
-  });
+  app.post(
+    "/v2/documents/:documentId/frames",
+    async (
+      request: FastifyRequest<{ Params: { documentId: string }; Body: Buffer }>,
+      reply: FastifyReply,
+    ) => {
+      const frame = decodeFrame(request.body);
+      if (frame.documentId !== request.params.documentId) {
+        reply.code(400);
+        return createErrorEnvelope(
+          "DOCUMENT_ID_MISMATCH",
+          "Frame document id does not match route document id",
+          false,
+        );
+      }
+      const response = await runPromise(documentService.handleSyncFrame(frame));
+      reply.header("content-type", "application/octet-stream");
+      return Buffer.from(encodeFrame(Array.isArray(response) ? (response[0] ?? frame) : response));
+    },
+  );
+
+  const handleZeroQuery = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!zeroSyncService?.enabled) {
+      reply.code(503);
+      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+    }
+    resolveSessionIdentity(request, reply);
+    return await zeroSyncService.handleQuery(request);
+  };
+
+  const handleZeroMutate = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!zeroSyncService?.enabled) {
+      reply.code(503);
+      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+    }
+    resolveSessionIdentity(request, reply);
+    return await zeroSyncService.handleMutate(request);
+  };
+
+  app.post("/api/zero/query", handleZeroQuery);
+  app.post("/api/zero/v2/query", handleZeroQuery);
+  app.post("/api/zero/mutate", handleZeroMutate);
+  app.post("/api/zero/v2/mutate", handleZeroMutate);
 
   const handleSessionRequest = async (request: FastifyRequest, reply: FastifyReply) => {
     const session = resolveSessionIdentity(request, reply);
@@ -113,51 +136,17 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   };
   app.get("/v2/session", handleSessionRequest);
 
-  app.post("/api/zero/query", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!zeroSyncService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
-    }
-    resolveSessionIdentity(request, reply);
-    return await zeroSyncService.handleQuery(request);
-  });
-
-  app.post("/api/zero/v2/query", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!zeroSyncService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
-    }
-    resolveSessionIdentity(request, reply);
-    return await zeroSyncService.handleQuery(request);
-  });
-
-  app.post("/api/zero/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!zeroSyncService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
-    }
-    resolveSessionIdentity(request, reply);
-    return await zeroSyncService.handleMutate(request);
-  });
-
-  app.post("/api/zero/v2/mutate", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!zeroSyncService?.enabled) {
-      reply.code(503);
-      return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
-    }
-    resolveSessionIdentity(request, reply);
-    return await zeroSyncService.handleMutate(request);
-  });
-
   app.post(
     "/v2/agent/frames",
     async (request: FastifyRequest<{ Body: Buffer }>, reply: FastifyReply) => {
-      const response = await sessionManager.handleAgentFrame(decodeAgentFrame(request.body), {
-        serverUrl: resolveRequestBaseUrl(request, "127.0.0.1:4321"),
-        ...(runtimeConfig.browserAppBaseUrl
-          ? { browserAppBaseUrl: runtimeConfig.browserAppBaseUrl }
-          : {}),
-      });
+      const response = await runPromise(
+        documentService.handleAgentFrame(decodeAgentFrame(request.body), {
+          serverUrl: resolveRequestBaseUrl(request, "127.0.0.1:4321"),
+          ...(runtimeConfig.browserAppBaseUrl
+            ? { browserAppBaseUrl: runtimeConfig.browserAppBaseUrl }
+            : {}),
+        }),
+      );
       reply.header("content-type", "application/octet-stream");
       return Buffer.from(encodeAgentFrame(response));
     },
@@ -177,15 +166,19 @@ export function createSyncServer(options: SyncServerOptions = {}) {
           if (frame.kind === "hello" && documentId === null) {
             documentId = frame.documentId;
             sessionId = frame.sessionId;
-            detach = sessionManager.attachBrowser(documentId, subscriberId, (nextFrame) => {
-              ws.send(encodeFrame(nextFrame));
-            });
-            const helloFrames = await sessionManager.openBrowserSession(frame);
+            detach = await runPromise(
+              documentService.attachBrowser(documentId, subscriberId, (nextFrame) => {
+                ws.send(encodeFrame(nextFrame));
+              }),
+            );
+            const helloFrames = await runPromise(documentService.openBrowserSession(frame));
             helloFrames.forEach((responseFrame) => ws.send(encodeFrame(responseFrame)));
             return;
           }
-          const response = await sessionManager.handleSyncFrame(frame);
-          ws.send(encodeFrame(response));
+          const response = await runPromise(documentService.handleSyncFrame(frame));
+          (Array.isArray(response) ? response : [response]).forEach((responseFrame) =>
+            ws.send(encodeFrame(responseFrame)),
+          );
         } catch (error) {
           ws.send(
             encodeFrame({
@@ -208,5 +201,5 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     });
   });
 
-  return { app, sessionManager };
+  return { app, sessionManager, documentService };
 }

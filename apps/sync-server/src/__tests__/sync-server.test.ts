@@ -57,7 +57,7 @@ describe("sync-server", () => {
     const { app } = createSyncServer();
     const response = await app.inject({
       method: "POST",
-      url: "/v1/frames",
+      url: "/v2/documents/book-1/frames",
       headers: {
         "content-type": "application/octet-stream",
       },
@@ -91,7 +91,7 @@ describe("sync-server", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/v1/frames",
+      url: "/v2/documents/book-1/frames",
       headers: {
         "content-type": "application/octet-stream",
       },

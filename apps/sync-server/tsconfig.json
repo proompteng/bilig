@@ -5,6 +5,7 @@
     "outDir": "dist",
     "paths": {
       "@bilig/agent-api": ["../../packages/agent-api/src/index.ts"],
+      "@bilig/actors": ["../../packages/actors/src/index.ts"],
       "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"],
       "@bilig/contracts": ["../../packages/contracts/src/index.ts"],
       "@bilig/core": ["../../packages/core/src/index.ts"],
@@ -20,6 +21,7 @@
     { "path": "../../packages/core" },
     { "path": "../../packages/binary-protocol" },
     { "path": "../../packages/agent-api" },
+    { "path": "../../packages/actors" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/runtime-kernel" },

@@ -1,4 +1,5 @@
 import { createSyncServer } from "./server.js";
+import { SyncDocumentSupervisor } from "./document-supervisor.js";
 import { DocumentSessionManager } from "./document-session-manager.js";
 import { createHttpWorksheetExecutor } from "./worksheet-executor.js";
 import { createZeroSyncService } from "./zero/service.js";
@@ -21,6 +22,7 @@ const sessionManager = new DocumentSessionManager(
     ...(Number.isFinite(maxImportBytes) ? { maxImportBytes } : {}),
   },
 );
+const documentService = new SyncDocumentSupervisor(sessionManager);
 
 const zeroSyncService = createZeroSyncService();
 
@@ -29,6 +31,7 @@ void zeroSyncService
   .then(async () => {
     const { app } = createSyncServer({
       sessionManager,
+      documentService,
       zeroSyncService,
     });
 

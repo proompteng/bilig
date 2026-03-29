@@ -1,4 +1,7 @@
+import { Effect } from "effect";
+
 import { attachStdioAgentLoop } from "./stdio-handler.js";
+import { LocalDocumentSupervisor } from "./document-supervisor.js";
 import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
 import { createLocalServer } from "./server.js";
 import { createHttpSyncRelay } from "./sync-relay.js";
@@ -29,13 +32,19 @@ const sessionManager = new LocalWorkbookSessionManager(
       }
     : sharedManagerOptions,
 );
+const documentService = new LocalDocumentSupervisor(sessionManager);
 const { app } = createLocalServer({
   sessionManager,
+  documentService,
   logger: !stdioMode,
 });
 const stdioLoop = stdioMode
   ? attachStdioAgentLoop({
-      handler: sessionManager,
+      handler: {
+        handleAgentFrame(frame) {
+          return documentService.handleAgentFrame(frame).pipe(Effect.runPromise);
+        },
+      },
     })
   : null;
 

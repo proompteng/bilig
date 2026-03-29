@@ -149,3 +149,154 @@ export function createBootstrapMachine<Config, Session>() {
     },
   });
 }
+
+interface DocumentSupervisorContext {
+  readonly documentId: string;
+  readonly browserSubscriberCount: number;
+  readonly lastKnownCursor: number | null;
+  readonly lastSnapshotCursor: number | null;
+  readonly lastOperation: string | null;
+  readonly lastError: string | null;
+}
+
+type DocumentSupervisorEvent =
+  | { type: "browser.attached" }
+  | { type: "browser.detached" }
+  | { type: "cursor.updated"; cursor: number }
+  | { type: "snapshot.updated"; cursor: number }
+  | { type: "operation.recorded"; operation: string }
+  | { type: "error.raised"; message: string }
+  | { type: "reset" };
+
+export function createDocumentSupervisorMachine(documentId: string) {
+  return setup<DocumentSupervisorContext, DocumentSupervisorEvent>({}).createMachine({
+    id: `document-supervisor:${documentId}`,
+    initial: "idle",
+    context: {
+      documentId,
+      browserSubscriberCount: 0,
+      lastKnownCursor: null,
+      lastSnapshotCursor: null,
+      lastOperation: null,
+      lastError: null,
+    },
+    states: {
+      idle: {
+        on: {
+          "browser.attached": {
+            target: "active",
+            actions: assign({
+              browserSubscriberCount: ({ context }) => context.browserSubscriberCount + 1,
+              lastError: () => null,
+            }),
+          },
+          "cursor.updated": {
+            target: "active",
+            actions: assign({
+              lastKnownCursor: ({ event }) => event.cursor,
+              lastError: () => null,
+            }),
+          },
+          "snapshot.updated": {
+            target: "active",
+            actions: assign({
+              lastSnapshotCursor: ({ event }) => event.cursor,
+              lastError: () => null,
+            }),
+          },
+          "operation.recorded": {
+            target: "active",
+            actions: assign({
+              lastOperation: ({ event }) => event.operation,
+              lastError: () => null,
+            }),
+          },
+          "error.raised": {
+            target: "degraded",
+            actions: assign({
+              lastError: ({ event }) => event.message,
+            }),
+          },
+        },
+      },
+      active: {
+        on: {
+          "browser.attached": {
+            actions: assign({
+              browserSubscriberCount: ({ context }) => context.browserSubscriberCount + 1,
+              lastError: () => null,
+            }),
+          },
+          "browser.detached": {
+            actions: assign({
+              browserSubscriberCount: ({ context }) =>
+                Math.max(0, context.browserSubscriberCount - 1),
+            }),
+          },
+          "cursor.updated": {
+            actions: assign({
+              lastKnownCursor: ({ event }) => event.cursor,
+              lastError: () => null,
+            }),
+          },
+          "snapshot.updated": {
+            actions: assign({
+              lastSnapshotCursor: ({ event }) => event.cursor,
+              lastError: () => null,
+            }),
+          },
+          "operation.recorded": {
+            actions: assign({
+              lastOperation: ({ event }) => event.operation,
+              lastError: () => null,
+            }),
+          },
+          "error.raised": {
+            target: "degraded",
+            actions: assign({
+              lastError: ({ event }) => event.message,
+            }),
+          },
+        },
+      },
+      degraded: {
+        on: {
+          reset: {
+            target: "active",
+            actions: assign({
+              lastError: () => null,
+            }),
+          },
+          "browser.attached": {
+            target: "active",
+            actions: assign({
+              browserSubscriberCount: ({ context }) => context.browserSubscriberCount + 1,
+              lastError: () => null,
+            }),
+          },
+          "cursor.updated": {
+            target: "active",
+            actions: assign({
+              lastKnownCursor: ({ event }) => event.cursor,
+              lastError: () => null,
+            }),
+          },
+          "snapshot.updated": {
+            target: "active",
+            actions: assign({
+              lastSnapshotCursor: ({ event }) => event.cursor,
+              lastError: () => null,
+            }),
+          },
+          "operation.recorded": {
+            target: "active",
+            actions: assign({
+              lastOperation: ({ event }) => event.operation,
+              lastError: () => null,
+            }),
+          },
+        },
+      },
+    },
+  });
+}

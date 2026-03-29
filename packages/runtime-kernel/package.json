@@ -16,6 +16,8 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@bilig/agent-api": "workspace:*",
+    "@bilig/binary-protocol": "workspace:*",
     "@bilig/contracts": "workspace:*",
     "@effect/platform": "0.96.0",
     "@effect/platform-node": "0.106.0",

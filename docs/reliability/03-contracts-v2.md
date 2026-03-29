@@ -7,6 +7,7 @@
 - `/v2/session`
 - `/v2/documents/:documentId/state`
 - `/v2/documents/:documentId/snapshot/latest`
+- `/v2/documents/:documentId/frames`
 - `/v2/documents/:documentId/ws`
 - `/v2/agent/frames`
 - `/api/zero/v2/query`

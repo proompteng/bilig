@@ -4,9 +4,15 @@
     "rootDir": "src",
     "outDir": "dist",
     "paths": {
+      "@bilig/agent-api": ["../agent-api/src/index.ts"],
+      "@bilig/binary-protocol": ["../binary-protocol/src/index.ts"],
       "@bilig/contracts": ["../contracts/src/index.ts"]
     }
   },
-  "references": [{ "path": "../contracts" }],
+  "references": [
+    { "path": "../agent-api" },
+    { "path": "../binary-protocol" },
+    { "path": "../contracts" }
+  ],
   "include": ["src/**/*"]
 }

@@ -9,6 +9,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@bilig/actors": "workspace:*",
     "@bilig/agent-api": "workspace:*",
     "@bilig/binary-protocol": "workspace:*",
     "@bilig/contracts": "workspace:*",

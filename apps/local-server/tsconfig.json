@@ -4,11 +4,13 @@
     "outDir": "./dist",
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
     "paths": {
+      "@bilig/actors": ["../../packages/actors/src/index.ts"],
       "@bilig/contracts": ["../../packages/contracts/src/index.ts"],
       "@bilig/runtime-kernel": ["../../packages/runtime-kernel/src/index.ts"]
     }
   },
   "references": [
+    { "path": "../../packages/actors" },
     { "path": "../../packages/core" },
     { "path": "../../packages/crdt" },
     { "path": "../../packages/contracts" },

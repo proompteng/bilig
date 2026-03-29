@@ -480,7 +480,7 @@ function parseRangeInput(value: unknown): string | CellRangeRef | undefined {
 }
 
 async function sendFrame(serverBaseUrl: string, frame: AgentFrame): Promise<SuccessAgentResponse> {
-  const response = await fetch(`${normalizeBaseUrl(serverBaseUrl)}/v1/agent/frames`, {
+  const response = await fetch(`${normalizeBaseUrl(serverBaseUrl)}/v2/agent/frames`, {
     method: "POST",
     headers: {
       "content-type": "application/octet-stream",

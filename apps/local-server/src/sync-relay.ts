@@ -31,13 +31,16 @@ export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSync
   let connectPromise: Promise<void> | null = null;
 
   const sendFrame = async (frame: ProtocolFrame): Promise<ProtocolFrame> => {
-    const response = await fetchImpl(`${baseUrl}/v1/frames`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/octet-stream",
+    const response = await fetchImpl(
+      `${baseUrl}/v2/documents/${encodeURIComponent(options.documentId)}/frames`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/octet-stream",
+        },
+        body: Buffer.from(encodeFrame(frame)),
       },
-      body: Buffer.from(encodeFrame(frame)),
-    });
+    );
     if (!response.ok) {
       throw new Error(`Sync relay request failed with status ${response.status}`);
     }

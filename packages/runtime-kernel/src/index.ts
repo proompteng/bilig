@@ -1,6 +1,9 @@
 import { Context, Data, Effect, Layer, Schema } from "effect";
 
+import type { AgentFrame } from "@bilig/agent-api";
+import type { HelloFrame, ProtocolFrame } from "@bilig/binary-protocol";
 import type { ErrorEnvelope, RuntimeSession } from "@bilig/contracts";
+import type { DocumentStateSummary } from "@bilig/contracts";
 
 export class TransportError extends Data.TaggedError("TransportError")<{
   readonly message: string;
@@ -34,6 +37,41 @@ export type NormalizedWebSocket = {
   on(event: string, listener: (...args: unknown[]) => void): void;
   send(data: Uint8Array): void;
 };
+
+export interface AgentFrameContext {
+  readonly serverUrl?: string;
+  readonly browserAppBaseUrl?: string;
+}
+
+export interface SnapshotPayload {
+  readonly cursor: number;
+  readonly contentType: string;
+  readonly bytes: Uint8Array;
+}
+
+export interface DocumentControlService {
+  readonly attachBrowser: (
+    documentId: string,
+    subscriberId: string,
+    send: (frame: ProtocolFrame) => void,
+  ) => Effect.Effect<() => void, TransportError>;
+  readonly openBrowserSession: (
+    frame: HelloFrame,
+  ) => Effect.Effect<ProtocolFrame[], TransportError>;
+  readonly handleSyncFrame: (
+    frame: ProtocolFrame,
+  ) => Effect.Effect<ProtocolFrame | ProtocolFrame[], TransportError>;
+  readonly handleAgentFrame: (
+    frame: AgentFrame,
+    context?: AgentFrameContext,
+  ) => Effect.Effect<AgentFrame, TransportError>;
+  readonly getDocumentState: (
+    documentId: string,
+  ) => Effect.Effect<DocumentStateSummary, TransportError>;
+  readonly getLatestSnapshot: (
+    documentId: string,
+  ) => Effect.Effect<SnapshotPayload | null, TransportError>;
+}
 
 export interface FetchService {
   readonly fetch: (
