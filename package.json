@@ -37,6 +37,10 @@
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
     "test:browser": "bun scripts/run-browser-tests.ts",
+    "test:fuzz": "bun scripts/run-fuzz.ts default",
+    "test:fuzz:main": "bun scripts/run-fuzz.ts main",
+    "test:fuzz:nightly": "bun scripts/run-fuzz.ts nightly",
+    "test:fuzz:replay": "bun scripts/run-fuzz.ts replay",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "bun scripts/perf-smoke.ts",
@@ -44,9 +48,10 @@
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm exec playwright install chromium && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "devDependencies": {
+    "@bilig/test-fuzz": "workspace:*",
     "@playwright/test": "1.58.2",
     "@types/node": "25.5.0",
     "@types/pg": "^8.20.0",
@@ -55,6 +60,7 @@
     "@types/react-reconciler": "^0.33.0",
     "@vitest/coverage-v8": "4.1.2",
     "assemblyscript": "0.28.12",
+    "fast-check": "4.6.0",
     "jsdom": "29.0.1",
     "lint-staged": "^16.4.0",
     "oxfmt": "^0.42.0",

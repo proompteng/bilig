@@ -101,6 +101,7 @@ type ZeroConnectionState =
 interface RibbonButtonProps {
   active?: boolean;
   ariaLabel: string;
+  pressed?: boolean;
   shortcut?: string;
   onClick(this: void): void;
   children: ReactNode;
@@ -769,6 +770,8 @@ function ToolbarSelect({
   widthClass: string;
   onChange(this: void, value: string): void;
 }) {
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
   return (
     <Select.Root
       items={options}
@@ -782,6 +785,8 @@ function ToolbarSelect({
       <Select.Trigger
         aria-label={ariaLabel}
         className={classNames(TOOLBAR_SELECT_TRIGGER_CLASS, widthClass)}
+        data-current-label={selectedOption?.label ?? ""}
+        data-current-value={value}
       >
         <Select.Value />
         <Select.Icon className="ml-2 text-[#5f6368]">
@@ -816,6 +821,7 @@ function ToolbarSelect({
 function RibbonIconButton({
   active = false,
   ariaLabel,
+  pressed,
   shortcut,
   onClick,
   children,
@@ -823,6 +829,7 @@ function RibbonIconButton({
   return (
     <Toolbar.Button
       aria-label={ariaLabel}
+      aria-pressed={pressed}
       className={classNames(TOOLBAR_BUTTON_CLASS, active && TOOLBAR_BUTTON_ACTIVE_CLASS)}
       onClick={onClick}
       title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}
@@ -2244,6 +2251,9 @@ export function WorkerWorkbookApp({
               currentNumberFormat.kind !== "general" && (currentNumberFormat.useGrouping ?? true)
             }
             ariaLabel="Toggle grouping"
+            pressed={
+              currentNumberFormat.kind !== "general" && (currentNumberFormat.useGrouping ?? true)
+            }
             onClick={() => void toggleGrouping()}
           >
             <Rows3 className={TOOLBAR_ICON_CLASS} />
@@ -2276,6 +2286,7 @@ export function WorkerWorkbookApp({
           <RibbonIconButton
             active={isBoldActive}
             ariaLabel="Bold"
+            pressed={isBoldActive}
             shortcut="⌘/Ctrl+B"
             onClick={() => void applyRangeStyle({ font: { bold: !isBoldActive } })}
           >
@@ -2284,6 +2295,7 @@ export function WorkerWorkbookApp({
           <RibbonIconButton
             active={isItalicActive}
             ariaLabel="Italic"
+            pressed={isItalicActive}
             shortcut="⌘/Ctrl+I"
             onClick={() => void applyRangeStyle({ font: { italic: !isItalicActive } })}
           >
@@ -2292,6 +2304,7 @@ export function WorkerWorkbookApp({
           <RibbonIconButton
             active={isUnderlineActive}
             ariaLabel="Underline"
+            pressed={isUnderlineActive}
             shortcut="⌘/Ctrl+U"
             onClick={() => void applyRangeStyle({ font: { underline: !isUnderlineActive } })}
           >
@@ -2335,6 +2348,7 @@ export function WorkerWorkbookApp({
           <RibbonIconButton
             active={horizontalAlignment === "left"}
             ariaLabel="Align left"
+            pressed={horizontalAlignment === "left"}
             onClick={() => {
               void applyRangeStyle({
                 alignment: { horizontal: horizontalAlignment === "left" ? null : "left" },
@@ -2346,6 +2360,7 @@ export function WorkerWorkbookApp({
           <RibbonIconButton
             active={horizontalAlignment === "center"}
             ariaLabel="Align center"
+            pressed={horizontalAlignment === "center"}
             onClick={() => {
               void applyRangeStyle({
                 alignment: { horizontal: horizontalAlignment === "center" ? null : "center" },
@@ -2357,6 +2372,7 @@ export function WorkerWorkbookApp({
           <RibbonIconButton
             active={horizontalAlignment === "right"}
             ariaLabel="Align right"
+            pressed={horizontalAlignment === "right"}
             onClick={() => {
               void applyRangeStyle({
                 alignment: { horizontal: horizontalAlignment === "right" ? null : "right" },
@@ -2380,6 +2396,7 @@ export function WorkerWorkbookApp({
         <RibbonIconButton
           active={isWrapActive}
           ariaLabel="Wrap"
+          pressed={isWrapActive}
           onClick={() =>
             void applyRangeStyle({
               alignment: { wrap: !isWrapActive },

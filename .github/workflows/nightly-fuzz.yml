@@ -1,28 +1,17 @@
-name: github-ci
+name: github-nightly-fuzz
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  schedule:
+    - cron: "0 9 * * *"
   workflow_dispatch:
 
 jobs:
-  verify:
-    name: verify-node-${{ matrix.node }}
+  nightly-fuzz:
+    name: nightly-fuzz
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - node: "22"
-            bench_tolerance: "5"
-          - node: "24.11.1"
-            bench_tolerance: "1.5"
+    timeout-minutes: 45
     env:
       CI: "true"
-      BILIG_BENCH_TOLERANCE: ${{ matrix.bench_tolerance }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,7 +19,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: "24.11.1"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -48,23 +37,23 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Run repository CI
+      - name: Install Chromium for nightly browser fuzz
         run: |
           set -eu
-          pnpm run ci
+          pnpm exec playwright install --with-deps chromium
 
-      - name: Upload fuzz and browser artifacts on failure
+      - name: Run nightly fuzz campaign
+        run: |
+          set -eu
+          pnpm test:fuzz:nightly
+
+      - name: Upload nightly fuzz artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: bilig-fuzz-artifacts-node-${{ matrix.node }}
+          name: bilig-nightly-fuzz-artifacts
           path: |
             artifacts/fuzz
             playwright-report
             test-results
           if-no-files-found: ignore
-
-      - name: Ensure tracked files stay clean
-        run: |
-          set -eu
-          git diff --exit-code

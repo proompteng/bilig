@@ -1,0 +1,20 @@
+{
+  "name": "@bilig/test-fuzz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal deterministic fast-check harnesses for bilig fuzz and model-based tests.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "fast-check": "4.6.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

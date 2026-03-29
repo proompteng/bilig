@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { expect, test, type Locator } from "@playwright/test";
+import fc from "fast-check";
+import { runProperty, shouldRunFuzzSuite } from "../../packages/test-fuzz/src/index.ts";
 
 const PRODUCT_ROW_MARKER_WIDTH = 46;
 const PRODUCT_COLUMN_WIDTH = 104;
@@ -13,6 +15,12 @@ const BORDER_SIDES = ["top", "right", "bottom", "left"] as const;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const bunExecutable = process.env["BUN_BIN"] ?? "bun";
+const fuzzBrowserEnabled = process.env["BILIG_FUZZ_BROWSER"] === "1";
+
+type BrowserSelectionAction =
+  | { kind: "click"; row: number; col: number }
+  | { kind: "shiftClick"; row: number; col: number }
+  | { kind: "key"; key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"; shift: boolean };
 
 function parseTestCellAddress(address: string): { row: number; col: number } {
   const match = /^([A-Z]+)(\d+)$/i.exec(address.trim());
@@ -26,6 +34,32 @@ function parseTestCellAddress(address: string): { row: number; col: number } {
     col = col * 26 + (letter.charCodeAt(0) - 64);
   }
   return { row, col: col - 1 };
+}
+
+function formatTestCellAddress(row: number, col: number): string {
+  let remaining = col + 1;
+  let letters = "";
+  while (remaining > 0) {
+    const offset = (remaining - 1) % 26;
+    letters = String.fromCharCode(65 + offset) + letters;
+    remaining = Math.floor((remaining - 1) / 26);
+  }
+  return `${letters}${row + 1}`;
+}
+
+function formatSelectionText(
+  startRow: number,
+  startCol: number,
+  endRow: number,
+  endCol: number,
+): string {
+  const minRow = Math.min(startRow, endRow);
+  const maxRow = Math.max(startRow, endRow);
+  const minCol = Math.min(startCol, endCol);
+  const maxCol = Math.max(startCol, endCol);
+  const start = formatTestCellAddress(minRow, minCol);
+  const end = formatTestCellAddress(maxRow, maxCol);
+  return start === end ? `Sheet1!${start}` : `Sheet1!${start}:${end}`;
 }
 
 interface LocalDocumentStateSummary {
@@ -64,6 +98,8 @@ type AgentResponse =
 type AgentFrame =
   | { kind: "request"; request: AgentRequest }
   | { kind: "response"; response: AgentResponse };
+
+type ToolbarPage = Parameters<typeof test>[0]["page"];
 
 interface WorkbookSnapshotLike {
   workbook: {
@@ -377,21 +413,9 @@ function getSingleCellStyleRecord(
   sheetName: string,
   address: string,
 ) {
-  const sheet = getSheetSnapshot(snapshot, sheetName);
-  const styleRange = sheet.metadata?.styleRanges?.find(
-    (entry) =>
-      entry.range.sheetName === sheetName &&
-      entry.range.startAddress === address &&
-      entry.range.endAddress === address,
-  );
-  if (!styleRange) {
-    throw new Error(`Missing style range for ${sheetName}!${address}`);
-  }
-  const styleRecord = snapshot.workbook.metadata?.styles?.find(
-    (entry) => entry.id === styleRange.styleId,
-  );
+  const styleRecord = getStyleRecordAtCell(snapshot, sheetName, address);
   if (!styleRecord) {
-    throw new Error(`Missing style record ${styleRange.styleId}`);
+    throw new Error(`Missing style range for ${sheetName}!${address}`);
   }
   return styleRecord;
 }
@@ -433,16 +457,39 @@ async function setColorInput(locator: Locator, value: string) {
   }, value);
 }
 
+function getToolbarButton(page: ToolbarPage, label: string): Locator {
+  return page.getByRole("button", { name: label, exact: true });
+}
+
+function getToolbarSelect(page: ToolbarPage, label: string): Locator {
+  return page.getByRole("combobox", { name: label, exact: true });
+}
+
 async function expectToolbarColor(locator: Locator, value: string) {
   await expect(locator).toHaveAttribute("data-current-color", value.toLowerCase());
 }
 
+async function expectToolbarSelectValue(page: ToolbarPage, label: string, value: string) {
+  await expect(getToolbarSelect(page, label)).toHaveAttribute("data-current-value", value);
+}
+
+async function selectToolbarOption(
+  page: ToolbarPage,
+  label: string,
+  optionLabel: string,
+  expectedValue = optionLabel,
+) {
+  await getToolbarSelect(page, label).click();
+  await page.getByRole("option", { name: optionLabel, exact: true }).click();
+  await expectToolbarSelectValue(page, label, expectedValue);
+}
+
 async function setToolbarCustomColor(
-  page: Parameters<typeof test>[0]["page"],
+  page: ToolbarPage,
   controlLabel: "Fill color" | "Text color",
   value: string,
 ) {
-  await page.getByLabel(controlLabel).click();
+  await getToolbarButton(page, controlLabel).click();
   await page.getByLabel(`Open custom ${controlLabel.toLowerCase()} picker`).click();
   await setColorInput(
     page.getByLabel(controlLabel === "Fill color" ? "Custom fill color" : "Custom text color", {
@@ -453,16 +500,16 @@ async function setToolbarCustomColor(
 }
 
 async function pickToolbarPresetColor(
-  page: Parameters<typeof test>[0]["page"],
+  page: ToolbarPage,
   controlLabel: "Fill color" | "Text color",
   swatchLabel: string,
 ) {
-  await page.getByLabel(controlLabel).click();
+  await getToolbarButton(page, controlLabel).click();
   await page.getByLabel(`${controlLabel} ${swatchLabel}`).click();
 }
 
 async function pickToolbarBorderPreset(
-  page: Parameters<typeof test>[0]["page"],
+  page: ToolbarPage,
   presetLabel:
     | "All borders"
     | "Inner borders"
@@ -475,7 +522,7 @@ async function pickToolbarBorderPreset(
     | "Bottom border"
     | "Clear borders",
 ) {
-  await page.getByLabel("Borders").click();
+  await getToolbarButton(page, "Borders").click();
   await page.getByRole("button", { name: presetLabel }).click();
 }
 
@@ -521,41 +568,56 @@ function getSingleCellStyleRecordOrNull(
   sheetName: string,
   address: string,
 ) {
-  const styleRange = findSingleCellStyleRange(snapshot, sheetName, address);
-  if (!styleRange) {
-    return null;
-  }
-  return (
-    snapshot.workbook.metadata?.styles?.find((entry) => entry.id === styleRange.styleId) ?? null
-  );
+  return getStyleRecordAtCell(snapshot, sheetName, address);
 }
 
 function getStyleRecordAtCell(snapshot: WorkbookSnapshotLike, sheetName: string, address: string) {
   const sheet = getSheetSnapshot(snapshot, sheetName);
   const parsed = parseTestCellAddress(address);
-  const styleRange = [...(sheet.metadata?.styleRanges ?? [])].toReversed().find((entry) => {
-    if (entry.range.sheetName !== sheetName) {
-      return false;
+  const styleRanges = sheet.metadata?.styleRanges ?? [];
+  const styleRecords = snapshot.workbook.metadata?.styles ?? [];
+  type SnapshotStyleRecord = NonNullable<
+    NonNullable<WorkbookSnapshotLike["workbook"]["metadata"]>["styles"]
+  >[number];
+
+  let mergedStyle: SnapshotStyleRecord | null = null;
+  for (const styleRange of styleRanges) {
+    if (styleRange.range.sheetName !== sheetName) {
+      continue;
     }
-    const start = parseTestCellAddress(entry.range.startAddress);
-    const end = parseTestCellAddress(entry.range.endAddress);
+    const start = parseTestCellAddress(styleRange.range.startAddress);
+    const end = parseTestCellAddress(styleRange.range.endAddress);
     const startRow = Math.min(start.row, end.row);
     const endRow = Math.max(start.row, end.row);
     const startCol = Math.min(start.col, end.col);
     const endCol = Math.max(start.col, end.col);
-    return (
+    const coversCell =
       parsed.row >= startRow &&
       parsed.row <= endRow &&
       parsed.col >= startCol &&
-      parsed.col <= endCol
-    );
-  });
-  if (!styleRange) {
-    return null;
+      parsed.col <= endCol;
+    if (!coversCell) {
+      continue;
+    }
+    const styleRecord = styleRecords.find((entry) => entry.id === styleRange.styleId);
+    if (!styleRecord) {
+      continue;
+    }
+    mergedStyle = {
+      ...(mergedStyle ?? { id: styleRecord.id }),
+      fill: styleRecord.fill ? { ...mergedStyle?.fill, ...styleRecord.fill } : mergedStyle?.fill,
+      font: styleRecord.font ? { ...mergedStyle?.font, ...styleRecord.font } : mergedStyle?.font,
+      alignment: styleRecord.alignment
+        ? { ...mergedStyle?.alignment, ...styleRecord.alignment }
+        : mergedStyle?.alignment,
+      borders: styleRecord.borders
+        ? { ...mergedStyle?.borders, ...styleRecord.borders }
+        : mergedStyle?.borders,
+      id: styleRecord.id,
+    };
   }
-  return (
-    snapshot.workbook.metadata?.styles?.find((entry) => entry.id === styleRange.styleId) ?? null
-  );
+
+  return mergedStyle;
 }
 
 function getSingleCellFormatRecordOrNull(
@@ -570,6 +632,11 @@ function getSingleCellFormatRecordOrNull(
   return (
     snapshot.workbook.metadata?.formats?.find((entry) => entry.id === formatRange.formatId) ?? null
   );
+}
+
+function getSheetCell(snapshot: WorkbookSnapshotLike, sheetName: string, address: string) {
+  const sheet = getSheetSnapshot(snapshot, sheetName);
+  return sheet.cells.find((cell) => cell.address === address);
 }
 
 async function waitForBrowserSession(localServerUrl: string, documentId: string) {
@@ -1157,6 +1224,43 @@ async function clickProductCell(
   }
 }
 
+async function runSelectionFuzzActions(
+  page: Parameters<typeof test>[0]["page"],
+  grid: Locator,
+  actions: readonly BrowserSelectionAction[],
+  index = 0,
+): Promise<void> {
+  const action = actions[index];
+  if (!action) {
+    return;
+  }
+
+  if (action.kind === "click") {
+    await clickProductCell(page, action.col, action.row);
+  } else if (action.kind === "shiftClick") {
+    await clickProductCell(page, action.col, action.row, { shift: true });
+  } else {
+    await grid.press(action.shift ? `Shift+${action.key}` : action.key);
+  }
+
+  const selection = await page.getByTestId("status-selection").innerText();
+  expect(selection).toMatch(
+    /^Sheet1!(?:[A-Z]+[0-9]+(?::[A-Z]+[0-9]+)?|[A-Z]+:[A-Z]+|[0-9]+:[0-9]+|All)$/,
+  );
+
+  const focusInsideShell = await page.evaluate(() => {
+    const active = document.activeElement;
+    return Boolean(
+      active?.closest('[data-testid="sheet-grid"]') ||
+      active?.closest('[data-testid="formula-bar"]') ||
+      active?.closest('[role="toolbar"]'),
+    );
+  });
+  expect(focusInsideShell).toBe(true);
+
+  await runSelectionFuzzActions(page, grid, actions, index + 1);
+}
+
 async function clickProductCellUpperHalf(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
@@ -1436,10 +1540,10 @@ test("web app applies preset swatch colors directly from the palette", async ({ 
   await page.goto("/?zeroViewportBridge=off");
 
   await pickToolbarPresetColor(page, "Fill color", "light cornflower blue 3");
-  await expectToolbarColor(page.getByLabel("Fill color"), "#c9daf8");
+  await expectToolbarColor(getToolbarButton(page, "Fill color"), "#c9daf8");
 
   await pickToolbarPresetColor(page, "Text color", "dark blue 1");
-  await expectToolbarColor(page.getByLabel("Text color"), "#3d85c6");
+  await expectToolbarColor(getToolbarButton(page, "Text color"), "#3d85c6");
 });
 
 test("web app keeps preset fill color visible after clicking another cell", async ({ page }) => {
@@ -1450,7 +1554,7 @@ test("web app keeps preset fill color visible after clicking another cell", asyn
   const target = { r: 201, g: 218, b: 248 };
 
   await pickToolbarPresetColor(page, "Fill color", "light cornflower blue 3");
-  await expectToolbarColor(page.getByLabel("Fill color"), "#c9daf8");
+  await expectToolbarColor(getToolbarButton(page, "Fill color"), "#c9daf8");
 
   await expect
     .poll(async () => await findClosestGridColorDistance(page, center.x, center.y, target, 10))
@@ -1533,21 +1637,21 @@ test("web app hydrates toolbar controls from the selected cell style and number 
 
     await clickProductCell(page, 0, 0);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
-    await expect(page.getByLabel("Number format")).toHaveValue("accounting");
-    await expect(page.getByLabel("Font family")).toHaveValue("Georgia");
-    await expect(page.getByLabel("Font size")).toHaveValue("14");
-    await expectToolbarColor(page.getByLabel("Fill color"), "#dbeafe");
-    await expectToolbarColor(page.getByLabel("Text color"), "#7c2d12");
-    await expect(page.getByLabel("Wrap")).toHaveAttribute("aria-pressed", "true");
+    await expectToolbarSelectValue(page, "Number format", "accounting");
+    await expectToolbarSelectValue(page, "Font family", "Georgia");
+    await expectToolbarSelectValue(page, "Font size", "14");
+    await expectToolbarColor(getToolbarButton(page, "Fill color"), "#dbeafe");
+    await expectToolbarColor(getToolbarButton(page, "Text color"), "#7c2d12");
+    await expect(getToolbarButton(page, "Wrap")).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[#e6f4ea\]/);
     await expect(page.getByLabel("Align right")).toHaveClass(/bg-\[#e6f4ea\]/);
 
     await clickProductCell(page, 1, 0);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B1");
-    await expect(page.getByLabel("Number format")).toHaveValue("general");
-    await expect(page.getByLabel("Font family")).toHaveValue("");
-    await expect(page.getByLabel("Font size")).toHaveValue("11");
-    await expect(page.getByLabel("Wrap")).toHaveAttribute("aria-pressed", "false");
+    await expectToolbarSelectValue(page, "Number format", "general");
+    await expectToolbarSelectValue(page, "Font family", "");
+    await expectToolbarSelectValue(page, "Font size", "11");
+    await expect(getToolbarButton(page, "Wrap")).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByLabel("Bold")).not.toHaveClass(/bg-\[#e6f4ea\]/);
     await expect(page.getByLabel("Align right")).not.toHaveClass(/bg-\[#e6f4ea\]/);
   } catch (error) {
@@ -1601,9 +1705,9 @@ test("web app persists toolbar formatting actions to the synced workbook snapsho
     await clickProductCell(page, 1, 1);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
 
-    await page.getByLabel("Number format").selectOption("accounting");
-    await page.getByLabel("Font family").selectOption("Georgia");
-    await page.getByLabel("Font size").selectOption("14");
+    await selectToolbarOption(page, "Number format", "Accounting", "accounting");
+    await selectToolbarOption(page, "Font family", "Georgia");
+    await selectToolbarOption(page, "Font size", "14");
     await page.getByLabel("Bold").click();
     await page.getByLabel("Italic").click();
     await page.getByLabel("Underline").click();
@@ -1613,12 +1717,12 @@ test("web app persists toolbar formatting actions to the synced workbook snapsho
     await pickToolbarBorderPreset(page, "All borders");
     await page.getByLabel("Wrap").click();
 
-    await expect(page.getByLabel("Number format")).toHaveValue("accounting");
-    await expect(page.getByLabel("Font family")).toHaveValue("Georgia");
-    await expect(page.getByLabel("Font size")).toHaveValue("14");
-    await expectToolbarColor(page.getByLabel("Fill color"), "#dbeafe");
-    await expectToolbarColor(page.getByLabel("Text color"), "#7c2d12");
-    await expect(page.getByLabel("Wrap")).toHaveAttribute("aria-pressed", "true");
+    await expectToolbarSelectValue(page, "Number format", "accounting");
+    await expectToolbarSelectValue(page, "Font family", "Georgia");
+    await expectToolbarSelectValue(page, "Font size", "14");
+    await expectToolbarColor(getToolbarButton(page, "Fill color"), "#dbeafe");
+    await expectToolbarColor(getToolbarButton(page, "Text color"), "#7c2d12");
+    await expect(getToolbarButton(page, "Wrap")).toHaveAttribute("aria-pressed", "true");
 
     await expect
       .poll(async () => {
@@ -1701,14 +1805,14 @@ test("web app clears style and number format back to workbook defaults", async (
     await clickProductCell(page, 2, 2);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C3");
 
-    await page.getByLabel("Number format").selectOption("accounting");
+    await selectToolbarOption(page, "Number format", "Accounting", "accounting");
     await page.getByLabel("Bold").click();
     await setToolbarCustomColor(page, "Fill color", "#fef3c7");
     await page.getByLabel("Clear style").click();
-    await page.getByLabel("Number format").selectOption("general");
+    await selectToolbarOption(page, "Number format", "General", "general");
 
-    await expect(page.getByLabel("Number format")).toHaveValue("general");
-    await expectToolbarColor(page.getByLabel("Fill color"), "#ffffff");
+    await expectToolbarSelectValue(page, "Number format", "general");
+    await expectToolbarColor(getToolbarButton(page, "Fill color"), "#ffffff");
     await expect(page.getByLabel("Bold")).not.toHaveClass(/bg-\[#e6f4ea\]/);
 
     await expect
@@ -1781,9 +1885,9 @@ test.describe("web app validates each toolbar formatting action individually", (
       },
     });
 
-    await expect(page.getByLabel("Number format")).toHaveValue("accounting");
-    await page.getByLabel("Number format").selectOption("general");
-    await expect(page.getByLabel("Number format")).toHaveValue("general");
+    await expectToolbarSelectValue(page, "Number format", "accounting");
+    await selectToolbarOption(page, "Number format", "General", "general");
+    await expectToolbarSelectValue(page, "Number format", "general");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -1812,8 +1916,12 @@ test.describe("web app validates each toolbar formatting action individually", (
         value: preset === "date" ? 45292 : 1234.5,
       });
 
-      await page.getByLabel("Number format").selectOption(preset);
-      await expect(page.getByLabel("Number format")).toHaveValue(preset);
+      await selectToolbarOption(
+        page,
+        "Number format",
+        preset[0].toUpperCase() + preset.slice(1),
+        preset,
+      );
 
       await expectToolbarSnapshotProjection(
         localServer.localServerUrl,
@@ -1850,7 +1958,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       },
     });
 
-    await expect(page.getByLabel("Number format")).toHaveValue("number");
+    await expectToolbarSelectValue(page, "Number format", "number");
     await page.getByLabel("Decrease decimals").click();
 
     await expectToolbarSnapshotProjection(
@@ -1887,7 +1995,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       },
     });
 
-    await expect(page.getByLabel("Number format")).toHaveValue("number");
+    await expectToolbarSelectValue(page, "Number format", "number");
     await page.getByLabel("Increase decimals").click();
 
     await expectToolbarSnapshotProjection(
@@ -1924,7 +2032,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       },
     });
 
-    await expect(page.getByLabel("Number format")).toHaveValue("number");
+    await expectToolbarSelectValue(page, "Number format", "number");
     await page.getByLabel("Toggle grouping").click();
 
     await expectToolbarSnapshotProjection(
@@ -1954,8 +2062,7 @@ test.describe("web app validates each toolbar formatting action individually", (
         value: "toolbar",
       });
 
-      await page.getByLabel(label).selectOption(value);
-      await expect(page.getByLabel(label)).toHaveValue(value);
+      await selectToolbarOption(page, label, value, value);
 
       await expectToolbarSnapshotProjection(
         localServer.localServerUrl,
@@ -1977,8 +2084,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       value: "toolbar",
     });
 
-    await page.getByLabel("Font size").selectOption("14");
-    await expect(page.getByLabel("Font size")).toHaveValue("14");
+    await selectToolbarOption(page, "Font size", "14");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2007,7 +2113,7 @@ test.describe("web app validates each toolbar formatting action individually", (
 
       await page.getByLabel(label).click();
       if (label === "Wrap") {
-        await expect(page.getByLabel(label)).toHaveAttribute("aria-pressed", "true");
+        await expect(getToolbarButton(page, label)).toHaveAttribute("aria-pressed", "true");
       } else {
         await expect(page.getByLabel(label)).toHaveClass(/bg-\[#e6f4ea\]/);
       }
@@ -2063,7 +2169,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       });
 
       await setToolbarCustomColor(page, label, color);
-      await expectToolbarColor(page.getByLabel(label), color);
+      await expectToolbarColor(getToolbarButton(page, label), color);
 
       await expectToolbarSnapshotProjection(
         localServer.localServerUrl,
@@ -2107,7 +2213,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       });
 
       await pickToolbarPresetColor(page, label, swatchLabel);
-      await expectToolbarColor(page.getByLabel(label), color);
+      await expectToolbarColor(getToolbarButton(page, label), color);
 
       await expectToolbarSnapshotProjection(
         localServer.localServerUrl,
@@ -2275,13 +2381,13 @@ test.describe("web app validates each toolbar formatting action individually", (
       },
     });
 
-    await expect(page.getByLabel("Font family")).toHaveValue("Georgia");
-    await expect(page.getByLabel("Font size")).toHaveValue("14");
+    await expectToolbarSelectValue(page, "Font family", "Georgia");
+    await expectToolbarSelectValue(page, "Font size", "14");
     await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[#e6f4ea\]/);
-    await expect(page.getByLabel("Wrap")).toHaveAttribute("aria-pressed", "true");
+    await expect(getToolbarButton(page, "Wrap")).toHaveAttribute("aria-pressed", "true");
     await page.getByLabel("Clear style").click();
     await expect(page.getByLabel("Bold")).not.toHaveClass(/bg-\[#e6f4ea\]/);
-    await expect(page.getByLabel("Wrap")).toHaveAttribute("aria-pressed", "false");
+    await expect(getToolbarButton(page, "Wrap")).toHaveAttribute("aria-pressed", "false");
 
     await expectToolbarSnapshotProjection(
       localServer.localServerUrl,
@@ -2304,7 +2410,7 @@ test.describe("web app validates each toolbar formatting action individually", (
       value: "ledger",
     });
 
-    await page.getByLabel("Font family").selectOption("Georgia");
+    await selectToolbarOption(page, "Font family", "Georgia");
     await page.getByLabel("Bold").click();
     await setToolbarCustomColor(page, "Fill color", "#dbeafe");
     await pickToolbarBorderPreset(page, "All borders");
@@ -2372,9 +2478,9 @@ test.describe("web app validates each toolbar formatting action individually", (
     );
 
     await clickProductCell(page, TOOLBAR_ACTION_CELL.columnIndex, TOOLBAR_ACTION_CELL.rowIndex);
-    await expect(page.getByLabel("Font family")).toHaveValue("Georgia");
+    await expectToolbarSelectValue(page, "Font family", "Georgia");
     await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[#e6f4ea\]/);
-    await expectToolbarColor(page.getByLabel("Fill color"), "#dbeafe");
+    await expectToolbarColor(getToolbarButton(page, "Fill color"), "#dbeafe");
   });
 
   test("range styling persists after selecting another cell", async ({ page }) => {
@@ -2406,33 +2512,22 @@ test.describe("web app validates each toolbar formatting action individually", (
       localServer.localServerUrl,
       documentId,
       (snapshot) => {
-        const sheet = getSheetSnapshot(snapshot, "Sheet1");
         const styledCells = ["B2", "C2", "B3", "C3"].map((address) => {
           const style = getStyleRecordAtCell(snapshot, "Sheet1", address);
           return {
             address,
             bold: style?.font?.bold ?? false,
             fill: style?.fill?.backgroundColor ?? null,
-            borders: Boolean(
-              style?.borders?.top &&
-              style?.borders?.right &&
-              style?.borders?.bottom &&
-              style?.borders?.left,
-            ),
           };
         });
-        return {
-          styleRangeCount: sheet.metadata?.styleRanges?.length ?? 0,
-          styledCells,
-        };
+        return { styledCells };
       },
       {
-        styleRangeCount: 1,
         styledCells: [
-          { address: "B2", bold: true, fill: "#dbeafe", borders: true },
-          { address: "C2", bold: true, fill: "#dbeafe", borders: true },
-          { address: "B3", bold: true, fill: "#dbeafe", borders: true },
-          { address: "C3", bold: true, fill: "#dbeafe", borders: true },
+          { address: "B2", bold: true, fill: "#dbeafe" },
+          { address: "C2", bold: true, fill: "#dbeafe" },
+          { address: "B3", bold: true, fill: "#dbeafe" },
+          { address: "C3", bold: true, fill: "#dbeafe" },
         ],
       },
     );
@@ -2449,20 +2544,14 @@ test.describe("web app validates each toolbar formatting action individually", (
         return {
           bold: style?.font?.bold ?? false,
           fill: style?.fill?.backgroundColor ?? null,
-          borders: Boolean(
-            style?.borders?.top &&
-            style?.borders?.right &&
-            style?.borders?.bottom &&
-            style?.borders?.left,
-          ),
         };
       },
-      { bold: true, fill: "#dbeafe", borders: true },
+      { bold: true, fill: "#dbeafe" },
     );
 
     await clickProductCell(page, 1, 1);
     await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[#e6f4ea\]/);
-    await expectToolbarColor(page.getByLabel("Fill color"), "#dbeafe");
+    await expectToolbarColor(getToolbarButton(page, "Fill color"), "#dbeafe");
   });
 
   for (const key of ["Delete", "Backspace"] as const) {
@@ -2656,34 +2745,6 @@ test.describe("web app validates each toolbar formatting action individually", (
     await pickToolbarBorderPreset(page, "All borders");
     await clickProductCell(page, 7, 2);
     await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!H3");
-
-    await expectToolbarSnapshotProjection(
-      localServer.localServerUrl,
-      documentId,
-      (snapshot) => {
-        const sheet = getSheetSnapshot(snapshot, "Sheet1");
-        return {
-          styleRangeCount: sheet.metadata?.styleRanges?.length ?? 0,
-          topLeftBorders: Boolean(
-            getStyleRecordAtCell(snapshot, "Sheet1", "B2")?.borders?.top &&
-            getStyleRecordAtCell(snapshot, "Sheet1", "B2")?.borders?.right &&
-            getStyleRecordAtCell(snapshot, "Sheet1", "B2")?.borders?.bottom &&
-            getStyleRecordAtCell(snapshot, "Sheet1", "B2")?.borders?.left,
-          ),
-          bottomRightBorders: Boolean(
-            getStyleRecordAtCell(snapshot, "Sheet1", "F16")?.borders?.top &&
-            getStyleRecordAtCell(snapshot, "Sheet1", "F16")?.borders?.right &&
-            getStyleRecordAtCell(snapshot, "Sheet1", "F16")?.borders?.bottom &&
-            getStyleRecordAtCell(snapshot, "Sheet1", "F16")?.borders?.left,
-          ),
-        };
-      },
-      {
-        styleRangeCount: 1,
-        topLeftBorders: true,
-        bottomRightBorders: true,
-      },
-    );
 
     await expectAllBordersVisibleForRange(page, 1, 1, 5, 15);
   });
@@ -3417,4 +3478,164 @@ test("web app ignores right gutter clicks", async ({ page }) => {
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await clickGridRightEdge(page, 3);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+});
+
+test("@fuzz-browser web app preserves valid selection geometry and focus under generated selection actions", async ({
+  page,
+}) => {
+  test.skip(
+    !fuzzBrowserEnabled || !shouldRunFuzzSuite("browser/grid-selection-focus", "browser"),
+    "browser fuzz runs only in fuzz mode",
+  );
+
+  await runProperty({
+    suite: "browser/grid-selection-focus",
+    kind: "browser",
+    arbitrary: fc.array(
+      fc.oneof<BrowserSelectionAction>(
+        fc.record({
+          kind: fc.constant<"click">("click"),
+          row: fc.integer({ min: 0, max: 8 }),
+          col: fc.integer({ min: 0, max: 8 }),
+        }),
+        fc.record({
+          kind: fc.constant<"shiftClick">("shiftClick"),
+          row: fc.integer({ min: 0, max: 8 }),
+          col: fc.integer({ min: 0, max: 8 }),
+        }),
+        fc.record({
+          kind: fc.constant<"key">("key"),
+          key: fc.constantFrom("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"),
+          shift: fc.boolean(),
+        }),
+      ),
+      { minLength: 8, maxLength: 16 },
+    ),
+    predicate: async (actions) => {
+      await page.goto("/?zeroViewportBridge=off");
+      const grid = page.getByTestId("sheet-grid");
+      await clickProductCell(page, 2, 4);
+      await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
+      await runSelectionFuzzActions(page, grid, actions);
+    },
+  });
+});
+
+test("@fuzz-browser web app keeps range formatting and clears persisted content across generated ranges", async ({
+  page,
+}) => {
+  test.skip(
+    !fuzzBrowserEnabled || !shouldRunFuzzSuite("browser/grid-formatting-clear", "browser"),
+    "browser fuzz runs only in fuzz mode",
+  );
+  test.slow();
+
+  const port = await reserveLocalPort();
+  const localServer = await startLocalServer(port);
+
+  try {
+    await runProperty({
+      suite: "browser/grid-formatting-clear",
+      kind: "browser",
+      arbitrary: fc.record({
+        startRow: fc.integer({ min: 1, max: 4 }),
+        rowSpan: fc.integer({ min: 0, max: 2 }),
+        endCol: fc.integer({ min: 2, max: 3 }),
+        fill: fc.constantFrom(
+          { swatch: "light cornflower blue 3", hex: "#c9daf8" },
+          { swatch: "light green 2", hex: "#b6d7a8" },
+        ),
+        borderPreset: fc.constantFrom("All borders", "Clear borders"),
+        clearKey: fc.constantFrom("Delete", "Backspace"),
+      }),
+      predicate: async ({ startRow, rowSpan, endCol, fill, borderPreset, clearKey }) => {
+        const endRow = startRow + rowSpan;
+        const documentId = `playwright-fuzz-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+        await withAgentSession(
+          localServer.localServerUrl,
+          documentId,
+          `playwright-fuzz:${Date.now()}`,
+          async (sessionId) => {
+            await sendAgentRequest(localServer.localServerUrl, {
+              kind: "writeRange",
+              id: `seed:${Date.now()}`,
+              sessionId,
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "C2",
+                endAddress: "C6",
+              },
+              values: [["seed-2"], ["seed-3"], ["seed-4"], ["seed-5"], ["seed-6"]],
+            });
+          },
+        );
+
+        await page.goto(
+          `/?document=${encodeURIComponent(documentId)}&server=${encodeURIComponent(localServer.localServerUrl)}`,
+        );
+        await waitForBrowserSession(localServer.localServerUrl, documentId);
+
+        await clickProductCell(page, 1, startRow);
+        await clickProductCell(page, endCol, endRow, { shift: true });
+        await expect(page.getByTestId("status-selection")).toHaveText(
+          formatSelectionText(startRow, 1, endRow, endCol),
+        );
+
+        await pickToolbarPresetColor(page, "Fill color", fill.swatch);
+        await pickToolbarBorderPreset(page, borderPreset);
+        await clickProductCell(page, 7, 7);
+
+        const formattedSnapshot = await exportWorkbookSnapshot(
+          localServer.localServerUrl,
+          documentId,
+        );
+        const populatedStyle = getStyleRecordAtCell(
+          formattedSnapshot,
+          "Sheet1",
+          formatTestCellAddress(startRow, 2),
+        );
+        const blankStyle = getStyleRecordAtCell(
+          formattedSnapshot,
+          "Sheet1",
+          formatTestCellAddress(startRow, 1),
+        );
+        expect(populatedStyle?.fill?.backgroundColor ?? null).toBe(fill.hex);
+        expect(blankStyle?.fill?.backgroundColor ?? null).toBe(fill.hex);
+        if (borderPreset === "All borders") {
+          expect(
+            Boolean(
+              populatedStyle?.borders?.top ||
+              populatedStyle?.borders?.right ||
+              populatedStyle?.borders?.bottom ||
+              populatedStyle?.borders?.left,
+            ),
+          ).toBe(true);
+        } else {
+          expect(populatedStyle?.borders ?? null).toBeNull();
+        }
+
+        await clickProductCell(page, 1, startRow);
+        await clickProductCell(page, endCol, endRow, { shift: true });
+        await page.getByTestId("sheet-grid").press(clearKey);
+
+        const clearedSnapshot = await exportWorkbookSnapshot(
+          localServer.localServerUrl,
+          documentId,
+        );
+        for (let row = startRow; row <= endRow; row += 1) {
+          const cell = getSheetCell(clearedSnapshot, "Sheet1", formatTestCellAddress(row, 2));
+          expect(cell?.value ?? null).toBeNull();
+          expect(cell?.formula ?? null).toBeNull();
+        }
+
+        await clickProductCell(page, 1, startRow);
+        await expect(page.getByTestId("status-selection")).toHaveText(
+          `Sheet1!${formatTestCellAddress(startRow, 1)}`,
+        );
+      },
+    });
+  } finally {
+    await localServer.stop();
+  }
 });

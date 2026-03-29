@@ -1,30 +1,20 @@
-name: forgejo-ci
+name: forgejo-nightly-fuzz
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  schedule:
+    - cron: "0 9 * * *"
   workflow_dispatch:
 
 jobs:
-  verify:
-    name: strict-verify
+  nightly-fuzz:
+    name: nightly-fuzz
     runs-on: bilig-ci
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH)=' || true
 
       - name: Verify Node baseline
         run: |
@@ -36,7 +26,6 @@ jobs:
         run: |
           set -eu
           corepack enable
-          pnpm --version
           test "$(pnpm --version)" = "10.32.1"
 
       - name: Install latest Bun
@@ -51,29 +40,24 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Install Chromium for browser smoke
+      - name: Install Chromium for nightly browser fuzz
         run: |
           set -eu
           pnpm exec playwright install --with-deps chromium
 
-      - name: Run strict repository CI
+      - name: Run nightly fuzz campaign
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          pnpm run ci
+          pnpm test:fuzz:nightly
 
-      - name: Upload fuzz and browser artifacts on failure
+      - name: Upload nightly fuzz artifacts
         if: failure()
         uses: https://data.forgejo.org/actions/upload-artifact@v4
         with:
-          name: bilig-fuzz-artifacts
+          name: bilig-nightly-fuzz-artifacts
           path: |
             artifacts/fuzz
             playwright-report
             test-results
           if-no-files-found: ignore
-
-      - name: Ensure tracked files stay clean
-        run: |
-          set -eu
-          git diff --exit-code

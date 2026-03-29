@@ -3,6 +3,7 @@ dist/
 coverage/
 playwright-report/
 test-results/
+artifacts/fuzz/
 .copilot/config.json
 .copilot/logs/
 .vite/

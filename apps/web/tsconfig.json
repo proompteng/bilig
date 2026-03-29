@@ -7,12 +7,14 @@
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
     "paths": {
       "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"],
-      "@bilig/zero-sync": ["../../packages/zero-sync/src/index.ts"]
+      "@bilig/zero-sync": ["../../packages/zero-sync/src/index.ts"],
+      "@bilig/test-fuzz": ["../../packages/test-fuzz/src/index.ts"]
     }
   },
   "references": [
     { "path": "../../packages/binary-protocol" },
-    { "path": "../../packages/zero-sync" }
+    { "path": "../../packages/zero-sync" },
+    { "path": "../../packages/test-fuzz" }
   ],
   "include": ["src/**/*", "vite.config.ts"]
 }

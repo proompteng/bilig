@@ -35,6 +35,7 @@ export default defineConfig({
       },
       { find: "@bilig/renderer", replacement: `${rootDir}packages/renderer/src/index.ts` },
       { find: "@bilig/grid", replacement: `${rootDir}packages/grid/src/index.ts` },
+      { find: "@bilig/test-fuzz", replacement: `${rootDir}packages/test-fuzz/src/index.ts` },
     ],
   },
   test: {
