@@ -208,8 +208,10 @@ describe("web shell", () => {
     expect(host.querySelector("[data-testid='replica-panel']")).toBeNull();
     expect(host.querySelector("[data-testid='ax-rail']")).toBeNull();
     expect(host.querySelector("[data-testid='ax-presence-chip']")).toBeNull();
+    expect(host.querySelector("[data-testid='worker-loading']")).toBeNull();
     expect(host.querySelector("h1")).toBeNull();
     expect(host.textContent).not.toContain("Excel-scale shell on top of the local-first engine");
+    expect(host.textContent).not.toContain("Starting workbook runtime...");
 
     await act(async () => {
       root.unmount();

@@ -2165,6 +2165,7 @@ function WorkerWorkbookAppInner({
   );
 
   const bridgeLoading = bridgeState === null;
+  const runtimeReady = !loading && Boolean(workerHandle) && Boolean(runtimeState) && !bridgeLoading;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f8f9fa] text-[#202124]">
@@ -2176,23 +2177,15 @@ function WorkerWorkbookAppInner({
           {runtimeError}
         </div>
       ) : null}
-      {!writesAllowed ? (
+      {runtimeReady && !writesAllowed ? (
         <div className="border-b border-[#d2e3fc] bg-[#eef4ff] px-3 py-2 text-sm text-[#174ea6]">
           Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection
           recovers.
         </div>
       ) : null}
-      {loading || !workerHandle || !runtimeState || bridgeLoading ? (
-        <div
-          className="border-b border-[#dadce0] bg-white px-3 py-2 text-sm text-[#5f6368]"
-          data-testid="worker-loading"
-        >
-          Starting workbook runtime...
-        </div>
-      ) : null}
       <div className="relative flex min-h-0 flex-1">
         <div className="min-h-0 min-w-0 flex-1">
-          {loading || !workerHandle || !runtimeState || bridgeLoading ? null : (
+          {!loading && workerHandle && runtimeState && !bridgeLoading ? (
             <WorkbookView
               ribbon={ribbon}
               editorValue={visibleEditorValue}
@@ -2247,7 +2240,7 @@ function WorkerWorkbookAppInner({
               subscribeViewport={subscribeViewport}
               columnWidths={columnWidths}
             />
-          )}
+          ) : null}
         </div>
       </div>
     </div>
