@@ -53,6 +53,47 @@ function buildWorkbookUploadBase64(): string {
 }
 
 describe("sync-server", () => {
+  it("serves Zero only through the v2 ingress routes", async () => {
+    const zeroSyncService = {
+      enabled: true,
+      initialize: async () => undefined,
+      close: async () => undefined,
+      handleQuery: async () => ({ ok: true, kind: "query" }),
+      handleMutate: async () => ({ ok: true, kind: "mutate" }),
+    };
+    const { app } = createSyncServer({ logger: false, zeroSyncService });
+
+    const queryResponse = await app.inject({
+      method: "POST",
+      url: "/api/zero/v2/query",
+      payload: {},
+    });
+    const mutateResponse = await app.inject({
+      method: "POST",
+      url: "/api/zero/v2/mutate",
+      payload: {},
+    });
+    const legacyQueryResponse = await app.inject({
+      method: "POST",
+      url: "/api/zero/query",
+      payload: {},
+    });
+    const legacyMutateResponse = await app.inject({
+      method: "POST",
+      url: "/api/zero/mutate",
+      payload: {},
+    });
+
+    expect(queryResponse.statusCode).toBe(200);
+    expect(queryResponse.json()).toEqual({ ok: true, kind: "query" });
+    expect(mutateResponse.statusCode).toBe(200);
+    expect(mutateResponse.json()).toEqual({ ok: true, kind: "mutate" });
+    expect(legacyQueryResponse.statusCode).toBe(404);
+    expect(legacyMutateResponse.statusCode).toBe(404);
+
+    await app.close();
+  });
+
   it("accepts hello frames and returns cursor watermarks", async () => {
     const { app } = createSyncServer();
     const response = await app.inject({

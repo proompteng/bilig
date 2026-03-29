@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { useActorRef, useSelector } from "@xstate/react";
 import {
   AlignCenter,
   AlignLeft,
@@ -55,19 +56,11 @@ import {
   type CellStylePatch,
   type LiteralInput,
 } from "@bilig/protocol";
-import {
-  createWorkerEngineClient,
-  type MessagePortLike,
-  type WorkerEngineClient,
-} from "@bilig/worker-transport";
 import { mutators, type BiligRuntimeConfig } from "@bilig/zero-sync";
+import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
+import type { WorkerRuntimeSelection, ZeroClient } from "./runtime-session.js";
 import { WorkerViewportCache } from "./viewport-cache.js";
-import type {
-  WorkbookWorkerBootstrapOptions,
-  WorkbookWorkerStateSnapshot,
-} from "./worker-runtime.js";
-import { ZeroWorkbookBridge, type ZeroWorkbookBridgeState } from "./zero/ZeroWorkbookBridge.js";
 
 type EditingMode = "idle" | "cell" | "formula";
 
@@ -75,14 +68,6 @@ type ParsedEditorInput =
   | { kind: "clear" }
   | { kind: "formula"; formula: string }
   | { kind: "value"; value: LiteralInput };
-
-interface WorkerHandle {
-  worker: Worker;
-  client: WorkerEngineClient;
-  cache: WorkerViewportCache;
-}
-
-type ZeroClient = ConstructorParameters<typeof ZeroWorkbookBridge>[0];
 
 type ZeroConnectionState =
   | { name: "connected" }
@@ -391,55 +376,6 @@ function isCommitOps(value: unknown): value is CommitOp[] {
   return Array.isArray(value);
 }
 
-function isCellSnapshot(value: unknown): value is CellSnapshot {
-  return (
-    isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["address"] === "string" &&
-    typeof value["flags"] === "number" &&
-    typeof value["version"] === "number" &&
-    isRecord(value["value"]) &&
-    typeof value["value"]["tag"] === "number"
-  );
-}
-
-function isRuntimeStateSnapshot(value: unknown): value is WorkbookWorkerStateSnapshot {
-  return (
-    isRecord(value) &&
-    typeof value["workbookName"] === "string" &&
-    Array.isArray(value["sheetNames"]) &&
-    isRecord(value["metrics"]) &&
-    typeof value["syncState"] === "string"
-  );
-}
-
-function createWorkerPort(worker: Worker): MessagePortLike {
-  type PortListener = Parameters<NonNullable<MessagePortLike["addEventListener"]>>[1];
-  const listenerMap = new Map<PortListener, EventListener>();
-  return {
-    postMessage(message: unknown) {
-      worker.postMessage(message, []);
-    },
-    addEventListener(type: "message", listener: PortListener) {
-      const wrapped: EventListener = (event) => {
-        if (event instanceof MessageEvent) {
-          listener(event);
-        }
-      };
-      listenerMap.set(listener, wrapped);
-      worker.addEventListener(type, wrapped);
-    },
-    removeEventListener(type: "message", listener: PortListener) {
-      const wrapped = listenerMap.get(listener);
-      if (!wrapped) {
-        return;
-      }
-      listenerMap.delete(listener);
-      worker.removeEventListener(type, wrapped);
-    },
-  };
-}
-
 function toResolvedValue(cell: CellSnapshot): string {
   switch (cell.value.tag) {
     case ValueTag.Number:
@@ -622,7 +558,7 @@ function getRangeCellCount(range: CellRangeRef): number {
   return (endRow - startRow + 1) * (endCol - startCol + 1);
 }
 
-function formatSyncStateLabel(state: WorkbookWorkerStateSnapshot["syncState"]): string {
+function formatSyncStateLabel(state: string): string {
   switch (state) {
     case "live":
       return "Live";
@@ -634,9 +570,9 @@ function formatSyncStateLabel(state: WorkbookWorkerStateSnapshot["syncState"]): 
       return "Behind";
     case "reconnecting":
       return "Reconnecting";
+    default:
+      return state;
   }
-  const exhaustiveState: never = state;
-  return exhaustiveState;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -1041,29 +977,66 @@ const DISABLED_CONNECTION_STATE: ZeroConnectionState = {
   reason: "Zero disabled for local runtime",
 };
 
-export function WorkerWorkbookApp({
-  config,
-  connectionState: connectionStateProp,
-  zero = null,
-}: {
+const workerRuntimeMachine = createWorkerRuntimeMachine();
+
+export function WorkerWorkbookApp(props: {
   config: BiligRuntimeConfig;
   connectionState?: ZeroConnectionState;
   zero?: ZeroClient | null;
 }) {
-  const runtimeConfig = useMemo(() => resolveRuntimeConfig(config), [config]);
+  const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config]);
+  const runtimeKey = [
+    runtimeConfig.documentId,
+    runtimeConfig.baseUrl ?? "local",
+    runtimeConfig.persistState ? "persist" : "memory",
+    runtimeConfig.zeroViewportBridge ? "zero" : "worker",
+  ].join("|");
+
+  return (
+    <WorkerWorkbookAppInner
+      key={runtimeKey}
+      runtimeConfig={runtimeConfig}
+      connectionState={props.connectionState}
+      zero={props.zero}
+    />
+  );
+}
+
+function WorkerWorkbookAppInner({
+  runtimeConfig,
+  connectionState: connectionStateProp,
+  zero = null,
+}: {
+  runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
+  connectionState?: ZeroConnectionState | undefined;
+  zero?: ZeroClient | null | undefined;
+}) {
   const documentId = runtimeConfig.documentId;
   const connectionState = connectionStateProp ?? DISABLED_CONNECTION_STATE;
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
-  const [workerHandle, setWorkerHandle] = useState<WorkerHandle | null>(null);
-  const [runtimeState, setRuntimeState] = useState<WorkbookWorkerStateSnapshot | null>(null);
-  const [bridgeState, setBridgeState] = useState<ZeroWorkbookBridgeState | null>(null);
-  const [selection, setSelection] = useState<{ sheetName: string; address: string }>({
-    sheetName: "Sheet1",
-    address: "A1",
+  const runtimeActorRef = useActorRef(workerRuntimeMachine, {
+    input: {
+      documentId,
+      replicaId,
+      baseUrl: runtimeConfig.baseUrl,
+      persistState: runtimeConfig.persistState,
+      zeroViewportBridge: runtimeConfig.zeroViewportBridge,
+      zero,
+      initialSelection: {
+        sheetName: "Sheet1",
+        address: "A1",
+      } satisfies WorkerRuntimeSelection,
+    },
   });
-  const [selectedCell, setSelectedCell] = useState<CellSnapshot>(() =>
-    emptyCellSnapshot("Sheet1", "A1"),
-  );
+  const runtimeSnapshot = useSelector(runtimeActorRef, (snapshot) => snapshot);
+  const runtimeController = runtimeSnapshot.context.controller;
+  const workerHandle = runtimeSnapshot.context.handle;
+  const runtimeState = runtimeSnapshot.context.runtimeState;
+  const bridgeState = runtimeSnapshot.context.bridgeState;
+  const selection = runtimeSnapshot.context.selection;
+  const selectedCell =
+    runtimeSnapshot.context.selectedCell ??
+    emptyCellSnapshot(selection.sheetName, selection.address);
   const [selectionLabel, setSelectionLabel] = useState("A1");
   const [recentFillColors, setRecentFillColors] = useState<readonly string[]>([]);
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([]);
@@ -1071,12 +1044,11 @@ export function WorkerWorkbookApp({
   const [editorSelectionBehavior, setEditorSelectionBehavior] =
     useState<EditSelectionBehavior>("select-all");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const runtimeError = runtimeSnapshot.context.error;
+  const loading = runtimeSnapshot.matches({ active: "booting" });
   const [, setCacheVersion] = useState(0);
   const selectionRef = useRef(selection);
-  const workerHandleRef = useRef<WorkerHandle | null>(null);
-  const bridgeRef = useRef<ZeroWorkbookBridge | null>(null);
+  const workerHandleRef = useRef(workerHandle);
   const editorValueRef = useRef(editorValue);
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
@@ -1086,219 +1058,25 @@ export function WorkerWorkbookApp({
   }, [selection]);
 
   useEffect(() => {
+    workerHandleRef.current = workerHandle;
+  }, [workerHandle]);
+
+  useEffect(() => {
+    if (!workerHandle) {
+      return;
+    }
+    return workerHandle.cache.subscribe(() => {
+      setCacheVersion((current) => current + 1);
+    });
+  }, [workerHandle]);
+
+  useEffect(() => {
     editorValueRef.current = editorValue;
   }, [editorValue]);
 
   useEffect(() => {
     editingModeRef.current = editingMode;
   }, [editingMode]);
-
-  const refreshRuntimeState = useCallback(async (handle?: WorkerHandle) => {
-    const active = handle ?? workerHandleRef.current;
-    if (!active) {
-      return;
-    }
-    const response = await active.client.invoke("getRuntimeState");
-    if (!isRuntimeStateSnapshot(response)) {
-      throw new Error("Worker returned an invalid runtime state payload");
-    }
-    const nextState = response;
-    setRuntimeState(nextState);
-  }, []);
-
-  const refreshSelectedCell = useCallback(
-    async (handle?: WorkerHandle, nextSelection?: { sheetName: string; address: string }) => {
-      const active = handle ?? workerHandleRef.current;
-      const target = nextSelection ?? selectionRef.current;
-      if (!active) {
-        return;
-      }
-      const cached = active.cache.peekCell(target.sheetName, target.address);
-      if (cached) {
-        setSelectedCell(cached);
-      }
-      const response = await active.client.invoke("getCell", target.sheetName, target.address);
-      if (!isCellSnapshot(response)) {
-        throw new Error("Worker returned an invalid cell snapshot");
-      }
-      const snapshot = response;
-      if (
-        selectionRef.current.sheetName === target.sheetName &&
-        selectionRef.current.address === target.address
-      ) {
-        setSelectedCell(snapshot);
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    let disposed = false;
-    let unsubscribeEvents: () => void = () => {};
-    let unsubscribeCache: () => void = () => {};
-    let interval = 0;
-
-    const worker = new Worker(new URL("./workbook.worker.ts", import.meta.url), { type: "module" });
-    const client = createWorkerEngineClient({ port: createWorkerPort(worker) });
-    const cache = new WorkerViewportCache(client);
-    const handle: WorkerHandle = { worker, client, cache };
-
-    setLoading(true);
-    setRuntimeError(null);
-    void (async () => {
-      try {
-        const response = await client.invoke("bootstrap", {
-          documentId,
-          replicaId,
-          baseUrl: runtimeConfig.baseUrl,
-          persistState: runtimeConfig.persistState,
-        } satisfies WorkbookWorkerBootstrapOptions);
-        if (!isRuntimeStateSnapshot(response)) {
-          throw new Error("Worker returned an invalid bootstrap payload");
-        }
-        const bootstrap = response;
-        if (disposed) {
-          return;
-        }
-        workerHandleRef.current = handle;
-        setWorkerHandle(handle);
-        setRuntimeState(bootstrap);
-        const firstSheet = bootstrap.sheetNames[0] ?? "Sheet1";
-        setSelection({ sheetName: firstSheet, address: "A1" });
-        selectionRef.current = { sheetName: firstSheet, address: "A1" };
-        await refreshSelectedCell(handle, selectionRef.current);
-        unsubscribeEvents = client.subscribe(() => {
-          void refreshRuntimeState(handle).catch((error: unknown) => {
-            if (!disposed) {
-              setRuntimeError(error instanceof Error ? error.message : String(error));
-            }
-          });
-        });
-        unsubscribeCache = cache.subscribe(() => {
-          if (disposed) {
-            return;
-          }
-          setCacheVersion((current) => current + 1);
-          const next = cache.peekCell(selectionRef.current.sheetName, selectionRef.current.address);
-          if (next) {
-            setSelectedCell(next);
-          }
-        });
-        interval = window.setInterval(() => {
-          void refreshRuntimeState(handle).catch((error: unknown) => {
-            if (!disposed) {
-              setRuntimeError(error instanceof Error ? error.message : String(error));
-            }
-          });
-        }, 250);
-      } catch (error) {
-        if (!disposed) {
-          setRuntimeError(error instanceof Error ? error.message : String(error));
-        }
-      } finally {
-        if (!disposed) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      disposed = true;
-      unsubscribeEvents();
-      unsubscribeCache();
-      if (interval) {
-        window.clearInterval(interval);
-      }
-      client.dispose();
-      worker.terminate();
-      workerHandleRef.current = null;
-    };
-  }, [
-    refreshRuntimeState,
-    refreshSelectedCell,
-    documentId,
-    replicaId,
-    runtimeConfig.baseUrl,
-    runtimeConfig.persistState,
-  ]);
-
-  useEffect(() => {
-    if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !workerHandle || !zero) {
-      return;
-    }
-    const bridge = new ZeroWorkbookBridge(zero, documentId, workerHandle.cache, (error) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
-    });
-    bridgeRef.current = bridge;
-    const unsubscribeWorkbook = bridge.subscribeWorkbookState((state) => {
-      setBridgeState(state);
-    });
-    const unsubscribeSelection = bridge.subscribeSelectedCell((cell) => {
-      if (cell) {
-        setSelectedCell(cell);
-      }
-    });
-
-    return () => {
-      unsubscribeWorkbook();
-      unsubscribeSelection();
-      bridge.dispose();
-      bridgeRef.current = null;
-      setBridgeState(null);
-    };
-  }, [documentId, runtimeConfig.baseUrl, runtimeConfig.zeroViewportBridge, workerHandle, zero]);
-
-  useEffect(() => {
-    const activeSheetNames =
-      runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge || !bridgeState
-        ? (runtimeState?.sheetNames ?? [])
-        : bridgeState.sheetNames;
-    if (activeSheetNames.length === 0) {
-      return;
-    }
-    if (!activeSheetNames.includes(selection.sheetName)) {
-      const nextSelection = { sheetName: activeSheetNames[0]!, address: "A1" };
-      setSelection(nextSelection);
-      selectionRef.current = nextSelection;
-      bridgeRef.current?.setSelection(nextSelection.sheetName, nextSelection.address);
-      if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge) {
-        void refreshSelectedCell(undefined, nextSelection).catch((error: unknown) => {
-          setRuntimeError(error instanceof Error ? error.message : String(error));
-        });
-      }
-    }
-  }, [
-    bridgeState,
-    refreshSelectedCell,
-    runtimeConfig.baseUrl,
-    runtimeConfig.zeroViewportBridge,
-    runtimeState,
-    selection.sheetName,
-  ]);
-
-  useEffect(() => {
-    bridgeRef.current?.setSelection(selection.sheetName, selection.address);
-
-    if (!workerHandle || (!runtimeConfig.baseUrl && runtimeConfig.zeroViewportBridge)) {
-      return;
-    }
-    let cancelled = false;
-    void refreshSelectedCell().catch((error: unknown) => {
-      if (!cancelled) {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    refreshSelectedCell,
-    runtimeConfig.baseUrl,
-    runtimeConfig.zeroViewportBridge,
-    selection.address,
-    selection.sheetName,
-    workerHandle,
-  ]);
 
   const writesAllowed =
     Boolean(runtimeConfig.baseUrl) ||
@@ -1313,6 +1091,16 @@ export function WorkerWorkbookApp({
     }
     return await active.client.invoke(method, ...args);
   }, []);
+
+  const reportRuntimeError = useCallback(
+    (error: unknown) => {
+      runtimeActorRef.send({
+        type: "session.error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    },
+    [runtimeActorRef],
+  );
 
   const runZeroMutation = useCallback(
     async (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
@@ -1341,15 +1129,10 @@ export function WorkerWorkbookApp({
         throw new Error(`Writes are unavailable while Zero is ${connectionState.name}`);
       }
       if (runtimeConfig.baseUrl) {
-        const result = await invokeWorker(method, ...args);
-        await refreshRuntimeState();
-        await refreshSelectedCell();
-        return result;
+        return await invokeWorker(method, ...args);
       }
 
       const localResult = await invokeWorker(method, ...args);
-      await refreshRuntimeState();
-      await refreshSelectedCell();
 
       switch (method) {
         case "setCellValue": {
@@ -1498,8 +1281,6 @@ export function WorkerWorkbookApp({
       connectionState.name,
       documentId,
       invokeWorker,
-      refreshRuntimeState,
-      refreshSelectedCell,
       runZeroMutation,
       runtimeConfig.baseUrl,
       writesAllowed,
@@ -1640,14 +1421,12 @@ export function WorkerWorkbookApp({
           movement,
         );
         const nextSelection = { sheetName: targetSelection.sheetName, address: nextAddress };
-        setSelection(nextSelection);
         selectionRef.current = nextSelection;
+        runtimeActorRef.send({ type: "selection.changed", selection: nextSelection });
       }
       editorTargetRef.current = selectionRef.current;
       void applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed).catch(
-        (error: unknown) => {
-          setRuntimeError(error instanceof Error ? error.message : String(error));
-        },
+        reportRuntimeError,
       );
     },
     [
@@ -1655,6 +1434,8 @@ export function WorkerWorkbookApp({
       applyOptimisticFormulaErrorEdit,
       applyParsedInput,
       getLiveSelectedCell,
+      reportRuntimeError,
+      runtimeActorRef,
       writesAllowed,
     ],
   );
@@ -1685,9 +1466,16 @@ export function WorkerWorkbookApp({
     editingModeRef.current = "idle";
     setEditingMode("idle");
     void invokeMutation("clearRange", targetRange).catch((error: unknown) => {
-      setRuntimeError(error instanceof Error ? error.message : String(error));
+      reportRuntimeError(error);
     });
-  }, [applyOptimisticCellEdit, invokeMutation, selection.sheetName, selectionLabel, writesAllowed]);
+  }, [
+    applyOptimisticCellEdit,
+    invokeMutation,
+    reportRuntimeError,
+    selection.sheetName,
+    selectionLabel,
+    writesAllowed,
+  ]);
 
   const clearSelectedCell = useCallback(() => {
     if (!writesAllowed) {
@@ -1734,15 +1522,13 @@ export function WorkerWorkbookApp({
       if (ops.length === 0) {
         return;
       }
-      void invokeMutation("renderCommit", ops).catch((error: unknown) => {
-        setRuntimeError(error instanceof Error ? error.message : String(error));
-      });
+      void invokeMutation("renderCommit", ops).catch(reportRuntimeError);
       setEditorSelectionBehavior("select-all");
       editorTargetRef.current = selectionRef.current;
       editingModeRef.current = "idle";
       setEditingMode("idle");
     },
-    [invokeMutation],
+    [invokeMutation, reportRuntimeError],
   );
 
   const fillSelectionRange = useCallback(
@@ -1770,11 +1556,9 @@ export function WorkerWorkbookApp({
           setEditingMode("idle");
           return undefined;
         })
-        .catch((error: unknown) => {
-          setRuntimeError(error instanceof Error ? error.message : String(error));
-        });
+        .catch(reportRuntimeError);
     },
-    [invokeMutation],
+    [invokeMutation, reportRuntimeError],
   );
 
   const copySelectionRange = useCallback(
@@ -1802,23 +1586,25 @@ export function WorkerWorkbookApp({
           setEditingMode("idle");
           return undefined;
         })
-        .catch((error: unknown) => {
-          setRuntimeError(error instanceof Error ? error.message : String(error));
-        });
+        .catch(reportRuntimeError);
     },
-    [invokeMutation],
+    [invokeMutation, reportRuntimeError],
   );
 
-  const selectAddress = useCallback((sheetName: string, address: string) => {
-    if (editingModeRef.current !== "idle") {
-      editorTargetRef.current = { sheetName, address };
-      editingModeRef.current = "idle";
-      setEditingMode("idle");
-    }
-    setSelection({ sheetName, address });
-    selectionRef.current = { sheetName, address };
-    editorTargetRef.current = { sheetName, address };
-  }, []);
+  const selectAddress = useCallback(
+    (sheetName: string, address: string) => {
+      if (editingModeRef.current !== "idle") {
+        editorTargetRef.current = { sheetName, address };
+        editingModeRef.current = "idle";
+        setEditingMode("idle");
+      }
+      const nextSelection = { sheetName, address };
+      selectionRef.current = nextSelection;
+      editorTargetRef.current = nextSelection;
+      runtimeActorRef.send({ type: "selection.changed", selection: nextSelection });
+    },
+    [runtimeActorRef],
+  );
 
   const handleEditorChange = useCallback((next: string) => {
     editorValueRef.current = next;
@@ -1874,21 +1660,12 @@ export function WorkerWorkbookApp({
       viewport: Parameters<WorkerViewportCache["subscribeViewport"]>[1],
       listener: Parameters<WorkerViewportCache["subscribeViewport"]>[2],
     ) => {
-      if (!workerHandle) {
+      if (!runtimeController) {
         return () => {};
       }
-      if (bridgeEnabled) {
-        const disposers = [
-          workerHandle.cache.subscribeViewport(sheetName, viewport, listener),
-          bridgeRef.current?.subscribeViewport(sheetName, viewport, listener) ?? (() => {}),
-        ];
-        return () => {
-          disposers.forEach((dispose) => dispose());
-        };
-      }
-      return workerHandle.cache.subscribeViewport(sheetName, viewport, listener);
+      return runtimeController.subscribeViewport(sheetName, viewport, listener);
     },
-    [bridgeEnabled, workerHandle],
+    [runtimeController],
   );
 
   const statusModeLabel = runtimeConfig.baseUrl
@@ -2466,9 +2243,7 @@ export function WorkerWorkbookApp({
                     workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
                     return undefined;
                   })
-                  .catch((error: unknown) => {
-                    setRuntimeError(error instanceof Error ? error.message : String(error));
-                  });
+                  .catch(reportRuntimeError);
               }}
               onBeginEdit={beginEditing}
               onBeginFormulaEdit={(seed?: string) => beginEditing(seed, "select-all", "formula")}
@@ -2481,9 +2256,7 @@ export function WorkerWorkbookApp({
                   selection.sheetName,
                   columnIndex,
                   newSize,
-                ).catch((error: unknown) => {
-                  setRuntimeError(error instanceof Error ? error.message : String(error));
-                });
+                ).catch(reportRuntimeError);
               }}
               onCommitEdit={commitEditor}
               onCopyRange={copySelectionRange}

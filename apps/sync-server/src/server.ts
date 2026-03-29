@@ -118,9 +118,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     return await zeroSyncService.handleMutate(request);
   };
 
-  app.post("/api/zero/query", handleZeroQuery);
   app.post("/api/zero/v2/query", handleZeroQuery);
-  app.post("/api/zero/mutate", handleZeroMutate);
   app.post("/api/zero/v2/mutate", handleZeroMutate);
 
   const handleSessionRequest = async (request: FastifyRequest, reply: FastifyReply) => {

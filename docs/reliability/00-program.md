@@ -58,7 +58,9 @@ This program is a clean-break rewrite of the control plane. It is not a request 
 - the `docs/reliability/*` design-doc set exists and is now the control-plane source of truth
 - `@bilig/contracts`, `@bilig/runtime-kernel`, and `@bilig/actors` exist in the workspace
 - the web bootstrap path is actor-driven through `@bilig/actors`
+- the web workbook shell now runs through a dedicated worker-runtime actor that owns worker bootstrap, runtime refresh, cache invalidation, selection synchronization, and optional Zero bridge lifecycle
 - `v2` session, document state, snapshot, websocket, agent, and Zero ingress routes exist in the web/local/sync path
+- the sync server now serves Zero only through `/api/zero/v2/query` and `/api/zero/v2/mutate`; GitOps must point Zero at the `v2` ingress paths
 - shared runtime-kernel adapters now own server edge config, error envelopes, session shaping, request base-url resolution, websocket normalization, and message-byte decoding
 
 ### Remaining before the rewrite is complete
@@ -66,7 +68,7 @@ This program is a clean-break rewrite of the control plane. It is not a request 
 - replace sync/local document managers with Effect-backed services supervised by document actors
 - move worker runtime, reconnect, and transport lifecycle into XState + Effect
 - finish web-app orchestration cutover beyond bootstrap
-- delete old `v1` entrypoints and all duplicated fallback control paths
+- delete the remaining old manager-backed and raw transport control paths
 - complete the reliability acceptance suite and failure drills from `04-cutover-and-acceptance.md`
 
 ## Repo Rules
