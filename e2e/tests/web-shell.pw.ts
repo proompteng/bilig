@@ -1108,6 +1108,9 @@ async function clickProductCell(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
   rowIndex: number,
+  options?: {
+    shift?: boolean;
+  },
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
@@ -1118,13 +1121,22 @@ async function clickProductCell(
 
   const columnLeft = await getProductColumnLeft(page, columnIndex);
   const columnWidth = await getProductColumnWidth(page, columnIndex);
-  await page.mouse.click(
-    grid.x + columnLeft + Math.floor(columnWidth / 2),
-    grid.y +
-      PRODUCT_HEADER_HEIGHT +
-      rowIndex * PRODUCT_ROW_HEIGHT +
-      Math.floor(PRODUCT_ROW_HEIGHT / 2),
-  );
+  if (options?.shift) {
+    await page.keyboard.down("Shift");
+  }
+  try {
+    await page.mouse.click(
+      grid.x + columnLeft + Math.floor(columnWidth / 2),
+      grid.y +
+        PRODUCT_HEADER_HEIGHT +
+        rowIndex * PRODUCT_ROW_HEIGHT +
+        Math.floor(PRODUCT_ROW_HEIGHT / 2),
+    );
+  } finally {
+    if (options?.shift) {
+      await page.keyboard.up("Shift");
+    }
+  }
 }
 
 async function clickProductCellUpperHalf(
@@ -1318,6 +1330,29 @@ test("web app keeps formula bar controls aligned and consistently sized", async 
   expect(
     Math.abs(nameBoxBox.y + nameBoxBox.height - (formulaFrameBox.y + formulaFrameBox.height)),
   ).toBeLessThanOrEqual(1);
+});
+
+test("web app keeps shell controls on one height and radius system", async ({ page }) => {
+  await page.goto("/?zeroViewportBridge=off");
+
+  const locators = [
+    page.getByLabel("Number format"),
+    page.getByTestId("name-box"),
+    page.getByTestId("formula-input-frame"),
+    page.getByTestId("status-mode"),
+    page.getByRole("tab", { name: "Sheet1" }),
+  ];
+
+  const metrics = await Promise.all(
+    locators.map(async (locator) => ({
+      height: Math.round((await getBox(locator)).height),
+      radius: await locator.evaluate((element) => getComputedStyle(element).borderRadius),
+    })),
+  );
+
+  const heights = metrics.map(({ height }) => height);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+  expect(new Set(metrics.map(({ radius }) => radius)).size).toBe(1);
 });
 
 test("web app keeps the toolbar compact on narrow viewports", async ({ page }) => {
@@ -3228,6 +3263,16 @@ test("web app expands the active range with repeated shift arrows", async ({ pag
 
   await grid.press("Shift+ArrowDown");
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5:E6");
+});
+
+test("web app expands the active range with shift-click", async ({ page }) => {
+  await page.goto("/?zeroViewportBridge=off");
+
+  await clickProductCell(page, 1, 1);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
+
+  await clickProductCell(page, 4, 5, { shift: true });
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:E6");
 });
 
 test("web app ignores right gutter clicks", async ({ page }) => {

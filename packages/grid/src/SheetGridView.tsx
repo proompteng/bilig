@@ -1182,18 +1182,33 @@ export function SheetGridView({
           const pointerCell = resolvePointerCell(event.clientX, event.clientY);
           ignoreNextPointerSelectionRef.current = pointerCell === null;
           pendingPointerCellRef.current = pointerCell;
-          dragAnchorCellRef.current = pointerCell;
-          dragPointerCellRef.current = pointerCell;
           dragGeometryRef.current = activeGeometry;
           dragDidMoveRef.current = false;
           dragViewportRef.current = visibleRegion;
           if (pointerCell) {
+            const anchorCell: Item = event.shiftKey
+              ? [selectedCell.col, selectedCell.row]
+              : pointerCell;
+            dragAnchorCellRef.current = anchorCell;
+            dragPointerCellRef.current = pointerCell;
             ignoreNextPointerSelectionRef.current = true;
-            setGridSelection(createGridSelection(pointerCell[0], pointerCell[1]));
+            setGridSelection(
+              event.shiftKey
+                ? resolveBodyDragSelection(anchorCell, pointerCell)
+                : createGridSelection(pointerCell[0], pointerCell[1]),
+            );
             if (isEditingCell) {
               onCommitEdit();
             }
-            onSelect(formatAddress(pointerCell[1], pointerCell[0]));
+            onSelect(
+              formatAddress(
+                event.shiftKey ? anchorCell[1] : pointerCell[1],
+                event.shiftKey ? anchorCell[0] : pointerCell[0],
+              ),
+            );
+          } else {
+            dragAnchorCellRef.current = null;
+            dragPointerCellRef.current = null;
           }
           focusGrid();
         }}

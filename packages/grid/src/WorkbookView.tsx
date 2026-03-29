@@ -132,12 +132,12 @@ export function WorkbookView({
           selectedAddr={selectedAddr}
           sheetName={sheetName}
         />
-        <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#d7dce5] bg-[#f8fafc] px-2.5">
+        <div className="flex min-h-10 items-center justify-between gap-2 border-t border-[#d7dce5] bg-[#f8fafc] px-2 py-1">
           <Tabs.Root value={sheetName} onValueChange={(value) => onSelectSheet(String(value))}>
-            <Tabs.List aria-label="Sheets" className="flex items-end gap-1">
+            <Tabs.List aria-label="Sheets" className="flex items-center gap-1">
               {sheetNames.map((name) => (
                 <Tabs.Tab
-                  className="inline-flex h-8 items-center rounded-t-[6px] border border-b-0 border-transparent bg-transparent px-3 text-[12px] font-medium text-[#5f6368] outline-none transition-[background-color,border-color,color] hover:bg-[#eef3f9] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc] data-[active]:border-[#d6dbe6] data-[active]:bg-white data-[active]:text-[#202124]"
+                  className="inline-flex h-8 items-center rounded-[4px] border border-transparent bg-transparent px-3 text-[12px] font-medium text-[#5f6368] outline-none transition-[background-color,border-color,color] hover:bg-[#eef3f9] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc] data-[active]:border-[#d6dbe6] data-[active]:bg-white data-[active]:text-[#202124]"
                   key={name}
                   value={name}
                 >

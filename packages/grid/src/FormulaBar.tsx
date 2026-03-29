@@ -33,7 +33,7 @@ export function FormulaBar({
 
   return (
     <div
-      className="formula-bar flex items-center gap-2 border-b border-[#d7dce5] bg-white px-3 py-2"
+      className="formula-bar flex items-center gap-2 border-b border-[#d7dce5] bg-white px-2 py-1"
       data-testid="formula-bar"
     >
       <div className="w-[112px] shrink-0">
@@ -42,7 +42,7 @@ export function FormulaBar({
         </label>
         <input
           aria-label="Name box"
-          className="box-border h-8 w-full rounded-[6px] border border-[#dadce0] bg-white px-3 text-[13px] leading-none text-[#202124] outline-none transition-[border-color,box-shadow] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#d2e3fc]"
+          className="box-border h-8 w-full rounded-[4px] border border-[#dadce0] bg-white px-2.5 text-[13px] leading-none text-[#202124] outline-none transition-[border-color,box-shadow] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#d2e3fc]"
           data-testid="name-box"
           id="name-box-input"
           value={addressValue}
@@ -69,7 +69,7 @@ export function FormulaBar({
           Formula
         </label>
         <div
-          className="box-border flex h-8 items-center rounded-[6px] border border-[#dadce0] bg-white"
+          className="box-border flex h-8 items-center rounded-[4px] border border-[#dadce0] bg-white"
           data-testid="formula-input-frame"
         >
           <span
@@ -80,7 +80,7 @@ export function FormulaBar({
           </span>
           <input
             aria-label="Formula"
-            className="h-full min-w-0 flex-1 border-0 bg-white px-3 text-[13px] leading-none text-[#202124] outline-none"
+            className="h-full min-w-0 flex-1 border-0 bg-white px-2.5 text-[13px] leading-none text-[#202124] outline-none"
             data-testid="formula-input"
             id="formula-input"
             placeholder="Type a literal or =formula"

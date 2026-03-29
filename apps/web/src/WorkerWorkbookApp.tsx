@@ -260,18 +260,20 @@ const FONT_SIZE_OPTIONS: readonly ToolbarSelectOption[] = [10, 11, 12, 13, 14, 1
 
 const TOOLBAR_ROOT_CLASS = "border-b border-[#d7dce5] bg-white font-['Roboto','Arial',sans-serif]";
 const TOOLBAR_ROW_CLASS =
-  "flex min-h-[38px] items-center gap-0 overflow-x-auto px-2.5 py-1 text-[12px] text-[#202124]";
-const TOOLBAR_GROUP_CLASS = "flex flex-none items-center gap-0.5 px-0.5";
-const TOOLBAR_SEPARATOR_CLASS = "mx-1 h-5 w-px shrink-0 bg-[#d7dce5]";
+  "flex min-h-10 items-center gap-0 overflow-x-auto px-2 py-1 text-[12px] text-[#202124]";
+const TOOLBAR_GROUP_CLASS = "flex flex-none items-center gap-1";
+const TOOLBAR_SEPARATOR_CLASS = "mx-1.5 h-6 w-px shrink-0 bg-[#d7dce5]";
 const TOOLBAR_BUTTON_CLASS =
-  "inline-flex h-8 min-w-8 items-center justify-center rounded-[5px] border border-transparent bg-transparent px-2 text-[#202124] transition-[background-color,border-color,color] outline-none hover:bg-[#f1f3f4] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
+  "inline-flex h-8 min-w-8 items-center justify-center rounded-[4px] border border-transparent bg-transparent px-2 text-[#202124] transition-[background-color,border-color,color] outline-none hover:bg-[#f1f3f4] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
 const TOOLBAR_BUTTON_ACTIVE_CLASS = "border-[#c6dabf] bg-[#e6f4ea] text-[#137333]";
 const TOOLBAR_SELECT_TRIGGER_CLASS =
-  "inline-flex h-8 items-center justify-between rounded-[6px] border border-[#dadce0] bg-white px-2.5 text-[12px] font-medium text-[#202124] outline-none transition-[border-color,box-shadow,background-color] hover:border-[#c6ccd7] focus-visible:border-[#1a73e8] focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
-const TOOLBAR_SEGMENTED_CLASS = "inline-flex items-center gap-0.5";
+  "inline-flex h-8 items-center justify-between rounded-[4px] border border-[#dadce0] bg-white px-2 text-[12px] font-medium text-[#202124] outline-none transition-[border-color,box-shadow,background-color] hover:border-[#c6ccd7] focus-visible:border-[#1a73e8] focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
+const TOOLBAR_SEGMENTED_CLASS = "inline-flex items-center gap-1";
 const TOOLBAR_ICON_CLASS = "h-3.5 w-3.5 shrink-0 stroke-[1.75]";
 const TOOLBAR_POPUP_CLASS =
-  "overflow-hidden rounded-[10px] border border-[#d0d7e2] bg-white p-1 shadow-[0_16px_36px_rgba(15,23,42,0.16)]";
+  "overflow-hidden rounded-[4px] border border-[#d0d7e2] bg-white p-2 shadow-[0_14px_30px_rgba(15,23,42,0.14)]";
+const TOOLBAR_POPUP_ACTION_CLASS =
+  "inline-flex h-8 items-center rounded-[4px] px-2 text-[11px] font-semibold transition-colors";
 
 function normalizeHexColor(value: string): string {
   return value.trim().toLowerCase();
@@ -592,7 +594,7 @@ function ToolbarSelect({
             <Select.List className="max-h-72 min-w-[var(--anchor-width)] overflow-auto py-1">
               {options.map((option) => (
                 <Select.Item
-                  className="flex cursor-default items-center justify-between gap-3 rounded-[6px] px-2.5 py-1.5 text-[12px] text-[#202124] outline-none data-[highlighted]:bg-[#eef3fd] data-[selected]:font-semibold"
+                  className="flex cursor-default items-center justify-between gap-3 rounded-[4px] px-2 py-1.5 text-[12px] text-[#202124] outline-none data-[highlighted]:bg-[#eef3fd] data-[selected]:font-semibold"
                   key={`${ariaLabel}-${option.value || "default"}`}
                   label={option.label}
                   value={option.value}
@@ -667,7 +669,7 @@ function ColorPaletteButton({
         <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
           {icon}
           <span
-            className="absolute inset-x-0 bottom-0 h-[2px] rounded-full"
+            className="absolute inset-x-0 bottom-0 h-[2px] rounded-[1px]"
             style={{ backgroundColor: normalizedCurrentColor } satisfies CSSProperties}
           />
         </span>
@@ -677,13 +679,16 @@ function ColorPaletteButton({
         <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
           <Popover.Popup
             aria-label={`${ariaLabel} palette`}
-            className={classNames(TOOLBAR_POPUP_CLASS, "w-[280px] p-2")}
+            className={classNames(TOOLBAR_POPUP_CLASS, "w-[288px]")}
             data-testid={`${ariaLabel.toLowerCase().replace(/\s+/g, "-")}-palette`}
           >
             <div className="mb-2 flex items-center justify-between">
               <button
                 aria-label={`Reset ${ariaLabel.toLowerCase()}`}
-                className="inline-flex h-7 items-center rounded-[6px] px-2.5 text-[11px] font-semibold text-[#5f6368] transition-colors hover:bg-[#f3f6fb]"
+                className={classNames(
+                  TOOLBAR_POPUP_ACTION_CLASS,
+                  "text-[#5f6368] hover:bg-[#f3f6fb]",
+                )}
                 onClick={() => {
                   onReset();
                   setOpen(false);
@@ -695,7 +700,10 @@ function ColorPaletteButton({
               </button>
               <button
                 aria-label={`Open custom ${ariaLabel.toLowerCase()} picker`}
-                className="inline-flex h-7 items-center rounded-[6px] px-2.5 text-[11px] font-semibold text-[#1a73e8] transition-colors hover:bg-[#eef3fd]"
+                className={classNames(
+                  TOOLBAR_POPUP_ACTION_CLASS,
+                  "text-[#1a73e8] hover:bg-[#eef3fd]",
+                )}
                 onClick={() => {
                   setShowCustomPicker((current) => !current);
                 }}
@@ -716,7 +724,7 @@ function ColorPaletteButton({
                     return (
                       <button
                         aria-label={`${ariaLabel} ${swatch.label}`}
-                        className="relative h-5 w-5 rounded-[4px] border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
+                        className="relative h-5 w-5 rounded-[2px] border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
                         data-color={swatch.value}
                         key={`${ariaLabel}-${swatch.label}`}
                         onClick={() => {
@@ -728,7 +736,7 @@ function ColorPaletteButton({
                         type="button"
                       >
                         {selected ? (
-                          <span className="absolute inset-0 rounded-[4px] ring-2 ring-[#1a73e8] ring-offset-1" />
+                          <span className="absolute inset-0 rounded-[2px] ring-2 ring-[#1a73e8] ring-offset-1" />
                         ) : null}
                       </button>
                     );
@@ -747,7 +755,7 @@ function ColorPaletteButton({
                   return (
                     <button
                       aria-label={`${ariaLabel} ${swatch.label}`}
-                      className="relative h-5 w-5 rounded-full border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
+                      className="relative h-5 w-5 rounded-[2px] border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
                       data-color={swatch.value}
                       key={`${ariaLabel}-${swatch.label}`}
                       onClick={() => {
@@ -759,7 +767,7 @@ function ColorPaletteButton({
                       type="button"
                     >
                       {selected ? (
-                        <span className="absolute inset-0 rounded-full ring-2 ring-[#1a73e8] ring-offset-1" />
+                        <span className="absolute inset-0 rounded-[2px] ring-2 ring-[#1a73e8] ring-offset-1" />
                       ) : null}
                     </button>
                   );
@@ -776,7 +784,7 @@ function ColorPaletteButton({
                   {recentColors.map((color) => (
                     <button
                       aria-label={`${ariaLabel} custom ${color}`}
-                      className="relative h-5 w-5 rounded-[3px] border border-[#d0d7e2]"
+                      className="relative h-5 w-5 rounded-[2px] border border-[#d0d7e2]"
                       data-color={color}
                       key={`${ariaLabel}-recent-${color}`}
                       onClick={() => {
@@ -788,7 +796,7 @@ function ColorPaletteButton({
                       type="button"
                     >
                       {color === normalizedCurrentColor ? (
-                        <span className="absolute inset-0 rounded-[3px] ring-2 ring-[#1a73e8] ring-offset-1" />
+                        <span className="absolute inset-0 rounded-[2px] ring-2 ring-[#1a73e8] ring-offset-1" />
                       ) : null}
                     </button>
                   ))}
@@ -802,7 +810,7 @@ function ColorPaletteButton({
                   <span>Pick a custom color</span>
                   <input
                     aria-label={customInputLabel}
-                    className="h-8 w-11 cursor-pointer rounded-[6px] border border-[#d0d7e2] bg-white p-0"
+                    className="h-8 w-11 cursor-pointer rounded-[4px] border border-[#d0d7e2] bg-white p-0"
                     type="color"
                     value={normalizedCurrentColor}
                     onChange={(event) => {
@@ -1666,7 +1674,7 @@ export function WorkerWorkbookApp({
     : "Local";
 
   const statusChipClass =
-    "inline-flex h-6 items-center rounded-[6px] border border-[#d7dce5] bg-white px-2 text-[11px] font-medium tracking-[0.01em] text-[#5f6368]";
+    "inline-flex h-8 items-center rounded-[4px] border border-[#d7dce5] bg-white px-2 text-[11px] font-medium tracking-[0.01em] text-[#5f6368]";
 
   const statusBar = (
     <>
