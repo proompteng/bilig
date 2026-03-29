@@ -3,7 +3,6 @@ import type { WorkbookSnapshot } from "@bilig/protocol";
 import { SpreadsheetEngine } from "@bilig/core";
 import {
   createEmptyWorkbookSnapshot,
-  ensureZeroSyncSchema,
   persistWorkbookMutation,
   type Queryable,
   type WorkbookRuntimeState,
@@ -225,29 +224,5 @@ describe("persistWorkbookMutation", () => {
     expect(db.statements.some((statement) => statement.includes("INSERT INTO recalc_job"))).toBe(
       false,
     );
-  });
-});
-
-describe("ensureZeroSyncSchema", () => {
-  it("creates and narrows the v2 Zero publication", async () => {
-    const db = createRecordingDb();
-
-    await ensureZeroSyncSchema(db);
-
-    expect(
-      db.statements.some(
-        (statement) =>
-          statement.includes("CREATE PUBLICATION") && statement.includes("zero_data_v2"),
-      ),
-    ).toBe(true);
-    expect(
-      db.statements.some(
-        (statement) =>
-          statement.includes("ALTER PUBLICATION") &&
-          statement.includes("SET TABLE") &&
-          statement.includes('"cell_eval"') &&
-          statement.includes('"workbooks"'),
-      ),
-    ).toBe(true);
   });
 });

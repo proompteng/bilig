@@ -93,20 +93,6 @@ const WORKBOOK_SNAPSHOT_RETENTION = 5;
 const WORKBOOK_SNAPSHOT_INTERVAL = 64;
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;
-const DEFAULT_ZERO_PUBLICATION = "zero_data_v2";
-const ZERO_PUBLICATION_TABLES = [
-  "workbooks",
-  "sheets",
-  "cells",
-  "cell_eval",
-  "row_metadata",
-  "column_metadata",
-  "defined_names",
-  "cell_styles",
-  "cell_number_formats",
-  "sheet_style_ranges",
-  "sheet_format_ranges",
-] as const;
 
 type FocusedCellEventPayload = Extract<
   WorkbookEventPayload,
@@ -127,21 +113,6 @@ type ColumnMetadataEventPayload = Extract<WorkbookEventPayload, { kind: "updateC
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-function sqlIdentifier(value: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-    throw new Error(`Unsafe SQL identifier: ${value}`);
-  }
-  return `"${value}"`;
-}
-
-function sqlLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
-}
-
-function zeroPublicationName(): string {
-  return process.env["BILIG_ZERO_PUBLICATION"]?.trim() || DEFAULT_ZERO_PUBLICATION;
 }
 
 function parseInteger(value: unknown): number {
@@ -1219,30 +1190,6 @@ async function persistWorkbookCheckpoint(
   );
 }
 
-async function ensureZeroSyncPublication(db: Queryable): Promise<void> {
-  const publicationName = zeroPublicationName();
-  const publicationIdentifier = sqlIdentifier(publicationName);
-  const publicationLiteral = sqlLiteral(publicationName);
-  const publishedTables = ZERO_PUBLICATION_TABLES.map((tableName) => sqlIdentifier(tableName)).join(
-    ", ",
-  );
-
-  await db.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM pg_publication
-        WHERE pubname = ${publicationLiteral}
-      ) THEN
-        EXECUTE 'CREATE PUBLICATION ${publicationIdentifier}';
-      END IF;
-    END
-    $$;
-  `);
-  await db.query(`ALTER PUBLICATION ${publicationIdentifier} SET TABLE ${publishedTables};`);
-}
-
 export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbooks (
@@ -1588,7 +1535,6 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
     `,
     [WORKBOOK_SNAPSHOT_FORMAT],
   );
-  await ensureZeroSyncPublication(db);
 }
 
 export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapshot {
