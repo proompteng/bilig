@@ -1441,7 +1441,11 @@ export function SheetGridView({
           columnSelect="multi"
           columnSelectionBlending="additive"
           columnSelectionMode="multi"
-          rowMarkers={{ kind: "clickable-number", width: gridMetrics.rowMarkerWidth }}
+          rowMarkers={{
+            kind: "clickable-number",
+            width: gridMetrics.rowMarkerWidth,
+            headerDisabled: true,
+          }}
           rowSelect="multi"
           rowSelectionBlending="additive"
           rowSelectionMode="multi"
