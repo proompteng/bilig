@@ -433,8 +433,8 @@ export function projectViewportPatch(
       const source = sourceByAddress.get(address);
       const computed = computedByAddress.get(address);
       const styleId = resolveStyleId(row, col, computed, sortedStyleRanges);
-      const style = input.stylesById.get(styleId) ?? { id: DEFAULT_STYLE_ID };
-      if (full || !state.knownStyleIds.has(style.id)) {
+      const style = input.stylesById.get(styleId);
+      if (style && (full || !state.knownStyleIds.has(style.id))) {
         state.knownStyleIds.add(style.id);
         styles.push(style);
       }
@@ -456,8 +456,8 @@ export function projectViewportPatch(
             version: computed.version,
           }
         : emptyCellSnapshot(input.viewport.sheetName, address);
-      if (style.id !== DEFAULT_STYLE_ID) {
-        snapshot.styleId = style.id;
+      if (styleId !== DEFAULT_STYLE_ID) {
+        snapshot.styleId = styleId;
       }
       if (numberFormat.code !== undefined) {
         snapshot.format = numberFormat.code;
@@ -472,7 +472,7 @@ export function projectViewportPatch(
       if (isLiteralInput(sourceInputValue)) {
         snapshot.input = sourceInputValue;
       }
-      const patchedCell = buildPatchedCell(snapshot, row, col, style.id);
+      const patchedCell = buildPatchedCell(snapshot, row, col, styleId);
       const signature = JSON.stringify([
         patchedCell.snapshot.version,
         patchedCell.snapshot.formula ?? "",
