@@ -142,6 +142,14 @@ export interface ProjectionDiff<Row> {
   deletes: string[];
 }
 
+export interface WorkbookProjectionOptions {
+  revision: number;
+  calculatedRevision: number;
+  ownerUserId: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
 function signatureOf(row: unknown): string {
   return JSON.stringify(row);
 }
@@ -200,20 +208,82 @@ function rangeId(
   return `${prefix}:${sheetName}:${startRow}:${startCol}:${endRow}:${endCol}`;
 }
 
+export function buildWorkbookHeaderRow(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  options: WorkbookProjectionOptions,
+): WorkbookSourceRow {
+  const calcSettings = snapshot.workbook.metadata?.calculationSettings;
+  const recalcEpoch = snapshot.workbook.metadata?.volatileContext?.recalcEpoch ?? 0;
+  return {
+    id: documentId,
+    name: snapshot.workbook.name,
+    ownerUserId: options.ownerUserId,
+    headRevision: options.revision,
+    calculatedRevision: options.calculatedRevision,
+    calcMode: calcSettings?.mode ?? "automatic",
+    compatibilityMode: calcSettings?.compatibilityMode ?? "excel-modern",
+    recalcEpoch,
+    updatedAt: options.updatedAt,
+  };
+}
+
+export function buildCalculationSettingsRow(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+): CalculationSettingsSourceRow {
+  const calcSettings = snapshot.workbook.metadata?.calculationSettings;
+  const recalcEpoch = snapshot.workbook.metadata?.volatileContext?.recalcEpoch ?? 0;
+  return {
+    workbookId: documentId,
+    mode: calcSettings?.mode ?? "automatic",
+    recalcEpoch,
+  };
+}
+
+function buildCellSourceRow(
+  documentId: string,
+  sheetName: string,
+  cell: WorkbookSnapshot["sheets"][number]["cells"][number],
+  options: WorkbookProjectionOptions,
+): CellSourceRow {
+  const parsed = parseCellAddress(cell.address, sheetName);
+  return {
+    workbookId: documentId,
+    sheetName,
+    address: cell.address,
+    rowNum: parsed.row,
+    colNum: parsed.col,
+    inputValue: cell.formula ? null : (cell.value ?? null),
+    formula: cell.formula ?? null,
+    format: cell.format ?? null,
+    explicitFormatId: null,
+    sourceRevision: options.revision,
+    updatedBy: options.updatedBy,
+    updatedAt: options.updatedAt,
+  };
+}
+
+export function buildSingleCellSourceRow(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  sheetName: string,
+  address: string,
+  options: WorkbookProjectionOptions,
+): CellSourceRow | null {
+  const sheet = snapshot.sheets.find((entry) => entry.name === sheetName);
+  const cell = sheet?.cells.find((entry) => entry.address === address);
+  if (!cell) {
+    return null;
+  }
+  return buildCellSourceRow(documentId, sheetName, cell, options);
+}
+
 export function buildWorkbookSourceProjection(
   documentId: string,
   snapshot: WorkbookSnapshot,
-  options: {
-    revision: number;
-    calculatedRevision: number;
-    ownerUserId: string;
-    updatedBy: string;
-    updatedAt: string;
-  },
+  options: WorkbookProjectionOptions,
 ): WorkbookSourceProjection {
-  const calcSettings = snapshot.workbook.metadata?.calculationSettings;
-  const recalcEpoch = snapshot.workbook.metadata?.volatileContext?.recalcEpoch ?? 0;
-
   const sheets: SheetSourceRow[] = [];
   const cells: CellSourceRow[] = [];
   const rowMetadata: AxisMetadataSourceRow[] = [];
@@ -236,21 +306,7 @@ export function buildWorkbookSourceProjection(
     });
 
     for (const cell of sheet.cells) {
-      const parsed = parseCellAddress(cell.address, sheet.name);
-      cells.push({
-        workbookId: documentId,
-        sheetName: sheet.name,
-        address: cell.address,
-        rowNum: parsed.row,
-        colNum: parsed.col,
-        inputValue: cell.formula ? null : (cell.value ?? null),
-        formula: cell.formula ?? null,
-        format: cell.format ?? null,
-        explicitFormatId: null,
-        sourceRevision: options.revision,
-        updatedBy: options.updatedBy,
-        updatedAt: options.updatedAt,
-      });
+      cells.push(buildCellSourceRow(documentId, sheet.name, cell, options));
     }
 
     for (const entry of sheet.metadata?.rowMetadata ?? []) {
@@ -351,28 +407,14 @@ export function buildWorkbookSourceProjection(
   }
 
   return {
-    workbook: {
-      id: documentId,
-      name: snapshot.workbook.name,
-      ownerUserId: options.ownerUserId,
-      headRevision: options.revision,
-      calculatedRevision: options.calculatedRevision,
-      calcMode: calcSettings?.mode ?? "automatic",
-      compatibilityMode: calcSettings?.compatibilityMode ?? "excel-modern",
-      recalcEpoch,
-      updatedAt: options.updatedAt,
-    },
+    workbook: buildWorkbookHeaderRow(documentId, snapshot, options),
     sheets,
     cells,
     rowMetadata,
     columnMetadata,
     definedNames,
     workbookMetadataEntries,
-    calculationSettings: {
-      workbookId: documentId,
-      mode: calcSettings?.mode ?? "automatic",
-      recalcEpoch,
-    },
+    calculationSettings: buildCalculationSettingsRow(documentId, snapshot),
     styles,
     numberFormats,
     styleRanges,

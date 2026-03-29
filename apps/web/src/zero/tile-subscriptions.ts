@@ -33,6 +33,15 @@ interface TileData {
   formatRanges: Map<string, FormatRangeRow>;
 }
 
+interface TileDataCounts {
+  sourceCells: Map<string, number>;
+  cellEval: Map<string, number>;
+  rowMetadata: Map<string, number>;
+  columnMetadata: Map<string, number>;
+  styleRanges: Map<string, number>;
+  formatRanges: Map<string, number>;
+}
+
 interface TileHandle {
   descriptor: TileDescriptor;
   refCount: number;
@@ -96,6 +105,17 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function createTileData(): TileData {
+  return {
+    sourceCells: new Map(),
+    cellEval: new Map(),
+    rowMetadata: new Map(),
+    columnMetadata: new Map(),
+    styleRanges: new Map(),
+    formatRanges: new Map(),
+  };
+}
+
+function createTileDataCounts(): TileDataCounts {
   return {
     sourceCells: new Map(),
     cellEval: new Map(),
@@ -193,10 +213,85 @@ function replaceMap<T>(
   }
 }
 
-function mergeMap<T>(target: Map<string, T>, source: ReadonlyMap<string, T>): void {
-  for (const [key, value] of source) {
-    target.set(key, value);
+function cloneMap<T>(source: ReadonlyMap<string, T>): Map<string, T> {
+  return new Map(source);
+}
+
+function cloneTileData(data: TileData): TileData {
+  return {
+    sourceCells: cloneMap(data.sourceCells),
+    cellEval: cloneMap(data.cellEval),
+    rowMetadata: cloneMap(data.rowMetadata),
+    columnMetadata: cloneMap(data.columnMetadata),
+    styleRanges: cloneMap(data.styleRanges),
+    formatRanges: cloneMap(data.formatRanges),
+  };
+}
+
+function updateAggregateMap<T>(
+  aggregate: Map<string, T>,
+  counts: Map<string, number>,
+  previous: ReadonlyMap<string, T>,
+  next: ReadonlyMap<string, T>,
+): void {
+  for (const key of previous.keys()) {
+    if (next.has(key)) {
+      continue;
+    }
+    const remaining = (counts.get(key) ?? 0) - 1;
+    if (remaining <= 0) {
+      counts.delete(key);
+      aggregate.delete(key);
+      continue;
+    }
+    counts.set(key, remaining);
   }
+
+  for (const [key, value] of next) {
+    if (!previous.has(key)) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    aggregate.set(key, value);
+  }
+}
+
+function updateAggregateTileData(
+  aggregate: TileData,
+  counts: TileDataCounts,
+  previous: TileData,
+  next: TileData,
+): void {
+  updateAggregateMap(
+    aggregate.sourceCells,
+    counts.sourceCells,
+    previous.sourceCells,
+    next.sourceCells,
+  );
+  updateAggregateMap(aggregate.cellEval, counts.cellEval, previous.cellEval, next.cellEval);
+  updateAggregateMap(
+    aggregate.rowMetadata,
+    counts.rowMetadata,
+    previous.rowMetadata,
+    next.rowMetadata,
+  );
+  updateAggregateMap(
+    aggregate.columnMetadata,
+    counts.columnMetadata,
+    previous.columnMetadata,
+    next.columnMetadata,
+  );
+  updateAggregateMap(
+    aggregate.styleRanges,
+    counts.styleRanges,
+    previous.styleRanges,
+    next.styleRanges,
+  );
+  updateAggregateMap(
+    aggregate.formatRanges,
+    counts.formatRanges,
+    previous.formatRanges,
+    next.formatRanges,
+  );
 }
 
 export class TileSubscriptionManager {
@@ -215,44 +310,38 @@ export class TileSubscriptionManager {
   ): TileViewportAttachment {
     const descriptors = toTileDescriptors(sheetName, viewport);
     const detachments = descriptors.map((descriptor) => this.attachTile(descriptor, listener));
-    const aggregateCache: { signature: string; data: TileData } = {
-      signature: "",
-      data: createTileData(),
+    const aggregateData = createTileData();
+    const aggregateCounts = createTileDataCounts();
+    const snapshots = new Map<string, { version: number; data: TileData }>();
+
+    const refreshAggregate = () => {
+      for (const handle of detachments) {
+        const previous = snapshots.get(handle.descriptor.key);
+        if (previous && previous.version === handle.version) {
+          continue;
+        }
+        const next = cloneTileData(handle.data);
+        updateAggregateTileData(
+          aggregateData,
+          aggregateCounts,
+          previous?.data ?? createTileData(),
+          next,
+        );
+        snapshots.set(handle.descriptor.key, {
+          version: handle.version,
+          data: next,
+        });
+      }
     };
 
-    const currentSignature = () =>
-      detachments.map((handle) => `${handle.descriptor.key}:${handle.version}`).join("|");
-
     const getData = () => {
-      const signature = currentSignature();
-      if (aggregateCache.signature === signature) {
-        return aggregateCache.data;
-      }
-      const next = createTileData();
-      for (const handle of detachments) {
-        mergeMap(next.sourceCells, handle.data.sourceCells);
-        mergeMap(next.cellEval, handle.data.cellEval);
-        mergeMap(next.rowMetadata, handle.data.rowMetadata);
-        mergeMap(next.columnMetadata, handle.data.columnMetadata);
-        mergeMap(next.styleRanges, handle.data.styleRanges);
-        mergeMap(next.formatRanges, handle.data.formatRanges);
-      }
-      aggregateCache.signature = signature;
-      aggregateCache.data = next;
-      return next;
+      refreshAggregate();
+      return aggregateData;
     };
 
     return {
       getData,
-      getSourceCell: (address: string) => {
-        for (const handle of detachments) {
-          const source = handle.data.sourceCells.get(address);
-          if (source) {
-            return source;
-          }
-        }
-        return undefined;
-      },
+      getSourceCell: (address: string) => getData().sourceCells.get(address),
       dispose: () => {
         for (const handle of detachments) {
           handle.listeners.delete(listener);
@@ -331,7 +420,6 @@ export class TileSubscriptionManager {
       ) as unknown as TypedView<readonly unknown[]>,
       (value) => {
         replaceMap(data.sourceCells, value, normalizeCellSourceRow, normalizeCellSourceKey);
-        notifyListeners();
       },
     );
     pushView(
@@ -347,7 +435,6 @@ export class TileSubscriptionManager {
       ) as unknown as TypedView<readonly unknown[]>,
       (value) => {
         replaceMap(data.cellEval, value, normalizeCellEvalRow, normalizeCellEvalKey);
-        notifyListeners();
       },
     );
     pushView(
@@ -361,7 +448,6 @@ export class TileSubscriptionManager {
       ) as unknown as TypedView<readonly unknown[]>,
       (value) => {
         replaceMap(data.rowMetadata, value, normalizeAxisMetadataRow, normalizeAxisMetadataKey);
-        notifyListeners();
       },
     );
     pushView(
@@ -375,7 +461,6 @@ export class TileSubscriptionManager {
       ) as unknown as TypedView<readonly unknown[]>,
       (value) => {
         replaceMap(data.columnMetadata, value, normalizeAxisMetadataRow, normalizeAxisMetadataKey);
-        notifyListeners();
       },
     );
     pushView(
@@ -396,7 +481,6 @@ export class TileSubscriptionManager {
           (row) => row as StyleRangeRow,
           (row) => row.id,
         );
-        notifyListeners();
       },
     );
     pushView(
@@ -417,7 +501,6 @@ export class TileSubscriptionManager {
           (row) => row as FormatRangeRow,
           (row) => row.id,
         );
-        notifyListeners();
       },
     );
     this.tiles.set(descriptor.key, handle);

@@ -1,33 +1,16 @@
-import { SpreadsheetEngine } from "@bilig/core";
 import {
   leaseNextRecalcJob,
-  loadWorkbookState,
+  loadWorkbookRuntimeMetadata,
   markRecalcJobCompleted,
   markRecalcJobFailed,
   markRecalcJobSuperseded,
   type Queryable,
 } from "./store.js";
 import { materializeCellEvalProjection } from "./projection.js";
+import { WorkbookRuntimeManager } from "./runtime-manager.js";
 
 const IDLE_POLL_MS = 250;
 const BUSY_POLL_MS = 25;
-
-async function createWorkbookEngine(
-  documentId: string,
-  snapshot: Awaited<ReturnType<typeof loadWorkbookState>>["snapshot"],
-  replicaSnapshot: Awaited<ReturnType<typeof loadWorkbookState>>["replicaSnapshot"],
-) {
-  const engine = new SpreadsheetEngine({
-    workbookName: documentId,
-    replicaId: `recalc:${documentId}`,
-  });
-  await engine.ready();
-  engine.importSnapshot(snapshot);
-  if (replicaSnapshot) {
-    engine.importReplicaSnapshot(replicaSnapshot);
-  }
-  return engine;
-}
 
 export class ZeroRecalcWorker {
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -36,6 +19,7 @@ export class ZeroRecalcWorker {
 
   constructor(
     private readonly db: Queryable,
+    private readonly runtimeManager: WorkbookRuntimeManager,
     private readonly workerId = `bilig-recalc:${process.pid}:${Math.random().toString(36).slice(2)}`,
   ) {}
 
@@ -85,31 +69,41 @@ export class ZeroRecalcWorker {
     }
 
     try {
-      const state = await loadWorkbookState(this.db, lease.workbookId);
-      if (state.headRevision !== lease.toRevision) {
-        await markRecalcJobSuperseded(this.db, lease);
-        return true;
-      }
+      await this.runtimeManager.runExclusive(lease.workbookId, async () => {
+        const metadata = await loadWorkbookRuntimeMetadata(this.db, lease.workbookId);
+        if (metadata.headRevision !== lease.toRevision) {
+          await markRecalcJobSuperseded(this.db, lease);
+          return;
+        }
 
-      const engine = await createWorkbookEngine(
-        lease.workbookId,
-        state.snapshot,
-        state.replicaSnapshot,
-      );
-      const cellEvalRows = materializeCellEvalProjection(
-        engine,
-        lease.workbookId,
-        lease.toRevision,
-        new Date().toISOString(),
-      );
-      await markRecalcJobCompleted(
-        this.db,
-        lease,
-        cellEvalRows,
-        engine.exportSnapshot(),
-        engine.exportReplicaSnapshot(),
-      );
+        const runtime = await this.runtimeManager.loadRuntime(this.db, lease.workbookId, metadata);
+        const cellEvalRows = materializeCellEvalProjection(
+          runtime.engine,
+          lease.workbookId,
+          lease.toRevision,
+          new Date().toISOString(),
+        );
+        const nextSnapshot = runtime.engine.exportSnapshot();
+        const nextReplicaSnapshot = runtime.engine.exportReplicaSnapshot();
+        const completed = await markRecalcJobCompleted(
+          this.db,
+          lease,
+          cellEvalRows,
+          nextSnapshot,
+          nextReplicaSnapshot,
+        );
+        if (!completed) {
+          this.runtimeManager.invalidate(lease.workbookId);
+          return;
+        }
+        this.runtimeManager.commitRecalc(lease.workbookId, {
+          calculatedRevision: lease.toRevision,
+          snapshot: nextSnapshot,
+          replicaSnapshot: nextReplicaSnapshot,
+        });
+      });
     } catch (error) {
+      this.runtimeManager.invalidate(lease.workbookId);
       await markRecalcJobFailed(this.db, lease, error);
     }
 

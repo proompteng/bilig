@@ -13,6 +13,7 @@ import { resolveSessionIdentity } from "../session.js";
 import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./db.js";
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
+import { WorkbookRuntimeManager } from "./runtime-manager.js";
 import { ensureZeroSyncSchema } from "./store.js";
 
 export interface ZeroSyncService {
@@ -74,12 +75,14 @@ class EnabledZeroSyncService implements ZeroSyncService {
   readonly enabled = true;
   private readonly pool: ReturnType<typeof createZeroPool>;
   private readonly dbProvider;
+  private readonly runtimeManager: WorkbookRuntimeManager;
   private readonly recalcWorker: ZeroRecalcWorker;
 
   constructor(connectionString: string) {
     this.pool = createZeroPool(connectionString);
     this.dbProvider = createZeroDbProvider(connectionString);
-    this.recalcWorker = new ZeroRecalcWorker(this.pool);
+    this.runtimeManager = new WorkbookRuntimeManager();
+    this.recalcWorker = new ZeroRecalcWorker(this.pool, this.runtimeManager);
   }
 
   async initialize(): Promise<void> {
@@ -89,6 +92,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async close(): Promise<void> {
     this.recalcWorker.stop();
+    await this.runtimeManager.close();
     await this.pool.end();
   }
 
@@ -169,7 +173,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
       this.dbProvider,
       (transact) =>
         transact(async (tx, name, args) => {
-          return await handleServerMutator(tx, name, args, session);
+          return await handleServerMutator(tx, name, args, this.runtimeManager, session);
         }),
       fastifyRequestToWebRequest(request),
     );

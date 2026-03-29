@@ -83,6 +83,7 @@ describe("TileSubscriptionManager", () => {
       },
     } as unknown as Zero;
 
+    let notifications = 0;
     const manager = new TileSubscriptionManager(zero, "bilig-demo", () => {});
     const attachment = manager.subscribeViewport(
       "Sheet1",
@@ -92,7 +93,9 @@ describe("TileSubscriptionManager", () => {
         colStart: 0,
         colEnd: 0,
       },
-      () => {},
+      () => {
+        notifications += 1;
+      },
     );
 
     const initial = attachment.getData();
@@ -112,8 +115,10 @@ describe("TileSubscriptionManager", () => {
     ]);
 
     const next = attachment.getData();
-    expect(next).not.toBe(initial);
+    expect(next).toBe(initial);
     expect(next.sourceCells.get("A1")?.inputValue).toBe("updated");
+    expect(attachment.getSourceCell("A1")?.inputValue).toBe("updated");
+    expect(notifications).toBe(1);
 
     attachment.dispose();
     manager.dispose();

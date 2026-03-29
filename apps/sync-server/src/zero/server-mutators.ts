@@ -33,6 +33,7 @@ import {
   type Queryable,
   type WorkbookRuntimeState,
 } from "./store.js";
+import { WorkbookRuntimeManager } from "./runtime-manager.js";
 import type { SessionIdentity } from "../session.js";
 
 interface ServerTransactionLike {
@@ -243,66 +244,88 @@ async function commitWorkbookMutation(
   documentId: string,
   tx: ServerTransactionLike,
   eventPayload: WorkbookEventPayload,
+  runtimeManager: WorkbookRuntimeManager,
   mutate: (engine: SpreadsheetEngine) => void,
   session?: SessionIdentity,
   updatedBy = session?.userID ?? "system",
 ) {
-  const db = tx.dbTransaction.wrappedTransaction;
-  await acquireWorkbookMutationLock(db, documentId);
-  const state = await loadWorkbookState(db, documentId);
-  const engine = await createWorkbookEngine(documentId, state.snapshot, state.replicaSnapshot);
-  mutate(engine);
-  const nextSnapshot = engine.exportSnapshot();
-  const result = await persistWorkbookMutation(db, documentId, {
-    previousState: state,
-    nextSnapshot,
-    nextReplicaSnapshot: engine.exportReplicaSnapshot(),
-    updatedBy,
-    ownerUserId: resolveOwnerUserId(state, session),
-    eventPayload,
+  return await runtimeManager.runExclusive(documentId, async () => {
+    const db = tx.dbTransaction.wrappedTransaction;
+    await acquireWorkbookMutationLock(db, documentId);
+    const state = await runtimeManager.loadRuntime(db, documentId);
+    try {
+      mutate(state.engine);
+      const nextSnapshot = state.engine.exportSnapshot();
+      const nextReplicaSnapshot = state.engine.exportReplicaSnapshot();
+      const ownerUserId = resolveOwnerUserId(state, session);
+      const result = await persistWorkbookMutation(db, documentId, {
+        previousState: state,
+        nextSnapshot,
+        nextReplicaSnapshot,
+        updatedBy,
+        ownerUserId,
+        eventPayload,
+      });
+      runtimeManager.commitMutation(documentId, {
+        snapshot: nextSnapshot,
+        replicaSnapshot: nextReplicaSnapshot,
+        headRevision: result.revision,
+        calculatedRevision: state.calculatedRevision,
+        ownerUserId,
+      });
+      return {
+        documentId,
+        revision: result.revision,
+        updatedAt: result.updatedAt,
+      };
+    } catch (error) {
+      runtimeManager.invalidate(documentId);
+      throw error;
+    }
   });
-  return {
-    documentId,
-    revision: result.revision,
-    updatedAt: result.updatedAt,
-  };
 }
 
 async function replaceWorkbookSnapshot(
   documentId: string,
   tx: ServerTransactionLike,
   snapshot: WorkbookSnapshot,
+  runtimeManager: WorkbookRuntimeManager,
   session?: SessionIdentity,
 ) {
-  const db = tx.dbTransaction.wrappedTransaction;
-  await acquireWorkbookMutationLock(db, documentId);
-  const state = await loadWorkbookState(db, documentId);
-  const engine = await createWorkbookEngine(documentId, snapshot, state.replicaSnapshot);
-  const nextSnapshot = engine.exportSnapshot();
-  const nextReplicaSnapshot = engine.exportReplicaSnapshot();
-  const result = await persistWorkbookMutation(db, documentId, {
-    previousState: state,
-    nextSnapshot,
-    nextReplicaSnapshot,
-    updatedBy: session?.userID ?? "system",
-    ownerUserId: resolveOwnerUserId(state, session),
-    eventPayload: {
-      kind: "replaceSnapshot",
-      snapshot: nextSnapshot,
-      replicaSnapshot: nextReplicaSnapshot,
-    },
+  return await runtimeManager.runExclusive(documentId, async () => {
+    const db = tx.dbTransaction.wrappedTransaction;
+    await acquireWorkbookMutationLock(db, documentId);
+    const state = await loadWorkbookState(db, documentId);
+    const engine = await createWorkbookEngine(documentId, snapshot, state.replicaSnapshot);
+    const nextSnapshot = engine.exportSnapshot();
+    const nextReplicaSnapshot = engine.exportReplicaSnapshot();
+    const ownerUserId = resolveOwnerUserId(state, session);
+    const result = await persistWorkbookMutation(db, documentId, {
+      previousState: state,
+      nextSnapshot,
+      nextReplicaSnapshot,
+      updatedBy: session?.userID ?? "system",
+      ownerUserId,
+      eventPayload: {
+        kind: "replaceSnapshot",
+        snapshot: nextSnapshot,
+        replicaSnapshot: nextReplicaSnapshot,
+      },
+    });
+    runtimeManager.invalidate(documentId);
+    return {
+      documentId,
+      revision: result.revision,
+      updatedAt: result.updatedAt,
+    };
   });
-  return {
-    documentId,
-    revision: result.revision,
-    updatedAt: result.updatedAt,
-  };
 }
 
 export async function handleServerMutator(
   tx: unknown,
   name: string,
   args: unknown,
+  runtimeManager: WorkbookRuntimeManager,
   session?: SessionIdentity,
 ): Promise<void> {
   const serverTx = requireServerTransaction(tx);
@@ -317,6 +340,7 @@ export async function handleServerMutator(
           kind: "applyBatch",
           batch: parsed.batch,
         },
+        runtimeManager,
         (engine) => {
           engine.applyRemoteBatch(parsed.batch);
         },
@@ -340,6 +364,7 @@ export async function handleServerMutator(
           address: parsed.address,
           value: parsed.value,
         },
+        runtimeManager,
         (engine) => {
           engine.setCellValue(parsed.sheetName, parsed.address, parsed.value);
         },
@@ -359,6 +384,7 @@ export async function handleServerMutator(
           address: parsed.address,
           formula: parsed.formula,
         },
+        runtimeManager,
         (engine) => {
           engine.setCellFormula(parsed.sheetName, parsed.address, parsed.formula);
         },
@@ -377,6 +403,7 @@ export async function handleServerMutator(
           sheetName: parsed.sheetName,
           address: parsed.address,
         },
+        runtimeManager,
         (engine) => {
           engine.clearCell(parsed.sheetName, parsed.address);
         },
@@ -394,6 +421,7 @@ export async function handleServerMutator(
           kind: "renderCommit",
           ops: parsed.ops,
         },
+        runtimeManager,
         (engine) => {
           engine.renderCommit(parsed.ops);
         },
@@ -412,6 +440,7 @@ export async function handleServerMutator(
           source: parsed.source,
           target: parsed.target,
         },
+        runtimeManager,
         (engine) => {
           engine.fillRange(parsed.source, parsed.target);
         },
@@ -430,6 +459,7 @@ export async function handleServerMutator(
           source: parsed.source,
           target: parsed.target,
         },
+        runtimeManager,
         (engine) => {
           engine.copyRange(parsed.source, parsed.target);
         },
@@ -449,6 +479,7 @@ export async function handleServerMutator(
           columnIndex: parsed.columnIndex,
           width: parsed.width,
         },
+        runtimeManager,
         (engine) => {
           engine.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
         },
@@ -468,6 +499,7 @@ export async function handleServerMutator(
           range: parsed.range,
           patch,
         },
+        runtimeManager,
         (engine) => {
           engine.setRangeStyle(parsed.range, patch);
         },
@@ -493,6 +525,7 @@ export async function handleServerMutator(
         parsed.documentId,
         serverTx,
         eventPayload,
+        runtimeManager,
         (engine) => {
           engine.clearRangeStyle(parsed.range, parsed.fields);
         },
@@ -512,6 +545,7 @@ export async function handleServerMutator(
           range: parsed.range,
           format,
         },
+        runtimeManager,
         (engine) => {
           engine.setRangeNumberFormat(parsed.range, format);
         },
@@ -529,6 +563,7 @@ export async function handleServerMutator(
           kind: "clearRangeNumberFormat",
           range: parsed.range,
         },
+        runtimeManager,
         (engine) => {
           engine.clearRangeNumberFormat(parsed.range);
         },
@@ -542,7 +577,13 @@ export async function handleServerMutator(
       if (!isWorkbookSnapshot(parsed.snapshot)) {
         throw new Error("Invalid workbook snapshot payload");
       }
-      await replaceWorkbookSnapshot(parsed.documentId, serverTx, parsed.snapshot, session);
+      await replaceWorkbookSnapshot(
+        parsed.documentId,
+        serverTx,
+        parsed.snapshot,
+        runtimeManager,
+        session,
+      );
       return;
     }
 

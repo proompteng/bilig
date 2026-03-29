@@ -1094,9 +1094,6 @@ export function SheetGridView({
               );
               onSelect(formatAddress(headerSelection.index, selectedCell.col));
               focusGrid();
-              window.requestAnimationFrame(() => {
-                ignoreNextPointerSelectionRef.current = false;
-              });
               return;
             }
             ignoreNextPointerSelectionRef.current = true;
@@ -1109,9 +1106,6 @@ export function SheetGridView({
             );
             onSelect(formatAddress(selectedCell.row, headerSelection.index));
             focusGrid();
-            window.requestAnimationFrame(() => {
-              ignoreNextPointerSelectionRef.current = false;
-            });
             return;
           }
           const pointerCell = resolvePointerCell(event.clientX, event.clientY);
@@ -1301,9 +1295,6 @@ export function SheetGridView({
             );
             onSelect(headerClickIntent.addr);
             focusGrid();
-            window.requestAnimationFrame(() => {
-              ignoreNextPointerSelectionRef.current = false;
-            });
           }}
           onGridSelectionChange={(nextSelection) => {
             const selectionPolicy = shouldSkipGridSelectionChange({

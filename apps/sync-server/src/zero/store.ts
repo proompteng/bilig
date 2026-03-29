@@ -7,6 +7,9 @@ import {
   type WorkbookEventRecord,
 } from "./events.js";
 import {
+  buildCalculationSettingsRow,
+  buildSingleCellSourceRow,
+  buildWorkbookHeaderRow,
   buildWorkbookSourceProjection,
   diffProjectionRows,
   type AxisMetadataSourceRow,
@@ -37,6 +40,12 @@ export interface Queryable {
 export interface WorkbookRuntimeState {
   snapshot: WorkbookSnapshot;
   replicaSnapshot: EngineReplicaSnapshot | null;
+  headRevision: number;
+  calculatedRevision: number;
+  ownerUserId: string;
+}
+
+export interface WorkbookRuntimeMetadata {
   headRevision: number;
   calculatedRevision: number;
   ownerUserId: string;
@@ -78,6 +87,11 @@ const WORKBOOK_SNAPSHOT_RETENTION = 5;
 const WORKBOOK_SNAPSHOT_INTERVAL = 64;
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;
+
+type FocusedCellEventPayload = Extract<
+  WorkbookEventPayload,
+  { kind: "setCellValue" | "setCellFormula" | "clearCell" }
+>;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -136,6 +150,16 @@ function workbookSnapshot(value: unknown, documentId: string): WorkbookSnapshot 
 
 function workbookReplicaSnapshot(value: unknown): EngineReplicaSnapshot | null {
   return isEngineReplicaSnapshot(value) ? value : null;
+}
+
+function isFocusedCellEventPayload(
+  payload: WorkbookEventPayload,
+): payload is FocusedCellEventPayload {
+  return (
+    payload.kind === "setCellValue" ||
+    payload.kind === "setCellFormula" ||
+    payload.kind === "clearCell"
+  );
 }
 
 function semanticSignature(value: unknown): string {
@@ -839,6 +863,28 @@ async function applySourceProjectionDiff(
   await applyFormatRangeDiff(db, previousProjection.formatRanges, nextProjection.formatRanges);
 }
 
+function buildFocusedCellRows(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  payload: FocusedCellEventPayload,
+  options: {
+    revision: number;
+    calculatedRevision: number;
+    ownerUserId: string;
+    updatedBy: string;
+    updatedAt: string;
+  },
+): readonly CellSourceRow[] {
+  const row = buildSingleCellSourceRow(
+    documentId,
+    snapshot,
+    payload.sheetName,
+    payload.address,
+    options,
+  );
+  return row ? [row] : [];
+}
+
 async function appendWorkbookEvent(db: Queryable, event: WorkbookEventRecord): Promise<void> {
   await db.query(
     `
@@ -1454,6 +1500,26 @@ export async function loadWorkbookState(
   };
 }
 
+export async function loadWorkbookRuntimeMetadata(
+  db: Queryable,
+  documentId: string,
+): Promise<WorkbookRuntimeMetadata> {
+  const result = await db.query<{
+    head_revision: number | string | null;
+    calculated_revision: number | string | null;
+    owner_user_id: string | null;
+  }>(
+    `SELECT head_revision, calculated_revision, owner_user_id FROM workbooks WHERE id = $1 LIMIT 1`,
+    [documentId],
+  );
+  const row = result.rows[0];
+  return {
+    headRevision: parseInteger(row?.head_revision),
+    calculatedRevision: parseInteger(row?.calculated_revision),
+    ownerUserId: row?.owner_user_id ?? "system",
+  };
+}
+
 export async function acquireWorkbookMutationLock(
   db: Queryable,
   documentId: string,
@@ -1468,34 +1534,69 @@ export async function persistWorkbookMutation(
 ): Promise<PersistWorkbookMutationResult> {
   const updatedAt = nowIso();
   const revision = options.previousState.headRevision + 1;
-
-  const previousProjection = buildWorkbookSourceProjection(
-    documentId,
-    options.previousState.snapshot,
-    {
-      revision: options.previousState.headRevision,
-      calculatedRevision: options.previousState.calculatedRevision,
-      ownerUserId: options.previousState.ownerUserId,
-      updatedBy: options.updatedBy,
-      updatedAt,
-    },
-  );
-  const nextProjection = buildWorkbookSourceProjection(documentId, options.nextSnapshot, {
+  const nextProjectionOptions = {
     revision,
     calculatedRevision: options.previousState.calculatedRevision,
     ownerUserId: options.ownerUserId,
     updatedBy: options.updatedBy,
     updatedAt,
-  });
+  };
+  const nextWorkbookRow = buildWorkbookHeaderRow(
+    documentId,
+    options.nextSnapshot,
+    nextProjectionOptions,
+  );
 
   await upsertWorkbookHeader(
     db,
     documentId,
-    nextProjection.workbook,
+    nextWorkbookRow,
     options.nextSnapshot,
     options.nextReplicaSnapshot,
   );
-  await applySourceProjectionDiff(db, previousProjection, nextProjection);
+  if (isFocusedCellEventPayload(options.eventPayload)) {
+    const previousCellRows = buildFocusedCellRows(
+      documentId,
+      options.previousState.snapshot,
+      options.eventPayload,
+      {
+        revision: options.previousState.headRevision,
+        calculatedRevision: options.previousState.calculatedRevision,
+        ownerUserId: options.previousState.ownerUserId,
+        updatedBy: options.updatedBy,
+        updatedAt,
+      },
+    );
+    const nextCellRows = buildFocusedCellRows(
+      documentId,
+      options.nextSnapshot,
+      options.eventPayload,
+      nextProjectionOptions,
+    );
+    await applyCalculationSettings(
+      db,
+      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    );
+    await applyCellDiff(db, previousCellRows, nextCellRows);
+  } else {
+    const previousProjection = buildWorkbookSourceProjection(
+      documentId,
+      options.previousState.snapshot,
+      {
+        revision: options.previousState.headRevision,
+        calculatedRevision: options.previousState.calculatedRevision,
+        ownerUserId: options.previousState.ownerUserId,
+        updatedBy: options.updatedBy,
+        updatedAt,
+      },
+    );
+    const nextProjection = buildWorkbookSourceProjection(
+      documentId,
+      options.nextSnapshot,
+      nextProjectionOptions,
+    );
+    await applySourceProjectionDiff(db, previousProjection, nextProjection);
+  }
 
   await appendWorkbookEvent(db, {
     workbookId: documentId,

@@ -446,6 +446,10 @@ function createSessionDocumentId(defaultDocumentId: string): string {
   return `${defaultDocumentId}:${Math.random().toString(36).slice(2)}`;
 }
 
+function shouldUseEphemeralDefaultDocument(): boolean {
+  return typeof navigator !== "undefined" && navigator.webdriver;
+}
+
 function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig {
   const searchParams = new URLSearchParams(window.location.search);
   const explicitDocumentId = searchParams.get("document");
@@ -464,11 +468,12 @@ function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig {
   }
 
   return {
-    documentId: baseUrl
-      ? createSessionDocumentId(config.defaultDocumentId)
-      : config.defaultDocumentId,
+    documentId:
+      baseUrl || shouldUseEphemeralDefaultDocument()
+        ? createSessionDocumentId(config.defaultDocumentId)
+        : config.defaultDocumentId,
     baseUrl,
-    persistState: baseUrl ? false : config.persistState,
+    persistState: baseUrl || shouldUseEphemeralDefaultDocument() ? false : config.persistState,
     zeroViewportBridge,
   };
 }
@@ -790,7 +795,7 @@ function AxSideRail({
   return (
     <aside
       aria-label="AX side pane"
-      className="flex min-h-0 w-full flex-col border-t border-[#dadce0] bg-white lg:w-[320px] lg:border-l lg:border-t-0"
+      className="pointer-events-none absolute inset-y-0 right-0 hidden w-[320px] flex-col border-l border-[#dadce0] bg-white/95 backdrop-blur md:flex"
       data-testid="ax-rail"
       role="complementary"
     >
@@ -2176,7 +2181,7 @@ export function WorkerWorkbookApp({ config }: { config: BiligRuntimeConfig }) {
           Starting workbook runtime...
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 flex-1">
         <div className="min-h-0 min-w-0 flex-1">
           {loading || !workerHandle || !runtimeState || bridgeLoading ? null : (
             <WorkbookView
