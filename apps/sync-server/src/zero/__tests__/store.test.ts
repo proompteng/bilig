@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkbookSnapshot } from "@bilig/protocol";
+import { SpreadsheetEngine } from "@bilig/core";
 import {
   createEmptyWorkbookSnapshot,
   persistWorkbookMutation,
@@ -34,6 +35,17 @@ function createRuntimeState(snapshot: WorkbookSnapshot): WorkbookRuntimeState {
     calculatedRevision: 0,
     ownerUserId: "owner-1",
   };
+}
+
+async function createSnapshot(
+  workbookName: string,
+  apply: (engine: SpreadsheetEngine) => void | Promise<void>,
+): Promise<WorkbookSnapshot> {
+  const engine = new SpreadsheetEngine({ workbookName });
+  await engine.ready();
+  engine.createSheet("Sheet1");
+  await apply(engine);
+  return engine.exportSnapshot();
 }
 
 describe("persistWorkbookMutation", () => {
@@ -112,5 +124,105 @@ describe("persistWorkbookMutation", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("skips recalc jobs for style-only edits when the workbook is already calculated", async () => {
+    const previousSnapshot = createEmptyWorkbookSnapshot("doc-1");
+    const nextSnapshot = await createSnapshot("doc-1", (engine) => {
+      engine.setRangeStyle(
+        { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+        { fill: { backgroundColor: "#abcdef" } },
+      );
+    });
+    const db = createRecordingDb();
+
+    const result = await persistWorkbookMutation(db, "doc-1", {
+      previousState: createRuntimeState(previousSnapshot),
+      nextSnapshot,
+      nextReplicaSnapshot: null,
+      updatedBy: "user-1",
+      ownerUserId: "owner-1",
+      eventPayload: {
+        kind: "setRangeStyle",
+        range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+        patch: { fill: { backgroundColor: "#abcdef" } },
+      },
+    });
+
+    expect(result.calculatedRevision).toBe(result.revision);
+    expect(result.recalcJobId).toBeNull();
+    expect(db.statements.some((statement) => statement.includes("INSERT INTO cell_styles"))).toBe(
+      true,
+    );
+    expect(
+      db.statements.some((statement) => statement.includes("INSERT INTO sheet_style_ranges")),
+    ).toBe(true);
+    expect(db.statements.some((statement) => statement.includes("INSERT INTO recalc_job"))).toBe(
+      false,
+    );
+  });
+
+  it("keeps recalc queued for style-only edits when an older value edit is still pending", async () => {
+    const previousSnapshot = createEmptyWorkbookSnapshot("doc-1");
+    const nextSnapshot = await createSnapshot("doc-1", (engine) => {
+      engine.setRangeStyle(
+        { sheetName: "Sheet1", startAddress: "B2", endAddress: "B2" },
+        { fill: { backgroundColor: "#abcdef" } },
+      );
+    });
+    const db = createRecordingDb();
+
+    const result = await persistWorkbookMutation(db, "doc-1", {
+      previousState: {
+        ...createRuntimeState(previousSnapshot),
+        headRevision: 5,
+        calculatedRevision: 3,
+      },
+      nextSnapshot,
+      nextReplicaSnapshot: null,
+      updatedBy: "user-1",
+      ownerUserId: "owner-1",
+      eventPayload: {
+        kind: "setRangeStyle",
+        range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "B2" },
+        patch: { fill: { backgroundColor: "#abcdef" } },
+      },
+    });
+
+    expect(result.calculatedRevision).toBe(3);
+    expect(result.recalcJobId).toBe("doc-1:recalc:6");
+    expect(db.statements.some((statement) => statement.includes("INSERT INTO recalc_job"))).toBe(
+      true,
+    );
+  });
+
+  it("persists column-width edits through the column metadata hot path without enqueuing recalc", async () => {
+    const previousSnapshot = createEmptyWorkbookSnapshot("doc-1");
+    const nextSnapshot = await createSnapshot("doc-1", (engine) => {
+      engine.updateColumnMetadata("Sheet1", 2, 1, 180, null);
+    });
+    const db = createRecordingDb();
+
+    const result = await persistWorkbookMutation(db, "doc-1", {
+      previousState: createRuntimeState(previousSnapshot),
+      nextSnapshot,
+      nextReplicaSnapshot: null,
+      updatedBy: "user-1",
+      ownerUserId: "owner-1",
+      eventPayload: {
+        kind: "updateColumnWidth",
+        sheetName: "Sheet1",
+        columnIndex: 2,
+        width: 180,
+      },
+    });
+
+    expect(result.recalcJobId).toBeNull();
+    expect(
+      db.statements.some((statement) => statement.includes("INSERT INTO column_metadata")),
+    ).toBe(true);
+    expect(db.statements.some((statement) => statement.includes("INSERT INTO recalc_job"))).toBe(
+      false,
+    );
   });
 });

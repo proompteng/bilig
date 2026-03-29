@@ -270,7 +270,7 @@ async function commitWorkbookMutation(
         snapshot: nextSnapshot,
         replicaSnapshot: nextReplicaSnapshot,
         headRevision: result.revision,
-        calculatedRevision: state.calculatedRevision,
+        calculatedRevision: result.calculatedRevision,
         ownerUserId,
       });
       return {

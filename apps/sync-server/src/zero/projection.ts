@@ -264,6 +264,38 @@ function buildCellSourceRow(
   };
 }
 
+function findSheet(snapshot: WorkbookSnapshot, sheetName: string) {
+  return snapshot.sheets.find((sheet) => sheet.name === sheetName);
+}
+
+function buildStyleSourceRow(
+  documentId: string,
+  style: NonNullable<NonNullable<WorkbookSnapshot["workbook"]["metadata"]>["styles"]>[number],
+  options: WorkbookProjectionOptions,
+): StyleSourceRow {
+  return {
+    workbookId: documentId,
+    id: style.id,
+    recordJSON: style,
+    hash: JSON.stringify(style),
+    createdAt: options.updatedAt,
+  };
+}
+
+function buildNumberFormatSourceRow(
+  documentId: string,
+  format: NonNullable<NonNullable<WorkbookSnapshot["workbook"]["metadata"]>["formats"]>[number],
+  options: WorkbookProjectionOptions,
+): NumberFormatSourceRow {
+  return {
+    workbookId: documentId,
+    id: format.id,
+    code: format.code,
+    kind: format.kind,
+    createdAt: options.updatedAt,
+  };
+}
+
 export function buildSingleCellSourceRow(
   documentId: string,
   snapshot: WorkbookSnapshot,
@@ -277,6 +309,104 @@ export function buildSingleCellSourceRow(
     return null;
   }
   return buildCellSourceRow(documentId, sheetName, cell, options);
+}
+
+export function buildSheetColumnMetadataRows(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  sheetName: string,
+  options: WorkbookProjectionOptions,
+): AxisMetadataSourceRow[] {
+  const rows: AxisMetadataSourceRow[] = [];
+  for (const entry of findSheet(snapshot, sheetName)?.metadata?.columnMetadata ?? []) {
+    rows.push({
+      workbookId: documentId,
+      sheetName,
+      startIndex: entry.start,
+      count: entry.count,
+      size: entry.size ?? null,
+      hidden: entry.hidden ?? null,
+      sourceRevision: options.revision,
+      updatedAt: options.updatedAt,
+    });
+  }
+  return rows;
+}
+
+export function buildWorkbookStyleRows(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  options: WorkbookProjectionOptions,
+): StyleSourceRow[] {
+  const rows: StyleSourceRow[] = [];
+  for (const style of snapshot.workbook.metadata?.styles ?? []) {
+    rows.push(buildStyleSourceRow(documentId, style, options));
+  }
+  return rows;
+}
+
+export function buildSheetStyleRangeRows(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  sheetName: string,
+  options: WorkbookProjectionOptions,
+): StyleRangeSourceRow[] {
+  const rows: StyleRangeSourceRow[] = [];
+  for (const entry of findSheet(snapshot, sheetName)?.metadata?.styleRanges ?? []) {
+    const start = parseCellAddress(entry.range.startAddress, sheetName);
+    const end = parseCellAddress(entry.range.endAddress, sheetName);
+    rows.push({
+      id: rangeId("style-range", sheetName, start.row, start.col, end.row, end.col),
+      workbookId: documentId,
+      sheetName,
+      startRow: start.row,
+      endRow: end.row,
+      startCol: start.col,
+      endCol: end.col,
+      styleId: entry.styleId,
+      sourceRevision: options.revision,
+      updatedAt: options.updatedAt,
+    });
+  }
+  return rows;
+}
+
+export function buildWorkbookNumberFormatRows(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  options: WorkbookProjectionOptions,
+): NumberFormatSourceRow[] {
+  const rows: NumberFormatSourceRow[] = [];
+  for (const format of snapshot.workbook.metadata?.formats ?? []) {
+    rows.push(buildNumberFormatSourceRow(documentId, format, options));
+  }
+  return rows;
+}
+
+export function buildSheetFormatRangeRows(
+  documentId: string,
+  snapshot: WorkbookSnapshot,
+  sheetName: string,
+  options: WorkbookProjectionOptions,
+): FormatRangeSourceRow[] {
+  const rows: FormatRangeSourceRow[] = [];
+  for (const entry of findSheet(snapshot, sheetName)?.metadata?.formatRanges ?? []) {
+    const start = parseCellAddress(entry.range.startAddress, sheetName);
+    const end = parseCellAddress(entry.range.endAddress, sheetName);
+    rows.push({
+      id: rangeId("format-range", sheetName, start.row, start.col, end.row, end.col),
+      workbookId: documentId,
+      sheetName,
+      startRow: start.row,
+      endRow: end.row,
+      startCol: start.col,
+      endCol: end.col,
+      formatId: entry.formatId,
+      sourceRevision: options.revision,
+      updatedAt: options.updatedAt,
+    });
+  }
+  return rows;
 }
 
 export function buildWorkbookSourceProjection(
@@ -370,25 +500,8 @@ export function buildWorkbookSourceProjection(
     }
   }
 
-  for (const style of snapshot.workbook.metadata?.styles ?? []) {
-    styles.push({
-      workbookId: documentId,
-      id: style.id,
-      recordJSON: style,
-      hash: JSON.stringify(style),
-      createdAt: options.updatedAt,
-    });
-  }
-
-  for (const format of snapshot.workbook.metadata?.formats ?? []) {
-    numberFormats.push({
-      workbookId: documentId,
-      id: format.id,
-      code: format.code,
-      kind: format.kind,
-      createdAt: options.updatedAt,
-    });
-  }
+  styles.push(...buildWorkbookStyleRows(documentId, snapshot, options));
+  numberFormats.push(...buildWorkbookNumberFormatRows(documentId, snapshot, options));
 
   for (const entry of snapshot.workbook.metadata?.definedNames ?? []) {
     definedNames.push({

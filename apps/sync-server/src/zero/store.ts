@@ -8,9 +8,14 @@ import {
 } from "./events.js";
 import {
   buildCalculationSettingsRow,
+  buildSheetColumnMetadataRows,
+  buildSheetFormatRangeRows,
+  buildSheetStyleRangeRows,
   buildSingleCellSourceRow,
   buildWorkbookHeaderRow,
+  buildWorkbookNumberFormatRows,
   buildWorkbookSourceProjection,
+  buildWorkbookStyleRows,
   diffProjectionRows,
   type AxisMetadataSourceRow,
   type CellEvalRow,
@@ -63,8 +68,9 @@ export interface PersistWorkbookMutationOptions {
 
 export interface PersistWorkbookMutationResult {
   revision: number;
+  calculatedRevision: number;
   updatedAt: string;
-  recalcJobId: string;
+  recalcJobId: string | null;
 }
 
 export interface RecalcJobLease {
@@ -92,6 +98,18 @@ type FocusedCellEventPayload = Extract<
   WorkbookEventPayload,
   { kind: "setCellValue" | "setCellFormula" | "clearCell" }
 >;
+
+type StyleRangeEventPayload = Extract<
+  WorkbookEventPayload,
+  { kind: "setRangeStyle" | "clearRangeStyle" }
+>;
+
+type NumberFormatRangeEventPayload = Extract<
+  WorkbookEventPayload,
+  { kind: "setRangeNumberFormat" | "clearRangeNumberFormat" }
+>;
+
+type ColumnMetadataEventPayload = Extract<WorkbookEventPayload, { kind: "updateColumnWidth" }>;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -159,6 +177,34 @@ function isFocusedCellEventPayload(
     payload.kind === "setCellValue" ||
     payload.kind === "setCellFormula" ||
     payload.kind === "clearCell"
+  );
+}
+
+function isStyleRangeEventPayload(
+  payload: WorkbookEventPayload,
+): payload is StyleRangeEventPayload {
+  return payload.kind === "setRangeStyle" || payload.kind === "clearRangeStyle";
+}
+
+function isNumberFormatRangeEventPayload(
+  payload: WorkbookEventPayload,
+): payload is NumberFormatRangeEventPayload {
+  return payload.kind === "setRangeNumberFormat" || payload.kind === "clearRangeNumberFormat";
+}
+
+function isColumnMetadataEventPayload(
+  payload: WorkbookEventPayload,
+): payload is ColumnMetadataEventPayload {
+  return payload.kind === "updateColumnWidth";
+}
+
+function eventRequiresRecalc(payload: WorkbookEventPayload): boolean {
+  return !(
+    payload.kind === "setRangeStyle" ||
+    payload.kind === "clearRangeStyle" ||
+    payload.kind === "setRangeNumberFormat" ||
+    payload.kind === "clearRangeNumberFormat" ||
+    payload.kind === "updateColumnWidth"
   );
 }
 
@@ -1534,10 +1580,20 @@ export async function persistWorkbookMutation(
 ): Promise<PersistWorkbookMutationResult> {
   const updatedAt = nowIso();
   const revision = options.previousState.headRevision + 1;
+  const needsRecalc =
+    options.previousState.calculatedRevision < options.previousState.headRevision ||
+    eventRequiresRecalc(options.eventPayload);
   const nextProjectionOptions = {
     revision,
-    calculatedRevision: options.previousState.calculatedRevision,
+    calculatedRevision: needsRecalc ? options.previousState.calculatedRevision : revision,
     ownerUserId: options.ownerUserId,
+    updatedBy: options.updatedBy,
+    updatedAt,
+  };
+  const previousProjectionOptions = {
+    revision: options.previousState.headRevision,
+    calculatedRevision: options.previousState.calculatedRevision,
+    ownerUserId: options.previousState.ownerUserId,
     updatedBy: options.updatedBy,
     updatedAt,
   };
@@ -1559,13 +1615,7 @@ export async function persistWorkbookMutation(
       documentId,
       options.previousState.snapshot,
       options.eventPayload,
-      {
-        revision: options.previousState.headRevision,
-        calculatedRevision: options.previousState.calculatedRevision,
-        ownerUserId: options.previousState.ownerUserId,
-        updatedBy: options.updatedBy,
-        updatedAt,
-      },
+      previousProjectionOptions,
     );
     const nextCellRows = buildFocusedCellRows(
       documentId,
@@ -1578,17 +1628,86 @@ export async function persistWorkbookMutation(
       buildCalculationSettingsRow(documentId, options.nextSnapshot),
     );
     await applyCellDiff(db, previousCellRows, nextCellRows);
+  } else if (isStyleRangeEventPayload(options.eventPayload)) {
+    await applyCalculationSettings(
+      db,
+      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    );
+    await applyStyleDiff(
+      db,
+      buildWorkbookStyleRows(documentId, options.previousState.snapshot, previousProjectionOptions),
+      buildWorkbookStyleRows(documentId, options.nextSnapshot, nextProjectionOptions),
+    );
+    await applyStyleRangeDiff(
+      db,
+      buildSheetStyleRangeRows(
+        documentId,
+        options.previousState.snapshot,
+        options.eventPayload.range.sheetName,
+        previousProjectionOptions,
+      ),
+      buildSheetStyleRangeRows(
+        documentId,
+        options.nextSnapshot,
+        options.eventPayload.range.sheetName,
+        nextProjectionOptions,
+      ),
+    );
+  } else if (isNumberFormatRangeEventPayload(options.eventPayload)) {
+    await applyCalculationSettings(
+      db,
+      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    );
+    await applyNumberFormatDiff(
+      db,
+      buildWorkbookNumberFormatRows(
+        documentId,
+        options.previousState.snapshot,
+        previousProjectionOptions,
+      ),
+      buildWorkbookNumberFormatRows(documentId, options.nextSnapshot, nextProjectionOptions),
+    );
+    await applyFormatRangeDiff(
+      db,
+      buildSheetFormatRangeRows(
+        documentId,
+        options.previousState.snapshot,
+        options.eventPayload.range.sheetName,
+        previousProjectionOptions,
+      ),
+      buildSheetFormatRangeRows(
+        documentId,
+        options.nextSnapshot,
+        options.eventPayload.range.sheetName,
+        nextProjectionOptions,
+      ),
+    );
+  } else if (isColumnMetadataEventPayload(options.eventPayload)) {
+    await applyCalculationSettings(
+      db,
+      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    );
+    await applyAxisMetadataDiff(
+      db,
+      "column_metadata",
+      buildSheetColumnMetadataRows(
+        documentId,
+        options.previousState.snapshot,
+        options.eventPayload.sheetName,
+        previousProjectionOptions,
+      ),
+      buildSheetColumnMetadataRows(
+        documentId,
+        options.nextSnapshot,
+        options.eventPayload.sheetName,
+        nextProjectionOptions,
+      ),
+    );
   } else {
     const previousProjection = buildWorkbookSourceProjection(
       documentId,
       options.previousState.snapshot,
-      {
-        revision: options.previousState.headRevision,
-        calculatedRevision: options.previousState.calculatedRevision,
-        ownerUserId: options.previousState.ownerUserId,
-        updatedBy: options.updatedBy,
-        updatedAt,
-      },
+      previousProjectionOptions,
     );
     const nextProjection = buildWorkbookSourceProjection(
       documentId,
@@ -1608,17 +1727,20 @@ export async function persistWorkbookMutation(
   });
 
   await supersedePendingRecalcJobs(db, documentId, revision);
-  const recalcJobId = await enqueueRecalcJob(
-    db,
-    documentId,
-    options.previousState.calculatedRevision,
-    revision,
-    deriveDirtyRegions(options.eventPayload),
-    updatedAt,
-  );
+  const recalcJobId = needsRecalc
+    ? await enqueueRecalcJob(
+        db,
+        documentId,
+        options.previousState.calculatedRevision,
+        revision,
+        eventRequiresRecalc(options.eventPayload) ? deriveDirtyRegions(options.eventPayload) : null,
+        updatedAt,
+      )
+    : null;
 
   return {
     revision,
+    calculatedRevision: nextProjectionOptions.calculatedRevision,
     updatedAt,
     recalcJobId,
   };
