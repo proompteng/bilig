@@ -22,6 +22,7 @@ COPY apps ./apps
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
+RUN pnpm --filter @bilig/local-server deploy --prod --legacy /out/local-server
 RUN pnpm --filter @bilig/sync-server deploy --prod --legacy /out/sync-server
 
 FROM nginx:1.29-alpine AS web-runtime
@@ -42,3 +43,15 @@ COPY --from=build /out/sync-server /app
 EXPOSE 4321
 
 CMD ["node", "dist/index.js"]
+
+FROM node:24-bookworm-slim AS local-runtime
+
+ENV NODE_ENV="production"
+
+WORKDIR /app
+
+COPY --from=build /out/local-server /app
+
+EXPOSE 4381
+
+CMD ["node", "dist/src/index.js"]

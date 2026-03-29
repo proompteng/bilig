@@ -8,6 +8,17 @@ import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js
 
 function noop(): void {}
 
+function applyCorsHeaders(reply: FastifyReply): void {
+  const allowOrigin = process.env["BILIG_CORS_ORIGIN"] ?? "*";
+  reply.header("access-control-allow-origin", allowOrigin);
+  reply.header("access-control-allow-methods", "GET,POST,OPTIONS");
+  reply.header("access-control-allow-headers", "content-type");
+  reply.header("access-control-expose-headers", "x-bilig-snapshot-cursor");
+  if (allowOrigin !== "*") {
+    reply.header("vary", "origin");
+  }
+}
+
 export interface LocalServerOptions {
   sessionManager?: LocalWorkbookSessionManager;
   logger?: boolean;
@@ -26,6 +37,13 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   const sessionManager = options.sessionManager ?? new LocalWorkbookSessionManager();
   const app = Fastify({ logger: options.logger ?? true });
   app.register(websocket);
+
+  app.addHook("onRequest", async (request, reply) => {
+    applyCorsHeaders(reply);
+    if (request.method === "OPTIONS") {
+      return reply.code(204).send();
+    }
+  });
 
   app.addContentTypeParser(
     "application/octet-stream",

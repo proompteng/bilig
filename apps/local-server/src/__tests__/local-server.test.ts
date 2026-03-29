@@ -161,6 +161,19 @@ describe("local-server", () => {
     ]);
   });
 
+  it("adds CORS headers for browser access to document snapshots", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/documents/cors-doc/snapshot/latest",
+      headers: {
+        origin: "http://localhost:3000",
+      },
+    });
+
+    expect(response.headers["access-control-allow-origin"]).toBe("*");
+    expect(response.headers["access-control-expose-headers"]).toBe("x-bilig-snapshot-cursor");
+  });
+
   it("rejects streaming subscriptions over the non-streaming HTTP agent endpoint", async () => {
     const openResponse = await app.inject({
       method: "POST",
