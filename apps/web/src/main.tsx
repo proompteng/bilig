@@ -34,7 +34,8 @@ function BootstrapRoot() {
       },
       loadSession: async (config: BootstrapConfig) =>
         await loadRuntimeSession(config.runtimeConfig.baseUrl),
-      shouldLoadSession: (config: BootstrapConfig) => config.runtimeConfig.zeroViewportBridge,
+      shouldLoadSession: (config: BootstrapConfig) =>
+        !config.runtimeConfig.baseUrl && config.runtimeConfig.zeroViewportBridge,
     },
   });
   const snapshot = useSelector(actorRef, (value) => value);
@@ -68,7 +69,7 @@ function BootstrapRoot() {
     );
   }
 
-  if (!config.runtimeConfig.zeroViewportBridge) {
+  if (config.runtimeConfig.baseUrl || !config.runtimeConfig.zeroViewportBridge) {
     return <ZeroDisabledApp config={config.rawConfig} />;
   }
 

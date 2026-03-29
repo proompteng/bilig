@@ -27,8 +27,9 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
   const baseUrl = searchParams.get("server");
   const bridgeOverride = searchParams.get("zeroViewportBridge");
   const ephemeralDocument = shouldUseEphemeralDefaultDocument();
-  const zeroViewportBridge =
-    bridgeOverride === "off"
+  const zeroViewportBridge = baseUrl
+    ? false
+    : bridgeOverride === "off"
       ? false
       : bridgeOverride === "on"
         ? true

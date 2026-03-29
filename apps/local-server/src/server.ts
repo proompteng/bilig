@@ -20,12 +20,34 @@ import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js
 
 function noop(): void {}
 
-function applyCorsHeaders(reply: FastifyReply, allowOrigin: string): void {
-  reply.header("access-control-allow-origin", allowOrigin);
+function resolveRequestOrigin(request: FastifyRequest): string | null {
+  const rawOrigin = request.headers.origin;
+  if (typeof rawOrigin === "string" && rawOrigin.trim().length > 0) {
+    return rawOrigin;
+  }
+  if (Array.isArray(rawOrigin)) {
+    const firstOrigin = rawOrigin.find(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
+    return firstOrigin ?? null;
+  }
+  return null;
+}
+
+function applyCorsHeaders(
+  reply: FastifyReply,
+  allowOrigin: string,
+  requestOrigin: string | null,
+): void {
+  const resolvedOrigin = allowOrigin === "*" && requestOrigin ? requestOrigin : allowOrigin;
+  const shouldVaryOrigin = allowOrigin !== "*" || requestOrigin !== null;
+
+  reply.header("access-control-allow-origin", resolvedOrigin);
   reply.header("access-control-allow-methods", "GET,POST,OPTIONS");
   reply.header("access-control-allow-headers", "content-type");
   reply.header("access-control-expose-headers", "x-bilig-snapshot-cursor");
-  if (allowOrigin !== "*") {
+  reply.header("access-control-allow-credentials", "true");
+  if (shouldVaryOrigin) {
     reply.header("vary", "origin");
   }
 }
@@ -45,7 +67,7 @@ export function createLocalServer(options: LocalServerOptions = {}) {
   app.register(websocket);
 
   app.addHook("onRequest", async (request, reply) => {
-    applyCorsHeaders(reply, allowOrigin);
+    applyCorsHeaders(reply, allowOrigin, resolveRequestOrigin(request));
     if (request.method === "OPTIONS") {
       return reply.code(204).send();
     }

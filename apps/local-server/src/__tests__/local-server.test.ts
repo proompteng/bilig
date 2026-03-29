@@ -170,8 +170,10 @@ describe("local-server", () => {
       },
     });
 
-    expect(response.headers["access-control-allow-origin"]).toBe("*");
+    expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
     expect(response.headers["access-control-expose-headers"]).toBe("x-bilig-snapshot-cursor");
+    expect(response.headers["vary"]).toBe("origin");
   });
 
   it("rejects streaming subscriptions over the non-streaming HTTP agent endpoint", async () => {
