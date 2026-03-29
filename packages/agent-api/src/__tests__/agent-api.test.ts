@@ -73,8 +73,7 @@ describe("agent api", () => {
         workbookName: "report.xlsx",
         sheetNames: ["Sheet1"],
         serverUrl: "http://127.0.0.1:4381",
-        browserUrl:
-          "http://127.0.0.1:4173/?document=xlsx%3Aabc123&server=http%3A%2F%2F127.0.0.1%3A4381",
+        browserUrl: "http://127.0.0.1:4173/?document=xlsx%3Aabc123",
         warnings: [],
       },
     };

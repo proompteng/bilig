@@ -1,19 +1,15 @@
 #!/usr/bin/env bun
 
 const textDecoder = new TextDecoder();
+const playwrightArgs = process.argv.slice(2);
 const browserStack = process.env["BILIG_BROWSER_STACK"] ?? "compose";
-const composeFile =
-  process.env["BILIG_E2E_COMPOSE_FILE"] ??
-  (browserStack === "compose-full" ? "compose.yaml" : "compose.e2e.yml");
+const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
 const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
-const e2eLocalServerPort = process.env["BILIG_E2E_LOCAL_SERVER_PORT"] ?? "4382";
 const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
 const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
 const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
-const e2eLocalServerUrl =
-  process.env["BILIG_E2E_LOCAL_SERVER_URL"] ?? `http://127.0.0.1:${e2eLocalServerPort}`;
 const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
 
@@ -148,7 +144,6 @@ function runPlaywright(args: string[]): void {
       ...process.env,
       BILIG_BROWSER_STACK: browserStack,
       BILIG_E2E_BASE_URL: e2eBaseUrl,
-      BILIG_E2E_LOCAL_SERVER_URL: e2eLocalServerUrl,
     },
   });
   if (result.exitCode !== 0) {
@@ -187,7 +182,6 @@ function runDockerCompose(args: string[], env = process.env): void {
       env: {
         ...env,
         BILIG_E2E_WEB_PORT: e2eWebPort,
-        BILIG_E2E_LOCAL_SERVER_PORT: e2eLocalServerPort,
         BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
         BILIG_E2E_ZERO_PORT: e2eZeroPort,
         BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
@@ -202,10 +196,6 @@ function runDockerCompose(args: string[], env = process.env): void {
 }
 
 function collectComposeLogs(): string {
-  const services =
-    browserStack === "compose-full"
-      ? ["web", "sync-server", "zero-cache", "postgres"]
-      : ["web", "local-server"];
   const result = Bun.spawnSync(
     [
       "docker",
@@ -216,7 +206,10 @@ function collectComposeLogs(): string {
       composeProject,
       "logs",
       "--no-color",
-      ...services,
+      "web",
+      "sync-server",
+      "zero-cache",
+      "postgres",
     ],
     {
       stdin: "ignore",
@@ -232,19 +225,11 @@ async function runComposePlaywright(): Promise<void> {
     throw new Error("docker is required for compose-based browser tests");
   }
   terminatePreviewServers();
-  runDockerCompose(
-    browserStack === "compose-full"
-      ? ["up", "-d", "--build"]
-      : ["up", "-d", "--build", "web", "local-server"],
-  );
+  runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
   try {
     await waitForHttp(`${e2eBaseUrl}/healthz`);
-    if (browserStack === "compose-full") {
-      await waitForHttp(`${e2eSyncServerUrl}/healthz`);
-    } else {
-      await waitForHttp(`${e2eLocalServerUrl}/healthz`);
-    }
-    runPlaywright([]);
+    await waitForHttp(`${e2eSyncServerUrl}/healthz`);
+    runPlaywright(playwrightArgs);
   } catch (error) {
     const logs = collectComposeLogs();
     throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`, {
@@ -255,10 +240,10 @@ async function runComposePlaywright(): Promise<void> {
   }
 }
 
-if (browserStack === "compose" || browserStack === "compose-full") {
+if (browserStack === "compose") {
   await runComposePlaywright();
 } else {
   terminatePreviewServers();
-  runPlaywright([]);
+  runPlaywright(playwrightArgs);
   terminatePreviewServers();
 }

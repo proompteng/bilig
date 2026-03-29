@@ -558,18 +558,20 @@ function getRangeCellCount(range: CellRangeRef): number {
   return (endRow - startRow + 1) * (endCol - startCol + 1);
 }
 
-function formatSyncStateLabel(state: string): string {
+function formatConnectionStateLabel(state: ZeroConnectionState["name"]): string {
   switch (state) {
-    case "live":
+    case "connected":
       return "Live";
-    case "syncing":
-      return "Syncing";
-    case "local-only":
-      return "Local";
-    case "behind":
-      return "Behind";
-    case "reconnecting":
-      return "Reconnecting";
+    case "connecting":
+      return "Connecting";
+    case "disconnected":
+      return "Disconnected";
+    case "needs-auth":
+      return "Needs auth";
+    case "error":
+      return "Error";
+    case "closed":
+      return "Closed";
     default:
       return state;
   }
@@ -972,24 +974,17 @@ function ColorPaletteButton({
   );
 }
 
-const DISABLED_CONNECTION_STATE: ZeroConnectionState = {
-  name: "disconnected",
-  reason: "Zero disabled for local runtime",
-};
-
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
 export function WorkerWorkbookApp(props: {
   config: BiligRuntimeConfig;
-  connectionState?: ZeroConnectionState;
-  zero?: ZeroClient | null;
+  connectionState: ZeroConnectionState;
+  zero: ZeroClient;
 }) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config]);
   const runtimeKey = [
     runtimeConfig.documentId,
-    runtimeConfig.baseUrl ?? "local",
     runtimeConfig.persistState ? "persist" : "memory",
-    runtimeConfig.zeroViewportBridge ? "zero" : "worker",
   ].join("|");
 
   return (
@@ -1004,23 +999,20 @@ export function WorkerWorkbookApp(props: {
 
 function WorkerWorkbookAppInner({
   runtimeConfig,
-  connectionState: connectionStateProp,
-  zero = null,
+  connectionState,
+  zero,
 }: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
-  connectionState?: ZeroConnectionState | undefined;
-  zero?: ZeroClient | null | undefined;
+  connectionState: ZeroConnectionState;
+  zero: ZeroClient;
 }) {
   const documentId = runtimeConfig.documentId;
-  const connectionState = connectionStateProp ?? DISABLED_CONNECTION_STATE;
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const runtimeActorRef = useActorRef(workerRuntimeMachine, {
     input: {
       documentId,
       replicaId,
-      baseUrl: runtimeConfig.baseUrl,
       persistState: runtimeConfig.persistState,
-      zeroViewportBridge: runtimeConfig.zeroViewportBridge,
       zero,
       initialSelection: {
         sheetName: "Sheet1",
@@ -1052,8 +1044,7 @@ function WorkerWorkbookAppInner({
   const editorValueRef = useRef(editorValue);
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
-  const zeroRef = useRef<ZeroClient | null>(zero);
-  const zeroReadyWaitersRef = useRef(new Set<(client: ZeroClient) => void>());
+  const zeroRef = useRef<ZeroClient>(zero);
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -1082,20 +1073,10 @@ function WorkerWorkbookAppInner({
 
   useEffect(() => {
     zeroRef.current = zero;
-    if (!zero) {
-      return;
-    }
-    for (const notifyReady of zeroReadyWaitersRef.current) {
-      notifyReady(zero);
-    }
-    zeroReadyWaitersRef.current.clear();
   }, [zero]);
 
   const writesAllowed =
-    Boolean(runtimeConfig.baseUrl) ||
-    !runtimeConfig.zeroViewportBridge ||
-    connectionState.name === "connected" ||
-    connectionState.name === "connecting";
+    connectionState.name === "connected" || connectionState.name === "connecting";
 
   const invokeWorker = useCallback(async (method: string, ...args: unknown[]): Promise<unknown> => {
     const active = workerHandleRef.current;
@@ -1103,27 +1084,6 @@ function WorkerWorkbookAppInner({
       throw new Error("Worker runtime is not ready");
     }
     return await active.client.invoke(method, ...args);
-  }, []);
-
-  const waitForZeroClient = useCallback(async (): Promise<ZeroClient> => {
-    const readyClient = zeroRef.current;
-    if (readyClient) {
-      return readyClient;
-    }
-    return await new Promise<ZeroClient>((resolve, reject) => {
-      const timeoutId = window.setTimeout(() => {
-        zeroReadyWaitersRef.current.delete(handleReady);
-        reject(new Error("Zero client is not ready"));
-      }, 2_000);
-
-      const handleReady = (client: ZeroClient) => {
-        window.clearTimeout(timeoutId);
-        zeroReadyWaitersRef.current.delete(handleReady);
-        resolve(client);
-      };
-
-      zeroReadyWaitersRef.current.add(handleReady);
-    });
   }, []);
 
   const reportRuntimeError = useCallback(
@@ -1136,35 +1096,25 @@ function WorkerWorkbookAppInner({
     [runtimeActorRef],
   );
 
-  const runZeroMutation = useCallback(
-    async (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
-      if (runtimeConfig.baseUrl || !runtimeConfig.zeroViewportBridge) {
-        return null;
-      }
-      const zeroClient = await waitForZeroClient();
-      const result = zeroClient.mutate(mutation);
-      const clientResult = await result.client;
-      if (
-        typeof clientResult === "object" &&
-        clientResult !== null &&
-        "type" in clientResult &&
-        clientResult.type === "error"
-      ) {
-        const error = clientResult.error;
-        throw error instanceof Error ? error : new Error(toErrorMessage(error));
-      }
-      return result;
-    },
-    [runtimeConfig.baseUrl, runtimeConfig.zeroViewportBridge, waitForZeroClient],
-  );
+  const runZeroMutation = useCallback(async (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
+    const result = zeroRef.current.mutate(mutation);
+    const clientResult = await result.client;
+    if (
+      typeof clientResult === "object" &&
+      clientResult !== null &&
+      "type" in clientResult &&
+      clientResult.type === "error"
+    ) {
+      const error = clientResult.error;
+      throw error instanceof Error ? error : new Error(toErrorMessage(error));
+    }
+    return result;
+  }, []);
 
   const invokeMutation = useCallback(
     async (method: string, ...args: unknown[]) => {
-      if (!runtimeConfig.baseUrl && !writesAllowed) {
+      if (!writesAllowed) {
         throw new Error(`Writes are unavailable while Zero is ${connectionState.name}`);
-      }
-      if (runtimeConfig.baseUrl) {
-        return await invokeWorker(method, ...args);
       }
 
       const localResult = await invokeWorker(method, ...args);
@@ -1312,14 +1262,7 @@ function WorkerWorkbookAppInner({
           throw new Error(`Unsupported workbook mutation: ${method}`);
       }
     },
-    [
-      connectionState.name,
-      documentId,
-      invokeWorker,
-      runZeroMutation,
-      runtimeConfig.baseUrl,
-      writesAllowed,
-    ],
+    [connectionState.name, documentId, invokeWorker, runZeroMutation, writesAllowed],
   );
 
   const applyOptimisticCellEdit = useCallback(
@@ -1655,10 +1598,7 @@ function WorkerWorkbookAppInner({
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
-  const bridgeEnabled = !runtimeConfig.baseUrl && runtimeConfig.zeroViewportBridge;
-  const sheetNames = [
-    ...(bridgeEnabled && bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? [])),
-  ];
+  const sheetNames = [...(bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? []))];
   const columnWidths = workerHandle
     ? workerHandle.cache.getColumnWidths(selection.sheetName)
     : undefined;
@@ -1703,9 +1643,7 @@ function WorkerWorkbookAppInner({
     [runtimeController],
   );
 
-  const statusModeLabel = runtimeConfig.baseUrl
-    ? formatSyncStateLabel(runtimeState?.syncState ?? "local-only")
-    : "Local";
+  const statusModeLabel = formatConnectionStateLabel(connectionState.name);
 
   const statusChipClass =
     "inline-flex h-8 items-center rounded-[4px] border border-[#d7dce5] bg-white px-2 text-[11px] font-medium tracking-[0.01em] text-[#5f6368]";
@@ -2226,7 +2164,7 @@ function WorkerWorkbookAppInner({
     </Toolbar.Root>
   );
 
-  const bridgeLoading = bridgeEnabled && bridgeState === null;
+  const bridgeLoading = bridgeState === null;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f8f9fa] text-[#202124]">
@@ -2238,7 +2176,7 @@ function WorkerWorkbookAppInner({
           {runtimeError}
         </div>
       ) : null}
-      {bridgeEnabled && !writesAllowed ? (
+      {!writesAllowed ? (
         <div className="border-b border-[#d2e3fc] bg-[#eef4ff] px-3 py-2 text-sm text-[#174ea6]">
           Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection
           recovers.

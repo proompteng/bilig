@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const browserStack = process.env["BILIG_BROWSER_STACK"];
-const useComposeBrowserStack = browserStack === "compose" || browserStack === "compose-full";
+const useComposeBrowserStack = browserStack === "compose";
 const browserBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? "http://127.0.0.1:4180";
 
 export default defineConfig({

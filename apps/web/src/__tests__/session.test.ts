@@ -21,7 +21,7 @@ describe("loadRuntimeSession", () => {
     };
     const fetchImpl = async () => jsonResponse(response);
 
-    const session = await loadRuntimeSession(null, fetchImpl);
+    const session = await loadRuntimeSession(fetchImpl);
 
     expect(session).toEqual<BiligRuntimeSession>({
       authToken: "token-123",
@@ -42,7 +42,7 @@ describe("loadRuntimeSession", () => {
         authSource: "guest",
       });
 
-    const session = await loadRuntimeSession(null, fetchImpl);
+    const session = await loadRuntimeSession(fetchImpl);
 
     expect(session.authToken).toBe("guest:abc");
     expect(session.userId).toBe("guest:abc");
@@ -50,7 +50,7 @@ describe("loadRuntimeSession", () => {
   });
 
   test("fails when the runtime session endpoint returns an error response", async () => {
-    await expect(loadRuntimeSession(null, failingFetchImpl)).rejects.toThrow(
+    await expect(loadRuntimeSession(failingFetchImpl)).rejects.toThrow(
       /Runtime session request failed/,
     );
   });

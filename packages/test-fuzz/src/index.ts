@@ -232,13 +232,19 @@ function resolveParameters<Ts extends unknown[]>(
   const maxMsOverride = parsePositiveInteger(process.env["BILIG_FUZZ_MAX_MS"]);
 
   const resolved: FuzzParameters<Ts> = {
+    numRuns: replayFixture?.numRuns ?? budget.numRuns,
+    interruptAfterTimeLimit: budget.maxMs,
     ...overrides,
-    numRuns: runsOverride ?? replayFixture?.numRuns ?? budget.numRuns,
-    interruptAfterTimeLimit: maxMsOverride ?? budget.maxMs,
   };
   const seed = seedOverride ?? replayFixture?.seed;
   if (seed !== undefined) {
     resolved.seed = seed;
+  }
+  if (runsOverride !== undefined) {
+    resolved.numRuns = runsOverride;
+  }
+  if (maxMsOverride !== undefined) {
+    resolved.interruptAfterTimeLimit = maxMsOverride;
   }
 
   if (replayFixture?.path) {

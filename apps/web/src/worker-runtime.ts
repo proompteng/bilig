@@ -1,4 +1,4 @@
-import type { CommitOp, EngineReplicaSnapshot, EngineSyncClient } from "@bilig/core";
+import type { CommitOp, EngineReplicaSnapshot } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
 import { formatAddress, indexToColumn } from "@bilig/formula";
@@ -22,13 +22,11 @@ import {
   formatCellDisplayValue,
 } from "@bilig/protocol";
 import {
-  createWebSocketSyncClient,
   encodeViewportPatch,
   type ViewportAxisPatch,
   type ViewportPatch,
   type ViewportPatchedCell,
   type ViewportPatchSubscription,
-  type WebSocketSyncClientOptions,
 } from "@bilig/worker-transport";
 
 interface WorkerSheet {
@@ -73,8 +71,6 @@ interface WorkerEngine {
     size: number | null,
     hidden: boolean | null,
   ): unknown;
-  connectSyncClient(client: EngineSyncClient): Promise<void>;
-  disconnectSyncClient(): Promise<void>;
   exportSnapshot(): WorkbookSnapshot;
   exportReplicaSnapshot(): EngineReplicaSnapshot;
   importSnapshot(snapshot: WorkbookSnapshot): void;
@@ -94,13 +90,7 @@ const DEFAULT_STYLE_ID = "style-0";
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
   replicaId: string;
-  baseUrl: string | null;
   persistState: boolean;
-}
-
-interface ServerSnapshotSeed {
-  cursor: number;
-  snapshot: WorkbookSnapshot;
 }
 
 export interface WorkbookWorkerStateSnapshot {
@@ -113,37 +103,6 @@ export interface WorkbookWorkerStateSnapshot {
 interface PersistedWorkbookState {
   snapshot: WorkbookSnapshot;
   replica: EngineReplicaSnapshot;
-}
-
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"]) &&
-    value["sheets"].every((sheet) => {
-      return (
-        isRecord(sheet) &&
-        typeof sheet["name"] === "string" &&
-        typeof sheet["order"] === "number" &&
-        Array.isArray(sheet["cells"]) &&
-        sheet["cells"].every((cell) => {
-          return (
-            isRecord(cell) &&
-            typeof cell["address"] === "string" &&
-            (cell["value"] === undefined ||
-              cell["value"] === null ||
-              typeof cell["value"] === "string" ||
-              typeof cell["value"] === "number" ||
-              typeof cell["value"] === "boolean") &&
-            (cell["formula"] === undefined || typeof cell["formula"] === "string") &&
-            (cell["format"] === undefined || typeof cell["format"] === "string")
-          );
-        })
-      );
-    })
-  );
 }
 
 interface ViewportSubscriptionState {
@@ -180,7 +139,6 @@ function parsePersistedWorkbookState(value: unknown): PersistedWorkbookState | n
 export class WorkbookWorkerRuntime {
   [method: string]: unknown;
   private readonly persistence: BrowserPersistence;
-  private readonly createSyncClient: (options: WebSocketSyncClientOptions) => EngineSyncClient;
   private engine: WorkerEngine | null = null;
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
@@ -195,11 +153,9 @@ export class WorkbookWorkerRuntime {
   constructor(
     options: {
       persistence?: BrowserPersistence;
-      createSyncClient?: (options: WebSocketSyncClientOptions) => EngineSyncClient;
     } = {},
   ) {
     this.persistence = options.persistence ?? createBrowserPersistence();
-    this.createSyncClient = options.createSyncClient ?? createWebSocketSyncClient;
   }
 
   async ready(): Promise<void> {
@@ -216,7 +172,6 @@ export class WorkbookWorkerRuntime {
     });
     this.engine = engine;
     await engine.ready();
-    let initialServerSnapshot: ServerSnapshotSeed | null = null;
 
     if (options.persistState) {
       const persisted = await this.persistence.loadJson(
@@ -228,19 +183,6 @@ export class WorkbookWorkerRuntime {
         engine.importReplicaSnapshot(persisted.replica);
       }
     }
-    if (options.baseUrl) {
-      try {
-        initialServerSnapshot = await this.fetchLatestServerSnapshot(
-          options.baseUrl,
-          options.documentId,
-        );
-        if (initialServerSnapshot) {
-          engine.importSnapshot(initialServerSnapshot.snapshot);
-        }
-      } catch {
-        initialServerSnapshot = null;
-      }
-    }
     if (engine.workbook.sheetsByName.size === 0) {
       engine.createSheet("Sheet1");
     }
@@ -250,21 +192,6 @@ export class WorkbookWorkerRuntime {
       this.broadcastViewportPatches(event.metrics);
     });
     await this.persistState();
-
-    if (options.baseUrl) {
-      try {
-        await engine.connectSyncClient(
-          this.createSyncClient({
-            documentId: options.documentId,
-            replicaId: options.replicaId,
-            baseUrl: options.baseUrl,
-            ...(initialServerSnapshot ? { initialServerCursor: initialServerSnapshot.cursor } : {}),
-          }),
-        );
-      } catch {
-        await engine.disconnectSyncClient();
-      }
-    }
 
     return this.getRuntimeState();
   }
@@ -443,29 +370,6 @@ export class WorkbookWorkerRuntime {
       this.persistenceKey(this.bootstrapOptions.documentId),
       persisted,
     );
-  }
-
-  private async fetchLatestServerSnapshot(
-    baseUrl: string,
-    documentId: string,
-  ): Promise<ServerSnapshotSeed | null> {
-    const url = new URL(`/v2/documents/${encodeURIComponent(documentId)}/snapshot/latest`, baseUrl);
-    const response = await fetch(url);
-    if (response.status === 404) {
-      return null;
-    }
-    if (!response.ok) {
-      throw new Error(`Failed to fetch latest server snapshot (${response.status})`);
-    }
-    const cursor = Number.parseInt(response.headers.get("x-bilig-snapshot-cursor") ?? "0", 10);
-    const parsed: unknown = JSON.parse(await response.text());
-    if (!isWorkbookSnapshot(parsed)) {
-      throw new Error("Invalid workbook snapshot payload");
-    }
-    return {
-      cursor: Number.isFinite(cursor) ? cursor : 0,
-      snapshot: parsed,
-    };
   }
 
   private broadcastViewportPatches(metrics: RecalcMetrics): void {

@@ -4,10 +4,10 @@ import { createBootstrapMachine } from "../index.js";
 
 describe("@bilig/actors bootstrap machine", () => {
   it("reaches ready after loading config and session", async () => {
-    const machine = createBootstrapMachine<{ apiBaseUrl: string }, { authToken: string }>();
+    const machine = createBootstrapMachine<{ defaultDocumentId: string }, { authToken: string }>();
     const actor = createActor(machine, {
       input: {
-        loadConfig: async () => ({ apiBaseUrl: "http://127.0.0.1:4321" }),
+        loadConfig: async () => ({ defaultDocumentId: "bilig-demo" }),
         loadSession: async () => ({ authToken: "token-123" }),
       },
     });
@@ -30,7 +30,7 @@ describe("@bilig/actors bootstrap machine", () => {
     await done;
 
     expect(actor.getSnapshot().context.config).toEqual({
-      apiBaseUrl: "http://127.0.0.1:4321",
+      defaultDocumentId: "bilig-demo",
     });
     expect(actor.getSnapshot().context.session).toEqual({
       authToken: "token-123",
@@ -39,7 +39,7 @@ describe("@bilig/actors bootstrap machine", () => {
 
   it("supports retry after a failed config load", async () => {
     let attempts = 0;
-    const machine = createBootstrapMachine<{ apiBaseUrl: string }, { authToken: string }>();
+    const machine = createBootstrapMachine<{ defaultDocumentId: string }, { authToken: string }>();
     const actor = createActor(machine, {
       input: {
         loadConfig: async () => {
@@ -47,7 +47,7 @@ describe("@bilig/actors bootstrap machine", () => {
           if (attempts === 1) {
             throw new Error("temporary failure");
           }
-          return { apiBaseUrl: "http://127.0.0.1:4321" };
+          return { defaultDocumentId: "bilig-demo" };
         },
         loadSession: async () => ({ authToken: "token-123" }),
       },

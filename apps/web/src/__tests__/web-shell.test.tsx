@@ -91,7 +91,7 @@ vi.mock("@rocicorp/zero/react", () => ({
       client: Promise.resolve({ type: "complete" }),
     }),
     materialize: () => ({
-      data: undefined,
+      data: [],
       addListener: () => () => {},
       destroy() {},
     }),
@@ -189,11 +189,9 @@ describe("web shell", () => {
       root.render(
         <App
           config={{
-            apiBaseUrl: "http://127.0.0.1:4321",
             zeroCacheUrl: "http://127.0.0.1:4848",
             defaultDocumentId: "bilig-demo",
             persistState: true,
-            zeroViewportBridge: false,
           }}
         />,
       );

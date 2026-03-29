@@ -1,49 +1,36 @@
 export interface BiligRuntimeConfig {
-  apiBaseUrl: string;
   zeroCacheUrl: string;
   defaultDocumentId: string;
   persistState: boolean;
-  zeroViewportBridge: boolean;
 }
-
-const DEFAULT_CONFIG: BiligRuntimeConfig = {
-  apiBaseUrl: "http://127.0.0.1:4321",
-  zeroCacheUrl: "http://127.0.0.1:4848",
-  defaultDocumentId: "bilig-demo",
-  persistState: true,
-  zeroViewportBridge: true,
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  throw new Error(`Runtime config field ${field} must be a non-empty string`);
+}
+
+function requireBoolean(value: unknown, field: string): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  throw new Error(`Runtime config field ${field} must be a boolean`);
+}
+
 export function parseRuntimeConfig(value: unknown): BiligRuntimeConfig {
   if (!isRecord(value)) {
-    return DEFAULT_CONFIG;
+    throw new Error("Runtime config payload must be an object");
   }
 
   return {
-    apiBaseUrl:
-      typeof value["apiBaseUrl"] === "string" && value["apiBaseUrl"].length > 0
-        ? value["apiBaseUrl"]
-        : DEFAULT_CONFIG.apiBaseUrl,
-    zeroCacheUrl:
-      typeof value["zeroCacheUrl"] === "string" && value["zeroCacheUrl"].length > 0
-        ? value["zeroCacheUrl"]
-        : DEFAULT_CONFIG.zeroCacheUrl,
-    defaultDocumentId:
-      typeof value["defaultDocumentId"] === "string" && value["defaultDocumentId"].length > 0
-        ? value["defaultDocumentId"]
-        : DEFAULT_CONFIG.defaultDocumentId,
-    persistState:
-      typeof value["persistState"] === "boolean"
-        ? value["persistState"]
-        : DEFAULT_CONFIG.persistState,
-    zeroViewportBridge:
-      typeof value["zeroViewportBridge"] === "boolean"
-        ? value["zeroViewportBridge"]
-        : DEFAULT_CONFIG.zeroViewportBridge,
+    zeroCacheUrl: requireNonEmptyString(value["zeroCacheUrl"], "zeroCacheUrl"),
+    defaultDocumentId: requireNonEmptyString(value["defaultDocumentId"], "defaultDocumentId"),
+    persistState: requireBoolean(value["persistState"], "persistState"),
   };
 }
 
@@ -57,7 +44,7 @@ export async function loadRuntimeConfig(
   });
 
   if (!response.ok) {
-    return DEFAULT_CONFIG;
+    throw new Error(`Failed to load runtime config (${response.status})`);
   }
 
   return parseRuntimeConfig(await response.json());

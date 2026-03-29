@@ -1,7 +1,5 @@
 {
-  "apiBaseUrl": "/",
   "zeroCacheUrl": "/zero",
   "defaultDocumentId": "bilig-demo",
-  "persistState": true,
-  "zeroViewportBridge": true
+  "persistState": true
 }

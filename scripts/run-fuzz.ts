@@ -74,11 +74,8 @@ const vitestFuzzFiles = listVitestFuzzFiles();
 runCommand(["pnpm", "exec", "vitest", "run", ...vitestFuzzFiles], env);
 
 if (!resolvedReplayFixture || replayKind === "browser") {
-  runCommand(
-    ["pnpm", "exec", "playwright", "test", "e2e/tests/web-shell.pw.ts", "--grep", "@fuzz-browser"],
-    {
-      ...env,
-      BILIG_FUZZ_BROWSER: "1",
-    },
-  );
+  runCommand(["bun", "scripts/run-browser-tests.ts", "--grep", "@fuzz-browser"], {
+    ...env,
+    BILIG_FUZZ_BROWSER: "1",
+  });
 }

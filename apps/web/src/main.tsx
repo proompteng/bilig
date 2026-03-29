@@ -5,7 +5,7 @@ import { ZeroProvider } from "@rocicorp/zero/react";
 import { createBootstrapMachine } from "@bilig/actors";
 import { loadRuntimeConfig, mutators, schema } from "@bilig/zero-sync";
 import type { RuntimeSession } from "@bilig/contracts";
-import { App, ZeroDisabledApp } from "./App.js";
+import { App } from "./App.js";
 import { resolveRuntimeConfig, type RuntimeConfig } from "./runtime-config";
 import { loadRuntimeSession } from "./session";
 import { resolveZeroCacheUrl, ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-connection";
@@ -32,10 +32,7 @@ function BootstrapRoot() {
           runtimeConfig: resolveRuntimeConfig(rawConfig),
         } satisfies BootstrapConfig;
       },
-      loadSession: async (config: BootstrapConfig) =>
-        await loadRuntimeSession(config.runtimeConfig.baseUrl),
-      shouldLoadSession: (config: BootstrapConfig) =>
-        !config.runtimeConfig.baseUrl && config.runtimeConfig.zeroViewportBridge,
+      loadSession: async () => await loadRuntimeSession(),
     },
   });
   const snapshot = useSelector(actorRef, (value) => value);
@@ -67,10 +64,6 @@ function BootstrapRoot() {
         Missing runtime config after bootstrap
       </div>
     );
-  }
-
-  if (config.runtimeConfig.baseUrl || !config.runtimeConfig.zeroViewportBridge) {
-    return <ZeroDisabledApp config={config.rawConfig} />;
   }
 
   if (!session) {

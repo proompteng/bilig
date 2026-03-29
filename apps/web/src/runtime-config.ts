@@ -2,9 +2,7 @@ import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 
 export interface RuntimeConfig {
   documentId: string;
-  baseUrl: string | null;
   persistState: boolean;
-  zeroViewportBridge: boolean;
 }
 
 function createSessionDocumentId(defaultDocumentId: string): string {
@@ -24,33 +22,19 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
       ? new URLSearchParams()
       : new URLSearchParams(window.location.search);
   const explicitDocumentId = searchParams.get("document");
-  const baseUrl = searchParams.get("server");
-  const bridgeOverride = searchParams.get("zeroViewportBridge");
   const ephemeralDocument = shouldUseEphemeralDefaultDocument();
-  const zeroViewportBridge = baseUrl
-    ? false
-    : bridgeOverride === "off"
-      ? false
-      : bridgeOverride === "on"
-        ? true
-        : config.zeroViewportBridge;
 
   if (explicitDocumentId) {
     return {
       documentId: explicitDocumentId,
-      baseUrl,
       persistState: true,
-      zeroViewportBridge,
     };
   }
 
   return {
-    documentId:
-      baseUrl || ephemeralDocument
-        ? createSessionDocumentId(config.defaultDocumentId)
-        : config.defaultDocumentId,
-    baseUrl,
-    persistState: baseUrl || ephemeralDocument ? false : config.persistState,
-    zeroViewportBridge,
+    documentId: ephemeralDocument
+      ? createSessionDocumentId(config.defaultDocumentId)
+      : config.defaultDocumentId,
+    persistState: ephemeralDocument ? false : config.persistState,
   };
 }

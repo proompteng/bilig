@@ -43,10 +43,8 @@ export type ZeroClient = ConstructorParameters<typeof ZeroWorkbookBridge>[0];
 export interface CreateWorkerRuntimeSessionInput {
   readonly documentId: string;
   readonly replicaId: string;
-  readonly baseUrl: string | null;
   readonly persistState: boolean;
-  readonly zeroViewportBridge: boolean;
-  readonly zero?: ZeroClient | null;
+  readonly zero: ZeroClient;
   readonly initialSelection: WorkerRuntimeSelection;
   readonly pollIntervalMs?: number;
 }
@@ -177,7 +175,7 @@ export async function createWorkerRuntimeSessionController(
   const handle: WorkerHandle = { worker, client, cache };
   let currentSelection = input.initialSelection;
   let currentBridgeState: ZeroWorkbookBridgeState | null = null;
-  let bridge: ZeroWorkbookBridge | null = null;
+  let zeroBridge: ZeroWorkbookBridge | null = null;
   let disposed = false;
   let unsubscribeEvents: () => void = noop;
   let unsubscribeCache: () => void = noop;
@@ -192,17 +190,19 @@ export async function createWorkerRuntimeSessionController(
     callbacks.onError(toErrorMessage(error));
   };
 
+  const requireZeroBridge = (): ZeroWorkbookBridge => {
+    if (!zeroBridge) {
+      throw new Error("Zero workbook bridge is not initialized");
+    }
+    return zeroBridge;
+  };
+
   const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {
     currentSelection = selection;
     callbacks.onSelection(selection);
-    if (bridge) {
-      bridge.setSelection(selection.sheetName, selection.address);
-      const next =
-        cache.peekCell(selection.sheetName, selection.address) ?? emptyCellSnapshot(selection);
-      callbacks.onSelectedCell(next);
-      return next;
-    }
-    const next = await loadSelectedCell(client, cache, selection);
+    requireZeroBridge().setSelection(selection.sheetName, selection.address);
+    const next =
+      cache.peekCell(selection.sheetName, selection.address) ?? emptyCellSnapshot(selection);
     callbacks.onSelectedCell(next);
     return next;
   };
@@ -214,14 +214,12 @@ export async function createWorkerRuntimeSessionController(
     }
     cache.setKnownSheets(response.sheetNames);
     callbacks.onRuntimeState(response);
-    if (!bridge) {
-      const reconciledSelection = reconcileSelection(currentSelection, response.sheetNames);
-      if (
-        reconciledSelection.sheetName !== currentSelection.sheetName ||
-        reconciledSelection.address !== currentSelection.address
-      ) {
-        await applySelection(reconciledSelection);
-      }
+    const reconciledSelection = reconcileSelection(currentSelection, response.sheetNames);
+    if (
+      reconciledSelection.sheetName !== currentSelection.sheetName ||
+      reconciledSelection.address !== currentSelection.address
+    ) {
+      await applySelection(reconciledSelection);
     }
     return response;
   };
@@ -230,7 +228,6 @@ export async function createWorkerRuntimeSessionController(
     const response = await client.invoke("bootstrap", {
       documentId: input.documentId,
       replicaId: input.replicaId,
-      baseUrl: input.baseUrl,
       persistState: input.persistState,
     } satisfies WorkbookWorkerBootstrapOptions);
     if (!isRuntimeStateSnapshot(response)) {
@@ -242,6 +239,9 @@ export async function createWorkerRuntimeSessionController(
     callbacks.onSelection(currentSelection);
     const selectedCell = await loadSelectedCell(client, cache, currentSelection);
     callbacks.onSelectedCell(selectedCell);
+
+    zeroBridge = new ZeroWorkbookBridge(input.zero, input.documentId, cache, reportError);
+    const activeBridge = requireZeroBridge();
 
     unsubscribeEvents = client.subscribe(() => {
       void refreshRuntimeState().catch(reportError);
@@ -258,29 +258,25 @@ export async function createWorkerRuntimeSessionController(
     interval = window.setInterval(() => {
       void refreshRuntimeState().catch(reportError);
     }, input.pollIntervalMs ?? 250);
-
-    if (!input.baseUrl && input.zeroViewportBridge && input.zero) {
-      bridge = new ZeroWorkbookBridge(input.zero, input.documentId, cache, reportError);
-      unsubscribeBridgeWorkbook = bridge.subscribeWorkbookState((state) => {
-        currentBridgeState = state;
-        callbacks.onBridgeState(state);
-        cache.setKnownSheets(state.sheetNames);
-        const reconciledSelection = reconcileSelection(currentSelection, state.sheetNames);
-        if (
-          reconciledSelection.sheetName !== currentSelection.sheetName ||
-          reconciledSelection.address !== currentSelection.address
-        ) {
-          currentSelection = reconciledSelection;
-          callbacks.onSelection(currentSelection);
-          bridge?.setSelection(currentSelection.sheetName, currentSelection.address);
-        }
-      });
-      unsubscribeBridgeSelection = bridge.subscribeSelectedCell((cell) => {
-        if (cell) {
-          callbacks.onSelectedCell(cell);
-        }
-      });
-    }
+    unsubscribeBridgeWorkbook = activeBridge.subscribeWorkbookState((state) => {
+      currentBridgeState = state;
+      callbacks.onBridgeState(state);
+      cache.setKnownSheets(state.sheetNames);
+      const reconciledSelection = reconcileSelection(currentSelection, state.sheetNames);
+      if (
+        reconciledSelection.sheetName !== currentSelection.sheetName ||
+        reconciledSelection.address !== currentSelection.address
+      ) {
+        currentSelection = reconciledSelection;
+        callbacks.onSelection(currentSelection);
+        activeBridge.setSelection(currentSelection.sheetName, currentSelection.address);
+      }
+    });
+    unsubscribeBridgeSelection = activeBridge.subscribeSelectedCell((cell) => {
+      if (cell) {
+        callbacks.onSelectedCell(cell);
+      }
+    });
 
     return {
       handle,
@@ -292,10 +288,10 @@ export async function createWorkerRuntimeSessionController(
         await applySelection(selection);
       },
       subscribeViewport(sheetName, viewport, listener) {
-        const disposers = [cache.subscribeViewport(sheetName, viewport, listener)];
-        if (bridge) {
-          disposers.push(bridge.subscribeViewport(sheetName, viewport, listener));
-        }
+        const disposers = [
+          cache.subscribeViewport(sheetName, viewport, listener),
+          activeBridge.subscribeViewport(sheetName, viewport, listener),
+        ];
         return () => {
           disposers.forEach((dispose) => dispose());
         };
@@ -307,8 +303,8 @@ export async function createWorkerRuntimeSessionController(
         disposed = true;
         unsubscribeBridgeWorkbook();
         unsubscribeBridgeSelection();
-        bridge?.dispose();
-        bridge = null;
+        activeBridge.dispose();
+        zeroBridge = null;
         unsubscribeEvents();
         unsubscribeCache();
         if (interval) {

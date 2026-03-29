@@ -325,19 +325,13 @@ docker compose up --build
 
 This brings up the full local stack:
 
-- `http://localhost:3000` for the web shell with `/v1`, `/api/zero`, and `/zero` proxied through nginx
+- `http://localhost:3000` for the web shell with `/v2`, `/api/zero/v2`, and `/zero` proxied through nginx
 - `http://localhost:4321/healthz` for the sync server
 - `http://localhost:4381/healthz` for the local workbook server
 - `http://localhost:4848/keepalive` for Zero cache
 - `postgresql://bilig:bilig@localhost:5432/bilig` for Postgres
 
 The compose stack uses `docker/runtime-config.local.json` for browser runtime wiring and creates the `zero_data` publication during Postgres init so Zero can replicate from the local database.
-
-To run the browser against the local workbook authority instead of the sync authority, open:
-
-```text
-http://localhost:3000/?server=http://localhost:4381
-```
 
 To reset local state:
 

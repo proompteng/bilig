@@ -86,11 +86,10 @@ Not:
 Single public origin:
 
 - `/` -> web shell from `bilig-app`
-- `/api/zero/query` -> `bilig-app`
-- `/api/zero/mutate` -> `bilig-app`
+- `/api/zero/v2/query` -> `bilig-app`
+- `/api/zero/v2/mutate` -> `bilig-app`
 - `/api/agent/*` -> `bilig-app`
 - `/zero` -> `bilig-zero`
-- `/v1/frames` -> branch bring-up only; removed from production routing before merge
 
 #### What gets removed from production
 

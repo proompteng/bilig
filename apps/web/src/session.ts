@@ -11,13 +11,11 @@ import {
 export type { BiligRuntimeSession };
 
 export function loadRuntimeSessionEffect(
-  baseUrl: string | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Effect.Effect<BiligRuntimeSession, DecodeError | HttpError | TransportError> {
-  const url = baseUrl ? new URL("/v2/session", baseUrl).toString() : "/v2/session";
   return Effect.tryPromise({
     try: () =>
-      fetchImpl(url, {
+      fetchImpl("/v2/session", {
         credentials: "include",
         headers: {
           accept: "application/json",
@@ -54,8 +52,7 @@ export function loadRuntimeSessionEffect(
 }
 
 export async function loadRuntimeSession(
-  baseUrl: string | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<BiligRuntimeSession> {
-  return await runPromise(loadRuntimeSessionEffect(baseUrl, fetchImpl));
+  return await runPromise(loadRuntimeSessionEffect(fetchImpl));
 }

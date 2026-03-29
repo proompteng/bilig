@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createActor } from "xstate";
+import { Zero } from "@rocicorp/zero";
 import { ValueTag } from "@bilig/protocol";
 import { createWorkerRuntimeMachine } from "../runtime-machine.js";
 import { WorkerViewportCache } from "../viewport-cache.js";
@@ -11,6 +12,8 @@ import type {
 } from "../runtime-session.js";
 
 function noop(): void {}
+
+const zeroStub: CreateWorkerRuntimeSessionInput["zero"] = Object.create(Zero.prototype);
 
 function createWorkerHandle(): WorkerHandle {
   const client: WorkerHandle["client"] = {
@@ -87,9 +90,8 @@ describe("worker runtime machine", () => {
       input: {
         documentId: "book-1",
         replicaId: "browser:test",
-        baseUrl: "http://127.0.0.1:4321",
         persistState: true,
-        zeroViewportBridge: false,
+        zero: zeroStub,
         initialSelection: { sheetName: "Sheet1", address: "A1" },
         createSession,
       },
@@ -127,9 +129,8 @@ describe("worker runtime machine", () => {
       input: {
         documentId: "book-1",
         replicaId: "browser:test",
-        baseUrl: "http://127.0.0.1:4321",
         persistState: true,
-        zeroViewportBridge: false,
+        zero: zeroStub,
         initialSelection: { sheetName: "Sheet1", address: "A1" },
         createSession,
       },

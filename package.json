@@ -37,7 +37,6 @@
     "test": "vitest --run",
     "coverage": "vitest --run --coverage",
     "test:browser": "bun scripts/run-browser-tests.ts",
-    "test:browser:full-stack": "BILIG_BROWSER_STACK=compose-full bun scripts/run-browser-tests.ts",
     "test:fuzz": "bun scripts/run-fuzz.ts default",
     "test:fuzz:main": "bun scripts/run-fuzz.ts main",
     "test:fuzz:nightly": "bun scripts/run-fuzz.ts nightly",
