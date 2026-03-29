@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import fc from "fast-check";
 import { runProperty, shouldRunFuzzSuite } from "../../packages/test-fuzz/src/index.ts";
 
@@ -21,6 +23,11 @@ type BrowserSelectionAction =
   | { kind: "click"; row: number; col: number }
   | { kind: "shiftClick"; row: number; col: number }
   | { kind: "key"; key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"; shift: boolean };
+
+interface ToolbarSyncAction {
+  readonly label: string;
+  readonly apply: (page: Page) => Promise<void>;
+}
 
 function parseTestCellAddress(address: string): { row: number; col: number } {
   const match = /^([A-Z]+)(\d+)$/i.exec(address.trim());
@@ -640,14 +647,22 @@ function getSheetCell(snapshot: WorkbookSnapshotLike, sheetName: string, address
 }
 
 async function waitForBrowserSession(localServerUrl: string, documentId: string) {
+  await waitForBrowserSessionCount(localServerUrl, documentId, 1);
+}
+
+async function waitForBrowserSessionCount(
+  localServerUrl: string,
+  documentId: string,
+  minimumSessionCount: number,
+) {
   await expect
     .poll(
       async () => {
         const documentState = await fetchDocumentState(localServerUrl, documentId);
-        return documentState.sessions.length > 0;
+        return documentState.sessions.length >= minimumSessionCount;
       },
       {
-        message: "browser should attach to the local-server document session",
+        message: `browser should attach ${minimumSessionCount} session(s) to the local-server document session`,
       },
     )
     .toBe(true);
@@ -1339,6 +1354,202 @@ async function dragProductBodySelection(
   await page.mouse.up();
 }
 
+async function selectToolbarActionRange(page: Page) {
+  await clickProductCell(page, 1, 1);
+  await clickProductCell(page, 2, 2, { shift: true });
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:C3");
+}
+
+async function captureWorkbookShellScreenshot(page: Page) {
+  await page.bringToFront();
+  const workbookShell = page.getByTestId("workbook-shell");
+  await expect(workbookShell).toBeVisible();
+  return await workbookShell.screenshot({
+    animations: "disabled",
+    caret: "hide",
+  });
+}
+
+async function compareScreenshotPixels(page: Page, left: Buffer, right: Buffer) {
+  return await page.evaluate(
+    async ({ leftDataUrl, rightDataUrl }) => {
+      const [leftImage, rightImage] = await Promise.all([
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.addEventListener("load", () => resolve(image), { once: true });
+          image.addEventListener(
+            "error",
+            () => reject(new Error("Failed to decode left screenshot data URL")),
+            { once: true },
+          );
+          image.src = leftDataUrl;
+        }),
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.addEventListener("load", () => resolve(image), { once: true });
+          image.addEventListener(
+            "error",
+            () => reject(new Error("Failed to decode right screenshot data URL")),
+            { once: true },
+          );
+          image.src = rightDataUrl;
+        }),
+      ]);
+      if (
+        leftImage.naturalWidth !== rightImage.naturalWidth ||
+        leftImage.naturalHeight !== rightImage.naturalHeight
+      ) {
+        return {
+          equal: false,
+          diffPixels: Number.POSITIVE_INFINITY,
+          width: leftImage.naturalWidth,
+          height: leftImage.naturalHeight,
+        };
+      }
+
+      const width = leftImage.naturalWidth;
+      const height = leftImage.naturalHeight;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Missing 2d context for screenshot comparison");
+      }
+
+      context.clearRect(0, 0, width, height);
+      context.drawImage(leftImage, 0, 0);
+      const leftPixels = context.getImageData(0, 0, width, height).data;
+      context.clearRect(0, 0, width, height);
+      context.drawImage(rightImage, 0, 0);
+      const rightPixels = context.getImageData(0, 0, width, height).data;
+
+      let diffPixels = 0;
+      for (let index = 0; index < leftPixels.length; index += 4) {
+        if (
+          leftPixels[index] !== rightPixels[index] ||
+          leftPixels[index + 1] !== rightPixels[index + 1] ||
+          leftPixels[index + 2] !== rightPixels[index + 2] ||
+          leftPixels[index + 3] !== rightPixels[index + 3]
+        ) {
+          diffPixels += 1;
+        }
+      }
+
+      return { equal: diffPixels === 0, diffPixels, width, height };
+    },
+    {
+      leftDataUrl: `data:image/png;base64,${left.toString("base64")}`,
+      rightDataUrl: `data:image/png;base64,${right.toString("base64")}`,
+    },
+  );
+}
+
+async function pollMatchingWorkbookShellScreenshots(
+  primaryPage: Page,
+  mirrorPage: Page,
+  startedAt: number,
+  timeoutMs: number,
+  maxDiffPixels: number,
+): Promise<{
+  primaryBuffer: Buffer;
+  mirrorBuffer: Buffer;
+  diffPixels: number;
+  matched: boolean;
+}> {
+  const primaryBuffer = await captureWorkbookShellScreenshot(primaryPage);
+  const mirrorBuffer = await captureWorkbookShellScreenshot(mirrorPage);
+  const comparison = await compareScreenshotPixels(primaryPage, primaryBuffer, mirrorBuffer);
+  const matched = comparison.equal || comparison.diffPixels <= maxDiffPixels;
+  if (matched || Date.now() - startedAt > timeoutMs) {
+    return {
+      primaryBuffer,
+      mirrorBuffer,
+      diffPixels: comparison.diffPixels,
+      matched,
+    };
+  }
+
+  await delay(50);
+  return await pollMatchingWorkbookShellScreenshots(
+    primaryPage,
+    mirrorPage,
+    startedAt,
+    timeoutMs,
+    maxDiffPixels,
+  );
+}
+
+async function expectMatchingWorkbookShellScreenshots(
+  primaryPage: Page,
+  mirrorPage: Page,
+  actionLabel: string,
+  testInfo: TestInfo,
+  timeoutMs = 1_500,
+  maxDiffPixels = 96,
+) {
+  const startedAt = Date.now();
+  const result = await pollMatchingWorkbookShellScreenshots(
+    primaryPage,
+    mirrorPage,
+    startedAt,
+    timeoutMs,
+    maxDiffPixels,
+  );
+  if (result.matched) {
+    return Date.now() - startedAt;
+  }
+
+  const primaryHash = createHash("sha256").update(result.primaryBuffer).digest("hex");
+  const mirrorHash = createHash("sha256").update(result.mirrorBuffer).digest("hex");
+  await writeFile(
+    testInfo.outputPath(`multiplayer-${actionLabel}-primary.png`),
+    result.primaryBuffer,
+  );
+  await writeFile(
+    testInfo.outputPath(`multiplayer-${actionLabel}-mirror.png`),
+    result.mirrorBuffer,
+  );
+
+  throw new Error(
+    `multiplayer shell screenshots diverged for ${actionLabel} after ${timeoutMs}ms (primary=${primaryHash}, mirror=${mirrorHash}, diffPixels=${result.diffPixels}, maxDiffPixels=${maxDiffPixels})`,
+  );
+}
+
+async function openSharedWorkbookPage(page: Page, localServerUrl: string, documentId: string) {
+  await page.goto(
+    `/?document=${encodeURIComponent(documentId)}&server=${encodeURIComponent(localServerUrl)}`,
+  );
+  await waitForBrowserSession(localServerUrl, documentId);
+  await selectToolbarActionRange(page);
+}
+
+async function runToolbarSyncActions(
+  page: Page,
+  mirrorPage: Page,
+  actions: readonly ToolbarSyncAction[],
+  testInfo: TestInfo,
+  index = 0,
+): Promise<void> {
+  const action = actions[index];
+  if (!action) {
+    return;
+  }
+
+  await action.apply(page);
+  await selectToolbarActionRange(page);
+  await selectToolbarActionRange(mirrorPage);
+  const elapsed = await expectMatchingWorkbookShellScreenshots(
+    page,
+    mirrorPage,
+    action.label,
+    testInfo,
+    1_500,
+  );
+  expect(elapsed).toBeLessThanOrEqual(1_500);
+  await runToolbarSyncActions(page, mirrorPage, actions, testInfo, index + 1);
+}
+
 test("web app renders the minimal product shell without legacy demo chrome", async ({ page }) => {
   await page.goto("/?zeroViewportBridge=off");
 
@@ -1762,6 +1973,172 @@ test("web app persists toolbar formatting actions to the synced workbook snapsho
       { cause: error },
     );
   } finally {
+    await localServer.stop();
+  }
+});
+
+test("web app keeps two live tabs visually converged across toolbar actions", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const port = await reserveLocalPort();
+  const documentId = `playwright-toolbar-multiplayer-${Date.now()}`;
+  const localServer = await startLocalServer(port);
+  const mirrorPage = await page.context().newPage();
+  const viewport = page.viewportSize();
+  if (viewport) {
+    await mirrorPage.setViewportSize(viewport);
+  }
+
+  const actions: readonly ToolbarSyncAction[] = [
+    {
+      label: "number-format-accounting",
+      apply: async (activePage) =>
+        await selectToolbarOption(activePage, "Number format", "Accounting", "accounting"),
+    },
+    {
+      label: "increase-decimals",
+      apply: async (activePage) => await activePage.getByLabel("Increase decimals").click(),
+    },
+    {
+      label: "decrease-decimals",
+      apply: async (activePage) => await activePage.getByLabel("Decrease decimals").click(),
+    },
+    {
+      label: "toggle-grouping",
+      apply: async (activePage) => await activePage.getByLabel("Toggle grouping").click(),
+    },
+    {
+      label: "font-family-georgia",
+      apply: async (activePage) => await selectToolbarOption(activePage, "Font family", "Georgia"),
+    },
+    {
+      label: "font-size-14",
+      apply: async (activePage) => await selectToolbarOption(activePage, "Font size", "14"),
+    },
+    { label: "bold", apply: async (activePage) => await activePage.getByLabel("Bold").click() },
+    {
+      label: "italic",
+      apply: async (activePage) => await activePage.getByLabel("Italic").click(),
+    },
+    {
+      label: "underline",
+      apply: async (activePage) => await activePage.getByLabel("Underline").click(),
+    },
+    {
+      label: "fill-color",
+      apply: async (activePage) => await setToolbarCustomColor(activePage, "Fill color", "#dbeafe"),
+    },
+    {
+      label: "text-color",
+      apply: async (activePage) => await setToolbarCustomColor(activePage, "Text color", "#7c2d12"),
+    },
+    {
+      label: "align-left",
+      apply: async (activePage) => await activePage.getByLabel("Align left").click(),
+    },
+    {
+      label: "align-center",
+      apply: async (activePage) => await activePage.getByLabel("Align center").click(),
+    },
+    {
+      label: "align-right",
+      apply: async (activePage) => await activePage.getByLabel("Align right").click(),
+    },
+    {
+      label: "border-all",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "All borders"),
+    },
+    {
+      label: "border-inner",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Inner borders"),
+    },
+    {
+      label: "border-horizontal",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Horizontal borders"),
+    },
+    {
+      label: "border-vertical",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Vertical borders"),
+    },
+    {
+      label: "border-outer",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Outer borders"),
+    },
+    {
+      label: "border-left",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Left border"),
+    },
+    {
+      label: "border-top",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Top border"),
+    },
+    {
+      label: "border-right",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Right border"),
+    },
+    {
+      label: "border-bottom",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Bottom border"),
+    },
+    {
+      label: "border-clear",
+      apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Clear borders"),
+    },
+    { label: "wrap", apply: async (activePage) => await activePage.getByLabel("Wrap").click() },
+    {
+      label: "clear-style",
+      apply: async (activePage) => await activePage.getByLabel("Clear style").click(),
+    },
+    {
+      label: "number-format-general",
+      apply: async (activePage) =>
+        await selectToolbarOption(activePage, "Number format", "General", "general"),
+    },
+  ];
+
+  try {
+    await withAgentSession(
+      localServer.localServerUrl,
+      documentId,
+      `playwright-agent:${Date.now()}`,
+      async (sessionId) => {
+        await sendAgentRequest(localServer.localServerUrl, {
+          kind: "writeRange",
+          id: `write:${Date.now()}`,
+          sessionId,
+          range: { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+          values: [
+            [1234.5, 6789.125],
+            [42.25, -7.5],
+          ],
+        });
+      },
+    );
+
+    await Promise.all([
+      openSharedWorkbookPage(page, localServer.localServerUrl, documentId),
+      openSharedWorkbookPage(mirrorPage, localServer.localServerUrl, documentId),
+    ]);
+    await waitForBrowserSessionCount(localServer.localServerUrl, documentId, 2);
+
+    const initialElapsed = await expectMatchingWorkbookShellScreenshots(
+      page,
+      mirrorPage,
+      "initial",
+      testInfo,
+      1_500,
+    );
+    expect(initialElapsed).toBeLessThanOrEqual(1_500);
+
+    await runToolbarSyncActions(page, mirrorPage, actions, testInfo);
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nLocal-server logs:\n${localServer.getLogs()}`,
+      { cause: error },
+    );
+  } finally {
+    await mirrorPage.close().catch(() => undefined);
     await localServer.stop();
   }
 });
