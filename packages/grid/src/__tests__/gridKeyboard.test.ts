@@ -31,6 +31,42 @@ describe("gridKeyboard", () => {
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: "Escape", metaKey: false })).toBe(
       true,
     );
+    expect(
+      isHandledGridKey({
+        altKey: false,
+        ctrlKey: true,
+        key: "a",
+        metaKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(true);
+    expect(
+      isHandledGridKey({
+        altKey: false,
+        ctrlKey: false,
+        key: " ",
+        metaKey: false,
+        shiftKey: true,
+      }),
+    ).toBe(true);
+    expect(
+      isHandledGridKey({
+        altKey: false,
+        ctrlKey: true,
+        key: " ",
+        metaKey: false,
+        shiftKey: true,
+      }),
+    ).toBe(true);
+    expect(
+      isHandledGridKey({
+        altKey: false,
+        ctrlKey: false,
+        key: "Home",
+        metaKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(true);
   });
 
   test("detects numeric editor seeds", () => {

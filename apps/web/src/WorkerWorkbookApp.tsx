@@ -1,21 +1,19 @@
-/* oxlint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-type-assertion */
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   AlignCenter,
   AlignLeft,
   AlignRight,
   Baseline,
   Bold,
+  Check,
   ChevronDown,
   Grid2x2,
   Grid2x2X,
@@ -30,9 +28,15 @@ import {
   Underline,
   WrapText,
 } from "lucide-react";
+import { Popover } from "@base-ui/react/popover";
+import { Select } from "@base-ui/react/select";
+import { Toolbar } from "@base-ui/react/toolbar";
+import type { CommitOp } from "@bilig/core";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress, parseFormula } from "@bilig/formula";
 import {
+  type CellNumberFormatInput,
+  type CellRangeRef,
   MAX_COLS,
   MAX_ROWS,
   ErrorCode,
@@ -41,6 +45,7 @@ import {
   formatErrorCode,
   type CellValue,
   type CellSnapshot,
+  type CellStyleField,
   type CellStylePatch,
   type LiteralInput,
 } from "@bilig/protocol";
@@ -90,11 +95,17 @@ type ZeroConnectionState =
 interface RibbonButtonProps {
   active?: boolean;
   ariaLabel: string;
+  shortcut?: string;
   onClick(this: void): void;
   children: ReactNode;
 }
 
 interface ColorSwatch {
+  label: string;
+  value: string;
+}
+
+interface ToolbarSelectOption {
   label: string;
   value: string;
 }
@@ -105,6 +116,7 @@ interface ColorPaletteButtonProps {
   customInputLabel: string;
   icon: ReactNode;
   recentColors: readonly string[];
+  shortcut?: string;
   swatches: readonly (readonly ColorSwatch[])[];
   onReset(this: void): void;
   onSelectColor(this: void, color: string, source: "preset" | "custom"): void;
@@ -220,6 +232,47 @@ const GOOGLE_SHEETS_STANDARD_SWATCHS: readonly ColorSwatch[] = [
   { label: "theme cyan", value: "#46bdc6" },
 ] as const;
 
+const NUMBER_FORMAT_OPTIONS: readonly ToolbarSelectOption[] = [
+  { label: "General", value: "general" },
+  { label: "Number", value: "number" },
+  { label: "Currency", value: "currency" },
+  { label: "Accounting", value: "accounting" },
+  { label: "Percent", value: "percent" },
+  { label: "Date", value: "date" },
+  { label: "Text", value: "text" },
+] as const;
+
+const FONT_FAMILY_OPTIONS: readonly ToolbarSelectOption[] = [
+  { label: "Aptos", value: "" },
+  { label: "Aptos", value: "Aptos" },
+  { label: "Georgia", value: "Georgia" },
+  { label: "Times New Roman", value: "Times New Roman" },
+  { label: "IBM Plex Sans", value: "IBM Plex Sans" },
+  { label: "Courier New", value: "Courier New" },
+] as const;
+
+const FONT_SIZE_OPTIONS: readonly ToolbarSelectOption[] = [10, 11, 12, 13, 14, 16, 18, 20].map(
+  (size) => ({
+    label: String(size),
+    value: String(size),
+  }),
+);
+
+const TOOLBAR_ROOT_CLASS = "border-b border-[#d7dce5] bg-white font-['Roboto','Arial',sans-serif]";
+const TOOLBAR_ROW_CLASS =
+  "flex min-h-[38px] items-center gap-0 overflow-x-auto px-2.5 py-1 text-[12px] text-[#202124]";
+const TOOLBAR_GROUP_CLASS = "flex flex-none items-center gap-0.5 px-0.5";
+const TOOLBAR_SEPARATOR_CLASS = "mx-1 h-5 w-px shrink-0 bg-[#d7dce5]";
+const TOOLBAR_BUTTON_CLASS =
+  "inline-flex h-8 min-w-8 items-center justify-center rounded-[5px] border border-transparent bg-transparent px-2 text-[#202124] transition-[background-color,border-color,color] outline-none hover:bg-[#f1f3f4] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
+const TOOLBAR_BUTTON_ACTIVE_CLASS = "border-[#c6dabf] bg-[#e6f4ea] text-[#137333]";
+const TOOLBAR_SELECT_TRIGGER_CLASS =
+  "inline-flex h-8 items-center justify-between rounded-[6px] border border-[#dadce0] bg-white px-2.5 text-[12px] font-medium text-[#202124] outline-none transition-[border-color,box-shadow,background-color] hover:border-[#c6ccd7] focus-visible:border-[#1a73e8] focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
+const TOOLBAR_SEGMENTED_CLASS = "inline-flex items-center gap-0.5";
+const TOOLBAR_ICON_CLASS = "h-3.5 w-3.5 shrink-0 stroke-[1.75]";
+const TOOLBAR_POPUP_CLASS =
+  "overflow-hidden rounded-[10px] border border-[#d0d7e2] bg-white p-1 shadow-[0_16px_36px_rgba(15,23,42,0.16)]";
+
 function normalizeHexColor(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -238,6 +291,46 @@ function isPresetColor(color: string): boolean {
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function isLiteralInput(value: unknown): value is LiteralInput {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
+
+function isCellRangeRef(value: unknown): value is CellRangeRef {
+  return (
+    isRecord(value) &&
+    typeof value["sheetName"] === "string" &&
+    typeof value["startAddress"] === "string" &&
+    typeof value["endAddress"] === "string"
+  );
+}
+
+function isCellStyleFieldList(value: unknown): value is CellStyleField[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isCellStylePatchValue(value: unknown): value is CellStylePatch {
+  return isRecord(value);
+}
+
+function isCellNumberFormatInputValue(value: unknown): value is CellNumberFormatInput {
+  return typeof value === "string" || isRecord(value);
+}
+
+function isCommitOps(value: unknown): value is CommitOp[] {
+  return Array.isArray(value);
 }
 
 function isCellSnapshot(value: unknown): value is CellSnapshot {
@@ -452,19 +545,88 @@ function classNames(...values: Array<string | false | null | undefined>): string
   return values.filter(Boolean).join(" ");
 }
 
-function RibbonIconButton({ active = false, ariaLabel, onClick, children }: RibbonButtonProps) {
+function isTextEntryTarget(target: EventTarget | null): boolean {
   return (
-    <button
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function ToolbarSelect({
+  ariaLabel,
+  options,
+  value,
+  widthClass,
+  onChange,
+}: {
+  ariaLabel: string;
+  options: readonly ToolbarSelectOption[];
+  value: string;
+  widthClass: string;
+  onChange(this: void, value: string): void;
+}) {
+  return (
+    <Select.Root
+      items={options}
+      value={value}
+      onValueChange={(nextValue: string | null) => {
+        if (typeof nextValue === "string") {
+          onChange(nextValue);
+        }
+      }}
+    >
+      <Select.Trigger
+        aria-label={ariaLabel}
+        className={classNames(TOOLBAR_SELECT_TRIGGER_CLASS, widthClass)}
+      >
+        <Select.Value />
+        <Select.Icon className="ml-2 text-[#5f6368]">
+          <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={6}>
+          <Select.Popup className={TOOLBAR_POPUP_CLASS}>
+            <Select.List className="max-h-72 min-w-[var(--anchor-width)] overflow-auto py-1">
+              {options.map((option) => (
+                <Select.Item
+                  className="flex cursor-default items-center justify-between gap-3 rounded-[6px] px-2.5 py-1.5 text-[12px] text-[#202124] outline-none data-[highlighted]:bg-[#eef3fd] data-[selected]:font-semibold"
+                  key={`${ariaLabel}-${option.value || "default"}`}
+                  label={option.label}
+                  value={option.value}
+                >
+                  <Select.ItemText>{option.label}</Select.ItemText>
+                  <Select.ItemIndicator className="text-[#1a73e8]">
+                    <Check className="h-3.5 w-3.5 stroke-[2]" />
+                  </Select.ItemIndicator>
+                </Select.Item>
+              ))}
+            </Select.List>
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
+function RibbonIconButton({
+  active = false,
+  ariaLabel,
+  shortcut,
+  onClick,
+  children,
+}: RibbonButtonProps) {
+  return (
+    <Toolbar.Button
       aria-label={ariaLabel}
-      className={classNames(
-        "box-border flex h-7 w-7 items-center justify-center border-r border-[#e8eaed] bg-white text-[#202124] transition-colors last:border-r-0 hover:bg-[#f1f3f4]",
-        active && "bg-[#e6f4ea] text-[#137333]",
-      )}
+      className={classNames(TOOLBAR_BUTTON_CLASS, active && TOOLBAR_BUTTON_ACTIVE_CLASS)}
       onClick={onClick}
-      type="button"
+      title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}
     >
       {children}
-    </button>
+    </Toolbar.Button>
   );
 }
 
@@ -474,91 +636,54 @@ function ColorPaletteButton({
   customInputLabel,
   icon,
   recentColors,
+  shortcut,
   swatches,
   onReset,
   onSelectColor,
 }: ColorPaletteButtonProps) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [showCustomPicker, setShowCustomPicker] = useState(false);
-  const [panelStyle, setPanelStyle] = useState<CSSProperties>({
-    left: 8,
-    top: 8,
-    position: "fixed",
-  });
   const normalizedCurrentColor = normalizeHexColor(currentColor);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Node &&
-        (triggerRef.current?.contains(target) || panelRef.current?.contains(target))
-      ) {
-        return;
-      }
-      setOpen(false);
-      setShowCustomPicker(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open || typeof window === "undefined") {
-      return;
-    }
-
-    const updatePanelPosition = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) {
-        return;
-      }
-      const rect = trigger.getBoundingClientRect();
-      const panelWidth = 258;
-      const viewportWidth = window.innerWidth;
-      const maxLeft = Math.max(8, viewportWidth - panelWidth - 8);
-      const left = Math.min(Math.max(8, rect.left), maxLeft);
-      const top = rect.bottom + 6;
-      setPanelStyle({
-        left,
-        top,
-        position: "fixed",
-      });
-    };
-
-    updatePanelPosition();
-    window.addEventListener("resize", updatePanelPosition);
-    window.addEventListener("scroll", updatePanelPosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePanelPosition);
-      window.removeEventListener("scroll", updatePanelPosition, true);
-    };
-  }, [open]);
-
-  const palette =
-    open && typeof document !== "undefined"
-      ? createPortal(
-          <div
+  return (
+    <Popover.Root
+      modal={false}
+      open={open}
+      onOpenChange={(nextOpen: boolean) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setShowCustomPicker(false);
+        }
+      }}
+    >
+      <Popover.Trigger
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={ariaLabel}
+        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-2")}
+        data-current-color={normalizedCurrentColor}
+        title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}
+      >
+        <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
+          {icon}
+          <span
+            className="absolute inset-x-0 bottom-0 h-[2px] rounded-full"
+            style={{ backgroundColor: normalizedCurrentColor } satisfies CSSProperties}
+          />
+        </span>
+        <ChevronDown className="h-3 w-3 stroke-[1.75]" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
+          <Popover.Popup
             aria-label={`${ariaLabel} palette`}
-            className="z-[1000] w-[258px] rounded-[6px] border border-[#dadce0] bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.14)]"
+            className={classNames(TOOLBAR_POPUP_CLASS, "w-[280px] p-2")}
             data-testid={`${ariaLabel.toLowerCase().replace(/\s+/g, "-")}-palette`}
-            ref={panelRef}
-            role="dialog"
-            style={panelStyle}
           >
             <div className="mb-2 flex items-center justify-between">
               <button
                 aria-label={`Reset ${ariaLabel.toLowerCase()}`}
-                className="inline-flex h-6 items-center rounded-[4px] px-2 text-[11px] font-medium text-[#5f6368] hover:bg-[#f1f3f4]"
+                className="inline-flex h-7 items-center rounded-[6px] px-2.5 text-[11px] font-semibold text-[#5f6368] transition-colors hover:bg-[#f3f6fb]"
                 onClick={() => {
                   onReset();
                   setOpen(false);
@@ -570,7 +695,7 @@ function ColorPaletteButton({
               </button>
               <button
                 aria-label={`Open custom ${ariaLabel.toLowerCase()} picker`}
-                className="inline-flex h-6 items-center rounded-[4px] px-2 text-[11px] font-medium text-[#1a73e8] hover:bg-[#f1f3f4]"
+                className="inline-flex h-7 items-center rounded-[6px] px-2.5 text-[11px] font-semibold text-[#1a73e8] transition-colors hover:bg-[#eef3fd]"
                 onClick={() => {
                   setShowCustomPicker((current) => !current);
                 }}
@@ -580,7 +705,7 @@ function ColorPaletteButton({
               </button>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {swatches.map((row) => (
                 <div
                   className="grid grid-cols-10 gap-1"
@@ -591,7 +716,7 @@ function ColorPaletteButton({
                     return (
                       <button
                         aria-label={`${ariaLabel} ${swatch.label}`}
-                        className="relative h-5 w-5 rounded-[3px] border border-[#dadce0] transition-transform hover:scale-[1.04]"
+                        className="relative h-5 w-5 rounded-[4px] border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
                         data-color={swatch.value}
                         key={`${ariaLabel}-${swatch.label}`}
                         onClick={() => {
@@ -603,7 +728,7 @@ function ColorPaletteButton({
                         type="button"
                       >
                         {selected ? (
-                          <span className="absolute inset-0 rounded-[3px] ring-2 ring-[#1a73e8] ring-offset-1" />
+                          <span className="absolute inset-0 rounded-[4px] ring-2 ring-[#1a73e8] ring-offset-1" />
                         ) : null}
                       </button>
                     );
@@ -612,8 +737,8 @@ function ColorPaletteButton({
               ))}
             </div>
 
-            <div className="mt-2 border-t border-[#eef1f4] pt-2">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-[#5f6368]">
+            <div className="mt-3 border-t border-[#eef1f4] pt-3">
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
                 Standard
               </div>
               <div className="grid grid-cols-8 gap-1">
@@ -622,7 +747,7 @@ function ColorPaletteButton({
                   return (
                     <button
                       aria-label={`${ariaLabel} ${swatch.label}`}
-                      className="relative h-5 w-5 rounded-[999px] border border-[#dadce0] transition-transform hover:scale-[1.04]"
+                      className="relative h-5 w-5 rounded-full border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
                       data-color={swatch.value}
                       key={`${ariaLabel}-${swatch.label}`}
                       onClick={() => {
@@ -634,7 +759,7 @@ function ColorPaletteButton({
                       type="button"
                     >
                       {selected ? (
-                        <span className="absolute inset-0 rounded-[999px] ring-2 ring-[#1a73e8] ring-offset-1" />
+                        <span className="absolute inset-0 rounded-full ring-2 ring-[#1a73e8] ring-offset-1" />
                       ) : null}
                     </button>
                   );
@@ -643,15 +768,15 @@ function ColorPaletteButton({
             </div>
 
             {recentColors.length > 0 ? (
-              <div className="mt-2 border-t border-[#eef1f4] pt-2">
-                <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-[#5f6368]">
+              <div className="mt-3 border-t border-[#eef1f4] pt-3">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
                   Custom
                 </div>
                 <div className="grid grid-cols-8 gap-1">
                   {recentColors.map((color) => (
                     <button
                       aria-label={`${ariaLabel} custom ${color}`}
-                      className="relative h-5 w-5 rounded-[3px] border border-[#dadce0]"
+                      className="relative h-5 w-5 rounded-[3px] border border-[#d0d7e2]"
                       data-color={color}
                       key={`${ariaLabel}-recent-${color}`}
                       onClick={() => {
@@ -672,12 +797,12 @@ function ColorPaletteButton({
             ) : null}
 
             {showCustomPicker ? (
-              <div className="mt-2 border-t border-[#eef1f4] pt-2">
+              <div className="mt-3 border-t border-[#eef1f4] pt-3">
                 <label className="flex items-center justify-between gap-3 text-[11px] font-medium text-[#5f6368]">
                   <span>Pick a custom color</span>
                   <input
                     aria-label={customInputLabel}
-                    className="h-7 w-10 cursor-pointer rounded-[4px] border border-[#dadce0] bg-white p-0"
+                    className="h-8 w-11 cursor-pointer rounded-[6px] border border-[#d0d7e2] bg-white p-0"
                     type="color"
                     value={normalizedCurrentColor}
                     onChange={(event) => {
@@ -689,37 +814,10 @@ function ColorPaletteButton({
                 </label>
               </div>
             ) : null}
-          </div>,
-          document.body,
-        )
-      : null;
-
-  return (
-    <>
-      <button
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-label={ariaLabel}
-        className="box-border inline-flex h-7 items-center gap-1 rounded-[2px] border border-transparent bg-transparent px-1.5 text-[#202124] transition-colors hover:border-[#dadce0] hover:bg-[#f1f3f4]"
-        data-current-color={normalizedCurrentColor}
-        onClick={() => {
-          setOpen((current) => !current);
-          setShowCustomPicker(false);
-        }}
-        ref={triggerRef}
-        type="button"
-      >
-        <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
-          {icon}
-          <span
-            className="absolute inset-x-0 bottom-0 h-[2px] rounded-full"
-            style={{ backgroundColor: normalizedCurrentColor } satisfies CSSProperties}
-          />
-        </span>
-        <ChevronDown className="h-3 w-3 stroke-[1.75]" />
-      </button>
-      {palette}
-    </>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -1023,7 +1121,7 @@ export function WorkerWorkbookApp({
   );
 
   const invokeMutation = useCallback(
-    async (method: string, ...args: any[]) => {
+    async (method: string, ...args: unknown[]) => {
       if (!runtimeConfig.baseUrl && !writesAllowed) {
         throw new Error(`Writes are unavailable while Zero is ${connectionState.name}`);
       }
@@ -1041,6 +1139,10 @@ export function WorkerWorkbookApp({
       switch (method) {
         case "setCellValue": {
           const [sheetName, address, value] = args;
+          assert(
+            typeof sheetName === "string" && typeof address === "string" && isLiteralInput(value),
+            "Invalid setCellValue args",
+          );
           await runZeroMutation(
             mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
           );
@@ -1048,6 +1150,12 @@ export function WorkerWorkbookApp({
         }
         case "setCellFormula": {
           const [sheetName, address, formula] = args;
+          assert(
+            typeof sheetName === "string" &&
+              typeof address === "string" &&
+              typeof formula === "string",
+            "Invalid setCellFormula args",
+          );
           await runZeroMutation(
             mutators.workbook.setCellFormula({
               documentId,
@@ -1060,26 +1168,39 @@ export function WorkerWorkbookApp({
         }
         case "clearCell": {
           const [sheetName, address] = args;
+          assert(
+            typeof sheetName === "string" && typeof address === "string",
+            "Invalid clearCell args",
+          );
           await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
           return localResult;
         }
         case "renderCommit": {
           const [ops] = args;
+          assert(isCommitOps(ops), "Invalid renderCommit args");
           await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
           return localResult;
         }
         case "fillRange": {
           const [source, target] = args;
+          assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid fillRange args");
           await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
           return localResult;
         }
         case "copyRange": {
           const [source, target] = args;
+          assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid copyRange args");
           await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
           return localResult;
         }
         case "updateColumnWidth": {
           const [sheetName, columnIndex, width] = args;
+          assert(
+            typeof sheetName === "string" &&
+              typeof columnIndex === "number" &&
+              typeof width === "number",
+            "Invalid updateColumnWidth args",
+          );
           await runZeroMutation(
             mutators.workbook.updateColumnWidth({
               documentId,
@@ -1092,6 +1213,10 @@ export function WorkerWorkbookApp({
         }
         case "autofitColumn": {
           const [sheetName, columnIndex] = args;
+          assert(
+            typeof sheetName === "string" && typeof columnIndex === "number",
+            "Invalid autofitColumn args",
+          );
           if (typeof localResult !== "number") {
             return localResult;
           }
@@ -1107,16 +1232,28 @@ export function WorkerWorkbookApp({
         }
         case "setRangeStyle": {
           const [range, patch] = args;
+          assert(
+            isCellRangeRef(range) && isCellStylePatchValue(patch),
+            "Invalid setRangeStyle args",
+          );
           await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
           return localResult;
         }
         case "clearRangeStyle": {
           const [range, fields] = args;
+          assert(
+            isCellRangeRef(range) && (fields === undefined || isCellStyleFieldList(fields)),
+            "Invalid clearRangeStyle args",
+          );
           await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
           return localResult;
         }
         case "setRangeNumberFormat": {
           const [range, format] = args;
+          assert(
+            isCellRangeRef(range) && isCellNumberFormatInputValue(format),
+            "Invalid setRangeNumberFormat args",
+          );
           await runZeroMutation(
             mutators.workbook.setRangeNumberFormat({
               documentId,
@@ -1128,6 +1265,7 @@ export function WorkerWorkbookApp({
         }
         case "clearRangeNumberFormat": {
           const [range] = args;
+          assert(isCellRangeRef(range), "Invalid clearRangeNumberFormat args");
           await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
           return localResult;
         }
@@ -1476,6 +1614,13 @@ export function WorkerWorkbookApp({
   const selectedStyle = workerHandle?.cache.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format);
+  const selectedFontFamily = selectedStyle?.font?.family ?? "";
+  const selectedFontSize = String(selectedStyle?.font?.size ?? 11);
+  const isBoldActive = selectedStyle?.font?.bold === true;
+  const isItalicActive = selectedStyle?.font?.italic === true;
+  const isUnderlineActive = selectedStyle?.font?.underline === true;
+  const horizontalAlignment = selectedStyle?.alignment?.horizontal ?? null;
+  const isWrapActive = selectedStyle?.alignment?.wrap === true;
   const currentFillColor = normalizeHexColor(selectedStyle?.fill?.backgroundColor ?? "#ffffff");
   const currentTextColor = normalizeHexColor(selectedStyle?.font?.color ?? "#111827");
   const visibleRecentFillColors = useMemo(
@@ -1520,13 +1665,18 @@ export function WorkerWorkbookApp({
     ? formatSyncStateLabel(runtimeState?.syncState ?? "local-only")
     : "Local";
 
+  const statusChipClass =
+    "inline-flex h-6 items-center rounded-[6px] border border-[#d7dce5] bg-white px-2 text-[11px] font-medium tracking-[0.01em] text-[#5f6368]";
+
   const statusBar = (
     <>
-      <span data-testid="status-mode">{statusModeLabel}</span>
-      <span data-testid="status-selection">
+      <span className={statusChipClass} data-testid="status-mode">
+        {statusModeLabel}
+      </span>
+      <span className={statusChipClass} data-testid="status-selection">
         {selection.sheetName}!{selectionLabel}
       </span>
-      <span data-testid="status-sync">
+      <span className={statusChipClass} data-testid="status-sync">
         {isEditing ? "Editing" : writesAllowed ? "Ready" : "Read-only"}
       </span>
     </>
@@ -1715,278 +1865,329 @@ export function WorkerWorkbookApp({
     });
   }, [currentNumberFormat, invokeMutation, selectionRange]);
 
-  const toolbarButtonClass =
-    "box-border inline-flex h-7 w-7 items-center justify-center rounded-[2px] border border-transparent bg-transparent p-0 text-[#202124] transition-colors hover:border-[#dadce0] hover:bg-[#f1f3f4]";
-  const toolbarSelectClass =
-    "box-border h-7 appearance-none rounded-[2px] border border-[#dadce0] bg-white px-2 text-[12px] font-medium text-[#202124] shadow-none outline-none";
-  const toolbarGroupClass = "flex flex-none items-center gap-1 px-0.5";
-  const toolbarSegmentedClass =
-    "inline-flex overflow-hidden rounded-[2px] border border-[#dadce0] bg-white";
-  const activeToolbarButtonClass = "border-[#b7d5c2] bg-[#e6f4ea] text-[#137333]";
-  const toolbarTextIconClass = "h-3.5 w-3.5 shrink-0 stroke-[1.75]";
+  useEffect(() => {
+    const handleWindowShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isTextEntryTarget(event.target) || event.altKey) {
+        return;
+      }
+
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+      if (!hasPrimaryModifier) {
+        return;
+      }
+
+      const normalizedKey = event.key.toLowerCase();
+      if (normalizedKey === "s") {
+        event.preventDefault();
+        return;
+      }
+
+      if (!writesAllowed) {
+        return;
+      }
+
+      if (!event.shiftKey && normalizedKey === "b") {
+        event.preventDefault();
+        void applyRangeStyle({ font: { bold: !isBoldActive } });
+        return;
+      }
+
+      if (!event.shiftKey && normalizedKey === "i") {
+        event.preventDefault();
+        void applyRangeStyle({ font: { italic: !isItalicActive } });
+        return;
+      }
+
+      if (!event.shiftKey && normalizedKey === "u") {
+        event.preventDefault();
+        void applyRangeStyle({ font: { underline: !isUnderlineActive } });
+        return;
+      }
+
+      if (event.shiftKey && event.code === "Digit1") {
+        event.preventDefault();
+        void setNumberFormatPreset("number");
+        return;
+      }
+
+      if (event.shiftKey && event.code === "Digit4") {
+        event.preventDefault();
+        void setNumberFormatPreset("currency");
+        return;
+      }
+
+      if (event.shiftKey && event.code === "Digit5") {
+        event.preventDefault();
+        void setNumberFormatPreset("percent");
+        return;
+      }
+
+      if (event.shiftKey && event.code === "Digit7") {
+        event.preventDefault();
+        void applyOuterBorders();
+        return;
+      }
+
+      if (event.shiftKey && normalizedKey === "l") {
+        event.preventDefault();
+        void applyRangeStyle({ alignment: { horizontal: "left" } });
+        return;
+      }
+
+      if (event.shiftKey && normalizedKey === "e") {
+        event.preventDefault();
+        void applyRangeStyle({ alignment: { horizontal: "center" } });
+        return;
+      }
+
+      if (event.shiftKey && normalizedKey === "r") {
+        event.preventDefault();
+        void applyRangeStyle({ alignment: { horizontal: "right" } });
+        return;
+      }
+
+      if (!event.shiftKey && event.code === "Backslash") {
+        event.preventDefault();
+        void clearRangeStyleFields();
+      }
+    };
+
+    window.addEventListener("keydown", handleWindowShortcut, true);
+    return () => {
+      window.removeEventListener("keydown", handleWindowShortcut, true);
+    };
+  }, [
+    applyOuterBorders,
+    applyRangeStyle,
+    clearRangeStyleFields,
+    isBoldActive,
+    isItalicActive,
+    isUnderlineActive,
+    setNumberFormatPreset,
+    writesAllowed,
+  ]);
 
   const ribbon = (
-    <div
-      className="border-b border-[#dadce0] bg-[#f8f9fa] font-['Roboto','Arial',sans-serif]"
-      role="toolbar"
+    <Toolbar.Root
       aria-label="Formatting toolbar"
+      className={classNames(TOOLBAR_ROOT_CLASS, TOOLBAR_ROW_CLASS)}
     >
-      <div className="flex min-h-9 items-center gap-0 overflow-x-auto px-2 py-1 text-[12px] text-[#202124]">
-        <div className={toolbarGroupClass}>
-          <select
-            aria-label="Number format"
-            className={`${toolbarSelectClass} w-32`}
-            value={currentNumberFormat.kind}
-            onChange={(event) => {
-              void setNumberFormatPreset(event.target.value);
-            }}
+      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <ToolbarSelect
+          ariaLabel="Number format"
+          options={NUMBER_FORMAT_OPTIONS}
+          value={currentNumberFormat.kind}
+          widthClass="w-32"
+          onChange={(value) => {
+            void setNumberFormatPreset(value);
+          }}
+        />
+        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Decimal controls">
+          <RibbonIconButton ariaLabel="Decrease decimals" onClick={() => void adjustDecimals(-1)}>
+            <Minus className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton ariaLabel="Increase decimals" onClick={() => void adjustDecimals(1)}>
+            <Plus className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            active={
+              currentNumberFormat.kind !== "general" && (currentNumberFormat.useGrouping ?? true)
+            }
+            ariaLabel="Toggle grouping"
+            onClick={() => void toggleGrouping()}
           >
-            <option value="general">General</option>
-            <option value="number">Number</option>
-            <option value="currency">Currency</option>
-            <option value="accounting">Accounting</option>
-            <option value="percent">Percent</option>
-            <option value="date">Date</option>
-            <option value="text">Text</option>
-          </select>
-          <div className={toolbarSegmentedClass} role="group" aria-label="Decimal controls">
-            <RibbonIconButton ariaLabel="Decrease decimals" onClick={() => void adjustDecimals(-1)}>
-              <Minus className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton ariaLabel="Increase decimals" onClick={() => void adjustDecimals(1)}>
-              <Plus className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              active={
-                currentNumberFormat.kind !== "general" && (currentNumberFormat.useGrouping ?? true)
-              }
-              ariaLabel="Toggle grouping"
-              onClick={() => void toggleGrouping()}
-            >
-              <Rows3 className={toolbarTextIconClass} />
-            </RibbonIconButton>
-          </div>
+            <Rows3 className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
         </div>
+      </Toolbar.Group>
 
-        <div className="mx-1 h-4 w-px shrink-0 bg-[#dadce0]" />
+      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
 
-        <div className={toolbarGroupClass}>
-          <select
-            aria-label="Font family"
-            className={`${toolbarSelectClass} w-36`}
-            value={selectedStyle?.font?.family ?? ""}
-            onChange={(event) => {
-              void applyRangeStyle({ font: { family: event.target.value || null } });
-            }}
+      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <ToolbarSelect
+          ariaLabel="Font family"
+          options={FONT_FAMILY_OPTIONS}
+          value={selectedFontFamily}
+          widthClass="w-36"
+          onChange={(value) => {
+            void applyRangeStyle({ font: { family: value || null } });
+          }}
+        />
+        <ToolbarSelect
+          ariaLabel="Font size"
+          options={FONT_SIZE_OPTIONS}
+          value={selectedFontSize}
+          widthClass="w-16"
+          onChange={(value) => {
+            void applyRangeStyle({ font: { size: value ? Number(value) : null } });
+          }}
+        />
+        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Font emphasis">
+          <RibbonIconButton
+            active={isBoldActive}
+            ariaLabel="Bold"
+            shortcut="⌘/Ctrl+B"
+            onClick={() => void applyRangeStyle({ font: { bold: !isBoldActive } })}
           >
-            <option value="">Aptos</option>
-            <option value="Aptos">Aptos</option>
-            <option value="Georgia">Georgia</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="IBM Plex Sans">IBM Plex Sans</option>
-            <option value="Courier New">Courier New</option>
-          </select>
-          <select
-            aria-label="Font size"
-            className={`${toolbarSelectClass} w-14`}
-            value={String(selectedStyle?.font?.size ?? "11")}
-            onChange={(event) => {
+            <Bold className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            active={isItalicActive}
+            ariaLabel="Italic"
+            shortcut="⌘/Ctrl+I"
+            onClick={() => void applyRangeStyle({ font: { italic: !isItalicActive } })}
+          >
+            <Italic className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            active={isUnderlineActive}
+            ariaLabel="Underline"
+            shortcut="⌘/Ctrl+U"
+            onClick={() => void applyRangeStyle({ font: { underline: !isUnderlineActive } })}
+          >
+            <Underline className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+        </div>
+        <ColorPaletteButton
+          ariaLabel="Fill color"
+          currentColor={currentFillColor}
+          customInputLabel="Custom fill color"
+          icon={<PaintBucket className={TOOLBAR_ICON_CLASS} />}
+          onReset={() => {
+            void resetFillColor();
+          }}
+          onSelectColor={(color, source) => {
+            void applyFillColor(color, source);
+          }}
+          recentColors={visibleRecentFillColors}
+          swatches={GOOGLE_SHEETS_SWATCH_ROWS}
+        />
+        <ColorPaletteButton
+          ariaLabel="Text color"
+          currentColor={currentTextColor}
+          customInputLabel="Custom text color"
+          icon={<Baseline className={TOOLBAR_ICON_CLASS} />}
+          onReset={() => {
+            void resetTextColor();
+          }}
+          onSelectColor={(color, source) => {
+            void applyTextColor(color, source);
+          }}
+          recentColors={visibleRecentTextColors}
+          swatches={GOOGLE_SHEETS_SWATCH_ROWS}
+        />
+      </Toolbar.Group>
+
+      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+
+      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Horizontal alignment">
+          <RibbonIconButton
+            active={horizontalAlignment === "left"}
+            ariaLabel="Align left"
+            onClick={() => {
               void applyRangeStyle({
-                font: { size: event.target.value ? Number(event.target.value) : null },
+                alignment: { horizontal: horizontalAlignment === "left" ? null : "left" },
               });
             }}
           >
-            {[10, 11, 12, 13, 14, 16, 18, 20].map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-          <div className={toolbarSegmentedClass} role="group" aria-label="Font emphasis">
-            <RibbonIconButton
-              active={selectedStyle?.font?.bold === true}
-              ariaLabel="Bold"
-              onClick={() => void applyRangeStyle({ font: { bold: !selectedStyle?.font?.bold } })}
-            >
-              <Bold className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              active={selectedStyle?.font?.italic === true}
-              ariaLabel="Italic"
-              onClick={() =>
-                void applyRangeStyle({ font: { italic: !selectedStyle?.font?.italic } })
-              }
-            >
-              <Italic className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              active={selectedStyle?.font?.underline === true}
-              ariaLabel="Underline"
-              onClick={() =>
-                void applyRangeStyle({ font: { underline: !selectedStyle?.font?.underline } })
-              }
-            >
-              <Underline className={toolbarTextIconClass} />
-            </RibbonIconButton>
-          </div>
-          <ColorPaletteButton
-            ariaLabel="Fill color"
-            currentColor={currentFillColor}
-            customInputLabel="Custom fill color"
-            icon={<PaintBucket className={toolbarTextIconClass} />}
-            onReset={() => {
-              void resetFillColor();
+            <AlignLeft className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            active={horizontalAlignment === "center"}
+            ariaLabel="Align center"
+            onClick={() => {
+              void applyRangeStyle({
+                alignment: { horizontal: horizontalAlignment === "center" ? null : "center" },
+              });
             }}
-            onSelectColor={(color, source) => {
-              void applyFillColor(color, source);
+          >
+            <AlignCenter className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            active={horizontalAlignment === "right"}
+            ariaLabel="Align right"
+            onClick={() => {
+              void applyRangeStyle({
+                alignment: { horizontal: horizontalAlignment === "right" ? null : "right" },
+              });
             }}
-            recentColors={visibleRecentFillColors}
-            swatches={GOOGLE_SHEETS_SWATCH_ROWS}
-          />
-          <ColorPaletteButton
-            ariaLabel="Text color"
-            currentColor={currentTextColor}
-            customInputLabel="Custom text color"
-            icon={<Baseline className={toolbarTextIconClass} />}
-            onReset={() => {
-              void resetTextColor();
-            }}
-            onSelectColor={(color, source) => {
-              void applyTextColor(color, source);
-            }}
-            recentColors={visibleRecentTextColors}
-            swatches={GOOGLE_SHEETS_SWATCH_ROWS}
-          />
+          >
+            <AlignRight className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
         </div>
+      </Toolbar.Group>
 
-        <div className="mx-1 h-4 w-px shrink-0 bg-[#dadce0]" />
+      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
 
-        <div className={toolbarGroupClass}>
-          <div className={toolbarSegmentedClass} role="group" aria-label="Horizontal alignment">
-            <RibbonIconButton
-              active={selectedStyle?.alignment?.horizontal === "left"}
-              ariaLabel="Align left"
-              onClick={() => {
-                void applyRangeStyle({
-                  alignment: {
-                    horizontal: selectedStyle?.alignment?.horizontal === "left" ? null : "left",
-                  },
-                });
-              }}
-            >
-              <AlignLeft className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              active={selectedStyle?.alignment?.horizontal === "center"}
-              ariaLabel="Align center"
-              onClick={() => {
-                void applyRangeStyle({
-                  alignment: {
-                    horizontal: selectedStyle?.alignment?.horizontal === "center" ? null : "center",
-                  },
-                });
-              }}
-            >
-              <AlignCenter className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              active={selectedStyle?.alignment?.horizontal === "right"}
-              ariaLabel="Align right"
-              onClick={() => {
-                void applyRangeStyle({
-                  alignment: {
-                    horizontal: selectedStyle?.alignment?.horizontal === "right" ? null : "right",
-                  },
-                });
-              }}
-            >
-              <AlignRight className={toolbarTextIconClass} />
-            </RibbonIconButton>
-          </div>
-        </div>
-
-        <div className="mx-1 h-4 w-px shrink-0 bg-[#dadce0]" />
-
-        <div className={toolbarGroupClass}>
-          <div className={toolbarSegmentedClass} role="group" aria-label="Border presets">
-            <RibbonIconButton
-              ariaLabel="Bottom border"
-              onClick={() =>
-                void applyRangeStyle({
-                  borders: {
-                    bottom: { style: "double", weight: "medium", color: "#111827" },
-                  },
-                })
-              }
-            >
-              <SquareDashedBottom className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton ariaLabel="Outer borders" onClick={() => void applyOuterBorders()}>
-              <Square className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              ariaLabel="All borders"
-              onClick={() =>
-                void applyRangeStyle({
-                  borders: {
-                    top: { style: "solid", weight: "thin", color: "#111827" },
-                    right: { style: "solid", weight: "thin", color: "#111827" },
-                    bottom: { style: "solid", weight: "thin", color: "#111827" },
-                    left: { style: "solid", weight: "thin", color: "#111827" },
-                  },
-                })
-              }
-            >
-              <Grid2x2 className={toolbarTextIconClass} />
-            </RibbonIconButton>
-            <RibbonIconButton
-              ariaLabel="No borders"
-              onClick={() =>
-                void clearRangeStyleFields([
-                  "borderTop",
-                  "borderRight",
-                  "borderBottom",
-                  "borderLeft",
-                ])
-              }
-            >
-              <Grid2x2X className={toolbarTextIconClass} />
-            </RibbonIconButton>
-          </div>
-        </div>
-
-        <div className="mx-1 h-4 w-px shrink-0 bg-[#dadce0]" />
-
-        <div className={toolbarGroupClass}>
-          <button
-            aria-label="Wrap"
-            aria-pressed={selectedStyle?.alignment?.wrap === true}
-            className={classNames(
-              toolbarButtonClass,
-              selectedStyle?.alignment?.wrap === true && activeToolbarButtonClass,
-            )}
+      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Border presets">
+          <RibbonIconButton
+            ariaLabel="Bottom border"
             onClick={() =>
               void applyRangeStyle({
-                alignment: { wrap: !(selectedStyle?.alignment?.wrap ?? false) },
+                borders: {
+                  bottom: { style: "double", weight: "medium", color: "#111827" },
+                },
               })
             }
-            type="button"
           >
-            <WrapText className={toolbarTextIconClass} />
-            <span className="sr-only">Wrap</span>
-          </button>
-          <button
-            aria-label="Clear style"
-            className={toolbarButtonClass}
-            onClick={() => void clearRangeStyleFields()}
-            type="button"
+            <SquareDashedBottom className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            ariaLabel="Outer borders"
+            shortcut="⌘/Ctrl+Shift+7"
+            onClick={() => void applyOuterBorders()}
           >
-            <RemoveFormatting className={toolbarTextIconClass} />
-            <span className="sr-only">Clear style</span>
-          </button>
+            <Square className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            ariaLabel="All borders"
+            onClick={() =>
+              void applyRangeStyle({
+                borders: {
+                  top: { style: "solid", weight: "thin", color: "#111827" },
+                  right: { style: "solid", weight: "thin", color: "#111827" },
+                  bottom: { style: "solid", weight: "thin", color: "#111827" },
+                  left: { style: "solid", weight: "thin", color: "#111827" },
+                },
+              })
+            }
+          >
+            <Grid2x2 className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
+          <RibbonIconButton
+            ariaLabel="No borders"
+            onClick={() =>
+              void clearRangeStyleFields(["borderTop", "borderRight", "borderBottom", "borderLeft"])
+            }
+          >
+            <Grid2x2X className={TOOLBAR_ICON_CLASS} />
+          </RibbonIconButton>
         </div>
-      </div>
-    </div>
+      </Toolbar.Group>
+
+      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+
+      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+        <RibbonIconButton
+          active={isWrapActive}
+          ariaLabel="Wrap"
+          onClick={() =>
+            void applyRangeStyle({
+              alignment: { wrap: !isWrapActive },
+            })
+          }
+        >
+          <WrapText className={TOOLBAR_ICON_CLASS} />
+          <span className="sr-only">Wrap</span>
+        </RibbonIconButton>
+        <RibbonIconButton ariaLabel="Clear style" onClick={() => void clearRangeStyleFields()}>
+          <RemoveFormatting className={TOOLBAR_ICON_CLASS} />
+          <span className="sr-only">Clear style</span>
+        </RibbonIconButton>
+      </Toolbar.Group>
+    </Toolbar.Root>
   );
 
   const bridgeLoading = bridgeEnabled && bridgeState === null;

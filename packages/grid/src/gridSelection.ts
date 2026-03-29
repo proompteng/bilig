@@ -75,14 +75,23 @@ export function createRangeSelection(
 export function formatSelectionSummary(selection: GridSelection, fallbackAddress: string): string {
   const selectedColumnStart = selection.columns.first();
   const selectedColumnEnd = selection.columns.last();
+  const selectedRowStart = selection.rows.first();
+  const selectedRowEnd = selection.rows.last();
+  if (
+    selectedColumnStart === 0 &&
+    selectedColumnEnd === MAX_COLS - 1 &&
+    selectedRowStart === 0 &&
+    selectedRowEnd === MAX_ROWS - 1
+  ) {
+    return "All";
+  }
+
   if (selectedColumnStart !== undefined && selectedColumnEnd !== undefined) {
     const start = indexToColumn(selectedColumnStart);
     const end = indexToColumn(selectedColumnEnd);
     return start === end ? `${start}:${start}` : `${start}:${end}`;
   }
 
-  const selectedRowStart = selection.rows.first();
-  const selectedRowEnd = selection.rows.last();
   if (selectedRowStart !== undefined && selectedRowEnd !== undefined) {
     const start = String(selectedRowStart + 1);
     const end = String(selectedRowEnd + 1);
@@ -158,6 +167,18 @@ export function createRowSliceSelection(
     },
     columns: CompactSelection.empty(),
     rows: CompactSelection.fromSingleSelection([top, bottom + 1]),
+  };
+}
+
+export function createSheetSelection(): GridSelection {
+  return {
+    current: {
+      cell: [0, 0],
+      range: { x: 0, y: 0, width: MAX_COLS, height: MAX_ROWS },
+      rangeStack: [],
+    },
+    columns: CompactSelection.fromSingleSelection([0, MAX_COLS]),
+    rows: CompactSelection.fromSingleSelection([0, MAX_ROWS]),
   };
 }
 

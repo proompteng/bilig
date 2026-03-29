@@ -33,7 +33,7 @@ export function FormulaBar({
 
   return (
     <div
-      className="formula-bar flex items-center gap-2 border-b border-[#dadce0] bg-white px-3 py-2"
+      className="formula-bar flex items-center gap-2 border-b border-[#d7dce5] bg-white px-3 py-2"
       data-testid="formula-bar"
     >
       <div className="w-[112px] shrink-0">
@@ -42,7 +42,7 @@ export function FormulaBar({
         </label>
         <input
           aria-label="Name box"
-          className="box-border h-8 w-full rounded-[2px] border border-[#dadce0] bg-white px-3 text-[14px] leading-none text-[#202124] outline-none focus:border-[#1a73e8]"
+          className="box-border h-8 w-full rounded-[6px] border border-[#dadce0] bg-white px-3 text-[13px] leading-none text-[#202124] outline-none transition-[border-color,box-shadow] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#d2e3fc]"
           data-testid="name-box"
           id="name-box-input"
           value={addressValue}
@@ -69,18 +69,18 @@ export function FormulaBar({
           Formula
         </label>
         <div
-          className="box-border flex h-8 items-center rounded-[2px] border border-[#dadce0] bg-white"
+          className="box-border flex h-8 items-center rounded-[6px] border border-[#dadce0] bg-white"
           data-testid="formula-input-frame"
         >
           <span
             aria-hidden="true"
-            className="inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[#dadce0] text-[16px] font-semibold leading-none text-[#5f6368]"
+            className="inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[#d7dce5] text-[15px] font-semibold leading-none text-[#5f6368]"
           >
             fx
           </span>
           <input
             aria-label="Formula"
-            className="h-full min-w-0 flex-1 border-0 bg-white px-3 text-[14px] leading-none text-[#202124] outline-none"
+            className="h-full min-w-0 flex-1 border-0 bg-white px-3 text-[13px] leading-none text-[#202124] outline-none"
             data-testid="formula-input"
             id="formula-input"
             placeholder="Type a literal or =formula"

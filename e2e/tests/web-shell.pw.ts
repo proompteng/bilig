@@ -3174,6 +3174,62 @@ test("web app commits in-cell string edits when clicking away", async ({ page })
   await expect(resolvedValue).toHaveText("h");
 });
 
+test("web app applies core formatting shortcuts from the keyboard", async ({ page }) => {
+  await page.goto("/?zeroViewportBridge=off");
+
+  const grid = page.getByTestId("sheet-grid");
+  await clickProductCell(page, 0, 0);
+  await grid.press(`${PRIMARY_MODIFIER}+B`);
+  await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await grid.press(`${PRIMARY_MODIFIER}+I`);
+  await expect(page.getByLabel("Italic")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await grid.press(`${PRIMARY_MODIFIER}+U`);
+  await expect(page.getByLabel("Underline")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await grid.press(`${PRIMARY_MODIFIER}+Shift+E`);
+  await expect(page.getByLabel("Align center")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await grid.press(`${PRIMARY_MODIFIER}+Shift+R`);
+  await expect(page.getByLabel("Align right")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await grid.press(`${PRIMARY_MODIFIER}+Shift+L`);
+  await expect(page.getByLabel("Align left")).toHaveClass(/bg-\[#e6f4ea\]/);
+});
+
+test("web app supports row, column, and full-sheet selection shortcuts", async ({ page }) => {
+  await page.goto("/?zeroViewportBridge=off");
+
+  const grid = page.getByTestId("sheet-grid");
+  await clickProductCell(page, 2, 4);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
+
+  await grid.press("Shift+Space");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!5:5");
+
+  await grid.press(`${PRIMARY_MODIFIER}+Space`);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C:C");
+
+  await grid.press(`${PRIMARY_MODIFIER}+Shift+Space`);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!All");
+
+  await grid.press(`${PRIMARY_MODIFIER}+A`);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!All");
+});
+
+test("web app expands the active range with repeated shift arrows", async ({ page }) => {
+  await page.goto("/?zeroViewportBridge=off");
+
+  const grid = page.getByTestId("sheet-grid");
+  await clickProductCell(page, 2, 4);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
+
+  await grid.press("Shift+ArrowRight");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5:D5");
+
+  await grid.press("Shift+ArrowRight");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5:E5");
+
+  await grid.press("Shift+ArrowDown");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5:E6");
+});
+
 test("web app ignores right gutter clicks", async ({ page }) => {
   await page.goto("/?zeroViewportBridge=off");
 

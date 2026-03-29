@@ -34,7 +34,9 @@ import {
   createColumnSliceSelection,
   createGridSelection,
   createRangeSelection,
+  createRowSelection,
   createRowSliceSelection,
+  createSheetSelection,
   formatSelectionSummary,
   rectangleToAddresses,
 } from "./gridSelection.js";
@@ -587,6 +589,13 @@ export function SheetGridView({
     onSelectionLabelChange?.(selectionSummary);
   }, [onSelectionLabelChange, selectionSummary]);
 
+  const currentSelectionCellCol = gridSelection.current?.cell?.[0] ?? null;
+  const currentSelectionCellRow = gridSelection.current?.cell?.[1] ?? null;
+  const currentSelectionRangeX = gridSelection.current?.range?.x ?? null;
+  const currentSelectionRangeY = gridSelection.current?.range?.y ?? null;
+  const currentSelectionRangeWidth = gridSelection.current?.range?.width ?? null;
+  const currentSelectionRangeHeight = gridSelection.current?.range?.height ?? null;
+
   const handleGridKey = useCallback(
     (event: {
       key: string;
@@ -597,6 +606,23 @@ export function SheetGridView({
       preventDefault(): void;
       cancel?: () => void;
     }) => {
+      const currentSelectionCell: [number, number] | null =
+        currentSelectionCellCol === null || currentSelectionCellRow === null
+          ? null
+          : [currentSelectionCellCol, currentSelectionCellRow];
+      const currentSelectionRange =
+        currentSelectionRangeX === null ||
+        currentSelectionRangeY === null ||
+        currentSelectionRangeWidth === null ||
+        currentSelectionRangeHeight === null
+          ? null
+          : {
+              x: currentSelectionRangeX,
+              y: currentSelectionRangeY,
+              width: currentSelectionRangeWidth,
+              height: currentSelectionRangeHeight,
+            };
+
       const action = resolveGridKeyAction({
         event,
         isEditingCell,
@@ -604,8 +630,9 @@ export function SheetGridView({
         editorInputFocused: isCellEditorInputFocused(),
         pendingTypeSeed: pendingTypeSeedRef.current,
         selectedCell: [selectedCell.col, selectedCell.row],
-        currentSelectionCell: gridSelection.current?.cell ?? null,
-        currentRangeAnchor: gridSelection.current?.cell ?? null,
+        currentSelectionCell,
+        currentRangeAnchor: currentSelectionCell,
+        currentSelectionRange,
       });
 
       if (action.kind === "none") {
@@ -682,14 +709,28 @@ export function SheetGridView({
           }
           return;
         }
+        case "select-row":
+          setGridSelection(createRowSelection(action.col, action.row));
+          return;
+        case "select-column":
+          setGridSelection(createColumnSelection(action.col, action.row));
+          return;
+        case "select-all":
+          setGridSelection(createSheetSelection());
+          return;
       }
     },
     [
       applyClipboardValues,
       beginSelectedEdit,
       captureInternalClipboardSelection,
+      currentSelectionCellCol,
+      currentSelectionCellRow,
+      currentSelectionRangeHeight,
+      currentSelectionRangeWidth,
+      currentSelectionRangeX,
+      currentSelectionRangeY,
       editorValue,
-      gridSelection.current?.cell,
       isEditingCell,
       onCancelEdit,
       onClearCell,
@@ -732,6 +773,7 @@ export function SheetGridView({
           ctrlKey: event.ctrlKey,
           key: normalizedKey,
           metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
         })
       ) {
         return;

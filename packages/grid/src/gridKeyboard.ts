@@ -57,17 +57,26 @@ export function isClipboardShortcut(
 }
 
 export function isHandledGridKey(
-  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">,
+  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey"> & {
+    shiftKey?: boolean;
+  },
 ): boolean {
+  const hasPrimaryModifier = event.ctrlKey || event.metaKey;
   return (
     isPrintableKey(event) ||
     isClipboardShortcut(event) ||
     isNavigationKey(event.key) ||
+    (hasPrimaryModifier && event.key.toLowerCase() === "a") ||
+    (event.key === " " && (hasPrimaryModifier || event.shiftKey)) ||
     event.key === "Enter" ||
     event.key === "Tab" ||
     event.key === "Escape" ||
     event.key === "F2" ||
     event.key === "Backspace" ||
-    event.key === "Delete"
+    event.key === "Delete" ||
+    event.key === "Home" ||
+    event.key === "End" ||
+    event.key === "PageUp" ||
+    event.key === "PageDown"
   );
 }

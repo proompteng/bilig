@@ -1,4 +1,5 @@
 import React from "react";
+import { Tabs } from "@base-ui/react/tabs";
 import type { Viewport } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
@@ -92,7 +93,7 @@ export function WorkbookView({
   onVisibleViewportChange,
 }: WorkbookViewProps) {
   return (
-    <section className="flex h-screen flex-col overflow-hidden bg-[#f8f9fa]">
+    <section className="flex h-screen flex-col overflow-hidden bg-[#f6f8fb]">
       {ribbon ? <div className="shrink-0">{ribbon}</div> : null}
       <div className="flex min-h-0 flex-1 flex-col bg-white">
         <FormulaBar
@@ -131,27 +132,22 @@ export function WorkbookView({
           selectedAddr={selectedAddr}
           sheetName={sheetName}
         />
-        <div className="flex min-h-8 items-center justify-between gap-3 border-t border-[#dadce0] bg-[#f8f9fa] px-2">
-          <div aria-label="Sheets" className="flex items-end gap-1" role="tablist">
-            {sheetNames.map((name) => (
-              <button
-                aria-selected={name === sheetName}
-                className={`inline-flex h-7 items-center rounded-t-[3px] border border-b-0 px-3 text-[12px] ${
-                  name === sheetName
-                    ? "border-[#dadce0] bg-white text-[#202124]"
-                    : "border-transparent bg-transparent text-[#5f6368] hover:bg-[#eef2f6]"
-                }`}
-                key={name}
-                onClick={() => onSelectSheet(name)}
-                role="tab"
-                type="button"
-              >
-                {name}
-              </button>
-            ))}
-          </div>
+        <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#d7dce5] bg-[#f8fafc] px-2.5">
+          <Tabs.Root value={sheetName} onValueChange={(value) => onSelectSheet(String(value))}>
+            <Tabs.List aria-label="Sheets" className="flex items-end gap-1">
+              {sheetNames.map((name) => (
+                <Tabs.Tab
+                  className="inline-flex h-8 items-center rounded-t-[6px] border border-b-0 border-transparent bg-transparent px-3 text-[12px] font-medium text-[#5f6368] outline-none transition-[background-color,border-color,color] hover:bg-[#eef3f9] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc] data-[active]:border-[#d6dbe6] data-[active]:bg-white data-[active]:text-[#202124]"
+                  key={name}
+                  value={name}
+                >
+                  {name}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.Root>
           {statusBar ? (
-            <div className="inline-flex flex-wrap items-center gap-3 text-[11px] text-[#5f6368]">
+            <div className="inline-flex flex-wrap items-center gap-2 text-[11px] text-[#5f6368]">
               {statusBar}
             </div>
           ) : null}
