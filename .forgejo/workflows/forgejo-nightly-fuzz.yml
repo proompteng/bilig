@@ -8,8 +8,10 @@ on:
 jobs:
   nightly-fuzz:
     name: nightly-fuzz
-    runs-on: bilig-ci
+    runs-on: docker
     timeout-minutes: 45
+    container:
+      image: docker.io/library/node:24-bookworm
     env:
       CI: "true"
     steps:

@@ -10,8 +10,10 @@ on:
 jobs:
   verify:
     name: strict-verify
-    runs-on: bilig-ci
+    runs-on: docker
     timeout-minutes: 20
+    container:
+      image: docker.io/library/node:24-bookworm
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
