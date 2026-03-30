@@ -58,6 +58,18 @@ jobs:
           set -eu
           pnpm exec playwright install --with-deps chromium
 
+      - name: Install docker-compose fallback
+        run: |
+          set -eu
+          if ! docker compose version >/dev/null 2>&1; then
+            curl -fsSL -o /usr/local/bin/docker-compose "https://github.com/docker/compose/releases/download/v2.33.1/docker-compose-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
+            chmod +x /usr/local/bin/docker-compose
+          fi
+          docker-compose --version
+          if docker compose version >/dev/null 2>&1; then
+            docker compose version
+          fi
+
       - name: Run strict repository CI
         run: |
           set -eu
