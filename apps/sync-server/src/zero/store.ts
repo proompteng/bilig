@@ -1,9 +1,14 @@
-import type { EngineReplicaSnapshot, SpreadsheetEngine } from "@bilig/core";
+import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
 import { parseCellAddress } from "@bilig/formula";
 import {
   ValueTag,
+  type CellBorderStyle,
+  type CellBorderWeight,
+  type CellHorizontalAlignment,
   type CellRangeRef,
+  type CellStyleRecord,
   type CellValue,
+  type CellVerticalAlignment,
   type WorkbookSnapshot,
 } from "@bilig/protocol";
 import {
@@ -14,9 +19,8 @@ import {
 } from "./events.js";
 import {
   buildCalculationSettingsRow,
+  buildSheetCellSourceRows,
   buildSheetColumnMetadataRows,
-  buildSheetFormatRangeRows,
-  buildSheetStyleRangeRows,
   buildSingleCellSourceRow,
   buildWorkbookHeaderRow,
   buildWorkbookNumberFormatRows,
@@ -28,10 +32,8 @@ import {
   type CellEvalRow,
   type CellSourceRow,
   type DefinedNameSourceRow,
-  type FormatRangeSourceRow,
   type NumberFormatSourceRow,
   type SheetSourceRow,
-  type StyleRangeSourceRow,
   type StyleSourceRow,
   type WorkbookMetadataSourceRow,
   type WorkbookSourceProjection,
@@ -101,6 +103,7 @@ const WORKBOOK_SNAPSHOT_RETENTION = 5;
 const WORKBOOK_SNAPSHOT_INTERVAL = 64;
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;
+const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2;
 
 type FocusedCellEventPayload = Extract<
   WorkbookEventPayload,
@@ -170,6 +173,22 @@ function isDirtyRegion(value: unknown): value is DirtyRegion {
   );
 }
 
+function isCellHorizontalAlignment(value: unknown): value is CellHorizontalAlignment {
+  return value === "general" || value === "left" || value === "center" || value === "right";
+}
+
+function isCellVerticalAlignment(value: unknown): value is CellVerticalAlignment {
+  return value === "top" || value === "middle" || value === "bottom";
+}
+
+function isCellBorderStyle(value: unknown): value is CellBorderStyle {
+  return value === "solid" || value === "dashed" || value === "dotted" || value === "double";
+}
+
+function isCellBorderWeight(value: unknown): value is CellBorderWeight {
+  return value === "thin" || value === "medium" || value === "thick";
+}
+
 function workbookSnapshot(value: unknown, documentId: string): WorkbookSnapshot {
   return isWorkbookSnapshot(value) ? value : createEmptyWorkbookSnapshot(documentId);
 }
@@ -233,6 +252,7 @@ function cellSignature(row: CellSourceRow): string {
     row.inputValue ?? null,
     row.formula ?? null,
     row.format ?? null,
+    row.styleId ?? null,
     row.explicitFormatId ?? null,
   ]);
 }
@@ -263,28 +283,6 @@ function numberFormatSignature(row: NumberFormatSourceRow): string {
   return semanticSignature([row.id, row.code, row.kind]);
 }
 
-function styleRangeSignature(row: StyleRangeSourceRow): string {
-  return semanticSignature([
-    row.sheetName,
-    row.startRow,
-    row.endRow,
-    row.startCol,
-    row.endCol,
-    row.styleId,
-  ]);
-}
-
-function formatRangeSignature(row: FormatRangeSourceRow): string {
-  return semanticSignature([
-    row.sheetName,
-    row.startRow,
-    row.endRow,
-    row.startCol,
-    row.endCol,
-    row.formatId,
-  ]);
-}
-
 function cellEvalSignature(row: CellEvalRow): string {
   return semanticSignature([
     row.sheetName,
@@ -295,6 +293,7 @@ function cellEvalSignature(row: CellEvalRow): string {
     row.flags,
     row.version,
     row.styleId,
+    row.styleJson,
     row.formatId,
     row.formatCode,
   ]);
@@ -335,6 +334,74 @@ function parseCellEvalValue(value: unknown): CellValue {
   return isCellValue(value) ? value : { tag: ValueTag.Empty };
 }
 
+function parseCellStyleRecord(value: unknown): CellStyleRecord | null {
+  if (!isRecord(value) || typeof value["id"] !== "string") {
+    return null;
+  }
+  const record: CellStyleRecord = { id: value["id"] };
+  if (isRecord(value["fill"])) {
+    const fill = value["fill"];
+    if (typeof fill["backgroundColor"] === "string") {
+      record.fill = { backgroundColor: fill["backgroundColor"] };
+    }
+  }
+  if (isRecord(value["font"])) {
+    const font = value["font"];
+    record.font = {
+      ...(typeof font["family"] === "string" ? { family: font["family"] } : {}),
+      ...(typeof font["size"] === "number" ? { size: font["size"] } : {}),
+      ...(typeof font["bold"] === "boolean" ? { bold: font["bold"] } : {}),
+      ...(typeof font["italic"] === "boolean" ? { italic: font["italic"] } : {}),
+      ...(typeof font["underline"] === "boolean" ? { underline: font["underline"] } : {}),
+      ...(typeof font["color"] === "string" ? { color: font["color"] } : {}),
+    };
+    if (Object.keys(record.font).length === 0) {
+      delete record.font;
+    }
+  }
+  if (isRecord(value["alignment"])) {
+    const alignment = value["alignment"];
+    const nextAlignment = {
+      ...(isCellHorizontalAlignment(alignment["horizontal"])
+        ? { horizontal: alignment["horizontal"] }
+        : {}),
+      ...(isCellVerticalAlignment(alignment["vertical"])
+        ? { vertical: alignment["vertical"] }
+        : {}),
+      ...(typeof alignment["wrap"] === "boolean" ? { wrap: alignment["wrap"] } : {}),
+      ...(typeof alignment["indent"] === "number" ? { indent: alignment["indent"] } : {}),
+    };
+    if (Object.keys(nextAlignment).length > 0) {
+      record.alignment = nextAlignment;
+    }
+  }
+  if (isRecord(value["borders"])) {
+    const borders = value["borders"];
+    const nextBorders: NonNullable<CellStyleRecord["borders"]> = {};
+    for (const side of ["top", "right", "bottom", "left"] as const) {
+      const border = borders[side];
+      if (!isRecord(border)) {
+        continue;
+      }
+      if (
+        isCellBorderStyle(border["style"]) &&
+        isCellBorderWeight(border["weight"]) &&
+        typeof border["color"] === "string"
+      ) {
+        nextBorders[side] = {
+          style: border["style"],
+          weight: border["weight"],
+          color: border["color"],
+        };
+      }
+    }
+    if (Object.keys(nextBorders).length > 0) {
+      record.borders = nextBorders;
+    }
+  }
+  return record;
+}
+
 function normalizeRangeBounds(range: CellRangeRef): {
   sheetName: string;
   rowStart: number;
@@ -355,6 +422,20 @@ function normalizeRangeBounds(range: CellRangeRef): {
 
 function cellEvalRowInRange(
   row: Pick<CellEvalRow, "sheetName" | "rowNum" | "colNum">,
+  range: CellRangeRef,
+): boolean {
+  const bounds = normalizeRangeBounds(range);
+  return (
+    row.sheetName === bounds.sheetName &&
+    row.rowNum >= bounds.rowStart &&
+    row.rowNum <= bounds.rowEnd &&
+    row.colNum >= bounds.colStart &&
+    row.colNum <= bounds.colEnd
+  );
+}
+
+function cellSourceRowInRange(
+  row: Pick<CellSourceRow, "sheetName" | "rowNum" | "colNum">,
   range: CellRangeRef,
 ): boolean {
   const bounds = normalizeRangeBounds(range);
@@ -411,6 +492,7 @@ async function upsertWorkbookHeader(
         owner_user_id,
         head_revision,
         calculated_revision,
+        source_projection_version,
         calc_mode,
         compatibility_mode,
         recalc_epoch,
@@ -418,13 +500,14 @@ async function upsertWorkbookHeader(
         replica_snapshot,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::timestamptz)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::timestamptz)
       ON CONFLICT (id)
       DO UPDATE SET
         name = EXCLUDED.name,
         owner_user_id = EXCLUDED.owner_user_id,
         head_revision = EXCLUDED.head_revision,
         calculated_revision = EXCLUDED.calculated_revision,
+        source_projection_version = EXCLUDED.source_projection_version,
         calc_mode = EXCLUDED.calc_mode,
         compatibility_mode = EXCLUDED.compatibility_mode,
         recalc_epoch = EXCLUDED.recalc_epoch,
@@ -438,6 +521,7 @@ async function upsertWorkbookHeader(
       projection.ownerUserId,
       projection.headRevision,
       projection.calculatedRevision,
+      AUTHORITATIVE_SOURCE_PROJECTION_VERSION,
       projection.calcMode,
       projection.compatibilityMode,
       projection.recalcEpoch,
@@ -525,12 +609,13 @@ async function applyCellDiff(
           input_value,
           formula,
           format,
+          style_id,
           explicit_format_id,
           source_revision,
           updated_by,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12::timestamptz)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::timestamptz)
         ON CONFLICT (workbook_id, sheet_name, address)
         DO UPDATE SET
           row_num = EXCLUDED.row_num,
@@ -538,6 +623,7 @@ async function applyCellDiff(
           input_value = EXCLUDED.input_value,
           formula = EXCLUDED.formula,
           format = EXCLUDED.format,
+          style_id = EXCLUDED.style_id,
           explicit_format_id = EXCLUDED.explicit_format_id,
           source_revision = EXCLUDED.source_revision,
           updated_by = EXCLUDED.updated_by,
@@ -552,6 +638,7 @@ async function applyCellDiff(
           JSON.stringify(row.inputValue ?? null),
           row.formula,
           row.format,
+          row.styleId,
           row.explicitFormatId,
           row.sourceRevision,
           row.updatedBy,
@@ -561,6 +648,30 @@ async function applyCellDiff(
     );
   }
   await Promise.all(tasks);
+}
+
+async function persistCellSourceRange(
+  db: Queryable,
+  documentId: string,
+  range: CellRangeRef,
+  nextRows: readonly CellSourceRow[],
+): Promise<void> {
+  const bounds = normalizeRangeBounds(range);
+  const nextRowsInRange = nextRows.filter((row) => cellSourceRowInRange(row, range));
+  await db.query(
+    `
+      DELETE FROM cells
+      WHERE workbook_id = $1
+        AND sheet_name = $2
+        AND row_num BETWEEN $3 AND $4
+        AND col_num BETWEEN $5 AND $6
+    `,
+    [documentId, bounds.sheetName, bounds.rowStart, bounds.rowEnd, bounds.colStart, bounds.colEnd],
+  );
+  if (nextRowsInRange.length === 0) {
+    return;
+  }
+  await applyCellDiff(db, [], nextRowsInRange);
 }
 
 async function applyAxisMetadataDiff(
@@ -798,128 +909,6 @@ async function applyNumberFormatDiff(
   await Promise.all(tasks);
 }
 
-async function applyStyleRangeDiff(
-  db: Queryable,
-  previousRows: readonly StyleRangeSourceRow[],
-  nextRows: readonly StyleRangeSourceRow[],
-): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.styleRange,
-    styleRangeSignature,
-  );
-  const tasks: Promise<unknown>[] = [];
-  for (const id of diff.deletes) {
-    tasks.push(db.query(`DELETE FROM sheet_style_ranges WHERE id = $1`, [id]));
-  }
-  for (const row of diff.upserts) {
-    tasks.push(
-      db.query(
-        `
-        INSERT INTO sheet_style_ranges (
-          id,
-          workbook_id,
-          sheet_name,
-          start_row,
-          end_row,
-          start_col,
-          end_col,
-          style_id,
-          source_revision,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz)
-        ON CONFLICT (id)
-        DO UPDATE SET
-          sheet_name = EXCLUDED.sheet_name,
-          start_row = EXCLUDED.start_row,
-          end_row = EXCLUDED.end_row,
-          start_col = EXCLUDED.start_col,
-          end_col = EXCLUDED.end_col,
-          style_id = EXCLUDED.style_id,
-          source_revision = EXCLUDED.source_revision,
-          updated_at = EXCLUDED.updated_at
-      `,
-        [
-          row.id,
-          row.workbookId,
-          row.sheetName,
-          row.startRow,
-          row.endRow,
-          row.startCol,
-          row.endCol,
-          row.styleId,
-          row.sourceRevision,
-          row.updatedAt,
-        ],
-      ),
-    );
-  }
-  await Promise.all(tasks);
-}
-
-async function applyFormatRangeDiff(
-  db: Queryable,
-  previousRows: readonly FormatRangeSourceRow[],
-  nextRows: readonly FormatRangeSourceRow[],
-): Promise<void> {
-  const diff = diffProjectionRows(
-    previousRows,
-    nextRows,
-    sourceProjectionKeys.formatRange,
-    formatRangeSignature,
-  );
-  const tasks: Promise<unknown>[] = [];
-  for (const id of diff.deletes) {
-    tasks.push(db.query(`DELETE FROM sheet_format_ranges WHERE id = $1`, [id]));
-  }
-  for (const row of diff.upserts) {
-    tasks.push(
-      db.query(
-        `
-        INSERT INTO sheet_format_ranges (
-          id,
-          workbook_id,
-          sheet_name,
-          start_row,
-          end_row,
-          start_col,
-          end_col,
-          format_id,
-          source_revision,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz)
-        ON CONFLICT (id)
-        DO UPDATE SET
-          sheet_name = EXCLUDED.sheet_name,
-          start_row = EXCLUDED.start_row,
-          end_row = EXCLUDED.end_row,
-          start_col = EXCLUDED.start_col,
-          end_col = EXCLUDED.end_col,
-          format_id = EXCLUDED.format_id,
-          source_revision = EXCLUDED.source_revision,
-          updated_at = EXCLUDED.updated_at
-      `,
-        [
-          row.id,
-          row.workbookId,
-          row.sheetName,
-          row.startRow,
-          row.endRow,
-          row.startCol,
-          row.endCol,
-          row.formatId,
-          row.sourceRevision,
-          row.updatedAt,
-        ],
-      ),
-    );
-  }
-  await Promise.all(tasks);
-}
-
 async function applySourceProjectionDiff(
   db: Queryable,
   previousProjection: WorkbookSourceProjection,
@@ -948,8 +937,6 @@ async function applySourceProjectionDiff(
   await applyCalculationSettings(db, nextProjection.calculationSettings);
   await applyStyleDiff(db, previousProjection.styles, nextProjection.styles);
   await applyNumberFormatDiff(db, previousProjection.numberFormats, nextProjection.numberFormats);
-  await applyStyleRangeDiff(db, previousProjection.styleRanges, nextProjection.styleRanges);
-  await applyFormatRangeDiff(db, previousProjection.formatRanges, nextProjection.formatRanges);
 }
 
 function buildFocusedCellRows(
@@ -1067,6 +1054,7 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
     flags: number | string | null;
     version: number | string | null;
     style_id: string | null;
+    style_json: unknown;
     format_id: string | null;
     format_code: string | null;
     calc_revision: number | string | null;
@@ -1083,6 +1071,7 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
         flags,
         version,
         style_id,
+        style_json,
         format_id,
         format_code,
         calc_revision,
@@ -1102,67 +1091,7 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
     flags: parseInteger(row.flags),
     version: parseInteger(row.version),
     styleId: row.style_id,
-    formatId: row.format_id,
-    formatCode: row.format_code,
-    calcRevision: parseInteger(row.calc_revision),
-    updatedAt: row.updated_at ?? nowIso(),
-  }));
-}
-
-async function loadCellEvalRowsForRange(
-  db: Queryable,
-  documentId: string,
-  range: CellRangeRef,
-): Promise<CellEvalRow[]> {
-  const bounds = normalizeRangeBounds(range);
-  const result = await db.query<{
-    workbook_id: string;
-    sheet_name: string;
-    address: string;
-    row_num: number | null;
-    col_num: number | null;
-    value: unknown;
-    flags: number | string | null;
-    version: number | string | null;
-    style_id: string | null;
-    format_id: string | null;
-    format_code: string | null;
-    calc_revision: number | string | null;
-    updated_at: string | null;
-  }>(
-    `
-      SELECT
-        workbook_id,
-        sheet_name,
-        address,
-        row_num,
-        col_num,
-        value,
-        flags,
-        version,
-        style_id,
-        format_id,
-        format_code,
-        calc_revision,
-        updated_at
-      FROM cell_eval
-      WHERE workbook_id = $1
-        AND sheet_name = $2
-        AND row_num BETWEEN $3 AND $4
-        AND col_num BETWEEN $5 AND $6
-    `,
-    [documentId, bounds.sheetName, bounds.rowStart, bounds.rowEnd, bounds.colStart, bounds.colEnd],
-  );
-  return result.rows.map((row) => ({
-    workbookId: row.workbook_id,
-    sheetName: row.sheet_name,
-    address: row.address,
-    rowNum: parseInteger(row.row_num),
-    colNum: parseInteger(row.col_num),
-    value: parseCellEvalValue(row.value),
-    flags: parseInteger(row.flags),
-    version: parseInteger(row.version),
-    styleId: row.style_id,
+    styleJson: parseCellStyleRecord(row.style_json),
     formatId: row.format_id,
     formatCode: row.format_code,
     calcRevision: parseInteger(row.calc_revision),
@@ -1206,12 +1135,13 @@ async function persistCellEvalRows(
           flags,
           version,
           style_id,
+          style_json,
           format_id,
           format_code,
           calc_revision,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::timestamptz)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::jsonb, $11, $12, $13, $14::timestamptz)
         ON CONFLICT (workbook_id, sheet_name, address)
         DO UPDATE SET
           row_num = EXCLUDED.row_num,
@@ -1220,6 +1150,7 @@ async function persistCellEvalRows(
           flags = EXCLUDED.flags,
           version = EXCLUDED.version,
           style_id = EXCLUDED.style_id,
+          style_json = EXCLUDED.style_json,
           format_id = EXCLUDED.format_id,
           format_code = EXCLUDED.format_code,
           calc_revision = EXCLUDED.calc_revision,
@@ -1235,6 +1166,7 @@ async function persistCellEvalRows(
           row.flags,
           row.version,
           row.styleId,
+          JSON.stringify(row.styleJson),
           row.formatId,
           row.formatCode,
           row.calcRevision,
@@ -1261,9 +1193,22 @@ async function persistCellEvalRangeDiff(
   range: CellRangeRef,
   nextRows: readonly CellEvalRow[],
 ): Promise<void> {
-  const previousRows = await loadCellEvalRowsForRange(db, documentId, range);
   const nextRowsInRange = nextRows.filter((row) => cellEvalRowInRange(row, range));
-  await persistCellEvalRows(db, documentId, previousRows, nextRowsInRange);
+  const bounds = normalizeRangeBounds(range);
+  await db.query(
+    `
+      DELETE FROM cell_eval
+      WHERE workbook_id = $1
+        AND sheet_name = $2
+        AND row_num BETWEEN $3 AND $4
+        AND col_num BETWEEN $5 AND $6
+    `,
+    [documentId, bounds.sheetName, bounds.rowStart, bounds.rowEnd, bounds.colStart, bounds.colEnd],
+  );
+  if (nextRowsInRange.length === 0) {
+    return;
+  }
+  await persistCellEvalRows(db, documentId, [], nextRowsInRange);
 }
 
 async function persistWorkbookCheckpoint(
@@ -1330,6 +1275,9 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
     `ALTER TABLE workbooks ADD COLUMN IF NOT EXISTS calculated_revision BIGINT NOT NULL DEFAULT 0;`,
   );
   await db.query(
+    `ALTER TABLE workbooks ADD COLUMN IF NOT EXISTS source_projection_version BIGINT NOT NULL DEFAULT 0;`,
+  );
+  await db.query(
     `ALTER TABLE workbooks ADD COLUMN IF NOT EXISTS calc_mode TEXT NOT NULL DEFAULT 'automatic';`,
   );
   await db.query(
@@ -1377,6 +1325,7 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   `);
   await db.query(`ALTER TABLE cells ADD COLUMN IF NOT EXISTS row_num INTEGER;`);
   await db.query(`ALTER TABLE cells ADD COLUMN IF NOT EXISTS col_num INTEGER;`);
+  await db.query(`ALTER TABLE cells ADD COLUMN IF NOT EXISTS style_id TEXT;`);
   await db.query(`ALTER TABLE cells ADD COLUMN IF NOT EXISTS explicit_format_id TEXT;`);
   await db.query(
     `ALTER TABLE cells ADD COLUMN IF NOT EXISTS source_revision BIGINT NOT NULL DEFAULT 0;`,
@@ -1402,6 +1351,7 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS row_num INTEGER;`);
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS col_num INTEGER;`);
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS style_id TEXT;`);
+  await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS style_json JSONB;`);
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS format_id TEXT;`);
   await db.query(`ALTER TABLE cell_eval ADD COLUMN IF NOT EXISTS format_code TEXT;`);
   await db.query(
@@ -1492,35 +1442,6 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
     );
   `);
   await db.query(`
-    CREATE TABLE IF NOT EXISTS sheet_style_ranges (
-      id TEXT PRIMARY KEY,
-      workbook_id TEXT NOT NULL REFERENCES workbooks(id) ON DELETE CASCADE,
-      sheet_name TEXT NOT NULL,
-      start_row INTEGER NOT NULL,
-      end_row INTEGER NOT NULL,
-      start_col INTEGER NOT NULL,
-      end_col INTEGER NOT NULL,
-      style_id TEXT NOT NULL,
-      source_revision BIGINT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS sheet_format_ranges (
-      id TEXT PRIMARY KEY,
-      workbook_id TEXT NOT NULL REFERENCES workbooks(id) ON DELETE CASCADE,
-      sheet_name TEXT NOT NULL,
-      start_row INTEGER NOT NULL,
-      end_row INTEGER NOT NULL,
-      start_col INTEGER NOT NULL,
-      end_col INTEGER NOT NULL,
-      format_id TEXT NOT NULL,
-      source_revision BIGINT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_event (
       workbook_id TEXT NOT NULL REFERENCES workbooks(id) ON DELETE CASCADE,
       revision BIGINT NOT NULL,
@@ -1581,12 +1502,6 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   );
   await db.query(
     `CREATE INDEX IF NOT EXISTS column_metadata_workbook_sheet_idx ON column_metadata(workbook_id, sheet_name, start_index);`,
-  );
-  await db.query(
-    `CREATE INDEX IF NOT EXISTS sheet_style_ranges_workbook_sheet_idx ON sheet_style_ranges(workbook_id, sheet_name, start_row, end_row, start_col, end_col);`,
-  );
-  await db.query(
-    `CREATE INDEX IF NOT EXISTS sheet_format_ranges_workbook_sheet_idx ON sheet_format_ranges(workbook_id, sheet_name, start_row, end_row, start_col, end_col);`,
   );
   await db.query(
     `CREATE INDEX IF NOT EXISTS recalc_job_status_lease_created_idx ON recalc_job(status, lease_until, created_at);`,
@@ -1672,6 +1587,168 @@ export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapsho
       },
     ],
   };
+}
+
+async function tableExists(db: Queryable, name: string): Promise<boolean> {
+  const result = await db.query<{ relation: string | null }>(`SELECT to_regclass($1) AS relation`, [
+    `public.${name}`,
+  ]);
+  return typeof result.rows[0]?.relation === "string";
+}
+
+async function replaceWorkbookSourceProjectionForMigration(
+  db: Queryable,
+  projection: WorkbookSourceProjection,
+): Promise<void> {
+  const workbookId = projection.workbook.id;
+  await db.query(`DELETE FROM sheets WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM cells WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM row_metadata WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM column_metadata WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM defined_names WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM workbook_metadata WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM calculation_settings WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM cell_styles WHERE workbook_id = $1`, [workbookId]);
+  await db.query(`DELETE FROM cell_number_formats WHERE workbook_id = $1`, [workbookId]);
+  await applySheetDiff(db, [], projection.sheets);
+  await applyCellDiff(db, [], projection.cells);
+  await applyAxisMetadataDiff(db, "row_metadata", [], projection.rowMetadata);
+  await applyAxisMetadataDiff(db, "column_metadata", [], projection.columnMetadata);
+  await applyDefinedNameDiff(db, [], projection.definedNames);
+  await applyWorkbookMetadataDiff(db, [], projection.workbookMetadataEntries);
+  await applyCalculationSettings(db, projection.calculationSettings);
+  await applyStyleDiff(db, [], projection.styles);
+  await applyNumberFormatDiff(db, [], projection.numberFormats);
+}
+
+async function replaceCellEvalForMigration(
+  db: Queryable,
+  documentId: string,
+  rows: readonly CellEvalRow[],
+): Promise<void> {
+  await db.query(`DELETE FROM cell_eval WHERE workbook_id = $1`, [documentId]);
+  if (rows.length > 0) {
+    await persistCellEvalRows(db, documentId, [], rows);
+  }
+}
+
+export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void> {
+  const styleRangesExist = await tableExists(db, "sheet_style_ranges");
+  const formatRangesExist = await tableExists(db, "sheet_format_ranges");
+  const legacyWorkbookIds = new Set<string>();
+
+  const staleProjectionRows = await db.query<{ id: string }>(
+    `
+      SELECT id
+      FROM workbooks
+      WHERE source_projection_version < $1
+    `,
+    [AUTHORITATIVE_SOURCE_PROJECTION_VERSION],
+  );
+  for (const row of staleProjectionRows.rows) {
+    legacyWorkbookIds.add(row.id);
+  }
+
+  const staleRenderRows = await db.query<{ workbook_id: string }>(
+    `
+      SELECT DISTINCT workbook_id
+      FROM cell_eval
+      WHERE style_id IS NOT NULL
+        AND style_json IS NULL
+    `,
+  );
+  for (const row of staleRenderRows.rows) {
+    legacyWorkbookIds.add(row.workbook_id);
+  }
+
+  if (styleRangesExist) {
+    const legacyStyleRows = await db.query<{ workbook_id: string }>(
+      `SELECT DISTINCT workbook_id FROM sheet_style_ranges`,
+    );
+    for (const row of legacyStyleRows.rows) {
+      legacyWorkbookIds.add(row.workbook_id);
+    }
+  }
+
+  if (formatRangesExist) {
+    const legacyFormatRows = await db.query<{ workbook_id: string }>(
+      `SELECT DISTINCT workbook_id FROM sheet_format_ranges`,
+    );
+    for (const row of legacyFormatRows.rows) {
+      legacyWorkbookIds.add(row.workbook_id);
+    }
+  }
+
+  if (legacyWorkbookIds.size === 0) {
+    return;
+  }
+
+  const result = await db.query<{
+    id: string;
+    snapshot: unknown;
+    replica_snapshot: unknown;
+    calculated_revision: number | string | null;
+    head_revision: number | string | null;
+    owner_user_id: string | null;
+    updated_at: string | null;
+  }>(
+    `
+      SELECT
+        id,
+        snapshot,
+        replica_snapshot,
+        calculated_revision,
+        head_revision,
+        owner_user_id,
+        updated_at
+      FROM workbooks
+      WHERE id = ANY($1::text[])
+    `,
+    [[...legacyWorkbookIds]],
+  );
+
+  await Promise.all(
+    result.rows.map(async (row) => {
+      const snapshot = workbookSnapshot(row.snapshot, row.id);
+      const replicaSnapshot = workbookReplicaSnapshot(row.replica_snapshot);
+      const updatedAt = row.updated_at ?? nowIso();
+      const engine = new SpreadsheetEngine({
+        workbookName: row.id,
+        replicaId: `cell-eval-backfill:${row.id}`,
+      });
+      await engine.ready();
+      engine.importSnapshot(snapshot);
+      if (replicaSnapshot) {
+        engine.importReplicaSnapshot(replicaSnapshot);
+      }
+      const projection = buildWorkbookSourceProjection(row.id, snapshot, {
+        revision: parseInteger(row.head_revision),
+        calculatedRevision: parseInteger(row.calculated_revision),
+        ownerUserId: row.owner_user_id ?? "system",
+        updatedBy: row.owner_user_id ?? "system",
+        updatedAt,
+      });
+      await replaceWorkbookSourceProjectionForMigration(db, projection);
+      await replaceCellEvalForMigration(
+        db,
+        row.id,
+        materializeCellEvalProjection(
+          engine,
+          row.id,
+          parseInteger(row.calculated_revision),
+          updatedAt,
+        ),
+      );
+      await upsertWorkbookHeader(db, row.id, projection.workbook, snapshot, replicaSnapshot);
+    }),
+  );
+}
+
+export async function dropLegacyZeroSyncSchemaObjects(db: Queryable): Promise<void> {
+  await db.query(`DROP INDEX IF EXISTS sheet_style_ranges_workbook_sheet_idx`);
+  await db.query(`DROP INDEX IF EXISTS sheet_format_ranges_workbook_sheet_idx`);
+  await db.query(`DROP TABLE IF EXISTS sheet_style_ranges`);
+  await db.query(`DROP TABLE IF EXISTS sheet_format_ranges`);
 }
 
 export async function loadWorkbookState(
@@ -1793,19 +1870,16 @@ export async function persistWorkbookMutation(
       buildWorkbookStyleRows(documentId, options.previousState.snapshot, previousProjectionOptions),
       buildWorkbookStyleRows(documentId, options.nextSnapshot, nextProjectionOptions),
     );
-    await applyStyleRangeDiff(
+    await persistCellSourceRange(
       db,
-      buildSheetStyleRangeRows(
-        documentId,
-        options.previousState.snapshot,
-        options.eventPayload.range.sheetName,
-        previousProjectionOptions,
-      ),
-      buildSheetStyleRangeRows(
+      documentId,
+      options.eventPayload.range,
+      buildSheetCellSourceRows(
         documentId,
         options.nextSnapshot,
         options.eventPayload.range.sheetName,
         nextProjectionOptions,
+        options.eventPayload.range,
       ),
     );
     if (options.nextEngine) {
@@ -1835,19 +1909,16 @@ export async function persistWorkbookMutation(
       ),
       buildWorkbookNumberFormatRows(documentId, options.nextSnapshot, nextProjectionOptions),
     );
-    await applyFormatRangeDiff(
+    await persistCellSourceRange(
       db,
-      buildSheetFormatRangeRows(
-        documentId,
-        options.previousState.snapshot,
-        options.eventPayload.range.sheetName,
-        previousProjectionOptions,
-      ),
-      buildSheetFormatRangeRows(
+      documentId,
+      options.eventPayload.range,
+      buildSheetCellSourceRows(
         documentId,
         options.nextSnapshot,
         options.eventPayload.range.sheetName,
         nextProjectionOptions,
+        options.eventPayload.range,
       ),
     );
     if (options.nextEngine) {

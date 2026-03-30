@@ -7,8 +7,6 @@ import {
   projectViewportPatch,
   type CellEvalRow,
   type CellSourceRow,
-  type FormatRangeRow,
-  type StyleRangeRow,
 } from "./viewport-projector.js";
 import { runProperty } from "@bilig/test-fuzz";
 
@@ -41,6 +39,7 @@ function buildComputedCells(
     col: number;
     value: number;
     styleId: string;
+    styleJson: CellStyleRecord;
     formatId: string;
     formatCode: string;
   }>,
@@ -58,27 +57,12 @@ function buildComputedCells(
         flags: 0,
         version: index + 1,
         styleId: entry.styleId,
+        styleJson: entry.styleJson,
         formatId: entry.formatId,
         formatCode: entry.formatCode,
       },
     ]),
   );
-}
-
-function buildStyles(styleIds: ReadonlyArray<string>): Map<string, CellStyleRecord> {
-  const entries: Array<readonly [string, CellStyleRecord]> = [
-    ["style-0", { id: "style-0" }],
-    ...styleIds.map((styleId, index): readonly [string, CellStyleRecord] => [
-      styleId,
-      {
-        id: styleId,
-        fill: {
-          backgroundColor: index % 2 === 0 ? "#dbeafe" : "#fef3c7",
-        },
-      },
-    ]),
-  ];
-  return new Map<string, CellStyleRecord>(entries);
 }
 
 function stripPatchVersion<T extends { version?: number }>(value: T): Omit<T, "version"> {
@@ -87,92 +71,56 @@ function stripPatchVersion<T extends { version?: number }>(value: T): Omit<T, "v
 }
 
 describe("viewport projector fuzz", () => {
-  it("keeps fresh style and format ranges authoritative over stale computed rows", async () => {
+  it("treats authoritative computed rows as the only formatting source", async () => {
     await runProperty({
-      suite: "web/viewport-projector/precedence",
+      suite: "web/viewport-projector/authoritative-computed-formatting",
       arbitrary: fc.record({
         row: fc.integer({ min: 0, max: 4 }),
         col: fc.integer({ min: 0, max: 4 }),
         inputValue: fc.integer({ min: 1, max: 999 }),
       }),
       predicate: ({ row, col, inputValue }) => {
-        const sourceCells = new Map<string, CellSourceRow>([
-          [
-            toAddress(row, col),
-            {
-              workbookId,
-              sheetName,
-              address: toAddress(row, col),
-              rowNum: row,
-              colNum: col,
-              inputValue,
-            },
-          ],
-        ]);
-        const cellEval = new Map<string, CellEvalRow>([
-          [
-            toAddress(row, col),
-            {
-              workbookId,
-              sheetName,
-              address: toAddress(row, col),
-              rowNum: row,
-              colNum: col,
-              value: { tag: ValueTag.Number, value: inputValue },
-              flags: 0,
-              version: 7,
-              styleId: "style-stale",
-              formatId: "format-stale",
-              formatCode: "0.00",
-            },
-          ],
-        ]);
-        const styleRanges = new Map<string, StyleRangeRow>([
-          [
-            `style-range:${row}:${col}`,
-            {
-              id: `style-range:${row}:${col}`,
-              workbookId,
-              sheetName,
-              startRow: row,
-              endRow: row,
-              startCol: col,
-              endCol: col,
-              styleId: "style-fresh",
-            },
-          ],
-        ]);
-        const formatRanges = new Map<string, FormatRangeRow>([
-          [
-            `format-range:${row}:${col}`,
-            {
-              id: `format-range:${row}:${col}`,
-              workbookId,
-              sheetName,
-              startRow: row,
-              endRow: row,
-              startCol: col,
-              endCol: col,
-              formatId: "format-fresh",
-            },
-          ],
-        ]);
-
         const patch = projectViewportPatch(
           createViewportProjectionState(),
           {
             viewport: { sheetName, rowStart: row, rowEnd: row, colStart: col, colEnd: col },
-            sourceCells,
-            cellEval,
+            sourceCells: new Map<string, CellSourceRow>([
+              [
+                toAddress(row, col),
+                {
+                  workbookId,
+                  sheetName,
+                  address: toAddress(row, col),
+                  rowNum: row,
+                  colNum: col,
+                  inputValue,
+                },
+              ],
+            ]),
+            cellEval: new Map<string, CellEvalRow>([
+              [
+                toAddress(row, col),
+                {
+                  workbookId,
+                  sheetName,
+                  address: toAddress(row, col),
+                  rowNum: row,
+                  colNum: col,
+                  value: { tag: ValueTag.Number, value: inputValue },
+                  flags: 0,
+                  version: 7,
+                  styleId: "style-fresh",
+                  styleJson: {
+                    id: "style-fresh",
+                    fill: { backgroundColor: "#00ff00" },
+                  },
+                  formatId: "format-fresh",
+                  formatCode: "$#,##0.00",
+                },
+              ],
+            ]),
             rowMetadata: new Map(),
             columnMetadata: new Map(),
-            styleRanges,
-            formatRanges,
-            stylesById: buildStyles(["style-stale", "style-fresh"]),
-            numberFormatCodeById: new Map([
-              ["format-stale", "0.00"],
-              ["format-fresh", "$#,##0.00"],
-            ]),
           },
           true,
         );
@@ -216,20 +164,20 @@ describe("viewport projector fuzz", () => {
             col: entry.col,
             value: entry.inputValue,
             styleId: `style-${index + 1}`,
+            styleJson: {
+              id: `style-${index + 1}`,
+              fill: {
+                backgroundColor: index % 2 === 0 ? "#dbeafe" : "#fef3c7",
+              },
+            },
             formatId: `format-${index + 1}`,
             formatCode: index % 2 === 0 ? "0.00" : "$#,##0.00",
           }));
           return { entries, computed };
         }),
       predicate: ({ entries, computed }) => {
-        const stylesById = buildStyles(computed.map((entry) => entry.styleId));
-        const formatCodes = new Map(
-          computed.map((entry) => [entry.formatId, entry.formatCode] as const),
-        );
         const sourceCells = buildSourceCells(entries);
         const computedCells = buildComputedCells(computed);
-        const styleRanges = new Map<string, StyleRangeRow>();
-        const formatRanges = new Map<string, FormatRangeRow>();
 
         const baseInput = {
           viewport: { sheetName, rowStart: 0, rowEnd: 2, colStart: 0, colEnd: 2 },
@@ -237,10 +185,6 @@ describe("viewport projector fuzz", () => {
           cellEval: computedCells,
           rowMetadata: new Map(),
           columnMetadata: new Map(),
-          styleRanges,
-          formatRanges,
-          stylesById,
-          numberFormatCodeById: formatCodes,
         };
 
         const state = createViewportProjectionState();
@@ -251,14 +195,13 @@ describe("viewport projector fuzz", () => {
         expect(secondPatch.columns).toHaveLength(0);
         expect(secondPatch.rows).toHaveLength(0);
 
-        const reversedInput = {
-          ...baseInput,
-          sourceCells: new Map([...sourceCells.entries()].toReversed()),
-          cellEval: new Map([...computedCells.entries()].toReversed()),
-        };
         const reorderedPatch = projectViewportPatch(
           createViewportProjectionState(),
-          reversedInput,
+          {
+            ...baseInput,
+            sourceCells: new Map([...sourceCells.entries()].toReversed()),
+            cellEval: new Map([...computedCells.entries()].toReversed()),
+          },
           true,
         );
 

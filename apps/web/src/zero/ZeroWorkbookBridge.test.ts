@@ -28,7 +28,7 @@ function createTypedView<T>(initial: T) {
 }
 
 describe("ZeroWorkbookBridge", () => {
-  it("repaints subscribed viewports when style rows arrive after a style-range update", () => {
+  it("repaints subscribed viewports when authoritative cell_eval rows update", () => {
     const workbookView = createTypedView({
       id: "bilig-demo",
       name: "bilig-demo",
@@ -42,9 +42,8 @@ describe("ZeroWorkbookBridge", () => {
         sortOrder: 0,
       },
     ]);
-    const stylesView = createTypedView<readonly unknown[]>([]);
-    const numberFormatsView = createTypedView<readonly unknown[]>([]);
-    const sourceView = createTypedView([
+
+    const selectionSourceView = createTypedView([
       {
         workbookId: "bilig-demo",
         sheetName: "Sheet1",
@@ -54,7 +53,7 @@ describe("ZeroWorkbookBridge", () => {
         inputValue: "relay",
       },
     ]);
-    const evalView = createTypedView([
+    const selectionEvalView = createTypedView([
       {
         workbookId: "bilig-demo",
         sheetName: "Sheet1",
@@ -66,40 +65,16 @@ describe("ZeroWorkbookBridge", () => {
         version: 1,
       },
     ]);
-    const rowView = createTypedView<readonly unknown[]>([]);
-    const columnView = createTypedView<readonly unknown[]>([]);
-    const styleRangeView = createTypedView([
-      {
-        id: "range-B2-C3",
-        workbookId: "bilig-demo",
-        sheetName: "Sheet1",
-        startRow: 1,
-        endRow: 2,
-        startCol: 1,
-        endCol: 2,
-        styleId: "style-border",
-        updatedAt: 1,
-      },
-    ]);
-    const formatRangeView = createTypedView<readonly unknown[]>([]);
+    const selectionRowView = createTypedView<readonly unknown[]>([]);
+    const selectionColumnView = createTypedView<readonly unknown[]>([]);
 
     const views = [
       workbookView,
       sheetView,
-      stylesView,
-      numberFormatsView,
-      sourceView,
-      evalView,
-      rowView,
-      columnView,
-      styleRangeView,
-      formatRangeView,
-      sourceView,
-      evalView,
-      rowView,
-      columnView,
-      styleRangeView,
-      formatRangeView,
+      selectionSourceView,
+      selectionEvalView,
+      selectionRowView,
+      selectionColumnView,
     ] as const;
 
     let index = 0;
@@ -138,22 +113,23 @@ describe("ZeroWorkbookBridge", () => {
     );
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(appliedPatches.at(-1)?.styles.every((style) => style.id === "style-0")).toBe(true);
+    expect(appliedPatches.at(-1)?.styles).toEqual([]);
     const initialPatchCount = appliedPatches.length;
 
-    stylesView.emit([
+    selectionEvalView.emit([
       {
         workbookId: "bilig-demo",
-        id: "style-border",
-        recordJSON: {
+        sheetName: "Sheet1",
+        address: "B2",
+        rowNum: 1,
+        colNum: 1,
+        value: { tag: 0 },
+        flags: 0,
+        version: 2,
+        styleId: "style-border",
+        styleJson: {
           id: "style-border",
           fill: { backgroundColor: "#dbeafe" },
-          borders: {
-            top: { style: "solid", weight: "thin", color: "#111827" },
-            right: { style: "solid", weight: "thin", color: "#111827" },
-            bottom: { style: "solid", weight: "thin", color: "#111827" },
-            left: { style: "solid", weight: "thin", color: "#111827" },
-          },
         },
       },
     ]);

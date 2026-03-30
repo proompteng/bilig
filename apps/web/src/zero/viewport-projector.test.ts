@@ -5,12 +5,10 @@ import {
   projectViewportPatch,
   type CellEvalRow,
   type CellSourceRow,
-  type FormatRangeRow,
-  type StyleRangeRow,
 } from "./viewport-projector.js";
 
 describe("projectViewportPatch", () => {
-  it("prefers fresh style and format ranges over stale computed formatting", () => {
+  it("renders from authoritative computed formatting without overlay queries", () => {
     const state = createViewportProjectionState();
     const sourceCells = new Map<string, CellSourceRow>([
       [
@@ -33,39 +31,13 @@ describe("projectViewportPatch", () => {
           value: { tag: ValueTag.Number, value: 7 },
           flags: 0,
           version: 4,
-          styleId: "style-stale",
-          formatId: "format-stale",
-          formatCode: "0.00",
-        },
-      ],
-    ]);
-    const styleRanges = new Map<string, StyleRangeRow>([
-      [
-        "style-range:Sheet1:0:0:0:0",
-        {
-          id: "style-range:Sheet1:0:0:0:0",
-          workbookId: "doc-1",
-          sheetName: "Sheet1",
-          startRow: 0,
-          endRow: 0,
-          startCol: 0,
-          endCol: 0,
           styleId: "style-fresh",
-        },
-      ],
-    ]);
-    const formatRanges = new Map<string, FormatRangeRow>([
-      [
-        "format-range:Sheet1:0:0:0:0",
-        {
-          id: "format-range:Sheet1:0:0:0:0",
-          workbookId: "doc-1",
-          sheetName: "Sheet1",
-          startRow: 0,
-          endRow: 0,
-          startCol: 0,
-          endCol: 0,
+          styleJson: {
+            id: "style-fresh",
+            fill: { backgroundColor: "#00ff00" },
+          },
           formatId: "format-fresh",
+          formatCode: "$#,##0.00",
         },
       ],
     ]);
@@ -78,17 +50,6 @@ describe("projectViewportPatch", () => {
         cellEval,
         rowMetadata: new Map(),
         columnMetadata: new Map(),
-        styleRanges,
-        formatRanges,
-        stylesById: new Map([
-          ["style-0", { id: "style-0" }],
-          ["style-stale", { id: "style-stale", fill: { backgroundColor: "#cccccc" } }],
-          ["style-fresh", { id: "style-fresh", fill: { backgroundColor: "#00ff00" } }],
-        ]),
-        numberFormatCodeById: new Map([
-          ["format-stale", "0.00"],
-          ["format-fresh", "$#,##0.00"],
-        ]),
       },
       true,
     );

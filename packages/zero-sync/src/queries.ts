@@ -103,40 +103,4 @@ export const queries = defineQueries({
         .orderBy("startIndex", "asc"),
     ),
   },
-  styleRanges: {
-    intersectTile: defineQuery(workbookTileArgsSchema, ({ args }) =>
-      zql.sheet_style_ranges
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("endRow", ">=", args.rowStart)
-        .where("startRow", "<=", args.rowEnd)
-        .where("endCol", ">=", args.colStart)
-        .where("startCol", "<=", args.colEnd)
-        .orderBy("startRow", "asc")
-        .orderBy("startCol", "asc"),
-    ),
-  },
-  formatRanges: {
-    intersectTile: defineQuery(workbookTileArgsSchema, ({ args }) =>
-      zql.sheet_format_ranges
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("endRow", ">=", args.rowStart)
-        .where("startRow", "<=", args.rowEnd)
-        .where("endCol", ">=", args.colStart)
-        .where("startCol", "<=", args.colEnd)
-        .orderBy("startRow", "asc")
-        .orderBy("startCol", "asc"),
-    ),
-  },
-  styles: {
-    byWorkbook: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-      zql.cell_styles.where("workbookId", documentId).orderBy("id", "asc"),
-    ),
-  },
-  numberFormats: {
-    byWorkbook: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-      zql.cell_number_formats.where("workbookId", documentId).orderBy("id", "asc"),
-    ),
-  },
 });

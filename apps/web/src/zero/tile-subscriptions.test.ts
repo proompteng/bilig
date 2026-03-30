@@ -67,9 +67,7 @@ describe("TileSubscriptionManager", () => {
         size: 104,
       },
     ]);
-    const styleView = createTypedView([]);
-    const formatView = createTypedView([]);
-    const views = [sourceView, evalView, rowView, columnView, styleView, formatView] as const;
+    const views = [sourceView, evalView, rowView, columnView] as const;
 
     let index = 0;
     const zero = {

@@ -1,6 +1,12 @@
 import type { SpreadsheetEngine } from "@bilig/core";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { CellValue, WorkbookSnapshot } from "@bilig/protocol";
+import {
+  ValueTag,
+  type CellRangeRef,
+  type CellStyleRecord,
+  type CellValue,
+  type WorkbookSnapshot,
+} from "@bilig/protocol";
 
 export interface WorkbookSourceRow {
   id: string;
@@ -32,6 +38,7 @@ export interface CellSourceRow {
   inputValue: unknown;
   formula: string | null;
   format: string | null;
+  styleId: string | null;
   explicitFormatId: string | null;
   sourceRevision: number;
   updatedBy: string;
@@ -83,32 +90,6 @@ export interface NumberFormatSourceRow {
   createdAt: string;
 }
 
-export interface StyleRangeSourceRow {
-  id: string;
-  workbookId: string;
-  sheetName: string;
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-  styleId: string;
-  sourceRevision: number;
-  updatedAt: string;
-}
-
-export interface FormatRangeSourceRow {
-  id: string;
-  workbookId: string;
-  sheetName: string;
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-  formatId: string;
-  sourceRevision: number;
-  updatedAt: string;
-}
-
 export interface CellEvalRow {
   workbookId: string;
   sheetName: string;
@@ -119,6 +100,7 @@ export interface CellEvalRow {
   flags: number;
   version: number;
   styleId: string | null;
+  styleJson: CellStyleRecord | null;
   formatId: string | null;
   formatCode: string | null;
   calcRevision: number;
@@ -136,8 +118,6 @@ export interface WorkbookSourceProjection {
   calculationSettings: CalculationSettingsSourceRow;
   styles: readonly StyleSourceRow[];
   numberFormats: readonly NumberFormatSourceRow[];
-  styleRanges: readonly StyleRangeSourceRow[];
-  formatRanges: readonly FormatRangeSourceRow[];
 }
 
 export interface ProjectionDiff<Row> {
@@ -200,18 +180,6 @@ export function diffProjectionRows<Row>(
   return { upserts, deletes };
 }
 
-function rangeId(
-  prefix: "style-range" | "format-range",
-  documentId: string,
-  sheetName: string,
-  startRow: number,
-  startCol: number,
-  endRow: number,
-  endCol: number,
-): string {
-  return `${prefix}:${documentId}:${sheetName}:${startRow}:${startCol}:${endRow}:${endCol}`;
-}
-
 export function buildWorkbookHeaderRow(
   documentId: string,
   snapshot: WorkbookSnapshot,
@@ -261,6 +229,7 @@ function buildCellSourceRow(
     inputValue: cell.formula ? null : (cell.value ?? null),
     formula: cell.formula ?? null,
     format: cell.format ?? null,
+    styleId: null,
     explicitFormatId: null,
     sourceRevision: options.revision,
     updatedBy: options.updatedBy,
@@ -349,32 +318,6 @@ export function buildWorkbookStyleRows(
   return rows;
 }
 
-export function buildSheetStyleRangeRows(
-  documentId: string,
-  snapshot: WorkbookSnapshot,
-  sheetName: string,
-  options: WorkbookProjectionOptions,
-): StyleRangeSourceRow[] {
-  const rows: StyleRangeSourceRow[] = [];
-  for (const entry of findSheet(snapshot, sheetName)?.metadata?.styleRanges ?? []) {
-    const start = parseCellAddress(entry.range.startAddress, sheetName);
-    const end = parseCellAddress(entry.range.endAddress, sheetName);
-    rows.push({
-      id: rangeId("style-range", documentId, sheetName, start.row, start.col, end.row, end.col),
-      workbookId: documentId,
-      sheetName,
-      startRow: start.row,
-      endRow: end.row,
-      startCol: start.col,
-      endCol: end.col,
-      styleId: entry.styleId,
-      sourceRevision: options.revision,
-      updatedAt: options.updatedAt,
-    });
-  }
-  return rows;
-}
-
 export function buildWorkbookNumberFormatRows(
   documentId: string,
   snapshot: WorkbookSnapshot,
@@ -387,30 +330,129 @@ export function buildWorkbookNumberFormatRows(
   return rows;
 }
 
-export function buildSheetFormatRangeRows(
+function normalizeRangeBounds(
+  sheetName: string,
+  startAddress: string,
+  endAddress: string,
+): { rowStart: number; rowEnd: number; colStart: number; colEnd: number } {
+  const start = parseCellAddress(startAddress, sheetName);
+  const end = parseCellAddress(endAddress, sheetName);
+  return {
+    rowStart: Math.min(start.row, end.row),
+    rowEnd: Math.max(start.row, end.row),
+    colStart: Math.min(start.col, end.col),
+    colEnd: Math.max(start.col, end.col),
+  };
+}
+
+function addressWithinBounds(
+  row: number,
+  col: number,
+  bounds?: { rowStart: number; rowEnd: number; colStart: number; colEnd: number },
+): boolean {
+  if (!bounds) {
+    return true;
+  }
+  return (
+    row >= bounds.rowStart && row <= bounds.rowEnd && col >= bounds.colStart && col <= bounds.colEnd
+  );
+}
+
+function upsertCellSourceRow(
+  rows: Map<string, CellSourceRow>,
+  documentId: string,
+  sheetName: string,
+  row: number,
+  col: number,
+  options: WorkbookProjectionOptions,
+): CellSourceRow {
+  const address = formatAddress(row, col);
+  const existing = rows.get(address);
+  if (existing) {
+    return existing;
+  }
+  const next: CellSourceRow = {
+    workbookId: documentId,
+    sheetName,
+    address,
+    rowNum: row,
+    colNum: col,
+    inputValue: null,
+    formula: null,
+    format: null,
+    styleId: null,
+    explicitFormatId: null,
+    sourceRevision: options.revision,
+    updatedBy: options.updatedBy,
+    updatedAt: options.updatedAt,
+  };
+  rows.set(address, next);
+  return next;
+}
+
+export function buildSheetCellSourceRows(
   documentId: string,
   snapshot: WorkbookSnapshot,
   sheetName: string,
   options: WorkbookProjectionOptions,
-): FormatRangeSourceRow[] {
-  const rows: FormatRangeSourceRow[] = [];
-  for (const entry of findSheet(snapshot, sheetName)?.metadata?.formatRanges ?? []) {
-    const start = parseCellAddress(entry.range.startAddress, sheetName);
-    const end = parseCellAddress(entry.range.endAddress, sheetName);
-    rows.push({
-      id: rangeId("format-range", documentId, sheetName, start.row, start.col, end.row, end.col),
-      workbookId: documentId,
-      sheetName,
-      startRow: start.row,
-      endRow: end.row,
-      startCol: start.col,
-      endCol: end.col,
-      formatId: entry.formatId,
-      sourceRevision: options.revision,
-      updatedAt: options.updatedAt,
-    });
+  range?: CellRangeRef,
+): CellSourceRow[] {
+  const sheet = findSheet(snapshot, sheetName);
+  if (!sheet) {
+    return [];
   }
-  return rows;
+  const formatCodeById = new Map(
+    (snapshot.workbook.metadata?.formats ?? []).map((entry) => [entry.id, entry.code]),
+  );
+  const bounds = range
+    ? normalizeRangeBounds(range.sheetName, range.startAddress, range.endAddress)
+    : undefined;
+  const rows = new Map<string, CellSourceRow>();
+
+  for (const cell of sheet.cells) {
+    const parsed = parseCellAddress(cell.address, sheetName);
+    if (!addressWithinBounds(parsed.row, parsed.col, bounds)) {
+      continue;
+    }
+    rows.set(cell.address, buildCellSourceRow(documentId, sheetName, cell, options));
+  }
+
+  for (const entry of sheet.metadata?.styleRanges ?? []) {
+    const rangeBounds = normalizeRangeBounds(
+      sheetName,
+      entry.range.startAddress,
+      entry.range.endAddress,
+    );
+    for (let row = rangeBounds.rowStart; row <= rangeBounds.rowEnd; row += 1) {
+      for (let col = rangeBounds.colStart; col <= rangeBounds.colEnd; col += 1) {
+        if (!addressWithinBounds(row, col, bounds)) {
+          continue;
+        }
+        upsertCellSourceRow(rows, documentId, sheetName, row, col, options).styleId = entry.styleId;
+      }
+    }
+  }
+
+  for (const entry of sheet.metadata?.formatRanges ?? []) {
+    const rangeBounds = normalizeRangeBounds(
+      sheetName,
+      entry.range.startAddress,
+      entry.range.endAddress,
+    );
+    const formatCode = formatCodeById.get(entry.formatId) ?? null;
+    for (let row = rangeBounds.rowStart; row <= rangeBounds.rowEnd; row += 1) {
+      for (let col = rangeBounds.colStart; col <= rangeBounds.colEnd; col += 1) {
+        if (!addressWithinBounds(row, col, bounds)) {
+          continue;
+        }
+        const sourceRow = upsertCellSourceRow(rows, documentId, sheetName, row, col, options);
+        sourceRow.explicitFormatId = entry.formatId;
+        sourceRow.format = formatCode;
+      }
+    }
+  }
+
+  return [...rows.values()];
 }
 
 export function buildWorkbookSourceProjection(
@@ -422,8 +464,6 @@ export function buildWorkbookSourceProjection(
   const cells: CellSourceRow[] = [];
   const rowMetadata: AxisMetadataSourceRow[] = [];
   const columnMetadata: AxisMetadataSourceRow[] = [];
-  const styleRanges: StyleRangeSourceRow[] = [];
-  const formatRanges: FormatRangeSourceRow[] = [];
   const styles: StyleSourceRow[] = [];
   const numberFormats: NumberFormatSourceRow[] = [];
   const definedNames: DefinedNameSourceRow[] = [];
@@ -439,9 +479,7 @@ export function buildWorkbookSourceProjection(
       updatedAt: options.updatedAt,
     });
 
-    for (const cell of sheet.cells) {
-      cells.push(buildCellSourceRow(documentId, sheet.name, cell, options));
-    }
+    cells.push(...buildSheetCellSourceRows(documentId, snapshot, sheet.name, options));
 
     for (const entry of sheet.metadata?.rowMetadata ?? []) {
       rowMetadata.push({
@@ -464,40 +502,6 @@ export function buildWorkbookSourceProjection(
         count: entry.count,
         size: entry.size ?? null,
         hidden: entry.hidden ?? null,
-        sourceRevision: options.revision,
-        updatedAt: options.updatedAt,
-      });
-    }
-
-    for (const entry of sheet.metadata?.styleRanges ?? []) {
-      const start = parseCellAddress(entry.range.startAddress, sheet.name);
-      const end = parseCellAddress(entry.range.endAddress, sheet.name);
-      styleRanges.push({
-        id: rangeId("style-range", documentId, sheet.name, start.row, start.col, end.row, end.col),
-        workbookId: documentId,
-        sheetName: sheet.name,
-        startRow: start.row,
-        endRow: end.row,
-        startCol: start.col,
-        endCol: end.col,
-        styleId: entry.styleId,
-        sourceRevision: options.revision,
-        updatedAt: options.updatedAt,
-      });
-    }
-
-    for (const entry of sheet.metadata?.formatRanges ?? []) {
-      const start = parseCellAddress(entry.range.startAddress, sheet.name);
-      const end = parseCellAddress(entry.range.endAddress, sheet.name);
-      formatRanges.push({
-        id: rangeId("format-range", documentId, sheet.name, start.row, start.col, end.row, end.col),
-        workbookId: documentId,
-        sheetName: sheet.name,
-        startRow: start.row,
-        endRow: end.row,
-        startCol: start.col,
-        endCol: end.col,
-        formatId: entry.formatId,
         sourceRevision: options.revision,
         updatedAt: options.updatedAt,
       });
@@ -534,8 +538,6 @@ export function buildWorkbookSourceProjection(
     calculationSettings: buildCalculationSettingsRow(documentId, snapshot),
     styles,
     numberFormats,
-    styleRanges,
-    formatRanges,
   };
 }
 
@@ -548,9 +550,44 @@ export function materializeCellEvalProjection(
   const entries: CellEvalRow[] = [];
 
   for (const sheet of engine.workbook.sheetsByName.values()) {
+    const addresses = new Set<string>();
     sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
       const address = formatAddress(row, col);
+      addresses.add(address);
+    });
+
+    for (const range of engine.workbook.listStyleRanges(sheet.name)) {
+      const start = parseCellAddress(range.range.startAddress, sheet.name);
+      const end = parseCellAddress(range.range.endAddress, sheet.name);
+      for (let row = start.row; row <= end.row; row += 1) {
+        for (let col = start.col; col <= end.col; col += 1) {
+          addresses.add(formatAddress(row, col));
+        }
+      }
+    }
+
+    for (const range of engine.workbook.listFormatRanges(sheet.name)) {
+      const start = parseCellAddress(range.range.startAddress, sheet.name);
+      const end = parseCellAddress(range.range.endAddress, sheet.name);
+      for (let row = start.row; row <= end.row; row += 1) {
+        for (let col = start.col; col <= end.col; col += 1) {
+          addresses.add(formatAddress(row, col));
+        }
+      }
+    }
+
+    for (const address of addresses) {
+      const { row, col } = parseCellAddress(address, sheet.name);
       const cell = engine.getCell(sheet.name, address);
+      if (
+        cell.value.tag === ValueTag.Empty &&
+        cell.flags === 0 &&
+        cell.styleId === undefined &&
+        cell.numberFormatId === undefined &&
+        cell.format === undefined
+      ) {
+        continue;
+      }
       entries.push({
         workbookId: documentId,
         sheetName: sheet.name,
@@ -561,12 +598,13 @@ export function materializeCellEvalProjection(
         flags: cell.flags,
         version: cell.version,
         styleId: cell.styleId ?? null,
+        styleJson: engine.getCellStyle(cell.styleId) ?? null,
         formatId: cell.numberFormatId ?? null,
         formatCode: cell.format ?? null,
         calcRevision: revision,
         updatedAt,
       });
-    });
+    }
   }
 
   return entries;
@@ -581,7 +619,5 @@ export const sourceProjectionKeys = {
   workbookMetadata: (row: WorkbookMetadataSourceRow) => JSON.stringify([row.workbookId, row.key]),
   style: (row: StyleSourceRow) => JSON.stringify([row.workbookId, row.id]),
   numberFormat: (row: NumberFormatSourceRow) => JSON.stringify([row.workbookId, row.id]),
-  styleRange: (row: StyleRangeSourceRow) => row.id,
-  formatRange: (row: FormatRangeSourceRow) => row.id,
   cellEval: (row: CellEvalRow) => JSON.stringify([row.workbookId, row.sheetName, row.address]),
 } as const;

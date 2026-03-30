@@ -2,8 +2,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag } from "@bilig/protocol";
 import { describe, expect, it } from "vitest";
 import {
-  buildSheetFormatRangeRows,
-  buildSheetStyleRangeRows,
+  buildSheetCellSourceRows,
   diffProjectionRows,
   materializeCellEvalProjection,
   sourceProjectionKeys,
@@ -21,6 +20,7 @@ describe("projection helpers", () => {
         inputValue: 21,
         formula: null,
         format: null,
+        styleId: null,
         explicitFormatId: null,
         sourceRevision: 1,
         updatedBy: "user-a",
@@ -45,6 +45,7 @@ describe("projection helpers", () => {
         row.inputValue,
         row.formula,
         row.format,
+        row.styleId,
         row.explicitFormatId,
       ]),
     );
@@ -53,7 +54,7 @@ describe("projection helpers", () => {
     expect(diff.deletes).toHaveLength(0);
   });
 
-  it("materializes authoritative cell_eval rows from the workbook engine", async () => {
+  it("materializes authoritative cell_eval rows from the workbook engine, including styled blanks", async () => {
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",
       replicaId: "projection-test",
@@ -62,16 +63,17 @@ describe("projection helpers", () => {
     engine.setCellValue("Sheet1", "A1", 7);
     engine.setCellFormula("Sheet1", "B1", "A1*3");
     engine.setRangeStyle(
-      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "C2" },
       { fill: { backgroundColor: "#abcdef" } },
     );
     engine.setRangeNumberFormat(
-      { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "C2" },
       { kind: "number", code: "$#,##0.00" },
     );
 
     const rows = materializeCellEvalProjection(engine, "doc-1", 9, "2026-03-28T10:02:00.000Z");
     const b1 = rows.find((row) => row.sheetName === "Sheet1" && row.address === "B1");
+    const c2 = rows.find((row) => row.sheetName === "Sheet1" && row.address === "C2");
 
     expect(b1).toEqual(
       expect.objectContaining({
@@ -79,6 +81,9 @@ describe("projection helpers", () => {
         rowNum: 0,
         colNum: 1,
         styleId: expect.any(String),
+        styleJson: expect.objectContaining({
+          fill: { backgroundColor: "#abcdef" },
+        }),
         formatId: expect.any(String),
         formatCode: expect.any(String),
         calcRevision: 9,
@@ -88,9 +93,23 @@ describe("projection helpers", () => {
       tag: ValueTag.Number,
       value: 21,
     });
+    expect(c2).toEqual(
+      expect.objectContaining({
+        workbookId: "doc-1",
+        rowNum: 1,
+        colNum: 2,
+        value: { tag: ValueTag.Empty },
+        styleId: expect.any(String),
+        styleJson: expect.objectContaining({
+          fill: { backgroundColor: "#abcdef" },
+        }),
+        formatId: expect.any(String),
+        formatCode: expect.any(String),
+      }),
+    );
   });
 
-  it("names style and format range ids per workbook to avoid cross-document collisions", async () => {
+  it("flattens style and format ranges into sparse source cell rows", async () => {
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",
       replicaId: "projection-test",
@@ -106,40 +125,33 @@ describe("projection helpers", () => {
     );
 
     const snapshot = engine.exportSnapshot();
-    const styleRowsA = buildSheetStyleRangeRows("doc-a", snapshot, "Sheet1", {
+    const sourceRows = buildSheetCellSourceRows("doc-a", snapshot, "Sheet1", {
       revision: 1,
       calculatedRevision: 1,
       ownerUserId: "owner-a",
       updatedBy: "user-a",
       updatedAt: "2026-03-29T10:00:00.000Z",
     });
-    const styleRowsB = buildSheetStyleRangeRows("doc-b", snapshot, "Sheet1", {
-      revision: 1,
-      calculatedRevision: 1,
-      ownerUserId: "owner-b",
-      updatedBy: "user-b",
-      updatedAt: "2026-03-29T10:00:00.000Z",
-    });
-    const formatRowsA = buildSheetFormatRangeRows("doc-a", snapshot, "Sheet1", {
-      revision: 1,
-      calculatedRevision: 1,
-      ownerUserId: "owner-a",
-      updatedBy: "user-a",
-      updatedAt: "2026-03-29T10:00:00.000Z",
-    });
-    const formatRowsB = buildSheetFormatRangeRows("doc-b", snapshot, "Sheet1", {
-      revision: 1,
-      calculatedRevision: 1,
-      ownerUserId: "owner-b",
-      updatedBy: "user-b",
-      updatedAt: "2026-03-29T10:00:00.000Z",
-    });
+    const b2 = sourceRows.find((row) => row.address === "B2");
+    const c3 = sourceRows.find((row) => row.address === "C3");
 
-    expect(styleRowsA.map((row) => row.id)).not.toEqual(styleRowsB.map((row) => row.id));
-    expect(formatRowsA.map((row) => row.id)).not.toEqual(formatRowsB.map((row) => row.id));
-    expect(styleRowsA[0]?.id).toContain("doc-a");
-    expect(styleRowsB[0]?.id).toContain("doc-b");
-    expect(formatRowsA[0]?.id).toContain("doc-a");
-    expect(formatRowsB[0]?.id).toContain("doc-b");
+    expect(b2).toEqual(
+      expect.objectContaining({
+        sheetName: "Sheet1",
+        address: "B2",
+        styleId: expect.any(String),
+        explicitFormatId: expect.any(String),
+        format: expect.any(String),
+      }),
+    );
+    expect(c3).toEqual(
+      expect.objectContaining({
+        sheetName: "Sheet1",
+        address: "C3",
+        styleId: expect.any(String),
+        explicitFormatId: expect.any(String),
+        format: expect.any(String),
+      }),
+    );
   });
 });

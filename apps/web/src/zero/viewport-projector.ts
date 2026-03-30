@@ -50,6 +50,7 @@ export interface CellEvalRow {
   flags: number;
   version: number;
   styleId?: string | null | undefined;
+  styleJson?: CellStyleRecord | null | undefined;
   formatId?: string | null | undefined;
   formatCode?: string | null | undefined;
 }
@@ -61,43 +62,6 @@ export interface AxisMetadataRow {
   count: number;
   size?: number | null | undefined;
   hidden?: boolean | null | undefined;
-}
-
-export interface StyleRangeRow {
-  id: string;
-  workbookId: string;
-  sheetName: string;
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-  styleId: string;
-  updatedAt?: number;
-}
-
-export interface FormatRangeRow {
-  id: string;
-  workbookId: string;
-  sheetName: string;
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-  formatId: string;
-  updatedAt?: number;
-}
-
-export interface StyleRow {
-  workbookId: string;
-  id: string;
-  recordJSON: CellStyleRecord;
-}
-
-export interface NumberFormatRow {
-  workbookId: string;
-  id: string;
-  code: string;
-  kind: string;
 }
 
 export interface ViewportProjectionState {
@@ -115,21 +79,12 @@ export interface ViewportProjectionInput {
   cellEval: ReadonlyMap<string, CellEvalRow>;
   rowMetadata: ReadonlyMap<string, AxisMetadataRow>;
   columnMetadata: ReadonlyMap<string, AxisMetadataRow>;
-  styleRanges: ReadonlyMap<string, StyleRangeRow>;
-  formatRanges: ReadonlyMap<string, FormatRangeRow>;
-  stylesById: ReadonlyMap<string, CellStyleRecord>;
-  numberFormatCodeById: ReadonlyMap<string, string>;
 }
 
 interface AxisViewportEntry {
   index: number;
   size?: number | null;
   hidden?: boolean | null;
-}
-
-interface ResolvedNumberFormat {
-  code?: string;
-  numberFormatId?: string;
 }
 
 const EMPTY_METRICS: RecalcMetrics = {
@@ -160,105 +115,6 @@ function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
     flags: 0,
     version: 0,
   };
-}
-
-function compareRectRanges(
-  left: Pick<StyleRangeRow, "startRow" | "startCol" | "endRow" | "endCol" | "id" | "updatedAt">,
-  right: Pick<StyleRangeRow, "startRow" | "startCol" | "endRow" | "endCol" | "id" | "updatedAt">,
-): number {
-  return (
-    left.startRow - right.startRow ||
-    left.startCol - right.startCol ||
-    left.endRow - right.endRow ||
-    left.endCol - right.endCol ||
-    (left.updatedAt ?? 0) - (right.updatedAt ?? 0) ||
-    left.id.localeCompare(right.id)
-  );
-}
-
-function pointInRange(
-  row: number,
-  col: number,
-  range: Pick<StyleRangeRow, "startRow" | "endRow" | "startCol" | "endCol">,
-): boolean {
-  return (
-    row >= range.startRow && row <= range.endRow && col >= range.startCol && col <= range.endCol
-  );
-}
-
-function resolveStyleId(
-  row: number,
-  col: number,
-  computed: CellEvalRow | undefined,
-  styleRanges: readonly StyleRangeRow[],
-): string {
-  let styleId = computed?.styleId ?? DEFAULT_STYLE_ID;
-  for (const range of styleRanges) {
-    if (pointInRange(row, col, range)) {
-      styleId = range.styleId;
-    }
-  }
-  return styleId;
-}
-
-function resolveNumberFormat(
-  row: number,
-  col: number,
-  source: CellSourceRow | undefined,
-  computed: CellEvalRow | undefined,
-  formatRanges: readonly FormatRangeRow[],
-  numberFormatCodeById: ReadonlyMap<string, string>,
-): ResolvedNumberFormat {
-  const result: ResolvedNumberFormat = {};
-  const explicitFormatId = source?.explicitFormatId;
-  const sourceFormat = source?.format;
-  if (sourceFormat !== undefined) {
-    result.code = sourceFormat;
-    if (explicitFormatId) {
-      result.numberFormatId = explicitFormatId;
-    }
-    return result;
-  }
-  if (explicitFormatId) {
-    const code = numberFormatCodeById.get(explicitFormatId);
-    if (code !== undefined) {
-      result.code = code;
-    }
-    result.numberFormatId = explicitFormatId;
-    return result;
-  }
-
-  let numberFormatId: string | undefined;
-  for (const range of formatRanges) {
-    if (pointInRange(row, col, range)) {
-      numberFormatId = range.formatId;
-    }
-  }
-  if (!numberFormatId) {
-    return result;
-  }
-  const code = numberFormatCodeById.get(numberFormatId);
-  if (code !== undefined) {
-    result.code = code;
-  }
-  result.numberFormatId = numberFormatId;
-  if (result.code !== undefined || result.numberFormatId !== undefined) {
-    return result;
-  }
-
-  if (computed?.formatCode) {
-    result.code = computed.formatCode;
-  }
-  if (computed?.formatId) {
-    result.numberFormatId = computed.formatId;
-    if (result.code === undefined) {
-      const computedCode = numberFormatCodeById.get(computed.formatId);
-      if (computedCode !== undefined) {
-        result.code = computedCode;
-      }
-    }
-  }
-  return result;
 }
 
 function toEditorText(snapshot: CellSnapshot): string {
@@ -350,6 +206,30 @@ function buildAxisPatches(
   return { patches, signatures };
 }
 
+function applySourceCellOverrides(snapshot: CellSnapshot, source: CellSourceRow | undefined): void {
+  if (!source) {
+    return;
+  }
+
+  if (source.formula !== undefined) {
+    if (source.formula === null) {
+      delete snapshot.formula;
+    } else {
+      snapshot.formula = source.formula;
+    }
+  }
+  if (isLiteralInput(source.inputValue)) {
+    snapshot.input = source.inputValue;
+  }
+
+  if (source.format !== undefined) {
+    snapshot.format = source.format;
+  }
+  if (source.explicitFormatId !== undefined) {
+    snapshot.numberFormatId = source.explicitFormatId;
+  }
+}
+
 export function createViewportProjectionState(): ViewportProjectionState {
   return {
     nextVersion: 1,
@@ -360,57 +240,18 @@ export function createViewportProjectionState(): ViewportProjectionState {
   };
 }
 
-export function buildStylesById(rows: readonly StyleRow[]): Map<string, CellStyleRecord> {
-  const map = new Map<string, CellStyleRecord>([[DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }]]);
-  for (const row of rows) {
-    map.set(row.id, {
-      ...row.recordJSON,
-      id: row.id,
-    });
-  }
-  return map;
-}
-
-export function buildNumberFormatCodeById(rows: readonly NumberFormatRow[]): Map<string, string> {
-  return new Map(rows.map((row) => [row.id, row.code]));
-}
-
 export function buildSelectedCellSnapshot(
   sheetName: string,
   address: string,
   cached: CellSnapshot | undefined,
   source: CellSourceRow | null,
-  numberFormatCodeById: ReadonlyMap<string, string>,
 ): CellSnapshot {
-  const base = cached ?? emptyCellSnapshot(sheetName, address);
-  if (!source) {
-    return base;
-  }
-
   const next: CellSnapshot = {
-    ...base,
+    ...(cached ?? emptyCellSnapshot(sheetName, address)),
     sheetName,
     address,
   };
-  if (source.formula != null) {
-    next.formula = source.formula ?? undefined;
-  }
-  const inputValue = source.inputValue;
-  if (isLiteralInput(inputValue)) {
-    next.input = inputValue;
-  }
-  const format = source.format;
-  if (format !== undefined) {
-    next.format = format;
-  } else if (source.explicitFormatId) {
-    const code = numberFormatCodeById.get(source.explicitFormatId);
-    if (code !== undefined) {
-      next.format = code;
-    }
-  }
-  if (source.explicitFormatId) {
-    next.numberFormatId = source.explicitFormatId;
-  }
+  applySourceCellOverrides(next, source ?? undefined);
   return next;
 }
 
@@ -424,29 +265,20 @@ export function projectViewportPatch(
   const nextCellSignatures = new Map<string, string>();
   const sourceByAddress = input.sourceCells;
   const computedByAddress = input.cellEval;
-  const sortedStyleRanges = [...input.styleRanges.values()].toSorted(compareRectRanges);
-  const sortedFormatRanges = [...input.formatRanges.values()].toSorted(compareRectRanges);
 
   for (let row = input.viewport.rowStart; row <= input.viewport.rowEnd; row += 1) {
     for (let col = input.viewport.colStart; col <= input.viewport.colEnd; col += 1) {
       const address = formatAddress(row, col);
       const source = sourceByAddress.get(address);
       const computed = computedByAddress.get(address);
-      const styleId = resolveStyleId(row, col, computed, sortedStyleRanges);
-      const style = input.stylesById.get(styleId);
-      if (style && (full || !state.knownStyleIds.has(style.id))) {
+      const styleId = computed?.styleJson?.id ?? computed?.styleId ?? DEFAULT_STYLE_ID;
+      const style = computed?.styleJson ?? undefined;
+
+      if (style && styleId !== DEFAULT_STYLE_ID && (full || !state.knownStyleIds.has(style.id))) {
         state.knownStyleIds.add(style.id);
         styles.push(style);
       }
 
-      const numberFormat = resolveNumberFormat(
-        row,
-        col,
-        source,
-        computed,
-        sortedFormatRanges,
-        input.numberFormatCodeById,
-      );
       const snapshot: CellSnapshot = computed
         ? {
             sheetName: input.viewport.sheetName,
@@ -456,22 +288,19 @@ export function projectViewportPatch(
             version: computed.version,
           }
         : emptyCellSnapshot(input.viewport.sheetName, address);
+
       if (styleId !== DEFAULT_STYLE_ID) {
         snapshot.styleId = styleId;
       }
-      if (numberFormat.code !== undefined) {
-        snapshot.format = numberFormat.code;
+      if (computed?.formatCode !== undefined && computed.formatCode !== null) {
+        snapshot.format = computed.formatCode;
       }
-      if (numberFormat.numberFormatId !== undefined) {
-        snapshot.numberFormatId = numberFormat.numberFormatId;
+      if (computed?.formatId !== undefined && computed.formatId !== null) {
+        snapshot.numberFormatId = computed.formatId;
       }
-      if (source?.formula != null) {
-        snapshot.formula = source.formula ?? undefined;
-      }
-      const sourceInputValue = source?.inputValue;
-      if (isLiteralInput(sourceInputValue)) {
-        snapshot.input = sourceInputValue;
-      }
+
+      applySourceCellOverrides(snapshot, source);
+
       const patchedCell = buildPatchedCell(snapshot, row, col, styleId);
       const signature = JSON.stringify([
         patchedCell.snapshot.version,

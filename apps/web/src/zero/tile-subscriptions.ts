@@ -2,13 +2,7 @@
 import type { TypedView, Zero } from "@rocicorp/zero";
 import type { Viewport } from "@bilig/protocol";
 import { queries } from "@bilig/zero-sync";
-import type {
-  AxisMetadataRow,
-  CellSourceRow,
-  CellEvalRow,
-  FormatRangeRow,
-  StyleRangeRow,
-} from "./viewport-projector.js";
+import type { AxisMetadataRow, CellSourceRow, CellEvalRow } from "./viewport-projector.js";
 
 export const TILE_ROWS = 128;
 export const TILE_COLS = 32;
@@ -29,8 +23,6 @@ interface TileData {
   cellEval: Map<string, CellEvalRow>;
   rowMetadata: Map<string, AxisMetadataRow>;
   columnMetadata: Map<string, AxisMetadataRow>;
-  styleRanges: Map<string, StyleRangeRow>;
-  formatRanges: Map<string, FormatRangeRow>;
 }
 
 interface TileDataCounts {
@@ -38,8 +30,6 @@ interface TileDataCounts {
   cellEval: Map<string, number>;
   rowMetadata: Map<string, number>;
   columnMetadata: Map<string, number>;
-  styleRanges: Map<string, number>;
-  formatRanges: Map<string, number>;
 }
 
 interface TileHandle {
@@ -110,8 +100,6 @@ function createTileData(): TileData {
     cellEval: new Map(),
     rowMetadata: new Map(),
     columnMetadata: new Map(),
-    styleRanges: new Map(),
-    formatRanges: new Map(),
   };
 }
 
@@ -121,8 +109,6 @@ function createTileDataCounts(): TileDataCounts {
     cellEval: new Map(),
     rowMetadata: new Map(),
     columnMetadata: new Map(),
-    styleRanges: new Map(),
-    formatRanges: new Map(),
   };
 }
 
@@ -174,6 +160,13 @@ function normalizeCellEvalRow(value: unknown): CellEvalRow {
   }
   if (typeof row["styleId"] === "string") {
     normalized.styleId = row["styleId"];
+  }
+  if (
+    typeof row["styleJson"] === "object" &&
+    row["styleJson"] !== null &&
+    typeof asRecord(row["styleJson"])["id"] === "string"
+  ) {
+    normalized.styleJson = row["styleJson"] as CellEvalRow["styleJson"];
   }
   if (typeof row["formatId"] === "string") {
     normalized.formatId = row["formatId"];
@@ -232,8 +225,6 @@ function cloneTileData(data: TileData): TileData {
     cellEval: cloneMap(data.cellEval),
     rowMetadata: cloneMap(data.rowMetadata),
     columnMetadata: cloneMap(data.columnMetadata),
-    styleRanges: cloneMap(data.styleRanges),
-    formatRanges: cloneMap(data.formatRanges),
   };
 }
 
@@ -288,18 +279,6 @@ function updateAggregateTileData(
     counts.columnMetadata,
     previous.columnMetadata,
     next.columnMetadata,
-  );
-  updateAggregateMap(
-    aggregate.styleRanges,
-    counts.styleRanges,
-    previous.styleRanges,
-    next.styleRanges,
-  );
-  updateAggregateMap(
-    aggregate.formatRanges,
-    counts.formatRanges,
-    previous.formatRanges,
-    next.formatRanges,
   );
 }
 
@@ -470,46 +449,6 @@ export class TileSubscriptionManager {
       ) as unknown as TypedView<readonly unknown[]>,
       (value) => {
         replaceMap(data.columnMetadata, value, normalizeAxisMetadataRow, normalizeAxisMetadataKey);
-      },
-    );
-    pushView(
-      this.zero.materialize(
-        queries.styleRanges.intersectTile({
-          documentId: this.documentId,
-          sheetName: descriptor.sheetName,
-          rowStart: descriptor.rowStart,
-          rowEnd: descriptor.rowEnd,
-          colStart: descriptor.colStart,
-          colEnd: descriptor.colEnd,
-        }),
-      ) as unknown as TypedView<readonly StyleRangeRow[]>,
-      (value) => {
-        replaceMap(
-          data.styleRanges,
-          value,
-          (row) => row as StyleRangeRow,
-          (row) => row.id,
-        );
-      },
-    );
-    pushView(
-      this.zero.materialize(
-        queries.formatRanges.intersectTile({
-          documentId: this.documentId,
-          sheetName: descriptor.sheetName,
-          rowStart: descriptor.rowStart,
-          rowEnd: descriptor.rowEnd,
-          colStart: descriptor.colStart,
-          colEnd: descriptor.colEnd,
-        }),
-      ) as unknown as TypedView<readonly FormatRangeRow[]>,
-      (value) => {
-        replaceMap(
-          data.formatRanges,
-          value,
-          (row) => row as FormatRangeRow,
-          (row) => row.id,
-        );
       },
     );
     this.tiles.set(descriptor.key, handle);

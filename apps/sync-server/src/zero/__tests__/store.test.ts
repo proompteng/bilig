@@ -97,9 +97,7 @@ describe("persistWorkbookMutation", () => {
           statement.includes("INSERT INTO defined_names") ||
           statement.includes("INSERT INTO workbook_metadata") ||
           statement.includes("INSERT INTO cell_styles") ||
-          statement.includes("INSERT INTO cell_number_formats") ||
-          statement.includes("INSERT INTO sheet_style_ranges") ||
-          statement.includes("INSERT INTO sheet_format_ranges"),
+          statement.includes("INSERT INTO cell_number_formats"),
       ),
     ).toBe(false);
   });
@@ -168,9 +166,8 @@ describe("persistWorkbookMutation", () => {
     expect(db.statements.some((statement) => statement.includes("INSERT INTO cell_styles"))).toBe(
       true,
     );
-    expect(
-      db.statements.some((statement) => statement.includes("INSERT INTO sheet_style_ranges")),
-    ).toBe(true);
+    expect(db.statements.some((statement) => statement.includes("DELETE FROM cells"))).toBe(true);
+    expect(db.statements.some((statement) => statement.includes("INSERT INTO cells"))).toBe(true);
     expect(db.statements.some((statement) => statement.includes("INSERT INTO recalc_job"))).toBe(
       false,
     );
@@ -236,11 +233,7 @@ describe("persistWorkbookMutation", () => {
       },
     });
 
-    expect(
-      db.statements.some((statement) =>
-        statement.includes("DELETE FROM sheet_style_ranges WHERE id = $1"),
-      ),
-    ).toBe(true);
+    expect(db.statements.some((statement) => statement.includes("DELETE FROM cells"))).toBe(true);
     expect(db.statements.some((statement) => statement.includes("INSERT INTO cell_eval"))).toBe(
       true,
     );

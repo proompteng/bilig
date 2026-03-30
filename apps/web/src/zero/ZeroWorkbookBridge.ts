@@ -6,14 +6,10 @@ import { queries } from "@bilig/zero-sync";
 import type { WorkerViewportCache } from "../viewport-cache.js";
 import { TileSubscriptionManager, type TileViewportAttachment } from "./tile-subscriptions.js";
 import {
-  buildNumberFormatCodeById,
   buildSelectedCellSnapshot,
-  buildStylesById,
   createViewportProjectionState,
   projectViewportPatch,
-  type NumberFormatRow,
   type SheetRow,
-  type StyleRow,
   type ViewportProjectionState,
   type WorkbookRow,
 } from "./viewport-projector.js";
@@ -58,8 +54,6 @@ export class ZeroWorkbookBridge {
   private readonly destroyers: Array<() => void> = [];
   private workbookRow: WorkbookRow | null = null;
   private sheetRows: readonly SheetRow[] = [];
-  private stylesById = buildStylesById([]);
-  private numberFormatCodeById = buildNumberFormatCodeById([]);
   private selection: { sheetName: string; address: string } = {
     sheetName: "Sheet1",
     address: "A1",
@@ -98,29 +92,6 @@ export class ZeroWorkbookBridge {
         },
       ),
     );
-    this.destroyers.push(
-      bindView(
-        asTypedView<readonly StyleRow[]>(
-          this.zero.materialize(queries.styles.byWorkbook({ documentId })),
-        ),
-        (value) => {
-          this.stylesById = buildStylesById(value);
-          this.reprojectAll();
-        },
-      ),
-    );
-    this.destroyers.push(
-      bindView(
-        asTypedView<readonly NumberFormatRow[]>(
-          this.zero.materialize(queries.numberFormats.byWorkbook({ documentId })),
-        ),
-        (value) => {
-          this.numberFormatCodeById = buildNumberFormatCodeById(value);
-          this.reprojectAll();
-        },
-      ),
-    );
-
     this.setSelection(this.selection.sheetName, this.selection.address);
   }
 
@@ -201,8 +172,6 @@ export class ZeroWorkbookBridge {
           state,
           {
             viewport: { ...viewport, sheetName },
-            stylesById: this.stylesById,
-            numberFormatCodeById: this.numberFormatCodeById,
             ...attachment.getData(),
           },
           full,
@@ -275,7 +244,6 @@ export class ZeroWorkbookBridge {
       this.selection.address,
       this.cache.peekCell(this.selection.sheetName, this.selection.address),
       selectedSource,
-      this.numberFormatCodeById,
     );
   }
 
@@ -296,25 +264,11 @@ export class ZeroWorkbookBridge {
           colStart: col,
           colEnd: col,
         },
-        stylesById: this.stylesById,
-        numberFormatCodeById: this.numberFormatCodeById,
         ...data,
       },
       full,
     );
     this.cache.applyViewportPatch(patch);
     this.emitSelection(this.currentSelectedCell());
-  }
-
-  private reprojectAll(): void {
-    for (const subscription of this.viewportSubscriptions) {
-      try {
-        subscription.notify(true);
-      } catch (error) {
-        this.onError(error);
-      }
-    }
-    this.reprojectSelection(true);
-    this.emitWorkbook();
   }
 }

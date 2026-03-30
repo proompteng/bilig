@@ -14,7 +14,11 @@ import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
 import { WorkbookRuntimeManager } from "./runtime-manager.js";
-import { ensureZeroSyncSchema } from "./store.js";
+import {
+  backfillAuthoritativeCellEval,
+  dropLegacyZeroSyncSchemaObjects,
+  ensureZeroSyncSchema,
+} from "./store.js";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -87,6 +91,8 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async initialize(): Promise<void> {
     await ensureZeroSyncSchema(this.pool);
+    await backfillAuthoritativeCellEval(this.pool);
+    await dropLegacyZeroSyncSchemaObjects(this.pool);
     this.recalcWorker.start();
   }
 
@@ -126,22 +132,6 @@ class EnabledZeroSyncService implements ZeroSyncService {
       "columnMetadata.tile": {
         query: queries.columnMetadata.tile,
         schema: workbookColumnTileArgsSchema,
-      },
-      "styleRanges.intersectTile": {
-        query: queries.styleRanges.intersectTile,
-        schema: workbookTileArgsSchema,
-      },
-      "formatRanges.intersectTile": {
-        query: queries.formatRanges.intersectTile,
-        schema: workbookTileArgsSchema,
-      },
-      "styles.byWorkbook": {
-        query: queries.styles.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      "numberFormats.byWorkbook": {
-        query: queries.numberFormats.byWorkbook,
-        schema: workbookQueryArgsSchema,
       },
     } as const;
 

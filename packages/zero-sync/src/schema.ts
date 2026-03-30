@@ -37,6 +37,7 @@ const cells = table("cells")
     inputValue: json().from("input_value").optional(),
     formula: string().optional(),
     format: string().optional(),
+    styleId: string().from("style_id").optional(),
     explicitFormatId: string().from("explicit_format_id").optional(),
     sourceRevision: number().from("source_revision"),
     updatedBy: string().from("updated_by"),
@@ -55,6 +56,7 @@ const cellEval = table("cell_eval")
     flags: number(),
     version: number(),
     styleId: string().from("style_id").optional(),
+    styleJson: json().from("style_json").optional(),
     formatId: string().from("format_id").optional(),
     formatCode: string().from("format_code").optional(),
     calcRevision: number().from("calc_revision"),
@@ -96,70 +98,8 @@ const definedNames = table("defined_names")
   })
   .primaryKey("workbookId", "name");
 
-const styles = table("cell_styles")
-  .columns({
-    workbookId: string().from("workbook_id"),
-    id: string().from("style_id"),
-    recordJSON: json().from("record_json"),
-    hash: string(),
-    createdAt: number().from("created_at"),
-  })
-  .primaryKey("workbookId", "id");
-
-const numberFormats = table("cell_number_formats")
-  .columns({
-    workbookId: string().from("workbook_id"),
-    id: string().from("format_id"),
-    code: string(),
-    kind: string(),
-    createdAt: number().from("created_at"),
-  })
-  .primaryKey("workbookId", "id");
-
-const styleRanges = table("sheet_style_ranges")
-  .columns({
-    id: string(),
-    workbookId: string().from("workbook_id"),
-    sheetName: string().from("sheet_name"),
-    startRow: number().from("start_row"),
-    endRow: number().from("end_row"),
-    startCol: number().from("start_col"),
-    endCol: number().from("end_col"),
-    styleId: string().from("style_id"),
-    sourceRevision: number().from("source_revision"),
-    updatedAt: number().from("updated_at"),
-  })
-  .primaryKey("id");
-
-const formatRanges = table("sheet_format_ranges")
-  .columns({
-    id: string(),
-    workbookId: string().from("workbook_id"),
-    sheetName: string().from("sheet_name"),
-    startRow: number().from("start_row"),
-    endRow: number().from("end_row"),
-    startCol: number().from("start_col"),
-    endCol: number().from("end_col"),
-    formatId: string().from("format_id"),
-    sourceRevision: number().from("source_revision"),
-    updatedAt: number().from("updated_at"),
-  })
-  .primaryKey("id");
-
 export const schema = createSchema({
-  tables: [
-    workbooks,
-    sheets,
-    cells,
-    cellEval,
-    rowMetadata,
-    columnMetadata,
-    definedNames,
-    styles,
-    numberFormats,
-    styleRanges,
-    formatRanges,
-  ],
+  tables: [workbooks, sheets, cells, cellEval, rowMetadata, columnMetadata, definedNames],
   relationships: [
     relationships(workbooks, ({ many }) => ({
       sheets: many({
@@ -171,16 +111,6 @@ export const schema = createSchema({
         sourceField: ["id"],
         destField: ["workbookId"],
         destSchema: definedNames,
-      }),
-      styles: many({
-        sourceField: ["id"],
-        destField: ["workbookId"],
-        destSchema: styles,
-      }),
-      numberFormats: many({
-        sourceField: ["id"],
-        destField: ["workbookId"],
-        destSchema: numberFormats,
       }),
     })),
     relationships(sheets, ({ many, one }) => ({
@@ -208,16 +138,6 @@ export const schema = createSchema({
         sourceField: ["workbookId", "name"],
         destField: ["workbookId", "sheetName"],
         destSchema: columnMetadata,
-      }),
-      styleRanges: many({
-        sourceField: ["workbookId", "name"],
-        destField: ["workbookId", "sheetName"],
-        destSchema: styleRanges,
-      }),
-      formatRanges: many({
-        sourceField: ["workbookId", "name"],
-        destField: ["workbookId", "sheetName"],
-        destSchema: formatRanges,
       }),
     })),
     relationships(cells, ({ one }) => ({
@@ -248,35 +168,7 @@ export const schema = createSchema({
         destSchema: sheets,
       }),
     })),
-    relationships(styleRanges, ({ one }) => ({
-      sheet: one({
-        sourceField: ["workbookId", "sheetName"],
-        destField: ["workbookId", "name"],
-        destSchema: sheets,
-      }),
-    })),
-    relationships(formatRanges, ({ one }) => ({
-      sheet: one({
-        sourceField: ["workbookId", "sheetName"],
-        destField: ["workbookId", "name"],
-        destSchema: sheets,
-      }),
-    })),
     relationships(definedNames, ({ one }) => ({
-      workbook: one({
-        sourceField: ["workbookId"],
-        destField: ["id"],
-        destSchema: workbooks,
-      }),
-    })),
-    relationships(styles, ({ one }) => ({
-      workbook: one({
-        sourceField: ["workbookId"],
-        destField: ["id"],
-        destSchema: workbooks,
-      }),
-    })),
-    relationships(numberFormats, ({ one }) => ({
       workbook: one({
         sourceField: ["workbookId"],
         destField: ["id"],
