@@ -398,11 +398,11 @@ async function startLocalTcpProxy(
     });
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    server.once("error", rejectPromise);
     server.listen(listenPort, "127.0.0.1", () => {
-      server.off("error", reject);
-      resolve();
+      server.off("error", rejectPromise);
+      resolvePromise();
     });
   });
 
@@ -411,13 +411,13 @@ async function startLocalTcpProxy(
   );
 
   return async () => {
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolvePromise, rejectPromise) => {
       server.close((error) => {
         if (error) {
-          reject(error);
+          rejectPromise(error);
           return;
         }
-        resolve();
+        resolvePromise();
       });
     });
   };
