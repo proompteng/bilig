@@ -32,6 +32,10 @@ COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 
 EXPOSE 3000
 
+FROM web-runtime AS web-e2e-runtime
+
+COPY docker/runtime-config.local.json /usr/share/nginx/html/runtime-config.json
+
 FROM node:24-bookworm-slim AS sync-runtime
 
 ENV NODE_ENV="production"

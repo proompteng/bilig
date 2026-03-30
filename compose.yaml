@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
     command:
       - postgres
       - -c
@@ -25,7 +27,6 @@ services:
       - "${BILIG_E2E_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres/01-zero-publication.sql:/docker-entrypoint-initdb.d/01-zero-publication.sql:ro
 
   local-server:
     build:
@@ -112,7 +113,7 @@ services:
   web:
     build:
       context: .
-      target: web-runtime
+      target: web-e2e-runtime
     depends_on:
       sync-server:
         condition: service_healthy
@@ -128,8 +129,6 @@ services:
       start_period: 5s
     ports:
       - "${BILIG_E2E_WEB_PORT:-3000}:3000"
-    volumes:
-      - ./docker/runtime-config.local.json:/usr/share/nginx/html/runtime-config.json:ro
 
 volumes:
   postgres-data:
