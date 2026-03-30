@@ -141,65 +141,23 @@ function isContainerizedRuntime(): boolean {
   return existsSync("/.dockerenv") || existsSync("/run/.containerenv");
 }
 
-function decodeRouteHexIpv4(value: string): string | null {
-  if (!/^[0-9a-fA-F]{8}$/.test(value)) {
-    return null;
+function resolveCurrentContainerId(): string | null {
+  const hostname = process.env["HOSTNAME"]?.trim();
+  if (hostname) {
+    return hostname;
   }
 
-  const octets: number[] = [];
-  for (let offset = 6; offset >= 0; offset -= 2) {
-    octets.push(Number.parseInt(value.slice(offset, offset + 2), 16));
-  }
-  return octets.join(".");
-}
-
-function resolveContainerGatewayHost(): string | null {
   try {
-    const routes = readFileSync("/proc/net/route", "utf8").trim().split("\n").slice(1);
-    for (const route of routes) {
-      const fields = route.trim().split(/\s+/);
-      const destination = fields[1] ?? "";
-      const gateway = fields[2] ?? "";
-      const flags = Number.parseInt(fields[3] ?? "", 16);
-      if (destination !== "00000000" || !Number.isInteger(flags) || (flags & 0x2) === 0) {
-        continue;
-      }
-
-      const address = decodeRouteHexIpv4(gateway);
-      if (address) {
-        return address;
-      }
-    }
+    const value = readFileSync("/etc/hostname", "utf8").trim();
+    return value.length > 0 ? value : null;
   } catch {}
 
   return null;
 }
 
-function resolveComposeHost(): string {
-  const explicitHost = process.env["BILIG_E2E_HOST"];
-  if (explicitHost) {
-    return explicitHost;
-  }
-
-  if (browserStack !== "compose" || !isContainerizedRuntime()) {
-    return "127.0.0.1";
-  }
-
-  const gatewayHost = resolveContainerGatewayHost();
-  if (gatewayHost) {
-    console.info(
-      `compose browser stack is running inside a container; using Docker host gateway ${gatewayHost}.`,
-    );
-    return gatewayHost;
-  }
-
-  console.warn(
-    "compose browser stack is running inside a container but Docker host gateway could not be determined; falling back to 127.0.0.1.",
-  );
-  return "127.0.0.1";
+function shouldUseComposeInternalNetwork(): boolean {
+  return browserStack === "compose" && isContainerizedRuntime();
 }
-
-const composeHost = resolveComposeHost();
 
 const composeFile = resolve(workspaceRoot, process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml");
 const composeProjectDirectory = dirname(composeFile);
@@ -208,9 +166,14 @@ const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
 const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
 const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
-const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://${composeHost}:${e2eWebPort}`;
+const e2eBaseUrl =
+  process.env["BILIG_E2E_BASE_URL"] ??
+  (shouldUseComposeInternalNetwork() ? "http://web:3000" : `http://127.0.0.1:${e2eWebPort}`);
 const e2eSyncServerUrl =
-  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://${composeHost}:${e2eSyncServerPort}`;
+  process.env["BILIG_E2E_SYNC_SERVER_URL"] ??
+  (shouldUseComposeInternalNetwork()
+    ? "http://sync-server:4321"
+    : `http://127.0.0.1:${e2eSyncServerPort}`);
 
 const PREVIEW_PORTS = [4179, 4180];
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;
@@ -395,6 +358,82 @@ function buildComposeCommand(invocation: ComposeInvocation, args: string[]): str
   ];
 }
 
+function connectCurrentContainerToComposeNetwork(): void {
+  if (!shouldUseComposeInternalNetwork()) {
+    return;
+  }
+  if (!commandExists("docker")) {
+    throw new Error(
+      "compose browser stack is running inside a container, but the docker CLI is unavailable to attach the job container to the compose network.",
+    );
+  }
+
+  const containerId = resolveCurrentContainerId();
+  if (!containerId) {
+    throw new Error(
+      "compose browser stack is running inside a container, but the current container id could not be determined.",
+    );
+  }
+
+  const networkName = `${composeProject}_default`;
+  const result = Bun.spawnSync(["docker", "network", "connect", networkName, containerId], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd: workspaceRoot,
+  });
+  if (result.exitCode === 0) {
+    console.info(
+      `compose browser stack is running inside a container; attached ${containerId} to ${networkName}.`,
+    );
+    return;
+  }
+
+  const output = [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)]
+    .join("")
+    .trim();
+  if (output.includes("already exists") || output.includes("already connected")) {
+    return;
+  }
+
+  throw new Error(
+    `failed to attach the current container to compose network ${networkName}: ${output || "unknown docker network connect failure"}`,
+  );
+}
+
+function disconnectCurrentContainerFromComposeNetwork(): void {
+  if (!shouldUseComposeInternalNetwork() || !commandExists("docker")) {
+    return;
+  }
+
+  const containerId = resolveCurrentContainerId();
+  if (!containerId) {
+    return;
+  }
+
+  const networkName = `${composeProject}_default`;
+  const result = Bun.spawnSync(["docker", "network", "disconnect", networkName, containerId], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd: workspaceRoot,
+  });
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  const output = [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)]
+    .join("")
+    .trim();
+  if (output.includes("is not connected") || output.includes("No such container")) {
+    return;
+  }
+
+  console.warn(
+    `failed to detach the current container from compose network ${networkName}: ${output || "unknown docker network disconnect failure"}`,
+  );
+}
+
 function runDockerCompose(args: string[], env = process.env): void {
   const invocation = requireComposeInvocation(true);
   if (!invocation) {
@@ -457,6 +496,7 @@ async function runComposePlaywright(): Promise<void> {
   terminatePreviewServers();
   try {
     runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
+    connectCurrentContainerToComposeNetwork();
     await waitForHttp(`${e2eBaseUrl}/healthz`);
     await waitForHttp(`${e2eSyncServerUrl}/healthz`);
     runPlaywright(playwrightArgs);
@@ -472,6 +512,7 @@ async function runComposePlaywright(): Promise<void> {
       cause: error,
     });
   } finally {
+    disconnectCurrentContainerFromComposeNetwork();
     try {
       runDockerCompose(["down", "-v", "--remove-orphans"]);
     } catch (error) {
