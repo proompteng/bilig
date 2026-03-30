@@ -2,9 +2,11 @@
 
 const textDecoder = new TextDecoder();
 const playwrightArgs = process.argv.slice(2);
-const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "compose";
+const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "auto";
 const normalizedBrowserStack =
-  requestedBrowserStack === "compose" || requestedBrowserStack === "local"
+  requestedBrowserStack === "compose" ||
+  requestedBrowserStack === "local" ||
+  requestedBrowserStack === "auto"
     ? requestedBrowserStack
     : "local";
 const isCi = process.env["CI"] === "1" || process.env["CI"] === "true";
@@ -89,15 +91,25 @@ function requireComposeInvocation(required: boolean): ComposeInvocation | null {
 
 const compose = resolveComposeInvocation();
 const composeLabel = compose ? compose.label : "unavailable";
-const browserStack = normalizedBrowserStack === "compose" && compose ? "compose" : "local";
+const browserStack =
+  (normalizedBrowserStack === "compose" || normalizedBrowserStack === "auto") && compose
+    ? "compose"
+    : "local";
 
-if (normalizedBrowserStack === "compose" && compose) {
+if ((normalizedBrowserStack === "compose" || normalizedBrowserStack === "auto") && compose) {
   console.info(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`);
 }
 
 if (normalizedBrowserStack === "compose" && !compose && isCi) {
   throw new Error(
-    "docker compose is required in CI. Neither `docker compose` nor `docker-compose` is available.",
+    "BILIG_BROWSER_STACK=compose is required in CI, but neither `docker compose` nor `docker-compose` is available.",
+  );
+}
+
+if (normalizedBrowserStack === "auto" && !compose) {
+  const fallbackCommand = "`docker compose` or `docker-compose`";
+  console.warn(
+    `BILIG_BROWSER_STACK is auto and compose is unavailable; falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
   );
 }
 
