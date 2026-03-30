@@ -107,6 +107,12 @@ if (normalizedBrowserStack === "compose" && !compose && isCi) {
 }
 
 if (normalizedBrowserStack === "auto" && !compose) {
+  if (isCi) {
+    throw new Error(
+      "CI requires docker compose for browser tests, but `docker compose` and `docker-compose` are both unavailable. Set BILIG_BROWSER_STACK=local only when a local runtime provides /v2/session.",
+    );
+  }
+
   const fallbackCommand = "`docker compose` or `docker-compose`";
   console.warn(
     `BILIG_BROWSER_STACK is auto and compose is unavailable; falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
@@ -117,6 +123,12 @@ if (normalizedBrowserStack === "compose" && !compose && !isCi) {
   const fallbackCommand = "`docker compose` or `docker-compose`";
   console.warn(
     `compose unavailable in this environment, falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
+  );
+}
+
+if (browserStack === "local") {
+  console.info(
+    "BILIG_BROWSER_STACK=local selected; Playwright will run against local web stack and expects /v2/session to be available.",
   );
 }
 const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
@@ -130,6 +142,7 @@ const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
 
 const PREVIEW_PORTS = [4179, 4180];
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;
 
 function parsePidList(output: string): number[] {
   if (!output) {
@@ -280,8 +293,21 @@ async function pollHttp(url: string, deadline: number, lastError = "unknown erro
   await pollHttp(url, deadline, lastError);
 }
 
-async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
-  await pollHttp(url, Date.now() + timeoutMs);
+async function waitForHttp(
+  url: string,
+  timeoutMs = 120_000,
+  lastError = "unknown error",
+): Promise<void> {
+  await pollHttp(url, Date.now() + timeoutMs, lastError);
+}
+
+async function ensureRuntimeSessionEndpoint(baseUrl: string): Promise<void> {
+  const sessionUrl = `${baseUrl.replace(/\/$/, "")}/v2/session`;
+  await waitForHttp(
+    sessionUrl,
+    SESSION_BOOTSTRAP_TIMEOUT_MS,
+    `runtime session endpoint ${sessionUrl} did not become available`,
+  );
 }
 
 function runDockerCompose(args: string[], env = process.env): void {
@@ -352,6 +378,7 @@ if (browserStack === "compose") {
   await runComposePlaywright();
 } else {
   terminatePreviewServers();
+  await ensureRuntimeSessionEndpoint(e2eBaseUrl);
   runPlaywright(playwrightArgs);
   terminatePreviewServers();
 }
