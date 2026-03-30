@@ -47,6 +47,13 @@ jobs:
           set -eu
           pnpm exec playwright install --with-deps chromium
 
+      - name: Install Docker CLI
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends docker.io
+          docker version
+
       - name: Run nightly fuzz campaign
         run: |
           set -eu
