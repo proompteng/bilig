@@ -1,7 +1,11 @@
 #!/usr/bin/env bun
 
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 const textDecoder = new TextDecoder();
 const playwrightArgs = process.argv.slice(2);
+const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "auto";
 const normalizedBrowserStack =
   requestedBrowserStack === "compose" ||
@@ -131,7 +135,8 @@ if (browserStack === "local") {
     "BILIG_BROWSER_STACK=local selected; Playwright will run against local web stack and expects /v2/session to be available.",
   );
 }
-const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
+const composeFile = resolve(workspaceRoot, process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml");
+const composeProjectDirectory = dirname(composeFile);
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
 const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
 const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
@@ -265,6 +270,7 @@ function runPlaywright(args: string[]): void {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
+    cwd: workspaceRoot,
     env: {
       ...process.env,
       BILIG_BROWSER_STACK: browserStack,
@@ -310,27 +316,38 @@ async function ensureRuntimeSessionEndpoint(baseUrl: string): Promise<void> {
   );
 }
 
+function buildComposeCommand(invocation: ComposeInvocation, args: string[]): string[] {
+  return [
+    ...invocation.command,
+    "--project-directory",
+    composeProjectDirectory,
+    "-f",
+    composeFile,
+    "-p",
+    composeProject,
+    ...args,
+  ];
+}
+
 function runDockerCompose(args: string[], env = process.env): void {
   const invocation = requireComposeInvocation(true);
   if (!invocation) {
     throw new Error("compose command is unavailable; cannot run compose stack.");
   }
 
-  const result = Bun.spawnSync(
-    [...invocation.command, "-f", composeFile, "-p", composeProject, ...args],
-    {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-      env: {
-        ...env,
-        BILIG_E2E_WEB_PORT: e2eWebPort,
-        BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
-        BILIG_E2E_ZERO_PORT: e2eZeroPort,
-        BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
-      },
+  const result = Bun.spawnSync(buildComposeCommand(invocation, args), {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    cwd: workspaceRoot,
+    env: {
+      ...env,
+      BILIG_E2E_WEB_PORT: e2eWebPort,
+      BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
+      BILIG_E2E_ZERO_PORT: e2eZeroPort,
+      BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
     },
-  );
+  });
   if (result.exitCode !== 0) {
     throw new Error(
       `${invocation.label} ${args.join(" ")} failed with exit code ${result.exitCode ?? 1}`,
@@ -344,14 +361,12 @@ function collectComposeLogs(): string {
     return "compose command is unavailable; compose logs were not collected.";
   }
 
-  const result = Bun.spawnSync(
-    [...invocation.command, "-f", composeFile, "-p", composeProject, "logs", "--no-color"],
-    {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
+  const result = Bun.spawnSync(buildComposeCommand(invocation, ["logs", "--no-color"]), {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd: workspaceRoot,
+  });
   return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join("").trim();
 }
 
@@ -361,14 +376,12 @@ function collectComposeStatus(): string {
     return "compose command is unavailable; compose service status was not collected.";
   }
 
-  const result = Bun.spawnSync(
-    [...invocation.command, "-f", composeFile, "-p", composeProject, "ps", "--all"],
-    {
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
+  const result = Bun.spawnSync(buildComposeCommand(invocation, ["ps", "--all"]), {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd: workspaceRoot,
+  });
   return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join("").trim();
 }
 
