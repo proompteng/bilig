@@ -167,6 +167,10 @@ const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
 const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
 const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
+const composeWebPort = shouldUseComposeInternalNetwork() ? "0" : e2eWebPort;
+const composeSyncServerPort = shouldUseComposeInternalNetwork() ? "0" : e2eSyncServerPort;
+const composeZeroPort = shouldUseComposeInternalNetwork() ? "0" : e2eZeroPort;
+const composePostgresPort = shouldUseComposeInternalNetwork() ? "0" : e2ePostgresPort;
 const e2eBaseUrl =
   process.env["BILIG_E2E_BASE_URL"] ??
   `http://127.0.0.1:${e2eWebPort}`;
@@ -512,10 +516,10 @@ function runDockerCompose(args: string[], env = process.env): void {
     cwd: workspaceRoot,
     env: {
       ...env,
-      BILIG_E2E_WEB_PORT: e2eWebPort,
-      BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
-      BILIG_E2E_ZERO_PORT: e2eZeroPort,
-      BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
+      BILIG_E2E_WEB_PORT: composeWebPort,
+      BILIG_E2E_SYNC_SERVER_PORT: composeSyncServerPort,
+      BILIG_E2E_ZERO_PORT: composeZeroPort,
+      BILIG_E2E_POSTGRES_PORT: composePostgresPort,
     },
   });
   if (result.exitCode !== 0) {
