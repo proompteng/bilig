@@ -11,29 +11,11 @@ import type {
   WorkerRuntimeSessionController,
 } from "../runtime-session.js";
 
-function noop(): void {}
-
 const zeroStub: CreateWorkerRuntimeSessionInput["zero"] = Object.create(Zero.prototype);
 
 function createWorkerHandle(): WorkerHandle {
-  const client: WorkerHandle["client"] = {
-    invoke: async () => undefined,
-    ready: async () => undefined,
-    subscribe: () => noop,
-    subscribeBatches: () => noop,
-    subscribeViewportPatches: () => noop,
-    dispose: noop,
-  };
-
   return {
-    worker: {
-      postMessage() {},
-      addEventListener() {},
-      removeEventListener() {},
-      terminate() {},
-    },
-    client,
-    cache: new WorkerViewportCache(client),
+    cache: new WorkerViewportCache(),
   };
 }
 

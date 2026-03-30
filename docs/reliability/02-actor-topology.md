@@ -20,7 +20,13 @@ The web app subscribes via `useSelector` only to narrow slices of these actors. 
 - `appBootstrap`
 - `workerRuntime`
 
-`workerRuntime` now owns worker creation, bootstrap, runtime-state refresh, selected-cell refresh, cache-driven invalidation, selection forwarding, and optional Zero bridge subscriptions. `WorkerWorkbookApp` renders the shell and dispatches actor events instead of orchestrating the worker lifecycle directly.
+`workerRuntime` now owns the web workbook session lifecycle, but the live shell is Zero-authoritative:
+
+- Zero-backed projection is the only viewport/render source for the grid
+- selected-cell state is fed from the Zero bridge, not a parallel worker viewport stream
+- persisted workbook writes complete through Zero/server, not a worker-first mutation path
+
+`WorkerWorkbookApp` renders the shell and dispatches actor events instead of orchestrating the session lifecycle directly.
 
 ## Worker
 
