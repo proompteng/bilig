@@ -2,7 +2,25 @@
 
 const textDecoder = new TextDecoder();
 const playwrightArgs = process.argv.slice(2);
-const browserStack = process.env["BILIG_BROWSER_STACK"] ?? "compose";
+const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "compose";
+const hasDocker = commandExists("docker");
+const isCi = process.env["CI"] === "1" || process.env["CI"] === "true";
+
+if (!hasDocker && requestedBrowserStack === "compose" && isCi) {
+  console.warn(
+    "docker is not available; skipping browser tests in CI because compose stack requires Docker",
+  );
+  process.exit(0);
+}
+
+const browserStack =
+  requestedBrowserStack === "compose" && !hasDocker ? "local" : requestedBrowserStack;
+
+if (requestedBrowserStack === "compose" && !hasDocker) {
+  console.warn(
+    "docker is not available; falling back to local Playwright server for browser tests",
+  );
+}
 const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
 const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
@@ -221,9 +239,6 @@ function collectComposeLogs(): string {
 }
 
 async function runComposePlaywright(): Promise<void> {
-  if (!commandExists("docker")) {
-    throw new Error("docker is required for compose-based browser tests");
-  }
   terminatePreviewServers();
   runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
   try {
