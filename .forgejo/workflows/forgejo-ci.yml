@@ -14,9 +14,11 @@ jobs:
     timeout-minutes: 20
     container:
       image: docker.io/library/node:24-bookworm
+      options: --add-host=host.docker.internal:host-gateway
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_E2E_HOST: host.docker.internal
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2

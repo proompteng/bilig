@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -135,6 +136,71 @@ if (browserStack === "local") {
     "BILIG_BROWSER_STACK=local selected; Playwright will run against local web stack and expects /v2/session to be available.",
   );
 }
+
+function isContainerizedRuntime(): boolean {
+  return existsSync("/.dockerenv") || existsSync("/run/.containerenv");
+}
+
+function decodeRouteHexIpv4(value: string): string | null {
+  if (!/^[0-9a-fA-F]{8}$/.test(value)) {
+    return null;
+  }
+
+  const octets: number[] = [];
+  for (let offset = 6; offset >= 0; offset -= 2) {
+    octets.push(Number.parseInt(value.slice(offset, offset + 2), 16));
+  }
+  return octets.join(".");
+}
+
+function resolveContainerGatewayHost(): string | null {
+  try {
+    const routes = readFileSync("/proc/net/route", "utf8").trim().split("\n").slice(1);
+    for (const route of routes) {
+      const fields = route.trim().split(/\s+/);
+      const destination = fields[1] ?? "";
+      const gateway = fields[2] ?? "";
+      const flags = Number.parseInt(fields[3] ?? "", 16);
+      if (destination !== "00000000" || !Number.isInteger(flags) || (flags & 0x2) === 0) {
+        continue;
+      }
+
+      const address = decodeRouteHexIpv4(gateway);
+      if (address) {
+        return address;
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+function resolveComposeHost(): string {
+  const explicitHost = process.env["BILIG_E2E_HOST"];
+  if (explicitHost) {
+    return explicitHost;
+  }
+
+  if (browserStack !== "compose" || !isContainerizedRuntime()) {
+    return "127.0.0.1";
+  }
+
+  const gatewayHost = resolveContainerGatewayHost();
+  if (gatewayHost) {
+    console.info(
+      `compose browser stack is running inside a container; using Docker host gateway ${gatewayHost}.`,
+    );
+    return gatewayHost;
+  }
+
+  console.warn(
+    "compose browser stack is running inside a container but Docker host gateway could not be determined; falling back to 127.0.0.1.",
+  );
+  return "127.0.0.1";
+}
+
+const composeHost = resolveComposeHost();
+
 const composeFile = resolve(workspaceRoot, process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml");
 const composeProjectDirectory = dirname(composeFile);
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
@@ -142,9 +208,9 @@ const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
 const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
 const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
-const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
+const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://${composeHost}:${e2eWebPort}`;
 const e2eSyncServerUrl =
-  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
+  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://${composeHost}:${e2eSyncServerPort}`;
 
 const PREVIEW_PORTS = [4179, 4180];
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;
