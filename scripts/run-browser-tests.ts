@@ -355,22 +355,58 @@ function collectComposeLogs(): string {
   return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join("").trim();
 }
 
+function collectComposeStatus(): string {
+  const invocation = requireComposeInvocation(false);
+  if (!invocation) {
+    return "compose command is unavailable; compose service status was not collected.";
+  }
+
+  const result = Bun.spawnSync(
+    [...invocation.command, "-f", composeFile, "-p", composeProject, "ps", "--all"],
+    {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  return [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)].join("").trim();
+}
+
 async function runComposePlaywright(): Promise<void> {
   requireComposeInvocation(true);
 
   terminatePreviewServers();
-  runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
   try {
+    runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
     await waitForHttp(`${e2eBaseUrl}/healthz`);
     await waitForHttp(`${e2eSyncServerUrl}/healthz`);
     runPlaywright(playwrightArgs);
   } catch (error) {
     const logs = collectComposeLogs();
-    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${logs}`, {
+    const status = collectComposeStatus();
+    const details = [logs, status]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join("\n\n");
+    const context = details ? `\n\nCompose diagnostics:\n${details}` : "";
+    throw new Error(`${error instanceof Error ? error.message : String(error)}${context}`, {
       cause: error,
     });
   } finally {
-    runDockerCompose(["down", "-v", "--remove-orphans"]);
+    try {
+      runDockerCompose(["down", "-v", "--remove-orphans"]);
+    } catch (error) {
+      const logs = collectComposeLogs();
+      const status = collectComposeStatus();
+      const details = [logs, status]
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .join("\n\n");
+      const context = details ? `\n\nCompose diagnostics:\n${details}` : "";
+      console.error(
+        `compose shutdown failed: ${error instanceof Error ? error.message : String(error)}${context}`,
+      );
+    }
   }
 }
 
