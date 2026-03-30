@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { existsSync, readFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -168,7 +169,7 @@ const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
 const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
 const e2eBaseUrl =
   process.env["BILIG_E2E_BASE_URL"] ??
-  (shouldUseComposeInternalNetwork() ? "http://web:3000" : `http://127.0.0.1:${e2eWebPort}`);
+  `http://127.0.0.1:${e2eWebPort}`;
 const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ??
   (shouldUseComposeInternalNetwork()
@@ -358,6 +359,70 @@ function buildComposeCommand(invocation: ComposeInvocation, args: string[]): str
   ];
 }
 
+async function startLocalTcpProxy(
+  listenPort: number,
+  targetHost: string,
+  targetPort: number,
+): Promise<() => Promise<void>> {
+  const server = createServer((incomingSocket) => {
+    const outgoingSocket = Bun.connect({
+      hostname: targetHost,
+      port: targetPort,
+      socket: {
+        data(socket, data) {
+          incomingSocket.write(Buffer.from(data));
+          return socket;
+        },
+        close() {
+          incomingSocket.end();
+        },
+        error() {
+          incomingSocket.destroy();
+        },
+        open(socket) {
+          incomingSocket.on("data", (chunk) => {
+            socket.write(chunk);
+          });
+          incomingSocket.on("end", () => {
+            socket.end();
+          });
+          incomingSocket.on("error", () => {
+            socket.terminate();
+          });
+        },
+      },
+    });
+
+    incomingSocket.on("close", () => {
+      outgoingSocket.terminate();
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(listenPort, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  console.info(
+    `compose browser stack is running inside a container; proxying 127.0.0.1:${listenPort} to ${targetHost}:${targetPort}.`,
+  );
+
+  return async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  };
+}
+
 function connectCurrentContainerToComposeNetwork(): void {
   if (!shouldUseComposeInternalNetwork()) {
     return;
@@ -494,9 +559,13 @@ async function runComposePlaywright(): Promise<void> {
   requireComposeInvocation(true);
 
   terminatePreviewServers();
+  let closeWebProxy: (() => Promise<void>) | null = null;
   try {
     runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
     connectCurrentContainerToComposeNetwork();
+    if (shouldUseComposeInternalNetwork()) {
+      closeWebProxy = await startLocalTcpProxy(Number.parseInt(e2eWebPort, 10), "web", 3000);
+    }
     await waitForHttp(`${e2eBaseUrl}/healthz`);
     await waitForHttp(`${e2eSyncServerUrl}/healthz`);
     runPlaywright(playwrightArgs);
@@ -512,6 +581,13 @@ async function runComposePlaywright(): Promise<void> {
       cause: error,
     });
   } finally {
+    if (closeWebProxy) {
+      await closeWebProxy().catch((error) => {
+        console.warn(
+          `failed to stop the local compose web proxy: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+    }
     disconnectCurrentContainerFromComposeNetwork();
     try {
       runDockerCompose(["down", "-v", "--remove-orphans"]);
