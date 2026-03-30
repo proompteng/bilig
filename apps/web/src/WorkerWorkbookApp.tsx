@@ -40,17 +40,15 @@ import { Select } from "@base-ui/react/select";
 import { Toolbar } from "@base-ui/react/toolbar";
 import type { CommitOp } from "@bilig/core";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
-import { formatAddress, parseCellAddress, parseFormula } from "@bilig/formula";
+import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
   type CellNumberFormatInput,
   type CellRangeRef,
   MAX_COLS,
   MAX_ROWS,
-  ErrorCode,
   ValueTag,
   parseCellNumberFormatCode,
   formatErrorCode,
-  type CellValue,
   type CellSnapshot,
   type CellStyleField,
   type CellStylePatch,
@@ -314,7 +312,6 @@ const TOOLBAR_POPUP_CLASS =
   "overflow-hidden rounded-[4px] border border-[#d0d7e2] bg-white p-2 shadow-[0_14px_30px_rgba(15,23,42,0.14)]";
 const TOOLBAR_POPUP_ACTION_CLASS =
   "inline-flex h-8 items-center rounded-[4px] px-2 text-[11px] font-semibold transition-colors";
-const MAX_OPTIMISTIC_RANGE_CLEAR_CELLS = 4_096;
 
 function normalizeHexColor(value: string): string {
   return value.trim().toLowerCase();
@@ -427,15 +424,6 @@ function parseEditorInput(rawValue: string): ParsedEditorInput {
   return { kind: "value", value: normalized };
 }
 
-function isInvalidFormulaSyntax(formula: string): boolean {
-  try {
-    parseFormula(formula);
-    return false;
-  } catch {
-    return true;
-  }
-}
-
 function clampSelectionMovement(
   address: string,
   sheetName: string,
@@ -544,20 +532,6 @@ function createRangeRef(
   };
 }
 
-function forEachAddressInRange(range: CellRangeRef, visit: (address: string) => void): void {
-  const { startRow, endRow, startCol, endCol } = getNormalizedRangeBounds(range);
-  for (let row = startRow; row <= endRow; row += 1) {
-    for (let col = startCol; col <= endCol; col += 1) {
-      visit(formatAddress(row, col));
-    }
-  }
-}
-
-function getRangeCellCount(range: CellRangeRef): number {
-  const { startRow, endRow, startCol, endCol } = getNormalizedRangeBounds(range);
-  return (endRow - startRow + 1) * (endCol - startCol + 1);
-}
-
 function formatConnectionStateLabel(state: ZeroConnectionState["name"]): string {
   switch (state) {
     case "connected":
@@ -584,6 +558,16 @@ function toErrorMessage(error: unknown): string {
   return JSON.stringify(error);
 }
 
+function isMutationErrorResult(value: unknown): value is { type: "error"; error: unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "error" &&
+    "error" in value
+  );
+}
+
 function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   return {
     sheetName,
@@ -591,26 +575,6 @@ function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
     value: { tag: ValueTag.Empty },
     flags: 0,
     version: 0,
-  };
-}
-
-function toOptimisticCellValue(value: LiteralInput, currentValue: CellValue): CellValue {
-  if (value === null) {
-    return { tag: ValueTag.Empty };
-  }
-  if (typeof value === "number") {
-    return { tag: ValueTag.Number, value };
-  }
-  if (typeof value === "boolean") {
-    return { tag: ValueTag.Boolean, value };
-  }
-  return {
-    tag: ValueTag.String,
-    value,
-    stringId:
-      currentValue.tag === ValueTag.String && currentValue.value === value
-        ? currentValue.stringId
-        : 0,
   };
 }
 
@@ -1078,14 +1042,6 @@ function WorkerWorkbookAppInner({
   const writesAllowed =
     connectionState.name === "connected" || connectionState.name === "connecting";
 
-  const invokeWorker = useCallback(async (method: string, ...args: unknown[]): Promise<unknown> => {
-    const active = workerHandleRef.current;
-    if (!active) {
-      throw new Error("Worker runtime is not ready");
-    }
-    return await active.client.invoke(method, ...args);
-  }, []);
-
   const reportRuntimeError = useCallback(
     (error: unknown) => {
       runtimeActorRef.send({
@@ -1096,28 +1052,35 @@ function WorkerWorkbookAppInner({
     [runtimeActorRef],
   );
 
-  const runZeroMutation = useCallback(async (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
-    const result = zeroRef.current.mutate(mutation);
-    const clientResult = await result.client;
-    if (
-      typeof clientResult === "object" &&
-      clientResult !== null &&
-      "type" in clientResult &&
-      clientResult.type === "error"
-    ) {
-      const error = clientResult.error;
-      throw error instanceof Error ? error : new Error(toErrorMessage(error));
-    }
-    return result;
-  }, []);
+  const runZeroMutation = useCallback(
+    (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
+      const result = zeroRef.current.mutate(mutation);
+      const observerResult =
+        (result as { server?: Promise<unknown> }).server ??
+        (result as { client?: Promise<unknown> }).client;
+      if (!observerResult) {
+        return;
+      }
+      void observerResult
+        .then((serverResult) => {
+          if (isMutationErrorResult(serverResult)) {
+            const error = serverResult.error;
+            reportRuntimeError(error instanceof Error ? error : new Error(toErrorMessage(error)));
+          }
+          return undefined;
+        })
+        .catch(reportRuntimeError);
+    },
+    [reportRuntimeError],
+  );
 
   const invokeMutation = useCallback(
-    async (method: string, ...args: unknown[]) => {
+    (method: string, ...args: unknown[]): Promise<void> => {
       if (!writesAllowed) {
-        throw new Error(`Writes are unavailable while Zero is ${connectionState.name}`);
+        return Promise.reject(
+          new Error(`Writes are unavailable while Zero is ${connectionState.name}`),
+        );
       }
-
-      const localResult = await invokeWorker(method, ...args);
 
       switch (method) {
         case "setCellValue": {
@@ -1126,10 +1089,10 @@ function WorkerWorkbookAppInner({
             typeof sheetName === "string" && typeof address === "string" && isLiteralInput(value),
             "Invalid setCellValue args",
           );
-          await runZeroMutation(
+          runZeroMutation(
             mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
           );
-          return localResult;
+          return Promise.resolve();
         }
         case "setCellFormula": {
           const [sheetName, address, formula] = args;
@@ -1139,7 +1102,7 @@ function WorkerWorkbookAppInner({
               typeof formula === "string",
             "Invalid setCellFormula args",
           );
-          await runZeroMutation(
+          runZeroMutation(
             mutators.workbook.setCellFormula({
               documentId,
               sheetName,
@@ -1147,7 +1110,7 @@ function WorkerWorkbookAppInner({
               formula,
             }),
           );
-          return localResult;
+          return Promise.resolve();
         }
         case "clearCell": {
           const [sheetName, address] = args;
@@ -1155,32 +1118,32 @@ function WorkerWorkbookAppInner({
             typeof sheetName === "string" && typeof address === "string",
             "Invalid clearCell args",
           );
-          await runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
-          return localResult;
+          runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
+          return Promise.resolve();
         }
         case "clearRange": {
           const [range] = args;
           assert(isCellRangeRef(range), "Invalid clearRange args");
-          await runZeroMutation(mutators.workbook.clearRange({ documentId, range }));
-          return localResult;
+          runZeroMutation(mutators.workbook.clearRange({ documentId, range }));
+          return Promise.resolve();
         }
         case "renderCommit": {
           const [ops] = args;
           assert(isCommitOps(ops), "Invalid renderCommit args");
-          await runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
-          return localResult;
+          runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
+          return Promise.resolve();
         }
         case "fillRange": {
           const [source, target] = args;
           assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid fillRange args");
-          await runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
-          return localResult;
+          runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
+          return Promise.resolve();
         }
         case "copyRange": {
           const [source, target] = args;
           assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid copyRange args");
-          await runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
-          return localResult;
+          runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
+          return Promise.resolve();
         }
         case "updateColumnWidth": {
           const [sheetName, columnIndex, width] = args;
@@ -1190,7 +1153,7 @@ function WorkerWorkbookAppInner({
               typeof width === "number",
             "Invalid updateColumnWidth args",
           );
-          await runZeroMutation(
+          runZeroMutation(
             mutators.workbook.updateColumnWidth({
               documentId,
               sheetName,
@@ -1198,26 +1161,7 @@ function WorkerWorkbookAppInner({
               width,
             }),
           );
-          return localResult;
-        }
-        case "autofitColumn": {
-          const [sheetName, columnIndex] = args;
-          assert(
-            typeof sheetName === "string" && typeof columnIndex === "number",
-            "Invalid autofitColumn args",
-          );
-          if (typeof localResult !== "number") {
-            return localResult;
-          }
-          await runZeroMutation(
-            mutators.workbook.updateColumnWidth({
-              documentId,
-              sheetName,
-              columnIndex,
-              width: localResult,
-            }),
-          );
-          return localResult;
+          return Promise.resolve();
         }
         case "setRangeStyle": {
           const [range, patch] = args;
@@ -1225,8 +1169,8 @@ function WorkerWorkbookAppInner({
             isCellRangeRef(range) && isCellStylePatchValue(patch),
             "Invalid setRangeStyle args",
           );
-          await runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
-          return localResult;
+          runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
+          return Promise.resolve();
         }
         case "clearRangeStyle": {
           const [range, fields] = args;
@@ -1234,8 +1178,8 @@ function WorkerWorkbookAppInner({
             isCellRangeRef(range) && (fields === undefined || isCellStyleFieldList(fields)),
             "Invalid clearRangeStyle args",
           );
-          await runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
-          return localResult;
+          runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
+          return Promise.resolve();
         }
         case "setRangeNumberFormat": {
           const [range, format] = args;
@@ -1243,87 +1187,27 @@ function WorkerWorkbookAppInner({
             isCellRangeRef(range) && isCellNumberFormatInputValue(format),
             "Invalid setRangeNumberFormat args",
           );
-          await runZeroMutation(
+          runZeroMutation(
             mutators.workbook.setRangeNumberFormat({
               documentId,
               range,
               format,
             }),
           );
-          return localResult;
+          return Promise.resolve();
         }
         case "clearRangeNumberFormat": {
           const [range] = args;
           assert(isCellRangeRef(range), "Invalid clearRangeNumberFormat args");
-          await runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
-          return localResult;
+          runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
+          return Promise.resolve();
         }
         default:
-          throw new Error(`Unsupported workbook mutation: ${method}`);
+          return Promise.reject(new Error(`Unsupported workbook mutation: ${method}`));
       }
     },
-    [connectionState.name, documentId, invokeWorker, runZeroMutation, writesAllowed],
+    [connectionState.name, documentId, runZeroMutation, writesAllowed],
   );
-
-  const applyOptimisticCellEdit = useCallback(
-    (sheetName: string, address: string, parsed: ParsedEditorInput) => {
-      const active = workerHandleRef.current;
-      if (!active) {
-        return;
-      }
-      const current = active.cache.getCell(sheetName, address);
-      const nextVersion = current.version + 1;
-      if (parsed.kind === "clear") {
-        active.cache.setCellSnapshot({
-          sheetName,
-          address,
-          value: { tag: ValueTag.Empty },
-          flags: current.flags,
-          version: nextVersion,
-          ...(current.format ? { format: current.format } : {}),
-        });
-        return;
-      }
-      if (parsed.kind === "formula") {
-        active.cache.setCellSnapshot({
-          sheetName,
-          address,
-          formula: parsed.formula,
-          value: current.value,
-          flags: current.flags,
-          version: nextVersion,
-          ...(current.format ? { format: current.format } : {}),
-        });
-        return;
-      }
-      active.cache.setCellSnapshot({
-        sheetName,
-        address,
-        input: parsed.value,
-        value: toOptimisticCellValue(parsed.value, current.value),
-        flags: current.flags,
-        version: nextVersion,
-        ...(current.format ? { format: current.format } : {}),
-      });
-    },
-    [],
-  );
-
-  const applyOptimisticFormulaErrorEdit = useCallback((sheetName: string, address: string) => {
-    const active = workerHandleRef.current;
-    if (!active) {
-      return;
-    }
-    const current = active.cache.getCell(sheetName, address);
-    active.cache.setCellSnapshot({
-      sheetName,
-      address,
-      value: { tag: ValueTag.Error, code: ErrorCode.Value },
-      flags: current.flags,
-      version: current.version + 1,
-      ...(current.format ? { format: current.format } : {}),
-    });
-  }, []);
 
   const getLiveSelectedCell = useCallback(
     (nextSelection = selectionRef.current) => {
@@ -1358,6 +1242,45 @@ function WorkerWorkbookAppInner({
 
   const applyParsedInput = useCallback(
     async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
+      const cache = workerHandleRef.current?.cache;
+      if (cache) {
+        const current = cache.peekCell(sheetName, address) ?? emptyCellSnapshot(sheetName, address);
+        const next: CellSnapshot = {
+          ...current,
+          sheetName,
+          address,
+          version: current.version + 1,
+        };
+
+        if (parsed.kind === "formula") {
+          next.formula = parsed.formula;
+          next.input = parsed.formula;
+          next.value = { tag: ValueTag.Empty };
+        } else if (parsed.kind === "clear") {
+          delete next.formula;
+          delete next.input;
+          next.value = { tag: ValueTag.Empty };
+        } else if (parsed.value === null) {
+          delete next.formula;
+          next.input = null;
+          next.value = { tag: ValueTag.Empty };
+        } else if (typeof parsed.value === "number") {
+          delete next.formula;
+          next.input = parsed.value;
+          next.value = { tag: ValueTag.Number, value: parsed.value };
+        } else if (typeof parsed.value === "boolean") {
+          delete next.formula;
+          next.input = parsed.value;
+          next.value = { tag: ValueTag.Boolean, value: parsed.value };
+        } else {
+          delete next.formula;
+          next.input = parsed.value;
+          next.value = { tag: ValueTag.String, value: parsed.value, stringId: 0 };
+        }
+
+        cache.setCellSnapshot(next);
+      }
+
       if (parsed.kind === "formula") {
         await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
         return;
@@ -1383,11 +1306,6 @@ function WorkerWorkbookAppInner({
           ? toEditorValue(getLiveSelectedCell(targetSelection))
           : editorValueRef.current;
       const parsed = parseEditorInput(nextValue);
-      if (parsed.kind === "formula" && isInvalidFormulaSyntax(parsed.formula)) {
-        applyOptimisticFormulaErrorEdit(targetSelection.sheetName, targetSelection.address);
-      } else {
-        applyOptimisticCellEdit(targetSelection.sheetName, targetSelection.address, parsed);
-      }
       editorTargetRef.current = targetSelection;
       editingModeRef.current = "idle";
       setEditingMode("idle");
@@ -1407,15 +1325,7 @@ function WorkerWorkbookAppInner({
         reportRuntimeError,
       );
     },
-    [
-      applyOptimisticCellEdit,
-      applyOptimisticFormulaErrorEdit,
-      applyParsedInput,
-      getLiveSelectedCell,
-      reportRuntimeError,
-      runtimeActorRef,
-      writesAllowed,
-    ],
+    [applyParsedInput, getLiveSelectedCell, reportRuntimeError, runtimeActorRef, writesAllowed],
   );
 
   const cancelEditor = useCallback(() => {
@@ -1433,11 +1343,6 @@ function WorkerWorkbookAppInner({
       return;
     }
     const targetRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
-    if (getRangeCellCount(targetRange) <= MAX_OPTIMISTIC_RANGE_CLEAR_CELLS) {
-      forEachAddressInRange(targetRange, (address) => {
-        applyOptimisticCellEdit(targetRange.sheetName, address, { kind: "clear" });
-      });
-    }
     editorValueRef.current = "";
     setEditorValue("");
     editorTargetRef.current = selectionRef.current;
@@ -1446,14 +1351,7 @@ function WorkerWorkbookAppInner({
     void invokeMutation("clearRange", targetRange).catch((error: unknown) => {
       reportRuntimeError(error);
     });
-  }, [
-    applyOptimisticCellEdit,
-    invokeMutation,
-    reportRuntimeError,
-    selection.sheetName,
-    selectionLabel,
-    writesAllowed,
-  ]);
+  }, [invokeMutation, reportRuntimeError, selection.sheetName, selectionLabel, writesAllowed]);
 
   const clearSelectedCell = useCallback(() => {
     if (!writesAllowed) {
@@ -2201,14 +2099,13 @@ function WorkerWorkbookAppInner({
               }}
               onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
                 workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, fallbackWidth);
-                return invokeMutation("autofitColumn", selection.sheetName, columnIndex)
-                  .then((width) => {
-                    if (typeof width !== "number") {
-                      return undefined;
-                    }
-                    workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, width);
-                    return undefined;
-                  })
+                return invokeMutation(
+                  "updateColumnWidth",
+                  selection.sheetName,
+                  columnIndex,
+                  fallbackWidth,
+                )
+                  .then(() => undefined)
                   .catch(reportRuntimeError);
               }}
               onBeginEdit={beginEditing}
