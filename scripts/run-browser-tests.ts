@@ -3,22 +3,108 @@
 const textDecoder = new TextDecoder();
 const playwrightArgs = process.argv.slice(2);
 const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "compose";
-const hasDocker = commandExists("docker");
+const normalizedBrowserStack =
+  requestedBrowserStack === "compose" || requestedBrowserStack === "local"
+    ? requestedBrowserStack
+    : "local";
 const isCi = process.env["CI"] === "1" || process.env["CI"] === "true";
-
-if (!hasDocker && requestedBrowserStack === "compose" && isCi) {
+if (requestedBrowserStack !== normalizedBrowserStack) {
   console.warn(
-    "docker is not available; skipping browser tests in CI because compose stack requires Docker",
+    `Unknown BILIG_BROWSER_STACK "${requestedBrowserStack}", defaulting to "local" stack.`,
   );
-  process.exit(0);
+}
+type ComposeInvocation = {
+  label: string;
+  command: string[];
+  version: string;
+};
+
+let composeInvocation: ComposeInvocation | null = null;
+let composeInvocationProbed = false;
+let composeInvocationLogged = false;
+
+function commandExists(command: string): boolean {
+  return Bun.which(command) !== null;
 }
 
-const browserStack =
-  requestedBrowserStack === "compose" && !hasDocker ? "local" : requestedBrowserStack;
+function probeComposeInvocation(): ComposeInvocation | null {
+  const dockerComposeCandidates = [
+    { label: "docker compose", command: ["docker", "compose"] },
+    { label: "docker-compose", command: ["docker-compose"] },
+  ];
 
-if (requestedBrowserStack === "compose" && !hasDocker) {
+  for (const candidate of dockerComposeCandidates) {
+    if (!commandExists(candidate.command[0])) {
+      continue;
+    }
+
+    const result = Bun.spawnSync([...candidate.command, "version"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) {
+      continue;
+    }
+
+    const version = [textDecoder.decode(result.stdout), textDecoder.decode(result.stderr)]
+      .join("")
+      .trim();
+    return {
+      label: candidate.label,
+      command: candidate.command,
+      version,
+    };
+  }
+
+  return null;
+}
+
+function resolveComposeInvocation(): ComposeInvocation | null {
+  if (!composeInvocationProbed) {
+    composeInvocation = probeComposeInvocation();
+    composeInvocationProbed = true;
+  }
+
+  return composeInvocation;
+}
+
+function requireComposeInvocation(required: boolean): ComposeInvocation | null {
+  const invocation = resolveComposeInvocation();
+
+  if (!invocation && required) {
+    throw new Error(
+      "docker compose is required for BILIG_BROWSER_STACK=compose, but neither `docker compose` nor `docker-compose` is available.",
+    );
+  }
+
+  if (invocation && !composeInvocationLogged) {
+    const version = invocation.version ? ` (${invocation.version})` : "";
+    console.info(`compose is available via "${invocation.label}"${version}.`);
+    composeInvocationLogged = true;
+  }
+
+  return invocation;
+}
+
+const compose = resolveComposeInvocation();
+const composeLabel = compose ? compose.label : "unavailable";
+const browserStack = normalizedBrowserStack === "compose" && compose ? "compose" : "local";
+
+if (normalizedBrowserStack === "compose" && compose) {
+  console.info(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`);
+}
+
+if (normalizedBrowserStack === "compose" && !compose && isCi) {
+  throw new Error(
+    "docker compose is required in CI. Neither `docker compose` nor `docker-compose` is available.",
+  );
+}
+
+if (normalizedBrowserStack === "compose" && !compose && !isCi) {
+  const fallbackCommand = "`docker compose` or `docker-compose`";
   console.warn(
-    "docker is not available; falling back to local Playwright server for browser tests",
+    `compose unavailable in this environment, falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
   );
 }
 const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
@@ -32,10 +118,6 @@ const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
 
 const PREVIEW_PORTS = [4179, 4180];
-
-function commandExists(command: string): boolean {
-  return Bun.which(command) !== null;
-}
 
 function parsePidList(output: string): number[] {
   if (!output) {
@@ -191,8 +273,13 @@ async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
 }
 
 function runDockerCompose(args: string[], env = process.env): void {
+  const invocation = requireComposeInvocation(true);
+  if (!invocation) {
+    throw new Error("compose command is unavailable; cannot run compose stack.");
+  }
+
   const result = Bun.spawnSync(
-    ["docker", "compose", "-f", composeFile, "-p", composeProject, ...args],
+    [...invocation.command, "-f", composeFile, "-p", composeProject, ...args],
     {
       stdin: "inherit",
       stdout: "inherit",
@@ -208,27 +295,19 @@ function runDockerCompose(args: string[], env = process.env): void {
   );
   if (result.exitCode !== 0) {
     throw new Error(
-      `docker compose ${args.join(" ")} failed with exit code ${result.exitCode ?? 1}`,
+      `${invocation.label} ${args.join(" ")} failed with exit code ${result.exitCode ?? 1}`,
     );
   }
 }
 
 function collectComposeLogs(): string {
+  const invocation = requireComposeInvocation(false);
+  if (!invocation) {
+    return "compose command is unavailable; compose logs were not collected.";
+  }
+
   const result = Bun.spawnSync(
-    [
-      "docker",
-      "compose",
-      "-f",
-      composeFile,
-      "-p",
-      composeProject,
-      "logs",
-      "--no-color",
-      "web",
-      "sync-server",
-      "zero-cache",
-      "postgres",
-    ],
+    [...invocation.command, "-f", composeFile, "-p", composeProject, "logs", "--no-color"],
     {
       stdin: "ignore",
       stdout: "pipe",
@@ -239,6 +318,8 @@ function collectComposeLogs(): string {
 }
 
 async function runComposePlaywright(): Promise<void> {
+  requireComposeInvocation(true);
+
   terminatePreviewServers();
   runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
   try {
