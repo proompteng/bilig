@@ -27,48 +27,29 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/01-zero-publication.sql:/docker-entrypoint-initdb.d/01-zero-publication.sql:ro
 
-  local-server:
+  bilig-app:
     build:
       context: .
-      target: local-runtime
-    environment:
-      HOST: 0.0.0.0
-      PORT: "4381"
-      SYNC_SERVER_URL: http://sync-server:4321
-      BILIG_PUBLIC_SERVER_URL: http://localhost:4381
-      BILIG_WEB_APP_BASE_URL: http://localhost:3000
-      BILIG_CORS_ORIGIN: http://localhost:3000
-    healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - fetch("http://127.0.0.1:4381/healthz").then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 5s
-    ports:
-      - "${BILIG_E2E_LOCAL_SERVER_PORT:-4381}:4381"
-
-  sync-server:
-    build:
-      context: .
-      target: sync-runtime
+      target: bilig-runtime
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       HOST: 0.0.0.0
       PORT: "4321"
+      LOCAL_PORT: "4381"
       DATABASE_URL: postgresql://bilig:bilig@postgres:5432/bilig
-      BILIG_LOCAL_SERVER_URL: http://local-server:4381
+      BILIG_LOCAL_SERVER_URL: http://localhost:4381
+      BILIG_SYNC_SERVER_URL: http://localhost:4321
       BILIG_PUBLIC_SERVER_URL: http://localhost:3000
       BILIG_WEB_APP_BASE_URL: http://localhost:3000
+      BILIG_CORS_ORIGIN: http://localhost:3000
     networks:
       default:
         aliases:
+          - bilig-app
           - bilig-sync
+          - local-server
     healthcheck:
       test:
         - CMD
@@ -81,13 +62,14 @@ services:
       start_period: 10s
     ports:
       - "${BILIG_E2E_SYNC_SERVER_PORT:-4321}:4321"
+      - "${BILIG_E2E_LOCAL_SERVER_PORT:-4381}:4381"
 
   zero-cache:
     image: rocicorp/zero:1.1.1
     depends_on:
       postgres:
         condition: service_healthy
-      sync-server:
+      bilig-app:
         condition: service_healthy
     environment:
       ZERO_PORT: "4848"
@@ -98,8 +80,8 @@ services:
       ZERO_UPSTREAM_DB: postgresql://bilig:bilig@postgres:5432/bilig
       ZERO_CVR_DB: postgresql://bilig:bilig@postgres:5432/bilig
       ZERO_CHANGE_DB: postgresql://bilig:bilig@postgres:5432/bilig
-      ZERO_QUERY_URL: http://bilig-sync:4321/api/zero/v2/query
-      ZERO_MUTATE_URL: http://bilig-sync:4321/api/zero/v2/mutate
+      ZERO_QUERY_URL: http://bilig-app:4321/api/zero/v2/query
+      ZERO_MUTATE_URL: http://bilig-app:4321/api/zero/v2/mutate
     networks:
       default:
         aliases:
@@ -114,7 +96,7 @@ services:
       context: .
       target: web-runtime
     depends_on:
-      sync-server:
+      bilig-app:
         condition: service_healthy
       zero-cache:
         condition: service_started
