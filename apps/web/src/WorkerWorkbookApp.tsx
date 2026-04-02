@@ -1002,7 +1002,7 @@ function WorkerWorkbookAppInner({
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
   const runtimeError = runtimeSnapshot.context.error;
   const loading = runtimeSnapshot.matches({ active: "booting" });
-  const [, setCacheVersion] = useState(0);
+  const [cacheVersion, setCacheVersion] = useState(0);
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef(workerHandle);
   const editorValueRef = useRef(editorValue);
@@ -2087,6 +2087,7 @@ function WorkerWorkbookAppInner({
         <div className="min-h-0 min-w-0 flex-1">
           {workbookReady && workerHandle ? (
             <WorkbookView
+              dataRevision={cacheVersion}
               ribbon={ribbon}
               editorValue={visibleEditorValue}
               editorSelectionBehavior={editorSelectionBehavior}

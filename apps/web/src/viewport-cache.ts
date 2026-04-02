@@ -39,6 +39,10 @@ function cellSnapshotSignature(snapshot: CellSnapshot): string {
   ].join("|");
 }
 
+function cellStyleSignature(style: CellStyleRecord): string {
+  return JSON.stringify(style);
+}
+
 interface CellSubscription {
   sheetName: string;
   addresses: Set<string>;
@@ -169,8 +173,14 @@ export class WorkerViewportCache implements GridEngineLike {
     this.knownSheets.add(patch.viewport.sheetName);
 
     const changedKeys = new Set<string>();
+    const changedStyleIds = new Set<string>();
+    const damagedCellKeys = new Set<string>();
     const damage: { cell: CellItem }[] = [];
     patch.styles.forEach((style) => {
+      const current = this.cellStyles.get(style.id);
+      if (!current || cellStyleSignature(current) !== cellStyleSignature(style)) {
+        changedStyleIds.add(style.id);
+      }
       this.cellStyles.set(style.id, style);
     });
     for (const cell of patch.cells) {
@@ -182,12 +192,23 @@ export class WorkerViewportCache implements GridEngineLike {
           continue;
         }
         if (cellSnapshotSignature(current) === cellSnapshotSignature(incoming)) {
+          if (
+            incoming.styleId &&
+            changedStyleIds.has(incoming.styleId) &&
+            !damagedCellKeys.has(key)
+          ) {
+            damage.push({ cell: [cell.col, cell.row] });
+            damagedCellKeys.add(key);
+          }
           continue;
         }
       }
       this.cellSnapshots.set(key, cell.snapshot);
       changedKeys.add(key);
-      damage.push({ cell: [cell.col, cell.row] });
+      if (!damagedCellKeys.has(key)) {
+        damage.push({ cell: [cell.col, cell.row] });
+        damagedCellKeys.add(key);
+      }
     }
 
     if (patch.columns.length > 0) {

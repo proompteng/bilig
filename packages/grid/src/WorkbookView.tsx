@@ -12,6 +12,7 @@ import {
 
 interface WorkbookViewProps {
   engine: GridEngineLike;
+  dataRevision?: number | undefined;
   sheetNames: string[];
   sheetName: string;
   selectedAddr: string;
@@ -63,6 +64,7 @@ interface WorkbookViewProps {
 
 export function WorkbookView({
   engine,
+  dataRevision,
   sheetNames,
   sheetName,
   selectedAddr,
@@ -112,6 +114,7 @@ export function WorkbookView({
           value={editorValue}
         />
         <SheetGridView
+          dataRevision={dataRevision}
           editorValue={editorValue}
           editorSelectionBehavior={editorSelectionBehavior}
           engine={engine}

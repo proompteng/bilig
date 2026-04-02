@@ -89,6 +89,7 @@ export type SheetGridViewportSubscription = (
 
 interface SheetGridViewProps {
   engine: GridEngineLike;
+  dataRevision?: number | undefined;
   sheetName: string;
   selectedAddr: string;
   editorValue: string;
@@ -168,6 +169,7 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
 
 export function SheetGridView({
   engine,
+  dataRevision,
   sheetName,
   selectedAddr,
   editorValue,
@@ -300,6 +302,11 @@ export function SheetGridView({
       setBorderOverlayRevision((current) => current + 1);
     });
   }, [engine, sheetName, subscribeViewport, viewport, visibleAddresses, visibleDamage]);
+
+  useLayoutEffect(() => {
+    editorRef.current?.updateCells(visibleDamage);
+    setBorderOverlayRevision((current) => current + 1);
+  }, [dataRevision, visibleDamage]);
 
   useLayoutEffect(() => {
     const hostBounds = hostRef.current?.getBoundingClientRect();
@@ -899,9 +906,20 @@ export function SheetGridView({
 
   const drawCell = useCallback<DrawCellCallback>(
     (args, drawContent) => {
-      drawContent();
       const snapshot = engine.getCell(sheetName, formatAddress(args.row, args.col));
       const style = engine.getCellStyle(snapshot.styleId);
+      if (style?.fill?.backgroundColor) {
+        args.ctx.save();
+        args.ctx.fillStyle = style.fill.backgroundColor;
+        args.ctx.fillRect(
+          args.rect.x + 1,
+          args.rect.y + 1,
+          Math.max(0, args.rect.width - 1),
+          Math.max(0, args.rect.height - 1),
+        );
+        args.ctx.restore();
+      }
+      drawContent();
       if (!style) {
         return;
       }

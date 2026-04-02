@@ -62,4 +62,24 @@ describe("WorkerViewportCache", () => {
 
     expect(cache.getCell("Sheet1", "D5").styleId).toBeUndefined();
   });
+
+  it("reports damage when a style record changes without a newer cell snapshot", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch({
+      ...createPatch("style-fill"),
+      styles: [{ id: "style-fill", fill: { backgroundColor: "#c9daf8" } }],
+    });
+
+    const damage = cache.applyViewportPatch({
+      ...createPatch("style-fill"),
+      styles: [{ id: "style-fill", fill: { backgroundColor: "#a4c2f4" } }],
+    });
+
+    expect(damage).toEqual([{ cell: [3, 4] }]);
+    expect(cache.getCellStyle("style-fill")).toEqual({
+      id: "style-fill",
+      fill: { backgroundColor: "#a4c2f4" },
+    });
+  });
 });

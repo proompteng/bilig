@@ -35,6 +35,7 @@ interface ViewportSubscriptionHandle {
   attachment: TileViewportAttachment;
   state: ViewportProjectionState;
   viewport: Viewport & { sheetName: string };
+  listener(damage?: readonly { cell: readonly [number, number] }[]): void;
   project(full: boolean): readonly { cell: readonly [number, number] }[];
   notify(full: boolean): void;
   dispose(): void;
@@ -261,6 +262,7 @@ export class ZeroWorkbookBridge {
       attachment,
       state,
       viewport: { ...viewport, sheetName },
+      listener,
       project: (full) => {
         const patch = projectViewportPatch(
           state,
@@ -374,6 +376,9 @@ export class ZeroWorkbookBridge {
     if (!snapshot) {
       return;
     }
+    const selectedStyle =
+      this.selectedCellEval?.styleJson ??
+      (snapshot.styleId ? this.stylesById.get(snapshot.styleId) : undefined);
 
     const inputText =
       snapshot.formula !== undefined
@@ -401,7 +406,10 @@ export class ZeroWorkbookBridge {
         recalcMs: 0,
         compileMs: 0,
       },
-      styles: [],
+      styles:
+        selectedStyle && snapshot.styleId && selectedStyle.id === snapshot.styleId
+          ? [selectedStyle]
+          : [],
       cells: [
         {
           row,
@@ -418,7 +426,25 @@ export class ZeroWorkbookBridge {
       rows: [],
     };
 
-    this.cache.applyViewportPatch(patch);
+    const damage = this.cache.applyViewportPatch(patch);
+    if (damage.length > 0) {
+      for (const subscription of this.viewportSubscriptions) {
+        if (
+          subscription.viewport.sheetName !== sheetName ||
+          row < subscription.viewport.rowStart ||
+          row > subscription.viewport.rowEnd ||
+          col < subscription.viewport.colStart ||
+          col > subscription.viewport.colEnd
+        ) {
+          continue;
+        }
+        try {
+          subscription.listener(damage);
+        } catch (error) {
+          this.onError(error);
+        }
+      }
+    }
     this.emitSelection(snapshot);
   }
 

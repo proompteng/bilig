@@ -151,4 +151,120 @@ describe("ZeroWorkbookBridge", () => {
     unsubscribe();
     bridge.dispose();
   });
+
+  it("repaints visible viewports when selected-cell materialization updates the cache", () => {
+    const workbookView = createTypedView({
+      id: "bilig-demo",
+      name: "bilig-demo",
+      headRevision: 1,
+      calculatedRevision: 1,
+    });
+    const sheetListView = createTypedView([
+      {
+        workbookId: "bilig-demo",
+        name: "Sheet1",
+        sortOrder: 0,
+      },
+    ]);
+    const styleRegistryView = createTypedView<readonly unknown[]>([
+      {
+        workbookId: "bilig-demo",
+        styleId: "style-fill",
+        styleJson: {
+          id: "style-fill",
+          fill: { backgroundColor: "#c9daf8" },
+        },
+      },
+    ]);
+    const numberFormatRegistryView = createTypedView<readonly unknown[]>([]);
+
+    const selectionSourceView = createTypedView<readonly unknown[]>([]);
+    const selectionEvalView = createTypedView<readonly unknown[]>([]);
+
+    const viewportInputView = createTypedView<readonly unknown[]>([]);
+    const viewportEvalView = createTypedView<readonly unknown[]>([]);
+    const viewportRowView = createTypedView<readonly unknown[]>([]);
+    const viewportColumnView = createTypedView<readonly unknown[]>([]);
+
+    const views = [
+      workbookView,
+      sheetListView,
+      styleRegistryView,
+      numberFormatRegistryView,
+      selectionSourceView,
+      selectionEvalView,
+      viewportInputView,
+      viewportEvalView,
+      viewportRowView,
+      viewportColumnView,
+    ];
+    let index = 0;
+
+    const zero = {
+      materialize(_query: unknown) {
+        const view = views[index];
+        index += 1;
+        return view ?? createTypedView([]);
+      },
+    } as unknown as Zero;
+
+    const applyViewportPatch = vi.fn((patch) =>
+      patch.cells.map((cell: { col: number; row: number }) => ({
+        cell: [cell.col, cell.row] as const,
+      })),
+    );
+    const cache = {
+      setKnownSheets: vi.fn(),
+      peekCell: vi.fn(() => undefined),
+      subscribeCells: vi.fn(() => () => {}),
+      applyViewportPatch,
+    } as unknown as WorkerViewportCache;
+
+    const bridge = new ZeroWorkbookBridge(zero, "bilig-demo", cache, () => {});
+    const listener = vi.fn();
+    const unsubscribe = bridge.subscribeViewport(
+      "Sheet1",
+      {
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      listener,
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    selectionEvalView.emit({
+      workbookId: "bilig-demo",
+      sheetId: "Sheet1",
+      address: "A1",
+      rowNum: 0,
+      colNum: 0,
+      value: { tag: 0 },
+      flags: 0,
+      version: 0,
+      styleId: "style-fill",
+      styleJson: {
+        id: "style-fill",
+        fill: { backgroundColor: "#c9daf8" },
+      },
+    });
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenLastCalledWith([{ cell: [0, 0] }]);
+    expect(applyViewportPatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        styles: [
+          expect.objectContaining({
+            id: "style-fill",
+            fill: { backgroundColor: "#c9daf8" },
+          }),
+        ],
+      }),
+    );
+
+    unsubscribe();
+    bridge.dispose();
+  });
 });
