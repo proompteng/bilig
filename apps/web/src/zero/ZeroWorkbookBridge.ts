@@ -188,7 +188,10 @@ export class ZeroWorkbookBridge {
       }),
     );
 
-    if (!this.cache.peekCell(sheetName, address)) {
+    const cachedCell = this.cache.peekCell(sheetName, address);
+    const needsSourceHydration =
+      !cachedCell || (cachedCell.input === undefined && cachedCell.formula === undefined);
+    if (needsSourceHydration) {
       this.selectionDestroyers.push(
         bindView(
           asTypedView<CellSourceRow | undefined>(
@@ -206,7 +209,9 @@ export class ZeroWorkbookBridge {
           },
         ),
       );
+    }
 
+    if (!cachedCell) {
       this.selectionDestroyers.push(
         bindView(
           asTypedView<CellEvalRow | undefined>(
