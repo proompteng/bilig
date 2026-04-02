@@ -99,4 +99,8 @@ describe("renderer commit log", () => {
   it("returns no delete ops for orphaned cells", () => {
     expect(collectDeleteOps(cell({ addr: "A1", value: 1 }))).toEqual([]);
   });
+
+  it("returns no sheet order ops without a workbook root", () => {
+    expect(collectSheetOrderOps(null)).toEqual([]);
+  });
 });
