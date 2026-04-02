@@ -1,14 +1,22 @@
 import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
+import { parseCellAddress } from "@bilig/formula";
 import type { WorkbookSnapshot } from "@bilig/protocol";
+import {
+  buildWorkbookSourceProjection,
+  type AxisMetadataSourceRow,
+  type CellSourceRow,
+} from "../zero/projection.js";
 import {
   loadWorkbookRuntimeMetadata,
   loadWorkbookState,
   type Queryable,
+  type WorkbookProjectionCommit,
+  type WorkbookProjectionState,
   type WorkbookRuntimeMetadata,
   type WorkbookRuntimeState,
 } from "../zero/store.js";
 
-export interface WorkbookRuntime extends WorkbookRuntimeState {
+export interface WorkbookRuntime extends WorkbookProjectionState {
   documentId: string;
   engine: SpreadsheetEngine;
 }
@@ -30,8 +38,7 @@ interface RuntimeSession extends WorkbookRuntime {
 }
 
 interface MutationCommit {
-  snapshot: WorkbookSnapshot;
-  replicaSnapshot?: EngineReplicaSnapshot | null;
+  projectionCommit: WorkbookProjectionCommit;
   headRevision: number;
   calculatedRevision: number;
   ownerUserId: string;
@@ -39,11 +46,10 @@ interface MutationCommit {
 
 interface RecalcCommit {
   calculatedRevision: number;
-  snapshot?: WorkbookSnapshot;
-  replicaSnapshot?: EngineReplicaSnapshot | null;
 }
 
 const DEFAULT_MAX_ENTRIES = 64;
+const LOADED_PROJECTION_UPDATED_AT = "1970-01-01T00:00:00.000Z";
 
 async function createWorkbookEngine(
   documentId: string,
@@ -99,6 +105,12 @@ export class WorkbookRuntimeManager {
     if (cached && cached.headRevision === nextMetadata.headRevision) {
       cached.calculatedRevision = nextMetadata.calculatedRevision;
       cached.ownerUserId = nextMetadata.ownerUserId;
+      cached.projection.workbook = {
+        ...cached.projection.workbook,
+        headRevision: nextMetadata.headRevision,
+        calculatedRevision: nextMetadata.calculatedRevision,
+        ownerUserId: nextMetadata.ownerUserId,
+      };
       this.touchSession(cached);
       return cached;
     }
@@ -107,8 +119,13 @@ export class WorkbookRuntimeManager {
     const session: RuntimeSession = {
       documentId,
       engine: await this.createEngine(documentId, state.snapshot, state.replicaSnapshot),
-      snapshot: state.snapshot,
-      replicaSnapshot: state.replicaSnapshot,
+      projection: buildWorkbookSourceProjection(documentId, state.snapshot, {
+        revision: state.headRevision,
+        calculatedRevision: state.calculatedRevision,
+        ownerUserId: state.ownerUserId,
+        updatedBy: state.ownerUserId,
+        updatedAt: LOADED_PROJECTION_UPDATED_AT,
+      }),
       headRevision: state.headRevision,
       calculatedRevision: state.calculatedRevision,
       ownerUserId: state.ownerUserId,
@@ -125,10 +142,7 @@ export class WorkbookRuntimeManager {
     if (!session) {
       return;
     }
-    session.snapshot = commit.snapshot;
-    if (commit.replicaSnapshot !== undefined) {
-      session.replicaSnapshot = commit.replicaSnapshot;
-    }
+    this.applyProjectionCommit(session, commit.projectionCommit);
     session.headRevision = commit.headRevision;
     session.calculatedRevision = commit.calculatedRevision;
     session.ownerUserId = commit.ownerUserId;
@@ -141,12 +155,10 @@ export class WorkbookRuntimeManager {
       return;
     }
     session.calculatedRevision = commit.calculatedRevision;
-    if (commit.snapshot) {
-      session.snapshot = commit.snapshot;
-    }
-    if (commit.replicaSnapshot !== undefined) {
-      session.replicaSnapshot = commit.replicaSnapshot;
-    }
+    session.projection.workbook = {
+      ...session.projection.workbook,
+      calculatedRevision: commit.calculatedRevision,
+    };
     this.touchSession(session);
   }
 
@@ -173,6 +185,52 @@ export class WorkbookRuntimeManager {
         return;
       }
       this.sessions.delete(oldest);
+    }
+  }
+
+  private applyProjectionCommit(session: RuntimeSession, commit: WorkbookProjectionCommit): void {
+    switch (commit.kind) {
+      case "replace":
+        session.projection = commit.projection;
+        return;
+      case "focused-cell":
+        session.projection.workbook = commit.workbook;
+        session.projection.calculationSettings = commit.calculationSettings;
+        session.projection.cells = withUpsertedProjectionCell(
+          session.projection.cells,
+          commit.sheetName,
+          commit.address,
+          commit.cell,
+        );
+        return;
+      case "cell-range":
+        session.projection.workbook = commit.workbook;
+        session.projection.calculationSettings = commit.calculationSettings;
+        if (commit.styles) {
+          session.projection.styles = [...commit.styles];
+        }
+        if (commit.numberFormats) {
+          session.projection.numberFormats = [...commit.numberFormats];
+        }
+        session.projection.cells = withReplacedProjectionCellsInRange(
+          session.projection.cells,
+          commit.range,
+          commit.cells,
+        );
+        return;
+      case "column-metadata":
+        session.projection.workbook = commit.workbook;
+        session.projection.calculationSettings = commit.calculationSettings;
+        session.projection.columnMetadata = withReplacedProjectionColumnMetadata(
+          session.projection.columnMetadata,
+          commit.sheetName,
+          commit.columnMetadata,
+        );
+        return;
+      default: {
+        const exhaustive: never = commit;
+        throw new Error(`Unhandled projection commit: ${JSON.stringify(exhaustive)}`);
+      }
     }
   }
 
@@ -207,4 +265,71 @@ export class WorkbookRuntimeManager {
     }
     this.busyDocuments.delete(documentId);
   }
+}
+
+function withUpsertedProjectionCell(
+  current: readonly CellSourceRow[],
+  sheetName: string,
+  address: string,
+  nextRow: CellSourceRow | null,
+): CellSourceRow[] {
+  const cells = current.slice();
+  const index = cells.findIndex(
+    (entry) => entry.sheetName === sheetName && entry.address === address,
+  );
+  if (!nextRow) {
+    if (index >= 0) {
+      cells.splice(index, 1);
+    }
+    return cells;
+  }
+  if (index >= 0) {
+    cells[index] = nextRow;
+    return cells;
+  }
+  cells.push(nextRow);
+  return cells;
+}
+
+function withReplacedProjectionCellsInRange(
+  current: readonly CellSourceRow[],
+  range: { sheetName: string; startAddress: string; endAddress: string },
+  nextRows: readonly CellSourceRow[],
+): CellSourceRow[] {
+  const cells = current.slice();
+  const start = parseCellAddress(range.startAddress, range.sheetName);
+  const end = parseCellAddress(range.endAddress, range.sheetName);
+  const rowStart = Math.min(start.row, end.row);
+  const rowEnd = Math.max(start.row, end.row);
+  const colStart = Math.min(start.col, end.col);
+  const colEnd = Math.max(start.col, end.col);
+  for (let index = cells.length - 1; index >= 0; index -= 1) {
+    const entry = cells[index]!;
+    if (
+      entry.sheetName === range.sheetName &&
+      entry.rowNum >= rowStart &&
+      entry.rowNum <= rowEnd &&
+      entry.colNum >= colStart &&
+      entry.colNum <= colEnd
+    ) {
+      cells.splice(index, 1);
+    }
+  }
+  cells.push(...nextRows);
+  return cells;
+}
+
+function withReplacedProjectionColumnMetadata(
+  current: readonly AxisMetadataSourceRow[],
+  sheetName: string,
+  nextRows: readonly AxisMetadataSourceRow[],
+): AxisMetadataSourceRow[] {
+  const rows = current.slice();
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (rows[index]!.sheetName === sheetName) {
+      rows.splice(index, 1);
+    }
+  }
+  rows.push(...nextRows);
+  return rows;
 }

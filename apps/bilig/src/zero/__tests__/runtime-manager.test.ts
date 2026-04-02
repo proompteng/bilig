@@ -2,6 +2,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag } from "@bilig/protocol";
 import { describe, expect, it } from "vitest";
 import { WorkbookRuntimeManager } from "../../workbook-runtime/runtime-manager.js";
+import { buildWorkbookSourceProjectionFromEngine } from "../projection.js";
 import type { Queryable, WorkbookRuntimeMetadata, WorkbookRuntimeState } from "../store.js";
 
 const noopDb: Queryable = {
@@ -63,8 +64,16 @@ describe("WorkbookRuntimeManager", () => {
       ownerUserId: "owner-1",
     };
     manager.commitMutation("doc-1", {
-      snapshot: runtime.engine.exportSnapshot(),
-      replicaSnapshot: runtime.engine.exportReplicaSnapshot(),
+      projectionCommit: {
+        kind: "replace",
+        projection: buildWorkbookSourceProjectionFromEngine("doc-1", runtime.engine, {
+          revision: 1,
+          calculatedRevision: 0,
+          ownerUserId: "owner-1",
+          updatedBy: "owner-1",
+          updatedAt: "2026-04-02T08:00:00.000Z",
+        }),
+      },
       headRevision: 1,
       calculatedRevision: 0,
       ownerUserId: "owner-1",

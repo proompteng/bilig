@@ -27,12 +27,7 @@ import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import type { WorkbookEventPayload } from "./events.js";
-import {
-  acquireWorkbookMutationLock,
-  persistWorkbookMutation,
-  type Queryable,
-  type WorkbookRuntimeState,
-} from "./store.js";
+import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -204,7 +199,7 @@ function normalizeNumberFormatInput(
   return normalized;
 }
 
-function resolveOwnerUserId(state: WorkbookRuntimeState, session?: SessionIdentity): string {
+function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIdentity): string {
   if (state.ownerUserId !== "system" || !session?.userID) {
     return state.ownerUserId;
   }
@@ -226,19 +221,16 @@ async function commitWorkbookMutation(
     const state = await runtimeManager.loadRuntime(db, documentId);
     try {
       mutate(state.engine);
-      const nextSnapshot = state.engine.exportSnapshot();
       const ownerUserId = resolveOwnerUserId(state, session);
       const result = await persistWorkbookMutation(db, documentId, {
         previousState: state,
-        nextSnapshot,
-        nextReplicaSnapshot: null,
         nextEngine: state.engine,
         updatedBy,
         ownerUserId,
         eventPayload,
       });
       runtimeManager.commitMutation(documentId, {
-        snapshot: nextSnapshot,
+        projectionCommit: result.projectionCommit,
         headRevision: result.revision,
         calculatedRevision: result.calculatedRevision,
         ownerUserId,

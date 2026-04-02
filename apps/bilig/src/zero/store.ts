@@ -20,19 +20,21 @@ import {
   type WorkbookEventRecord,
 } from "./events.js";
 import {
-  buildCalculationSettingsRow,
-  buildSheetCellSourceRows,
-  buildSheetColumnMetadataRows,
-  buildSingleCellSourceRow,
-  buildWorkbookHeaderRow,
-  buildWorkbookNumberFormatRows,
+  buildCalculationSettingsRowFromEngine,
+  buildSheetCellSourceRowsFromEngine,
+  buildSheetColumnMetadataRowsFromEngine,
+  buildSingleCellSourceRowFromEngine,
+  buildWorkbookHeaderRowFromEngine,
+  buildWorkbookNumberFormatRowsFromEngine,
   buildWorkbookSourceProjection,
-  buildWorkbookStyleRows,
+  buildWorkbookSourceProjectionFromEngine,
+  buildWorkbookStyleRowsFromEngine,
   diffProjectionRows,
   materializeCellEvalProjection,
   type AxisMetadataSourceRow,
   type CellEvalRow,
   type CellSourceRow,
+  type CalculationSettingsSourceRow,
   type DefinedNameSourceRow,
   type NumberFormatSourceRow,
   type SheetSourceRow,
@@ -67,11 +69,46 @@ export interface WorkbookRuntimeMetadata {
   ownerUserId: string;
 }
 
+export interface WorkbookProjectionState {
+  projection: WorkbookSourceProjection;
+  headRevision: number;
+  calculatedRevision: number;
+  ownerUserId: string;
+}
+
+export type WorkbookProjectionCommit =
+  | {
+      kind: "replace";
+      projection: WorkbookSourceProjection;
+    }
+  | {
+      kind: "focused-cell";
+      workbook: WorkbookSourceProjection["workbook"];
+      calculationSettings: CalculationSettingsSourceRow;
+      sheetName: string;
+      address: string;
+      cell: CellSourceRow | null;
+    }
+  | {
+      kind: "cell-range";
+      workbook: WorkbookSourceProjection["workbook"];
+      calculationSettings: CalculationSettingsSourceRow;
+      range: CellRangeRef;
+      cells: readonly CellSourceRow[];
+      styles?: readonly StyleSourceRow[];
+      numberFormats?: readonly NumberFormatSourceRow[];
+    }
+  | {
+      kind: "column-metadata";
+      workbook: WorkbookSourceProjection["workbook"];
+      calculationSettings: CalculationSettingsSourceRow;
+      sheetName: string;
+      columnMetadata: readonly AxisMetadataSourceRow[];
+    };
+
 export interface PersistWorkbookMutationOptions {
-  previousState: WorkbookRuntimeState;
-  nextSnapshot: WorkbookSnapshot;
-  nextReplicaSnapshot?: EngineReplicaSnapshot | null;
-  nextEngine?: SpreadsheetEngine | null;
+  previousState: WorkbookProjectionState;
+  nextEngine: SpreadsheetEngine;
   updatedBy: string;
   ownerUserId: string;
   eventPayload: WorkbookEventPayload;
@@ -83,6 +120,7 @@ export interface PersistWorkbookMutationResult {
   calculatedRevision: number;
   updatedAt: string;
   recalcJobId: string | null;
+  projectionCommit: WorkbookProjectionCommit;
 }
 
 export interface RecalcJobLease {
@@ -970,26 +1008,21 @@ async function applySourceProjectionDiff(
   await applyNumberFormatDiff(db, previousProjection.numberFormats, nextProjection.numberFormats);
 }
 
-function buildFocusedCellRows(
-  documentId: string,
-  snapshot: WorkbookSnapshot,
+function buildFocusedProjectionCellRows(
+  projection: WorkbookSourceProjection,
   payload: FocusedCellEventPayload,
-  options: {
-    revision: number;
-    calculatedRevision: number;
-    ownerUserId: string;
-    updatedBy: string;
-    updatedAt: string;
-  },
 ): readonly CellSourceRow[] {
-  const row = buildSingleCellSourceRow(
-    documentId,
-    snapshot,
-    payload.sheetName,
-    payload.address,
-    options,
+  const row = projection.cells.find(
+    (entry) => entry.sheetName === payload.sheetName && entry.address === payload.address,
   );
   return row ? [row] : [];
+}
+
+function buildSheetColumnMetadataRowsFromProjection(
+  projection: WorkbookSourceProjection,
+  sheetName: string,
+): readonly AxisMetadataSourceRow[] {
+  return projection.columnMetadata.filter((entry) => entry.sheetName === sheetName);
 }
 
 async function appendWorkbookEvent(db: Queryable, event: WorkbookEventRecord): Promise<void> {
@@ -1958,145 +1991,150 @@ export async function persistWorkbookMutation(
     updatedBy: options.updatedBy,
     updatedAt,
   };
-  const previousProjectionOptions = {
-    revision: options.previousState.headRevision,
-    calculatedRevision: options.previousState.calculatedRevision,
-    ownerUserId: options.previousState.ownerUserId,
-    updatedBy: options.updatedBy,
-    updatedAt,
-  };
-  const nextWorkbookRow = buildWorkbookHeaderRow(
+  const nextWorkbookRow = buildWorkbookHeaderRowFromEngine(
     documentId,
-    options.nextSnapshot,
+    options.nextEngine,
     nextProjectionOptions,
   );
+  const nextCalculationSettings = buildCalculationSettingsRowFromEngine(
+    documentId,
+    options.nextEngine,
+  );
+  let projectionCommit: WorkbookProjectionCommit;
 
   await upsertWorkbookHeader(db, documentId, nextWorkbookRow, null, null);
   if (isFocusedCellEventPayload(options.eventPayload)) {
-    const previousCellRows = buildFocusedCellRows(
-      documentId,
-      options.previousState.snapshot,
+    const previousCellRows = buildFocusedProjectionCellRows(
+      options.previousState.projection,
       options.eventPayload,
-      previousProjectionOptions,
     );
-    const nextCellRows = buildFocusedCellRows(
+    const nextCellRow = buildSingleCellSourceRowFromEngine(
       documentId,
-      options.nextSnapshot,
-      options.eventPayload,
+      options.nextEngine,
+      options.eventPayload.sheetName,
+      options.eventPayload.address,
       nextProjectionOptions,
     );
-    await applyCalculationSettings(
-      db,
-      buildCalculationSettingsRow(documentId, options.nextSnapshot),
-    );
+    const nextCellRows = nextCellRow ? [nextCellRow] : [];
+    await applyCalculationSettings(db, nextCalculationSettings);
     await applyCellDiff(db, previousCellRows, nextCellRows);
+    projectionCommit = {
+      kind: "focused-cell",
+      workbook: nextWorkbookRow,
+      calculationSettings: nextCalculationSettings,
+      sheetName: options.eventPayload.sheetName,
+      address: options.eventPayload.address,
+      cell: nextCellRow,
+    };
   } else if (isStyleRangeEventPayload(options.eventPayload)) {
-    await applyCalculationSettings(
-      db,
-      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    const nextStyleRows = buildWorkbookStyleRowsFromEngine(
+      documentId,
+      options.nextEngine,
+      nextProjectionOptions,
     );
-    await applyStyleDiff(
-      db,
-      buildWorkbookStyleRows(documentId, options.previousState.snapshot, previousProjectionOptions),
-      buildWorkbookStyleRows(documentId, options.nextSnapshot, nextProjectionOptions),
+    const nextCellRows = buildSheetCellSourceRowsFromEngine(
+      documentId,
+      options.nextEngine,
+      options.eventPayload.range.sheetName,
+      nextProjectionOptions,
+      options.eventPayload.range,
     );
-    await persistCellSourceRange(
+    await applyCalculationSettings(db, nextCalculationSettings);
+    await applyStyleDiff(db, options.previousState.projection.styles, nextStyleRows);
+    await persistCellSourceRange(db, documentId, options.eventPayload.range, nextCellRows);
+    await persistCellEvalRangeDiff(
       db,
       documentId,
       options.eventPayload.range,
-      buildSheetCellSourceRows(
+      materializeCellEvalProjection(
+        options.nextEngine,
         documentId,
-        options.nextSnapshot,
-        options.eventPayload.range.sheetName,
-        nextProjectionOptions,
-        options.eventPayload.range,
+        nextProjectionOptions.calculatedRevision,
+        updatedAt,
       ),
     );
-    if (options.nextEngine) {
-      await persistCellEvalRangeDiff(
-        db,
-        documentId,
-        options.eventPayload.range,
-        materializeCellEvalProjection(
-          options.nextEngine,
-          documentId,
-          nextProjectionOptions.calculatedRevision,
-          updatedAt,
-        ),
-      );
-    }
+    projectionCommit = {
+      kind: "cell-range",
+      workbook: nextWorkbookRow,
+      calculationSettings: nextCalculationSettings,
+      range: options.eventPayload.range,
+      cells: nextCellRows,
+      styles: nextStyleRows,
+    };
   } else if (isNumberFormatRangeEventPayload(options.eventPayload)) {
-    await applyCalculationSettings(
-      db,
-      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    const nextNumberFormatRows = buildWorkbookNumberFormatRowsFromEngine(
+      documentId,
+      options.nextEngine,
+      nextProjectionOptions,
     );
+    const nextCellRows = buildSheetCellSourceRowsFromEngine(
+      documentId,
+      options.nextEngine,
+      options.eventPayload.range.sheetName,
+      nextProjectionOptions,
+      options.eventPayload.range,
+    );
+    await applyCalculationSettings(db, nextCalculationSettings);
     await applyNumberFormatDiff(
       db,
-      buildWorkbookNumberFormatRows(
-        documentId,
-        options.previousState.snapshot,
-        previousProjectionOptions,
-      ),
-      buildWorkbookNumberFormatRows(documentId, options.nextSnapshot, nextProjectionOptions),
+      options.previousState.projection.numberFormats,
+      nextNumberFormatRows,
     );
-    await persistCellSourceRange(
+    await persistCellSourceRange(db, documentId, options.eventPayload.range, nextCellRows);
+    await persistCellEvalRangeDiff(
       db,
       documentId,
       options.eventPayload.range,
-      buildSheetCellSourceRows(
+      materializeCellEvalProjection(
+        options.nextEngine,
         documentId,
-        options.nextSnapshot,
-        options.eventPayload.range.sheetName,
-        nextProjectionOptions,
-        options.eventPayload.range,
+        nextProjectionOptions.calculatedRevision,
+        updatedAt,
       ),
     );
-    if (options.nextEngine) {
-      await persistCellEvalRangeDiff(
-        db,
-        documentId,
-        options.eventPayload.range,
-        materializeCellEvalProjection(
-          options.nextEngine,
-          documentId,
-          nextProjectionOptions.calculatedRevision,
-          updatedAt,
-        ),
-      );
-    }
+    projectionCommit = {
+      kind: "cell-range",
+      workbook: nextWorkbookRow,
+      calculationSettings: nextCalculationSettings,
+      range: options.eventPayload.range,
+      cells: nextCellRows,
+      numberFormats: nextNumberFormatRows,
+    };
   } else if (isColumnMetadataEventPayload(options.eventPayload)) {
-    await applyCalculationSettings(
-      db,
-      buildCalculationSettingsRow(documentId, options.nextSnapshot),
+    const nextColumnMetadataRows = buildSheetColumnMetadataRowsFromEngine(
+      documentId,
+      options.nextEngine,
+      options.eventPayload.sheetName,
+      nextProjectionOptions,
     );
+    await applyCalculationSettings(db, nextCalculationSettings);
     await applyAxisMetadataDiff(
       db,
       "column_metadata",
-      buildSheetColumnMetadataRows(
-        documentId,
-        options.previousState.snapshot,
+      buildSheetColumnMetadataRowsFromProjection(
+        options.previousState.projection,
         options.eventPayload.sheetName,
-        previousProjectionOptions,
       ),
-      buildSheetColumnMetadataRows(
-        documentId,
-        options.nextSnapshot,
-        options.eventPayload.sheetName,
-        nextProjectionOptions,
-      ),
+      nextColumnMetadataRows,
     );
+    projectionCommit = {
+      kind: "column-metadata",
+      workbook: nextWorkbookRow,
+      calculationSettings: nextCalculationSettings,
+      sheetName: options.eventPayload.sheetName,
+      columnMetadata: nextColumnMetadataRows,
+    };
   } else {
-    const previousProjection = buildWorkbookSourceProjection(
+    const nextProjection = buildWorkbookSourceProjectionFromEngine(
       documentId,
-      options.previousState.snapshot,
-      previousProjectionOptions,
-    );
-    const nextProjection = buildWorkbookSourceProjection(
-      documentId,
-      options.nextSnapshot,
+      options.nextEngine,
       nextProjectionOptions,
     );
-    await applySourceProjectionDiff(db, previousProjection, nextProjection);
+    await applySourceProjectionDiff(db, options.previousState.projection, nextProjection);
+    projectionCommit = {
+      kind: "replace",
+      projection: nextProjection,
+    };
   }
 
   await appendWorkbookEvent(db, {
@@ -2125,6 +2163,7 @@ export async function persistWorkbookMutation(
     calculatedRevision: nextProjectionOptions.calculatedRevision,
     updatedAt,
     recalcJobId,
+    projectionCommit,
   };
 }
 

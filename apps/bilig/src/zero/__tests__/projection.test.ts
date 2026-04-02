@@ -3,6 +3,7 @@ import { ValueTag } from "@bilig/protocol";
 import { describe, expect, it } from "vitest";
 import {
   buildSheetCellSourceRows,
+  buildSheetCellSourceRowsFromEngine,
   diffProjectionRows,
   materializeCellEvalProjection,
   sourceProjectionKeys,
@@ -152,6 +153,35 @@ describe("projection helpers", () => {
         explicitFormatId: expect.any(String),
         format: expect.any(String),
       }),
+    );
+  });
+
+  it("materializes the same sparse source rows directly from the engine", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "projection-test",
+    });
+    await engine.ready();
+    engine.setCellValue("Sheet1", "A1", 99);
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+      { fill: { backgroundColor: "#abcdef" } },
+    );
+    engine.setRangeNumberFormat(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+      { kind: "number", code: "$#,##0.00" },
+    );
+
+    const options = {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "owner-a",
+      updatedBy: "user-a",
+      updatedAt: "2026-03-29T10:00:00.000Z",
+    } as const;
+
+    expect(buildSheetCellSourceRowsFromEngine("doc-a", engine, "Sheet1", options)).toEqual(
+      buildSheetCellSourceRows("doc-a", engine.exportSnapshot(), "Sheet1", options),
     );
   });
 });
