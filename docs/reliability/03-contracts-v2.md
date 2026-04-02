@@ -8,7 +8,6 @@
 - `/v2/documents/:documentId/state`
 - `/v2/documents/:documentId/snapshot/latest`
 - `/v2/documents/:documentId/frames`
-- `/v2/documents/:documentId/ws`
 - `/v2/agent/frames`
 - `/api/zero/v2/query`
 - `/api/zero/v2/mutate`
@@ -29,7 +28,7 @@ Every `v2` HTTP error returns:
 - `retryable`
 - optional `details`
 
-Websocket and worker control-plane failures use the same tagged error vocabulary, adapted to their transport.
+Worker and asynchronous control-plane failures use the same tagged error vocabulary, adapted to their transport.
 
 ## Current First-Wave Contracts
 

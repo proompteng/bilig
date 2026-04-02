@@ -18,10 +18,8 @@ This ledger maps the current production path to concrete proof points in the che
 
 ## Open work that still matters
 
-- finish renaming remaining snapshot-era relational tables and helpers where that churn is worth the migration cost
 - keep reducing projection and render write amplification
 - finish the remaining non-production canonical formula rows
-- replace remaining legacy/local-only transport surfaces when they stop providing value for harnesses
 
 ## Removed or retired product surfaces
 

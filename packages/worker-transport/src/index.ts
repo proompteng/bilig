@@ -364,4 +364,3 @@ function attachMessageListener(
 }
 
 export * from "./viewport-patch.js";
-export * from "./websocket-sync-client.js";

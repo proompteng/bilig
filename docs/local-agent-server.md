@@ -1,31 +1,17 @@
 # Local Agent Server
 
-## Current state
+## Status
 
-The standalone `apps/local-server` package has been retired.
+Retired as a standalone HTTP surface.
 
-Local worksheet and agent-oriented behavior now lives inside `apps/bilig` modules:
+## Current model
 
-- `src/http/local-server.ts`
-- `src/workbook-runtime/local-*`
-- `src/agent/*`
-- `src/import-export/*`
+- There is no separate local agent server process in the product runtime.
+- Worksheet execution now happens in-process inside `apps/bilig`.
+- Agent ingress still enters through `/v2/agent/frames` on the monolith.
 
-## Product rule
+## Proof points
 
-There is one backend runtime.
-
-Local-only workflows may still use the monolith's local listener for:
-
-- worksheet import/export
-- local harnesses
-- agent-driven workbook operations
-- compatibility/debug workflows
-
-But local browser product behavior is not a separate application anymore.
-
-## Exit gate
-
-- no standalone local-server package is required for development, CI, or deployment
-- local agent and workbook behavior is hosted by monolith modules only
-- documentation points engineers to `apps/bilig`, not a retired parallel app
+- [apps/bilig/src/index.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/index.ts)
+- [apps/bilig/src/workbook-runtime/local-document-supervisor.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/workbook-runtime/local-document-supervisor.ts)
+- [apps/bilig/src/workbook-runtime/worksheet-executor.ts](/Users/gregkonush/github.com/bilig/apps/bilig/src/workbook-runtime/worksheet-executor.ts)

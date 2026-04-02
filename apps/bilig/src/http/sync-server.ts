@@ -1,12 +1,9 @@
 import { existsSync } from "node:fs";
-import type { IncomingMessage } from "node:http";
 import { dirname, join } from "node:path";
-import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
 import httpProxy from "@fastify/http-proxy";
-import { WebSocketServer, type WebSocket } from "ws";
 
 import { decodeAgentFrame, encodeAgentFrame } from "@bilig/agent-api";
 import { decodeFrame, encodeFrame } from "@bilig/binary-protocol";
@@ -15,11 +12,9 @@ import {
   createErrorEnvelope,
   createRuntimeSession,
   type DocumentControlService,
-  normalizeWebSocket,
   resolveRequestBaseUrl,
   resolveServerRuntimeConfig,
   runPromise,
-  toMessageBytes,
 } from "@bilig/runtime-kernel";
 import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 
@@ -45,8 +40,6 @@ export interface SyncServerOptions {
   zeroSyncService?: ZeroSyncService;
   logger?: boolean;
 }
-
-function noop(): void {}
 
 function resolveBooleanEnv(value: string | undefined, fallback: boolean): boolean {
   const normalized = value?.trim().toLowerCase();
@@ -91,14 +84,6 @@ function shouldServeSpaFallback(method: string, url: string): boolean {
   return !SPA_FALLBACK_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix),
   );
-}
-
-function isDocumentSyncWebSocketPath(url: string | undefined): boolean {
-  if (!url) {
-    return false;
-  }
-  const pathname = new URL(url, "http://localhost").pathname;
-  return /^\/v2\/documents\/[^/]+\/ws$/.test(pathname);
 }
 
 export function createSyncServer(options: SyncServerOptions = {}) {
@@ -240,80 +225,6 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       return Buffer.from(encodeAgentFrame(response));
     },
   );
-
-  const documentSocketServer = new WebSocketServer({ noServer: true });
-
-  const handleDocumentSocketConnection = (candidate: unknown) => {
-    const ws = normalizeWebSocket(candidate);
-    let documentId: string | null = null;
-    let sessionId: string | null = null;
-    const subscriberId = `sync-browser:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-    let detach = noop;
-
-    ws.on("message", async (raw: unknown) => {
-      try {
-        const frame = decodeFrame(toMessageBytes(raw));
-        if (frame.kind === "hello" && documentId === null) {
-          documentId = frame.documentId;
-          sessionId = frame.sessionId;
-          detach = await runPromise(
-            documentService.attachBrowser(documentId, subscriberId, (nextFrame) => {
-              ws.send(encodeFrame(nextFrame));
-            }),
-          );
-          const helloFrames = await runPromise(documentService.openBrowserSession(frame));
-          helloFrames.forEach((responseFrame) => {
-            ws.send(encodeFrame(responseFrame));
-          });
-          return;
-        }
-        const response = await runPromise(documentService.handleSyncFrame(frame));
-        (Array.isArray(response) ? response : [response]).forEach((responseFrame) => {
-          ws.send(encodeFrame(responseFrame));
-        });
-      } catch (error) {
-        ws.send(
-          encodeFrame({
-            kind: "error",
-            documentId: documentId ?? "unknown",
-            code: "SYNC_SERVER_MESSAGE_FAILURE",
-            message: error instanceof Error ? error.message : String(error),
-            retryable: false,
-          }),
-        );
-      }
-    });
-
-    ws.on("close", () => {
-      detach();
-      if (documentId && sessionId) {
-        void sessionManager.persistence.presence.leave(documentId, sessionId);
-      }
-    });
-  };
-
-  const handleDocumentUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
-    if (!isDocumentSyncWebSocketPath(request.url)) {
-      return;
-    }
-    documentSocketServer.handleUpgrade(request, socket, head, (websocket: WebSocket) => {
-      handleDocumentSocketConnection(websocket);
-    });
-  };
-
-  app.server.on("upgrade", handleDocumentUpgrade);
-  app.addHook("onClose", async () => {
-    app.server.off("upgrade", handleDocumentUpgrade);
-    await new Promise<void>((resolve, reject) => {
-      documentSocketServer.close((error?: Error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
-      });
-    });
-  });
 
   if (webDistRoot) {
     app.register(fastifyStatic, {

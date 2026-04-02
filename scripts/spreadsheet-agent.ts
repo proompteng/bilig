@@ -872,7 +872,7 @@ async function main(): Promise<void> {
   }
 
   const options = parseArgs(argv);
-  const server = options.server ?? process.env.BILIG_AGENT_SERVER_URL ?? "http://127.0.0.1:4381";
+  const server = options.server ?? process.env.BILIG_AGENT_SERVER_URL ?? "http://127.0.0.1:4321";
   const documentId = options.document ?? process.env.BILIG_DOCUMENT_ID ?? "bilig-demo";
   const replicaId = options.replica ?? `codex:${Date.now()}`;
 

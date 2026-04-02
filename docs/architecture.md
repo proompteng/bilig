@@ -60,6 +60,5 @@ The following are not current architecture anymore:
 ## Recommended next focus
 
 1. keep reducing projection churn and render write amplification
-2. finish eliminating legacy snapshot-era assumptions from Zero storage/schema naming
-3. keep tightening CI, rollout, and rebuild validation around the monolith path
-4. keep closing the remaining non-production canonical formula rows
+2. keep tightening CI, rollout, and rebuild validation around the monolith path
+3. keep closing the remaining non-production canonical formula rows

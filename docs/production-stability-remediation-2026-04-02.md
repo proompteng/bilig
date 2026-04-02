@@ -65,10 +65,10 @@ This removes the need to persist giant snapshots on each edit while preserving d
 - [x] remove steady-state per-selection Zero materialization for in-viewport cells
 - [x] add isolated-document production Playwright smoke
 - [x] harden app deployment probes / rollout safety
-- [ ] run local validation
-- [ ] publish repos
-- [ ] sync Argo CD
-- [ ] verify live smoke and stability
+- [x] run local validation
+- [x] publish repos
+- [x] sync Argo CD
+- [x] verify live smoke and stability
 
 ## Exit criteria
 

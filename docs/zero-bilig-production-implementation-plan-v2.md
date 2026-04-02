@@ -1,7 +1,7 @@
 # bilig → Zero 1.0 production implementation plan
 ## Repo-grounded, monolith + Zero production plan
-## Status: implementation largely landed; cleanup, validation, and rollout hardening remain
-## Last revalidated against local repos: 2026-04-01
+## Status: implementation landed; active plan items are closed
+## Last revalidated against local repos: 2026-04-02
 
 > Historical note:
 > The canonical backend runtime now lives in `apps/bilig`.
@@ -43,7 +43,7 @@ This update revalidated the plan against the current code in:
 - `apps/bilig` is the canonical backend package (`@bilig/app`).
 - The active sync HTTP ingress and Zero service run from `apps/bilig`.
 - The monolith serves the built Vite browser shell and the authoritative API surface from one deployable runtime.
-- The monolith still starts an internal local worksheet listener for in-process execution helpers.
+- The monolith executes worksheet operations in-process; it no longer starts a second local HTTP server.
 - Root `dev`, `build`, and Docker workflows target `@bilig/app` as the only product runtime image.
 - The web shell already mounts `ZeroProvider` with a session-derived `userID`.
 - The web shell already renders through `ZeroWorkbookBridge` instead of whole-workbook Zero snapshots.
@@ -61,14 +61,8 @@ The target architecture remains:
 
 ## 2. Implementation status summary
 
-Most of the architecture described in the original draft is now present in-tree.
-The remaining work is not “invent the system” work. It is:
-
-- remove stale duplicate app packages and dead placeholder code
-- align docs and CI with the monolith topology
-- tighten image/release/deployment wiring
-- continue chipping away at snapshot-era naming and projection churn
-- validate the full stack end to end
+The architecture described in the original draft is now present in-tree and shipped.
+The remaining work is ordinary product iteration, not topology migration.
 
 ## 3. Acceptance rule
 

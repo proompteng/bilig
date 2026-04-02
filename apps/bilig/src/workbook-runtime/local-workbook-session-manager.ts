@@ -197,7 +197,7 @@ export class LocalWorkbookSessionManager {
 
     const engine = new SpreadsheetEngine({
       workbookName: documentId,
-      replicaId: `local-server:${documentId}`,
+      replicaId: `worksheet-host:${documentId}`,
     });
 
     const session: LocalWorkbookSession = {
@@ -687,7 +687,7 @@ export class LocalWorkbookSessionManager {
     this.publishSnapshot(session, imported.snapshot);
 
     const serverUrl = normalizeBaseUrl(
-      context.serverUrl ?? this.options.publicServerUrl ?? "http://127.0.0.1:4381",
+      context.serverUrl ?? this.options.publicServerUrl ?? "http://127.0.0.1:4321",
     );
     return {
       kind: "workbookLoaded",

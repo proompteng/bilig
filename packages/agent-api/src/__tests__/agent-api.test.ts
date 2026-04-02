@@ -72,7 +72,7 @@ describe("agent api", () => {
         sessionId: "xlsx:abc123:agent-local",
         workbookName: "report.xlsx",
         sheetNames: ["Sheet1"],
-        serverUrl: "http://127.0.0.1:4381",
+        serverUrl: "http://127.0.0.1:4321",
         browserUrl: "http://127.0.0.1:4173/?document=xlsx%3Aabc123",
         warnings: [],
       },

@@ -1,4 +1,5 @@
 import { decodeAgentFrame, encodeAgentFrame, type AgentFrame } from "@bilig/agent-api";
+import { runPromise, type DocumentControlService } from "@bilig/runtime-kernel";
 
 export interface WorksheetExecutor {
   execute(frame: AgentFrame): Promise<AgentFrame>;
@@ -7,6 +8,12 @@ export interface WorksheetExecutor {
 export interface HttpWorksheetExecutorOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
+}
+
+export interface InProcessWorksheetExecutorOptions {
+  documentService: DocumentControlService;
+  serverUrl?: string;
+  browserAppBaseUrl?: string;
 }
 
 function normalizeBaseUrl(value: string): string {
@@ -32,6 +39,21 @@ export function createHttpWorksheetExecutor(
         throw new Error(`Worksheet executor request failed with status ${response.status}`);
       }
       return decodeAgentFrame(new Uint8Array(await response.arrayBuffer()));
+    },
+  };
+}
+
+export function createInProcessWorksheetExecutor(
+  options: InProcessWorksheetExecutorOptions,
+): WorksheetExecutor {
+  return {
+    execute(frame) {
+      return runPromise(
+        options.documentService.handleAgentFrame(frame, {
+          ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
+          ...(options.browserAppBaseUrl ? { browserAppBaseUrl: options.browserAppBaseUrl } : {}),
+        }),
+      );
     },
   };
 }

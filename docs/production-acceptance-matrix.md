@@ -29,6 +29,5 @@
 - `9` canonical formula rows are not yet `implemented-wasm-production`
 - `names:defined-name-range`, `tables:table-total-row-sum`, and `structured-reference:table-column-ref` are not production
 - full WASM-only production routing is not yet closed for the complete canonical worksheet surface
-- sync-server durable remote worksheet execution is not yet the default checked-in behavior
 - typed binary agent and viewport payload codecs are not yet closed
 - row resize, hide and unhide, context-menu actions, and frozen-pane UX are not implemented in the product shell

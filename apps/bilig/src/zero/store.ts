@@ -132,21 +132,21 @@ export interface RecalcJobLease {
   attempts: number;
 }
 
-interface WorkbookCheckpoint {
+interface WorkbookCheckpointRecord {
   revision: number;
-  snapshot: WorkbookSnapshot;
-  replicaSnapshot: EngineReplicaSnapshot | null;
+  checkpointPayload: WorkbookSnapshot;
+  replicaState: EngineReplicaSnapshot | null;
 }
 
-const WORKBOOK_SNAPSHOT_FORMAT = "json-v1";
-const WORKBOOK_SNAPSHOT_RETENTION = 5;
-const WORKBOOK_SNAPSHOT_INTERVAL = 64;
+const WORKBOOK_CHECKPOINT_FORMAT = "json-v1";
+const WORKBOOK_CHECKPOINT_RETENTION = 5;
+const WORKBOOK_CHECKPOINT_INTERVAL = 64;
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;
 const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2;
 
 export function shouldPersistWorkbookCheckpointRevision(revision: number): boolean {
-  return revision === 1 || revision % WORKBOOK_SNAPSHOT_INTERVAL === 0;
+  return revision === 1 || revision % WORKBOOK_CHECKPOINT_INTERVAL === 0;
 }
 
 type FocusedCellEventPayload = Extract<
@@ -233,11 +233,11 @@ function isCellBorderWeight(value: unknown): value is CellBorderWeight {
   return value === "thin" || value === "medium" || value === "thick";
 }
 
-function workbookSnapshot(value: unknown, documentId: string): WorkbookSnapshot {
+function parseCheckpointPayload(value: unknown, documentId: string): WorkbookSnapshot {
   return isWorkbookSnapshot(value) ? value : createEmptyWorkbookSnapshot(documentId);
 }
 
-function workbookReplicaSnapshot(value: unknown): EngineReplicaSnapshot | null {
+function parseCheckpointReplicaState(value: unknown): EngineReplicaSnapshot | null {
   return isEngineReplicaSnapshot(value) ? value : null;
 }
 
@@ -495,7 +495,7 @@ function cellSourceRowInRange(
 async function loadLatestWorkbookCheckpoint(
   db: Queryable,
   documentId: string,
-): Promise<WorkbookCheckpoint | null> {
+): Promise<WorkbookCheckpointRecord | null> {
   const result = await db.query<{
     revision: number | string | null;
     payload: unknown;
@@ -516,8 +516,8 @@ async function loadLatestWorkbookCheckpoint(
   }
   return {
     revision: parseInteger(row.revision),
-    snapshot: row.payload,
-    replicaSnapshot: workbookReplicaSnapshot(row.replica_snapshot),
+    checkpointPayload: row.payload,
+    replicaState: parseCheckpointReplicaState(row.replica_snapshot),
   };
 }
 
@@ -550,8 +550,8 @@ async function upsertWorkbookHeader(
   db: Queryable,
   documentId: string,
   projection: WorkbookSourceProjection["workbook"],
-  snapshot: WorkbookSnapshot | null,
-  replicaSnapshot: EngineReplicaSnapshot | null,
+  checkpointPayload: WorkbookSnapshot | null,
+  replicaState: EngineReplicaSnapshot | null,
 ): Promise<void> {
   await db.query(
     `
@@ -594,8 +594,8 @@ async function upsertWorkbookHeader(
       projection.calcMode,
       projection.compatibilityMode,
       projection.recalcEpoch,
-      JSON.stringify(snapshot),
-      JSON.stringify(replicaSnapshot),
+      JSON.stringify(checkpointPayload),
+      JSON.stringify(replicaState),
       projection.updatedAt,
     ],
   );
@@ -1342,8 +1342,8 @@ async function persistWorkbookCheckpoint(
   db: Queryable,
   documentId: string,
   revision: number,
-  snapshot: WorkbookSnapshot,
-  replicaSnapshot: EngineReplicaSnapshot | null,
+  checkpointPayload: WorkbookSnapshot,
+  replicaState: EngineReplicaSnapshot | null,
 ): Promise<void> {
   await db.query(
     `
@@ -1362,9 +1362,9 @@ async function persistWorkbookCheckpoint(
     [
       documentId,
       revision,
-      WORKBOOK_SNAPSHOT_FORMAT,
-      JSON.stringify(snapshot),
-      JSON.stringify(replicaSnapshot),
+      WORKBOOK_CHECKPOINT_FORMAT,
+      JSON.stringify(checkpointPayload),
+      JSON.stringify(replicaState),
     ],
   );
   await db.query(
@@ -1379,7 +1379,7 @@ async function persistWorkbookCheckpoint(
           LIMIT $2
         )
     `,
-    [documentId, WORKBOOK_SNAPSHOT_RETENTION],
+    [documentId, WORKBOOK_CHECKPOINT_RETENTION],
   );
 }
 
@@ -1696,7 +1696,7 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
       ON CONFLICT (workbook_id, revision)
       DO NOTHING
     `,
-    [WORKBOOK_SNAPSHOT_FORMAT],
+    [WORKBOOK_CHECKPOINT_FORMAT],
   );
 }
 
@@ -1836,19 +1836,19 @@ export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void
 
   await Promise.all(
     result.rows.map(async (row) => {
-      const snapshot = workbookSnapshot(row.snapshot, row.id);
-      const replicaSnapshot = workbookReplicaSnapshot(row.replica_snapshot);
+      const checkpointPayload = parseCheckpointPayload(row.snapshot, row.id);
+      const replicaState = parseCheckpointReplicaState(row.replica_snapshot);
       const updatedAt = row.updated_at ?? nowIso();
       const engine = new SpreadsheetEngine({
         workbookName: row.id,
         replicaId: `cell-eval-backfill:${row.id}`,
       });
       await engine.ready();
-      engine.importSnapshot(snapshot);
-      if (replicaSnapshot) {
-        engine.importReplicaSnapshot(replicaSnapshot);
+      engine.importSnapshot(checkpointPayload);
+      if (replicaState) {
+        engine.importReplicaSnapshot(replicaState);
       }
-      const projection = buildWorkbookSourceProjection(row.id, snapshot, {
+      const projection = buildWorkbookSourceProjection(row.id, checkpointPayload, {
         revision: parseInteger(row.head_revision),
         calculatedRevision: parseInteger(row.calculated_revision),
         ownerUserId: row.owner_user_id ?? "system",
@@ -1866,7 +1866,7 @@ export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void
           updatedAt,
         ),
       );
-      await upsertWorkbookHeader(db, row.id, projection.workbook, snapshot, replicaSnapshot);
+      await upsertWorkbookHeader(db, row.id, projection.workbook, checkpointPayload, replicaState);
     }),
   );
 }
@@ -1896,13 +1896,13 @@ export async function loadWorkbookState(
   const headRevision = parseInteger(row?.head_revision);
   const calculatedRevision = parseInteger(row?.calculated_revision);
   const ownerUserId = row?.owner_user_id ?? "system";
-  const inlineSnapshot = isWorkbookSnapshot(row?.snapshot) ? row.snapshot : null;
-  const inlineReplicaSnapshot = workbookReplicaSnapshot(row?.replica_snapshot);
+  const inlineCheckpointPayload = isWorkbookSnapshot(row?.snapshot) ? row.snapshot : null;
+  const inlineReplicaState = parseCheckpointReplicaState(row?.replica_snapshot);
 
-  if (inlineSnapshot) {
+  if (inlineCheckpointPayload) {
     return {
-      snapshot: inlineSnapshot,
-      replicaSnapshot: inlineReplicaSnapshot,
+      snapshot: inlineCheckpointPayload,
+      replicaSnapshot: inlineReplicaState,
       headRevision,
       calculatedRevision,
       ownerUserId,
@@ -1911,13 +1911,13 @@ export async function loadWorkbookState(
 
   const checkpoint = await loadLatestWorkbookCheckpoint(db, documentId);
   const baseRevision = checkpoint?.revision ?? 0;
-  const baseSnapshot = workbookSnapshot(checkpoint?.snapshot, documentId);
-  const baseReplicaSnapshot = workbookReplicaSnapshot(checkpoint?.replicaSnapshot);
+  const baseCheckpointPayload = parseCheckpointPayload(checkpoint?.checkpointPayload, documentId);
+  const baseReplicaState = parseCheckpointReplicaState(checkpoint?.replicaState);
 
   if (headRevision <= baseRevision) {
     return {
-      snapshot: baseSnapshot,
-      replicaSnapshot: baseReplicaSnapshot,
+      snapshot: baseCheckpointPayload,
+      replicaSnapshot: baseReplicaState,
       headRevision,
       calculatedRevision,
       ownerUserId,
@@ -1929,9 +1929,9 @@ export async function loadWorkbookState(
     replicaId: `checkpoint-replay:${documentId}:${headRevision}`,
   });
   await engine.ready();
-  engine.importSnapshot(baseSnapshot);
-  if (baseReplicaSnapshot) {
-    engine.importReplicaSnapshot(baseReplicaSnapshot);
+  engine.importSnapshot(baseCheckpointPayload);
+  if (baseReplicaState) {
+    engine.importReplicaSnapshot(baseReplicaState);
   }
   const events = await loadWorkbookEventsAfter(db, documentId, baseRevision);
   for (const payload of events) {

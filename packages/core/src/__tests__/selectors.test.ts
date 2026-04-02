@@ -42,4 +42,18 @@ describe("core selectors", () => {
       }),
     ]);
   });
+
+  it("returns no viewport cells when the sheet does not exist", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "selectors-missing-sheet" });
+    await engine.ready();
+
+    expect(
+      selectViewportCells(engine, "Missing", {
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      }),
+    ).toEqual([]);
+  });
 });

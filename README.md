@@ -328,9 +328,8 @@ docker compose up --build
 
 This brings up the full local stack:
 
-- `http://localhost:3000` for the web shell with `/v2`, `/api/zero/v2`, and `/zero` proxied through nginx
-- `http://localhost:4321/healthz` for the sync server
-- `http://localhost:4381/healthz` for the local workbook server
+- `http://localhost:3000` for the monolith web shell with `/v2`, `/api/zero/v2`, and `/zero`
+- `http://localhost:4321/healthz` for the monolith app runtime
 - `http://localhost:4848/keepalive` for Zero cache
 - `postgresql://bilig:bilig@localhost:5432/bilig` for Postgres
 

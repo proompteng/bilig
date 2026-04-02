@@ -25,7 +25,7 @@ async function readProtocolFrame(response: Response): Promise<ProtocolFrame> {
 export function createHttpSyncRelay(options: HttpSyncRelayOptions): UpstreamSyncRelay {
   const fetchImpl = options.fetchImpl ?? fetch;
   const baseUrl = normalizeBaseUrl(options.baseUrl);
-  const replicaId = options.replicaId ?? `local-server:${options.documentId}`;
+  const replicaId = options.replicaId ?? `worksheet-host:${options.documentId}`;
   const sessionId = `${options.documentId}:${replicaId}`;
   let lastServerCursor = 0;
   let connectPromise: Promise<void> | null = null;
