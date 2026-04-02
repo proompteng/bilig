@@ -1496,7 +1496,9 @@ function WorkerWorkbookAppInner({
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
-  const sheetNames = [...(bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? []))];
+  const sheetNames = [
+    ...(bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? [selection.sheetName])),
+  ];
   const columnWidths = workerHandle
     ? workerHandle.cache.getColumnWidths(selection.sheetName)
     : undefined;
@@ -2062,8 +2064,8 @@ function WorkerWorkbookAppInner({
     </Toolbar.Root>
   );
 
-  const bridgeLoading = bridgeState === null;
-  const runtimeReady = !loading && Boolean(workerHandle) && Boolean(runtimeState) && !bridgeLoading;
+  const runtimeReady = !loading && Boolean(workerHandle) && Boolean(runtimeState);
+  const workbookReady = !loading && Boolean(workerHandle);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f8f9fa] text-[#202124]">
@@ -2083,7 +2085,7 @@ function WorkerWorkbookAppInner({
       ) : null}
       <div className="relative flex min-h-0 flex-1">
         <div className="min-h-0 min-w-0 flex-1">
-          {!loading && workerHandle && runtimeState && !bridgeLoading ? (
+          {workbookReady && workerHandle ? (
             <WorkbookView
               ribbon={ribbon}
               editorValue={visibleEditorValue}

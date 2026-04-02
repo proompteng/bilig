@@ -12,7 +12,9 @@ import {
   type WorkbookSnapshot,
 } from "@bilig/protocol";
 import {
+  applyWorkbookEvent,
   deriveDirtyRegions,
+  isWorkbookEventPayload,
   type DirtyRegion,
   type WorkbookEventPayload,
   type WorkbookEventRecord,
@@ -68,7 +70,7 @@ export interface WorkbookRuntimeMetadata {
 export interface PersistWorkbookMutationOptions {
   previousState: WorkbookRuntimeState;
   nextSnapshot: WorkbookSnapshot;
-  nextReplicaSnapshot: EngineReplicaSnapshot | null;
+  nextReplicaSnapshot?: EngineReplicaSnapshot | null;
   nextEngine?: SpreadsheetEngine | null;
   updatedBy: string;
   ownerUserId: string;
@@ -104,6 +106,10 @@ const WORKBOOK_SNAPSHOT_INTERVAL = 64;
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;
 const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2;
+
+export function shouldPersistWorkbookCheckpointRevision(revision: number): boolean {
+  return revision === 1 || revision % WORKBOOK_SNAPSHOT_INTERVAL === 0;
+}
 
 type FocusedCellEventPayload = Extract<
   WorkbookEventPayload,
@@ -477,11 +483,36 @@ async function loadLatestWorkbookCheckpoint(
   };
 }
 
+async function loadWorkbookEventsAfter(
+  db: Queryable,
+  documentId: string,
+  revision: number,
+): Promise<readonly WorkbookEventPayload[]> {
+  const result = await db.query<{
+    revision: number | string | null;
+    txn_json: unknown;
+  }>(
+    `
+      SELECT revision, txn_json
+      FROM workbook_event
+      WHERE workbook_id = $1
+        AND revision > $2
+      ORDER BY revision ASC
+    `,
+    [documentId, revision],
+  );
+  return result.rows.flatMap((row) =>
+    parseInteger(row.revision) > revision && isWorkbookEventPayload(row.txn_json)
+      ? [row.txn_json]
+      : [],
+  );
+}
+
 async function upsertWorkbookHeader(
   db: Queryable,
   documentId: string,
   projection: WorkbookSourceProjection["workbook"],
-  snapshot: WorkbookSnapshot,
+  snapshot: WorkbookSnapshot | null,
   replicaSnapshot: EngineReplicaSnapshot | null,
 ): Promise<void> {
   await db.query(
@@ -1829,15 +1860,57 @@ export async function loadWorkbookState(
     [documentId],
   );
   const row = result.rows[0];
-  const checkpoint = isWorkbookSnapshot(row?.snapshot)
-    ? null
-    : await loadLatestWorkbookCheckpoint(db, documentId);
+  const headRevision = parseInteger(row?.head_revision);
+  const calculatedRevision = parseInteger(row?.calculated_revision);
+  const ownerUserId = row?.owner_user_id ?? "system";
+  const inlineSnapshot = isWorkbookSnapshot(row?.snapshot) ? row.snapshot : null;
+  const inlineReplicaSnapshot = workbookReplicaSnapshot(row?.replica_snapshot);
+
+  if (inlineSnapshot) {
+    return {
+      snapshot: inlineSnapshot,
+      replicaSnapshot: inlineReplicaSnapshot,
+      headRevision,
+      calculatedRevision,
+      ownerUserId,
+    };
+  }
+
+  const checkpoint = await loadLatestWorkbookCheckpoint(db, documentId);
+  const baseRevision = checkpoint?.revision ?? 0;
+  const baseSnapshot = workbookSnapshot(checkpoint?.snapshot, documentId);
+  const baseReplicaSnapshot = workbookReplicaSnapshot(checkpoint?.replicaSnapshot);
+
+  if (headRevision <= baseRevision) {
+    return {
+      snapshot: baseSnapshot,
+      replicaSnapshot: baseReplicaSnapshot,
+      headRevision,
+      calculatedRevision,
+      ownerUserId,
+    };
+  }
+
+  const engine = new SpreadsheetEngine({
+    workbookName: documentId,
+    replicaId: `checkpoint-replay:${documentId}:${headRevision}`,
+  });
+  await engine.ready();
+  engine.importSnapshot(baseSnapshot);
+  if (baseReplicaSnapshot) {
+    engine.importReplicaSnapshot(baseReplicaSnapshot);
+  }
+  const events = await loadWorkbookEventsAfter(db, documentId, baseRevision);
+  for (const payload of events) {
+    applyWorkbookEvent(engine, payload);
+  }
+
   return {
-    snapshot: workbookSnapshot(row?.snapshot ?? checkpoint?.snapshot, documentId),
-    replicaSnapshot: workbookReplicaSnapshot(row?.replica_snapshot ?? checkpoint?.replicaSnapshot),
-    headRevision: parseInteger(row?.head_revision ?? checkpoint?.revision ?? 0),
-    calculatedRevision: parseInteger(row?.calculated_revision),
-    ownerUserId: row?.owner_user_id ?? "system",
+    snapshot: engine.exportSnapshot(),
+    replicaSnapshot: null,
+    headRevision,
+    calculatedRevision,
+    ownerUserId,
   };
 }
 
@@ -1898,13 +1971,7 @@ export async function persistWorkbookMutation(
     nextProjectionOptions,
   );
 
-  await upsertWorkbookHeader(
-    db,
-    documentId,
-    nextWorkbookRow,
-    options.nextSnapshot,
-    options.nextReplicaSnapshot,
-  );
+  await upsertWorkbookHeader(db, documentId, nextWorkbookRow, null, null);
   if (isFocusedCellEventPayload(options.eventPayload)) {
     const previousCellRows = buildFocusedCellRows(
       documentId,
@@ -2115,7 +2182,7 @@ export async function markRecalcJobCompleted(
   db: Queryable,
   lease: RecalcJobLease,
   nextRows: readonly CellEvalRow[],
-  snapshot: WorkbookSnapshot,
+  snapshot: WorkbookSnapshot | null,
   replicaSnapshot: EngineReplicaSnapshot | null,
   isIncremental = false,
 ): Promise<boolean> {
@@ -2153,7 +2220,7 @@ export async function markRecalcJobCompleted(
     [lease.id],
   );
 
-  if (lease.toRevision === 1 || lease.toRevision % WORKBOOK_SNAPSHOT_INTERVAL === 0) {
+  if (shouldPersistWorkbookCheckpointRevision(lease.toRevision) && snapshot) {
     await persistWorkbookCheckpoint(
       db,
       lease.workbookId,

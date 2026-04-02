@@ -69,8 +69,6 @@ export class ZeroWorkbookBridge {
     sheetName: "Sheet1",
     address: "A1",
   };
-
-  // Phase 3: Targeted selected cell query
   private selectedCellSource: CellSourceRow | null = null;
   private selectedCellEval: CellEvalRow | null = null;
   private readonly selectionDestroyers: Array<() => void> = [];
@@ -183,40 +181,50 @@ export class ZeroWorkbookBridge {
     }
 
     this.selectionDestroyers.push(
-      bindView(
-        asTypedView<CellSourceRow | undefined>(
-          this.zero.materialize(
-            queries.cellInput.one({
-              documentId: this.documentId,
-              sheetName,
-              address,
-            }),
-          ),
-        ),
-        (value) => {
-          this.selectedCellSource = value ?? null;
-          this.reprojectSelection(false);
-        },
-      ),
+      this.cache.subscribeCells(sheetName, [address], () => {
+        this.selectedCellSource = null;
+        this.selectedCellEval = null;
+        this.reprojectSelection(false);
+      }),
     );
 
-    this.selectionDestroyers.push(
-      bindView(
-        asTypedView<CellEvalRow | undefined>(
-          this.zero.materialize(
-            queries.cellEval.one({
-              documentId: this.documentId,
-              sheetName,
-              address,
-            }),
+    if (!this.cache.peekCell(sheetName, address)) {
+      this.selectionDestroyers.push(
+        bindView(
+          asTypedView<CellSourceRow | undefined>(
+            this.zero.materialize(
+              queries.cellInput.one({
+                documentId: this.documentId,
+                sheetName,
+                address,
+              }),
+            ),
           ),
+          (value) => {
+            this.selectedCellSource = value ?? null;
+            this.reprojectSelection(false);
+          },
         ),
-        (value) => {
-          this.selectedCellEval = value ?? null;
-          this.reprojectSelection(false);
-        },
-      ),
-    );
+      );
+
+      this.selectionDestroyers.push(
+        bindView(
+          asTypedView<CellEvalRow | undefined>(
+            this.zero.materialize(
+              queries.cellEval.one({
+                documentId: this.documentId,
+                sheetName,
+                address,
+              }),
+            ),
+          ),
+          (value) => {
+            this.selectedCellEval = value ?? null;
+            this.reprojectSelection(false);
+          },
+        ),
+      );
+    }
 
     this.reprojectSelection(true);
   }

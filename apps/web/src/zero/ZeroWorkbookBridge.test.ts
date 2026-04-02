@@ -96,6 +96,7 @@ describe("ZeroWorkbookBridge", () => {
     const cache = {
       setKnownSheets: vi.fn(),
       peekCell: vi.fn(() => undefined),
+      subscribeCells: vi.fn(() => () => {}),
       applyViewportPatch: vi.fn((patch) => {
         appliedPatches.push({ styles: patch.styles });
         return patch.cells.map((cell: { col: number; row: number }) => ({

@@ -107,6 +107,7 @@ export async function createWorkerRuntimeSessionController(
   callbacks: WorkerRuntimeSessionCallbacks,
 ): Promise<WorkerRuntimeSessionController> {
   const cache = new WorkerViewportCache();
+  cache.setKnownSheets([input.initialSelection.sheetName]);
   const handle: WorkerHandle = { cache };
   let currentSelection = input.initialSelection;
   let currentBridgeState: ZeroWorkbookBridgeState | null = null;

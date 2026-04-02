@@ -95,6 +95,78 @@ export interface WorkbookEventRecord {
   createdAt: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isCellRangeRef(value: unknown): value is CellRangeRef {
+  return (
+    isRecord(value) &&
+    typeof value["sheetName"] === "string" &&
+    typeof value["startAddress"] === "string" &&
+    typeof value["endAddress"] === "string"
+  );
+}
+
+export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPayload {
+  if (!isRecord(value) || typeof value["kind"] !== "string") {
+    return false;
+  }
+
+  switch (value["kind"]) {
+    case "applyBatch":
+      return Array.isArray(value["batch"]);
+    case "setCellValue":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["address"] === "string" &&
+        value["value"] !== undefined
+      );
+    case "setCellFormula":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["address"] === "string" &&
+        typeof value["formula"] === "string"
+      );
+    case "clearCell":
+      return typeof value["sheetName"] === "string" && typeof value["address"] === "string";
+    case "clearRange":
+      return isCellRangeRef(value["range"]);
+    case "renderCommit":
+      return Array.isArray(value["ops"]);
+    case "fillRange":
+    case "copyRange":
+      return isCellRangeRef(value["source"]) && isCellRangeRef(value["target"]);
+    case "updateColumnWidth":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["columnIndex"] === "number" &&
+        typeof value["width"] === "number"
+      );
+    case "setRangeStyle":
+      return isCellRangeRef(value["range"]) && typeof value["patch"] === "object";
+    case "clearRangeStyle":
+      return (
+        isCellRangeRef(value["range"]) &&
+        (value["fields"] === undefined || isStringArray(value["fields"]))
+      );
+    case "setRangeNumberFormat":
+      return (
+        isCellRangeRef(value["range"]) &&
+        (typeof value["format"] === "string" ||
+          (typeof value["format"] === "object" && value["format"] !== null))
+      );
+    case "clearRangeNumberFormat":
+      return isCellRangeRef(value["range"]);
+    default:
+      return false;
+  }
+}
+
 function singleCellRegion(sheetName: string, address: string): DirtyRegion {
   const parsed = parseCellAddress(address, sheetName);
   return {

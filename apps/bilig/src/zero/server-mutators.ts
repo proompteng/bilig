@@ -227,12 +227,11 @@ async function commitWorkbookMutation(
     try {
       mutate(state.engine);
       const nextSnapshot = state.engine.exportSnapshot();
-      const nextReplicaSnapshot = state.engine.exportReplicaSnapshot();
       const ownerUserId = resolveOwnerUserId(state, session);
       const result = await persistWorkbookMutation(db, documentId, {
         previousState: state,
         nextSnapshot,
-        nextReplicaSnapshot,
+        nextReplicaSnapshot: null,
         nextEngine: state.engine,
         updatedBy,
         ownerUserId,
@@ -240,7 +239,6 @@ async function commitWorkbookMutation(
       });
       runtimeManager.commitMutation(documentId, {
         snapshot: nextSnapshot,
-        replicaSnapshot: nextReplicaSnapshot,
         headRevision: result.revision,
         calculatedRevision: result.calculatedRevision,
         ownerUserId,

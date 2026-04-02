@@ -6,6 +6,7 @@ import {
   markRecalcJobCompleted,
   markRecalcJobFailed,
   markRecalcJobSuperseded,
+  shouldPersistWorkbookCheckpointRevision,
   type Queryable,
 } from "./store.js";
 
@@ -88,8 +89,11 @@ export class ZeroRecalcWorker {
           new Date().toISOString(),
           changedCellIndices,
         );
-        const nextSnapshot = runtime.engine.exportSnapshot();
-        const nextReplicaSnapshot = runtime.engine.exportReplicaSnapshot();
+        const shouldCheckpoint = shouldPersistWorkbookCheckpointRevision(lease.toRevision);
+        const nextSnapshot = shouldCheckpoint ? runtime.engine.exportSnapshot() : null;
+        const nextReplicaSnapshot = shouldCheckpoint
+          ? runtime.engine.exportReplicaSnapshot()
+          : null;
         const completed = await markRecalcJobCompleted(
           this.db,
           lease,
@@ -104,8 +108,8 @@ export class ZeroRecalcWorker {
         }
         this.runtimeManager.commitRecalc(lease.workbookId, {
           calculatedRevision: lease.toRevision,
-          snapshot: nextSnapshot,
-          replicaSnapshot: nextReplicaSnapshot,
+          ...(nextSnapshot ? { snapshot: nextSnapshot } : {}),
+          ...(shouldCheckpoint ? { replicaSnapshot: nextReplicaSnapshot } : {}),
         });
       });
     } catch (error) {

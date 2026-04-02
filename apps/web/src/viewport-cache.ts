@@ -11,6 +11,34 @@ const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const DEFAULT_STYLE_ID = "style-0";
 type CellItem = readonly [number, number];
 
+function snapshotValueKey(snapshot: CellSnapshot): string {
+  switch (snapshot.value.tag) {
+    case ValueTag.Number:
+      return `n:${snapshot.value.value}`;
+    case ValueTag.Boolean:
+      return `b:${snapshot.value.value ? 1 : 0}`;
+    case ValueTag.String:
+      return `s:${snapshot.value.stringId}:${snapshot.value.value}`;
+    case ValueTag.Error:
+      return `e:${snapshot.value.code}`;
+    case ValueTag.Empty:
+      return "empty";
+  }
+}
+
+function cellSnapshotSignature(snapshot: CellSnapshot): string {
+  return [
+    snapshot.version,
+    snapshot.flags,
+    snapshot.formula ?? "",
+    snapshot.format ?? "",
+    snapshot.styleId ?? "",
+    snapshot.numberFormatId ?? "",
+    snapshot.input ?? "",
+    snapshotValueKey(snapshot),
+  ].join("|");
+}
+
 interface CellSubscription {
   sheetName: string;
   addresses: Set<string>;
@@ -151,6 +179,9 @@ export class WorkerViewportCache implements GridEngineLike {
       if (current) {
         const incoming = cell.snapshot;
         if (current.version > incoming.version) {
+          continue;
+        }
+        if (cellSnapshotSignature(current) === cellSnapshotSignature(incoming)) {
           continue;
         }
       }

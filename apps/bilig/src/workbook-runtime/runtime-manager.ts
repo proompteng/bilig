@@ -31,7 +31,7 @@ interface RuntimeSession extends WorkbookRuntime {
 
 interface MutationCommit {
   snapshot: WorkbookSnapshot;
-  replicaSnapshot: EngineReplicaSnapshot | null;
+  replicaSnapshot?: EngineReplicaSnapshot | null;
   headRevision: number;
   calculatedRevision: number;
   ownerUserId: string;
@@ -126,7 +126,9 @@ export class WorkbookRuntimeManager {
       return;
     }
     session.snapshot = commit.snapshot;
-    session.replicaSnapshot = commit.replicaSnapshot;
+    if (commit.replicaSnapshot !== undefined) {
+      session.replicaSnapshot = commit.replicaSnapshot;
+    }
     session.headRevision = commit.headRevision;
     session.calculatedRevision = commit.calculatedRevision;
     session.ownerUserId = commit.ownerUserId;
