@@ -105,6 +105,51 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 24 });
   });
 
+  it("recalculateDirty performs incremental recalculation from regions", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+    engine.setCellValue("Sheet1", "C1", 5);
+    engine.setCellFormula("Sheet1", "D1", "C1+10");
+
+    expect(engine.getCellValue("Sheet1", "B1").value).toBe(20);
+    expect(engine.getCellValue("Sheet1", "D1").value).toBe(15);
+
+    // Update A1 and C1 without recalculating immediately.
+    // SpreadsheetEngine methods mostly call applyBatch which always recalculates.
+    // We'll use the internal workbook store to bypass immediate calc.
+    const a1Index = engine.workbook.ensureCell("Sheet1", "A1");
+    const c1Index = engine.workbook.ensureCell("Sheet1", "C1");
+
+    engine.workbook.cellStore.setValue(a1Index, { tag: ValueTag.Number, value: 50 });
+    engine.workbook.cellStore.setValue(c1Index, { tag: ValueTag.Number, value: 100 });
+
+    // Verify values are updated but NOT recalculated (B1 and D1 should have old results)
+    expect(engine.getCellValue("Sheet1", "A1").value).toBe(50);
+    expect(engine.getCellValue("Sheet1", "B1").value).toBe(20); // Still old result
+    expect(engine.getCellValue("Sheet1", "C1").value).toBe(100);
+    expect(engine.getCellValue("Sheet1", "D1").value).toBe(15); // Still old result
+
+    // Recalculate only A1's region
+    const changed = engine.recalculateDirty([
+      { sheetName: "Sheet1", rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
+    ]);
+
+    // Should contain B1 (0,1) because it depends on A1 (0,0)
+    const b1Index = engine.workbook.getCellIndex("Sheet1", "B1")!;
+    expect([...changed]).toContain(b1Index);
+
+    // D1 (0,3) should NOT be in changed because we didn't mark C1 (0,2) as dirty
+    const d1Index = engine.workbook.getCellIndex("Sheet1", "D1")!;
+    expect([...changed]).not.toContain(d1Index);
+
+    expect(engine.getCellValue("Sheet1", "B1").value).toBe(100); // 50 * 2
+    expect(engine.getCellValue("Sheet1", "D1").value).toBe(15); // Still old value
+  });
+
   it("evaluates string concatenation and string comparisons on the wasm path", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

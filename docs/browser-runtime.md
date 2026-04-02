@@ -2,60 +2,58 @@
 
 ## Current state
 
-- persistence is extracted into `@bilig/storage-browser`
-- worker transport exists and is used by the shipping browser shell
-- `apps/web` boots a dedicated worker-backed runtime by default
-- the worker owns engine boot, persistence restore, WASM lifecycle, sync connectivity, and viewport patch derivation
-- the UI consumes worker-derived viewport patches and worker-sourced sync state
-- the browser can target a local app server runtime and fall back to local-only worker execution
-- current browser-runtime gaps:
-  - `apps/web` no longer depends on legacy demo CSS or sources
-  - the viewport patch payload is JSON inside a byte envelope rather than a dedicated typed binary codec
-  - remote catch-up and durable multiplayer depend on unfinished sync-server work
+- `apps/web` is the only supported browser shell.
+- The browser boots through a dedicated worker runtime and consumes viewport patches instead of raw workbook state.
+- The product path is Zero-backed:
+  - workbook/session boot comes from `/v2/session`
+  - authoritative workbook reads come from Zero tile queries
+  - writes go through semantic Zero mutators
+- The worker still owns parsing, optimistic previews, formatting helpers, clipboard behavior, and patch encoding.
+- The browser no longer depends on the retired `apps/local-server` or `apps/sync-server` packages.
 
 ## Canonical boot flow
 
-1. restore workbook snapshot from browser persistence when enabled
-2. restore replica snapshot and local state
-3. initialize worker transport
-4. initialize engine and WASM in the worker
-5. connect the local app server when configured
-6. replay local and remote deltas
-7. surface sync state in the shell
+1. Load `runtime-config.json`.
+2. Load `/v2/session` from the monolith.
+3. Mount `ZeroProvider` with the session-derived `userID` and auth token.
+4. Bootstrap the worker runtime.
+5. Start `ZeroWorkbookBridge` subscriptions for workbook bootstrap, tile reads, selected-cell source, and axis metadata.
+6. Project authoritative Zero rows back into the existing viewport-patch contract.
+7. Layer optimistic worker previews over authoritative data until server state converges.
 
 ## Responsibilities
 
-- UI thread: paint, input, clipboard, overlays, formula bar, and shell composition
-- worker: engine, formula execution, authoritative ops, persistence, sync, WASM, and viewport patch derivation
+- UI thread:
+  - rendering
+  - input
+  - formula bar
+  - shell composition
+  - connection-state presentation
+- Worker runtime:
+  - local parse / preview / formatting helpers
+  - patch encoding
+  - clipboard translation
+  - selected-cell editing state
+- Zero bridge:
+  - tile subscriptions
+  - authoritative workbook projection
+  - patch emission into the grid cache
 
-## Preconditions
+## Product rules
 
-The browser runtime should not become the place where workbook semantics are re-invented. The remaining browser work depends on:
-
-- the authoritative workbook op model fully covering the remaining workbook mutation surface
-- workbook metadata such as names, tables, structured references, and spill ownership being first-class for `names:defined-name-range`, `tables:table-total-row-sum`, and `structured-reference:table-column-ref`
-- the sync service growing into a durable remote worksheet host rather than a thin ingress layer
-
-## Target state
-
-- `apps/web` remains worker-first by default
-- the UI thread owns only shell and input concerns
-- the worker owns engine, authoritative ops, WASM, persistence, and live sync
-- the worker derives viewport and render patches for visible ranges instead of exposing raw engine state directly to the grid
-- the browser defaults to the local app server loop when available and falls back cleanly to local-only worker execution when it is not
-- `apps/web` no longer depends on deprecated demo source or styling
-- viewport patch payloads and agent payloads use typed codecs instead of JSON-in-binary wrappers
+- The browser is server-authoritative in production mode.
+- Disconnected or auth-failed Zero states must become read-only.
+- `replaceSnapshot` is legacy-only debug plumbing, not the product write path.
+- The grid contract remains viewport-patch based until a dedicated binary patch codec is introduced deliberately.
 
 ## Exit gate
 
-- the production app boots through a worker-backed engine
-- the production app can reconnect to the local app server and catch up by cursor
-- live edits, restore, and reconnect flows pass browser tests without in-process engine fallback
-- visible workbook updates are painted from worker-derived viewport patches
-- the browser shell surfaces sync state sourced from the worker runtime
-- the browser shell does not depend on retired demo-shell source or styling
+- the production shell renders through Zero-backed viewport patches
+- the shell uses real session-derived identity instead of hard-coded anonymous IDs
+- common edits commit through Zero mutators and converge back through authoritative `cell_eval`
+- reconnect, auth failure, and disconnected states are visible in the shell and disable unsafe writes
 
 ## See also
 
 - [architecture.md](/Users/gregkonush/github.com/bilig/docs/architecture.md)
-- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
+- [zero-bilig-production-implementation-plan-v2.md](/Users/gregkonush/github.com/bilig/docs/zero-bilig-production-implementation-plan-v2.md)

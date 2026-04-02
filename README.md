@@ -4,13 +4,18 @@
 
 It already has the foundations of a serious spreadsheet/runtime stack: a real engine, a real local session loop, a real binary sync layer, a real reconciler, and a reasonably mature grid shell. The biggest remaining gap is not basic spreadsheet arithmetic; it is the seam between what the local engine can represent and what the authoritative replicated model can express.
 
+> Current topology note:
+> `apps/bilig` is the only shipped product runtime.
+> `apps/web` remains the browser source tree, but the built assets now ship from the monolith image.
+> Any remaining references below to `apps/local-server` or `apps/sync-server` are historical architecture context, not the current supported deployment shape.
+
 ## bilig — what this project does
 
 ### Overview
 
 **bilig** is a local-first spreadsheet system built as a monorepo. Its purpose is to provide an Excel-like worksheet engine that can run in the browser, execute formulas deterministically, synchronize edits in realtime, expose spreadsheet state to agents, and progressively move hot calculation paths into WebAssembly for higher performance.
 
-This project is not just a spreadsheet UI. It combines a workbook engine, formula language stack, synchronization model, binary transport, browser storage, local server runtime, remote sync runtime, React-based workbook authoring layer, and a reusable grid UI.
+This project is not just a spreadsheet UI. It combines a workbook engine, formula language stack, synchronization model, binary transport, browser storage, a fullstack monolith runtime, React-based workbook authoring layer, and a reusable grid UI.
 
 At a high level, bilig is trying to become a full spreadsheet runtime platform with these properties:
 
@@ -186,9 +191,8 @@ A useful way to understand bilig is to think of it as five connected layers.
 
 #### Layer 5: runtimes and storage
 
-- `apps/web` is the browser shell
-- `apps/local-server` hosts live local workbook sessions
-- `apps/sync-server` is the remote sync service surface
+- `apps/web` is the browser source tree compiled into the monolith
+- `apps/bilig` is the only supported product runtime and serves the built web shell
 - `@bilig/storage-browser` and `@bilig/storage-server` handle browser and server persistence concerns
 
 This split is important because it allows the project to evolve into a spreadsheet platform rather than a single-page app with tightly coupled logic.
@@ -199,9 +203,8 @@ This split is important because it allows the project to evolve into a spreadshe
 
 | Path | Role |
 | --- | --- |
-| `apps/web` | Production browser shell wrapper |
-| `apps/local-server` | Local machine workbook/session server and agent ingress |
-| `apps/sync-server` | Remote sync backend surface |
+| `apps/web` | Vite/React browser source compiled into the monolith |
+| `apps/bilig` | Fullstack monolith runtime, API surface, and static asset server |
 
 #### Packages
 

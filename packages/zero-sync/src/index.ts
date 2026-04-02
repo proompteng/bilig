@@ -5,14 +5,16 @@ export {
   clearRangeArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
+  deleteSheetViewArgsSchema,
   rangeMutationArgsSchema,
-  replaceSnapshotArgsSchema,
   renderCommitArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  sheetViewArgsSchema,
   updateColumnWidthArgsSchema,
+  updatePresenceArgsSchema,
 } from "./mutators.js";
 export {
   queries,

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { CycleDetector } from "../cycle-detection.js";
 
+function getUint32ArrayField(detector: CycleDetector, field: string): Uint32Array {
+  const value = Reflect.get(detector, field);
+  expect(value).toBeInstanceOf(Uint32Array);
+  if (!(value instanceof Uint32Array)) {
+    throw new TypeError(`${field} should be a Uint32Array`);
+  }
+  return value;
+}
+
 describe("CycleDetector", () => {
   it("assigns deterministic group ids for separate strongly connected components", () => {
     const graph = new Map<number, number[]>([
@@ -98,5 +107,26 @@ describe("CycleDetector", () => {
     expect(result.cycleGroups[130]).toBe(-1);
     expect(result.cycleGroups[131]).toBe(0);
     expect(result.cycleGroups[132]).toBe(0);
+  });
+
+  it("resets visit epochs when the packed marks roll over", () => {
+    const detector = new CycleDetector();
+    const visitMarks = getUint32ArrayField(detector, "visitMarks");
+    const onStackMarks = getUint32ArrayField(detector, "onStackMarks");
+
+    visitMarks[1] = 99;
+    onStackMarks[1] = 77;
+    Reflect.set(detector, "visitEpoch", 0xffff_fffe);
+
+    detector.detect(
+      [],
+      4,
+      () => {},
+      () => false,
+    );
+
+    expect(Reflect.get(detector, "visitEpoch")).toBe(1);
+    expect(visitMarks[1]).toBe(0);
+    expect(onStackMarks[1]).toBe(0);
   });
 });

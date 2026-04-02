@@ -192,8 +192,26 @@ export const clearRangeArgsSchema = baseMutationArgsSchema.extend({
   range: cellRangeRefSchema,
 });
 
-export const replaceSnapshotArgsSchema = baseMutationArgsSchema.extend({
-  snapshot: z.any(),
+export const updatePresenceArgsSchema = baseMutationArgsSchema.extend({
+  sessionId: z.string().min(1),
+  sheetId: z.string().optional(),
+  address: z.string().optional(),
+  selection: z.any().optional(),
+});
+
+export const sheetViewArgsSchema = baseMutationArgsSchema.extend({
+  id: z.string().min(1),
+  sheetId: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(["filter", "sort", "slicer"]),
+  filterJson: z.any(),
+  sortJson: z.any(),
+  slicerJson: z.any(),
+  isDefault: z.boolean(),
+});
+
+export const deleteSheetViewArgsSchema = baseMutationArgsSchema.extend({
+  id: z.string().min(1),
 });
 
 async function noop(): Promise<void> {}
@@ -213,7 +231,9 @@ export const mutators = defineMutators({
     clearRangeStyle: defineMutator(clearRangeStyleArgsSchema, noop),
     setRangeNumberFormat: defineMutator(setRangeNumberFormatArgsSchema, noop),
     clearRangeNumberFormat: defineMutator(clearRangeNumberFormatArgsSchema, noop),
-    replaceSnapshot: defineMutator(replaceSnapshotArgsSchema, noop),
+    updatePresence: defineMutator(updatePresenceArgsSchema, noop),
+    upsertSheetView: defineMutator(sheetViewArgsSchema, noop),
+    deleteSheetView: defineMutator(deleteSheetViewArgsSchema, noop),
   },
 });
 

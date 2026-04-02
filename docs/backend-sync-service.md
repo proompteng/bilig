@@ -2,40 +2,45 @@
 
 ## Current state
 
-- `apps/sync-server` is executable and tested
-- ingress is binary over HTTP today, not yet binary websocket on the hot path
-- durability is still backed by in-memory store abstractions, not Postgres/object storage
-- remote agent ingress exists, but live worksheet execution is not complete
+The canonical backend is `apps/bilig`.
+
+What the backend owns today:
+
+- `/healthz`
+- `/v2/session`
+- `/api/zero/v2/query`
+- `/api/zero/v2/mutate`
+- agent ingress on `/v2/agent/frames`
+- the embedded recalc worker and authoritative Postgres materialization path
+- an integrated local listener that remains available for harnesses and import/export workflows
+
+What is no longer the product authority:
+
+- the retired `apps/sync-server` package
+- the retired CRDT-first browser sync topology
 
 ## Product role
 
-`apps/sync-server` is the control plane and realtime ingress for collaborative worksheets.
+`apps/bilig` is the single production backend runtime for the spreadsheet product.
+It serves:
 
-## Canonical responsibilities
+- auth/session boot
+- Zero query and mutate surfaces
+- workbook serialization and authoritative write ordering
+- recalc job processing and `cell_eval` materialization
+- agent APIs and operational endpoints
 
-- accept binary browser sync frames
-- persist CRDT batches durably before ack
-- manage document ownership and cursor state
-- serve snapshot restore endpoints
-- expose a remote agent ingress
-- later: binary websocket fanout and cross-pod routing
+## Operational target
 
-## Production target
-
-- Fastify HTTP control plane
-- binary websocket gateway
-- Postgres metadata and cursor store
-- Redis presence and routing
-- object-storage snapshot persistence
+- Fastify monolith
+- Postgres as source of truth
+- Zero as sync/cache runtime
+- no Redis dependency on the correctness path
+- no separate product backend packages for local or sync authority
 
 ## Exit gate
 
-- append-before-ack is proven against durable storage
-- cursor catch-up, snapshot restore, and reconnect replay are tested end to end
-- remote agent ingress executes against live worksheet sessions
-- production traffic runs through the websocket gateway rather than the HTTP-only scaffold path
-
-## See also
-
-- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
-- [typed-agent-protocol-rfc.md](/Users/gregkonush/github.com/bilig/docs/typed-agent-protocol-rfc.md)
+- production traffic runs through `apps/bilig`
+- Zero query/mutate endpoints are served by the monolith
+- browser product flows do not depend on the removed `apps/sync-server` package
+- deployment manifests and image workflows target the monolith image only

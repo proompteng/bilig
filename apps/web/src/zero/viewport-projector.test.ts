@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ValueTag } from "@bilig/protocol";
 import {
+  buildSelectedCellSnapshot,
   createViewportProjectionState,
   projectViewportPatch,
   type CellEvalRow,
@@ -69,5 +70,17 @@ describe("projectViewportPatch", () => {
     expect(patch.styles).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: "style-fresh" })]),
     );
+  });
+
+  it("derives a literal display value when only the source row is available", () => {
+    const snapshot = buildSelectedCellSnapshot("Sheet1", "E5", undefined, {
+      workbookId: "doc-1",
+      sheetName: "Sheet1",
+      address: "E5",
+      inputValue: 21,
+    });
+
+    expect(snapshot.input).toBe(21);
+    expect(snapshot.value).toEqual({ tag: ValueTag.Number, value: 21 });
   });
 });

@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import net from "node:net";
+
 const textDecoder = new TextDecoder();
 const playwrightArgs = process.argv.slice(2);
 const requestedBrowserStack = process.env["BILIG_BROWSER_STACK"] ?? "auto";
@@ -284,6 +286,46 @@ async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
   await pollHttp(url, Date.now() + timeoutMs);
 }
 
+async function pollTcp(
+  host: string,
+  port: number,
+  deadline: number,
+  lastError = "unknown error",
+): Promise<void> {
+  if (Date.now() >= deadline) {
+    throw new Error(`Timed out waiting for ${host}:${port}: ${lastError}`);
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const socket = net.createConnection({ host, port });
+      const cleanup = () => {
+        socket.removeAllListeners();
+        socket.destroy();
+      };
+
+      socket.once("connect", () => {
+        cleanup();
+        resolve();
+      });
+      socket.once("error", (error) => {
+        cleanup();
+        reject(error);
+      });
+    });
+    return;
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : String(error);
+  }
+
+  await Bun.sleep(250);
+  await pollTcp(host, port, deadline, lastError);
+}
+
+async function waitForTcp(host: string, port: number, timeoutMs = 120_000): Promise<void> {
+  await pollTcp(host, port, Date.now() + timeoutMs);
+}
+
 function runDockerCompose(args: string[], env = process.env): void {
   const invocation = requireComposeInvocation(true);
   if (!invocation) {
@@ -333,10 +375,11 @@ async function runComposePlaywright(): Promise<void> {
   requireComposeInvocation(true);
 
   terminatePreviewServers();
-  runDockerCompose(["up", "-d", "--build", "postgres", "sync-server", "zero-cache", "web"]);
+  runDockerCompose(["up", "-d", "--build", "postgres", "bilig-app", "zero-cache"]);
   try {
     await waitForHttp(`${e2eBaseUrl}/healthz`);
     await waitForHttp(`${e2eSyncServerUrl}/healthz`);
+    await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10));
     runPlaywright(playwrightArgs);
   } catch (error) {
     const logs = collectComposeLogs();

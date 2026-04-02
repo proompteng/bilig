@@ -1,75 +1,42 @@
 # `bilig` Canonical Product Design
 
-`bilig` is a local-first spreadsheet system with a browser-native Excel shell, a deterministic semantic core, and a WASM execution engine.
+`bilig` is a server-authoritative multiplayer spreadsheet with a worker-first browser shell, a deterministic semantic core, and a WASM-accelerated formula engine.
 
 ## Current state
 
-- `@bilig/core`, `@bilig/formula`, `@bilig/wasm-kernel`, `apps/web`, `apps/local-server`, and `apps/sync-server` exist and are executable
-- `@bilig/core` has a transaction-based workbook engine with metadata, row and column structure, freeze panes, filters, sorts, tables, spills, pivots, and undo/redo
-- `apps/web` now boots worker-first by default and consumes worker-derived viewport patches
-- `apps/local-server` is a live worksheet host for browser and agent sessions
-- `apps/sync-server` handles durable ingress and snapshots, but remote worksheet execution is not closed by default
-- `@bilig/agent-api` uses binary framing around JSON payloads rather than a typed binary payload schema
-- the canonical registry in code currently contains `101` canonical entries:
-  - `92` are `implemented-wasm-production`
-  - `6` are `implemented-js`
-  - `3` are `blocked`
-- the `9` non-production canonical rows are:
-  - `dynamic-array:filter-basic`
-  - `dynamic-array:unique-basic`
-  - `lambda:let-basic`
-  - `lambda:lambda-invoke`
-  - `lambda:map-basic`
-  - `lambda:byrow-basic`
-  - `names:defined-name-range`
-  - `tables:table-total-row-sum`
-  - `structured-reference:table-column-ref`
-
-## Current milestone
-
-- close the current `101`-row canonical worksheet formula corpus as represented in `packages/formula/src/compatibility.ts`
-- keep parity proved by checked-in oracle fixtures and differential tests
-- keep JS as the semantic oracle until the `9` non-production canonical rows close
-- close reference-valued names, table totals and column refs, and the JS-only lambda and dynamic-array rows listed above
+- `@bilig/core`, `@bilig/formula`, `@bilig/wasm-kernel`, `@bilig/workbook-domain`, `apps/web`, and `apps/bilig` are the active product surface.
+- The browser shell is worker-first and consumes viewport patches.
+- The production collaboration path is Zero-backed and Postgres-backed.
+- The monolith serves the active session, Zero, agent, and recalc surfaces.
+- The canonical registry in code still contains a small non-production tail; feature parity exists, but the remaining gap is polish, performance, and operational hardening rather than basic capability.
 
 ## Canonical target
 
-- formula semantics target Excel 365 built-in worksheet parity as of `2026-03-15`
-- browser and local-server execution remain local-first
-- all supported production formulas execute in WASM
-- workbook metadata needed by formulas travels with the workbook model:
-  - defined names
-  - tables
-  - structured references
-  - spill metadata
-  - volatile recalc context
+- formula semantics target Excel-class parity for supported families
+- browser rendering stays worker-first
+- authoritative workbook state stays server-ordered and relationally materialized
+- common edits feel instant through worker preview plus fast authoritative convergence
+- deployment stays intentionally simple:
+  - `bilig-app` single deployable monolith image
+  - `bilig-zero`
+  - Postgres
+
+## Competitive baselines
+
+The current implementation should outperform consumer spreadsheet products on the dimensions we control directly:
+
+- lower visible edit latency through worker-side preview and narrow authoritative tile sync
+- cleaner rebuild semantics through `workbook_event` plus warm snapshots
+- stronger formula/runtime determinism than ad hoc browser-state spreadsheets
+- better operational observability than opaque hosted spreadsheet products
 
 ## Repo boundary
 
-- `bilig` owns:
-  - parser, binder, optimizer, oracle harness, WASM kernel, workbook metadata model, dynamic-array runtime, compatibility matrix, browser shell, and acceptance docs
-- `lab` owns:
-  - deployment manifests, rollout gates, observability wiring, alerts, dashboards, and SLO plumbing
-
-See:
-
-- [formula-canonical-program.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-program.md)
-- [formula-canonical-matrix.md](/Users/gregkonush/github.com/bilig/docs/formula-canonical-matrix.md)
-- [formula-oracle-capture.md](/Users/gregkonush/github.com/bilig/docs/formula-oracle-capture.md)
-- [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)
-- [workbook-metadata-model.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-model.md)
-- [dynamic-array-runtime.md](/Users/gregkonush/github.com/bilig/docs/dynamic-array-runtime.md)
-- [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)
-- [workbook-metadata-runtime-rfc.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-runtime-rfc.md)
-- [browser-runtime.md](/Users/gregkonush/github.com/bilig/docs/browser-runtime.md)
-- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
-- [typed-agent-protocol-rfc.md](/Users/gregkonush/github.com/bilig/docs/typed-agent-protocol-rfc.md)
-- [bilig-lab-contract.md](/Users/gregkonush/github.com/bilig/docs/bilig-lab-contract.md)
+- `bilig` owns product runtime, semantic engine, browser shell, and acceptance behavior
+- `lab` owns deployment manifests, Argo CD rollout, and cluster operations
 
 ## Exit gate
 
-- the canonical formula registry is fully decision-complete
-- every canonical formula entry has fixture-backed status
-- every canonical entry is `implemented-wasm-production`
-- JS remains oracle, differential, and debug infrastructure rather than a production requirement for canonical rows
-- `lab` contracts exist and match the bilig-side runtime assumptions
+- the monolith is the only supported backend runtime in the repo
+- browser product flows use Zero plus Postgres-backed authoritative state
+- product docs no longer describe the retired duplicate app topology as current

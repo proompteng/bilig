@@ -3,17 +3,50 @@ import {
   ValueTag,
   formatCellDisplayValue,
   type CellSnapshot,
+  type LiteralInput,
   type CellStyleRecord,
   type CellValue,
-  type LiteralInput,
   type RecalcMetrics,
   type Viewport,
 } from "@bilig/protocol";
-import type { ViewportPatch, ViewportPatchedCell } from "@bilig/worker-transport";
 
-const DEFAULT_STYLE_ID = "style-0";
-const PRODUCT_COLUMN_WIDTH = 104;
-const PRODUCT_ROW_HEIGHT = 22;
+export interface CellSourceRow {
+  workbookId: string;
+  sheetName: string;
+  address: string;
+  rowNum?: number;
+  colNum?: number;
+  inputValue?: LiteralInput | null;
+  formula?: string;
+  styleId?: string | null;
+  explicitFormatId?: string | null;
+  editorText?: string;
+}
+
+export interface CellEvalRow {
+  workbookId: string;
+  sheetName: string;
+  address: string;
+  rowNum?: number;
+  colNum?: number;
+  value: CellValue;
+  flags: number;
+  version: number;
+  styleId?: string | null;
+  styleJson?: CellStyleRecord | null;
+  formatId?: string | null;
+  formatCode?: string | null;
+  calcRevision?: number;
+}
+
+export interface AxisMetadataRow {
+  workbookId: string;
+  sheetName: string;
+  startIndex: number;
+  count: number;
+  size?: number;
+  hidden?: boolean;
+}
 
 export interface WorkbookRow {
   id: string;
@@ -23,45 +56,34 @@ export interface WorkbookRow {
 }
 
 export interface SheetRow {
+  id?: string;
   workbookId: string;
   name: string;
-  sortOrder: number;
+  position?: number;
+  sortOrder?: number;
 }
 
-export interface CellSourceRow {
+export interface CellStyleRow {
   workbookId: string;
-  sheetName: string;
-  address: string;
-  rowNum?: number | null | undefined;
-  colNum?: number | null | undefined;
-  inputValue?: unknown;
-  formula?: string | null | undefined;
-  format?: string;
-  explicitFormatId?: string;
+  styleId: string;
+  styleJson: CellStyleRecord;
 }
 
-export interface CellEvalRow {
+export interface NumberFormatRow {
   workbookId: string;
-  sheetName: string;
-  address: string;
-  rowNum?: number | null | undefined;
-  colNum?: number | null | undefined;
-  value: CellValue;
-  flags: number;
-  version: number;
-  styleId?: string | null | undefined;
-  styleJson?: CellStyleRecord | null | undefined;
-  formatId?: string | null | undefined;
-  formatCode?: string | null | undefined;
+  formatId: string;
+  code: string;
 }
 
-export interface AxisMetadataRow {
-  workbookId: string;
-  sheetName: string;
-  startIndex: number;
-  count: number;
-  size?: number | null | undefined;
-  hidden?: boolean | null | undefined;
+export interface ViewportProjectionInput {
+  viewport: Viewport & { sheetName: string };
+  sourceCells: Map<string, CellSourceRow>;
+  cellEval: Map<string, CellEvalRow>;
+  rowMetadata: Map<string, AxisMetadataRow>;
+  columnMetadata: Map<string, AxisMetadataRow>;
+  stylesById?: ReadonlyMap<string, CellStyleRecord>;
+  numberFormatsById?: ReadonlyMap<string, string>;
+  metrics?: RecalcMetrics;
 }
 
 export interface ViewportProjectionState {
@@ -72,19 +94,24 @@ export interface ViewportProjectionState {
   lastRowSignatures: Map<number, string>;
 }
 
-export interface ViewportProjectionInput {
+export interface ViewportPatch {
+  version: number;
+  full: boolean;
   viewport: Viewport & { sheetName: string };
-  metrics?: RecalcMetrics;
-  sourceCells: ReadonlyMap<string, CellSourceRow>;
-  cellEval: ReadonlyMap<string, CellEvalRow>;
-  rowMetadata: ReadonlyMap<string, AxisMetadataRow>;
-  columnMetadata: ReadonlyMap<string, AxisMetadataRow>;
-}
-
-interface AxisViewportEntry {
-  index: number;
-  size?: number | null;
-  hidden?: boolean | null;
+  metrics: RecalcMetrics;
+  styles: CellStyleRecord[];
+  cells: Array<{
+    row: number;
+    col: number;
+    snapshot: CellSnapshot;
+    displayText: string;
+    copyText: string;
+    editorText: string;
+    formatId: number;
+    styleId: string;
+  }>;
+  columns: Array<{ index: number; size: number; hidden: boolean }>;
+  rows: Array<{ index: number; size: number; hidden: boolean }>;
 }
 
 const EMPTY_METRICS: RecalcMetrics = {
@@ -98,135 +125,144 @@ const EMPTY_METRICS: RecalcMetrics = {
   compileMs: 0,
 };
 
-function isLiteralInput(value: unknown): value is LiteralInput {
-  return (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  );
+const PRODUCT_COLUMN_WIDTH = 104;
+const PRODUCT_ROW_HEIGHT = 22;
+const EMPTY_STYLE_MAP = new Map<string, CellStyleRecord>();
+const EMPTY_FORMAT_MAP = new Map<string, string>();
+
+function buildAxisPatches(
+  start: number,
+  end: number,
+  entries: AxisMetadataRow[],
+  defaultSize: number,
+  lastSignatures: Map<number, string>,
+  full: boolean,
+): {
+  patches: Array<{ index: number; size: number; hidden: boolean }>;
+  signatures: Map<number, string>;
+} {
+  const patches: Array<{ index: number; size: number; hidden: boolean }> = [];
+  const nextSignatures = new Map<number, string>();
+
+  for (let i = start; i <= end; i += 1) {
+    const entry = entries.find((e) => e.startIndex === i);
+    const size = entry?.size ?? defaultSize;
+    const hidden = entry?.hidden ?? false;
+    const signature = `${size}:${hidden}`;
+    nextSignatures.set(i, signature);
+
+    if (full || lastSignatures.get(i) !== signature) {
+      patches.push({ index: i, size, hidden });
+    }
+  }
+
+  return { patches, signatures: nextSignatures };
+}
+
+function signatureOfCell(row: CellEvalRow, source: CellSourceRow | undefined): string {
+  return [
+    row.version,
+    row.styleId ?? "",
+    row.formatId ?? "",
+    JSON.stringify(row.value),
+    JSON.stringify(source?.inputValue ?? null),
+    source?.formula ?? "",
+    source?.styleId ?? "",
+    source?.explicitFormatId ?? "",
+  ].join(":");
 }
 
 function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   return {
     sheetName,
     address,
-    value: { tag: ValueTag.Empty },
+    value: { tag: ValueTag.Empty }, // Ensure value is ALWAYS defined
     flags: 0,
     version: 0,
   };
 }
 
-function toEditorText(snapshot: CellSnapshot): string {
-  if (snapshot.formula) {
-    return `=${snapshot.formula}`;
+function resolveFormatCode(
+  formatId: string | null | undefined,
+  inlineFormatCode: string | null | undefined,
+  numberFormatsById: ReadonlyMap<string, string>,
+): string | undefined {
+  if (inlineFormatCode !== undefined && inlineFormatCode !== null) {
+    return inlineFormatCode;
   }
-  if (snapshot.input === null || snapshot.input === undefined) {
-    return formatCellDisplayValue(snapshot.value, snapshot.format);
+  if (formatId === undefined || formatId === null) {
+    return undefined;
   }
-  if (typeof snapshot.input === "boolean") {
-    return snapshot.input ? "TRUE" : "FALSE";
-  }
-  return String(snapshot.input);
+  return numberFormatsById.get(formatId);
 }
 
-function buildPatchedCell(
+function literalInputToText(value: LiteralInput | undefined | null): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  return String(value);
+}
+
+function literalInputToCellValue(value: LiteralInput | undefined | null): CellValue {
+  if (value === undefined || value === null) {
+    return { tag: ValueTag.Empty };
+  }
+  if (typeof value === "number") {
+    return { tag: ValueTag.Number, value };
+  }
+  if (typeof value === "boolean") {
+    return { tag: ValueTag.Boolean, value };
+  }
+  return { tag: ValueTag.String, value, stringId: 0 };
+}
+
+function applyLiteralValueFallback(
   snapshot: CellSnapshot,
-  row: number,
-  col: number,
-  styleId: string,
-): ViewportPatchedCell {
-  const editorText = toEditorText(snapshot);
-  const displayText = formatCellDisplayValue(snapshot.value, snapshot.format);
-  return {
-    row,
-    col,
-    snapshot,
-    displayText,
-    copyText: snapshot.formula ? editorText : displayText,
-    editorText,
-    formatId: 0,
-    styleId,
-  };
-}
-
-function buildAxisEntries(
-  viewport: Viewport,
-  rows: readonly AxisMetadataRow[],
-  defaultSize: number,
-  startKey: "rowStart" | "colStart",
-  endKey: "rowEnd" | "colEnd",
-): Map<number, AxisViewportEntry> {
-  const start = viewport[startKey];
-  const end = viewport[endKey];
-  const indexed = new Map<number, AxisViewportEntry>();
-  for (const entry of rows) {
-    const entryEnd = entry.startIndex + Math.max(0, entry.count - 1);
-    if (entryEnd < start || entry.startIndex > end) {
-      continue;
-    }
-    for (
-      let index = Math.max(start, entry.startIndex);
-      index <= Math.min(end, entryEnd);
-      index += 1
-    ) {
-      const axisEntry: AxisViewportEntry = { index, size: entry.size ?? defaultSize };
-      if (entry.hidden !== undefined) {
-        axisEntry.hidden = entry.hidden;
-      }
-      indexed.set(index, axisEntry);
-    }
+  source: CellSourceRow | undefined,
+): void {
+  if (!source || source.formula !== undefined || source.inputValue === undefined) {
+    return;
   }
-  return indexed;
-}
-
-function buildAxisPatches(
-  start: number,
-  end: number,
-  entries: Map<number, AxisViewportEntry>,
-  defaultSize: number,
-  previous: Map<number, string>,
-  full: boolean,
-): {
-  patches: Array<{ index: number; size: number; hidden: boolean }>;
-  signatures: Map<number, string>;
-} {
-  const signatures = new Map<number, string>();
-  const patches: Array<{ index: number; size: number; hidden: boolean }> = [];
-  for (let index = start; index <= end; index += 1) {
-    const entry = entries.get(index);
-    const size = entry?.size ?? defaultSize;
-    const hidden = entry?.hidden ?? false;
-    const signature = `${size}:${hidden ? 1 : 0}`;
-    signatures.set(index, signature);
-    if (full || previous.get(index) !== signature) {
-      patches.push({ index, size, hidden });
-    }
+  if (snapshot.value.tag !== ValueTag.Empty) {
+    return;
   }
-  return { patches, signatures };
+  snapshot.value = literalInputToCellValue(source.inputValue);
 }
 
-function applySourceCellOverrides(snapshot: CellSnapshot, source: CellSourceRow | undefined): void {
+function applySourceCellOverrides(
+  snapshot: CellSnapshot,
+  source: CellSourceRow | undefined,
+  numberFormatsById: ReadonlyMap<string, string>,
+): void {
   if (!source) {
     return;
   }
 
-  if (source.formula !== undefined) {
-    if (source.formula === null) {
-      delete snapshot.formula;
-    } else {
-      snapshot.formula = source.formula;
-    }
-  }
-  if (isLiteralInput(source.inputValue)) {
+  if (source.inputValue !== undefined) {
     snapshot.input = source.inputValue;
   }
-
-  if (source.format !== undefined) {
-    snapshot.format = source.format;
+  if (source.formula !== undefined) {
+    snapshot.formula = source.formula;
+  }
+  if (source.styleId !== undefined) {
+    if (source.styleId === null) {
+      delete snapshot.styleId;
+    } else {
+      snapshot.styleId = source.styleId;
+    }
   }
   if (source.explicitFormatId !== undefined) {
-    snapshot.numberFormatId = source.explicitFormatId;
+    if (source.explicitFormatId === null) {
+      delete snapshot.numberFormatId;
+    } else {
+      snapshot.numberFormatId = source.explicitFormatId;
+    }
+    const formatCode = resolveFormatCode(source.explicitFormatId, undefined, numberFormatsById);
+    if (formatCode !== undefined) {
+      snapshot.format = formatCode;
+    } else if (source.explicitFormatId === null) {
+      delete snapshot.format;
+    }
   }
 }
 
@@ -245,13 +281,19 @@ export function buildSelectedCellSnapshot(
   address: string,
   cached: CellSnapshot | undefined,
   source: CellSourceRow | null,
+  numberFormatsById: ReadonlyMap<string, string> = EMPTY_FORMAT_MAP,
 ): CellSnapshot {
   const next: CellSnapshot = {
     ...(cached ?? emptyCellSnapshot(sheetName, address)),
     sheetName,
     address,
   };
-  applySourceCellOverrides(next, source ?? undefined);
+  // Double check value is set
+  if (!next.value) {
+    next.value = { tag: ValueTag.Empty };
+  }
+  applySourceCellOverrides(next, source ?? undefined, numberFormatsById);
+  applyLiteralValueFallback(next, source ?? undefined);
   return next;
 }
 
@@ -261,82 +303,87 @@ export function projectViewportPatch(
   full: boolean,
 ): ViewportPatch {
   const styles: CellStyleRecord[] = [];
-  const cells: ViewportPatchedCell[] = [];
-  const nextCellSignatures = new Map<string, string>();
-  const sourceByAddress = input.sourceCells;
-  const computedByAddress = input.cellEval;
+  const cells: ViewportPatch["cells"] = [];
+  const stylesById = input.stylesById ?? EMPTY_STYLE_MAP;
+  const numberFormatsById = input.numberFormatsById ?? EMPTY_FORMAT_MAP;
 
   for (let row = input.viewport.rowStart; row <= input.viewport.rowEnd; row += 1) {
     for (let col = input.viewport.colStart; col <= input.viewport.colEnd; col += 1) {
       const address = formatAddress(row, col);
-      const source = sourceByAddress.get(address);
-      const computed = computedByAddress.get(address);
-      const styleId = computed?.styleJson?.id ?? computed?.styleId ?? DEFAULT_STYLE_ID;
-      const style = computed?.styleJson ?? undefined;
+      const evalRow = input.cellEval.get(address);
+      const sourceRow = input.sourceCells.get(address);
 
-      if (style && styleId !== DEFAULT_STYLE_ID && (full || !state.knownStyleIds.has(style.id))) {
-        state.knownStyleIds.add(style.id);
-        styles.push(style);
+      if (!evalRow && !sourceRow) {
+        if (full) {
+          cells.push({
+            row,
+            col,
+            snapshot: emptyCellSnapshot(input.viewport.sheetName, address),
+            displayText: "",
+            copyText: "",
+            editorText: "",
+            formatId: 0,
+            styleId: "style-0",
+          });
+        }
+        continue;
       }
 
-      const snapshot: CellSnapshot = computed
+      const signature = evalRow ? signatureOfCell(evalRow, sourceRow) : "empty";
+      if (!full && state.lastCellSignatures.get(address) === signature) {
+        continue;
+      }
+      state.lastCellSignatures.set(address, signature);
+
+      const formatCode = resolveFormatCode(
+        evalRow?.formatId,
+        evalRow?.formatCode,
+        numberFormatsById,
+      );
+      const snapshot: CellSnapshot = evalRow
         ? {
             sheetName: input.viewport.sheetName,
             address,
-            value: computed.value,
-            flags: computed.flags,
-            version: computed.version,
+            value: evalRow.value,
+            flags: evalRow.flags,
+            version: evalRow.version,
+            ...(evalRow.styleId ? { styleId: evalRow.styleId } : {}),
+            ...(formatCode ? { format: formatCode } : {}),
+            ...(evalRow.formatId ? { numberFormatId: evalRow.formatId } : {}),
           }
         : emptyCellSnapshot(input.viewport.sheetName, address);
 
-      if (styleId !== DEFAULT_STYLE_ID) {
-        snapshot.styleId = styleId;
-      }
-      if (computed?.formatCode !== undefined && computed.formatCode !== null) {
-        snapshot.format = computed.formatCode;
-      }
-      if (computed?.formatId !== undefined && computed.formatId !== null) {
-        snapshot.numberFormatId = computed.formatId;
+      applySourceCellOverrides(snapshot, sourceRow, numberFormatsById);
+      applyLiteralValueFallback(snapshot, sourceRow);
+
+      const styleRecord =
+        (snapshot.styleId ? stylesById.get(snapshot.styleId) : undefined) ??
+        evalRow?.styleJson ??
+        undefined;
+      if (styleRecord && !state.knownStyleIds.has(styleRecord.id)) {
+        styles.push(styleRecord);
+        state.knownStyleIds.add(styleRecord.id);
       }
 
-      applySourceCellOverrides(snapshot, source);
-
-      const patchedCell = buildPatchedCell(snapshot, row, col, styleId);
-      const signature = JSON.stringify([
-        patchedCell.snapshot.version,
-        patchedCell.snapshot.formula ?? "",
-        patchedCell.snapshot.input ?? null,
-        patchedCell.snapshot.format ?? "",
-        patchedCell.snapshot.numberFormatId ?? "",
-        patchedCell.snapshot.styleId ?? "",
-        patchedCell.snapshot.value,
-        patchedCell.displayText,
-        patchedCell.copyText,
-        patchedCell.editorText,
-      ]);
-      const key = `${input.viewport.sheetName}!${address}`;
-      nextCellSignatures.set(key, signature);
-      if (full || state.lastCellSignatures.get(key) !== signature) {
-        cells.push(patchedCell);
-      }
+      const editorText =
+        sourceRow?.editorText ??
+        (snapshot.formula ? `=${snapshot.formula}` : literalInputToText(snapshot.input));
+      cells.push({
+        row,
+        col,
+        snapshot,
+        displayText: formatCellDisplayValue(snapshot.value, snapshot.format),
+        copyText: snapshot.formula ? `=${snapshot.formula}` : literalInputToText(snapshot.input),
+        editorText,
+        formatId: 0,
+        styleId: snapshot.styleId ?? "style-0",
+      });
     }
   }
-  state.lastCellSignatures = nextCellSignatures;
 
-  const columnEntries = buildAxisEntries(
-    input.viewport,
-    [...input.columnMetadata.values()],
-    PRODUCT_COLUMN_WIDTH,
-    "colStart",
-    "colEnd",
-  );
-  const rowEntries = buildAxisEntries(
-    input.viewport,
-    [...input.rowMetadata.values()],
-    PRODUCT_ROW_HEIGHT,
-    "rowStart",
-    "rowEnd",
-  );
+  const columnEntries = [...input.columnMetadata.values()];
+  const rowEntries = [...input.rowMetadata.values()];
+
   const { patches: columns, signatures: columnSignatures } = buildAxisPatches(
     input.viewport.colStart,
     input.viewport.colEnd,

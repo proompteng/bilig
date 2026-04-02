@@ -1,14 +1,23 @@
 /* oxlint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { parseCellAddress } from "@bilig/formula";
-import type { CellSnapshot, Viewport } from "@bilig/protocol";
+import {
+  formatCellDisplayValue,
+  type CellSnapshot,
+  type CellStyleRecord,
+  type Viewport,
+} from "@bilig/protocol";
 import type { TypedView, Zero } from "@rocicorp/zero";
 import { queries } from "@bilig/zero-sync";
 import type { WorkerViewportCache } from "../viewport-cache.js";
 import { TileSubscriptionManager, type TileViewportAttachment } from "./tile-subscriptions.js";
 import {
   buildSelectedCellSnapshot,
+  type CellStyleRow,
+  type NumberFormatRow,
   createViewportProjectionState,
   projectViewportPatch,
+  type CellEvalRow,
+  type CellSourceRow,
   type SheetRow,
   type ViewportProjectionState,
   type WorkbookRow,
@@ -52,13 +61,20 @@ export class ZeroWorkbookBridge {
   private readonly selectionListeners = new Set<SelectionListener>();
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionHandle>();
   private readonly destroyers: Array<() => void> = [];
+  private readonly stylesById = new Map<string, CellStyleRecord>();
+  private readonly numberFormatsById = new Map<string, string>();
   private workbookRow: WorkbookRow | null = null;
   private sheetRows: readonly SheetRow[] = [];
   private selection: { sheetName: string; address: string } = {
     sheetName: "Sheet1",
     address: "A1",
   };
-  private selectionAttachment: TileViewportAttachment | null = null;
+
+  // Phase 3: Targeted selected cell query
+  private selectedCellSource: CellSourceRow | null = null;
+  private selectedCellEval: CellEvalRow | null = null;
+  private readonly selectionDestroyers: Array<() => void> = [];
+
   private readonly selectionProjectionState = createViewportProjectionState();
 
   constructor(
@@ -72,7 +88,7 @@ export class ZeroWorkbookBridge {
     this.destroyers.push(
       bindView(
         asTypedView<WorkbookRow | undefined>(
-          this.zero.materialize(queries.workbooks.get({ documentId })),
+          this.zero.materialize(queries.workbook.get({ documentId })),
         ),
         (value) => {
           this.workbookRow = value ?? null;
@@ -83,12 +99,42 @@ export class ZeroWorkbookBridge {
     this.destroyers.push(
       bindView(
         asTypedView<readonly SheetRow[]>(
-          this.zero.materialize(queries.sheets.byWorkbook({ documentId })),
+          this.zero.materialize(queries.sheet.byWorkbook({ documentId })),
         ),
         (value) => {
           this.sheetRows = value;
           this.cache.setKnownSheets(value.map((sheet) => sheet.name));
           this.emitWorkbook();
+        },
+      ),
+    );
+    this.destroyers.push(
+      bindView(
+        asTypedView<readonly CellStyleRow[]>(
+          this.zero.materialize(queries.cellStyle.byWorkbook({ documentId })),
+        ),
+        (value) => {
+          this.stylesById.clear();
+          for (const row of value) {
+            this.stylesById.set(row.styleId, row.styleJson);
+          }
+          this.notifyViewportSubscriptions(false);
+          this.reprojectSelection(false);
+        },
+      ),
+    );
+    this.destroyers.push(
+      bindView(
+        asTypedView<readonly NumberFormatRow[]>(
+          this.zero.materialize(queries.numberFormat.byWorkbook({ documentId })),
+        ),
+        (value) => {
+          this.numberFormatsById.clear();
+          for (const row of value) {
+            this.numberFormatsById.set(row.formatId, row.code);
+          }
+          this.notifyViewportSubscriptions(false);
+          this.reprojectSelection(false);
         },
       ),
     );
@@ -121,28 +167,57 @@ export class ZeroWorkbookBridge {
 
   setSelection(sheetName: string, address: string): void {
     if (
-      this.selectionAttachment &&
       this.selection.sheetName === sheetName &&
-      this.selection.address === address
+      this.selection.address === address &&
+      this.selectionDestroyers.length > 0
     ) {
       return;
     }
 
     this.selection = { sheetName, address };
-    this.selectionAttachment?.dispose();
-    const parsed = parseCellAddress(address, sheetName);
-    this.selectionAttachment = this.tileManager.subscribeViewport(
-      sheetName,
-      {
-        rowStart: parsed.row,
-        rowEnd: parsed.row,
-        colStart: parsed.col,
-        colEnd: parsed.col,
-      },
-      () => {
-        this.reprojectSelection(false);
-      },
+    this.selectedCellSource = null;
+    this.selectedCellEval = null;
+
+    while (this.selectionDestroyers.length > 0) {
+      this.selectionDestroyers.pop()?.();
+    }
+
+    this.selectionDestroyers.push(
+      bindView(
+        asTypedView<CellSourceRow | undefined>(
+          this.zero.materialize(
+            queries.cellInput.one({
+              documentId: this.documentId,
+              sheetName,
+              address,
+            }),
+          ),
+        ),
+        (value) => {
+          this.selectedCellSource = value ?? null;
+          this.reprojectSelection(false);
+        },
+      ),
     );
+
+    this.selectionDestroyers.push(
+      bindView(
+        asTypedView<CellEvalRow | undefined>(
+          this.zero.materialize(
+            queries.cellEval.one({
+              documentId: this.documentId,
+              sheetName,
+              address,
+            }),
+          ),
+        ),
+        (value) => {
+          this.selectedCellEval = value ?? null;
+          this.reprojectSelection(false);
+        },
+      ),
+    );
+
     this.reprojectSelection(true);
   }
 
@@ -150,18 +225,24 @@ export class ZeroWorkbookBridge {
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+    sheetViewId?: string,
   ): () => void {
     let handle: ViewportSubscriptionHandle | null = null;
-    const attachment = this.tileManager.subscribeViewport(sheetName, viewport, () => {
-      if (!handle) {
-        return;
-      }
-      try {
-        listener(handle.project(false));
-      } catch (error) {
-        this.onError(error);
-      }
-    });
+    const attachment = this.tileManager.subscribeViewport(
+      sheetName,
+      viewport,
+      () => {
+        if (!handle) {
+          return;
+        }
+        try {
+          listener(handle.project(false));
+        } catch (error) {
+          this.onError(error);
+        }
+      },
+      sheetViewId,
+    );
     const state = createViewportProjectionState();
     handle = {
       attachment,
@@ -173,13 +254,17 @@ export class ZeroWorkbookBridge {
           {
             viewport: { ...viewport, sheetName },
             ...attachment.getData(),
+            stylesById: this.stylesById,
+            numberFormatsById: this.numberFormatsById,
           },
           full,
         );
         return this.cache.applyViewportPatch(patch);
       },
       notify: (full) => {
-        listener(handle?.project(full));
+        if (handle) {
+          listener(handle.project(full));
+        }
       },
       dispose: () => {
         attachment.dispose();
@@ -196,7 +281,9 @@ export class ZeroWorkbookBridge {
   }
 
   dispose(): void {
-    this.selectionAttachment?.dispose();
+    while (this.selectionDestroyers.length > 0) {
+      this.selectionDestroyers.pop()?.();
+    }
     for (const subscription of this.viewportSubscriptions) {
       subscription.dispose();
     }
@@ -238,37 +325,97 @@ export class ZeroWorkbookBridge {
   }
 
   private currentSelectedCell(): CellSnapshot | null {
-    const selectedSource = this.selectionAttachment?.getSourceCell(this.selection.address) ?? null;
+    const authoritativeFormat =
+      this.selectedCellEval?.formatCode ??
+      (this.selectedCellEval?.formatId
+        ? this.numberFormatsById.get(this.selectedCellEval.formatId)
+        : undefined);
+    const authoritativeCell = this.selectedCellEval
+      ? {
+          sheetName: this.selection.sheetName,
+          address: this.selection.address,
+          value: this.selectedCellEval.value,
+          flags: this.selectedCellEval.flags,
+          version: this.selectedCellEval.version,
+          ...(this.selectedCellEval.styleId ? { styleId: this.selectedCellEval.styleId } : {}),
+          ...(this.selectedCellEval.formatId
+            ? { numberFormatId: this.selectedCellEval.formatId }
+            : {}),
+          ...(authoritativeFormat ? { format: authoritativeFormat } : {}),
+        }
+      : this.cache.peekCell(this.selection.sheetName, this.selection.address);
     return buildSelectedCellSnapshot(
       this.selection.sheetName,
       this.selection.address,
-      this.cache.peekCell(this.selection.sheetName, this.selection.address),
-      selectedSource,
+      authoritativeCell,
+      this.selectedCellSource,
+      this.numberFormatsById,
     );
   }
 
   private reprojectSelection(full: boolean): void {
-    if (!this.selectionAttachment) {
-      return;
-    }
     const { sheetName, address } = this.selection;
     const { row, col } = parseCellAddress(address, sheetName);
-    const data = this.selectionAttachment.getData();
-    const patch = projectViewportPatch(
-      this.selectionProjectionState,
-      {
-        viewport: {
-          sheetName,
-          rowStart: row,
-          rowEnd: row,
-          colStart: col,
-          colEnd: col,
-        },
-        ...data,
-      },
+
+    const snapshot = this.currentSelectedCell();
+    if (!snapshot) {
+      return;
+    }
+
+    const inputText =
+      snapshot.formula !== undefined
+        ? `=${snapshot.formula}`
+        : snapshot.input === undefined || snapshot.input === null
+          ? ""
+          : String(snapshot.input);
+    const patch = {
+      version: this.selectionProjectionState.nextVersion++,
       full,
-    );
+      viewport: {
+        sheetName,
+        rowStart: row,
+        rowEnd: row,
+        colStart: col,
+        colEnd: col,
+      },
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      styles: [],
+      cells: [
+        {
+          row,
+          col,
+          snapshot,
+          displayText: formatCellDisplayValue(snapshot.value, snapshot.format),
+          copyText: inputText,
+          editorText: this.selectedCellSource?.editorText ?? inputText,
+          formatId: 0,
+          styleId: snapshot.styleId ?? "style-0",
+        },
+      ],
+      columns: [],
+      rows: [],
+    };
+
     this.cache.applyViewportPatch(patch);
-    this.emitSelection(this.currentSelectedCell());
+    this.emitSelection(snapshot);
+  }
+
+  private notifyViewportSubscriptions(full: boolean): void {
+    for (const subscription of this.viewportSubscriptions) {
+      try {
+        subscription.notify(full);
+      } catch (error) {
+        this.onError(error);
+      }
+    }
   }
 }

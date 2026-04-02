@@ -39,17 +39,18 @@ services:
       PORT: "4321"
       LOCAL_PORT: "4381"
       DATABASE_URL: postgresql://bilig:bilig@postgres:5432/bilig
-      BILIG_LOCAL_SERVER_URL: http://localhost:4381
-      BILIG_SYNC_SERVER_URL: http://localhost:4321
-      BILIG_PUBLIC_SERVER_URL: http://localhost:3000
-      BILIG_WEB_APP_BASE_URL: http://localhost:3000
-      BILIG_CORS_ORIGIN: http://localhost:3000
+      BILIG_LOCAL_SERVER_URL: http://127.0.0.1:4381
+      BILIG_PUBLIC_SERVER_URL: http://127.0.0.1:${BILIG_E2E_WEB_PORT:-3000}
+      BILIG_WEB_APP_BASE_URL: http://127.0.0.1:${BILIG_E2E_WEB_PORT:-3000}
+      BILIG_CORS_ORIGIN: http://127.0.0.1:${BILIG_E2E_WEB_PORT:-3000}
+      BILIG_ZERO_CACHE_URL: /zero
+      BILIG_ZERO_PROXY_UPSTREAM: http://zero-cache:4848
+      BILIG_DEFAULT_DOCUMENT_ID: bilig-demo
+      BILIG_PERSIST_STATE: "true"
     networks:
       default:
         aliases:
           - bilig-app
-          - bilig-sync
-          - local-server
     healthcheck:
       test:
         - CMD
@@ -62,7 +63,7 @@ services:
       start_period: 10s
     ports:
       - "${BILIG_E2E_SYNC_SERVER_PORT:-4321}:4321"
-      - "${BILIG_E2E_LOCAL_SERVER_PORT:-4381}:4381"
+      - "${BILIG_E2E_WEB_PORT:-3000}:4321"
 
   zero-cache:
     image: rocicorp/zero:1.1.1
@@ -90,28 +91,6 @@ services:
       - "${BILIG_E2E_ZERO_PORT:-4848}:4848"
     volumes:
       - zero-replica-data:/data
-
-  web:
-    build:
-      context: .
-      target: web-runtime
-    depends_on:
-      bilig-app:
-        condition: service_healthy
-      zero-cache:
-        condition: service_started
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- http://127.0.0.1:3000/healthz >/dev/null || exit 1
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 5s
-    ports:
-      - "${BILIG_E2E_WEB_PORT:-3000}:3000"
-    volumes:
-      - ./docker/runtime-config.local.json:/usr/share/nginx/html/runtime-config.json:ro
 
 volumes:
   postgres-data:

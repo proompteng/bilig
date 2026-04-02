@@ -35,57 +35,60 @@ describe("ZeroWorkbookBridge", () => {
       headRevision: 1,
       calculatedRevision: 1,
     });
-    const sheetView = createTypedView([
+    const sheetListView = createTypedView([
       {
         workbookId: "bilig-demo",
         name: "Sheet1",
         sortOrder: 0,
       },
     ]);
+    const styleRegistryView = createTypedView<readonly unknown[]>([]);
+    const numberFormatRegistryView = createTypedView<readonly unknown[]>([]);
 
-    const selectionSourceView = createTypedView([
-      {
-        workbookId: "bilig-demo",
-        sheetName: "Sheet1",
-        address: "B2",
-        rowNum: 1,
-        colNum: 1,
-        inputValue: "relay",
-      },
-    ]);
-    const selectionEvalView = createTypedView([
-      {
-        workbookId: "bilig-demo",
-        sheetName: "Sheet1",
-        address: "B2",
-        rowNum: 1,
-        colNum: 1,
-        value: { tag: 0 },
-        flags: 0,
-        version: 1,
-      },
-    ]);
-    const selectionRowView = createTypedView<readonly unknown[]>([]);
-    const selectionColumnView = createTypedView<readonly unknown[]>([]);
+    const selectionSourceView = createTypedView({
+      workbookId: "bilig-demo",
+      sheetId: "Sheet1",
+      address: "B2",
+      rowNum: 1,
+      colNum: 1,
+      inputValue: "relay",
+    });
+    const selectionEvalView = createTypedView({
+      workbookId: "bilig-demo",
+      sheetId: "Sheet1",
+      address: "B2",
+      rowNum: 1,
+      colNum: 1,
+      value: { tag: 0 },
+      flags: 0,
+      version: 1,
+    });
 
+    const viewportInputView = createTypedView<readonly unknown[]>([]);
+    const viewportEvalView = createTypedView<readonly unknown[]>([]);
+    const viewportRowView = createTypedView<readonly unknown[]>([]);
+    const viewportColumnView = createTypedView<readonly unknown[]>([]);
+
+    // Sequence based on ZeroWorkbookBridge usage
     const views = [
-      workbookView,
-      sheetView,
-      selectionSourceView,
-      selectionEvalView,
-      selectionRowView,
-      selectionColumnView,
-    ] as const;
-
+      workbookView, // constructor: queries.workbook.get
+      sheetListView, // constructor: queries.sheet.byWorkbook
+      styleRegistryView, // constructor: queries.cellStyle.byWorkbook
+      numberFormatRegistryView, // constructor: queries.numberFormat.byWorkbook
+      selectionSourceView, // constructor -> setSelection: queries.cellInput.one
+      selectionEvalView, // constructor -> setSelection: queries.cellEval.one
+      viewportInputView, // subscribeViewport -> attachTile: queries.cellInput.tile
+      viewportEvalView, // subscribeViewport -> attachTile: queries.cellEval.tile
+      viewportRowView, // subscribeViewport -> attachTile: queries.sheetRow.tile
+      viewportColumnView, // subscribeViewport -> attachTile: queries.sheetCol.tile
+    ];
     let index = 0;
+
     const zero = {
-      materialize() {
+      materialize(_query: unknown) {
         const view = views[index];
-        if (!view) {
-          throw new Error(`No view available for materialize index ${index}`);
-        }
         index += 1;
-        return view;
+        return view ?? createTypedView([]);
       },
     } as unknown as Zero;
 
@@ -95,7 +98,9 @@ describe("ZeroWorkbookBridge", () => {
       peekCell: vi.fn(() => undefined),
       applyViewportPatch: vi.fn((patch) => {
         appliedPatches.push({ styles: patch.styles });
-        return patch.cells.map((cell) => ({ cell: [cell.col, cell.row] as const }));
+        return patch.cells.map((cell: { col: number; row: number }) => ({
+          cell: [cell.col, cell.row] as const,
+        }));
       }),
     } as unknown as WorkerViewportCache;
 
@@ -116,10 +121,11 @@ describe("ZeroWorkbookBridge", () => {
     expect(appliedPatches.at(-1)?.styles).toEqual([]);
     const initialPatchCount = appliedPatches.length;
 
-    selectionEvalView.emit([
+    // Emit to the viewportEvalView since that's what subscribeViewport listens to via tile notification
+    viewportEvalView.emit([
       {
         workbookId: "bilig-demo",
-        sheetName: "Sheet1",
+        sheetId: "Sheet1",
         address: "B2",
         rowNum: 1,
         colNum: 1,

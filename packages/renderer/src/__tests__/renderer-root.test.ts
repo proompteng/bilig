@@ -217,4 +217,38 @@ describe("renderer root", () => {
     expect(createFiberRoot(container)).toBeTruthy();
     expect(() => updateFiberRoot(null, null, () => {})).toThrow("Invalid fiber root");
   });
+
+  it("normalizes wrapper-only and multi-workbook roots deterministically", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "renderer-root-normalization" });
+    await engine.ready();
+    const root = createWorkbookRendererRoot(engine);
+
+    await expect(
+      root.render(React.createElement(React.StrictMode, null, false, undefined, null)),
+    ).resolves.toBeUndefined();
+    expect(engine.exportSnapshot().sheets).toEqual([]);
+
+    await root.render(
+      React.createElement(
+        React.StrictMode,
+        null,
+        React.createElement(
+          Workbook,
+          { name: "Book" },
+          React.createElement(Sheet, { name: "Sheet1" }),
+        ),
+        React.createElement(
+          Workbook,
+          { name: "Book" },
+          React.createElement(Sheet, { name: "Sheet2" }),
+        ),
+      ),
+    );
+
+    const renderedSheetNames = engine
+      .exportSnapshot()
+      .sheets.map((sheet) => sheet.name)
+      .toSorted();
+    expect(renderedSheetNames).toEqual(["Sheet1", "Sheet2"]);
+  });
 });

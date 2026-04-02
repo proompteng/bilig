@@ -4,61 +4,18 @@ import type {
   EngineOpBatch as WorkbookDomainEngineOpBatch,
   OpId as WorkbookDomainOpId,
   ReplicaId as WorkbookDomainReplicaId,
-  WorkbookAxisEntryOp as WorkbookDomainWorkbookAxisEntryOp,
-  WorkbookCellNumberFormatOp as WorkbookDomainWorkbookCellNumberFormatOp,
-  WorkbookCellStyleOp as WorkbookDomainWorkbookCellStyleOp,
-  WorkbookOp as WorkbookDomainWorkbookOp,
-  WorkbookOpBatch as WorkbookDomainWorkbookOpBatch,
-  WorkbookSortDirection as WorkbookDomainWorkbookSortDirection,
-  WorkbookSortKey as WorkbookDomainWorkbookSortKey,
-  WorkbookStructuralAxis as WorkbookDomainWorkbookStructuralAxis,
-  WorkbookTableOp as WorkbookDomainWorkbookTableOp,
-  WorkbookTxn as WorkbookDomainWorkbookTxn,
 } from "@bilig/workbook-domain";
 
-// Replica-state helpers remain in this package. Workbook semantic op types now live in
-// `@bilig/workbook-domain` and are re-exported here only as a compatibility bridge.
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
 export type Clock = WorkbookDomainClock;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
 export type EngineOp = WorkbookDomainEngineOp;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
 export type EngineOpBatch = WorkbookDomainEngineOpBatch;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
 export type OpId = WorkbookDomainOpId;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
 export type ReplicaId = WorkbookDomainReplicaId;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookAxisEntryOp = WorkbookDomainWorkbookAxisEntryOp;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookCellNumberFormatOp = WorkbookDomainWorkbookCellNumberFormatOp;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookCellStyleOp = WorkbookDomainWorkbookCellStyleOp;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookOp = WorkbookDomainWorkbookOp;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookOpBatch = WorkbookDomainWorkbookOpBatch;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookSortDirection = WorkbookDomainWorkbookSortDirection;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookSortKey = WorkbookDomainWorkbookSortKey;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookStructuralAxis = WorkbookDomainWorkbookStructuralAxis;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookTableOp = WorkbookDomainWorkbookTableOp;
-/** @deprecated Import from `@bilig/workbook-domain` instead. */
-export type WorkbookTxn = WorkbookDomainWorkbookTxn;
 
 export interface ReplicaState {
   replicaId: ReplicaId;
   clock: Clock;
   appliedBatchIds: Set<OpId>;
-}
-
-export interface ReplicaSnapshot {
-  replicaId: ReplicaId;
-  counter: number;
-  appliedBatchIds: OpId[];
 }
 
 export interface OpOrder {
@@ -68,17 +25,23 @@ export interface OpOrder {
   opIndex: number;
 }
 
-export interface ReplicaVersionSnapshot {
-  entityKey: string;
-  order: OpOrder;
-}
-
 function normalizedDefinedName(name: string): string {
   return name.trim().toUpperCase();
 }
 
 function pivotEntityKey(sheetName: string, address: string): string {
   return `pivot:${sheetName}!${address}`;
+}
+
+export interface ReplicaSnapshot {
+  replicaId: ReplicaId;
+  counter: number;
+  appliedBatchIds: OpId[];
+}
+
+export interface ReplicaVersionSnapshot {
+  entityKey: string;
+  order: OpOrder;
 }
 
 export function createReplicaState(replicaId: ReplicaId): ReplicaState {
@@ -96,6 +59,7 @@ export function hydrateReplicaState(state: ReplicaState, snapshot: ReplicaSnapsh
   snapshot.appliedBatchIds.forEach((id) => state.appliedBatchIds.add(id));
 }
 
+/** @deprecated Use authoritative linearization in monolith instead. */
 export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): ReplicaSnapshot {
   const appliedBatchIds = [...state.appliedBatchIds].toSorted();
   const trimmed = appliedBatchIds.slice(Math.max(0, appliedBatchIds.length - limit));
@@ -106,6 +70,7 @@ export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): Replic
   };
 }
 
+/** @deprecated Use authoritative linearization in monolith instead. */
 export function importReplicaSnapshot(snapshot: ReplicaSnapshot): ReplicaState {
   const state = createReplicaState(snapshot.replicaId);
   hydrateReplicaState(state, snapshot);

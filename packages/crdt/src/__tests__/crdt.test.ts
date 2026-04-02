@@ -97,6 +97,17 @@ describe("crdt", () => {
     expect(compareOpOrder(right, left)).toBeGreaterThan(0);
   });
 
+  it("assigns monotonically increasing clocks within a replica", () => {
+    const state = createReplicaState("replica");
+    const b1 = createBatch(state, [{ kind: "upsertWorkbook", name: "book" }]);
+    const b2 = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
+
+    expect(b1.clock.counter).toBe(1);
+    expect(b2.clock.counter).toBe(2);
+    expect(b1.id).toBe("replica:1");
+    expect(b2.id).toBe("replica:2");
+  });
+
   it("compacts workbook metadata entities by logical key", () => {
     const state = createReplicaState("replica");
     const define = createBatch(state, [

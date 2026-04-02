@@ -85,6 +85,7 @@ import { StringPool } from "./string-pool.js";
 import { WasmKernelFacade } from "./wasm-facade.js";
 import {
   WorkbookStore,
+  makeCellKey,
   normalizeDefinedName,
   normalizeWorkbookObjectName,
   pivotKey,
@@ -809,7 +810,7 @@ export class SpreadsheetEngine {
     return this.workbook.getVolatileContext();
   }
 
-  recalculateNow(): void {
+  recalculateNow(): number[] {
     this.workbook.setVolatileContext({
       recalcEpoch: this.workbook.getVolatileContext().recalcEpoch + 1,
     });
@@ -834,6 +835,101 @@ export class SpreadsheetEngine {
       changed,
       (cellIndex) => this.workbook.getQualifiedAddress(cellIndex),
     );
+    return Array.from(changed);
+  }
+
+  recalculateDifferential(): { js: CellSnapshot[]; wasm: CellSnapshot[]; drift: string[] } {
+    // 1. Snapshot original state
+    const originalSnapshot = this.exportSnapshot();
+
+    // 2. JS Only Recalc
+    this.formulas.forEach((f) => {
+      f.compiled.mode = FormulaMode.JsOnly;
+    });
+    const jsChanged = this.recalculateNow();
+    const jsResults = jsChanged.map((idx) => this.getCellByIndex(idx));
+
+    // 3. Restore and rerun using the engine's normal compiled formula modes.
+    this.importSnapshot(originalSnapshot);
+    const wasmChanged = this.recalculateNow();
+    const wasmResults = wasmChanged.map((idx) => this.getCellByIndex(idx));
+
+    // 4. Compare
+    const drift: string[] = [];
+    const jsMap = new Map(
+      jsResults.map((result) => [`${result.sheetName}!${result.address}`, result]),
+    );
+    const wasmMap = new Map(
+      wasmResults.map((result) => [`${result.sheetName}!${result.address}`, result]),
+    );
+
+    for (const [addr, jsCell] of jsMap) {
+      const wasmCell = wasmMap.get(addr);
+      if (!wasmCell) {
+        drift.push(`${addr}: Calculated in JS but MISSING in WASM`);
+        continue;
+      }
+      if (JSON.stringify(jsCell.value) !== JSON.stringify(wasmCell.value)) {
+        drift.push(
+          `${addr}: JS=${JSON.stringify(jsCell.value)} WASM=${JSON.stringify(wasmCell.value)}`,
+        );
+      }
+    }
+
+    for (const addr of wasmMap.keys()) {
+      if (!jsMap.has(addr)) {
+        drift.push(`${addr}: Calculated in WASM but MISSING in JS`);
+      }
+    }
+
+    return { js: jsResults, wasm: wasmResults, drift };
+  }
+
+  recalculateDirty(
+    dirtyRegions: Array<{
+      sheetName: string;
+      rowStart: number;
+      rowEnd: number;
+      colStart: number;
+      colEnd: number;
+    }>,
+  ): number[] {
+    this.beginMutationCollection();
+    let changedInputCount = 0;
+    let formulaChangedCount = 0;
+    let explicitChangedCount = 0;
+
+    for (const region of dirtyRegions) {
+      const sheet = this.workbook.getSheet(region.sheetName);
+      if (!sheet) continue;
+
+      for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
+        for (let col = region.colStart; col <= region.colEnd; col += 1) {
+          const cellIndex = this.workbook.cellKeyToIndex.get(makeCellKey(sheet.id, row, col));
+          if (cellIndex !== undefined) {
+            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
+            explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
+          }
+        }
+      }
+    }
+
+    const recalculated = this.reconcilePivotOutputs(
+      this.recalculate(
+        this.composeMutationRoots(changedInputCount, formulaChangedCount),
+        this.changedInputBuffer.subarray(0, changedInputCount),
+      ),
+      false,
+    );
+    const changed = this.composeEventChanges(recalculated, explicitChangedCount);
+    this.lastMetrics.batchId += 1;
+    this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
+    this.events.emit(
+      { kind: "batch", changedCellIndices: changed, metrics: this.lastMetrics },
+      changed,
+      (cellIndex) => this.workbook.getQualifiedAddress(cellIndex),
+    );
+    return Array.from(changed);
   }
 
   updateRowMetadata(

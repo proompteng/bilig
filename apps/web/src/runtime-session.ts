@@ -29,7 +29,6 @@ export interface CreateWorkerRuntimeSessionInput {
   readonly persistState: boolean;
   readonly zero: ZeroClient;
   readonly initialSelection: WorkerRuntimeSelection;
-  readonly pollIntervalMs?: number;
 }
 
 export interface WorkerRuntimeSessionController {
@@ -43,6 +42,7 @@ export interface WorkerRuntimeSessionController {
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+    sheetViewId?: string,
   ) => () => void;
   readonly dispose: () => void;
 }
@@ -170,8 +170,8 @@ export async function createWorkerRuntimeSessionController(
     async setSelection(selection) {
       await applySelection(selection);
     },
-    subscribeViewport(sheetName, viewport, listener) {
-      return zeroBridge.subscribeViewport(sheetName, viewport, listener);
+    subscribeViewport(sheetName, viewport, listener, sheetViewId) {
+      return zeroBridge.subscribeViewport(sheetName, viewport, listener, sheetViewId);
     },
     dispose() {
       if (disposed) {

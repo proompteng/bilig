@@ -1,3 +1,5 @@
+> Historical note: this document predates the completed monolith cutover. `apps/bilig` is the canonical backend runtime; references below to `apps/local-server` and `apps/sync-server` are preserved migration context, not the current supported topology.
+
 # Typed Agent Protocol RFC
 
 ## Problem

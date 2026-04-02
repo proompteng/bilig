@@ -2,19 +2,30 @@
 
 ## Current state
 
-- `apps/local-server` exists and hosts live local workbook sessions.
-- browser clients can connect over binary websocket frames and receive committed batch broadcasts.
-- canonical worksheet request/response operations now execute against live local workbook sessions through the local agent API ingress.
-- agent chat orchestration is not wired yet; this tranche is worksheet-session first, not chat-to-action complete.
+The standalone `apps/local-server` package has been retired.
 
-## Target state
+Local worksheet and agent-oriented behavior now lives inside `apps/bilig` modules:
 
-- the local agent server is the default authoritative runtime for local workbook sessions and agent-driven work.
-- chat messages enter the local agent server, run through Codex CLI plus skills, and commit worksheet mutations through the same ordered transaction stream as UI edits.
-- committed mutations emit binary CRDT frames immediately to the frontend and relay upstream to the remote sync backend when connected.
+- `src/http/local-server.ts`
+- `src/workbook-runtime/local-*`
+- `src/agent/*`
+- `src/import-export/*`
+
+## Product rule
+
+There is one backend runtime.
+
+Local-only workflows may still use the monolith's local listener for:
+
+- worksheet import/export
+- local harnesses
+- agent-driven workbook operations
+- compatibility/debug workflows
+
+But local browser product behavior is not a separate application anymore.
 
 ## Exit gate
 
-- local browser sessions connect to the local agent server by default
-- chat-driven agent work mutates live workbook sessions and updates the frontend in near realtime
-- local crash/restart recovery preserves workbook state, cursors, and pending outbound sync state
+- no standalone local-server package is required for development, CI, or deployment
+- local agent and workbook behavior is hosted by monolith modules only
+- documentation points engineers to `apps/bilig`, not a retired parallel app

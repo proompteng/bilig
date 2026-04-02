@@ -1,37 +1,39 @@
 # Implementation Ledger
 
-This ledger maps the current canonical formula milestone to concrete proof points in the checked-in source.
+This ledger maps the current production path to concrete proof points in the checked-in source.
 
 ## Closed foundation rows
 
 | Row | Proof |
 | --- | --- |
-| compatibility registry exists | `packages/formula/src/compatibility.ts` |
-| checked-in fixture packs exist | `packages/excel-fixtures/src` |
-| JS oracle tests exist | `packages/formula/src/__tests__` |
-| WASM kernel tests exist | `packages/wasm-kernel/src/__tests__/kernel.test.ts` |
-| browser and product acceptance exists | `e2e/tests/web-shell.pw.ts` |
-| worker-backed browser shell exists | `apps/web/src/WorkerWorkbookApp.tsx`, `apps/web/src/workbook.worker.ts` |
-| transaction-based workbook engine exists | `packages/core/src/engine.ts` |
-| metadata-aware workbook store exists | `packages/core/src/workbook-store.ts` |
+| Worker-first browser shell | `apps/web/src/WorkerWorkbookApp.tsx` |
+| Zero-backed authoritative viewport bridge | `apps/web/src/zero/ZeroWorkbookBridge.ts` |
+| Monolith backend runtime | `apps/bilig/src/index.ts` |
+| Zero service in monolith | `apps/bilig/src/zero/service.ts` |
+| Semantic Zero mutators | `apps/bilig/src/zero/server-mutators.ts` |
+| Recalc worker | `apps/bilig/src/zero/recalc-worker.ts` |
+| Relational Zero schema (repo-local) | `packages/zero-sync/src/schema.ts` |
+| Additive local Postgres schema | `docker/postgres/02-v2-schema.sql` |
+| Transport-neutral workbook op layer | `packages/workbook-domain/src/index.ts` |
 
-## Current open rows
+## Open work that still matters
 
-- `9` canonical rows remain non-production in the registry:
-  - `6` are `implemented-js`
-  - `3` are `blocked`
-- reference-valued defined names, table semantics, and structured-reference production routing are not closed
-- sync-server remote worksheet execution returns `NOT_IMPLEMENTED` by default for most worksheet requests
-- server-side storage remains in-memory in the checked-in storage package
-- agent payloads use JSON inside a binary frame envelope
-- viewport patch payloads use JSON inside a byte envelope
+- finish renaming remaining snapshot-era relational tables and helpers where that churn is worth the migration cost
+- keep reducing projection and render write amplification
+- finish the remaining non-production canonical formula rows
+- replace remaining legacy/local-only transport surfaces when they stop providing value for harnesses
+
+## Removed or retired product surfaces
+
+- standalone `apps/local-server`
+- standalone `apps/sync-server`
+- Redis as a required product runtime component
+- placeholder-only monolith files with no imports or shipping behavior
 
 ## Release rule
 
-No canonical formula family closes until:
+No runtime or deployment surface is considered complete until:
 
-1. fixtures exist
-2. JS passes
-3. WASM passes differential parity
-4. production routing flips to WASM
-5. the matching runtime assumptions are documented where relevant
+1. the monolith path is the only supported product backend
+2. image build/publish workflows target the same Docker runtime names used locally and in deployment
+3. browser tests, typecheck, lint, unit tests, and deployment manifests agree on the same app topology

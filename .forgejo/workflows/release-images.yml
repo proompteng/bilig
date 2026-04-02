@@ -11,8 +11,8 @@ env:
   IMAGE_NAMESPACE: lab
 
 jobs:
-  build-web-amd64:
-    name: build-bilig-web-amd64
+  build-app-amd64:
+    name: build-bilig-app-amd64
     runs-on: docker
     timeout-minutes: 45
     steps:
@@ -36,20 +36,20 @@ jobs:
         run: |
           set -euxo pipefail
 
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-web"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-app"
           SHA="${{ steps.meta.outputs.sha }}"
           ARCH_TAG="${IMAGE}:${SHA}-amd64"
 
           docker build \
             --file ./Dockerfile \
-            --target web-runtime \
+            --target bilig-runtime \
             --tag "$ARCH_TAG" \
             .
 
           docker push "$ARCH_TAG"
 
-  build-web-arm64:
-    name: build-bilig-web-arm64
+  build-app-arm64:
+    name: build-bilig-app-arm64
     runs-on: docker-arm64
     timeout-minutes: 45
     steps:
@@ -80,94 +80,13 @@ jobs:
         run: |
           set -euxo pipefail
 
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-web"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-app"
           SHA="${{ steps.meta.outputs.sha }}"
           ARCH_TAG="${IMAGE}:${SHA}-arm64"
 
           docker build \
             --file ./Dockerfile \
-            --target web-runtime \
-            --tag "$ARCH_TAG" \
-            .
-
-          docker push "$ARCH_TAG"
-
-  build-sync-amd64:
-    name: build-bilig-sync-amd64
-    runs-on: docker
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Verify amd64 Docker environment
-        run: |
-          set -euxo pipefail
-          docker version
-          docker info
-          test "$(uname -m)" = "x86_64"
-
-      - name: Resolve image tags
-        id: meta
-        run: |
-          set -eu
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push amd64 image
-        run: |
-          set -euxo pipefail
-
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-sync"
-          SHA="${{ steps.meta.outputs.sha }}"
-          ARCH_TAG="${IMAGE}:${SHA}-amd64"
-
-          docker build \
-            --file ./Dockerfile \
-            --target sync-runtime \
-            --tag "$ARCH_TAG" \
-            .
-
-          docker push "$ARCH_TAG"
-
-  build-sync-arm64:
-    name: build-bilig-sync-arm64
-    runs-on: docker-arm64
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Verify arm64 Docker environment
-        run: |
-          set -euxo pipefail
-          docker version
-          docker info
-          case "$(uname -m)" in
-            aarch64|arm64)
-              ;;
-            *)
-              echo "Expected arm64 runner, got $(uname -m)"
-              exit 1
-              ;;
-          esac
-
-      - name: Resolve image tags
-        id: meta
-        run: |
-          set -eu
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push arm64 image
-        run: |
-          set -euxo pipefail
-
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-sync"
-          SHA="${{ steps.meta.outputs.sha }}"
-          ARCH_TAG="${IMAGE}:${SHA}-arm64"
-
-          docker build \
-            --file ./Dockerfile \
-            --target sync-runtime \
+            --target bilig-runtime \
             --tag "$ARCH_TAG" \
             .
 
@@ -176,10 +95,8 @@ jobs:
   publish-manifests:
     name: publish-multiarch-manifests
     needs:
-      - build-web-amd64
-      - build-web-arm64
-      - build-sync-amd64
-      - build-sync-arm64
+      - build-app-amd64
+      - build-app-arm64
     runs-on: docker
     timeout-minutes: 20
     steps:
@@ -218,15 +135,15 @@ jobs:
         run: |
           set -euxo pipefail
 
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/bilig-app"
           SHA="${{ steps.meta.outputs.sha }}"
           SHORT_SHA="${{ steps.meta.outputs.short_sha }}"
           PUBLISH_LATEST="${{ steps.head.outputs.publish_latest }}"
+          SOURCE_AMD64="${IMAGE}:${SHA}-amd64"
+          SOURCE_ARM64="${IMAGE}:${SHA}-arm64"
 
           publish_tag() {
             TARGET_TAG="$1"
-            SOURCE_AMD64="$2"
-            SOURCE_ARM64="$3"
-
             docker manifest create "$TARGET_TAG" "$SOURCE_AMD64" "$SOURCE_ARM64"
             docker manifest annotate "$TARGET_TAG" "$SOURCE_AMD64" --os linux --arch amd64
             docker manifest annotate "$TARGET_TAG" "$SOURCE_ARM64" --os linux --arch arm64
@@ -234,18 +151,9 @@ jobs:
             docker manifest inspect "$TARGET_TAG" >/dev/null
           }
 
-          publish_manifests() {
-            IMAGE="$1"
-            SOURCE_AMD64="${IMAGE}:${SHA}-amd64"
-            SOURCE_ARM64="${IMAGE}:${SHA}-arm64"
+          publish_tag "${IMAGE}:${SHA}"
+          publish_tag "${IMAGE}:${SHORT_SHA}"
 
-            publish_tag "${IMAGE}:${SHA}" "$SOURCE_AMD64" "$SOURCE_ARM64"
-            publish_tag "${IMAGE}:${SHORT_SHA}" "$SOURCE_AMD64" "$SOURCE_ARM64"
-
-            if [ "$PUBLISH_LATEST" = "true" ]; then
-              publish_tag "${IMAGE}:latest" "$SOURCE_AMD64" "$SOURCE_ARM64"
-            fi
-          }
-
-          publish_manifests "${REGISTRY}/${IMAGE_NAMESPACE}/bilig-web"
-          publish_manifests "${REGISTRY}/${IMAGE_NAMESPACE}/bilig-sync"
+          if [ "$PUBLISH_LATEST" = "true" ]; then
+            publish_tag "${IMAGE}:latest"
+          fi

@@ -22,8 +22,7 @@
     { "path": "./packages/benchmarks" },
     { "path": "./packages/zero-sync" },
     { "path": "./packages/test-fuzz" },
-    { "path": "./apps/local-server" },
-    { "path": "./apps/sync-server" },
+    { "path": "./apps/bilig" },
     { "path": "./apps/web" }
   ]
 }

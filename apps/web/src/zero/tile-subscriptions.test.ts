@@ -34,7 +34,7 @@ describe("TileSubscriptionManager", () => {
     const sourceView = createTypedView([
       {
         workbookId: "bilig-demo",
-        sheetName: "Sheet1",
+        sheetId: "Sheet1",
         address: "A1",
         inputValue: "hello",
       },
@@ -42,7 +42,7 @@ describe("TileSubscriptionManager", () => {
     const evalView = createTypedView([
       {
         workbookId: "bilig-demo",
-        sheetName: "Sheet1",
+        sheetId: "Sheet1",
         address: "A1",
         value: { tag: 0 },
         flags: 0,
@@ -52,32 +52,29 @@ describe("TileSubscriptionManager", () => {
     const rowView = createTypedView([
       {
         workbookId: "bilig-demo",
-        sheetName: "Sheet1",
-        startIndex: 0,
-        count: 1,
-        size: 22,
+        sheetId: "Sheet1",
+        rowNum: 0,
+        height: 22,
       },
     ]);
     const columnView = createTypedView([
       {
         workbookId: "bilig-demo",
-        sheetName: "Sheet1",
-        startIndex: 0,
-        count: 1,
-        size: 104,
+        sheetId: "Sheet1",
+        colNum: 0,
+        width: 104,
       },
     ]);
-    const views = [sourceView, evalView, rowView, columnView] as const;
 
+    const views = [sourceView, evalView, rowView, columnView];
     let index = 0;
+
     const zero = {
-      materialize() {
-        const view = views[index];
-        if (!view) {
-          throw new Error("No more views available");
-        }
+      materialize(_query: unknown) {
+        // Simple sequence-based mock for attachTile
+        const view = views[index % 4];
         index += 1;
-        return view;
+        return view ?? createTypedView([]);
       },
     } as unknown as Zero;
 
@@ -101,12 +98,13 @@ describe("TileSubscriptionManager", () => {
     expect(initial.cellEval.get("A1")?.version).toBe(1);
     expect(initial.rowMetadata.size).toBe(1);
     expect(initial.columnMetadata.size).toBe(1);
+
     expect(attachment.getData()).toBe(initial);
 
     sourceView.emit([
       {
         workbookId: "bilig-demo",
-        sheetName: "Sheet1",
+        sheetId: "Sheet1",
         address: "A1",
         inputValue: "updated",
       },

@@ -1,14 +1,14 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`bilig` is a `pnpm` monorepo. `apps/web` is the Vite/React shell, `apps/local-server` hosts local workbook sessions, and `apps/sync-server` handles sync services. Shared libraries live in `packages/`. Unit tests are usually in `src/__tests__/`, browser E2E tests in `e2e/tests`, architecture notes in `docs/`, and automation in `scripts/`.
+`bilig` is a `pnpm` monorepo. `apps/web` is the Vite/React browser source, and `apps/bilig` is the fullstack monolith runtime that serves the built web app and backend APIs. Shared libraries live in `packages/`. Unit tests are usually in `src/__tests__/`, browser E2E tests in `e2e/tests`, architecture notes in `docs/`, and automation in `scripts/`.
 
 ## Build, Test, and Development Commands
 Use Node `24+`, Bun, and `pnpm@10.32.1`.
 
 - `pnpm dev:web`: run the web shell.
-- `pnpm dev:web-local`: run the web shell and local server together.
-- `pnpm dev:sync`: run the sync server.
+- `pnpm dev:web-local`: run the web shell and monolith together.
+- `pnpm dev:sync`: run the monolith runtime.
 - `pnpm build`: build all packages.
 - `pnpm lint`, `pnpm format`, `pnpm typecheck`: lint, format, and type-check.
 - `pnpm test`, `pnpm coverage`, `pnpm test:browser`: unit, coverage, and Playwright E2E runs.
@@ -26,7 +26,7 @@ Add colocated unit tests as `*.test.ts` or `*.test.tsx`; keep browser flows in `
 ## Infra & Cluster Operations
 Cluster infrastructure for `bilig` does not live in this repo. The GitOps source of truth is the sibling repo at `~/github.com/lab`, especially `argocd/applications/bilig`, with supporting infra automation under `ansible/`. Make infra changes there and let Argo CD reconcile; use direct cluster mutation only for debugging or emergencies.
 
-From `~/github.com/lab`, validate with `bun run lint:argocd`, `bun run tf:plan`, and `bun run ansible` as needed. Use `kubectl config current-context`, then inspect with `kubectl -n bilig get deploy,svc,pods`, `kubectl -n bilig logs -f deploy/bilig-web`, and `kubectl -n bilig rollout status deployment/bilig-sync`. For Argo CD, use `argocd context`, `argocd app get bilig`, `argocd app diff bilig`, and, when intentionally rolling out GitOps changes, `argocd app sync bilig && argocd app wait bilig --sync --health`.
+From `~/github.com/lab`, validate with `bun run lint:argocd`, `bun run tf:plan`, and `bun run ansible` as needed. Use `kubectl config current-context`, then inspect with `kubectl -n bilig get deploy,svc,pods`, `kubectl -n bilig logs -f deploy/bilig-app`, and `kubectl -n bilig rollout status deployment/bilig-app`. For Argo CD, use `argocd context`, `argocd app get bilig`, `argocd app diff bilig`, and, when intentionally rolling out GitOps changes, `argocd app sync bilig && argocd app wait bilig --sync --health`.
 
 ## Remotes & Source of Truth
 For `bilig`, Forgejo `origin` is the source of truth.

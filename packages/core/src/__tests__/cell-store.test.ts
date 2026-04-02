@@ -58,4 +58,13 @@ describe("CellStore", () => {
       Array.from({ length: store.capacity }, () => -1),
     );
   });
+
+  it("returns an empty cell for unknown stored tags", () => {
+    const store = new CellStore(1);
+    const index = store.allocate(1, 0, 0);
+
+    store.tags[index] = 99;
+
+    expect(store.getValue(index, () => "")).toEqual({ tag: ValueTag.Empty });
+  });
 });

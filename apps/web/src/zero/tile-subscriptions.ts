@@ -1,17 +1,22 @@
 /* oxlint-disable @typescript-eslint/no-unsafe-type-assertion */
 import type { TypedView, Zero } from "@rocicorp/zero";
 import type { Viewport } from "@bilig/protocol";
+import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
 import { queries } from "@bilig/zero-sync";
 import type { AxisMetadataRow, CellSourceRow, CellEvalRow } from "./viewport-projector.js";
+import type { CellStyleRecord } from "@bilig/protocol";
 
 export const TILE_ROWS = 128;
 export const TILE_COLS = 32;
-const OVERSCAN_ROWS = 32;
-const OVERSCAN_COLS = 8;
+const OVERSCAN_ROWS = 64;
+const OVERSCAN_COLS = 16;
+const PRELOAD_ROWS = 128;
+const PRELOAD_COLS = 32;
 
 interface TileDescriptor {
   key: string;
   sheetName: string;
+  sheetViewId: string | undefined;
   rowStart: number;
   rowEnd: number;
   colStart: number;
@@ -57,29 +62,33 @@ function bindView<T>(view: TypedView<T>, onData: (data: T) => void): () => void 
   };
 }
 
-function clampViewport(viewport: Viewport): Viewport {
+function clampViewport(viewport: Viewport, padRows: number, padCols: number): Viewport {
   return {
-    rowStart: Math.max(0, viewport.rowStart - OVERSCAN_ROWS),
-    rowEnd: Math.max(viewport.rowStart, viewport.rowEnd + OVERSCAN_ROWS),
-    colStart: Math.max(0, viewport.colStart - OVERSCAN_COLS),
-    colEnd: Math.max(viewport.colStart, viewport.colEnd + OVERSCAN_COLS),
+    rowStart: Math.max(0, viewport.rowStart - padRows),
+    rowEnd: Math.max(viewport.rowStart, viewport.rowEnd + padRows),
+    colStart: Math.max(0, viewport.colStart - padCols),
+    colEnd: Math.max(viewport.colStart, viewport.colEnd + padCols),
   };
 }
 
-function toTileDescriptors(sheetName: string, viewport: Viewport): TileDescriptor[] {
-  const expanded = clampViewport(viewport);
-  const tileRowStart = Math.floor(expanded.rowStart / TILE_ROWS);
-  const tileRowEnd = Math.floor(expanded.rowEnd / TILE_ROWS);
-  const tileColStart = Math.floor(expanded.colStart / TILE_COLS);
-  const tileColEnd = Math.floor(expanded.colEnd / TILE_COLS);
+function toTileDescriptors(
+  sheetName: string,
+  viewport: Viewport,
+  sheetViewId?: string,
+): TileDescriptor[] {
+  const tileRowStart = Math.floor(viewport.rowStart / TILE_ROWS);
+  const tileRowEnd = Math.floor(viewport.rowEnd / TILE_ROWS);
+  const tileColStart = Math.floor(viewport.colStart / TILE_COLS);
+  const tileColEnd = Math.floor(viewport.colEnd / TILE_COLS);
   const descriptors: TileDescriptor[] = [];
   for (let tileRow = tileRowStart; tileRow <= tileRowEnd; tileRow += 1) {
     for (let tileCol = tileColStart; tileCol <= tileColEnd; tileCol += 1) {
       const rowStart = tileRow * TILE_ROWS;
       const colStart = tileCol * TILE_COLS;
       descriptors.push({
-        key: `${sheetName}:${tileRow}:${tileCol}`,
+        key: `${sheetName}:${tileRow}:${tileCol}${sheetViewId ? `:${sheetViewId}` : ""}`,
         sheetName,
+        sheetViewId,
         rowStart,
         rowEnd: rowStart + TILE_ROWS - 1,
         colStart,
@@ -92,6 +101,92 @@ function toTileDescriptors(sheetName: string, viewport: Viewport): TileDescripto
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
+}
+
+function asTypedView<T>(view: unknown): TypedView<T> {
+  return view as TypedView<T>;
+}
+
+function isLiteralInput(value: unknown): value is LiteralInput {
+  return (
+    value === null ||
+    typeof value === "number" ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  );
+}
+
+function normalizeLiteralInput(value: unknown): LiteralInput | null | undefined {
+  return isLiteralInput(value) ? value : undefined;
+}
+
+function normalizeValueTag(value: unknown): ValueTag | null {
+  if (typeof value === "number") {
+    return value in ValueTag ? (value as ValueTag) : null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  switch (value) {
+    case "Empty":
+      return ValueTag.Empty;
+    case "Number":
+      return ValueTag.Number;
+    case "Boolean":
+      return ValueTag.Boolean;
+    case "String":
+      return ValueTag.String;
+    case "Error":
+      return ValueTag.Error;
+    default:
+      return null;
+  }
+}
+
+function normalizeErrorCode(value: unknown): ErrorCode {
+  if (typeof value === "number") {
+    return value as ErrorCode;
+  }
+  if (typeof value === "string" && value.length > 0) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed)) {
+      return parsed as ErrorCode;
+    }
+    const enumValue = (ErrorCode as Record<string, unknown>)[value];
+    if (typeof enumValue === "number") {
+      return enumValue as ErrorCode;
+    }
+  }
+  return ErrorCode.Value;
+}
+
+function normalizeCellValue(row: Record<string, unknown>): CellValue {
+  if (typeof row["value"] === "object" && row["value"] !== null) {
+    return row["value"] as CellValue;
+  }
+
+  const tag = normalizeValueTag(row["valueTag"]);
+  switch (tag) {
+    case null:
+      return { tag: ValueTag.Empty };
+    case ValueTag.Number:
+      return typeof row["numberValue"] === "number"
+        ? { tag: ValueTag.Number, value: row["numberValue"] }
+        : { tag: ValueTag.Empty };
+    case ValueTag.Boolean:
+      return typeof row["booleanValue"] === "boolean"
+        ? { tag: ValueTag.Boolean, value: row["booleanValue"] }
+        : { tag: ValueTag.Empty };
+    case ValueTag.String:
+      return typeof row["stringValue"] === "string"
+        ? { tag: ValueTag.String, value: row["stringValue"], stringId: 0 }
+        : { tag: ValueTag.Empty };
+    case ValueTag.Error:
+      return { tag: ValueTag.Error, code: normalizeErrorCode(row["errorCode"]) };
+    case ValueTag.Empty:
+    default:
+      return { tag: ValueTag.Empty };
+  }
 }
 
 function createTileData(): TileData {
@@ -116,9 +211,8 @@ function normalizeCellSourceRow(value: unknown): CellSourceRow {
   const row = asRecord(value);
   const normalized: CellSourceRow = {
     workbookId: String(row["workbookId"]),
-    sheetName: String(row["sheetName"]),
+    sheetName: String(row["sheetId"] ?? row["sheetName"]),
     address: String(row["address"]),
-    inputValue: row["inputValue"],
   };
   if (typeof row["rowNum"] === "number") {
     normalized.rowNum = row["rowNum"];
@@ -126,14 +220,25 @@ function normalizeCellSourceRow(value: unknown): CellSourceRow {
   if (typeof row["colNum"] === "number") {
     normalized.colNum = row["colNum"];
   }
-  if (typeof row["formula"] === "string") {
+  const inputValue = normalizeLiteralInput(row["inputJson"] ?? row["inputValue"]);
+  if (inputValue !== undefined) {
+    normalized.inputValue = inputValue;
+  }
+  if (typeof row["formulaSource"] === "string") {
+    normalized.formula = row["formulaSource"];
+  } else if (typeof row["formula"] === "string") {
     normalized.formula = row["formula"];
   }
-  if (typeof row["format"] === "string") {
-    normalized.format = row["format"];
+  if (typeof row["styleId"] === "string") {
+    normalized.styleId = row["styleId"];
   }
-  if (typeof row["explicitFormatId"] === "string") {
+  if (typeof row["formatId"] === "string") {
+    normalized.explicitFormatId = row["formatId"];
+  } else if (typeof row["explicitFormatId"] === "string") {
     normalized.explicitFormatId = row["explicitFormatId"];
+  }
+  if (typeof row["editorText"] === "string") {
+    normalized.editorText = row["editorText"];
   }
   return normalized;
 }
@@ -146,11 +251,11 @@ function normalizeCellEvalRow(value: unknown): CellEvalRow {
   const row = asRecord(value);
   const normalized: CellEvalRow = {
     workbookId: String(row["workbookId"]),
-    sheetName: String(row["sheetName"]),
+    sheetName: String(row["sheetId"] ?? row["sheetName"]),
     address: String(row["address"]),
-    value: row["value"] as CellEvalRow["value"],
+    value: normalizeCellValue(row),
     flags: Number(row["flags"] ?? 0),
-    version: Number(row["version"] ?? 0),
+    version: Number(row["version"] ?? row["calcRevision"] ?? 0),
   };
   if (typeof row["rowNum"] === "number") {
     normalized.rowNum = row["rowNum"];
@@ -166,13 +271,16 @@ function normalizeCellEvalRow(value: unknown): CellEvalRow {
     row["styleJson"] !== null &&
     typeof asRecord(row["styleJson"])["id"] === "string"
   ) {
-    normalized.styleJson = row["styleJson"] as CellEvalRow["styleJson"];
+    normalized.styleJson = row["styleJson"] as CellStyleRecord;
   }
   if (typeof row["formatId"] === "string") {
     normalized.formatId = row["formatId"];
   }
   if (typeof row["formatCode"] === "string") {
     normalized.formatCode = row["formatCode"];
+  }
+  if (typeof row["calcRevision"] === "number") {
+    normalized.calcRevision = row["calcRevision"];
   }
   return normalized;
 }
@@ -185,10 +293,16 @@ function normalizeAxisMetadataRow(value: unknown): AxisMetadataRow {
   const row = asRecord(value);
   const normalized: AxisMetadataRow = {
     workbookId: String(row["workbookId"]),
-    sheetName: String(row["sheetName"]),
-    startIndex: Number(row["startIndex"] ?? 0),
-    count: Number(row["count"] ?? 0),
+    sheetName: String(row["sheetId"] ?? row["sheetName"]),
+    startIndex: Number(row["rowNum"] ?? row["colNum"] ?? row["startIndex"] ?? 0),
+    count: Number(row["count"] ?? 1),
   };
+  if (typeof row["height"] === "number") {
+    normalized.size = row["height"];
+  }
+  if (typeof row["width"] === "number") {
+    normalized.size = row["width"];
+  }
   if (typeof row["size"] === "number") {
     normalized.size = row["size"];
   }
@@ -200,19 +314,6 @@ function normalizeAxisMetadataRow(value: unknown): AxisMetadataRow {
 
 function normalizeAxisMetadataKey(row: AxisMetadataRow): string {
   return [row.startIndex, row.count, row.size ?? "", row.hidden === true ? 1 : 0].join(":");
-}
-
-function replaceMap<T>(
-  target: Map<string, T>,
-  rows: readonly unknown[],
-  normalize: (value: unknown) => T,
-  keyFn: (value: T) => string,
-): void {
-  target.clear();
-  for (const row of rows) {
-    const normalized = normalize(row);
-    target.set(keyFn(normalized), normalized);
-  }
 }
 
 function cloneMap<T>(source: ReadonlyMap<string, T>): Map<string, T> {
@@ -284,6 +385,7 @@ function updateAggregateTileData(
 
 export class TileSubscriptionManager {
   private readonly tiles = new Map<string, TileHandle>();
+  private readonly preloadTiles = new Set<string>();
 
   constructor(
     private readonly zero: Zero,
@@ -295,9 +397,15 @@ export class TileSubscriptionManager {
     sheetName: string,
     viewport: Viewport,
     listener: () => void,
+    sheetViewId?: string,
   ): TileViewportAttachment {
-    const descriptors = toTileDescriptors(sheetName, viewport);
+    const clamped = clampViewport(viewport, OVERSCAN_ROWS, OVERSCAN_COLS);
+    const descriptors = toTileDescriptors(sheetName, clamped, sheetViewId);
     const detachments = descriptors.map((descriptor) => this.attachTile(descriptor, listener));
+
+    // Background preloading of surrounding tiles
+    this.managePreloads(sheetName, viewport, sheetViewId);
+
     const aggregateData = createTileData();
     const aggregateCounts = createTileDataCounts();
     const snapshots = new Map<string, { version: number; data: TileData }>();
@@ -337,6 +445,7 @@ export class TileSubscriptionManager {
           if (handle.refCount <= 0) {
             handle.destroy();
             this.tiles.delete(handle.descriptor.key);
+            this.preloadTiles.delete(handle.descriptor.key);
           }
         }
       },
@@ -348,18 +457,21 @@ export class TileSubscriptionManager {
       handle.destroy();
     }
     this.tiles.clear();
+    this.preloadTiles.clear();
   }
 
-  private attachTile(descriptor: TileDescriptor, listener: () => void): TileHandle {
+  private attachTile(descriptor: TileDescriptor, listener: (() => void) | null): TileHandle {
     const existing = this.tiles.get(descriptor.key);
     if (existing) {
       existing.refCount += 1;
-      existing.listeners.add(listener);
+      if (listener) {
+        existing.listeners.add(listener);
+      }
       return existing;
     }
 
     const data = createTileData();
-    const listeners = new Set([listener]);
+    const listeners = new Set(listener ? [listener] : []);
     const handle: TileHandle = {
       descriptor,
       refCount: 1,
@@ -385,73 +497,140 @@ export class TileSubscriptionManager {
     };
 
     const destroyers: Array<() => void> = [];
-    const pushView = <T>(view: TypedView<T>, assign: (value: T) => void) => {
-      assign(view.data);
+    const pushView = <T>(
+      view: TypedView<readonly unknown[]>,
+      map: Map<string, T>,
+      normalize: (value: unknown) => T,
+      keyFn: (value: T) => string,
+    ) => {
+      const update = (rows: readonly unknown[]) => {
+        const nextKeys = new Set<string>();
+        for (const row of rows) {
+          const normalized = normalize(row);
+          const key = keyFn(normalized);
+          nextKeys.add(key);
+          map.set(key, normalized);
+        }
+        for (const key of map.keys()) {
+          if (!nextKeys.has(key)) {
+            map.delete(key);
+          }
+        }
+      };
+
+      // Ensure data is synced synchronously
+      update(view.data);
+
       destroyers.push(
         bindView(view, (value) => {
-          assign(value);
+          update(value);
           notifyListeners();
         }),
       );
     };
 
     pushView(
-      this.zero.materialize(
-        queries.cells.tile({
-          documentId: this.documentId,
-          sheetName: descriptor.sheetName,
-          rowStart: descriptor.rowStart,
-          rowEnd: descriptor.rowEnd,
-          colStart: descriptor.colStart,
-          colEnd: descriptor.colEnd,
-        }),
-      ) as unknown as TypedView<readonly unknown[]>,
-      (value) => {
-        replaceMap(data.sourceCells, value, normalizeCellSourceRow, normalizeCellSourceKey);
-      },
+      asTypedView<readonly unknown[]>(
+        this.zero.materialize(
+          queries.cellInput.tile({
+            documentId: this.documentId,
+            sheetName: descriptor.sheetName,
+            rowStart: descriptor.rowStart,
+            rowEnd: descriptor.rowEnd,
+            colStart: descriptor.colStart,
+            colEnd: descriptor.colEnd,
+          }),
+        ),
+      ),
+      data.sourceCells,
+      normalizeCellSourceRow,
+      normalizeCellSourceKey,
     );
     pushView(
-      this.zero.materialize(
-        queries.cellEval.tile({
-          documentId: this.documentId,
-          sheetName: descriptor.sheetName,
-          rowStart: descriptor.rowStart,
-          rowEnd: descriptor.rowEnd,
-          colStart: descriptor.colStart,
-          colEnd: descriptor.colEnd,
-        }),
-      ) as unknown as TypedView<readonly unknown[]>,
-      (value) => {
-        replaceMap(data.cellEval, value, normalizeCellEvalRow, normalizeCellEvalKey);
-      },
+      asTypedView<readonly unknown[]>(
+        this.zero.materialize(
+          queries.cellEval.tile({
+            documentId: this.documentId,
+            sheetName: descriptor.sheetName,
+            rowStart: descriptor.rowStart,
+            rowEnd: descriptor.rowEnd,
+            colStart: descriptor.colStart,
+            colEnd: descriptor.colEnd,
+          }),
+        ),
+      ),
+      data.cellEval,
+      normalizeCellEvalRow,
+      normalizeCellEvalKey,
     );
     pushView(
-      this.zero.materialize(
-        queries.rowMetadata.tile({
-          documentId: this.documentId,
-          sheetName: descriptor.sheetName,
-          rowStart: descriptor.rowStart,
-          rowEnd: descriptor.rowEnd,
-        }),
-      ) as unknown as TypedView<readonly unknown[]>,
-      (value) => {
-        replaceMap(data.rowMetadata, value, normalizeAxisMetadataRow, normalizeAxisMetadataKey);
-      },
+      asTypedView<readonly unknown[]>(
+        this.zero.materialize(
+          queries.sheetRow.tile({
+            documentId: this.documentId,
+            sheetName: descriptor.sheetName,
+            rowStart: descriptor.rowStart,
+            rowEnd: descriptor.rowEnd,
+          }),
+        ),
+      ),
+      data.rowMetadata,
+      normalizeAxisMetadataRow,
+      normalizeAxisMetadataKey,
     );
     pushView(
-      this.zero.materialize(
-        queries.columnMetadata.tile({
-          documentId: this.documentId,
-          sheetName: descriptor.sheetName,
-          colStart: descriptor.colStart,
-          colEnd: descriptor.colEnd,
-        }),
-      ) as unknown as TypedView<readonly unknown[]>,
-      (value) => {
-        replaceMap(data.columnMetadata, value, normalizeAxisMetadataRow, normalizeAxisMetadataKey);
-      },
+      asTypedView<readonly unknown[]>(
+        this.zero.materialize(
+          queries.sheetCol.tile({
+            documentId: this.documentId,
+            sheetName: descriptor.sheetName,
+            colStart: descriptor.colStart,
+            colEnd: descriptor.colEnd,
+          }),
+        ),
+      ),
+      data.columnMetadata,
+      normalizeAxisMetadataRow,
+      normalizeAxisMetadataKey,
     );
     this.tiles.set(descriptor.key, handle);
     return handle;
+  }
+
+  private managePreloads(sheetName: string, viewport: Viewport, sheetViewId?: string) {
+    const preloadViewport = clampViewport(viewport, PRELOAD_ROWS, PRELOAD_COLS);
+    const activeDescriptors = new Set(
+      toTileDescriptors(
+        sheetName,
+        clampViewport(viewport, OVERSCAN_ROWS, OVERSCAN_COLS),
+        sheetViewId,
+      ).map((d) => d.key),
+    );
+    const preloadDescriptors = toTileDescriptors(sheetName, preloadViewport, sheetViewId);
+
+    for (const descriptor of preloadDescriptors) {
+      if (!activeDescriptors.has(descriptor.key) && !this.tiles.has(descriptor.key)) {
+        this.attachTile(descriptor, null);
+        this.preloadTiles.add(descriptor.key);
+      }
+    }
+
+    // Evict distant preloads if needed
+    for (const key of this.preloadTiles) {
+      if (!activeDescriptors.has(key)) {
+        const isStillInPreloadRange = preloadDescriptors.some((d) => d.key === key);
+        if (!isStillInPreloadRange) {
+          const handle = this.tiles.get(key);
+          if (handle) {
+            handle.refCount -= 1;
+            if (handle.refCount <= 0) {
+              handle.destroy();
+              this.tiles.delete(key);
+              this.preloadTiles.delete(key);
+            }
+          }
+        }
+      }
+    }
   }
 }

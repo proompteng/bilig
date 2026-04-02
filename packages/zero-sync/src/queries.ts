@@ -9,98 +9,159 @@ export const workbookQueryArgsSchema = z.object({
   documentId: z.string().min(1),
 });
 
-export const workbookCellArgsSchema = workbookQueryArgsSchema.extend({
-  sheetName: z.string().min(1),
+const workbookSheetArgsSchema = workbookQueryArgsSchema
+  .extend({
+    sheetId: z.string().min(1).optional(),
+    sheetName: z.string().min(1).optional(),
+  })
+  .refine((args) => args.sheetId !== undefined || args.sheetName !== undefined, {
+    message: "sheetId or sheetName is required",
+  });
+
+function resolveSheetId(args: z.infer<typeof workbookSheetArgsSchema>): string {
+  return args.sheetId ?? args.sheetName ?? "";
+}
+
+export const workbookCellArgsSchema = workbookSheetArgsSchema.extend({
   address: z.string().min(1),
 });
 
-export const workbookTileArgsSchema = workbookQueryArgsSchema.extend({
-  sheetName: z.string().min(1),
+export const workbookTileArgsSchema = workbookSheetArgsSchema.extend({
   rowStart: z.number().int().nonnegative(),
   rowEnd: z.number().int().nonnegative(),
   colStart: z.number().int().nonnegative(),
   colEnd: z.number().int().nonnegative(),
 });
 
-export const workbookRowTileArgsSchema = workbookQueryArgsSchema.extend({
-  sheetName: z.string().min(1),
+export const workbookRowTileArgsSchema = workbookSheetArgsSchema.extend({
   rowStart: z.number().int().nonnegative(),
   rowEnd: z.number().int().nonnegative(),
 });
 
-export const workbookColumnTileArgsSchema = workbookQueryArgsSchema.extend({
-  sheetName: z.string().min(1),
+export const workbookColumnTileArgsSchema = workbookSheetArgsSchema.extend({
   colStart: z.number().int().nonnegative(),
   colEnd: z.number().int().nonnegative(),
 });
+
+const workbookGet = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.workbooks.where("id", documentId).one(),
+);
+
+const sheetByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.sheets.where("workbookId", documentId).orderBy("sortOrder", "asc"),
+);
+
+const cellInputOne = defineQuery(workbookCellArgsSchema, ({ args }) =>
+  zql.cells
+    .where("workbookId", args.documentId)
+    .where("sheetName", resolveSheetId(args))
+    .where("address", args.address)
+    .one(),
+);
+
+const cellInputTile = defineQuery(workbookTileArgsSchema, ({ args }) =>
+  zql.cells
+    .where("workbookId", args.documentId)
+    .where("sheetName", resolveSheetId(args))
+    .where("rowNum", ">=", args.rowStart)
+    .where("rowNum", "<=", args.rowEnd)
+    .where("colNum", ">=", args.colStart)
+    .where("colNum", "<=", args.colEnd)
+    .orderBy("rowNum", "asc")
+    .orderBy("colNum", "asc"),
+);
+
+const cellEvalOne = defineQuery(workbookCellArgsSchema, ({ args }) =>
+  zql.cell_eval
+    .where("workbookId", args.documentId)
+    .where("sheetName", resolveSheetId(args))
+    .where("address", args.address)
+    .one(),
+);
+
+const cellEvalTile = defineQuery(workbookTileArgsSchema, ({ args }) =>
+  zql.cell_eval
+    .where("workbookId", args.documentId)
+    .where("sheetName", resolveSheetId(args))
+    .where("rowNum", ">=", args.rowStart)
+    .where("rowNum", "<=", args.rowEnd)
+    .where("colNum", ">=", args.colStart)
+    .where("colNum", "<=", args.colEnd)
+    .orderBy("rowNum", "asc")
+    .orderBy("colNum", "asc"),
+);
+
+const sheetRowTile = defineQuery(workbookRowTileArgsSchema, ({ args }) =>
+  zql.row_metadata
+    .where("workbookId", args.documentId)
+    .where("sheetName", resolveSheetId(args))
+    .where("startIndex", ">=", args.rowStart)
+    .where("startIndex", "<=", args.rowEnd)
+    .orderBy("startIndex", "asc"),
+);
+
+const sheetColTile = defineQuery(workbookColumnTileArgsSchema, ({ args }) =>
+  zql.column_metadata
+    .where("workbookId", args.documentId)
+    .where("sheetName", resolveSheetId(args))
+    .where("startIndex", ">=", args.colStart)
+    .where("startIndex", "<=", args.colEnd)
+    .orderBy("startIndex", "asc"),
+);
+
+const cellStyleByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.cell_styles.where("workbookId", documentId).orderBy("styleId", "asc"),
+);
+
+const numberFormatByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.cell_number_formats.where("workbookId", documentId).orderBy("formatId", "asc"),
+);
 
 export const queries = defineQueries({
+  workbook: {
+    get: workbookGet,
+  },
   workbooks: {
-    get: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-      zql.workbooks.where("id", documentId).one(),
-    ),
+    get: workbookGet,
+  },
+  sheet: {
+    byWorkbook: sheetByWorkbook,
   },
   sheets: {
-    byWorkbook: defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-      zql.sheets.where("workbookId", documentId).orderBy("sortOrder", "asc"),
-    ),
+    byWorkbook: sheetByWorkbook,
+  },
+  cellInput: {
+    one: cellInputOne,
+    tile: cellInputTile,
   },
   cells: {
-    one: defineQuery(workbookCellArgsSchema, ({ args }) =>
-      zql.cells
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("address", args.address)
-        .one(),
-    ),
-    tile: defineQuery(workbookTileArgsSchema, ({ args }) =>
-      zql.cells
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("rowNum", ">=", args.rowStart)
-        .where("rowNum", "<=", args.rowEnd)
-        .where("colNum", ">=", args.colStart)
-        .where("colNum", "<=", args.colEnd)
-        .orderBy("rowNum", "asc")
-        .orderBy("colNum", "asc"),
-    ),
+    one: cellInputOne,
+    tile: cellInputTile,
   },
   cellEval: {
-    one: defineQuery(workbookCellArgsSchema, ({ args }) =>
-      zql.cell_eval
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("address", args.address)
-        .one(),
-    ),
-    tile: defineQuery(workbookTileArgsSchema, ({ args }) =>
-      zql.cell_eval
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("rowNum", ">=", args.rowStart)
-        .where("rowNum", "<=", args.rowEnd)
-        .where("colNum", ">=", args.colStart)
-        .where("colNum", "<=", args.colEnd)
-        .orderBy("rowNum", "asc")
-        .orderBy("colNum", "asc"),
-    ),
+    one: cellEvalOne,
+    tile: cellEvalTile,
+  },
+  cellRender: {
+    one: cellEvalOne,
+    tile: cellEvalTile,
+  },
+  sheetRow: {
+    tile: sheetRowTile,
   },
   rowMetadata: {
-    tile: defineQuery(workbookRowTileArgsSchema, ({ args }) =>
-      zql.row_metadata
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("startIndex", "<=", args.rowEnd)
-        .orderBy("startIndex", "asc"),
-    ),
+    tile: sheetRowTile,
+  },
+  sheetCol: {
+    tile: sheetColTile,
   },
   columnMetadata: {
-    tile: defineQuery(workbookColumnTileArgsSchema, ({ args }) =>
-      zql.column_metadata
-        .where("workbookId", args.documentId)
-        .where("sheetName", args.sheetName)
-        .where("startIndex", "<=", args.colEnd)
-        .orderBy("startIndex", "asc"),
-    ),
+    tile: sheetColTile,
+  },
+  cellStyle: {
+    byWorkbook: cellStyleByWorkbook,
+  },
+  numberFormat: {
+    byWorkbook: numberFormatByWorkbook,
   },
 });
