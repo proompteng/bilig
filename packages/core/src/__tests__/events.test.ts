@@ -5,7 +5,11 @@ import { EngineEventBus } from "../events.js";
 function batchEvent(changedCellIndices: Uint32Array = new Uint32Array()): EngineEvent {
   return {
     kind: "batch",
+    invalidation: "cells",
     changedCellIndices,
+    invalidatedRanges: [],
+    invalidatedRows: [],
+    invalidatedColumns: [],
     metrics: {
       batchId: 1,
       changedInputCount: 0,
@@ -93,15 +97,87 @@ describe("EngineEventBus", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it("notifies every watched listener once during broadcast invalidation", () => {
+  it("notifies watched addresses for range invalidations without changed cell indices", () => {
     const events = new EngineEventBus();
     const listener = vi.fn();
 
+    const unsubscribe = events.subscribeCells([2], ["Sheet1!C3"], listener);
+    events.emit(
+      {
+        ...batchEvent(),
+        invalidatedRanges: [{ sheetName: "Sheet1", startAddress: "B2", endAddress: "D4" }],
+      },
+      new Uint32Array(),
+      (cellIndex) => (cellIndex === 2 ? "Sheet1!B2" : "Sheet1!Z9"),
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("ignores invalid qualified addresses during range invalidation checks", () => {
+    const events = new EngineEventBus();
+    const listener = vi.fn();
+
+    events.subscribeCellAddress("not-a-qualified-address", listener);
+    events.emit(
+      {
+        ...batchEvent(),
+        invalidatedRanges: [{ sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" }],
+      },
+      new Uint32Array(),
+      () => "Sheet1!A1",
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("skips watchers from other sheets when applying range invalidations", () => {
+    const events = new EngineEventBus();
+    const listener = vi.fn();
+
+    events.subscribeCellAddress("Other!A1", listener);
+    events.emit(
+      {
+        ...batchEvent(),
+        invalidatedRanges: [{ sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" }],
+      },
+      new Uint32Array(),
+      () => "Other!A1",
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("skips cell-index listeners whose resolved addresses fall outside invalidated ranges", () => {
+    const events = new EngineEventBus();
+    const listener = vi.fn();
+
+    events.subscribeCellIndex(7, listener);
+    events.emit(
+      {
+        ...batchEvent(),
+        invalidatedRanges: [{ sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" }],
+      },
+      new Uint32Array(),
+      () => "Sheet1!Z9",
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("notifies every watched listener once during broadcast invalidation", () => {
+    const events = new EngineEventBus();
+    const listener = vi.fn();
+    const general = vi.fn();
+
+    events.subscribe(general);
     events.subscribeCellIndex(2, listener);
     events.subscribeCellAddress("Sheet1!C3", listener);
 
     events.emitAllWatched(batchEvent());
 
+    expect(general).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 

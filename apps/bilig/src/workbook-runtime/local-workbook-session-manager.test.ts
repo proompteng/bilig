@@ -1,0 +1,132 @@
+import { describe, expect, it } from "vitest";
+import type { ProtocolFrame } from "@bilig/binary-protocol";
+import type { AgentFrame } from "@bilig/agent-api";
+import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
+
+async function openSession(
+  manager: LocalWorkbookSessionManager,
+  documentId: string,
+): Promise<string> {
+  const response = await manager.handleAgentFrame({
+    kind: "request",
+    request: {
+      kind: "openWorkbookSession",
+      id: "open-1",
+      documentId,
+      replicaId: "replica-1",
+    },
+  } satisfies AgentFrame);
+
+  if (response.kind !== "response" || response.response.kind !== "ok") {
+    throw new Error("Expected workbook session to open");
+  }
+  if (!response.response.sessionId) {
+    throw new Error("Expected workbook session id");
+  }
+
+  return response.response.sessionId;
+}
+
+describe("LocalWorkbookSessionManager", () => {
+  it("compacts long batch backlogs into a snapshot", async () => {
+    const manager = new LocalWorkbookSessionManager();
+    const sessionId = await openSession(manager, "doc-perf");
+
+    await Promise.all(
+      Array.from({ length: 270 }, (_entry, index) =>
+        manager.handleAgentFrame({
+          kind: "request",
+          request: {
+            kind: "writeRange",
+            id: `write-${index}`,
+            sessionId,
+            range: {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "A1",
+            },
+            values: [[index]],
+          },
+        } satisfies AgentFrame),
+      ),
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const snapshot = manager.getLatestSnapshot("doc-perf");
+    expect(snapshot).not.toBeNull();
+
+    const helloFrames = await manager.handleSyncFrame({
+      kind: "hello",
+      documentId: "doc-perf",
+      replicaId: "browser-1",
+      sessionId: "browser-1",
+      protocolVersion: 1,
+      lastServerCursor: 0,
+      capabilities: [],
+    } satisfies ProtocolFrame);
+
+    expect(helloFrames.some((frame) => frame.kind === "snapshotChunk")).toBe(true);
+    const appendFrames = helloFrames.filter((frame) => frame.kind === "appendBatch");
+    expect(appendFrames.length).toBeLessThanOrEqual(256);
+  });
+
+  it("emits large range subscription events for style-only invalidations", async () => {
+    const manager = new LocalWorkbookSessionManager();
+    const sessionId = await openSession(manager, "doc-range");
+    const events: AgentFrame[] = [];
+    const unsubscribeEvents = manager.subscribeAgentEvents((event) => {
+      events.push({ kind: "event", event });
+    });
+
+    await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "subscribeRange",
+        id: "subscribe-1",
+        sessionId,
+        subscriptionId: "sub-1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "Z20",
+        },
+      },
+    } satisfies AgentFrame);
+
+    await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "setRangeStyle",
+        id: "style-1",
+        sessionId,
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B2",
+        },
+        patch: {
+          fill: { backgroundColor: "#ff0000" },
+        },
+      },
+    } satisfies AgentFrame);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(events).toContainEqual({
+      kind: "event",
+      event: {
+        kind: "rangeChanged",
+        subscriptionId: "sub-1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "Z20",
+        },
+        changedAddresses: ["B2"],
+      },
+    });
+
+    unsubscribeEvents();
+  });
+});

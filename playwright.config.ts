@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 const browserStack = process.env["BILIG_BROWSER_STACK"];
 const useComposeBrowserStack = browserStack === "compose";
 const browserBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? "http://127.0.0.1:4180";
+const browserReadyUrl = process.env["BILIG_E2E_READY_URL"] ?? "http://127.0.0.1:4181/healthz";
 
 export default defineConfig({
   testDir: "./e2e/tests",
@@ -27,7 +28,7 @@ export default defineConfig({
     : {
         webServer: {
           command: "bun scripts/run-playwright-stack.ts",
-          port: 4180,
+          url: browserReadyUrl,
           reuseExistingServer: false,
           timeout: 300_000,
         },

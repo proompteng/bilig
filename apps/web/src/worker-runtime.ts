@@ -1,7 +1,7 @@
 import type { CommitOp, EngineReplicaSnapshot } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
-import { formatAddress, indexToColumn } from "@bilig/formula";
+import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
 import { createBrowserPersistence, type BrowserPersistence } from "@bilig/storage-browser";
 import {
   type CellRangeRef,
@@ -41,6 +41,7 @@ interface WorkerWorkbook {
   workbookName: string;
   sheetsByName: Map<string, WorkerSheet>;
   getSheet(sheetName: string): WorkerSheet | undefined;
+  getQualifiedAddress(cellIndex: number): string;
 }
 
 interface WorkerEngine {
@@ -86,6 +87,7 @@ const MAX_COLUMN_WIDTH = 480;
 const AUTOFIT_PADDING = 28;
 const AUTOFIT_CHAR_WIDTH = 8;
 const DEFAULT_STYLE_ID = "style-0";
+const PERSIST_DEBOUNCE_MS = 120;
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
@@ -110,9 +112,36 @@ interface ViewportSubscriptionState {
   listener: (patch: Uint8Array) => void;
   nextVersion: number;
   knownStyleIds: Set<string>;
+  lastStyleSignatures: Map<string, string>;
   lastCellSignatures: Map<string, string>;
   lastColumnSignatures: Map<number, string>;
   lastRowSignatures: Map<number, string>;
+}
+
+function styleSignature(style: CellStyleRecord): string {
+  const fill = style.fill?.backgroundColor ?? "";
+  const font = style.font;
+  const alignment = style.alignment;
+  const borders = style.borders;
+  return [
+    fill,
+    font?.family ?? "",
+    font?.size ?? "",
+    font?.bold ? 1 : 0,
+    font?.italic ? 1 : 0,
+    font?.underline ? 1 : 0,
+    font?.color ?? "",
+    alignment?.horizontal ?? "",
+    alignment?.vertical ?? "",
+    alignment?.wrap ? 1 : 0,
+    alignment?.indent ?? "",
+    borders?.top ? `${borders.top.style}:${borders.top.weight}:${borders.top.color}` : "",
+    borders?.right ? `${borders.right.style}:${borders.right.weight}:${borders.right.color}` : "",
+    borders?.bottom
+      ? `${borders.bottom.style}:${borders.bottom.weight}:${borders.bottom.color}`
+      : "",
+    borders?.left ? `${borders.left.style}:${borders.left.weight}:${borders.left.color}` : "",
+  ].join("|");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -149,6 +178,9 @@ export class WorkbookWorkerRuntime {
     [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
   ]);
   private nextFormatId = 1;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistInFlight: Promise<void> | null = null;
+  private persistQueued = false;
 
   constructor(
     options: {
@@ -188,10 +220,10 @@ export class WorkbookWorkerRuntime {
     }
 
     this.engineSubscription = engine.subscribe((event) => {
-      void this.persistState();
-      this.broadcastViewportPatches(event.metrics);
+      this.schedulePersistState();
+      this.broadcastViewportPatches(event);
     });
-    await this.persistState();
+    await this.persistStateNow();
 
     return this.getRuntimeState();
   }
@@ -209,8 +241,8 @@ export class WorkbookWorkerRuntime {
   async replaceSnapshot(snapshot: WorkbookSnapshot): Promise<WorkbookWorkerStateSnapshot> {
     const engine = this.requireEngine();
     engine.importSnapshot(snapshot);
-    await this.persistState();
-    this.broadcastViewportPatches(engine.getLastMetrics());
+    await this.persistStateNow();
+    this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
   }
 
@@ -317,11 +349,12 @@ export class WorkbookWorkerRuntime {
       listener,
       nextVersion: 1,
       knownStyleIds: new Set(),
+      lastStyleSignatures: new Map<string, string>(),
       lastCellSignatures: new Map<string, string>(),
       lastColumnSignatures: new Map<number, string>(),
       lastRowSignatures: new Map<number, string>(),
     };
-    listener(encodeViewportPatch(this.buildViewportPatch(state, true)));
+    listener(encodeViewportPatch(this.buildViewportPatch(state, null)));
     this.viewportSubscriptions.add(state);
     return () => {
       this.viewportSubscriptions.delete(state);
@@ -331,6 +364,11 @@ export class WorkbookWorkerRuntime {
   private cleanup(): void {
     this.engineSubscription?.();
     this.engineSubscription = null;
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.persistQueued = false;
     this.viewportSubscriptions.clear();
     this.styles.clear();
     this.styles.set(DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID });
@@ -354,27 +392,71 @@ export class WorkbookWorkerRuntime {
     return `bilig:web:${documentId}:runtime`;
   }
 
-  private async persistState(): Promise<void> {
-    if (!this.bootstrapOptions) {
+  private schedulePersistState(): void {
+    if (!this.bootstrapOptions?.persistState) {
       return;
     }
-    if (!this.bootstrapOptions.persistState) {
+    this.persistQueued = true;
+    if (this.persistTimer !== null) {
       return;
     }
-    const engine = this.requireEngine();
-    const persisted: PersistedWorkbookState = {
-      snapshot: engine.exportSnapshot(),
-      replica: engine.exportReplicaSnapshot(),
-    };
-    await this.persistence.saveJson(
-      this.persistenceKey(this.bootstrapOptions.documentId),
-      persisted,
-    );
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      void this.flushPersistState();
+    }, PERSIST_DEBOUNCE_MS);
   }
 
-  private broadcastViewportPatches(metrics: RecalcMetrics): void {
+  private async persistStateNow(): Promise<void> {
+    if (this.persistTimer !== null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.persistQueued = true;
+    await this.flushPersistState();
+  }
+
+  private async flushPersistState(): Promise<void> {
+    if (!this.persistQueued || !this.bootstrapOptions?.persistState || !this.engine) {
+      return;
+    }
+    if (this.persistInFlight) {
+      await this.persistInFlight;
+      if (this.persistQueued) {
+        await this.flushPersistState();
+      }
+      return;
+    }
+
+    const documentId = this.bootstrapOptions.documentId;
+    const persisted: PersistedWorkbookState = {
+      snapshot: this.engine.exportSnapshot(),
+      replica: this.engine.exportReplicaSnapshot(),
+    };
+    this.persistQueued = false;
+    const savePromise = this.persistence.saveJson(this.persistenceKey(documentId), persisted);
+    this.persistInFlight = savePromise;
+    try {
+      await savePromise;
+    } finally {
+      if (this.persistInFlight === savePromise) {
+        this.persistInFlight = null;
+      }
+    }
+    if (this.persistQueued) {
+      await this.flushPersistState();
+    }
+  }
+
+  private broadcastViewportPatches(
+    event: EngineEvent | null,
+    metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
+  ): void {
+    const changedAddressesBySheet =
+      event && event.invalidation !== "full"
+        ? this.collectChangedAddressesBySheet(event.changedCellIndices)
+        : null;
     for (const subscription of this.viewportSubscriptions) {
-      const patch = this.buildViewportPatch(subscription, false, metrics);
+      const patch = this.buildViewportPatch(subscription, event, metrics, changedAddressesBySheet);
       if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0) {
         continue;
       }
@@ -384,49 +466,78 @@ export class WorkbookWorkerRuntime {
 
   private buildViewportPatch(
     state: ViewportSubscriptionState,
-    full: boolean,
+    event: EngineEvent | null,
     metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
+    changedAddressesBySheet: Map<string, Set<string>> | null = null,
   ): ViewportPatch {
     const engine = this.requireEngine();
     const viewport = state.subscription;
-    const nextCellSignatures = new Map<string, string>();
+    const hasSheet = engine.workbook.getSheet(viewport.sheetName) !== undefined;
     const styles: CellStyleRecord[] = [];
     const cells: ViewportPatchedCell[] = [];
+    const full = event === null || event.invalidation === "full";
+    const changedAddresses = changedAddressesBySheet?.get(viewport.sheetName) ?? null;
+    const invalidatedRanges =
+      event?.invalidatedRanges.filter(
+        (range: CellRangeRef) => range.sheetName === viewport.sheetName,
+      ) ?? [];
+    const invalidatedRows =
+      event?.invalidatedRows.filter(
+        (entry: { sheetName: string; startIndex: number; endIndex: number }) =>
+          entry.sheetName === viewport.sheetName,
+      ) ?? [];
+    const invalidatedColumns =
+      event?.invalidatedColumns.filter(
+        (entry: { sheetName: string; startIndex: number; endIndex: number }) =>
+          entry.sheetName === viewport.sheetName,
+      ) ?? [];
 
-    for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
-      for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
-        const address = formatAddress(row, col);
-        const key = `${viewport.sheetName}!${address}`;
-        const snapshot = engine.workbook.getSheet(viewport.sheetName)
-          ? engine.getCell(viewport.sheetName, address)
-          : this.emptyCellSnapshot(viewport.sheetName, address);
-        const formatId = this.getFormatId(snapshot.format);
-        const style = this.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID);
-        if (full || !state.knownStyleIds.has(style.id)) {
-          state.knownStyleIds.add(style.id);
-          styles.push(style);
-        }
-        const patchedCell = this.buildPatchedCell(snapshot, row, col, formatId, style.id);
-        const signature = JSON.stringify([
-          patchedCell.snapshot.version,
-          patchedCell.snapshot.formula ?? "",
-          patchedCell.snapshot.input ?? null,
-          patchedCell.snapshot.format ?? "",
-          patchedCell.snapshot.styleId ?? "",
-          patchedCell.snapshot.value,
-          patchedCell.displayText,
-          patchedCell.copyText,
-          patchedCell.editorText,
-          patchedCell.formatId,
-          patchedCell.styleId,
-        ]);
-        nextCellSignatures.set(key, signature);
-        if (full || state.lastCellSignatures.get(key) !== signature) {
-          cells.push(patchedCell);
+    if (full) {
+      state.lastCellSignatures.clear();
+      state.lastStyleSignatures.clear();
+      for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
+        for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
+          this.appendPatchedCell(
+            state,
+            styles,
+            cells,
+            viewport.sheetName,
+            row,
+            col,
+            hasSheet,
+            true,
+          );
         }
       }
+    } else {
+      const targetAddresses = this.collectViewportAddresses(
+        viewport.sheetName,
+        viewport,
+        changedAddresses,
+        invalidatedRanges,
+      );
+      for (const address of targetAddresses) {
+        const parsed = parseCellAddress(address, viewport.sheetName);
+        if (
+          parsed.row < viewport.rowStart ||
+          parsed.row > viewport.rowEnd ||
+          parsed.col < viewport.colStart ||
+          parsed.col > viewport.colEnd
+        ) {
+          continue;
+        }
+        this.appendPatchedCell(
+          state,
+          styles,
+          cells,
+          viewport.sheetName,
+          parsed.row,
+          parsed.col,
+          hasSheet,
+          false,
+        );
+      }
     }
-    state.lastCellSignatures = nextCellSignatures;
 
     const columnEntries = this.indexAxisEntries(engine.getColumnAxisEntries(viewport.sheetName));
     const rowEntries = this.indexAxisEntries(engine.getRowAxisEntries(viewport.sheetName));
@@ -437,6 +548,7 @@ export class WorkbookWorkerRuntime {
       PRODUCT_COLUMN_WIDTH,
       state.lastColumnSignatures,
       full,
+      invalidatedColumns,
     );
     const { patches: rows, signatures: rowSignatures } = this.buildAxisPatches(
       viewport.rowStart,
@@ -445,6 +557,7 @@ export class WorkbookWorkerRuntime {
       PRODUCT_ROW_HEIGHT,
       state.lastRowSignatures,
       full,
+      invalidatedRows,
     );
     state.lastColumnSignatures = columnSignatures;
     state.lastRowSignatures = rowSignatures;
@@ -461,25 +574,82 @@ export class WorkbookWorkerRuntime {
     };
   }
 
-  private buildPatchedCell(
-    snapshot: CellSnapshot,
+  private appendPatchedCell(
+    state: ViewportSubscriptionState,
+    styles: CellStyleRecord[],
+    cells: ViewportPatchedCell[],
+    sheetName: string,
     row: number,
     col: number,
-    formatId: number,
-    styleId: string,
-  ): ViewportPatchedCell {
+    hasSheet: boolean,
+    force: boolean,
+  ): void {
+    const address = formatAddress(row, col);
+    const key = `${sheetName}!${address}`;
+    const snapshot = hasSheet
+      ? this.requireEngine().getCell(sheetName, address)
+      : this.emptyCellSnapshot(sheetName, address);
+    const formatId = this.getFormatId(snapshot.format);
+    const style = this.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID);
+    const nextStyleSignature = styleSignature(style);
+    const previousStyleSignature = state.lastStyleSignatures.get(style.id);
+    if (
+      force ||
+      previousStyleSignature !== nextStyleSignature ||
+      !state.knownStyleIds.has(style.id)
+    ) {
+      state.knownStyleIds.add(style.id);
+      state.lastStyleSignatures.set(style.id, nextStyleSignature);
+      styles.push(style);
+    }
     const editorText = this.toEditorText(snapshot);
     const displayText = this.toDisplayText(snapshot);
-    return {
-      row,
-      col,
+    const copyText = snapshot.formula ? editorText : displayText;
+    const signature = this.buildPatchedCellSignature(
       snapshot,
       displayText,
-      copyText: snapshot.formula ? editorText : displayText,
+      copyText,
       editorText,
       formatId,
+      style.id,
+    );
+    if (force || state.lastCellSignatures.get(key) !== signature) {
+      cells.push({
+        row,
+        col,
+        snapshot,
+        displayText,
+        copyText,
+        editorText,
+        formatId,
+        styleId: style.id,
+      });
+    }
+    state.lastCellSignatures.set(key, signature);
+  }
+
+  private buildPatchedCellSignature(
+    snapshot: CellSnapshot,
+    displayText: string,
+    copyText: string,
+    editorText: string,
+    formatId: number,
+    styleId: string,
+  ): string {
+    return [
+      snapshot.version,
+      snapshot.flags,
+      snapshot.formula ?? "",
+      snapshot.input ?? "",
+      snapshot.format ?? "",
+      snapshot.styleId ?? "",
+      formatId,
       styleId,
-    };
+      this.snapshotValueSignature(snapshot),
+      displayText,
+      copyText,
+      editorText,
+    ].join("|");
   }
 
   private getStyleRecord(styleId: string): CellStyleRecord {
@@ -499,10 +669,17 @@ export class WorkbookWorkerRuntime {
     defaultSize: number,
     previous: Map<number, string>,
     full: boolean,
+    invalidatedAxes: readonly { startIndex: number; endIndex: number }[] = [],
   ): { patches: ViewportAxisPatch[]; signatures: Map<number, string> } {
-    const signatures = new Map<number, string>();
+    if (!full && invalidatedAxes.length === 0) {
+      return { patches: [], signatures: previous };
+    }
+    const signatures = full ? new Map<number, string>() : new Map(previous);
     const patches: ViewportAxisPatch[] = [];
-    for (let index = start; index <= end; index += 1) {
+    const indices = full
+      ? this.collectAxisIndices(start, end, null)
+      : this.collectAxisIndices(start, end, invalidatedAxes);
+    for (const index of indices) {
       const entry = entries.get(index);
       const size = entry?.size ?? defaultSize;
       const hidden = entry?.hidden ?? false;
@@ -519,6 +696,61 @@ export class WorkbookWorkerRuntime {
     entries: readonly WorkbookAxisEntrySnapshot[],
   ): Map<number, WorkbookAxisEntrySnapshot> {
     return new Map(entries.map((entry) => [entry.index, entry]));
+  }
+
+  private collectViewportAddresses(
+    sheetName: string,
+    viewport: ViewportPatchSubscription,
+    changedAddresses: ReadonlySet<string> | null,
+    invalidatedRanges: readonly CellRangeRef[],
+  ): Set<string> {
+    const addresses = new Set<string>(changedAddresses ?? []);
+    for (let index = 0; index < invalidatedRanges.length; index += 1) {
+      const range = invalidatedRanges[index]!;
+      const start = parseCellAddress(range.startAddress, sheetName);
+      const end = parseCellAddress(range.endAddress, sheetName);
+      const rowStart = Math.max(viewport.rowStart, Math.min(start.row, end.row));
+      const rowEnd = Math.min(viewport.rowEnd, Math.max(start.row, end.row));
+      const colStart = Math.max(viewport.colStart, Math.min(start.col, end.col));
+      const colEnd = Math.min(viewport.colEnd, Math.max(start.col, end.col));
+      if (rowStart > rowEnd || colStart > colEnd) {
+        continue;
+      }
+      for (let row = rowStart; row <= rowEnd; row += 1) {
+        for (let col = colStart; col <= colEnd; col += 1) {
+          addresses.add(formatAddress(row, col));
+        }
+      }
+    }
+    return addresses;
+  }
+
+  private collectAxisIndices(
+    start: number,
+    end: number,
+    invalidatedAxes: readonly { startIndex: number; endIndex: number }[] | null,
+  ): number[] {
+    if (invalidatedAxes === null) {
+      const indices: number[] = [];
+      for (let index = start; index <= end; index += 1) {
+        indices.push(index);
+      }
+      return indices;
+    }
+
+    const indices = new Set<number>();
+    for (let axisIndex = 0; axisIndex < invalidatedAxes.length; axisIndex += 1) {
+      const axis = invalidatedAxes[axisIndex]!;
+      const clampedStart = Math.max(start, axis.startIndex);
+      const clampedEnd = Math.min(end, axis.endIndex);
+      if (clampedStart > clampedEnd) {
+        continue;
+      }
+      for (let index = clampedStart; index <= clampedEnd; index += 1) {
+        indices.add(index);
+      }
+    }
+    return Array.from(indices).toSorted((left, right) => left - right);
   }
 
   private normalizeViewport(subscription: ViewportPatchSubscription): ViewportPatchSubscription {
@@ -561,6 +793,43 @@ export class WorkbookWorkerRuntime {
 
   private toDisplayText(snapshot: CellSnapshot): string {
     return formatCellDisplayValue(snapshot.value, snapshot.format);
+  }
+
+  private collectChangedAddressesBySheet(
+    changedCellIndices: readonly number[] | Uint32Array,
+  ): Map<string, Set<string>> {
+    const changedBySheet = new Map<string, Set<string>>();
+    const workbook = this.requireEngine().workbook;
+
+    for (let index = 0; index < changedCellIndices.length; index += 1) {
+      const qualifiedAddress = workbook.getQualifiedAddress(changedCellIndices[index]!);
+      const separator = qualifiedAddress.indexOf("!");
+      if (separator <= 0) {
+        continue;
+      }
+      const sheetName = qualifiedAddress.slice(0, separator);
+      const address = qualifiedAddress.slice(separator + 1);
+      const sheetAddresses = changedBySheet.get(sheetName) ?? new Set<string>();
+      sheetAddresses.add(address);
+      changedBySheet.set(sheetName, sheetAddresses);
+    }
+
+    return changedBySheet;
+  }
+
+  private snapshotValueSignature(snapshot: CellSnapshot): string {
+    switch (snapshot.value.tag) {
+      case ValueTag.Number:
+        return `n:${snapshot.value.value}`;
+      case ValueTag.Boolean:
+        return `b:${snapshot.value.value ? 1 : 0}`;
+      case ValueTag.String:
+        return `s:${snapshot.value.stringId}:${snapshot.value.value}`;
+      case ValueTag.Error:
+        return `e:${snapshot.value.code}`;
+      case ValueTag.Empty:
+        return "empty";
+    }
   }
 
   private emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {

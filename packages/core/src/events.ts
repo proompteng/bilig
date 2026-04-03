@@ -1,4 +1,13 @@
-import type { EngineEvent } from "@bilig/protocol";
+import type { CellRangeRef, EngineEvent } from "@bilig/protocol";
+import { parseCellAddress } from "@bilig/formula";
+
+interface NormalizedRange {
+  sheetName: string;
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+}
 
 export class EngineEventBus {
   private readonly listeners = new Set<(event: EngineEvent) => void>();
@@ -89,7 +98,7 @@ export class EngineEventBus {
       listener(event);
     }
 
-    if (changedCellIndices.length === 0) {
+    if (changedCellIndices.length === 0 && event.invalidatedRanges.length === 0) {
       return;
     }
 
@@ -110,6 +119,34 @@ export class EngineEventBus {
         this.notifyListener(listener);
       });
     }
+
+    if (event.invalidatedRanges.length === 0 || !resolveAddress) {
+      return;
+    }
+
+    const normalizedRanges = normalizeRanges(event.invalidatedRanges);
+    if (normalizedRanges.length === 0) {
+      return;
+    }
+
+    this.cellIndexListeners.forEach((listeners, cellIndex) => {
+      const qualifiedAddress = resolveAddress(cellIndex);
+      if (!isQualifiedAddressInRanges(qualifiedAddress, normalizedRanges)) {
+        return;
+      }
+      listeners.forEach((listener) => {
+        this.notifyListener(listener);
+      });
+    });
+
+    this.addressListeners.forEach((listeners, qualifiedAddress) => {
+      if (!isQualifiedAddressInRanges(qualifiedAddress, normalizedRanges)) {
+        return;
+      }
+      listeners.forEach((listener) => {
+        this.notifyListener(listener);
+      });
+    });
   }
 
   emitAllWatched(event: EngineEvent): void {
@@ -166,4 +203,46 @@ export class EngineEventBus {
     this.listenerIds.set(listener, nextId);
     return nextId;
   }
+}
+
+function normalizeRanges(ranges: readonly CellRangeRef[]): NormalizedRange[] {
+  return ranges.map((range) => {
+    const start = parseCellAddress(range.startAddress, range.sheetName);
+    const end = parseCellAddress(range.endAddress, range.sheetName);
+    return {
+      sheetName: range.sheetName,
+      startRow: Math.min(start.row, end.row),
+      endRow: Math.max(start.row, end.row),
+      startCol: Math.min(start.col, end.col),
+      endCol: Math.max(start.col, end.col),
+    };
+  });
+}
+
+function isQualifiedAddressInRanges(
+  qualifiedAddress: string,
+  ranges: readonly NormalizedRange[],
+): boolean {
+  const separator = qualifiedAddress.indexOf("!");
+  if (separator <= 0) {
+    return false;
+  }
+  const sheetName = qualifiedAddress.slice(0, separator);
+  const address = qualifiedAddress.slice(separator + 1);
+  const parsed = parseCellAddress(address, sheetName);
+  for (let index = 0; index < ranges.length; index += 1) {
+    const range = ranges[index]!;
+    if (range.sheetName !== sheetName) {
+      continue;
+    }
+    if (
+      parsed.row >= range.startRow &&
+      parsed.row <= range.endRow &&
+      parsed.col >= range.startCol &&
+      parsed.col <= range.endCol
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

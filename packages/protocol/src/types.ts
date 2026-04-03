@@ -86,9 +86,19 @@ export interface RecalcMetrics {
   compileMs: number;
 }
 
+export interface AxisInvalidation {
+  sheetName: string;
+  startIndex: number;
+  endIndex: number;
+}
+
 export interface EngineEvent {
   kind: "batch";
+  invalidation: "cells" | "full";
   changedCellIndices: Uint32Array | number[];
+  invalidatedRanges: CellRangeRef[];
+  invalidatedRows: AxisInvalidation[];
+  invalidatedColumns: AxisInvalidation[];
   metrics: RecalcMetrics;
 }
 

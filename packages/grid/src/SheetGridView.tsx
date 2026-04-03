@@ -1,11 +1,12 @@
 import {
+  startTransition,
+  useDeferredValue,
   useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
 import type { CellStyleRecord, Viewport } from "@bilig/protocol";
@@ -22,6 +23,11 @@ import {
 } from "@glideapps/glide-data-grid";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
 import {
+  buildBorderOverlayState,
+  shouldRefreshBorderOverlay,
+  type BorderOverlaySegment,
+} from "./gridBorderOverlay.js";
+import {
   EMPTY_COLUMN_WIDTHS,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
@@ -30,53 +36,50 @@ import {
   type GridRect,
 } from "./gridMetrics.js";
 import {
-  createColumnSelection,
-  createColumnSliceSelection,
   createGridSelection,
-  createRangeSelection,
-  createRowSelection,
-  createRowSliceSelection,
-  createSheetSelection,
   formatSelectionSummary,
   rectangleToAddresses,
 } from "./gridSelection.js";
-import { resolveActivatedCell, resolveSelectionChange } from "./gridSelectionSync.js";
 import {
   createPointerGeometry,
-  resolveColumnResizeTarget,
   resolveHeaderSelection as resolveHeaderSelectionFromGeometry,
   resolveHeaderSelectionForDrag as resolveHeaderSelectionForDragFromGeometry,
   resolvePointerCell as resolvePointerCellFromGeometry,
+  resolveColumnResizeTarget,
   type HeaderSelection,
   type PointerGeometry,
   type VisibleRegionState,
 } from "./gridPointer.js";
-import {
-  resolveBodyDragSelection,
-  resolveBodyPointerUpResult,
-  resolveHeaderDragSelection,
-} from "./gridDragSelection.js";
-import { parseClipboardPlainText } from "./gridClipboard.js";
 import { cellToEditorSeed, cellToGridCell, getResolvedCellFontFamily } from "./gridCells.js";
-import {
-  isClipboardShortcut,
-  isHandledGridKey,
-  isNavigationKey,
-  isPrintableKey,
-  normalizeKeyboardKey,
-} from "./gridKeyboard.js";
-import { resolveGridKeyAction } from "./gridKeyActions.js";
+import { isHandledGridKey } from "./gridKeyboard.js";
 import { getEditorTextAlign, getGridTheme, getOverlayStyle } from "./gridPresentation.js";
+import type { InternalClipboardRange } from "./gridInternalClipboard.js";
 import {
-  resolveBodyDoubleClickIntent,
-  resolveHeaderClickIntent,
-  shouldSkipGridSelectionChange,
-} from "./gridEventPolicy.js";
+  finishGridResize,
+  handleGridBodyDoubleClick,
+  handleGridCellActivated,
+  handleGridHeaderClick,
+  handleGridPointerDown,
+  handleGridPointerMove,
+  handleGridPointerUp,
+  handleGridSelectionChange,
+  startGridResize,
+} from "./gridInteractionController.js";
 import {
-  buildInternalClipboardRange,
-  matchesInternalClipboardPaste,
-  type InternalClipboardRange,
-} from "./gridInternalClipboard.js";
+  clearGridPendingPointerActivation,
+  resetGridPointerInteraction,
+} from "./gridInteractionState.js";
+import {
+  applyGridClipboardValues,
+  captureGridClipboardSelection,
+  getNormalizedGridKeyboardKey,
+  handleGridCopyCapture,
+  handleGridKey as dispatchGridKey,
+  handleGridPasteCapture,
+  shouldHandleDataEditorGridKey,
+  shouldHandleGridWindowKey,
+  type GridKeyboardEventLike,
+} from "./gridClipboardKeyboardController.js";
 import type { GridEngineLike } from "./grid-engine.js";
 
 export type EditMovement = readonly [-1 | 0 | 1, -1 | 0 | 1];
@@ -89,7 +92,6 @@ export type SheetGridViewportSubscription = (
 
 interface SheetGridViewProps {
   engine: GridEngineLike;
-  dataRevision?: number | undefined;
   sheetName: string;
   selectedAddr: string;
   editorValue: string;
@@ -132,26 +134,6 @@ interface SheetGridViewProps {
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
 }
 
-interface BorderOverlaySegment {
-  key: string;
-  style: CSSProperties;
-}
-
-function isCellEditorInputFocused(): boolean {
-  if (typeof document === "undefined") {
-    return false;
-  }
-  const activeElement = document.activeElement;
-  return (
-    activeElement instanceof HTMLInputElement &&
-    activeElement.dataset["testid"] === "cell-editor-input"
-  );
-}
-
-function isEditableElement(element: Element | null): element is HTMLElement {
-  return element instanceof HTMLElement && element.isContentEditable;
-}
-
 function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): boolean {
   if (left === right) {
     return true;
@@ -167,9 +149,19 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
   );
 }
 
+function sameVisibleRegion(left: VisibleRegionState, right: VisibleRegionState): boolean {
+  return (
+    left.tx === right.tx &&
+    left.ty === right.ty &&
+    left.range.x === right.range.x &&
+    left.range.y === right.range.y &&
+    left.range.width === right.range.width &&
+    left.range.height === right.range.height
+  );
+}
+
 export function SheetGridView({
   engine,
-  dataRevision,
   sheetName,
   selectedAddr,
   editorValue,
@@ -212,6 +204,22 @@ export function SheetGridView({
   const columnResizeActiveRef = useRef(false);
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingTypeSeedRef = useRef<string | null>(null);
+  const visibleBorderSignaturesRef = useRef(new Map<string, string>());
+  const interactionState = useMemo(
+    () => ({
+      ignoreNextPointerSelectionRef,
+      pendingPointerCellRef,
+      dragAnchorCellRef,
+      dragPointerCellRef,
+      dragHeaderSelectionRef,
+      dragViewportRef,
+      dragGeometryRef,
+      dragDidMoveRef,
+      postDragSelectionExpiryRef,
+      columnResizeActiveRef,
+    }),
+    [],
+  );
   const [borderOverlayRevision, setBorderOverlayRevision] = useState(0);
   const [borderSegments, setBorderSegments] = useState<readonly BorderOverlaySegment[]>([]);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
@@ -243,6 +251,12 @@ export function SheetGridView({
       })),
     [columnWidths, gridMetrics.columnWidth],
   );
+  const columnWidthOverridesAttr = useMemo(() => {
+    const entries = Object.entries(columnWidths).toSorted(
+      ([left], [right]) => Number(left) - Number(right),
+    );
+    return entries.length === 0 ? "{}" : JSON.stringify(Object.fromEntries(entries));
+  }, [columnWidths]);
 
   const getCellContent = useCallback(
     ([col, row]: Item) => cellToGridCell(engine, sheetName, formatAddress(row, col)),
@@ -271,6 +285,8 @@ export function SheetGridView({
     [visibleItems],
   );
   const visibleDamage = useMemo(() => visibleItems.map((cell) => ({ cell })), [visibleItems]);
+  const deferredVisibleRegion = useDeferredValue(visibleRegion);
+  const deferredVisibleItems = useDeferredValue(visibleItems);
   const viewport = useMemo<Viewport>(
     () => ({
       rowStart: visibleRegion.range.y,
@@ -294,21 +310,25 @@ export function SheetGridView({
     if (subscribeViewport) {
       return subscribeViewport(sheetName, viewport, (damage) => {
         editorRef.current?.updateCells(damage ? [...damage] : visibleDamage);
-        setBorderOverlayRevision((current) => current + 1);
+        if (
+          !damage ||
+          shouldRefreshBorderOverlay(visibleBorderSignaturesRef.current, engine, sheetName, damage)
+        ) {
+          startTransition(() => {
+            setBorderOverlayRevision((current) => current + 1);
+          });
+        }
       });
     }
     return engine.subscribeCells(sheetName, visibleAddresses, () => {
       editorRef.current?.updateCells(visibleDamage);
-      setBorderOverlayRevision((current) => current + 1);
+      startTransition(() => {
+        setBorderOverlayRevision((current) => current + 1);
+      });
     });
   }, [engine, sheetName, subscribeViewport, viewport, visibleAddresses, visibleDamage]);
 
-  useLayoutEffect(() => {
-    editorRef.current?.updateCells(visibleDamage);
-    setBorderOverlayRevision((current) => current + 1);
-  }, [dataRevision, visibleDamage]);
-
-  useLayoutEffect(() => {
+  useEffect(() => {
     const hostBounds = hostRef.current?.getBoundingClientRect();
     const editor = editorRef.current;
     if (!hostBounds || !editor) {
@@ -316,46 +336,16 @@ export function SheetGridView({
       return;
     }
 
-    const segments = new Map<string, BorderOverlaySegment>();
-    for (const [col, row] of visibleItems) {
-      const snapshot = engine.getCell(sheetName, formatAddress(row, col));
-      const style = engine.getCellStyle(snapshot.styleId);
-      if (!style?.borders) {
-        continue;
-      }
-      const bounds = editor.getBounds(col, row);
-      if (!bounds) {
-        continue;
-      }
-
-      const rect = {
-        x: bounds.x - hostBounds.left,
-        y: bounds.y - hostBounds.top,
-        width: bounds.width,
-        height: bounds.height,
-      };
-
-      const borderEntries = [
-        ["top", style.borders.top],
-        ["right", style.borders.right],
-        ["bottom", style.borders.bottom],
-        ["left", style.borders.left],
-      ] as const;
-
-      for (const [side, border] of borderEntries) {
-        if (!border) {
-          continue;
-        }
-        const descriptor = createBorderOverlayDescriptor(rect, side, border);
-        if (!descriptor) {
-          continue;
-        }
-        segments.set(descriptor.key, descriptor.segment);
-      }
-    }
-
-    setBorderSegments([...segments.values()]);
-  }, [borderOverlayRevision, engine, sheetName, visibleItems, visibleRegion]);
+    const nextOverlayState = buildBorderOverlayState(
+      engine,
+      sheetName,
+      deferredVisibleItems,
+      hostBounds,
+      (col, row) => editor.getBounds(col, row),
+    );
+    visibleBorderSignaturesRef.current = nextOverlayState.signatures;
+    setBorderSegments(nextOverlayState.segments);
+  }, [borderOverlayRevision, deferredVisibleItems, deferredVisibleRegion, engine, sheetName]);
 
   useLayoutEffect(() => {
     editorRef.current?.scrollTo(selectedCell.col, selectedCell.row);
@@ -374,36 +364,44 @@ export function SheetGridView({
       ) {
         return current;
       }
-      pendingPointerCellRef.current = null;
-      dragAnchorCellRef.current = null;
-      dragPointerCellRef.current = null;
+      clearGridPendingPointerActivation(interactionState);
       dragGeometryRef.current = null;
       return createGridSelection(selectedCell.col, selectedCell.row);
     });
-  }, [selectedCell.col, selectedCell.row, sheetName]);
+  }, [interactionState, selectedCell.col, selectedCell.row, sheetName]);
 
-  useEffect(() => {
+  const refreshOverlayBounds = useCallback(() => {
+    const next = editorRef.current?.getBounds(selectedCell.col, selectedCell.row);
+    setOverlayBounds((current) => {
+      if (!next) {
+        return current;
+      }
+      return sameBounds(current, next) ? current : next;
+    });
+  }, [selectedCell.col, selectedCell.row]);
+
+  useLayoutEffect(() => {
     if (!isEditingCell) {
       setOverlayBounds(undefined);
       return;
     }
 
-    let frame = 0;
-    const tick = () => {
-      const next = editorRef.current?.getBounds(selectedCell.col, selectedCell.row);
-      setOverlayBounds((current) => {
-        if (!next) {
-          return current;
-        }
-        return sameBounds(current, next) ? current : next;
-      });
-      frame = window.requestAnimationFrame(tick);
-    };
-    frame = window.requestAnimationFrame(tick);
+    const frame = window.requestAnimationFrame(refreshOverlayBounds);
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [isEditingCell, selectedCell.col, selectedCell.row, visibleRegion.tx, visibleRegion.ty]);
+  }, [isEditingCell, refreshOverlayBounds, visibleRegion.tx, visibleRegion.ty]);
+
+  useEffect(() => {
+    if (!isEditingCell) {
+      return;
+    }
+    const handleWindowResize = () => refreshOverlayBounds();
+    window.addEventListener("resize", handleWindowResize);
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+    };
+  }, [isEditingCell, refreshOverlayBounds]);
 
   const focusGrid = useCallback(() => {
     editorRef.current?.focus();
@@ -548,240 +546,85 @@ export function SheetGridView({
 
   const applyClipboardValues = useCallback(
     (target: Item, values: readonly (readonly string[])[]) => {
-      if (values.length === 0 || values[0]?.length === 0) {
-        return;
-      }
-
-      const internalClipboard = internalClipboardRef.current;
-      if (matchesInternalClipboardPaste(internalClipboard, values)) {
-        if (!internalClipboard) {
-          return;
-        }
-        onCopyRange(
-          internalClipboard.sourceStartAddress,
-          internalClipboard.sourceEndAddress,
-          formatAddress(target[1], target[0]),
-          formatAddress(
-            target[1] + internalClipboard.rowCount - 1,
-            target[0] + internalClipboard.colCount - 1,
-          ),
-        );
-        return;
-      }
-
-      onPaste(sheetName, formatAddress(target[1], target[0]), values);
+      applyGridClipboardValues({
+        internalClipboardRef,
+        onCopyRange,
+        onPaste,
+        sheetName,
+        target,
+        values,
+      });
     },
     [onCopyRange, onPaste, sheetName],
   );
 
   const captureInternalClipboardSelection = useCallback(() => {
-    const range = gridSelection.current?.range;
-    if (!range || gridSelection.columns.length > 0 || gridSelection.rows.length > 0) {
-      internalClipboardRef.current = null;
-      return;
-    }
-
-    const values = Array.from({ length: range.height }, (_rowEntry, rowOffset) =>
-      Array.from({ length: range.width }, (_colEntry, colOffset) =>
-        cellToEditorSeed(
-          engine.getCell(sheetName, formatAddress(range.y + rowOffset, range.x + colOffset)),
-        ),
-      ),
-    );
-
-    internalClipboardRef.current = buildInternalClipboardRange(range, values);
+    return captureGridClipboardSelection({
+      engine,
+      gridSelection,
+      internalClipboardRef,
+      sheetName,
+    });
   }, [engine, gridSelection, sheetName]);
 
   useEffect(() => {
     onSelectionLabelChange?.(selectionSummary);
   }, [onSelectionLabelChange, selectionSummary]);
 
-  const currentSelectionCellCol = gridSelection.current?.cell?.[0] ?? null;
-  const currentSelectionCellRow = gridSelection.current?.cell?.[1] ?? null;
-  const currentSelectionRangeX = gridSelection.current?.range?.x ?? null;
-  const currentSelectionRangeY = gridSelection.current?.range?.y ?? null;
-  const currentSelectionRangeWidth = gridSelection.current?.range?.width ?? null;
-  const currentSelectionRangeHeight = gridSelection.current?.range?.height ?? null;
-
   const handleGridKey = useCallback(
-    (event: {
-      key: string;
-      ctrlKey: boolean;
-      metaKey: boolean;
-      altKey: boolean;
-      shiftKey?: boolean;
-      preventDefault(): void;
-      cancel?: () => void;
-    }) => {
-      const currentSelectionCell: [number, number] | null =
-        currentSelectionCellCol === null || currentSelectionCellRow === null
-          ? null
-          : [currentSelectionCellCol, currentSelectionCellRow];
-      const currentSelectionRange =
-        currentSelectionRangeX === null ||
-        currentSelectionRangeY === null ||
-        currentSelectionRangeWidth === null ||
-        currentSelectionRangeHeight === null
-          ? null
-          : {
-              x: currentSelectionRangeX,
-              y: currentSelectionRangeY,
-              width: currentSelectionRangeWidth,
-              height: currentSelectionRangeHeight,
-            };
-
-      const action = resolveGridKeyAction({
-        event,
-        isEditingCell,
+    (event: GridKeyboardEventLike) => {
+      dispatchGridKey({
+        applyClipboardValues,
+        beginSelectedEdit,
+        captureInternalClipboardSelection,
         editorValue,
-        editorInputFocused: isCellEditorInputFocused(),
-        pendingTypeSeed: pendingTypeSeedRef.current,
-        selectedCell: [selectedCell.col, selectedCell.row],
-        currentSelectionCell,
-        currentRangeAnchor: currentSelectionCell,
-        currentSelectionRange,
+        event,
+        gridSelection,
+        isEditingCell,
+        onCancelEdit,
+        onClearCell,
+        onCommitEdit,
+        onEditorChange,
+        onSelect,
+        pendingKeyboardPasteSequenceRef,
+        pendingTypeSeedRef,
+        selectedCell,
+        setGridSelection,
+        suppressNextNativePasteRef,
       });
-
-      if (action.kind === "none") {
-        return;
-      }
-
-      event.preventDefault();
-      event.cancel?.();
-
-      switch (action.kind) {
-        case "edit-append":
-          onEditorChange(action.value);
-          return;
-        case "commit-edit":
-          onCommitEdit(action.movement);
-          return;
-        case "cancel-edit":
-          onCancelEdit();
-          return;
-        case "begin-edit":
-          pendingTypeSeedRef.current = action.pendingTypeSeed;
-          beginSelectedEdit(action.seed, action.selectionBehavior);
-          return;
-        case "move-selection":
-          setGridSelection(createGridSelection(action.cell[0], action.cell[1]));
-          onSelect(formatAddress(action.cell[1], action.cell[0]));
-          return;
-        case "extend-selection":
-          setGridSelection(
-            createRangeSelection(
-              createGridSelection(action.anchor[0], action.anchor[1]),
-              action.anchor,
-              action.target,
-            ),
-          );
-          return;
-        case "clear-cell":
-          pendingTypeSeedRef.current = action.pendingTypeSeed;
-          onClearCell();
-          return;
-        case "clipboard-copy": {
-          captureInternalClipboardSelection();
-          const clipboard = internalClipboardRef.current;
-          if (clipboard && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-            void navigator.clipboard.writeText(clipboard.plainText).catch(() => {});
-          }
-          return;
-        }
-        case "clipboard-cut":
-          captureInternalClipboardSelection();
-          return;
-        case "clipboard-paste": {
-          pendingKeyboardPasteSequenceRef.current += 1;
-          const sequence = pendingKeyboardPasteSequenceRef.current;
-          if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
-            void navigator.clipboard
-              .readText()
-              .then((rawText) => {
-                if (pendingKeyboardPasteSequenceRef.current !== sequence) {
-                  return undefined;
-                }
-                pendingKeyboardPasteSequenceRef.current = 0;
-                const values = parseClipboardPlainText(rawText);
-                applyClipboardValues(action.target, values);
-                suppressNextNativePasteRef.current = true;
-                return undefined;
-              })
-              .catch(() => {
-                if (pendingKeyboardPasteSequenceRef.current === sequence) {
-                  pendingKeyboardPasteSequenceRef.current = 0;
-                }
-                return undefined;
-              });
-          }
-          return;
-        }
-        case "select-row":
-          setGridSelection(createRowSelection(action.col, action.row));
-          return;
-        case "select-column":
-          setGridSelection(createColumnSelection(action.col, action.row));
-          return;
-        case "select-all":
-          setGridSelection(createSheetSelection());
-          return;
-      }
     },
     [
       applyClipboardValues,
       beginSelectedEdit,
       captureInternalClipboardSelection,
-      currentSelectionCellCol,
-      currentSelectionCellRow,
-      currentSelectionRangeHeight,
-      currentSelectionRangeWidth,
-      currentSelectionRangeX,
-      currentSelectionRangeY,
       editorValue,
+      gridSelection,
       isEditingCell,
       onCancelEdit,
       onClearCell,
       onCommitEdit,
       onEditorChange,
       onSelect,
-      selectedCell.col,
-      selectedCell.row,
+      selectedCell,
     ],
   );
 
   useEffect(() => {
     const handleWindowKeyDown = (event: KeyboardEvent) => {
-      const normalizedKey = normalizeKeyboardKey(event.key, event.code);
+      const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code);
       const activeElement = document.activeElement;
       if (
-        activeElement instanceof HTMLInputElement ||
-        activeElement instanceof HTMLTextAreaElement ||
-        activeElement instanceof HTMLSelectElement ||
-        isEditableElement(activeElement)
-      ) {
-        return;
-      }
-
-      const withinGridHost = Boolean(activeElement && hostRef.current?.contains(activeElement));
-      const onDocumentBody =
-        activeElement === document.body ||
-        activeElement === document.documentElement ||
-        activeElement === null;
-      if (withinGridHost) {
-        return;
-      }
-      if (!onDocumentBody) {
-        return;
-      }
-
-      if (
-        !isHandledGridKey({
-          altKey: event.altKey,
-          ctrlKey: event.ctrlKey,
-          key: normalizedKey,
-          metaKey: event.metaKey,
-          shiftKey: event.shiftKey,
-        })
+        !shouldHandleGridWindowKey(
+          {
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            key: normalizedKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+          },
+          activeElement,
+          hostRef.current,
+        )
       ) {
         return;
       }
@@ -881,15 +724,13 @@ export function SheetGridView({
           return;
         }
         const cell = cellToGridCell(engine, sheetName, formatAddress(row, col));
-        const snapshot = engine.getCell(sheetName, formatAddress(row, col));
-        const style = engine.getCellStyle(snapshot.styleId);
         const displayText =
           "displayData" in cell
             ? String(cell.displayData ?? "")
             : "copyData" in cell
               ? String(cell.copyData ?? "")
               : "";
-        context.font = `400 ${gridTheme.editorFontSize} ${getResolvedCellFontFamily(style?.font?.family)}`;
+        context.font = `400 ${gridTheme.editorFontSize} ${getResolvedCellFontFamily()}`;
         measuredWidth = Math.max(measuredWidth, context.measureText(displayText).width);
       });
 
@@ -914,8 +755,8 @@ export function SheetGridView({
         args.ctx.fillRect(
           args.rect.x + 1,
           args.rect.y + 1,
-          Math.max(0, args.rect.width - 1),
-          Math.max(0, args.rect.height - 1),
+          Math.max(0, args.rect.width - 2),
+          Math.max(0, args.rect.height - 2),
         );
         args.ctx.restore();
       }
@@ -936,24 +777,21 @@ export function SheetGridView({
   );
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col bg-white" data-testid="sheet-grid-shell">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]"
+      data-testid="sheet-grid-shell"
+    >
       <div
-        className="sheet-grid-host min-h-0 flex-1 bg-white pr-2 pb-2 [--gdg-accent-color:#1a73e8]"
-        data-column-width-overrides={JSON.stringify(columnWidths)}
-        data-default-column-width={String(gridMetrics.columnWidth)}
+        className="sheet-grid-host min-h-0 flex-1 bg-[var(--wb-surface)] pr-2 pb-2"
+        data-column-width-overrides={columnWidthOverridesAttr}
+        data-default-column-width={gridMetrics.columnWidth}
         data-testid="sheet-grid"
         role="grid"
         onKeyDownCapture={(event) => {
-          const normalizedKey = normalizeKeyboardKey(event.key, event.code);
-          ignoreNextPointerSelectionRef.current = false;
-          pendingPointerCellRef.current = null;
-          dragAnchorCellRef.current = null;
-          dragPointerCellRef.current = null;
-          dragHeaderSelectionRef.current = null;
-          dragGeometryRef.current = null;
-          dragDidMoveRef.current = false;
-          dragViewportRef.current = null;
-          postDragSelectionExpiryRef.current = 0;
+          const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code);
+          resetGridPointerInteraction(interactionState, {
+            clearIgnoreNextPointerSelection: true,
+          });
 
           if (
             !isHandledGridKey({
@@ -980,330 +818,102 @@ export function SheetGridView({
           }
         }}
         onCopyCapture={(event) => {
-          captureInternalClipboardSelection();
-          if (!event.clipboardData) {
-            return;
-          }
-          const clipboard = internalClipboardRef.current;
-          if (!clipboard) {
-            return;
-          }
-          event.clipboardData.setData("text/plain", clipboard.plainText);
-          event.preventDefault();
+          handleGridCopyCapture({
+            captureInternalClipboardSelection,
+            event,
+            internalClipboardRef,
+          });
         }}
         onPasteCapture={(event) => {
-          if (suppressNextNativePasteRef.current) {
-            suppressNextNativePasteRef.current = false;
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
-          const rawText = event.clipboardData?.getData("text/plain") ?? "";
-          const values = parseClipboardPlainText(rawText);
-          if (values.length === 0 || values[0]?.length === 0) {
-            return;
-          }
-          if (pendingKeyboardPasteSequenceRef.current !== 0) {
-            pendingKeyboardPasteSequenceRef.current = 0;
-          }
-
-          const target = gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row];
-          applyClipboardValues(target, values);
-          event.preventDefault();
-          event.stopPropagation();
+          handleGridPasteCapture({
+            applyClipboardValues,
+            event,
+            gridSelection,
+            pendingKeyboardPasteSequenceRef,
+            selectedCell,
+            suppressNextNativePasteRef,
+          });
         }}
         onKeyDown={(event) => handleGridKey(event)}
         onDoubleClickCapture={(event) => {
-          const activeGeometry = resolvePointerGeometry(visibleRegion);
-          if (!activeGeometry) {
-            return;
-          }
-          const doubleClickIntent = resolveBodyDoubleClickIntent({
-            resizeTarget: resolveColumnResizeTarget(
-              event.clientX,
-              event.clientY,
-              visibleRegion,
-              activeGeometry,
-              columnWidths,
-              gridMetrics.columnWidth,
-            ),
-            bodyCell: resolvePointerCell(
-              event.clientX,
-              event.clientY,
-              visibleRegion,
-              activeGeometry,
-            ),
+          handleGridBodyDoubleClick({
+            event,
+            applyColumnWidth,
+            beginEditAt,
+            columnWidths,
+            computeAutofitColumnWidth,
+            defaultColumnWidth: gridMetrics.columnWidth,
+            interactionState,
+            isEditingCell,
             lastBodyClickCell: lastBodyClickCellRef.current,
+            onAutofitColumn,
+            onCommitEdit: () => onCommitEdit(),
+            onSelect,
+            resolvePointerCell,
+            resolvePointerGeometry,
+            selectedCell: [selectedCell.col, selectedCell.row],
+            setGridSelection,
+            visibleRegion,
           });
-          if (doubleClickIntent.kind === "ignore") {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          if (doubleClickIntent.kind === "edit-cell") {
-            const editAddress = formatAddress(doubleClickIntent.cell[1], doubleClickIntent.cell[0]);
-            setGridSelection(
-              createGridSelection(doubleClickIntent.cell[0], doubleClickIntent.cell[1]),
-            );
-            onSelect(editAddress);
-            beginEditAt(editAddress);
-            return;
-          }
-          columnResizeActiveRef.current = false;
-          pendingPointerCellRef.current = null;
-          dragAnchorCellRef.current = null;
-          dragPointerCellRef.current = null;
-          dragHeaderSelectionRef.current = null;
-          dragGeometryRef.current = null;
-          dragDidMoveRef.current = false;
-          dragViewportRef.current = null;
-          postDragSelectionExpiryRef.current = 0;
-          if (onAutofitColumn) {
-            void Promise.resolve(
-              onAutofitColumn(
-                doubleClickIntent.columnIndex,
-                computeAutofitColumnWidth(doubleClickIntent.columnIndex),
-              ),
-            );
-            return;
-          }
-          applyColumnWidth(
-            doubleClickIntent.columnIndex,
-            computeAutofitColumnWidth(doubleClickIntent.columnIndex),
-          );
         }}
         onPointerMoveCapture={(event) => {
-          if (columnResizeActiveRef.current) {
-            return;
-          }
-          if ((event.buttons & 1) !== 1) {
-            return;
-          }
-          const headerAnchor = dragHeaderSelectionRef.current;
-          if (headerAnchor) {
-            const nextHeader = resolveHeaderSelectionForPointerDrag(
-              headerAnchor.kind,
-              event.clientX,
-              event.clientY,
-              dragViewportRef.current ?? visibleRegion,
-              dragGeometryRef.current,
-            );
-            if (!nextHeader || nextHeader.index === headerAnchor.index) {
-              return;
-            }
-            dragPointerCellRef.current = null;
-            dragDidMoveRef.current = true;
-            setGridSelection(
-              resolveHeaderDragSelection(headerAnchor, nextHeader.index, [
-                selectedCell.col,
-                selectedCell.row,
-              ]).selection,
-            );
-            return;
-          }
-          if (dragAnchorCellRef.current === null) {
-            return;
-          }
-          const pointerCell = resolvePointerCell(
-            event.clientX,
-            event.clientY,
-            dragViewportRef.current ?? visibleRegion,
-            dragGeometryRef.current,
-          );
-          if (!pointerCell) {
-            return;
-          }
-          const currentPointer = dragPointerCellRef.current;
-          if (
-            currentPointer &&
-            currentPointer[0] === pointerCell[0] &&
-            currentPointer[1] === pointerCell[1]
-          ) {
-            return;
-          }
-          dragPointerCellRef.current = pointerCell;
-          if (
-            pointerCell[0] !== dragAnchorCellRef.current[0] ||
-            pointerCell[1] !== dragAnchorCellRef.current[1]
-          ) {
-            dragDidMoveRef.current = true;
-            ignoreNextPointerSelectionRef.current = false;
-            setGridSelection(resolveBodyDragSelection(dragAnchorCellRef.current, pointerCell));
-          }
+          handleGridPointerMove({
+            dragAnchorCell: dragAnchorCellRef.current,
+            dragGeometry: dragGeometryRef.current,
+            dragHeaderSelection: dragHeaderSelectionRef.current,
+            dragPointerCell: dragPointerCellRef.current,
+            dragViewport: dragViewportRef.current,
+            event,
+            interactionState,
+            isEditingCell,
+            onCommitEdit: () => onCommitEdit(),
+            onSelect,
+            resolveHeaderSelectionForPointerDrag,
+            resolvePointerCell,
+            selectedCell: [selectedCell.col, selectedCell.row],
+            setGridSelection,
+            visibleRegion,
+          });
         }}
         onPointerDownCapture={(event) => {
-          if (event.button !== 0) {
-            return;
-          }
-          const activeGeometry = resolvePointerGeometry(visibleRegion);
-          if (
-            activeGeometry &&
-            resolveColumnResizeTarget(
-              event.clientX,
-              event.clientY,
-              visibleRegion,
-              activeGeometry,
-              columnWidths,
-              gridMetrics.columnWidth,
-            ) !== null
-          ) {
-            pendingPointerCellRef.current = null;
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-            dragHeaderSelectionRef.current = null;
-            dragGeometryRef.current = null;
-            dragDidMoveRef.current = false;
-            dragViewportRef.current = null;
-            postDragSelectionExpiryRef.current = 0;
-            return;
-          }
-          const headerSelection = resolveHeaderSelectionAtPointer(event.clientX, event.clientY);
-          if (headerSelection) {
-            pendingPointerCellRef.current = null;
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-            dragHeaderSelectionRef.current = headerSelection;
-            dragGeometryRef.current = null;
-            dragDidMoveRef.current = false;
-            dragViewportRef.current = null;
-            postDragSelectionExpiryRef.current = 0;
-            if (isEditingCell) {
-              onCommitEdit();
-            }
-            dragGeometryRef.current = activeGeometry;
-            dragViewportRef.current = visibleRegion;
-            if (headerSelection.kind === "row") {
-              ignoreNextPointerSelectionRef.current = true;
-              setGridSelection(
-                createRowSliceSelection(
-                  selectedCell.col,
-                  headerSelection.index,
-                  headerSelection.index,
-                ),
-              );
-              onSelect(formatAddress(headerSelection.index, selectedCell.col));
-              focusGrid();
-              return;
-            }
-            ignoreNextPointerSelectionRef.current = true;
-            setGridSelection(
-              createColumnSliceSelection(
-                headerSelection.index,
-                headerSelection.index,
-                selectedCell.row,
-              ),
-            );
-            onSelect(formatAddress(selectedCell.row, headerSelection.index));
-            focusGrid();
-            return;
-          }
-          const pointerCell = resolvePointerCell(event.clientX, event.clientY);
-          ignoreNextPointerSelectionRef.current = pointerCell === null;
-          pendingPointerCellRef.current = pointerCell;
-          dragGeometryRef.current = activeGeometry;
-          dragDidMoveRef.current = false;
-          dragViewportRef.current = visibleRegion;
-          if (pointerCell) {
-            const anchorCell: Item = event.shiftKey
-              ? [selectedCell.col, selectedCell.row]
-              : pointerCell;
-            dragAnchorCellRef.current = anchorCell;
-            dragPointerCellRef.current = pointerCell;
-            ignoreNextPointerSelectionRef.current = true;
-            setGridSelection(
-              event.shiftKey
-                ? resolveBodyDragSelection(anchorCell, pointerCell)
-                : createGridSelection(pointerCell[0], pointerCell[1]),
-            );
-            if (isEditingCell) {
-              onCommitEdit();
-            }
-            onSelect(
-              formatAddress(
-                event.shiftKey ? anchorCell[1] : pointerCell[1],
-                event.shiftKey ? anchorCell[0] : pointerCell[0],
-              ),
-            );
-          } else {
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-          }
-          focusGrid();
+          handleGridPointerDown({
+            columnWidths,
+            defaultColumnWidth: gridMetrics.columnWidth,
+            event,
+            focusGrid,
+            interactionState,
+            isEditingCell,
+            onCommitEdit: () => onCommitEdit(),
+            onSelect,
+            resolveColumnResizeTargetAtPointer: resolveColumnResizeTarget,
+            resolveHeaderSelectionAtPointer,
+            resolvePointerCell,
+            resolvePointerGeometry,
+            selectedCell: [selectedCell.col, selectedCell.row],
+            setGridSelection,
+            visibleRegion,
+          });
         }}
         onPointerUpCapture={(event) => {
-          if (columnResizeActiveRef.current) {
-            return;
-          }
-          const headerAnchor = dragHeaderSelectionRef.current;
-          if (headerAnchor) {
-            const finalHeader =
-              resolveHeaderSelectionForPointerDrag(
-                headerAnchor.kind,
-                event.clientX,
-                event.clientY,
-                dragViewportRef.current ?? visibleRegion,
-                dragGeometryRef.current,
-              ) ?? headerAnchor;
-            const resolvedHeaderDrag = resolveHeaderDragSelection(headerAnchor, finalHeader.index, [
-              selectedCell.col,
-              selectedCell.row,
-            ]);
-            setGridSelection(resolvedHeaderDrag.selection);
-            onSelect(resolvedHeaderDrag.addr);
-            window.requestAnimationFrame(() => {
-              pendingPointerCellRef.current = null;
-              dragAnchorCellRef.current = null;
-              dragPointerCellRef.current = null;
-              dragHeaderSelectionRef.current = null;
-              dragGeometryRef.current = null;
-              dragDidMoveRef.current = false;
-              dragViewportRef.current = null;
-            });
-            return;
-          }
-          const anchorCell = dragAnchorCellRef.current;
-          if (!anchorCell) {
-            return;
-          }
-
-          if (dragDidMoveRef.current) {
-            const pointerCell =
-              resolvePointerCell(
-                event.clientX,
-                event.clientY,
-                dragViewportRef.current ?? visibleRegion,
-                dragGeometryRef.current,
-              ) ??
-              dragPointerCellRef.current ??
-              anchorCell;
-            const pointerUpResult = resolveBodyPointerUpResult(anchorCell, pointerCell, true);
-            postDragSelectionExpiryRef.current = pointerUpResult.shouldSetDragExpiry
-              ? window.performance.now() + 200
-              : 0;
-            if (pointerUpResult.selection) {
-              setGridSelection(pointerUpResult.selection);
-            }
-            if (pointerUpResult.addr) {
-              onSelect(pointerUpResult.addr);
-            }
-            lastBodyClickCellRef.current = pointerUpResult.clickedCell;
-          } else {
-            const pointerUpResult = resolveBodyPointerUpResult(
-              anchorCell,
-              dragPointerCellRef.current ?? anchorCell,
-              false,
-            );
-            lastBodyClickCellRef.current = pointerUpResult.clickedCell;
-          }
-
-          window.requestAnimationFrame(() => {
-            pendingPointerCellRef.current = null;
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-            dragHeaderSelectionRef.current = null;
-            dragGeometryRef.current = null;
-            dragDidMoveRef.current = false;
-            dragViewportRef.current = null;
+          handleGridPointerUp({
+            dragAnchorCell: dragAnchorCellRef.current,
+            dragDidMove: dragDidMoveRef.current,
+            dragGeometry: dragGeometryRef.current,
+            dragHeaderSelection: dragHeaderSelectionRef.current,
+            dragPointerCell: dragPointerCellRef.current,
+            dragViewport: dragViewportRef.current,
+            event,
+            interactionState,
+            isEditingCell,
+            lastBodyClickCellRef,
+            onCommitEdit: () => onCommitEdit(),
+            onSelect,
+            postDragSelectionExpiryRef,
+            resolveHeaderSelectionForPointerDrag,
+            resolvePointerCell,
+            selectedCell: [selectedCell.col, selectedCell.row],
+            setGridSelection,
+            visibleRegion,
           });
         }}
         ref={hostRef}
@@ -1328,37 +938,24 @@ export function SheetGridView({
           maxColumnWidth={MAX_COLUMN_WIDTH}
           minColumnWidth={MIN_COLUMN_WIDTH}
           onColumnResizeStart={() => {
-            columnResizeActiveRef.current = true;
-            pendingPointerCellRef.current = null;
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-            dragHeaderSelectionRef.current = null;
-            dragGeometryRef.current = null;
-            dragDidMoveRef.current = false;
-            dragViewportRef.current = null;
-            postDragSelectionExpiryRef.current = 0;
+            startGridResize(interactionState);
           }}
           onColumnResize={(_column: GridColumn, newSize: number, columnIndex: number) => {
             applyColumnWidth(columnIndex, newSize);
           }}
           onColumnResizeEnd={(_column: GridColumn, newSize: number, columnIndex: number) => {
             applyColumnWidth(columnIndex, newSize);
-            window.requestAnimationFrame(() => {
-              columnResizeActiveRef.current = false;
-            });
+            finishGridResize(interactionState);
           }}
           onCellActivated={([col, row]) => {
-            const cell = resolveActivatedCell(
-              [col, row],
-              dragAnchorCellRef.current,
-              pendingPointerCellRef.current,
-            );
-            pendingPointerCellRef.current = null;
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-            setGridSelection(createGridSelection(cell[0], cell[1]));
-            const addr = formatAddress(cell[1], cell[0]);
-            onSelect(addr);
+            handleGridCellActivated({
+              activatedCell: [col, row],
+              dragAnchorCell: dragAnchorCellRef.current,
+              interactionState,
+              onSelect,
+              pendingPointerCell: pendingPointerCellRef.current,
+              setGridSelection,
+            });
           }}
           onDelete={() => {
             onClearCell();
@@ -1366,84 +963,37 @@ export function SheetGridView({
           }}
           onFillPattern={handleFillPattern}
           onHeaderClicked={(col, event) => {
-            const headerClickIntent = resolveHeaderClickIntent({
-              isEdge: event.isEdge,
-              isDoubleClick: Boolean(event.isDoubleClick),
-              columnResizeActive: columnResizeActiveRef.current,
+            handleGridHeaderClick({
+              applyColumnWidth,
               columnIndex: col,
+              computeAutofitColumnWidth,
+              event,
+              focusGrid,
+              interactionState,
+              isEditingCell,
+              onCommitEdit: () => onCommitEdit(),
+              onSelect,
               selectedRow: selectedCell.row,
+              setGridSelection,
             });
-            if (headerClickIntent.kind === "ignore") {
-              return;
-            }
-            if (headerClickIntent.kind === "autofit-column") {
-              applyColumnWidth(
-                headerClickIntent.columnIndex,
-                computeAutofitColumnWidth(headerClickIntent.columnIndex),
-              );
-              columnResizeActiveRef.current = false;
-              return;
-            }
-            ignoreNextPointerSelectionRef.current = true;
-            pendingPointerCellRef.current = null;
-            dragAnchorCellRef.current = null;
-            dragPointerCellRef.current = null;
-            dragHeaderSelectionRef.current = null;
-            dragGeometryRef.current = null;
-            dragViewportRef.current = null;
-            postDragSelectionExpiryRef.current = 0;
-            if (isEditingCell) {
-              onCommitEdit();
-            }
-            setGridSelection(
-              createColumnSelection(headerClickIntent.columnIndex, headerClickIntent.selectedRow),
-            );
-            onSelect(headerClickIntent.addr);
-            focusGrid();
           }}
           onGridSelectionChange={(nextSelection) => {
-            const selectionPolicy = shouldSkipGridSelectionChange({
-              columnResizeActive: columnResizeActiveRef.current,
-              postDragSelectionExpiry: postDragSelectionExpiryRef.current,
-              now: window.performance.now(),
-              ignoreNextPointerSelection: ignoreNextPointerSelectionRef.current,
-              hasDragViewport: dragViewportRef.current !== null,
-            });
-            if (selectionPolicy.clearPostDragSelectionExpiry) {
-              postDragSelectionExpiryRef.current = 0;
-            }
-            if (selectionPolicy.consumeIgnoreNextPointerSelection) {
-              ignoreNextPointerSelectionRef.current = false;
-            }
-            if (selectionPolicy.skip) {
-              return;
-            }
-            const resolvedSelection = resolveSelectionChange({
+            handleGridSelectionChange({
+              dragAnchorCell: dragAnchorCellRef.current,
+              dragPointerCell: dragPointerCellRef.current,
+              interactionState,
+              isEditingCell,
               nextSelection,
-              anchorCell: dragAnchorCellRef.current ?? pendingPointerCellRef.current,
-              pointerCell: dragPointerCellRef.current ?? pendingPointerCellRef.current,
+              now: window.performance.now(),
+              onCommitEdit: () => onCommitEdit(),
+              onSelect,
+              pendingPointerCell: pendingPointerCellRef.current,
               selectedCell: [selectedCell.col, selectedCell.row],
+              setGridSelection,
             });
-            if (!resolvedSelection) {
-              return;
-            }
-            setGridSelection(resolvedSelection.selection);
-            if (isEditingCell) {
-              onCommitEdit();
-            }
-            onSelect(resolvedSelection.addr);
           }}
           onKeyDown={(event) => {
-            if (
-              !isPrintableKey(event) &&
-              !isClipboardShortcut(event) &&
-              !isNavigationKey(event.key) &&
-              event.key !== "Enter" &&
-              event.key !== "Tab" &&
-              event.key !== "F2" &&
-              event.key !== "Backspace" &&
-              event.key !== "Delete"
-            ) {
+            if (!shouldHandleDataEditorGridKey(event)) {
               return;
             }
             handleGridKey(event);
@@ -1453,7 +1003,12 @@ export function SheetGridView({
             return false;
           }}
           onVisibleRegionChanged={(range, tx, ty) => {
-            setVisibleRegion({ range, tx, ty });
+            startTransition(() => {
+              setVisibleRegion((current) => {
+                const next = { range, tx, ty };
+                return sameVisibleRegion(current, next) ? current : next;
+              });
+            });
           }}
           rowHeight={gridMetrics.rowHeight}
           columnSelect="multi"
@@ -1523,7 +1078,7 @@ function drawCellUnderline(
     style.font?.italic ? "italic" : "",
     style.font?.bold ? "700" : "400",
     `${style.font?.size ?? size}px`,
-    getResolvedCellFontFamily(style.font?.family),
+    getResolvedCellFontFamily(),
   ].filter(Boolean);
   const padding = 8;
   args.ctx.save();
@@ -1545,79 +1100,4 @@ function drawCellUnderline(
   args.ctx.lineTo(endX, y);
   args.ctx.stroke();
   args.ctx.restore();
-}
-
-function createBorderOverlayDescriptor(
-  rect: Pick<Rectangle, "x" | "y" | "width" | "height">,
-  side: "top" | "right" | "bottom" | "left",
-  border: NonNullable<NonNullable<CellStyleRecord["borders"]>["top"]>,
-): { key: string; segment: BorderOverlaySegment } | null {
-  const thickness = border.weight === "thick" ? 3 : border.weight === "medium" ? 2 : 1;
-  const isHorizontal = side === "top" || side === "bottom";
-  // Glide cell bounds include the trailing shared gridline pixel. Canonicalize right/bottom
-  // edges onto that shared line so adjacent cells collapse into one rendered border segment.
-  const edgeX = side === "left" ? rect.x : side === "right" ? rect.x + rect.width - 1 : rect.x;
-  const edgeY = side === "top" ? rect.y : side === "bottom" ? rect.y + rect.height - 1 : rect.y;
-  const length = isHorizontal ? rect.width : rect.height;
-  const offset = thickness / 2;
-  const style: CSSProperties = {
-    position: "absolute",
-    pointerEvents: "none",
-    backgroundColor: border.color,
-    left: isHorizontal ? edgeX : edgeX - offset,
-    top: isHorizontal ? edgeY - offset : edgeY,
-    width: isHorizontal ? length : thickness,
-    height: isHorizontal ? thickness : length,
-  };
-
-  if (border.style === "dashed" || border.style === "dotted") {
-    style.backgroundColor = "transparent";
-    style.backgroundImage = isHorizontal
-      ? `repeating-linear-gradient(90deg, ${border.color} 0 ${border.style === "dashed" ? 6 : 1}px, transparent ${border.style === "dashed" ? 6 : 1}px ${border.style === "dashed" ? 10 : 4}px)`
-      : `repeating-linear-gradient(180deg, ${border.color} 0 ${border.style === "dashed" ? 6 : 1}px, transparent ${border.style === "dashed" ? 6 : 1}px ${border.style === "dashed" ? 10 : 4}px)`;
-  }
-
-  if (border.style === "double") {
-    style.backgroundColor = "transparent";
-    style.backgroundImage = isHorizontal
-      ? `linear-gradient(to bottom, ${border.color} 0 1px, transparent 1px calc(100% - 1px), ${border.color} calc(100% - 1px) 100%)`
-      : `linear-gradient(to right, ${border.color} 0 1px, transparent 1px calc(100% - 1px), ${border.color} calc(100% - 1px) 100%)`;
-    style.height = isHorizontal ? Math.max(3, thickness + 2) : length;
-    style.width = isHorizontal ? length : Math.max(3, thickness + 2);
-    style.left = isHorizontal ? edgeX : edgeX - Math.max(3, thickness + 2) / 2;
-    style.top = isHorizontal ? edgeY - Math.max(3, thickness + 2) / 2 : edgeY;
-  }
-
-  const left = Number(style.left);
-  const top = Number(style.top);
-  const width = Number(style.width);
-  const height = Number(style.height);
-  if (
-    !Number.isFinite(left) ||
-    !Number.isFinite(top) ||
-    !Number.isFinite(width) ||
-    !Number.isFinite(height) ||
-    width <= 0 ||
-    height <= 0
-  ) {
-    return null;
-  }
-
-  const key = [
-    Math.round(edgeX * 100) / 100,
-    Math.round(edgeY * 100) / 100,
-    Math.round(length * 100) / 100,
-    isHorizontal ? "h" : "v",
-    border.style,
-    border.weight ?? "thin",
-    border.color ?? "#111827",
-  ].join(":");
-
-  return {
-    key,
-    segment: {
-      key,
-      style,
-    },
-  };
 }

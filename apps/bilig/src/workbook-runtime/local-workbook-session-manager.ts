@@ -1,6 +1,5 @@
 import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
-import type { CellRangeRef, CellValue } from "@bilig/protocol";
-import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
+import type { CellRangeRef, CellValue, EngineEvent } from "@bilig/protocol";
 import type {
   AckFrame,
   CursorWatermarkFrame,
@@ -9,16 +8,23 @@ import type {
   ProtocolFrame,
   SnapshotChunkFrame,
 } from "@bilig/binary-protocol";
-import {
-  XLSX_CONTENT_TYPE,
-  type AgentEvent,
-  type AgentFrame,
-  type AgentResponse,
-  type LoadWorkbookFileRequest,
+import type {
+  AgentEvent,
+  AgentFrame,
+  AgentResponse,
+  LoadWorkbookFileRequest,
 } from "@bilig/agent-api";
 import { shouldApplyBatch } from "@bilig/crdt";
-import { importXlsx } from "@bilig/excel-import";
 import type { UpstreamSyncRelay } from "../zero/sync-relay.js";
+import {
+  type AgentFrameContext,
+  createWorkbookLoadedResponse,
+  normalizeSessionId,
+  prepareWorkbookLoad,
+  routeAgentFrame,
+  type WorksheetAgentRequest,
+} from "./agent-routing.js";
+import { createSnapshotPublication } from "./session-shared.js";
 
 interface BrowserSubscriber {
   id: string;
@@ -36,7 +42,6 @@ interface AgentRangeSubscription {
   subscriptionId: string;
   sessionId: string;
   range: CellRangeRef;
-  changedAddresses: string[];
   unsubscribe: () => void;
 }
 
@@ -67,6 +72,7 @@ interface LocalWorkbookSession {
   replicaSnapshot: EngineReplicaSnapshot | null;
   upstreamRelay: UpstreamSyncRelay | null;
   unsubscribeBatches: () => void;
+  compactScheduled: boolean;
 }
 
 export interface LocalWorkbookSessionManagerOptions {
@@ -90,17 +96,8 @@ export interface LocalSnapshotSummary {
   bytes: Uint8Array;
 }
 
-export interface AgentFrameContext {
-  serverUrl?: string;
-  browserAppBaseUrl?: string;
-}
-
-const DEFAULT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
-const snapshotEncoder = new TextEncoder();
-
-function normalizeSessionId(documentId: string, replicaId: string): string {
-  return `${documentId}:${replicaId}`;
-}
+const MAX_BATCH_BACKLOG = 256;
+const LARGE_RANGE_SUBSCRIPTION_THRESHOLD = 256;
 
 function iterateRange(range: CellRangeRef): string[] {
   const [startColPart, startRowPart] = splitAddress(range.startAddress);
@@ -145,41 +142,99 @@ function encodeColumn(value: number): string {
   return output;
 }
 
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
+function cellCountForRange(range: CellRangeRef): number {
+  const [startColPart, startRowPart] = splitAddress(range.startAddress);
+  const [endColPart, endRowPart] = splitAddress(range.endAddress);
+  const width = decodeColumn(endColPart) - decodeColumn(startColPart) + 1;
+  const height = Number.parseInt(endRowPart, 10) - Number.parseInt(startRowPart, 10) + 1;
+  return width * height;
 }
 
-function buildBrowserUrl(
-  browserAppBaseUrl: string | undefined,
-  serverUrl: string,
-  documentId: string,
-): string | undefined {
-  if (!browserAppBaseUrl) {
-    return undefined;
+function collectChangedAddressesInRange(
+  engine: SpreadsheetEngine,
+  range: CellRangeRef,
+  changedCellIndices: readonly number[] | Uint32Array,
+): string[] {
+  const [startColPart, startRowPart] = splitAddress(range.startAddress);
+  const [endColPart, endRowPart] = splitAddress(range.endAddress);
+  const startCol = decodeColumn(startColPart);
+  const endCol = decodeColumn(endColPart);
+  const startRow = Number.parseInt(startRowPart, 10);
+  const endRow = Number.parseInt(endRowPart, 10);
+  const changedAddresses: string[] = [];
+
+  for (let index = 0; index < changedCellIndices.length; index += 1) {
+    const qualifiedAddress = engine.workbook.getQualifiedAddress(changedCellIndices[index]!);
+    if (!qualifiedAddress.startsWith(`${range.sheetName}!`)) {
+      continue;
+    }
+    const address = qualifiedAddress.slice(range.sheetName.length + 1);
+    const parsed = splitAddress(address);
+    const col = decodeColumn(parsed[0]);
+    const row = Number.parseInt(parsed[1], 10);
+    if (col < startCol || col > endCol || row < startRow || row > endRow) {
+      continue;
+    }
+    changedAddresses.push(address);
   }
-  const url = new URL(normalizeBaseUrl(browserAppBaseUrl));
-  url.searchParams.set("document", documentId);
-  url.searchParams.set("server", serverUrl);
-  return url.toString();
+
+  return changedAddresses;
 }
 
-function decodeBase64(bytesBase64: string): Uint8Array {
-  const normalized = bytesBase64.trim();
-  if (normalized.length === 0 || normalized.length % 4 !== 0) {
-    throw new Error("Workbook upload bytesBase64 must be a non-empty base64 string");
+function collectAddressesForIntersection(
+  range: CellRangeRef,
+  startAddress: string,
+  endAddress: string,
+): string[] {
+  const rangeStart = splitAddress(range.startAddress);
+  const rangeEnd = splitAddress(range.endAddress);
+  const eventStart = splitAddress(startAddress);
+  const eventEnd = splitAddress(endAddress);
+
+  const startCol = Math.max(decodeColumn(rangeStart[0]), decodeColumn(eventStart[0]));
+  const endCol = Math.min(decodeColumn(rangeEnd[0]), decodeColumn(eventEnd[0]));
+  const startRow = Math.max(Number.parseInt(rangeStart[1], 10), Number.parseInt(eventStart[1], 10));
+  const endRow = Math.min(Number.parseInt(rangeEnd[1], 10), Number.parseInt(eventEnd[1], 10));
+
+  if (startCol > endCol || startRow > endRow) {
+    return [];
   }
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
-    throw new Error("Workbook upload bytesBase64 contains invalid base64 characters");
+
+  const changedAddresses: string[] = [];
+  for (let row = startRow; row <= endRow; row += 1) {
+    for (let col = startCol; col <= endCol; col += 1) {
+      changedAddresses.push(`${encodeColumn(col)}${row}`);
+    }
   }
-  return new Uint8Array(Buffer.from(normalized, "base64"));
+  return changedAddresses;
 }
 
-function createImportedDocumentId(): string {
-  const random =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-  return `xlsx:${random}`;
+function collectChangedAddressesForEvent(
+  engine: SpreadsheetEngine,
+  range: CellRangeRef,
+  event: EngineEvent,
+): string[] {
+  if (event.invalidation === "full") {
+    return iterateRange(range);
+  }
+
+  const changedAddresses = new Set(
+    collectChangedAddressesInRange(engine, range, event.changedCellIndices),
+  );
+  for (let index = 0; index < event.invalidatedRanges.length; index += 1) {
+    const invalidatedRange = event.invalidatedRanges[index]!;
+    if (invalidatedRange.sheetName !== range.sheetName) {
+      continue;
+    }
+    collectAddressesForIntersection(
+      range,
+      invalidatedRange.startAddress,
+      invalidatedRange.endAddress,
+    ).forEach((address) => {
+      changedAddresses.add(address);
+    });
+  }
+  return [...changedAddresses];
 }
 
 export class LocalWorkbookSessionManager {
@@ -214,6 +269,7 @@ export class LocalWorkbookSessionManager {
       replicaSnapshot: null,
       upstreamRelay: this.options.createSyncRelay?.(documentId) ?? null,
       unsubscribeBatches: () => {},
+      compactScheduled: false,
     };
 
     session.unsubscribeBatches = engine.subscribeBatches((batch) => {
@@ -227,6 +283,7 @@ export class LocalWorkbookSessionManager {
       session.batches.push({ cursor: session.cursor, frame });
       session.replicaSnapshot = engine.exportReplicaSnapshot();
       this.broadcast(documentId, frame);
+      this.maybeCompactSession(session);
       void this.relayUpstream(session, batch);
     });
 
@@ -304,6 +361,7 @@ export class LocalWorkbookSessionManager {
         session.batches.push({ cursor: session.cursor, frame: committedFrame });
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
         this.broadcast(frame.documentId, committedFrame);
+        this.maybeCompactSession(session);
         void this.relayUpstream(session, frame.batch);
         return [this.ack(frame.documentId, frame.batch.id, session.cursor)];
       }
@@ -350,257 +408,38 @@ export class LocalWorkbookSessionManager {
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
-    if (frame.kind !== "request") {
-      return this.agentError(
-        "unknown",
-        "INVALID_AGENT_FRAME",
-        "Local server accepts only agent requests",
-        false,
-      );
-    }
-
-    const request = frame.request;
-    const requestId = request.id;
-    let response: AgentResponse;
-    try {
-      switch (request.kind) {
-        case "loadWorkbookFile": {
-          response = this.loadWorkbookFile(request, context);
-          break;
-        }
-
-        case "openWorkbookSession": {
-          const session = this.ensureSession(request.documentId);
-          const sessionId = normalizeSessionId(request.documentId, request.replicaId);
-          session.agentSessions.set(sessionId, {
-            sessionId,
-            documentId: request.documentId,
-            replicaId: request.replicaId,
-            subscriptionIds: new Set(),
+    return routeAgentFrame(frame, context, {
+      invalidFrameMessage: "Local server accepts only agent requests",
+      errorCode: "LOCAL_SERVER_FAILURE",
+      loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
+      openWorkbookSession: (request) => {
+        const session = this.ensureSession(request.documentId);
+        const sessionId = normalizeSessionId(request.documentId, request.replicaId);
+        session.agentSessions.set(sessionId, {
+          sessionId,
+          documentId: request.documentId,
+          replicaId: request.replicaId,
+          subscriptionIds: new Set(),
+        });
+        return { kind: "ok", id: request.id, sessionId };
+      },
+      closeWorkbookSession: (request) => {
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        const agentSession = session.agentSessions.get(request.sessionId);
+        if (agentSession) {
+          [...agentSession.subscriptionIds].forEach((subscriptionId) => {
+            this.removeAgentSubscription(session, request.sessionId, subscriptionId);
           });
-          response = { kind: "ok", id: request.id, sessionId };
-          break;
         }
-
-        case "closeWorkbookSession": {
-          const session = this.getSessionByAgentSessionId(request.sessionId);
-          const agentSession = session.agentSessions.get(request.sessionId);
-          if (agentSession) {
-            [...agentSession.subscriptionIds].forEach((subscriptionId) => {
-              this.removeAgentSubscription(session, request.sessionId, subscriptionId);
-            });
-          }
-          session.agentSessions.delete(request.sessionId);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "readRange": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          response = {
-            kind: "rangeValues",
-            id: request.id,
-            values: this.readRange(engine, request.range),
-          };
-          break;
-        }
-
-        case "writeRange": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.setRangeValues(request.range, request.values);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "setRangeFormulas": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.setRangeFormulas(request.range, request.formulas);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "setRangeStyle": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.setRangeStyle(request.range, request.patch);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "clearRangeStyle": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.clearRangeStyle(request.range, request.fields);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "setRangeNumberFormat": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.setRangeNumberFormat(request.range, request.format);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "clearRangeNumberFormat": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.clearRangeNumberFormat(request.range);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "clearRange": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.clearRange(request.range);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "fillRange": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.fillRange(request.source, request.target);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "copyRange": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.copyRange(request.source, request.target);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "pasteRange": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          engine.pasteRange(request.source, request.target);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "getDependents": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          const dependencies = engine.getDependents(request.sheetName, request.address);
-          response = {
-            kind: "dependencies",
-            id: request.id,
-            addresses: dependencies.directDependents,
-          };
-          break;
-        }
-
-        case "getPrecedents": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          const dependencies = engine.getDependencies(request.sheetName, request.address);
-          response = {
-            kind: "dependencies",
-            id: request.id,
-            addresses: dependencies.directPrecedents,
-          };
-          break;
-        }
-
-        case "exportSnapshot": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          response = { kind: "snapshot", id: request.id, snapshot: engine.exportSnapshot() };
-          break;
-        }
-
-        case "importSnapshot": {
-          const session = this.getSessionByAgentSessionId(request.sessionId);
-          session.engine.importSnapshot(request.snapshot);
-          session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "getMetrics": {
-          const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-          response = { kind: "metrics", id: request.id, value: engine.getLastMetrics() };
-          break;
-        }
-
-        case "subscribeRange": {
-          const session = this.getSessionByAgentSessionId(request.sessionId);
-          const agentSession = session.agentSessions.get(request.sessionId);
-          if (!agentSession) {
-            throw new Error(`Unknown agent session: ${request.sessionId}`);
-          }
-          const existingOwner = this.agentSubscriptionOwners.get(request.subscriptionId);
-          if (existingOwner) {
-            throw new Error(`Subscription id already in use: ${request.subscriptionId}`);
-          }
-
-          const changedAddresses = iterateRange(request.range);
-          const unsubscribe = session.engine.subscribeCells(
-            request.range.sheetName,
-            changedAddresses,
-            () => {
-              this.queueAgentEvent(session.documentId, {
-                kind: "rangeChanged",
-                subscriptionId: request.subscriptionId,
-                range: request.range,
-                changedAddresses: [...changedAddresses],
-              });
-            },
-          );
-
-          session.agentSubscriptions.set(request.subscriptionId, {
-            subscriptionId: request.subscriptionId,
-            sessionId: request.sessionId,
-            range: request.range,
-            changedAddresses,
-            unsubscribe,
-          });
-          agentSession.subscriptionIds.add(request.subscriptionId);
-          this.agentSubscriptionOwners.set(request.subscriptionId, request.sessionId);
-          response = {
-            kind: "ok",
-            id: request.id,
-            value: { subscriptionId: request.subscriptionId },
-          };
-          break;
-        }
-
-        case "unsubscribe": {
-          const session = this.getSessionByAgentSessionId(request.sessionId);
-          this.removeAgentSubscription(session, request.sessionId, request.subscriptionId);
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        case "createPivotTable": {
-          const session = this.getSessionByAgentSessionId(request.sessionId);
-          session.engine.setPivotTable(request.sheetName, request.address, {
-            name: request.name,
-            source: request.source,
-            groupBy: request.groupBy,
-            values: request.values,
-          });
-          response = { kind: "ok", id: request.id };
-          break;
-        }
-
-        default: {
-          const exhaustiveRequest: never = request;
-          response = {
-            kind: "error",
-            id: requestId,
-            code: "UNSUPPORTED_AGENT_REQUEST",
-            message: `Unsupported agent request ${(exhaustiveRequest as { kind: string }).kind}`,
-            retryable: false,
-          };
-          break;
-        }
-      }
-    } catch (error) {
-      response = {
-        kind: "error",
-        id: request.id,
-        code: "LOCAL_SERVER_FAILURE",
-        message: error instanceof Error ? error.message : String(error),
-        retryable: false,
-      };
-    }
-
-    return { kind: "response", response };
+        session.agentSessions.delete(request.sessionId);
+        return { kind: "ok", id: request.id };
+      },
+      getMetrics: (request) => {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        return { kind: "metrics", id: request.id, value: engine.getLastMetrics() };
+      },
+      handleWorksheetRequest: (_frame, request) => this.handleWorksheetRequest(request),
+    });
   }
 
   getDocumentState(documentId: string): LocalDocumentStateSummary {
@@ -627,17 +466,25 @@ export class LocalWorkbookSessionManager {
   }
 
   private readRange(engine: SpreadsheetEngine, range: CellRangeRef): CellValue[][] {
-    const addresses = iterateRange(range);
     const [startColPart] = splitAddress(range.startAddress);
     const [endColPart] = splitAddress(range.endAddress);
+    const [, startRowPart] = splitAddress(range.startAddress);
+    const [, endRowPart] = splitAddress(range.endAddress);
+    const startCol = decodeColumn(startColPart);
+    const endCol = decodeColumn(endColPart);
+    const startRow = Number.parseInt(startRowPart, 10);
+    const endRow = Number.parseInt(endRowPart, 10);
     const width = decodeColumn(endColPart) - decodeColumn(startColPart) + 1;
     const rows: CellValue[][] = [];
-    for (let index = 0; index < addresses.length; index += width) {
-      rows.push(
-        addresses
-          .slice(index, index + width)
-          .map((address) => engine.getCellValue(range.sheetName, address)),
-      );
+    for (let row = startRow; row <= endRow; row += 1) {
+      const nextRow: CellValue[] = Array.from<CellValue>({ length: width });
+      for (let col = startCol; col <= endCol; col += 1) {
+        nextRow[col - startCol] = engine.getCellValue(
+          range.sheetName,
+          `${encodeColumn(col)}${row}`,
+        );
+      }
+      rows.push(nextRow);
     }
     return rows;
   }
@@ -658,55 +505,198 @@ export class LocalWorkbookSessionManager {
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
   ): AgentResponse {
-    if (request.contentType !== XLSX_CONTENT_TYPE) {
-      throw new Error("Unsupported workbook upload content type");
-    }
-    if (request.openMode === "replace" && !request.documentId) {
-      throw new Error("Workbook replace uploads require documentId");
-    }
-
-    const bytes = decodeBase64(request.bytesBase64);
-    const maxImportBytes = this.options.maxImportBytes ?? DEFAULT_IMPORT_MAX_BYTES;
-    if (bytes.byteLength > maxImportBytes) {
-      throw new Error(`Workbook upload exceeds ${maxImportBytes} bytes`);
-    }
-
-    const imported = importXlsx(bytes, request.fileName);
-    const documentId = request.documentId ?? createImportedDocumentId();
-    const session = this.ensureSession(documentId);
-    const sessionId = normalizeSessionId(documentId, request.replicaId);
-    session.agentSessions.set(sessionId, {
-      sessionId,
-      documentId,
+    const prepared = prepareWorkbookLoad(request, context, {
+      ...(this.options.maxImportBytes !== undefined
+        ? { maxImportBytes: this.options.maxImportBytes }
+        : {}),
+      ...(this.options.publicServerUrl ? { publicServerUrl: this.options.publicServerUrl } : {}),
+      ...(this.options.browserAppBaseUrl
+        ? { browserAppBaseUrl: this.options.browserAppBaseUrl }
+        : {}),
+    });
+    const session = this.ensureSession(prepared.documentId);
+    session.agentSessions.set(prepared.sessionId, {
+      sessionId: prepared.sessionId,
+      documentId: prepared.documentId,
       replicaId: request.replicaId,
-      subscriptionIds: session.agentSessions.get(sessionId)?.subscriptionIds ?? new Set(),
+      subscriptionIds: session.agentSessions.get(prepared.sessionId)?.subscriptionIds ?? new Set(),
     });
 
-    session.engine.importSnapshot(imported.snapshot);
+    session.engine.importSnapshot(prepared.imported.snapshot);
     session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-    this.publishSnapshot(session, imported.snapshot);
+    this.publishSnapshot(session, prepared.imported.snapshot);
 
-    const serverUrl = normalizeBaseUrl(
-      context.serverUrl ?? this.options.publicServerUrl ?? "http://127.0.0.1:4321",
-    );
-    return {
-      kind: "workbookLoaded",
-      id: request.id,
-      documentId,
-      sessionId,
-      workbookName: imported.workbookName,
-      sheetNames: imported.sheetNames,
-      serverUrl,
-      ...(() => {
-        const browserUrl = buildBrowserUrl(
-          context.browserAppBaseUrl ?? this.options.browserAppBaseUrl,
-          serverUrl,
-          documentId,
-        );
-        return browserUrl ? { browserUrl } : {};
-      })(),
-      warnings: imported.warnings,
-    };
+    return createWorkbookLoadedResponse(request.id, prepared);
+  }
+
+  private handleWorksheetRequest(request: WorksheetAgentRequest): AgentResponse {
+    switch (request.kind) {
+      case "readRange": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        return {
+          kind: "rangeValues",
+          id: request.id,
+          values: this.readRange(engine, request.range),
+        };
+      }
+      case "writeRange": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.setRangeValues(request.range, request.values);
+        return { kind: "ok", id: request.id };
+      }
+      case "setRangeFormulas": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.setRangeFormulas(request.range, request.formulas);
+        return { kind: "ok", id: request.id };
+      }
+      case "setRangeStyle": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.setRangeStyle(request.range, request.patch);
+        return { kind: "ok", id: request.id };
+      }
+      case "clearRangeStyle": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.clearRangeStyle(request.range, request.fields);
+        return { kind: "ok", id: request.id };
+      }
+      case "setRangeNumberFormat": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.setRangeNumberFormat(request.range, request.format);
+        return { kind: "ok", id: request.id };
+      }
+      case "clearRangeNumberFormat": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.clearRangeNumberFormat(request.range);
+        return { kind: "ok", id: request.id };
+      }
+      case "clearRange": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.clearRange(request.range);
+        return { kind: "ok", id: request.id };
+      }
+      case "fillRange": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.fillRange(request.source, request.target);
+        return { kind: "ok", id: request.id };
+      }
+      case "copyRange": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.copyRange(request.source, request.target);
+        return { kind: "ok", id: request.id };
+      }
+      case "pasteRange": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        engine.pasteRange(request.source, request.target);
+        return { kind: "ok", id: request.id };
+      }
+      case "getDependents": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        const dependencies = engine.getDependents(request.sheetName, request.address);
+        return {
+          kind: "dependencies",
+          id: request.id,
+          addresses: dependencies.directDependents,
+        };
+      }
+      case "getPrecedents": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        const dependencies = engine.getDependencies(request.sheetName, request.address);
+        return {
+          kind: "dependencies",
+          id: request.id,
+          addresses: dependencies.directPrecedents,
+        };
+      }
+      case "exportSnapshot": {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        return { kind: "snapshot", id: request.id, snapshot: engine.exportSnapshot() };
+      }
+      case "importSnapshot": {
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        session.engine.importSnapshot(request.snapshot);
+        session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+        return { kind: "ok", id: request.id };
+      }
+      case "subscribeRange": {
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        const agentSession = session.agentSessions.get(request.sessionId);
+        if (!agentSession) {
+          throw new Error(`Unknown agent session: ${request.sessionId}`);
+        }
+        const existingOwner = this.agentSubscriptionOwners.get(request.subscriptionId);
+        if (existingOwner) {
+          throw new Error(`Subscription id already in use: ${request.subscriptionId}`);
+        }
+
+        const rangeCellCount = cellCountForRange(request.range);
+        const changedAddresses =
+          rangeCellCount <= LARGE_RANGE_SUBSCRIPTION_THRESHOLD ? iterateRange(request.range) : null;
+        const unsubscribe = changedAddresses
+          ? session.engine.subscribeCells(request.range.sheetName, changedAddresses, () => {
+              this.queueAgentEvent(session.documentId, {
+                kind: "rangeChanged",
+                subscriptionId: request.subscriptionId,
+                range: request.range,
+                changedAddresses: [...changedAddresses],
+              });
+            })
+          : session.engine.subscribe((event: EngineEvent) => {
+              const changedInRange = collectChangedAddressesForEvent(
+                session.engine,
+                request.range,
+                event,
+              );
+              if (changedInRange.length === 0) {
+                return;
+              }
+              this.queueAgentEvent(session.documentId, {
+                kind: "rangeChanged",
+                subscriptionId: request.subscriptionId,
+                range: request.range,
+                changedAddresses: changedInRange,
+              });
+            });
+
+        session.agentSubscriptions.set(request.subscriptionId, {
+          subscriptionId: request.subscriptionId,
+          sessionId: request.sessionId,
+          range: request.range,
+          unsubscribe,
+        });
+        agentSession.subscriptionIds.add(request.subscriptionId);
+        this.agentSubscriptionOwners.set(request.subscriptionId, request.sessionId);
+        return {
+          kind: "ok",
+          id: request.id,
+          value: { subscriptionId: request.subscriptionId },
+        };
+      }
+      case "unsubscribe": {
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        this.removeAgentSubscription(session, request.sessionId, request.subscriptionId);
+        return { kind: "ok", id: request.id };
+      }
+      case "createPivotTable": {
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        session.engine.setPivotTable(request.sheetName, request.address, {
+          name: request.name,
+          source: request.source,
+          groupBy: request.groupBy,
+          values: request.values,
+        });
+        return { kind: "ok", id: request.id };
+      }
+      default: {
+        const exhaustiveRequest: never = request;
+        return {
+          kind: "error",
+          id: "unknown",
+          code: "UNSUPPORTED_AGENT_REQUEST",
+          message: `Unsupported agent request ${(exhaustiveRequest as { kind: string }).kind}`,
+          retryable: false,
+        };
+      }
+    }
   }
 
   private removeAgentSubscription(
@@ -771,31 +761,38 @@ export class LocalWorkbookSessionManager {
     session: LocalWorkbookSession,
     snapshot: Parameters<SpreadsheetEngine["importSnapshot"]>[0],
   ): void {
-    const snapshotId = `${session.documentId}:snapshot:${Date.now()}`;
     const cursor = session.cursor + 1;
-    const bytes = snapshotEncoder.encode(JSON.stringify(snapshot));
-    const frames = createSnapshotChunkFrames({
-      documentId: session.documentId,
-      snapshotId,
-      cursor,
-      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
-      bytes,
-    });
+    const publication = createSnapshotPublication(session.documentId, cursor, snapshot);
     session.cursor = cursor;
     session.batches = [];
     session.latestSnapshot = {
       cursor,
-      snapshotId,
-      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
-      bytes,
-      frames,
+      snapshotId: publication.snapshotId,
+      contentType: publication.contentType,
+      bytes: publication.bytes,
+      frames: publication.frames,
     };
-    frames.forEach((frame) => this.broadcast(session.documentId, frame));
+    publication.frames.forEach((frame) => this.broadcast(session.documentId, frame));
     this.broadcast(session.documentId, {
       kind: "cursorWatermark",
       documentId: session.documentId,
       cursor,
       compactedCursor: cursor,
+    });
+  }
+
+  private maybeCompactSession(session: LocalWorkbookSession): void {
+    if (session.batches.length <= MAX_BATCH_BACKLOG || session.compactScheduled) {
+      return;
+    }
+    session.compactScheduled = true;
+    setImmediate(() => {
+      session.compactScheduled = false;
+      const liveSession = this.sessions.get(session.documentId);
+      if (!liveSession || liveSession.batches.length <= MAX_BATCH_BACKLOG) {
+        return;
+      }
+      this.publishSnapshot(liveSession, liveSession.engine.exportSnapshot());
     });
   }
 
@@ -820,19 +817,6 @@ export class LocalWorkbookSessionManager {
       batchId,
       cursor,
       acceptedAtUnixMs: Date.now(),
-    };
-  }
-
-  private agentError(id: string, code: string, message: string, retryable: boolean): AgentFrame {
-    return {
-      kind: "response",
-      response: {
-        kind: "error",
-        id,
-        code,
-        message,
-        retryable,
-      },
     };
   }
 }

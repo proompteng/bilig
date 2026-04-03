@@ -1,5 +1,7 @@
 import { decodeAgentFrame, encodeAgentFrame, type AgentFrame } from "@bilig/agent-api";
 import { runPromise, type DocumentControlService } from "@bilig/runtime-kernel";
+import type { AgentFrameContext } from "./agent-routing.js";
+import { normalizeBaseUrl } from "./session-shared.js";
 
 export interface WorksheetExecutor {
   execute(frame: AgentFrame): Promise<AgentFrame>;
@@ -14,10 +16,6 @@ export interface InProcessWorksheetExecutorOptions {
   documentService: DocumentControlService;
   serverUrl?: string;
   browserAppBaseUrl?: string;
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
 export function createHttpWorksheetExecutor(
@@ -46,14 +44,13 @@ export function createHttpWorksheetExecutor(
 export function createInProcessWorksheetExecutor(
   options: InProcessWorksheetExecutorOptions,
 ): WorksheetExecutor {
+  const context: AgentFrameContext = {
+    ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
+    ...(options.browserAppBaseUrl ? { browserAppBaseUrl: options.browserAppBaseUrl } : {}),
+  };
   return {
     execute(frame) {
-      return runPromise(
-        options.documentService.handleAgentFrame(frame, {
-          ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
-          ...(options.browserAppBaseUrl ? { browserAppBaseUrl: options.browserAppBaseUrl } : {}),
-        }),
-      );
+      return runPromise(options.documentService.handleAgentFrame(frame, context));
     },
   };
 }

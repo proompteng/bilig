@@ -1,8 +1,8 @@
 import React from "react";
-import { Tabs } from "@base-ui/react/tabs";
 import type { Viewport } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
+import { WorkbookSheetTabs } from "./WorkbookSheetTabs.js";
 import {
   SheetGridView,
   type EditMovement,
@@ -12,7 +12,6 @@ import {
 
 interface WorkbookViewProps {
   engine: GridEngineLike;
-  dataRevision?: number | undefined;
   sheetNames: string[];
   sheetName: string;
   selectedAddr: string;
@@ -22,6 +21,8 @@ interface WorkbookViewProps {
   isEditing: boolean;
   isEditingCell: boolean;
   onSelectSheet(this: void, sheetName: string): void;
+  onCreateSheet?: (() => void) | undefined;
+  onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined;
   onSelect(this: void, addr: string): void;
   onAddressCommit(this: void, addr: string): void;
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void;
@@ -64,7 +65,6 @@ interface WorkbookViewProps {
 
 export function WorkbookView({
   engine,
-  dataRevision,
   sheetNames,
   sheetName,
   selectedAddr,
@@ -74,6 +74,8 @@ export function WorkbookView({
   isEditing,
   isEditingCell,
   onSelectSheet,
+  onCreateSheet,
+  onRenameSheet,
   onSelect,
   onAddressCommit,
   onBeginEdit,
@@ -96,11 +98,11 @@ export function WorkbookView({
 }: WorkbookViewProps) {
   return (
     <section
-      className="flex h-screen flex-col overflow-hidden bg-[#f6f8fb]"
+      className="flex h-screen flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
       data-testid="workbook-shell"
     >
       {ribbon ? <div className="shrink-0">{ribbon}</div> : null}
-      <div className="flex min-h-0 flex-1 flex-col bg-white">
+      <div className="flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
         <FormulaBar
           address={selectedAddr}
           isEditing={isEditing}
@@ -114,7 +116,6 @@ export function WorkbookView({
           value={editorValue}
         />
         <SheetGridView
-          dataRevision={dataRevision}
           editorValue={editorValue}
           editorSelectionBehavior={editorSelectionBehavior}
           engine={engine}
@@ -138,26 +139,14 @@ export function WorkbookView({
           selectedAddr={selectedAddr}
           sheetName={sheetName}
         />
-        <div className="flex min-h-10 items-center justify-between gap-2 border-t border-[#d7dce5] bg-[#f8fafc] px-2 py-1">
-          <Tabs.Root value={sheetName} onValueChange={(value) => onSelectSheet(String(value))}>
-            <Tabs.List aria-label="Sheets" className="flex items-center gap-1">
-              {sheetNames.map((name) => (
-                <Tabs.Tab
-                  className="inline-flex h-8 items-center rounded-[4px] border border-transparent bg-transparent px-3 text-[12px] font-medium text-[#5f6368] outline-none transition-[background-color,border-color,color] hover:bg-[#eef3f9] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc] data-[active]:border-[#d6dbe6] data-[active]:bg-white data-[active]:text-[#202124]"
-                  key={name}
-                  value={name}
-                >
-                  {name}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.Root>
-          {statusBar ? (
-            <div className="inline-flex flex-wrap items-center gap-2 text-[11px] text-[#5f6368]">
-              {statusBar}
-            </div>
-          ) : null}
-        </div>
+        <WorkbookSheetTabs
+          onCreateSheet={onCreateSheet}
+          onRenameSheet={onRenameSheet}
+          onSelectSheet={onSelectSheet}
+          sheetName={sheetName}
+          sheetNames={sheetNames}
+          statusBar={statusBar}
+        />
       </div>
     </section>
   );

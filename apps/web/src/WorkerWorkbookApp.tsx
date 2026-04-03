@@ -1,54 +1,18 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
-import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  Baseline,
-  Bold,
-  Check,
-  ChevronDown,
-  Grid2x2X,
-  Grid3x3,
-  Italic,
-  Minus,
-  PaintBucket,
-  PanelBottom,
-  PanelLeft,
-  PanelLeftRightDashed,
-  PanelRight,
-  PanelTop,
-  PanelTopBottomDashed,
-  Plus,
-  RemoveFormatting,
-  Rows3,
-  Square,
-  Underline,
-  WrapText,
-  type LucideIcon,
-} from "lucide-react";
-import { Popover } from "@base-ui/react/popover";
-import { Select } from "@base-ui/react/select";
-import { Toolbar } from "@base-ui/react/toolbar";
 import type { CommitOp } from "@bilig/core";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
   type CellNumberFormatInput,
+  type CellNumberFormatPreset,
   type CellRangeRef,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
-  parseCellNumberFormatCode,
   formatErrorCode,
+  normalizeCellNumberFormatPreset,
+  parseCellNumberFormatCode,
   type CellSnapshot,
   type CellStyleField,
   type CellStylePatch,
@@ -57,8 +21,11 @@ import {
 import { mutators, type BiligRuntimeConfig } from "@bilig/zero-sync";
 import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
-import type { WorkerRuntimeSelection, ZeroClient } from "./runtime-session.js";
+import type { ZeroClient } from "./runtime-session.js";
+import { loadPersistedSelection, persistSelection } from "./selection-persistence.js";
 import { WorkerViewportCache } from "./viewport-cache.js";
+import { WorkbookToolbar, type BorderPreset } from "./workbook-toolbar.js";
+import { isPresetColor, mergeRecentCustomColors, normalizeHexColor } from "./workbook-colors.js";
 
 type EditingMode = "idle" | "cell" | "formula";
 
@@ -81,55 +48,6 @@ type ZeroConnectionState =
   | { name: "error"; reason: string }
   | { name: "closed"; reason: string };
 
-interface RibbonButtonProps {
-  active?: boolean;
-  ariaLabel: string;
-  pressed?: boolean;
-  shortcut?: string;
-  onClick(this: void): void;
-  children: ReactNode;
-}
-
-interface ColorSwatch {
-  label: string;
-  value: string;
-}
-
-interface ToolbarSelectOption {
-  label: string;
-  value: string;
-}
-
-interface ColorPaletteButtonProps {
-  ariaLabel: string;
-  currentColor: string;
-  customInputLabel: string;
-  icon: ReactNode;
-  recentColors: readonly string[];
-  shortcut?: string;
-  swatches: readonly (readonly ColorSwatch[])[];
-  onReset(this: void): void;
-  onSelectColor(this: void, color: string, source: "preset" | "custom"): void;
-}
-
-type BorderPreset =
-  | "all"
-  | "inner"
-  | "horizontal"
-  | "vertical"
-  | "outer"
-  | "left"
-  | "top"
-  | "right"
-  | "bottom"
-  | "clear";
-
-interface BorderPresetOption {
-  key: BorderPreset;
-  label: string;
-  Icon: LucideIcon;
-}
-
 const BORDER_CLEAR_FIELDS: readonly CellStyleField[] = [
   "borderTop",
   "borderRight",
@@ -142,192 +60,19 @@ const DEFAULT_BORDER_SIDE = {
   weight: "thin",
   color: "#111827",
 } as const;
+const DEFAULT_FONT_FAMILY = "JetBrains Mono";
 
-const BORDER_PRESET_ROWS: readonly (readonly BorderPresetOption[])[] = [
-  [
-    { key: "all", label: "All borders", Icon: Grid3x3 },
-    { key: "inner", label: "Inner borders", Icon: Grid3x3 },
-    { key: "horizontal", label: "Horizontal borders", Icon: PanelTopBottomDashed },
-    { key: "vertical", label: "Vertical borders", Icon: PanelLeftRightDashed },
-    { key: "outer", label: "Outer borders", Icon: Square },
-  ],
-  [
-    { key: "left", label: "Left border", Icon: PanelLeft },
-    { key: "top", label: "Top border", Icon: PanelTop },
-    { key: "right", label: "Right border", Icon: PanelRight },
-    { key: "bottom", label: "Bottom border", Icon: PanelBottom },
-    { key: "clear", label: "Clear borders", Icon: Grid2x2X },
-  ],
-] as const;
-
-const GOOGLE_SHEETS_SWATCH_ROWS: readonly (readonly ColorSwatch[])[] = [
-  [
-    { label: "black", value: "#000000" },
-    { label: "dark gray 4", value: "#434343" },
-    { label: "dark gray 3", value: "#666666" },
-    { label: "dark gray 2", value: "#999999" },
-    { label: "dark gray 1", value: "#b7b7b7" },
-    { label: "gray", value: "#cccccc" },
-    { label: "light gray 1", value: "#d9d9d9" },
-    { label: "light gray 2", value: "#efefef" },
-    { label: "light gray 3", value: "#f3f3f3" },
-    { label: "white", value: "#ffffff" },
-  ],
-  [
-    { label: "red berry", value: "#980000" },
-    { label: "red", value: "#ff0000" },
-    { label: "orange", value: "#ff9900" },
-    { label: "yellow", value: "#ffff00" },
-    { label: "green", value: "#00ff00" },
-    { label: "cyan", value: "#00ffff" },
-    { label: "cornflower blue", value: "#4a86e8" },
-    { label: "blue", value: "#0000ff" },
-    { label: "purple", value: "#9900ff" },
-    { label: "magenta", value: "#ff00ff" },
-  ],
-  [
-    { label: "light red berry 3", value: "#e6b8af" },
-    { label: "light red 3", value: "#f4cccc" },
-    { label: "light orange 3", value: "#fce5cd" },
-    { label: "light yellow 3", value: "#fff2cc" },
-    { label: "light green 3", value: "#d9ead3" },
-    { label: "light cyan 3", value: "#d0e0e3" },
-    { label: "light cornflower blue 3", value: "#c9daf8" },
-    { label: "light blue 3", value: "#cfe2f3" },
-    { label: "light purple 3", value: "#d9d2e9" },
-    { label: "light magenta 3", value: "#ead1dc" },
-  ],
-  [
-    { label: "light red berry 2", value: "#dd7e6b" },
-    { label: "light red 2", value: "#ea9999" },
-    { label: "light orange 2", value: "#f9cb9c" },
-    { label: "light yellow 2", value: "#ffe599" },
-    { label: "light green 2", value: "#b6d7a8" },
-    { label: "light cyan 2", value: "#a2c4c9" },
-    { label: "light cornflower blue 2", value: "#a4c2f4" },
-    { label: "light blue 2", value: "#9fc5e8" },
-    { label: "light purple 2", value: "#b4a7d6" },
-    { label: "light magenta 2", value: "#d5a6bd" },
-  ],
-  [
-    { label: "light red berry 1", value: "#cc4125" },
-    { label: "light red 1", value: "#e06666" },
-    { label: "light orange 1", value: "#f6b26b" },
-    { label: "light yellow 1", value: "#ffd966" },
-    { label: "light green 1", value: "#93c47d" },
-    { label: "light cyan 1", value: "#76a5af" },
-    { label: "light cornflower blue 1", value: "#6d9eeb" },
-    { label: "light blue 1", value: "#6fa8dc" },
-    { label: "light purple 1", value: "#8e7cc3" },
-    { label: "light magenta 1", value: "#c27ba0" },
-  ],
-  [
-    { label: "dark red 1", value: "#cc0000" },
-    { label: "dark orange 1", value: "#e69138" },
-    { label: "dark yellow 1", value: "#f1c232" },
-    { label: "dark green 1", value: "#6aa84f" },
-    { label: "dark cyan 1", value: "#45818e" },
-    { label: "dark cornflower blue 1", value: "#3c78d8" },
-    { label: "dark blue 1", value: "#3d85c6" },
-    { label: "dark purple 1", value: "#674ea7" },
-    { label: "dark magenta 1", value: "#a64d79" },
-    { label: "dark red berry 1", value: "#a61c00" },
-  ],
-  [
-    { label: "dark red berry 2", value: "#85200c" },
-    { label: "dark red 2", value: "#990000" },
-    { label: "dark orange 2", value: "#b45f06" },
-    { label: "dark yellow 2", value: "#bf9000" },
-    { label: "dark green 2", value: "#38761d" },
-    { label: "dark cyan 2", value: "#134f5c" },
-    { label: "dark cornflower blue 2", value: "#1155cc" },
-    { label: "dark blue 2", value: "#0b5394" },
-    { label: "dark purple 2", value: "#351c75" },
-    { label: "dark magenta 2", value: "#741b47" },
-  ],
-  [
-    { label: "dark red berry 3", value: "#5b0f00" },
-    { label: "dark red 3", value: "#660000" },
-    { label: "dark orange 3", value: "#783f04" },
-    { label: "dark yellow 3", value: "#7f6000" },
-    { label: "dark green 3", value: "#274e13" },
-    { label: "dark cyan 3", value: "#0c343d" },
-    { label: "dark cornflower blue 3", value: "#1c4587" },
-    { label: "dark blue 3", value: "#073763" },
-    { label: "dark purple 3", value: "#20124d" },
-    { label: "dark magenta 3", value: "#4c1130" },
-  ],
-] as const;
-
-const GOOGLE_SHEETS_STANDARD_SWATCHS: readonly ColorSwatch[] = [
-  { label: "theme black", value: "#000000" },
-  { label: "theme white", value: "#ffffff" },
-  { label: "theme cornflower blue", value: "#4285f4" },
-  { label: "theme red", value: "#ea4335" },
-  { label: "theme yellow", value: "#fbbc04" },
-  { label: "theme green", value: "#34a853" },
-  { label: "theme orange", value: "#ff6d01" },
-  { label: "theme cyan", value: "#46bdc6" },
-] as const;
-
-const NUMBER_FORMAT_OPTIONS: readonly ToolbarSelectOption[] = [
-  { label: "General", value: "general" },
-  { label: "Number", value: "number" },
-  { label: "Currency", value: "currency" },
-  { label: "Accounting", value: "accounting" },
-  { label: "Percent", value: "percent" },
-  { label: "Date", value: "date" },
-  { label: "Text", value: "text" },
-] as const;
-
-const FONT_FAMILY_OPTIONS: readonly ToolbarSelectOption[] = [
-  { label: "Aptos", value: "" },
-  { label: "Aptos", value: "Aptos" },
-  { label: "Georgia", value: "Georgia" },
-  { label: "Times New Roman", value: "Times New Roman" },
-  { label: "IBM Plex Sans", value: "IBM Plex Sans" },
-  { label: "Courier New", value: "Courier New" },
-] as const;
-
-const FONT_SIZE_OPTIONS: readonly ToolbarSelectOption[] = [10, 11, 12, 13, 14, 16, 18, 20].map(
-  (size) => ({
-    label: String(size),
-    value: String(size),
-  }),
-);
-
-const TOOLBAR_ROOT_CLASS = "border-b border-[#d7dce5] bg-white font-['Roboto','Arial',sans-serif]";
-const TOOLBAR_ROW_CLASS =
-  "flex min-h-10 items-center gap-0 overflow-x-auto px-2 py-1 text-[12px] text-[#202124]";
-const TOOLBAR_GROUP_CLASS = "flex flex-none items-center gap-1";
-const TOOLBAR_SEPARATOR_CLASS = "mx-1.5 h-6 w-px shrink-0 bg-[#d7dce5]";
-const TOOLBAR_BUTTON_CLASS =
-  "inline-flex h-8 min-w-8 items-center justify-center rounded-[4px] border border-transparent bg-transparent px-2 text-[#202124] transition-[background-color,border-color,color] outline-none hover:bg-[#f1f3f4] focus-visible:border-[#1a73e8] focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
-const TOOLBAR_BUTTON_ACTIVE_CLASS = "border-[#c6dabf] bg-[#e6f4ea] text-[#137333]";
-const TOOLBAR_SELECT_TRIGGER_CLASS =
-  "inline-flex h-8 items-center justify-between rounded-[4px] border border-[#dadce0] bg-white px-2 text-[12px] font-medium text-[#202124] outline-none transition-[border-color,box-shadow,background-color] hover:border-[#c6ccd7] focus-visible:border-[#1a73e8] focus-visible:ring-2 focus-visible:ring-[#d2e3fc]";
-const TOOLBAR_SEGMENTED_CLASS = "inline-flex items-center gap-1";
-const TOOLBAR_ICON_CLASS = "h-3.5 w-3.5 shrink-0 stroke-[1.75]";
-const TOOLBAR_POPUP_CLASS =
-  "overflow-hidden rounded-[4px] border border-[#d0d7e2] bg-white p-2 shadow-[0_14px_30px_rgba(15,23,42,0.14)]";
-const TOOLBAR_POPUP_ACTION_CLASS =
-  "inline-flex h-8 items-center rounded-[4px] px-2 text-[11px] font-semibold transition-colors";
-
-function normalizeHexColor(value: string): string {
-  return value.trim().toLowerCase();
+function createNextSheetName(sheetNames: readonly string[]): string {
+  const existing = new Set(sheetNames);
+  let index = 1;
+  while (existing.has(`Sheet${index}`)) {
+    index += 1;
+  }
+  return `Sheet${index}`;
 }
 
-function mergeRecentCustomColors(current: readonly string[], color: string): readonly string[] {
-  const normalized = normalizeHexColor(color);
-  return [normalized, ...current.filter((entry) => entry !== normalized)].slice(0, 8);
-}
-
-function isPresetColor(color: string): boolean {
-  const normalized = normalizeHexColor(color);
-  return (
-    GOOGLE_SHEETS_SWATCH_ROWS.some((row) => row.some((swatch) => swatch.value === normalized)) ||
-    GOOGLE_SHEETS_STANDARD_SWATCHS.some((swatch) => swatch.value === normalized)
-  );
+function normalizeSheetNameKey(value: string): string {
+  return value.trim().toUpperCase();
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -578,10 +323,6 @@ function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   };
 }
 
-function classNames(...values: Array<string | false | null | undefined>): string {
-  return values.filter(Boolean).join(" ");
-}
-
 function isTextEntryTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
@@ -591,351 +332,31 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
   );
 }
 
-function BorderPresetMenu({
-  disabled,
-  onApplyPreset,
-}: {
-  disabled?: boolean;
-  onApplyPreset(this: void, preset: BorderPreset): void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  const applyPreset = useCallback(
-    (preset: BorderPreset) => {
-      onApplyPreset(preset);
-      setOpen(false);
-    },
-    [onApplyPreset],
-  );
-
-  return (
-    <Popover.Root
-      modal={false}
-      open={open}
-      onOpenChange={(nextOpen: boolean) => {
-        setOpen(nextOpen);
-      }}
-    >
-      <Popover.Trigger
-        aria-label="Borders"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-2")}
-        disabled={disabled}
-        title="Borders"
-        type="button"
-      >
-        <Square className={TOOLBAR_ICON_CLASS} />
-        <ChevronDown className="h-3 w-3 shrink-0 stroke-[1.75] text-[#5f6368]" />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
-          <Popover.Popup
-            aria-label="Border presets"
-            className={classNames(TOOLBAR_POPUP_CLASS, "w-[228px]")}
-          >
-            <div className="space-y-1">
-              {BORDER_PRESET_ROWS.map((row) => (
-                <div key={row.map(({ key }) => key).join("-")} className="grid grid-cols-5 gap-1">
-                  {row.map(({ key, label, Icon }) => (
-                    <button
-                      key={key}
-                      aria-label={label}
-                      className="inline-flex h-8 items-center justify-center rounded-[4px] border border-transparent text-[#202124] outline-none transition-colors hover:bg-[#eef3fd] focus-visible:border-[#1a73e8] focus-visible:bg-[#eef3fd]"
-                      onClick={() => applyPreset(key)}
-                      title={label}
-                      type="button"
-                    >
-                      <Icon className={TOOLBAR_ICON_CLASS} />
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
-function ToolbarSelect({
-  ariaLabel,
-  options,
-  value,
-  widthClass,
-  onChange,
-}: {
-  ariaLabel: string;
-  options: readonly ToolbarSelectOption[];
-  value: string;
-  widthClass: string;
-  onChange(this: void, value: string): void;
-}) {
-  const selectedOption = options.find((option) => option.value === value) ?? options[0];
-
-  return (
-    <Select.Root
-      items={options}
-      value={value}
-      onValueChange={(nextValue: string | null) => {
-        if (typeof nextValue === "string") {
-          onChange(nextValue);
-        }
-      }}
-    >
-      <Select.Trigger
-        aria-label={ariaLabel}
-        className={classNames(TOOLBAR_SELECT_TRIGGER_CLASS, widthClass)}
-        data-current-label={selectedOption?.label ?? ""}
-        data-current-value={value}
-      >
-        <Select.Value />
-        <Select.Icon className="ml-2 text-[#5f6368]">
-          <ChevronDown className="h-3.5 w-3.5 stroke-[1.75]" />
-        </Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={6}>
-          <Select.Popup className={TOOLBAR_POPUP_CLASS}>
-            <Select.List className="max-h-72 min-w-[var(--anchor-width)] overflow-auto py-1">
-              {options.map((option) => (
-                <Select.Item
-                  className="flex cursor-default items-center justify-between gap-3 rounded-[4px] px-2 py-1.5 text-[12px] text-[#202124] outline-none data-[highlighted]:bg-[#eef3fd] data-[selected]:font-semibold"
-                  key={`${ariaLabel}-${option.value || "default"}`}
-                  label={option.label}
-                  value={option.value}
-                >
-                  <Select.ItemText>{option.label}</Select.ItemText>
-                  <Select.ItemIndicator className="text-[#1a73e8]">
-                    <Check className="h-3.5 w-3.5 stroke-[2]" />
-                  </Select.ItemIndicator>
-                </Select.Item>
-              ))}
-            </Select.List>
-          </Select.Popup>
-        </Select.Positioner>
-      </Select.Portal>
-    </Select.Root>
-  );
-}
-
-function RibbonIconButton({
-  active = false,
-  ariaLabel,
-  pressed,
-  shortcut,
-  onClick,
-  children,
-}: RibbonButtonProps) {
-  return (
-    <Toolbar.Button
-      aria-label={ariaLabel}
-      aria-pressed={pressed}
-      className={classNames(TOOLBAR_BUTTON_CLASS, active && TOOLBAR_BUTTON_ACTIVE_CLASS)}
-      onClick={onClick}
-      title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}
-    >
-      {children}
-    </Toolbar.Button>
-  );
-}
-
-function ColorPaletteButton({
-  ariaLabel,
-  currentColor,
-  customInputLabel,
-  icon,
-  recentColors,
-  shortcut,
-  swatches,
-  onReset,
-  onSelectColor,
-}: ColorPaletteButtonProps) {
-  const [open, setOpen] = useState(false);
-  const [showCustomPicker, setShowCustomPicker] = useState(false);
-  const normalizedCurrentColor = normalizeHexColor(currentColor);
-
-  return (
-    <Popover.Root
-      modal={false}
-      open={open}
-      onOpenChange={(nextOpen: boolean) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          setShowCustomPicker(false);
-        }
-      }}
-    >
-      <Popover.Trigger
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-label={ariaLabel}
-        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-2")}
-        data-current-color={normalizedCurrentColor}
-        title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}
-      >
-        <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
-          {icon}
-          <span
-            className="absolute inset-x-0 bottom-0 h-[2px] rounded-[1px]"
-            style={{ backgroundColor: normalizedCurrentColor } satisfies CSSProperties}
-          />
-        </span>
-        <ChevronDown className="h-3 w-3 stroke-[1.75]" />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
-          <Popover.Popup
-            aria-label={`${ariaLabel} palette`}
-            className={classNames(TOOLBAR_POPUP_CLASS, "w-[288px]")}
-            data-testid={`${ariaLabel.toLowerCase().replace(/\s+/g, "-")}-palette`}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <button
-                aria-label={`Reset ${ariaLabel.toLowerCase()}`}
-                className={classNames(
-                  TOOLBAR_POPUP_ACTION_CLASS,
-                  "text-[#5f6368] hover:bg-[#f3f6fb]",
-                )}
-                onClick={() => {
-                  onReset();
-                  setOpen(false);
-                  setShowCustomPicker(false);
-                }}
-                type="button"
-              >
-                Reset
-              </button>
-              <button
-                aria-label={`Open custom ${ariaLabel.toLowerCase()} picker`}
-                className={classNames(
-                  TOOLBAR_POPUP_ACTION_CLASS,
-                  "text-[#1a73e8] hover:bg-[#eef3fd]",
-                )}
-                onClick={() => {
-                  setShowCustomPicker((current) => !current);
-                }}
-                type="button"
-              >
-                Custom
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              {swatches.map((row) => (
-                <div
-                  className="grid grid-cols-10 gap-1"
-                  key={`${ariaLabel}-row-${row[0]?.label ?? "empty"}`}
-                >
-                  {row.map((swatch) => {
-                    const selected = swatch.value === normalizedCurrentColor;
-                    return (
-                      <button
-                        aria-label={`${ariaLabel} ${swatch.label}`}
-                        className="relative h-5 w-5 rounded-[2px] border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
-                        data-color={swatch.value}
-                        key={`${ariaLabel}-${swatch.label}`}
-                        onClick={() => {
-                          onSelectColor(swatch.value, "preset");
-                          setOpen(false);
-                          setShowCustomPicker(false);
-                        }}
-                        style={{ backgroundColor: swatch.value } satisfies CSSProperties}
-                        type="button"
-                      >
-                        {selected ? (
-                          <span className="absolute inset-0 rounded-[2px] ring-2 ring-[#1a73e8] ring-offset-1" />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 border-t border-[#eef1f4] pt-3">
-              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
-                Standard
-              </div>
-              <div className="grid grid-cols-8 gap-1">
-                {GOOGLE_SHEETS_STANDARD_SWATCHS.map((swatch) => {
-                  const selected = swatch.value === normalizedCurrentColor;
-                  return (
-                    <button
-                      aria-label={`${ariaLabel} ${swatch.label}`}
-                      className="relative h-5 w-5 rounded-[2px] border border-[#d0d7e2] transition-transform hover:scale-[1.05]"
-                      data-color={swatch.value}
-                      key={`${ariaLabel}-${swatch.label}`}
-                      onClick={() => {
-                        onSelectColor(swatch.value, "preset");
-                        setOpen(false);
-                        setShowCustomPicker(false);
-                      }}
-                      style={{ backgroundColor: swatch.value } satisfies CSSProperties}
-                      type="button"
-                    >
-                      {selected ? (
-                        <span className="absolute inset-0 rounded-[2px] ring-2 ring-[#1a73e8] ring-offset-1" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {recentColors.length > 0 ? (
-              <div className="mt-3 border-t border-[#eef1f4] pt-3">
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
-                  Custom
-                </div>
-                <div className="grid grid-cols-8 gap-1">
-                  {recentColors.map((color) => (
-                    <button
-                      aria-label={`${ariaLabel} custom ${color}`}
-                      className="relative h-5 w-5 rounded-[2px] border border-[#d0d7e2]"
-                      data-color={color}
-                      key={`${ariaLabel}-recent-${color}`}
-                      onClick={() => {
-                        onSelectColor(color, "custom");
-                        setOpen(false);
-                        setShowCustomPicker(false);
-                      }}
-                      style={{ backgroundColor: color } satisfies CSSProperties}
-                      type="button"
-                    >
-                      {color === normalizedCurrentColor ? (
-                        <span className="absolute inset-0 rounded-[2px] ring-2 ring-[#1a73e8] ring-offset-1" />
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {showCustomPicker ? (
-              <div className="mt-3 border-t border-[#eef1f4] pt-3">
-                <label className="flex items-center justify-between gap-3 text-[11px] font-medium text-[#5f6368]">
-                  <span>Pick a custom color</span>
-                  <input
-                    aria-label={customInputLabel}
-                    className="h-8 w-11 cursor-pointer rounded-[4px] border border-[#d0d7e2] bg-white p-0"
-                    type="color"
-                    value={normalizedCurrentColor}
-                    onChange={(event) => {
-                      onSelectColor(event.target.value, "custom");
-                      setOpen(false);
-                      setShowCustomPicker(false);
-                    }}
-                  />
-                </label>
-              </div>
-            ) : null}
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
+function adjustNumberFormatDecimals(
+  currentFormat: CellNumberFormatPreset,
+  delta: number,
+): CellNumberFormatPreset {
+  switch (currentFormat.kind) {
+    case "number":
+    case "percent":
+    case "currency":
+    case "accounting":
+      return normalizeCellNumberFormatPreset({
+        ...currentFormat,
+        decimals: (currentFormat.decimals ?? 0) + delta,
+      });
+    case "general":
+    case "text":
+      return normalizeCellNumberFormatPreset({
+        kind: "number",
+        decimals: Math.max(0, delta > 0 ? 1 : 0),
+        useGrouping: true,
+      });
+    case "date":
+    case "time":
+    case "datetime":
+      return currentFormat;
+  }
 }
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
@@ -972,37 +393,40 @@ function WorkerWorkbookAppInner({
 }) {
   const documentId = runtimeConfig.documentId;
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
+  const initialSelection = useMemo(() => loadPersistedSelection(documentId), [documentId]);
   const runtimeActorRef = useActorRef(workerRuntimeMachine, {
     input: {
       documentId,
       replicaId,
       persistState: runtimeConfig.persistState,
       zero,
-      initialSelection: {
-        sheetName: "Sheet1",
-        address: "A1",
-      } satisfies WorkerRuntimeSelection,
+      initialSelection,
     },
   });
-  const runtimeSnapshot = useSelector(runtimeActorRef, (snapshot) => snapshot);
-  const runtimeController = runtimeSnapshot.context.controller;
-  const workerHandle = runtimeSnapshot.context.handle;
-  const runtimeState = runtimeSnapshot.context.runtimeState;
-  const bridgeState = runtimeSnapshot.context.bridgeState;
-  const selection = runtimeSnapshot.context.selection;
+  const runtimeController = useSelector(runtimeActorRef, (snapshot) => snapshot.context.controller);
+  const workerHandle = useSelector(runtimeActorRef, (snapshot) => snapshot.context.handle);
+  const bridgeState = useSelector(runtimeActorRef, (snapshot) => snapshot.context.bridgeState);
+  const selection = useSelector(runtimeActorRef, (snapshot) => snapshot.context.selection);
+  const runtimeSelectedCell = useSelector(
+    runtimeActorRef,
+    (snapshot) => snapshot.context.selectedCell,
+  );
+  const runtimeError = useSelector(runtimeActorRef, (snapshot) => snapshot.context.error);
+  const loading = useSelector(runtimeActorRef, (snapshot) =>
+    snapshot.matches({ active: "booting" }),
+  );
+  const runtimeReady = !loading && Boolean(workerHandle);
+  const workbookReady = runtimeReady;
   const selectedCell =
-    runtimeSnapshot.context.selectedCell ??
-    emptyCellSnapshot(selection.sheetName, selection.address);
+    runtimeSelectedCell ?? emptyCellSnapshot(selection.sheetName, selection.address);
   const [selectionLabel, setSelectionLabel] = useState("A1");
   const [recentFillColors, setRecentFillColors] = useState<readonly string[]>([]);
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([]);
+  const [zeroHealthReady, setZeroHealthReady] = useState(false);
   const [editorValue, setEditorValue] = useState("");
   const [editorSelectionBehavior, setEditorSelectionBehavior] =
     useState<EditSelectionBehavior>("select-all");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
-  const runtimeError = runtimeSnapshot.context.error;
-  const loading = runtimeSnapshot.matches({ active: "booting" });
-  const [cacheVersion, setCacheVersion] = useState(0);
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef(workerHandle);
   const editorValueRef = useRef(editorValue);
@@ -1015,16 +439,11 @@ function WorkerWorkbookAppInner({
   }, [selection]);
 
   useEffect(() => {
-    workerHandleRef.current = workerHandle;
-  }, [workerHandle]);
+    persistSelection(documentId, selection);
+  }, [documentId, selection]);
 
   useEffect(() => {
-    if (!workerHandle) {
-      return;
-    }
-    return workerHandle.cache.subscribe(() => {
-      setCacheVersion((current) => current + 1);
-    });
+    workerHandleRef.current = workerHandle;
   }, [workerHandle]);
 
   useEffect(() => {
@@ -1039,8 +458,52 @@ function WorkerWorkbookAppInner({
     zeroRef.current = zero;
   }, [zero]);
 
+  useEffect(() => {
+    if (!runtimeConfig.persistState || !runtimeReady) {
+      setZeroHealthReady(false);
+      return;
+    }
+    if (connectionState.name === "error" || connectionState.name === "closed") {
+      setZeroHealthReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    const probe = async (): Promise<void> => {
+      try {
+        const response = await fetch("/zero/keepalive", { cache: "no-store" });
+        if (response.ok) {
+          if (!cancelled) {
+            setZeroHealthReady(true);
+          }
+          return;
+        }
+      } catch {}
+      if (!cancelled) {
+        window.setTimeout(() => {
+          void probe();
+        }, 250);
+      }
+    };
+
+    setZeroHealthReady(false);
+    void probe();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionState.name, runtimeConfig.persistState, runtimeReady]);
+
   const writesAllowed =
     connectionState.name === "connected" || connectionState.name === "connecting";
+
+  const columnWidths = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.cache.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => workerHandle?.cache.getColumnWidths(selection.sheetName),
+    () => workerHandle?.cache.getColumnWidths(selection.sheetName),
+  );
 
   const reportRuntimeError = useCallback(
     (error: unknown) => {
@@ -1496,16 +959,14 @@ function WorkerWorkbookAppInner({
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
-  const sheetNames = [
-    ...(bridgeState ? bridgeState.sheetNames : (runtimeState?.sheetNames ?? [selection.sheetName])),
-  ];
-  const columnWidths = workerHandle
-    ? workerHandle.cache.getColumnWidths(selection.sheetName)
-    : undefined;
+  const sheetNames = useMemo(
+    () => [...(bridgeState?.sheetNames ?? [selection.sheetName])],
+    [bridgeState?.sheetNames, selection.sheetName],
+  );
   const selectedStyle = workerHandle?.cache.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format);
-  const selectedFontFamily = selectedStyle?.font?.family ?? "";
+  const selectedFontFamily = selectedStyle?.font?.family ?? DEFAULT_FONT_FAMILY;
   const selectedFontSize = String(selectedStyle?.font?.size ?? 11);
   const isBoldActive = selectedStyle?.font?.bold === true;
   const isItalicActive = selectedStyle?.font?.italic === true;
@@ -1528,6 +989,7 @@ function WorkerWorkbookAppInner({
         : mergeRecentCustomColors(recentTextColors, currentTextColor),
     [currentTextColor, recentTextColors],
   );
+  const statusModeLabel = formatConnectionStateLabel(connectionState.name);
 
   const subscribeViewport = useCallback(
     (
@@ -1543,23 +1005,32 @@ function WorkerWorkbookAppInner({
     [runtimeController],
   );
 
-  const statusModeLabel = formatConnectionStateLabel(connectionState.name);
-
+  const statusModeValue = connectionState.name === "connected" ? "Live" : statusModeLabel;
+  const statusSyncValue = !runtimeReady
+    ? "Loading"
+    : !runtimeConfig.persistState || zeroHealthReady
+      ? "Ready"
+      : connectionState.name === "connecting"
+        ? "Syncing"
+        : "Unavailable";
   const statusChipClass =
-    "inline-flex h-8 items-center rounded-[4px] border border-[#d7dce5] bg-white px-2 text-[11px] font-medium tracking-[0.01em] text-[#5f6368]";
+    "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]";
 
-  const statusBar = (
-    <>
-      <span className={statusChipClass} data-testid="status-mode">
-        {statusModeLabel}
-      </span>
-      <span className={statusChipClass} data-testid="status-selection">
-        {selection.sheetName}!{selectionLabel}
-      </span>
-      <span className={statusChipClass} data-testid="status-sync">
-        {isEditing ? "Editing" : writesAllowed ? "Ready" : "Read-only"}
-      </span>
-    </>
+  const statusBar = useMemo(
+    () => (
+      <>
+        <span className={statusChipClass} data-testid="status-mode">
+          {statusModeValue}
+        </span>
+        <span className={statusChipClass} data-testid="status-selection">
+          {selection.sheetName}!{selectionLabel}
+        </span>
+        <span className={statusChipClass} data-testid="status-sync">
+          {statusSyncValue}
+        </span>
+      </>
+    ),
+    [selection.sheetName, selectionLabel, statusChipClass, statusModeValue, statusSyncValue],
   );
 
   const applyRangeStyle = useCallback(
@@ -1653,12 +1124,10 @@ function WorkerWorkbookAppInner({
           await applyColumnBorder(startCol + 1, endCol, "left");
           return;
         case "horizontal":
-          await applyRowBorder(startRow, endRow, "top");
-          await applyRowBorder(endRow, endRow, "bottom");
+          await applyRowBorder(startRow + 1, endRow, "top");
           return;
         case "vertical":
-          await applyColumnBorder(startCol, endCol, "left");
-          await applyColumnBorder(endCol, endCol, "right");
+          await applyColumnBorder(startCol + 1, endCol, "left");
           return;
         case "outer":
           await applyRowBorder(startRow, startRow, "top");
@@ -1685,6 +1154,58 @@ function WorkerWorkbookAppInner({
       }
     },
     [invokeMutation, selectionRange],
+  );
+
+  const createSheet = useCallback(() => {
+    const nextSheetName = createNextSheetName(sheetNames);
+    workerHandle?.cache.setKnownSheets([...sheetNames, nextSheetName]);
+    void invokeMutation("renderCommit", [
+      {
+        kind: "upsertSheet",
+        name: nextSheetName,
+        order: sheetNames.length,
+      } satisfies CommitOp,
+    ])
+      .then(() => selectAddress(nextSheetName, "A1"))
+      .catch(reportRuntimeError);
+  }, [invokeMutation, reportRuntimeError, selectAddress, sheetNames, workerHandle]);
+
+  const renameSheet = useCallback(
+    (currentName: string, nextName: string) => {
+      const trimmedName = nextName.trim();
+      if (trimmedName.length === 0 || trimmedName === currentName) {
+        return;
+      }
+      const currentKey = normalizeSheetNameKey(currentName);
+      const nextKey = normalizeSheetNameKey(trimmedName);
+      if (
+        sheetNames.some(
+          (name) =>
+            normalizeSheetNameKey(name) === nextKey && normalizeSheetNameKey(name) !== currentKey,
+        )
+      ) {
+        return;
+      }
+
+      workerHandle?.cache.setKnownSheets(
+        sheetNames.map((name) => (name === currentName ? trimmedName : name)),
+      );
+      void invokeMutation("renderCommit", [
+        {
+          kind: "renameSheet",
+          oldName: currentName,
+          newName: trimmedName,
+        } satisfies CommitOp,
+      ])
+        .then(() => {
+          if (selectionRef.current.sheetName === currentName) {
+            selectAddress(trimmedName, selectionRef.current.address);
+          }
+          return undefined;
+        })
+        .catch(reportRuntimeError);
+    },
+    [invokeMutation, reportRuntimeError, selectAddress, sheetNames, workerHandle],
   );
 
   const setNumberFormatPreset = useCallback(
@@ -1740,36 +1261,42 @@ function WorkerWorkbookAppInner({
     [invokeMutation, selectionRange],
   );
 
-  const adjustDecimals = useCallback(
+  const adjustSelectionDecimals = useCallback(
     async (delta: number) => {
-      if (
-        currentNumberFormat.kind !== "number" &&
-        currentNumberFormat.kind !== "currency" &&
-        currentNumberFormat.kind !== "accounting" &&
-        currentNumberFormat.kind !== "percent"
-      ) {
+      const nextFormat = adjustNumberFormatDecimals(currentNumberFormat, delta);
+      if (nextFormat.kind === "general") {
+        await invokeMutation("clearRangeNumberFormat", selectionRange);
         return;
       }
-      await invokeMutation("setRangeNumberFormat", selectionRange, {
-        ...currentNumberFormat,
-        decimals: Math.max(0, Math.min(8, (currentNumberFormat.decimals ?? 2) + delta)),
-      });
+      await invokeMutation("setRangeNumberFormat", selectionRange, nextFormat);
     },
     [currentNumberFormat, invokeMutation, selectionRange],
   );
 
-  const toggleGrouping = useCallback(async () => {
-    if (
-      currentNumberFormat.kind !== "number" &&
-      currentNumberFormat.kind !== "currency" &&
-      currentNumberFormat.kind !== "accounting"
-    ) {
-      return;
+  const toggleSelectionGrouping = useCallback(async () => {
+    switch (currentNumberFormat.kind) {
+      case "number":
+      case "currency":
+      case "accounting":
+        await invokeMutation("setRangeNumberFormat", selectionRange, {
+          ...currentNumberFormat,
+          useGrouping: !currentNumberFormat.useGrouping,
+        });
+        return;
+      case "general":
+      case "text":
+        await invokeMutation("setRangeNumberFormat", selectionRange, {
+          kind: "number",
+          decimals: 0,
+          useGrouping: true,
+        });
+        return;
+      case "percent":
+      case "date":
+      case "time":
+      case "datetime":
+        return;
     }
-    await invokeMutation("setRangeNumberFormat", selectionRange, {
-      ...currentNumberFormat,
-      useGrouping: !(currentNumberFormat.useGrouping ?? true),
-    });
   }, [currentNumberFormat, invokeMutation, selectionRange]);
 
   useEffect(() => {
@@ -1874,201 +1401,108 @@ function WorkerWorkbookAppInner({
     writesAllowed,
   ]);
 
-  const ribbon = (
-    <Toolbar.Root
-      aria-label="Formatting toolbar"
-      className={classNames(TOOLBAR_ROOT_CLASS, TOOLBAR_ROW_CLASS)}
-    >
-      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-        <ToolbarSelect
-          ariaLabel="Number format"
-          options={NUMBER_FORMAT_OPTIONS}
-          value={currentNumberFormat.kind}
-          widthClass="w-32"
-          onChange={(value) => {
-            void setNumberFormatPreset(value);
-          }}
-        />
-        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Decimal controls">
-          <RibbonIconButton ariaLabel="Decrease decimals" onClick={() => void adjustDecimals(-1)}>
-            <Minus className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton ariaLabel="Increase decimals" onClick={() => void adjustDecimals(1)}>
-            <Plus className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            active={
-              currentNumberFormat.kind !== "general" && (currentNumberFormat.useGrouping ?? true)
-            }
-            ariaLabel="Toggle grouping"
-            pressed={
-              currentNumberFormat.kind !== "general" && (currentNumberFormat.useGrouping ?? true)
-            }
-            onClick={() => void toggleGrouping()}
-          >
-            <Rows3 className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-        </div>
-      </Toolbar.Group>
-
-      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
-
-      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-        <ToolbarSelect
-          ariaLabel="Font family"
-          options={FONT_FAMILY_OPTIONS}
-          value={selectedFontFamily}
-          widthClass="w-36"
-          onChange={(value) => {
-            void applyRangeStyle({ font: { family: value || null } });
-          }}
-        />
-        <ToolbarSelect
-          ariaLabel="Font size"
-          options={FONT_SIZE_OPTIONS}
-          value={selectedFontSize}
-          widthClass="w-16"
-          onChange={(value) => {
-            void applyRangeStyle({ font: { size: value ? Number(value) : null } });
-          }}
-        />
-        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Font emphasis">
-          <RibbonIconButton
-            active={isBoldActive}
-            ariaLabel="Bold"
-            pressed={isBoldActive}
-            shortcut="⌘/Ctrl+B"
-            onClick={() => void applyRangeStyle({ font: { bold: !isBoldActive } })}
-          >
-            <Bold className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            active={isItalicActive}
-            ariaLabel="Italic"
-            pressed={isItalicActive}
-            shortcut="⌘/Ctrl+I"
-            onClick={() => void applyRangeStyle({ font: { italic: !isItalicActive } })}
-          >
-            <Italic className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            active={isUnderlineActive}
-            ariaLabel="Underline"
-            pressed={isUnderlineActive}
-            shortcut="⌘/Ctrl+U"
-            onClick={() => void applyRangeStyle({ font: { underline: !isUnderlineActive } })}
-          >
-            <Underline className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-        </div>
-        <ColorPaletteButton
-          ariaLabel="Fill color"
-          currentColor={currentFillColor}
-          customInputLabel="Custom fill color"
-          icon={<PaintBucket className={TOOLBAR_ICON_CLASS} />}
-          onReset={() => {
-            void resetFillColor();
-          }}
-          onSelectColor={(color, source) => {
-            void applyFillColor(color, source);
-          }}
-          recentColors={visibleRecentFillColors}
-          swatches={GOOGLE_SHEETS_SWATCH_ROWS}
-        />
-        <ColorPaletteButton
-          ariaLabel="Text color"
-          currentColor={currentTextColor}
-          customInputLabel="Custom text color"
-          icon={<Baseline className={TOOLBAR_ICON_CLASS} />}
-          onReset={() => {
-            void resetTextColor();
-          }}
-          onSelectColor={(color, source) => {
-            void applyTextColor(color, source);
-          }}
-          recentColors={visibleRecentTextColors}
-          swatches={GOOGLE_SHEETS_SWATCH_ROWS}
-        />
-      </Toolbar.Group>
-
-      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
-
-      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-        <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="Horizontal alignment">
-          <RibbonIconButton
-            active={horizontalAlignment === "left"}
-            ariaLabel="Align left"
-            pressed={horizontalAlignment === "left"}
-            onClick={() => {
-              void applyRangeStyle({
-                alignment: { horizontal: horizontalAlignment === "left" ? null : "left" },
-              });
-            }}
-          >
-            <AlignLeft className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            active={horizontalAlignment === "center"}
-            ariaLabel="Align center"
-            pressed={horizontalAlignment === "center"}
-            onClick={() => {
-              void applyRangeStyle({
-                alignment: { horizontal: horizontalAlignment === "center" ? null : "center" },
-              });
-            }}
-          >
-            <AlignCenter className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            active={horizontalAlignment === "right"}
-            ariaLabel="Align right"
-            pressed={horizontalAlignment === "right"}
-            onClick={() => {
-              void applyRangeStyle({
-                alignment: { horizontal: horizontalAlignment === "right" ? null : "right" },
-              });
-            }}
-          >
-            <AlignRight className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-        </div>
-      </Toolbar.Group>
-
-      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
-
-      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-        <BorderPresetMenu disabled={!writesAllowed} onApplyPreset={applyBorderPreset} />
-      </Toolbar.Group>
-
-      <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
-
-      <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-        <RibbonIconButton
-          active={isWrapActive}
-          ariaLabel="Wrap"
-          pressed={isWrapActive}
-          onClick={() =>
-            void applyRangeStyle({
-              alignment: { wrap: !isWrapActive },
-            })
-          }
-        >
-          <WrapText className={TOOLBAR_ICON_CLASS} />
-          <span className="sr-only">Wrap</span>
-        </RibbonIconButton>
-        <RibbonIconButton ariaLabel="Clear style" onClick={() => void clearRangeStyleFields()}>
-          <RemoveFormatting className={TOOLBAR_ICON_CLASS} />
-          <span className="sr-only">Clear style</span>
-        </RibbonIconButton>
-      </Toolbar.Group>
-    </Toolbar.Root>
+  const ribbon = useMemo(
+    () => (
+      <WorkbookToolbar
+        currentFillColor={currentFillColor}
+        currentNumberFormatKind={currentNumberFormat.kind}
+        currentTextColor={currentTextColor}
+        horizontalAlignment={horizontalAlignment}
+        isBoldActive={isBoldActive}
+        isItalicActive={isItalicActive}
+        isUnderlineActive={isUnderlineActive}
+        isWrapActive={isWrapActive}
+        onApplyBorderPreset={applyBorderPreset}
+        onClearStyle={() => {
+          void clearRangeStyleFields();
+        }}
+        onFillColorReset={() => {
+          void resetFillColor();
+        }}
+        onFillColorSelect={(color, source) => {
+          void applyFillColor(color, source);
+        }}
+        onDecreaseDecimals={() => {
+          void adjustSelectionDecimals(-1);
+        }}
+        onFontFamilyChange={(value) => {
+          void applyRangeStyle({ font: { family: value === DEFAULT_FONT_FAMILY ? null : value } });
+        }}
+        onFontSizeChange={(value) => {
+          void applyRangeStyle({ font: { size: value ? Number(value) : null } });
+        }}
+        onIncreaseDecimals={() => {
+          void adjustSelectionDecimals(1);
+        }}
+        onHorizontalAlignmentChange={(alignment) => {
+          void applyRangeStyle({
+            alignment: {
+              horizontal: horizontalAlignment === alignment ? null : alignment,
+            },
+          });
+        }}
+        onNumberFormatChange={(value) => {
+          void setNumberFormatPreset(value);
+        }}
+        onTextColorReset={() => {
+          void resetTextColor();
+        }}
+        onTextColorSelect={(color, source) => {
+          void applyTextColor(color, source);
+        }}
+        onToggleGrouping={() => {
+          void toggleSelectionGrouping();
+        }}
+        onToggleBold={() => {
+          void applyRangeStyle({ font: { bold: !isBoldActive } });
+        }}
+        onToggleItalic={() => {
+          void applyRangeStyle({ font: { italic: !isItalicActive } });
+        }}
+        onToggleUnderline={() => {
+          void applyRangeStyle({ font: { underline: !isUnderlineActive } });
+        }}
+        onToggleWrap={() => {
+          void applyRangeStyle({
+            alignment: { wrap: !isWrapActive },
+          });
+        }}
+        recentFillColors={visibleRecentFillColors}
+        recentTextColors={visibleRecentTextColors}
+        selectedFontFamily={selectedFontFamily}
+        selectedFontSize={selectedFontSize}
+        writesAllowed={writesAllowed}
+      />
+    ),
+    [
+      applyBorderPreset,
+      applyFillColor,
+      applyRangeStyle,
+      applyTextColor,
+      clearRangeStyleFields,
+      currentFillColor,
+      currentNumberFormat.kind,
+      currentTextColor,
+      horizontalAlignment,
+      isBoldActive,
+      isItalicActive,
+      isUnderlineActive,
+      isWrapActive,
+      adjustSelectionDecimals,
+      resetFillColor,
+      resetTextColor,
+      selectedFontFamily,
+      selectedFontSize,
+      setNumberFormatPreset,
+      toggleSelectionGrouping,
+      visibleRecentFillColors,
+      visibleRecentTextColors,
+      writesAllowed,
+    ],
   );
 
-  const runtimeReady = !loading && Boolean(workerHandle) && Boolean(runtimeState);
-  const workbookReady = !loading && Boolean(workerHandle);
-
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#f8f9fa] text-[#202124]">
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
       {runtimeError ? (
         <div
           className="border-b border-[#f1b5b5] bg-[#fff7f7] px-3 py-2 text-sm text-[#991b1b]"
@@ -2078,7 +1512,7 @@ function WorkerWorkbookAppInner({
         </div>
       ) : null}
       {runtimeReady && !writesAllowed ? (
-        <div className="border-b border-[#d2e3fc] bg-[#eef4ff] px-3 py-2 text-sm text-[#174ea6]">
+        <div className="border-b border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-2 text-sm text-[var(--wb-accent)]">
           Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection
           recovers.
         </div>
@@ -2087,7 +1521,6 @@ function WorkerWorkbookAppInner({
         <div className="min-h-0 min-w-0 flex-1">
           {workbookReady && workerHandle ? (
             <WorkbookView
-              dataRevision={cacheVersion}
               ribbon={ribbon}
               editorValue={visibleEditorValue}
               editorSelectionBehavior={editorSelectionBehavior}
@@ -2126,9 +1559,11 @@ function WorkerWorkbookAppInner({
               }}
               onCommitEdit={commitEditor}
               onCopyRange={copySelectionRange}
+              onCreateSheet={writesAllowed ? createSheet : undefined}
               onEditorChange={handleEditorChange}
               onFillRange={fillSelectionRange}
               onPaste={pasteIntoSelection}
+              onRenameSheet={writesAllowed ? renameSheet : undefined}
               onSelectionLabelChange={setSelectionLabel}
               onSelect={(addr) => selectAddress(selection.sheetName, addr)}
               onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}

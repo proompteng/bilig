@@ -45,6 +45,7 @@ export type WorkbookOp =
   | { kind: "setCalculationSettings"; settings: WorkbookCalculationSettingsSnapshot }
   | { kind: "setVolatileContext"; context: WorkbookVolatileContextSnapshot }
   | { kind: "upsertSheet"; name: string; order: number }
+  | { kind: "renameSheet"; oldName: string; newName: string }
   | { kind: "deleteSheet"; name: string }
   | {
       kind: "insertRows";

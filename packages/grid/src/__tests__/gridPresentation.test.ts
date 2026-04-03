@@ -23,9 +23,13 @@ describe("gridPresentation", () => {
   test("returns the dense product theme values", () => {
     const productTheme = getGridTheme();
 
+    expect(productTheme.accentColor).toBe("#1f7a43");
+    expect(productTheme.accentLight).toBe("rgba(31, 122, 67, 0.14)");
+    expect(productTheme.bgHeaderHasFocus).toBe("#e6f4ea");
     expect(productTheme.cellHorizontalPadding).toBe(8);
     expect(productTheme.cellVerticalPadding).toBe(4);
     expect(productTheme.editorFontSize).toBe("12px");
+    expect(productTheme.fontFamily).toContain("JetBrainsMono Nerd Font");
     expect(productTheme.headerFontStyle).toContain("11px");
   });
 });

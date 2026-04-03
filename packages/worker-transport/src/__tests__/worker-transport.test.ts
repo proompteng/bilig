@@ -93,7 +93,11 @@ describe("worker transport", () => {
     eventListeners.forEach((listener) => {
       listener({
         kind: "batch",
+        invalidation: "cells",
         changedCellIndices: Uint32Array.from([1, 2]),
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
         metrics: {
           batchId: 1,
           changedInputCount: 1,

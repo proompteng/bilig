@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { ErrorCode, ValueTag, type CellSnapshot } from "@bilig/protocol";
+import { ErrorCode, ValueTag, type CellSnapshot, type CellStyleRecord } from "@bilig/protocol";
 import { GridCellKind } from "@glideapps/glide-data-grid";
-import { cellToEditorSeed, snapshotToGridCell } from "../gridCells.js";
+import { cellStyleToThemeOverride, cellToEditorSeed, snapshotToGridCell } from "../gridCells.js";
 
 function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
   const snapshot: CellSnapshot = {
@@ -66,5 +66,26 @@ describe("gridCells", () => {
     );
     expect(formulaStringCell.kind).toBe(GridCellKind.Text);
     expect(formulaStringCell.copyData).toBe("=A1&B1");
+  });
+
+  test("keeps fill styling out of theme overrides so grid borders stay stable", () => {
+    const fillOnlyStyle: CellStyleRecord = {
+      id: "style-fill",
+      fill: { backgroundColor: "#ea9999" },
+    };
+
+    expect(cellStyleToThemeOverride(fillOnlyStyle)).toBeUndefined();
+
+    const fontAndFillStyle: CellStyleRecord = {
+      id: "style-font-fill",
+      fill: { backgroundColor: "#ea9999" },
+      font: { color: "#202124", family: "Roboto", size: 12 },
+    };
+
+    expect(cellStyleToThemeOverride(fontAndFillStyle)).toEqual({
+      textDark: "#202124",
+      baseFontStyle: "400 12px",
+      fontFamily: '"JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+    });
   });
 });

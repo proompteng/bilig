@@ -43,6 +43,7 @@ import {
   parseCellAddress,
   parseFormula,
   parseRangeAddress,
+  renameFormulaSheetReferences,
   rewriteAddressForStructuralTransform,
   rewriteFormulaForStructuralTransform,
   rewriteRangeForStructuralTransform,
@@ -103,8 +104,16 @@ import {
 import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
 
 export interface CommitOp {
-  kind: "upsertWorkbook" | "upsertSheet" | "deleteSheet" | "upsertCell" | "deleteCell";
+  kind:
+    | "upsertWorkbook"
+    | "upsertSheet"
+    | "renameSheet"
+    | "deleteSheet"
+    | "upsertCell"
+    | "deleteCell";
   name?: string;
+  oldName?: string;
+  newName?: string;
   order?: number;
   sheetName?: string;
   addr?: string;
@@ -346,6 +355,44 @@ function definedNameValueToCellValue(
     return errorValue(ErrorCode.Value);
   }
   return literalToValue(input, stringPool);
+}
+
+function renameDefinedNameValueSheet(
+  input: WorkbookDefinedNameValueSnapshot,
+  oldSheetName: string,
+  newSheetName: string,
+): WorkbookDefinedNameValueSnapshot {
+  if (typeof input === "object" && input !== null && "kind" in input) {
+    switch (input.kind) {
+      case "scalar":
+      case "structured-ref":
+        return input;
+      case "cell-ref":
+        return input.sheetName === oldSheetName ? { ...input, sheetName: newSheetName } : input;
+      case "range-ref":
+        return input.sheetName === oldSheetName ? { ...input, sheetName: newSheetName } : input;
+      case "formula":
+        return {
+          ...input,
+          formula: renameFormulaTextForSheet(input.formula, oldSheetName, newSheetName),
+        };
+    }
+  }
+  if (typeof input === "string" && input.startsWith("=")) {
+    return renameFormulaTextForSheet(input, oldSheetName, newSheetName);
+  }
+  return input;
+}
+
+function renameFormulaTextForSheet(
+  input: string,
+  oldSheetName: string,
+  newSheetName: string,
+): string {
+  const hasLeadingEquals = input.startsWith("=");
+  const source = hasLeadingEquals ? input.slice(1) : input;
+  const rewritten = renameFormulaSheetReferences(source, oldSheetName, newSheetName);
+  return hasLeadingEquals ? `=${rewritten}` : rewritten;
 }
 
 function resolveMetadataReferencesInAst(
@@ -702,6 +749,17 @@ export class SpreadsheetEngine {
     ]);
   }
 
+  renameSheet(oldName: string, newName: string): void {
+    const trimmedName = newName.trim();
+    if (trimmedName.length === 0 || oldName === trimmedName) {
+      return;
+    }
+    if (this.workbook.getSheet(trimmedName)) {
+      return;
+    }
+    this.executeLocalTransaction([{ kind: "renameSheet", oldName, newName: trimmedName }]);
+  }
+
   deleteSheet(name: string): void {
     this.executeLocalTransaction([{ kind: "deleteSheet", name }]);
   }
@@ -831,7 +889,15 @@ export class SpreadsheetEngine {
     this.lastMetrics.batchId += 1;
     this.lastMetrics.changedInputCount = formulaChangedCount;
     this.events.emit(
-      { kind: "batch", changedCellIndices: changed, metrics: this.lastMetrics },
+      {
+        kind: "batch",
+        invalidation: "cells",
+        changedCellIndices: changed,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+        metrics: this.lastMetrics,
+      },
       changed,
       (cellIndex) => this.workbook.getQualifiedAddress(cellIndex),
     );
@@ -925,7 +991,15 @@ export class SpreadsheetEngine {
     this.lastMetrics.batchId += 1;
     this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
     this.events.emit(
-      { kind: "batch", changedCellIndices: changed, metrics: this.lastMetrics },
+      {
+        kind: "batch",
+        invalidation: "cells",
+        changedCellIndices: changed,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+        metrics: this.lastMetrics,
+      },
       changed,
       (cellIndex) => this.workbook.getQualifiedAddress(cellIndex),
     );
@@ -2184,6 +2258,15 @@ export class SpreadsheetEngine {
     });
   }
 
+  private rewriteDefinedNamesForSheetRename(oldSheetName: string, newSheetName: string): void {
+    this.workbook.listDefinedNames().forEach((record) => {
+      const nextValue = renameDefinedNameValueSheet(record.value, oldSheetName, newSheetName);
+      if (!definedNameValuesEqual(record.value, nextValue)) {
+        this.workbook.setDefinedName(record.name, nextValue);
+      }
+    });
+  }
+
   private rewriteCellFormulasForStructuralTransform(
     sheetName: string,
     transform: StructuralAxisTransform,
@@ -2199,6 +2282,33 @@ export class SpreadsheetEngine {
         transform,
       );
     });
+  }
+
+  private rewriteCellFormulasForSheetRename(
+    oldSheetName: string,
+    newSheetName: string,
+    formulaChangedCount: number,
+  ): number {
+    this.formulas.forEach((formula, cellIndex) => {
+      if (!formula) {
+        return;
+      }
+      const ownerSheetName = this.workbook.getSheetNameById(
+        this.workbook.cellStore.sheetIds[cellIndex]!,
+      );
+      if (!ownerSheetName) {
+        return;
+      }
+      const nextSource = renameFormulaSheetReferences(formula.source, oldSheetName, newSheetName);
+      if (nextSource === formula.source && ownerSheetName !== newSheetName) {
+        return;
+      }
+      const compiled = this.compileFormulaForSheet(ownerSheetName, nextSource);
+      const dependencies = this.materializeDependencies(ownerSheetName, compiled);
+      this.setFormula(cellIndex, nextSource, compiled, dependencies);
+      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
+    });
+    return formulaChangedCount;
   }
 
   private rewriteWorkbookMetadataForStructuralTransform(
@@ -3184,6 +3294,11 @@ export class SpreadsheetEngine {
         case "upsertSheet":
           if (op.name) engineOps.push({ kind: "upsertSheet", name: op.name, order: op.order ?? 0 });
           break;
+        case "renameSheet":
+          if (op.oldName && op.newName) {
+            engineOps.push({ kind: "renameSheet", oldName: op.oldName, newName: op.newName });
+          }
+          break;
         case "deleteSheet":
           if (op.name) engineOps.push({ kind: "deleteSheet", name: op.name });
           break;
@@ -3345,8 +3460,10 @@ export class SpreadsheetEngine {
     let explicitChangedCount = 0;
     let topologyChanged = false;
     let sheetDeleted = false;
-    let styleRangeChanged = false;
-    let formatRangeChanged = false;
+    let structuralInvalidation = false;
+    const invalidatedRanges: CellRangeRef[] = [];
+    const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = [];
+    const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = [];
     let refreshAllPivots = false;
     let appliedOps = 0;
     const canSkipOrderChecks = source !== "remote";
@@ -3392,6 +3509,33 @@ export class SpreadsheetEngine {
             topologyChanged = topologyChanged || formulaChangedCount !== sheetReboundCount;
             refreshAllPivots = true;
             break;
+          case "renameSheet": {
+            const renamedSheet = this.workbook.renameSheet(op.oldName, op.newName);
+            this.entityVersions.set(`sheet:${op.oldName}`, order);
+            this.entityVersions.set(`sheet:${op.newName}`, order);
+            this.sheetDeleteVersions.set(op.oldName, order);
+            const renamedTombstone = this.sheetDeleteVersions.get(op.newName);
+            if (!renamedTombstone || compareOpOrder(order, renamedTombstone) > 0) {
+              this.sheetDeleteVersions.delete(op.newName);
+            }
+            if (!renamedSheet) {
+              break;
+            }
+            if (this.selection.sheetName === op.oldName) {
+              this.setSelection(op.newName, this.selection.address);
+            }
+            this.rewriteDefinedNamesForSheetRename(op.oldName, op.newName);
+            formulaChangedCount = this.rewriteCellFormulasForSheetRename(
+              op.oldName,
+              op.newName,
+              formulaChangedCount,
+            );
+            topologyChanged = true;
+            sheetDeleted = true;
+            structuralInvalidation = true;
+            refreshAllPivots = true;
+            break;
+          }
           case "deleteSheet":
             const removal = this.removeSheetRuntime(op.name, explicitChangedCount);
             changedInputCount += removal.changedInputCount;
@@ -3401,6 +3545,7 @@ export class SpreadsheetEngine {
             this.sheetDeleteVersions.set(op.name, order);
             topologyChanged = true;
             sheetDeleted = true;
+            structuralInvalidation = true;
             refreshAllPivots = true;
             break;
           case "insertRows":
@@ -3417,40 +3562,57 @@ export class SpreadsheetEngine {
               formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
             });
             topologyChanged = true;
+            structuralInvalidation = true;
             refreshAllPivots = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           }
           case "updateRowMetadata":
             this.workbook.setRowMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
+            invalidatedRows.push({
+              sheetName: op.sheetName,
+              startIndex: op.start,
+              endIndex: op.start + op.count - 1,
+            });
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "updateColumnMetadata":
             this.workbook.setColumnMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
+            invalidatedColumns.push({
+              sheetName: op.sheetName,
+              startIndex: op.start,
+              endIndex: op.start + op.count - 1,
+            });
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "setFreezePane":
             this.workbook.setFreezePane(op.sheetName, op.rows, op.cols);
+            structuralInvalidation = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "clearFreezePane":
             this.workbook.clearFreezePane(op.sheetName);
+            structuralInvalidation = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "setFilter":
             this.workbook.setFilter(op.sheetName, op.range);
+            structuralInvalidation = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "clearFilter":
             this.workbook.deleteFilter(op.sheetName, op.range);
+            structuralInvalidation = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "setSort":
             this.workbook.setSort(op.sheetName, op.range, op.keys);
+            structuralInvalidation = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "clearSort":
             this.workbook.deleteSort(op.sheetName, op.range);
+            structuralInvalidation = true;
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "upsertTable":
@@ -3579,12 +3741,12 @@ export class SpreadsheetEngine {
             break;
           case "setStyleRange":
             this.workbook.setStyleRange(op.range, op.styleId);
-            styleRangeChanged = true;
+            invalidatedRanges.push(op.range);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "setFormatRange":
             this.workbook.setFormatRange(op.range, op.formatId);
-            formatRangeChanged = true;
+            invalidatedRanges.push(op.range);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "clearCell": {
@@ -3691,10 +3853,14 @@ export class SpreadsheetEngine {
     this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
     const event = {
       kind: "batch",
+      invalidation: sheetDeleted || structuralInvalidation ? "full" : "cells",
       changedCellIndices: changed,
+      invalidatedRanges,
+      invalidatedRows,
+      invalidatedColumns,
       metrics: this.lastMetrics,
     } satisfies EngineEvent;
-    if (sheetDeleted || styleRangeChanged || formatRangeChanged) {
+    if (event.invalidation === "full") {
       this.events.emitAllWatched(event);
     } else {
       this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
@@ -3737,6 +3903,13 @@ export class SpreadsheetEngine {
           return [{ kind: "deleteSheet", name: op.name }];
         }
         return [{ kind: "upsertSheet", name: existing.name, order: existing.order }];
+      }
+      case "renameSheet": {
+        const existing = this.workbook.getSheet(op.newName);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "renameSheet", oldName: op.newName, newName: op.oldName }];
       }
       case "deleteSheet": {
         const sheet = this.workbook.getSheet(op.name);
@@ -5612,6 +5785,8 @@ export class SpreadsheetEngine {
       case "upsertSheet":
       case "deleteSheet":
         return `sheet:${op.name}`;
+      case "renameSheet":
+        return `sheet:${op.oldName}`;
       case "insertRows":
       case "deleteRows":
       case "moveRows":
@@ -5707,6 +5882,8 @@ export class SpreadsheetEngine {
         return undefined;
       case "upsertSheet":
         return this.sheetDeleteVersions.get(op.name);
+      case "renameSheet":
+        return this.sheetDeleteVersions.get(op.oldName);
       case "upsertPivotTable":
         return (
           this.sheetDeleteVersions.get(op.sheetName) ??

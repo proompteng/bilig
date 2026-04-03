@@ -6,20 +6,23 @@ import type {
   HelloFrame,
   ProtocolFrame,
 } from "@bilig/binary-protocol";
-import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
-import {
-  XLSX_CONTENT_TYPE,
-  type AgentFrame,
-  type AgentResponse,
-  type LoadWorkbookFileRequest,
-} from "@bilig/agent-api";
-import { importXlsx } from "@bilig/excel-import";
+import { createSnapshotChunkFrames } from "@bilig/binary-protocol";
+import type { AgentFrame, AgentResponse, LoadWorkbookFileRequest } from "@bilig/agent-api";
 import {
   type InMemoryDocumentPersistence,
   createInMemoryDocumentPersistence,
 } from "@bilig/storage-server";
 import type { WorkbookSnapshot } from "@bilig/protocol";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
+import {
+  type AgentFrameContext,
+  createWorkbookLoadedResponse,
+  normalizeSessionId,
+  prepareWorkbookLoad,
+  routeAgentFrame,
+  worksheetHostUnavailableResponse,
+} from "./agent-routing.js";
+import { createSnapshotPublication } from "./session-shared.js";
 
 interface SnapshotAssembly {
   documentId: string;
@@ -35,11 +38,6 @@ interface BrowserSubscriber {
   send(frame: ProtocolFrame): void;
 }
 
-export interface AgentFrameContext {
-  serverUrl?: string;
-  browserAppBaseUrl?: string;
-}
-
 export interface DocumentStateSummary {
   documentId: string;
   cursor: number;
@@ -52,50 +50,6 @@ export interface DocumentSessionManagerOptions {
   browserAppBaseUrl?: string;
   publicServerUrl?: string;
   maxImportBytes?: number;
-}
-
-const DEFAULT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
-const snapshotEncoder = new TextEncoder();
-
-function normalizeBaseUrl(value: string): string {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function buildBrowserUrl(
-  browserAppBaseUrl: string | undefined,
-  serverUrl: string,
-  documentId: string,
-): string | undefined {
-  if (!browserAppBaseUrl) {
-    return undefined;
-  }
-  const url = new URL(normalizeBaseUrl(browserAppBaseUrl));
-  url.searchParams.set("document", documentId);
-  url.searchParams.set("server", serverUrl);
-  return url.toString();
-}
-
-function decodeBase64(bytesBase64: string): Uint8Array {
-  const normalized = bytesBase64.trim();
-  if (normalized.length === 0 || normalized.length % 4 !== 0) {
-    throw new Error("Workbook upload bytesBase64 must be a non-empty base64 string");
-  }
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
-    throw new Error("Workbook upload bytesBase64 contains invalid base64 characters");
-  }
-  return new Uint8Array(Buffer.from(normalized, "base64"));
-}
-
-function createImportedDocumentId(): string {
-  const random =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-  return `xlsx:${random}`;
-}
-
-function normalizeSessionId(documentId: string, replicaId: string): string {
-  return `${documentId}:${replicaId}`;
 }
 
 export class DocumentSessionManager {
@@ -175,142 +129,60 @@ export class DocumentSessionManager {
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
-    if (frame.kind !== "request") {
-      return {
-        kind: "response",
-        response: {
-          kind: "error",
-          id: "unknown",
-          code: "INVALID_AGENT_FRAME",
-          message: "Sync server accepts only agent requests on the remote API ingress",
-          retryable: false,
-        },
-      };
-    }
-
-    const request = frame.request;
-    let response: AgentResponse;
-    try {
-      if (request.kind === "loadWorkbookFile") {
-        response = await this.loadWorkbookFile(request, context);
-        return {
-          kind: "response",
-          response,
-        };
-      }
-
-      if (this.worksheetExecutor) {
-        switch (request.kind) {
-          case "openWorkbookSession":
-            await this.persistence.presence.join(
-              request.documentId,
-              `${request.documentId}:${request.replicaId}`,
-            );
-            return this.worksheetExecutor.execute(frame);
-          case "closeWorkbookSession":
-            await this.persistence.presence.leave(
-              request.sessionId.split(":")[0] ?? request.sessionId,
-              request.sessionId,
-            );
-            return this.worksheetExecutor.execute(frame);
-          case "readRange":
-          case "writeRange":
-          case "setRangeFormulas":
-          case "setRangeStyle":
-          case "clearRangeStyle":
-          case "setRangeNumberFormat":
-          case "clearRangeNumberFormat":
-          case "clearRange":
-          case "fillRange":
-          case "copyRange":
-          case "pasteRange":
-          case "getDependents":
-          case "getPrecedents":
-          case "subscribeRange":
-          case "unsubscribe":
-          case "exportSnapshot":
-          case "importSnapshot":
-          case "createPivotTable":
-            return this.worksheetExecutor.execute(frame);
-          case "getMetrics":
-            break;
+    return routeAgentFrame(frame, context, {
+      invalidFrameMessage: "Sync server accepts only agent requests on the remote API ingress",
+      errorCode: "SYNC_SERVER_FAILURE",
+      loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
+      openWorkbookSession: async (request) => {
+        const sessionId = normalizeSessionId(request.documentId, request.replicaId);
+        await this.persistence.presence.join(request.documentId, sessionId);
+        if (this.worksheetExecutor) {
+          return this.worksheetExecutor.execute({
+            kind: "request",
+            request,
+          });
         }
-      }
-
-      switch (request.kind) {
-        case "openWorkbookSession":
-          await this.persistence.presence.join(request.documentId, request.id);
-          response = {
-            kind: "ok",
-            id: request.id,
-            sessionId: `${request.documentId}:${request.replicaId}`,
-          };
-          break;
-        case "closeWorkbookSession":
-          await this.persistence.presence.leave(
-            request.sessionId.split(":")[0] ?? request.sessionId,
-            request.sessionId,
-          );
-          response = {
-            kind: "ok",
-            id: request.id,
-          };
-          break;
-        case "getMetrics":
-          response = {
-            kind: "metrics",
-            id: request.id,
-            value: {
-              service: "bilig-app",
-              documentSessions: (
-                await this.persistence.presence.sessions(
-                  request.sessionId.split(":")[0] ?? request.sessionId,
-                )
-              ).length,
-            },
-          };
-          break;
-        case "readRange":
-        case "writeRange":
-        case "setRangeFormulas":
-        case "setRangeStyle":
-        case "clearRangeStyle":
-        case "setRangeNumberFormat":
-        case "clearRangeNumberFormat":
-        case "clearRange":
-        case "fillRange":
-        case "copyRange":
-        case "pasteRange":
-        case "getDependents":
-        case "getPrecedents":
-        case "subscribeRange":
-        case "unsubscribe":
-        case "exportSnapshot":
-        case "importSnapshot":
-        case "createPivotTable":
-          response = {
-            kind: "error",
-            id: request.id,
-            code: "NOT_IMPLEMENTED",
-            message: `${request.kind} is reserved in the remote API contract but not wired to a live worksheet host yet`,
-            retryable: false,
-          };
-          break;
-      }
-    } catch (error) {
-      response = {
-        kind: "error",
+        return {
+          kind: "ok",
+          id: request.id,
+          sessionId,
+        };
+      },
+      closeWorkbookSession: async (request) => {
+        await this.persistence.presence.leave(
+          request.sessionId.split(":")[0] ?? request.sessionId,
+          request.sessionId,
+        );
+        if (this.worksheetExecutor) {
+          return this.worksheetExecutor.execute({
+            kind: "request",
+            request,
+          });
+        }
+        return {
+          kind: "ok",
+          id: request.id,
+        };
+      },
+      getMetrics: async (request) => ({
+        kind: "metrics",
         id: request.id,
-        code: "SYNC_SERVER_FAILURE",
-        message: error instanceof Error ? error.message : String(error),
-        retryable: false,
-      };
-    }
-
-    return {
-      kind: "response",
-      response,
-    };
+        value: {
+          service: "bilig-app",
+          documentSessions: (
+            await this.persistence.presence.sessions(
+              request.sessionId.split(":")[0] ?? request.sessionId,
+            )
+          ).length,
+        },
+      }),
+      handleWorksheetRequest: async (requestFrame, request) => {
+        if (!this.worksheetExecutor) {
+          return worksheetHostUnavailableResponse(request);
+        }
+        return this.worksheetExecutor.execute(requestFrame);
+      },
+    });
   }
 
   attachBrowser(
@@ -379,47 +251,18 @@ export class DocumentSessionManager {
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
   ): Promise<AgentResponse> {
-    if (request.contentType !== XLSX_CONTENT_TYPE) {
-      throw new Error("Unsupported workbook upload content type");
-    }
-    if (request.openMode === "replace" && !request.documentId) {
-      throw new Error("Workbook replace uploads require documentId");
-    }
-
-    const bytes = decodeBase64(request.bytesBase64);
-    const maxImportBytes = this.options.maxImportBytes ?? DEFAULT_IMPORT_MAX_BYTES;
-    if (bytes.byteLength > maxImportBytes) {
-      throw new Error(`Workbook upload exceeds ${maxImportBytes} bytes`);
-    }
-
-    const imported = importXlsx(bytes, request.fileName);
-    const documentId = request.documentId ?? createImportedDocumentId();
-    const sessionId = normalizeSessionId(documentId, request.replicaId);
-
-    await this.persistence.presence.join(documentId, sessionId);
-    await this.publishImportedSnapshot(documentId, imported.snapshot);
-
-    const serverUrl = normalizeBaseUrl(
-      context.serverUrl ?? this.options.publicServerUrl ?? "http://127.0.0.1:4321",
-    );
-    return {
-      kind: "workbookLoaded",
-      id: request.id,
-      documentId,
-      sessionId,
-      workbookName: imported.workbookName,
-      sheetNames: imported.sheetNames,
-      serverUrl,
-      ...(() => {
-        const browserUrl = buildBrowserUrl(
-          context.browserAppBaseUrl ?? this.options.browserAppBaseUrl,
-          serverUrl,
-          documentId,
-        );
-        return browserUrl ? { browserUrl } : {};
-      })(),
-      warnings: imported.warnings,
-    };
+    const prepared = prepareWorkbookLoad(request, context, {
+      ...(this.options.maxImportBytes !== undefined
+        ? { maxImportBytes: this.options.maxImportBytes }
+        : {}),
+      ...(this.options.publicServerUrl ? { publicServerUrl: this.options.publicServerUrl } : {}),
+      ...(this.options.browserAppBaseUrl
+        ? { browserAppBaseUrl: this.options.browserAppBaseUrl }
+        : {}),
+    });
+    await this.persistence.presence.join(prepared.documentId, prepared.sessionId);
+    await this.publishImportedSnapshot(prepared.documentId, prepared.imported.snapshot);
+    return createWorkbookLoadedResponse(request.id, prepared);
   }
 
   private async publishImportedSnapshot(
@@ -427,27 +270,18 @@ export class DocumentSessionManager {
     snapshot: WorkbookSnapshot,
   ): Promise<void> {
     const cursor = (await this.persistence.batches.latestCursor(documentId)) + 1;
-    const snapshotId = `${documentId}:snapshot:${Date.now()}`;
-    const bytes = snapshotEncoder.encode(JSON.stringify(snapshot));
+    const publication = createSnapshotPublication(documentId, cursor, snapshot);
 
     await this.persistence.batches.reset(documentId, cursor);
     await this.persistence.snapshots.put({
       documentId,
-      snapshotId,
+      snapshotId: publication.snapshotId,
       cursor,
-      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
-      bytes,
+      contentType: publication.contentType,
+      bytes: publication.bytes,
       createdAtUnixMs: Date.now(),
     });
-
-    const frames = createSnapshotChunkFrames({
-      documentId,
-      snapshotId,
-      cursor,
-      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
-      bytes,
-    });
-    frames.forEach((frame) => this.broadcast(documentId, frame));
+    publication.frames.forEach((frame) => this.broadcast(documentId, frame));
     this.broadcast(documentId, {
       kind: "cursorWatermark",
       documentId,

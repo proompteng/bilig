@@ -223,6 +223,94 @@ export class WorkbookStore {
     this.sheetsById.delete(sheet.id);
   }
 
+  renameSheet(oldName: string, nextName: string): SheetRecord | undefined {
+    const trimmedName = nextName.trim();
+    if (trimmedName.length === 0) {
+      throw new Error("Sheet name must be non-empty");
+    }
+    const sheet = this.sheetsByName.get(oldName);
+    if (!sheet) {
+      return undefined;
+    }
+    if (oldName === trimmedName) {
+      return sheet;
+    }
+    if (this.sheetsByName.has(trimmedName)) {
+      return undefined;
+    }
+
+    this.sheetsByName.delete(oldName);
+    sheet.name = trimmedName;
+    this.sheetsByName.set(trimmedName, sheet);
+
+    rekeyRecords(this.metadata.freezePanes, (record) =>
+      record.sheetName === oldName ? { ...record, sheetName: trimmedName } : record,
+    );
+    rekeyRecords(this.metadata.rowMetadata, (record) =>
+      record.sheetName === oldName ? { ...record, sheetName: trimmedName } : record,
+    );
+    rekeyRecords(this.metadata.columnMetadata, (record) =>
+      record.sheetName === oldName ? { ...record, sheetName: trimmedName } : record,
+    );
+    rekeyRecords(this.metadata.filters, (record) =>
+      record.sheetName === oldName || record.range.sheetName === oldName
+        ? {
+            sheetName: record.sheetName === oldName ? trimmedName : record.sheetName,
+            range: {
+              ...record.range,
+              sheetName: record.range.sheetName === oldName ? trimmedName : record.range.sheetName,
+            },
+          }
+        : record,
+    );
+    rekeyRecords(this.metadata.sorts, (record) =>
+      record.sheetName === oldName || record.range.sheetName === oldName
+        ? {
+            sheetName: record.sheetName === oldName ? trimmedName : record.sheetName,
+            range: {
+              ...record.range,
+              sheetName: record.range.sheetName === oldName ? trimmedName : record.range.sheetName,
+            },
+            keys: record.keys.map((key) => ({ ...key })),
+          }
+        : record,
+    );
+    rekeyRecords(this.metadata.tables, (record) =>
+      record.sheetName === oldName ? { ...record, sheetName: trimmedName } : record,
+    );
+    rekeyRecords(this.metadata.spills, (record) =>
+      record.sheetName === oldName ? { ...record, sheetName: trimmedName } : record,
+    );
+    rekeyRecords(this.metadata.pivots, (record) =>
+      record.sheetName === oldName || record.source.sheetName === oldName
+        ? {
+            ...record,
+            sheetName: record.sheetName === oldName ? trimmedName : record.sheetName,
+            source: {
+              ...record.source,
+              sheetName:
+                record.source.sheetName === oldName ? trimmedName : record.source.sheetName,
+            },
+            groupBy: [...record.groupBy],
+            values: record.values.map((value) => ({ ...value })),
+          }
+        : record,
+    );
+
+    sheet.styleRanges = sheet.styleRanges.map((record) =>
+      record.range.sheetName === oldName
+        ? { ...record, range: { ...record.range, sheetName: trimmedName } }
+        : record,
+    );
+    sheet.formatRanges = sheet.formatRanges.map((record) =>
+      record.range.sheetName === oldName
+        ? { ...record, range: { ...record.range, sheetName: trimmedName } }
+        : record,
+    );
+
+    return sheet;
+  }
+
   getSheet(name: string): SheetRecord | undefined {
     return this.sheetsByName.get(name);
   }
@@ -1219,6 +1307,106 @@ function deleteRecordsBySheet<T>(
       bucket.delete(key);
     }
   }
+}
+
+function rekeyRecords<T>(bucket: Map<string, T>, rewrite: (record: T) => T): void {
+  const rewritten = [...bucket.values()].map((record) => rewrite(record));
+  bucket.clear();
+  rewritten.forEach((record) => {
+    bucket.set(recordKey(record), record);
+  });
+}
+
+function recordKey(record: unknown): string {
+  if (isFreezePaneRecord(record)) {
+    return record.sheetName;
+  }
+  if (isAxisMetadataRecord(record)) {
+    return axisMetadataKey(record.sheetName, record.start, record.count);
+  }
+  if (isFilterRecord(record)) {
+    return filterKey(record.sheetName, record.range);
+  }
+  if (isSortRecord(record)) {
+    return sortKey(record.sheetName, record.range);
+  }
+  if (isTableRecord(record)) {
+    return tableKey(record.name);
+  }
+  if (isSpillRecord(record)) {
+    return spillKey(record.sheetName, record.address);
+  }
+  if (isPivotRecord(record)) {
+    return pivotKey(record.sheetName, record.address);
+  }
+  throw new Error("Unsupported workbook metadata record");
+}
+
+function isFreezePaneRecord(record: unknown): record is WorkbookFreezePaneRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    "rows" in record &&
+    "cols" in record &&
+    !("address" in record)
+  );
+}
+
+function isAxisMetadataRecord(record: unknown): record is WorkbookAxisMetadataRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    "start" in record &&
+    "count" in record &&
+    "size" in record &&
+    "hidden" in record
+  );
+}
+
+function isFilterRecord(record: unknown): record is WorkbookFilterRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    "range" in record &&
+    !("keys" in record)
+  );
+}
+
+function isSortRecord(record: unknown): record is WorkbookSortRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    "range" in record &&
+    "keys" in record
+  );
+}
+
+function isTableRecord(record: unknown): record is WorkbookTableRecord {
+  return (
+    typeof record === "object" && record !== null && "name" in record && "columnNames" in record
+  );
+}
+
+function isSpillRecord(record: unknown): record is WorkbookSpillRecord {
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    "sheetName" in record &&
+    "address" in record &&
+    "rows" in record &&
+    "cols" in record &&
+    !("source" in record)
+  );
+}
+
+function isPivotRecord(record: unknown): record is WorkbookPivotRecord {
+  return (
+    typeof record === "object" && record !== null && "sheetName" in record && "source" in record
+  );
 }
 
 function normalizeCellStyleRecord(style: CellStyleRecord): WorkbookCellStyleRecord {

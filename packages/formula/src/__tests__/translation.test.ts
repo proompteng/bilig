@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorCode } from "@bilig/protocol";
 import {
+  renameFormulaSheetReferences,
   rewriteAddressForStructuralTransform,
   rewriteFormulaForStructuralTransform,
   rewriteRangeForStructuralTransform,
@@ -50,9 +51,23 @@ describe("translateFormulaReferences", () => {
     expect(translateFormulaReferences("LAMBDA(x,x+1)(A1)", 1, 2)).toBe("LAMBDA(x,x+1)(C2)");
   });
 
+  it("translates standalone row and column references plus axis ranges", () => {
+    expect(translateFormulaReferences("SUM(A:A)+SUM(2:2)", 3, 2)).toBe("SUM(C:C)+SUM(5:5)");
+    expect(translateFormulaReferences("A:A+2:4", 1, 1)).toBe("B:B+3:5");
+  });
+
   it("throws when a relative axis would move outside worksheet bounds even if the other axis is absolute", () => {
     expect(() => translateFormulaReferences("$A1+B$1", -1, -2)).toThrow(
       "Translated reference moved outside worksheet bounds: $A1",
+    );
+  });
+
+  it("throws when standalone row and column refs move outside bounds", () => {
+    expect(() => translateFormulaReferences("A:A", 0, -1)).toThrow(
+      "Translated reference moved outside worksheet bounds: A",
+    );
+    expect(() => translateFormulaReferences("1:1", -1, 0)).toThrow(
+      "Translated reference moved outside worksheet bounds: 1",
     );
   });
 
@@ -124,6 +139,57 @@ describe("translateFormulaReferences", () => {
         count: 2,
       }),
     ).toBe("A1+Sheet2!B2");
+  });
+
+  it("keeps row refs on column transforms and column refs on row transforms", () => {
+    expect(
+      rewriteFormulaForStructuralTransform("3:5", "Sheet1", "Sheet1", {
+        kind: "insert",
+        axis: "column",
+        start: 1,
+        count: 2,
+      }),
+    ).toBe("3:5");
+    expect(
+      rewriteFormulaForStructuralTransform("B:D", "Sheet1", "Sheet1", {
+        kind: "delete",
+        axis: "row",
+        start: 1,
+        count: 1,
+      }),
+    ).toBe("B:D");
+  });
+
+  it("rewrites unary expressions during structural transforms", () => {
+    expect(
+      rewriteFormulaForStructuralTransform("-A1", "Sheet1", "Sheet1", {
+        kind: "insert",
+        axis: "column",
+        start: 0,
+        count: 1,
+      }),
+    ).toBe("-B1");
+  });
+
+  it("rewrites moved cell ranges in both directions", () => {
+    expect(
+      rewriteRangeForStructuralTransform("D1", "E1", {
+        kind: "move",
+        axis: "column",
+        start: 3,
+        count: 1,
+        target: 1,
+      }),
+    ).toEqual({ startAddress: "B1", endAddress: "E1" });
+    expect(
+      rewriteRangeForStructuralTransform("B1", "D1", {
+        kind: "move",
+        axis: "column",
+        start: 1,
+        count: 1,
+        target: 3,
+      }),
+    ).toEqual({ startAddress: "B1", endAddress: "D1" });
   });
 
   it("rewrites single-cell addresses and throws for invalid address inputs", () => {
@@ -244,6 +310,19 @@ describe("translateFormulaReferences", () => {
     ).toBe("1-(2-3)");
   });
 
+  it("renames sheet references inside nested unary, call, and invoke expressions", () => {
+    expect(
+      renameFormulaSheetReferences(
+        "SUM(-'Old Sheet'!A1,MAP('Old Sheet'!B:B,LAMBDA(x,x)))+'Old Sheet'!C1#",
+        "Old Sheet",
+        "New Sheet",
+      ),
+    ).toBe("SUM(-'New Sheet'!A1,MAP('New Sheet'!B:B,LAMBDA(x,x)))+'New Sheet'!C1#");
+    expect(
+      renameFormulaSheetReferences("LAMBDA(x,x)('Old Sheet'!A1)", "Old Sheet", "New Sheet"),
+    ).toBe("LAMBDA(x,x)('New Sheet'!A1)");
+  });
+
   it("rewrites spill refs and axis ranges while collapsing deleted axis refs to #REF", () => {
     expect(
       rewriteFormulaForStructuralTransform("'My Sheet'!A1#+SUM(2:2)", "My Sheet", "My Sheet", {
@@ -294,6 +373,15 @@ describe("translateFormulaReferences", () => {
         },
       ),
     ).toBe("SUM(Sheet2!C:C)+SUM(Sheet2!$4:$4)");
+  });
+
+  it("renames explicit sheet references while preserving quoting", () => {
+    expect(
+      renameFormulaSheetReferences("SUM(Data!A1:B2)+'Old Sheet'!C3+Current!D4", "Old Sheet", "Q1"),
+    ).toBe("SUM(Data!A1:B2)+Q1!C3+Current!D4");
+    expect(
+      renameFormulaSheetReferences("'It''s here'!A1+Sheet2!B2", "It's here", "New Sheet"),
+    ).toBe("'New Sheet'!A1+Sheet2!B2");
   });
 
   it("throws when translated row or column refs move outside worksheet bounds", () => {

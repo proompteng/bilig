@@ -26,51 +26,61 @@ function BootstrapShell() {
   return (
     <div
       aria-hidden="true"
-      className="min-h-screen bg-[#f7f9fc] text-transparent"
+      className="min-h-screen bg-[var(--wb-app-bg)] font-sans text-transparent"
       data-testid="bootstrap-shell"
     >
-      <div className="border-b border-[#d7dce5] bg-white/95 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="h-8 w-44 rounded-[4px] bg-[#edf1f6]" />
-          <div className="h-8 w-8 rounded-[4px] bg-[#edf1f6]" />
-          <div className="h-8 w-8 rounded-[4px] bg-[#edf1f6]" />
-          <div className="h-8 w-36 rounded-[4px] bg-[#edf1f6]" />
-          <div className="h-8 w-18 rounded-[4px] bg-[#edf1f6]" />
-          <div className="ml-auto h-8 w-32 rounded-[4px] bg-[#edf1f6]" />
+      <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
+        <div className="flex min-h-[40px] items-center gap-3">
+          <div className="h-8 w-28 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-muted)]" />
+          <div className="h-8 w-[5.5rem] rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-muted)]" />
+          <div className="h-7 w-7 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)]" />
+          <div className="h-7 w-7 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)]" />
+          <div className="h-5 w-px bg-[var(--wb-border)]" />
+          <div className="h-7 w-7 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)]" />
+          <div className="h-7 w-7 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)]" />
+          <div className="h-7 w-7 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)]" />
         </div>
       </div>
-      <div className="border-b border-[#d7dce5] bg-white px-4 py-2.5">
+      <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="h-9 w-28 rounded-[4px] bg-[#edf1f6]" />
-          <div className="h-9 flex-1 rounded-[4px] bg-[#edf1f6]" />
+          <div className="h-8 w-24 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]" />
+          <div className="h-8 flex-1 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]" />
         </div>
       </div>
-      <div className="px-4 py-3">
-        <div className="overflow-hidden rounded-[8px] border border-[#d7dce5] bg-white shadow-[0_1px_2px_rgba(17,24,39,0.04)]">
-          <div className="grid grid-cols-[64px_repeat(10,minmax(0,1fr))] border-b border-[#d7dce5] bg-[#f8fafc]">
-            <div className="h-10 border-r border-[#d7dce5] bg-[#f3f6fb]" />
+      <div className="flex-1 px-0">
+        <div className="h-full overflow-hidden bg-[var(--wb-surface)]">
+          <div className="grid grid-cols-[46px_repeat(10,minmax(0,1fr))] border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]">
+            <div className="h-6 border-r border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]" />
             {Array.from({ length: 10 }, (_, index) => (
               <div
-                className="h-10 border-r border-[#e6eaf0] bg-[#f8fafc] last:border-r-0"
+                className="h-6 border-r border-[var(--wb-grid-border)] bg-[var(--wb-surface-subtle)] last:border-r-0"
                 key={`bootstrap-col-${index}`}
               />
             ))}
           </div>
           {Array.from({ length: 18 }, (_row, index) => (
             <div
-              className="grid grid-cols-[64px_repeat(10,minmax(0,1fr))] border-b border-[#eef1f4] last:border-b-0"
+              className="grid grid-cols-[46px_repeat(10,minmax(0,1fr))] border-b border-[var(--wb-grid-border)] last:border-b-0"
               key={`bootstrap-row-${index}`}
             >
-              <div className="h-10 border-r border-[#d7dce5] bg-[#fbfcfe]" />
+              <div className="h-[22px] border-r border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]" />
               {Array.from({ length: 10 }, (_cell, cellIndex) => (
                 <div
-                  className="h-10 border-r border-[#eef1f4] bg-white last:border-r-0"
+                  className="h-[22px] border-r border-[var(--wb-grid-border)] bg-[var(--wb-surface)] last:border-r-0"
                   key={`bootstrap-cell-${index}-${cellIndex}`}
                 />
               ))}
             </div>
           ))}
         </div>
+      </div>
+      <div className="flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 py-1.5">
+        <div className="flex items-center gap-1.5">
+          <div className="h-8 w-20 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]" />
+          <div className="h-8 w-20 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]" />
+          <div className="h-8 w-8 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]" />
+        </div>
+        <div className="h-7 w-28 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]" />
       </div>
     </div>
   );

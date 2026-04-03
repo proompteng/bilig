@@ -142,6 +142,8 @@ function entityKeyForOp(op: EngineOp): string {
     case "upsertSheet":
     case "deleteSheet":
       return `sheet:${op.name}`;
+    case "renameSheet":
+      return `sheet:${op.oldName}`;
     case "insertRows":
     case "deleteRows":
     case "moveRows":
@@ -192,6 +194,7 @@ function entityKeyForOp(op: EngineOp): string {
     case "deletePivotTable":
       return pivotEntityKey(op.sheetName, op.address);
   }
+  return String(op);
 }
 
 function sheetDeleteBarrierForOp(
@@ -211,6 +214,8 @@ function sheetDeleteBarrierForOp(
       return undefined;
     case "upsertSheet":
       return latestSheetDeletes.get(op.name);
+    case "renameSheet":
+      return latestSheetDeletes.get(op.oldName);
     case "insertRows":
     case "deleteRows":
     case "moveRows":
@@ -244,6 +249,7 @@ function sheetDeleteBarrierForOp(
     case "upsertPivotTable":
       return latestSheetDeletes.get(op.sheetName) ?? latestSheetDeletes.get(op.source.sheetName);
   }
+  return undefined;
 }
 
 export function compactLog(batches: EngineOpBatch[]): EngineOpBatch[] {

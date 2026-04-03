@@ -9,7 +9,7 @@ import {
 import { GridCellKind, type GridCell } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
 
-const DEFAULT_FONT_FALLBACK = '"Aptos","Segoe UI","IBM Plex Sans",sans-serif';
+const DEFAULT_FONT_FALLBACK = '"JetBrainsMono Nerd Font","JetBrains Mono",monospace';
 
 export function cellToEditorSeed(
   snapshot: Pick<CellSnapshot, "formula" | "input" | "value">,
@@ -113,7 +113,7 @@ export function cellToGridCell(engine: GridEngineLike, sheetName: string, addr: 
 }
 
 export function cellStyleToThemeOverride(style: CellStyleRecord | undefined) {
-  if (!style?.fill && !style?.font) {
+  if (!style?.font) {
     return undefined;
   }
   const fontStyleParts: string[] = [];
@@ -123,10 +123,9 @@ export function cellStyleToThemeOverride(style: CellStyleRecord | undefined) {
   fontStyleParts.push(style.font?.bold ? "700" : "400");
   fontStyleParts.push(`${style.font?.size ?? 13}px`);
   return {
-    ...(style.fill?.backgroundColor ? { bgCell: style.fill.backgroundColor } : {}),
     ...(style.font?.color ? { textDark: style.font.color } : {}),
     ...(fontStyleParts.length > 0 ? { baseFontStyle: fontStyleParts.join(" ") } : {}),
-    ...(style.font?.family ? { fontFamily: getResolvedCellFontFamily(style.font.family) } : {}),
+    fontFamily: getResolvedCellFontFamily(),
   };
 }
 
@@ -147,9 +146,6 @@ function resolveContentAlign(
   }
 }
 
-export function getResolvedCellFontFamily(family: string | undefined): string {
-  if (!family) {
-    return DEFAULT_FONT_FALLBACK;
-  }
-  return `"${family.replaceAll('"', '\\"')}",${DEFAULT_FONT_FALLBACK}`;
+export function getResolvedCellFontFamily(): string {
+  return DEFAULT_FONT_FALLBACK;
 }

@@ -170,6 +170,29 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "D1")).toEqual({ tag: ValueTag.Boolean, value: true });
   });
 
+  it("reports differential drift when restored recalculation produces different changed-cell sets", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 10);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+    engine.setCellValue("Sheet1", "A1", 12);
+
+    const differential = engine.recalculateDifferential();
+
+    expect(differential.drift).toEqual(["Sheet1!B1: Calculated in JS but MISSING in WASM"]);
+    expect(differential.wasm).toEqual([]);
+    expect(differential.js).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Sheet1",
+          address: "B1",
+          value: { tag: ValueTag.Number, value: 24 },
+        }),
+      ]),
+    );
+  });
+
   it("relocates relative formulas when copying a range", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -2983,6 +3006,98 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 });
   });
 
+  it("renames sheets without breaking formulas, names, or sheet metadata", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Data");
+    engine.createSheet("Summary");
+    engine.setRangeValues({ sheetName: "Data", startAddress: "A1", endAddress: "B2" }, [
+      [2, 3],
+      [4, 5],
+    ]);
+    engine.setCellFormula("Data", "C1", "A1+B1");
+    engine.setCellFormula("Summary", "A1", "SUM(Data!A1:B2)");
+    engine.setDefinedName("AnchorCell", { kind: "cell-ref", sheetName: "Data", address: "A1" });
+    engine.setDefinedName("SalesRange", "=Data!A1:B2");
+    engine.setFreezePane("Data", 1, 0);
+    engine.setFilter("Data", { sheetName: "Data", startAddress: "A1", endAddress: "B2" });
+    engine.setSort("Data", { sheetName: "Data", startAddress: "A1", endAddress: "B2" }, [
+      { keyAddress: "B1", direction: "asc" },
+    ]);
+    engine.setTable({
+      name: "Sales",
+      sheetName: "Data",
+      startAddress: "A1",
+      endAddress: "B2",
+      columnNames: ["Q1", "Q2"],
+      headerRow: false,
+      totalsRow: false,
+    });
+    engine.setPivotTable("Summary", "D2", {
+      name: "SalesPivot",
+      source: { sheetName: "Data", startAddress: "A1", endAddress: "B2" },
+      groupBy: ["Q1"],
+      values: [{ sourceColumn: "Q2", summarizeBy: "sum" }],
+    });
+
+    engine.renameSheet("Data", "Revenue");
+
+    expect(engine.exportSnapshot().sheets.map((sheet) => sheet.name)).toEqual([
+      "Revenue",
+      "Summary",
+    ]);
+    expect(engine.getCell("Revenue", "C1").formula).toBe("A1+B1");
+    expect(engine.getCellValue("Revenue", "C1")).toEqual({ tag: ValueTag.Number, value: 5 });
+    expect(engine.getCell("Summary", "A1").formula).toBe("SUM(Revenue!A1:B2)");
+    expect(engine.getCellValue("Summary", "A1")).toEqual({ tag: ValueTag.Number, value: 14 });
+    expect(engine.getDefinedName("AnchorCell")).toEqual({
+      name: "AnchorCell",
+      value: { kind: "cell-ref", sheetName: "Revenue", address: "A1" },
+    });
+    expect(engine.getDefinedName("SalesRange")).toEqual({
+      name: "SalesRange",
+      value: "=Revenue!A1:B2",
+    });
+    expect(engine.getFreezePane("Revenue")).toEqual({ sheetName: "Revenue", rows: 1, cols: 0 });
+    expect(engine.getFreezePane("Data")).toBeUndefined();
+    expect(engine.getFilters("Revenue")).toEqual([
+      {
+        sheetName: "Revenue",
+        range: { sheetName: "Revenue", startAddress: "A1", endAddress: "B2" },
+      },
+    ]);
+    expect(engine.getSorts("Revenue")).toEqual([
+      {
+        sheetName: "Revenue",
+        range: { sheetName: "Revenue", startAddress: "A1", endAddress: "B2" },
+        keys: [{ keyAddress: "B1", direction: "asc" }],
+      },
+    ]);
+    expect(engine.getTables()).toEqual([
+      {
+        name: "Sales",
+        sheetName: "Revenue",
+        startAddress: "A1",
+        endAddress: "B2",
+        columnNames: ["Q1", "Q2"],
+        headerRow: false,
+        totalsRow: false,
+      },
+    ]);
+    expect(engine.getPivotTables()).toEqual([
+      {
+        name: "SalesPivot",
+        sheetName: "Summary",
+        address: "D2",
+        source: { sheetName: "Revenue", startAddress: "A1", endAddress: "B2" },
+        groupBy: ["Q1"],
+        values: [{ sourceColumn: "Q2", summarizeBy: "sum" }],
+        rows: 1,
+        cols: 1,
+      },
+    ]);
+  });
+
   it("clears reverse range edges when a range-backed formula is removed", async () => {
     const engine = new SpreadsheetEngine();
     await engine.ready();
@@ -4690,6 +4805,34 @@ describe("SpreadsheetEngine", () => {
     });
   });
 
+  it("emits targeted range invalidation for style-only edits", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const events: Array<{
+      invalidation: "cells" | "full";
+      invalidatedRanges: readonly { sheetName: string; startAddress: string; endAddress: string }[];
+    }> = [];
+    const unsubscribe = engine.subscribe((event) => {
+      events.push({
+        invalidation: event.invalidation,
+        invalidatedRanges: event.invalidatedRanges,
+      });
+    });
+
+    engine.setRangeStyle(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" },
+      { fill: { backgroundColor: "#ABCDEF" } },
+    );
+
+    expect(events.at(-1)).toEqual({
+      invalidation: "cells",
+      invalidatedRanges: [{ sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" }],
+    });
+    unsubscribe();
+  });
+
   it("interns identical cell styles across ranges", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
@@ -4804,6 +4947,31 @@ describe("SpreadsheetEngine", () => {
     expect(engine.clearSort("Sheet1", sortRange)).toBe(true);
     expect(engine.getSorts("Sheet1")).toEqual([]);
     expect(engine.getVolatileContext()).toEqual({ recalcEpoch: 0 });
+  });
+
+  it("emits targeted axis invalidation for column metadata edits", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const events: Array<{
+      invalidation: "cells" | "full";
+      invalidatedColumns: readonly { sheetName: string; startIndex: number; endIndex: number }[];
+    }> = [];
+    const unsubscribe = engine.subscribe((event) => {
+      events.push({
+        invalidation: event.invalidation,
+        invalidatedColumns: event.invalidatedColumns,
+      });
+    });
+
+    engine.updateColumnMetadata("Sheet1", 2, 2, 120, true);
+
+    expect(events.at(-1)).toEqual({
+      invalidation: "cells",
+      invalidatedColumns: [{ sheetName: "Sheet1", startIndex: 2, endIndex: 3 }],
+    });
+    unsubscribe();
   });
 
   it("merges advanced style fields including borders and font weight", async () => {

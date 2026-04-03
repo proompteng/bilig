@@ -64,6 +64,15 @@ export function rewriteFormulaForStructuralTransform(
   );
 }
 
+export function renameFormulaSheetReferences(
+  source: string,
+  oldSheetName: string,
+  newSheetName: string,
+): string {
+  const ast = parseFormula(source);
+  return serializeFormula(renameNodeSheetReferences(ast, oldSheetName, newSheetName));
+}
+
 export function rewriteAddressForStructuralTransform(
   address: string,
   transform: StructuralAxisTransform,
@@ -258,6 +267,53 @@ function rewriteNodeForStructuralTransform(
         args: node.args.map((arg) =>
           rewriteNodeForStructuralTransform(arg, ownerSheetName, targetSheetName, transform),
         ),
+      };
+  }
+}
+
+function renameNodeSheetReferences(
+  node: FormulaNode,
+  oldSheetName: string,
+  newSheetName: string,
+): FormulaNode {
+  switch (node.kind) {
+    case "NumberLiteral":
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "ErrorLiteral":
+    case "NameRef":
+    case "StructuredRef":
+      return node;
+    case "CellRef":
+    case "SpillRef":
+    case "RowRef":
+    case "ColumnRef":
+    case "RangeRef":
+      return {
+        ...node,
+        ...(node.sheetName === oldSheetName ? { sheetName: newSheetName } : {}),
+      };
+    case "UnaryExpr":
+      return {
+        ...node,
+        argument: renameNodeSheetReferences(node.argument, oldSheetName, newSheetName),
+      };
+    case "BinaryExpr":
+      return {
+        ...node,
+        left: renameNodeSheetReferences(node.left, oldSheetName, newSheetName),
+        right: renameNodeSheetReferences(node.right, oldSheetName, newSheetName),
+      };
+    case "CallExpr":
+      return {
+        ...node,
+        args: node.args.map((arg) => renameNodeSheetReferences(arg, oldSheetName, newSheetName)),
+      };
+    case "InvokeExpr":
+      return {
+        ...node,
+        callee: renameNodeSheetReferences(node.callee, oldSheetName, newSheetName),
+        args: node.args.map((arg) => renameNodeSheetReferences(arg, oldSheetName, newSheetName)),
       };
   }
 }

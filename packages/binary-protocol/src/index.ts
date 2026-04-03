@@ -149,6 +149,7 @@ const OP_TAGS: Record<EngineOp["kind"], number> = {
   setWorkbookMetadata: 2,
   upsertSheet: 3,
   deleteSheet: 4,
+  renameSheet: 37,
   updateRowMetadata: 5,
   updateColumnMetadata: 6,
   setFreezePane: 7,
@@ -855,6 +856,10 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case "deleteSheet":
       writer.string(op.name);
       return;
+    case "renameSheet":
+      writer.string(op.oldName);
+      writer.string(op.newName);
+      return;
     case "insertRows":
     case "insertColumns":
       writer.string(op.sheetName);
@@ -1005,6 +1010,8 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       return { kind: "upsertSheet", name: reader.string(), order: reader.u32() };
     case 4:
       return { kind: "deleteSheet", name: reader.string() };
+    case 37:
+      return { kind: "renameSheet", oldName: reader.string(), newName: reader.string() };
     case 29:
       return {
         kind: "insertRows",

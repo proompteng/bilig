@@ -4,10 +4,13 @@ import net from "node:net";
 const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? "bilig-playwright";
 const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
+const e2eReadyPort = process.env["BILIG_E2E_READY_PORT"] ?? "4181";
 const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
 const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
 const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
+const e2eReadyUrl =
+  process.env["BILIG_E2E_READY_URL"] ?? `http://127.0.0.1:${e2eReadyPort}/healthz`;
 const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
 
@@ -173,11 +176,14 @@ async function waitForTcp(host: string, port: number, timeoutMs = 240_000): Prom
 
 let stopping = false;
 const keepAlive = setInterval(() => {}, 1 << 30);
+let readinessServer: { stop(closeActiveConnections?: boolean): void } | null = null;
 
 async function shutdown(exitCode: number): Promise<never> {
   if (!stopping) {
     stopping = true;
     clearInterval(keepAlive);
+    readinessServer?.stop(true);
+    readinessServer = null;
     runCompose(["down", "-v", "--remove-orphans"], { allowFailure: true });
   }
   process.exit(exitCode);
@@ -197,7 +203,18 @@ try {
   await waitForHttp(`${e2eBaseUrl}/healthz`);
   await waitForHttp(`${e2eSyncServerUrl}/healthz`);
   await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10));
-  console.log(`Playwright E2E stack ready on ${e2eBaseUrl}`);
+  readinessServer = Bun.serve({
+    hostname: "127.0.0.1",
+    port: Number.parseInt(e2eReadyPort, 10),
+    fetch(request) {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/healthz") {
+        return new Response("ok", { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  console.log(`Playwright E2E stack ready on ${e2eBaseUrl} (${e2eReadyUrl})`);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   await shutdown(1);

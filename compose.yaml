@@ -70,6 +70,14 @@ services:
         condition: service_healthy
       bilig-app:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -f http://localhost:4848/keepalive
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     environment:
       ZERO_PORT: "4848"
       ZERO_REPLICA_FILE: /data/zero.db

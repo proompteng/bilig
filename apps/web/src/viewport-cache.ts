@@ -9,6 +9,7 @@ import {
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const DEFAULT_STYLE_ID = "style-0";
+const MAX_CACHED_CELLS_PER_SHEET = 6000;
 type CellItem = readonly [number, number];
 
 function snapshotValueKey(snapshot: CellSnapshot): string {
@@ -40,7 +41,29 @@ function cellSnapshotSignature(snapshot: CellSnapshot): string {
 }
 
 function cellStyleSignature(style: CellStyleRecord): string {
-  return JSON.stringify(style);
+  const fill = style.fill?.backgroundColor ?? "";
+  const font = style.font;
+  const alignment = style.alignment;
+  const borders = style.borders;
+  return [
+    fill,
+    font?.family ?? "",
+    font?.size ?? "",
+    font?.bold ? 1 : 0,
+    font?.italic ? 1 : 0,
+    font?.underline ? 1 : 0,
+    font?.color ?? "",
+    alignment?.horizontal ?? "",
+    alignment?.vertical ?? "",
+    alignment?.wrap ? 1 : 0,
+    alignment?.indent ?? "",
+    borders?.top ? `${borders.top.style}:${borders.top.weight}:${borders.top.color}` : "",
+    borders?.right ? `${borders.right.style}:${borders.right.weight}:${borders.right.color}` : "",
+    borders?.bottom
+      ? `${borders.bottom.style}:${borders.bottom.weight}:${borders.bottom.color}`
+      : "",
+    borders?.left ? `${borders.left.style}:${borders.left.weight}:${borders.left.color}` : "",
+  ].join("|");
 }
 
 interface CellSubscription {
@@ -55,15 +78,18 @@ export class WorkerViewportCache implements GridEngineLike {
       if (!this.knownSheets.has(sheetName)) {
         return undefined;
       }
-      const entries = [...this.cellSnapshots.values()].filter(
-        (snapshot) => snapshot.sheetName === sheetName,
-      );
+      const sheetCellKeys = this.cellKeysBySheet.get(sheetName);
       return {
         grid: {
           forEachCellEntry: (listener: (cellIndex: number, row: number, col: number) => void) => {
-            entries.forEach((snapshot, index) => {
+            let index = 0;
+            sheetCellKeys?.forEach((key) => {
+              const snapshot = this.cellSnapshots.get(key);
+              if (!snapshot) {
+                return;
+              }
               const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
-              listener(index, parsed.row, parsed.col);
+              listener(index++, parsed.row, parsed.col);
             });
           },
         },
@@ -72,6 +98,7 @@ export class WorkerViewportCache implements GridEngineLike {
   };
 
   private readonly cellSnapshots = new Map<string, CellSnapshot>();
+  private readonly cellKeysBySheet = new Map<string, Set<string>>();
   private readonly cellStyles = new Map<string, CellStyleRecord>([
     [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
   ]);
@@ -81,6 +108,8 @@ export class WorkerViewportCache implements GridEngineLike {
   private readonly pendingColumnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>();
   private readonly knownSheets = new Set<string>();
+  private readonly activeViewportKeysBySheet = new Map<string, Set<string>>();
+  private readonly activeViewports = new Map<string, Viewport>();
 
   constructor(private readonly client?: WorkerEngineClient) {}
 
@@ -114,11 +143,16 @@ export class WorkerViewportCache implements GridEngineLike {
     const key = `${snapshot.sheetName}!${snapshot.address}`;
     this.knownSheets.add(snapshot.sheetName);
     this.cellSnapshots.set(key, snapshot);
+    this.sheetCellKeys(snapshot.sheetName).add(key);
     this.notifyCellSubscriptions(new Set([key]));
     this.listeners.forEach((listener) => listener());
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
+    const currentWidth = this.columnWidthsBySheet.get(sheetName)?.[columnIndex];
+    if (currentWidth === width) {
+      return;
+    }
     this.knownSheets.add(sheetName);
     const widths = { ...this.columnWidthsBySheet.get(sheetName) };
     widths[columnIndex] = width;
@@ -130,8 +164,18 @@ export class WorkerViewportCache implements GridEngineLike {
   }
 
   setKnownSheets(sheetNames: readonly string[]): void {
+    if (
+      sheetNames.length === this.knownSheets.size &&
+      sheetNames.every((sheetName) => this.knownSheets.has(sheetName))
+    ) {
+      return;
+    }
+    const removedSheets = [...this.knownSheets].filter(
+      (sheetName) => !sheetNames.includes(sheetName),
+    );
     this.knownSheets.clear();
     sheetNames.forEach((sheetName) => this.knownSheets.add(sheetName));
+    removedSheets.forEach((sheetName) => this.dropSheetCache(sheetName));
     this.listeners.forEach((listener) => listener());
   }
 
@@ -159,10 +203,27 @@ export class WorkerViewportCache implements GridEngineLike {
     if (!this.client) {
       throw new Error("Local worker viewport subscriptions are unavailable in the Zero runtime");
     }
-    return this.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
-      const damage = this.applyPatch(decodeViewportPatch(bytes));
-      listener(damage);
-    });
+    const viewportKey = `${sheetName}:${viewport.rowStart}:${viewport.rowEnd}:${viewport.colStart}:${viewport.colEnd}`;
+    this.activeViewports.set(viewportKey, viewport);
+    const sheetViewportKeys = this.activeViewportKeysBySheet.get(sheetName) ?? new Set<string>();
+    sheetViewportKeys.add(viewportKey);
+    this.activeViewportKeysBySheet.set(sheetName, sheetViewportKeys);
+    const unsubscribe = this.client.subscribeViewportPatches(
+      { sheetName, ...viewport },
+      (bytes: Uint8Array) => {
+        const damage = this.applyPatch(decodeViewportPatch(bytes));
+        listener(damage);
+      },
+    );
+    return () => {
+      unsubscribe();
+      this.activeViewports.delete(viewportKey);
+      const nextSheetViewportKeys = this.activeViewportKeysBySheet.get(sheetName);
+      nextSheetViewportKeys?.delete(viewportKey);
+      if (nextSheetViewportKeys && nextSheetViewportKeys.size === 0) {
+        this.activeViewportKeysBySheet.delete(sheetName);
+      }
+    };
   }
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
@@ -204,6 +265,7 @@ export class WorkerViewportCache implements GridEngineLike {
         }
       }
       this.cellSnapshots.set(key, cell.snapshot);
+      this.sheetCellKeys(patch.viewport.sheetName).add(key);
       changedKeys.add(key);
       if (!damagedCellKeys.has(key)) {
         damage.push({ cell: [cell.col, cell.row] });
@@ -211,6 +273,7 @@ export class WorkerViewportCache implements GridEngineLike {
       }
     }
 
+    let axisChanged = false;
     if (patch.columns.length > 0) {
       const widths = { ...this.columnWidthsBySheet.get(patch.viewport.sheetName) };
       const pendingWidths = { ...this.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) };
@@ -223,6 +286,7 @@ export class WorkerViewportCache implements GridEngineLike {
         if (pending === column.size) {
           delete pendingWidths[column.index];
         }
+        axisChanged = true;
       });
       this.columnWidthsBySheet.set(patch.viewport.sheetName, widths);
       this.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, pendingWidths);
@@ -232,13 +296,89 @@ export class WorkerViewportCache implements GridEngineLike {
       const heights = { ...this.rowHeightsBySheet.get(patch.viewport.sheetName) };
       patch.rows.forEach((row: { index: number; size: number }) => {
         heights[row.index] = row.size;
+        axisChanged = true;
       });
       this.rowHeightsBySheet.set(patch.viewport.sheetName, heights);
     }
 
+    this.pruneSheetCache(patch.viewport.sheetName);
     this.notifyCellSubscriptions(changedKeys);
-    this.listeners.forEach((listener) => listener());
+    if (damage.length > 0 || axisChanged) {
+      this.listeners.forEach((listener) => listener());
+    }
     return damage;
+  }
+
+  private sheetCellKeys(sheetName: string): Set<string> {
+    const existing = this.cellKeysBySheet.get(sheetName);
+    if (existing) {
+      return existing;
+    }
+    const created = new Set<string>();
+    this.cellKeysBySheet.set(sheetName, created);
+    return created;
+  }
+
+  private pruneSheetCache(sheetName: string): void {
+    const sheetCellKeys = this.cellKeysBySheet.get(sheetName);
+    if (!sheetCellKeys || sheetCellKeys.size <= MAX_CACHED_CELLS_PER_SHEET) {
+      return;
+    }
+    const activeViewportKeys = this.activeViewportKeysBySheet.get(sheetName);
+    if (!activeViewportKeys || activeViewportKeys.size === 0) {
+      return;
+    }
+    const activeViewports = [...activeViewportKeys]
+      .map((key) => this.activeViewports.get(key))
+      .filter((viewport): viewport is Viewport => viewport !== undefined);
+    const pinnedKeys = new Set<string>();
+    this.cellSubscriptions.forEach((subscription) => {
+      if (subscription.sheetName !== sheetName) {
+        return;
+      }
+      subscription.addresses.forEach((address) => pinnedKeys.add(`${sheetName}!${address}`));
+    });
+    const keysToInspect = Array.from(sheetCellKeys);
+    for (const key of keysToInspect) {
+      if (sheetCellKeys.size <= MAX_CACHED_CELLS_PER_SHEET) {
+        break;
+      }
+      if (pinnedKeys.has(key)) {
+        continue;
+      }
+      const snapshot = this.cellSnapshots.get(key);
+      if (!snapshot) {
+        sheetCellKeys.delete(key);
+        continue;
+      }
+      const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
+      const insideActiveViewport = activeViewports.some((viewport) => {
+        return (
+          parsed.row >= viewport.rowStart &&
+          parsed.row <= viewport.rowEnd &&
+          parsed.col >= viewport.colStart &&
+          parsed.col <= viewport.colEnd
+        );
+      });
+      if (insideActiveViewport) {
+        continue;
+      }
+      this.cellSnapshots.delete(key);
+      sheetCellKeys.delete(key);
+    }
+  }
+
+  private dropSheetCache(sheetName: string): void {
+    this.cellKeysBySheet.get(sheetName)?.forEach((key) => {
+      this.cellSnapshots.delete(key);
+    });
+    this.cellKeysBySheet.delete(sheetName);
+    this.columnWidthsBySheet.delete(sheetName);
+    this.pendingColumnWidthsBySheet.delete(sheetName);
+    this.rowHeightsBySheet.delete(sheetName);
+    const viewportKeys = this.activeViewportKeysBySheet.get(sheetName);
+    viewportKeys?.forEach((key) => this.activeViewports.delete(key));
+    this.activeViewportKeysBySheet.delete(sheetName);
   }
 
   private notifyCellSubscriptions(changedKeys: Set<string>): void {

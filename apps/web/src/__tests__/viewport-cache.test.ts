@@ -82,4 +82,15 @@ describe("WorkerViewportCache", () => {
       fill: { backgroundColor: "#a4c2f4" },
     });
   });
+
+  it("drops stale sheet cache entries when sheets disappear", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch(createPatch());
+    expect(cache.peekCell("Sheet1", "D5")).toBeDefined();
+
+    cache.setKnownSheets(["Sheet2"]);
+
+    expect(cache.peekCell("Sheet1", "D5")).toBeUndefined();
+  });
 });

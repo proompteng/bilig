@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
+  parseClipboardContent,
+  parseClipboardHtml,
   parseClipboardPlainText,
   serializeClipboardMatrix,
   serializeClipboardPlainText,
@@ -23,5 +25,42 @@ describe("gridClipboard", () => {
       ["3", "4"],
     ]);
     expect(parseClipboardPlainText("")).toEqual([]);
+  });
+
+  test("parses quoted csv with commas and multiline cells", () => {
+    expect(parseClipboardPlainText('"Name","Notes"\n"Alice","Line 1\nLine 2"')).toEqual([
+      ["Name", "Notes"],
+      ["Alice", "Line 1\nLine 2"],
+    ]);
+  });
+
+  test("parses quoted tabular plain text from spreadsheets", () => {
+    expect(parseClipboardPlainText('"A\tB"\tC\n1\t"two\tcolumns"')).toEqual([
+      ["A\tB", "C"],
+      ["1", "two\tcolumns"],
+    ]);
+  });
+
+  test("parses html table clipboard content", () => {
+    expect(
+      parseClipboardHtml(
+        "<table><tr><td>A</td><td><b>B</b></td></tr><tr><td>1</td><td>two<br>lines</td></tr></table>",
+      ),
+    ).toEqual([
+      ["A", "B"],
+      ["1", "two\nlines"],
+    ]);
+  });
+
+  test("prefers html clipboard data when available", () => {
+    expect(
+      parseClipboardContent(
+        "A,B\n1,2",
+        "<table><tr><td>A</td><td>B</td></tr><tr><td>1</td><td>2</td></tr></table>",
+      ),
+    ).toEqual([
+      ["A", "B"],
+      ["1", "2"],
+    ]);
   });
 });

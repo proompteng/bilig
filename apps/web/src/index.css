@@ -1,3 +1,85 @@
 @import "tailwindcss";
 @source "./";
 @source "../../../packages/grid/src";
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMonoNerdFont-Medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMonoNerdFont-Bold.ttf") format("truetype");
+}
+
+@theme {
+  --font-sans: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  --font-mono: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+}
+
+@layer base {
+  :root {
+    --wb-app-bg: #f4f7fb;
+    --wb-surface: #ffffff;
+    --wb-surface-subtle: #f8fafc;
+    --wb-surface-muted: #f1f5f9;
+    --wb-border: #d6dee8;
+    --wb-border-strong: #c3cdd9;
+    --wb-grid-border: #e7edf3;
+    --wb-text: #1f2328;
+    --wb-text-muted: #5f6b7a;
+    --wb-text-subtle: #7a8595;
+    --wb-accent: #0b57d0;
+    --wb-accent-soft: #e8f0fe;
+    --wb-accent-ring: #d2e3fc;
+    --wb-hover: #eef3f9;
+    --wb-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --wb-shadow-md: 0 10px 24px rgba(15, 23, 42, 0.12);
+    --wb-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.14);
+    --wb-radius-control: 6px;
+    --wb-radius-panel: 8px;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    color-scheme: light;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-[var(--wb-app-bg)] font-sans text-[var(--wb-text)];
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: var(--wb-accent-ring);
+    color: #0f172a;
+  }
+}

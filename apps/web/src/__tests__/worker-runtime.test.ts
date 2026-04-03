@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { BrowserPersistence } from "@bilig/storage-browser";
 import { ValueTag } from "@bilig/protocol";
@@ -27,6 +27,10 @@ function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPer
 }
 
 describe("WorkbookWorkerRuntime", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("restores persisted workbook state and emits viewport patches for visible edits", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "phase3-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");
@@ -68,6 +72,8 @@ describe("WorkbookWorkerRuntime", () => {
     runtime.setCellFormula("Sheet1", "B1", "A1*2");
 
     expect(received).toHaveLength(2);
+    expect(received[1]?.full).toBe(false);
+    expect(received[1]?.cells).toHaveLength(1);
     expect(received[1]?.cells.find((cell) => cell.snapshot.address === "B1")?.displayText).toBe(
       "14",
     );
@@ -123,11 +129,75 @@ describe("WorkbookWorkerRuntime", () => {
     );
 
     const patch = received.at(-1);
+    expect(patch?.full).toBe(false);
     expect(patch?.styles).toHaveLength(1);
     expect(patch?.styles[0]).toMatchObject({
       fill: { backgroundColor: "#336699" },
       font: { family: "Fira Sans" },
     });
     expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id);
+  });
+
+  it("patches only affected axis entries for column metadata edits", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "axis-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 3,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    runtime.updateColumnWidth("Sheet1", 1, 160);
+
+    const patch = received.at(-1);
+    expect(patch?.full).toBe(false);
+    expect(patch?.cells).toHaveLength(0);
+    expect(patch?.rows).toHaveLength(0);
+    expect(patch?.columns).toEqual([{ index: 1, size: 160, hidden: false }]);
+  });
+
+  it("coalesces persistence saves across edit bursts", async () => {
+    vi.useFakeTimers();
+    const saveJson = vi.fn(async () => {});
+    const runtime = new WorkbookWorkerRuntime({
+      persistence: {
+        async loadJson() {
+          return null;
+        },
+        saveJson,
+        async remove() {},
+      },
+    });
+
+    await runtime.bootstrap({
+      documentId: "perf-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(saveJson).toHaveBeenCalledTimes(1);
+
+    runtime.setCellValue("Sheet1", "A1", 1);
+    runtime.setCellValue("Sheet1", "A2", 2);
+    runtime.setCellValue("Sheet1", "A3", 3);
+
+    expect(saveJson).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(saveJson).toHaveBeenCalledTimes(2);
   });
 });
