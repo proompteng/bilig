@@ -26,10 +26,10 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: "pnpm --filter @bilig/web preview:ci",
+          command: "bun scripts/run-playwright-stack.ts",
           port: 4180,
           reuseExistingServer: false,
-          timeout: 120_000,
+          timeout: 300_000,
         },
       }),
 });

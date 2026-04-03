@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload fuzz and browser artifacts on failure
         if: failure()
-        uses: https://data.forgejo.org/actions/upload-artifact@v4
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
           name: bilig-fuzz-artifacts
           path: |

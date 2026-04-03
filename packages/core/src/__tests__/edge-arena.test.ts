@@ -55,4 +55,17 @@ describe("EdgeArena", () => {
     view[1] = 16;
     expect([...arena.read(slice)]).toEqual([4, 16, 15]);
   });
+
+  it("leaves slices unchanged when removing a value that is not present", () => {
+    const arena = new EdgeArena();
+    const slice = arena.replace(arena.empty(), Uint32Array.from([2, 4, 8]));
+
+    const unchanged = arena.removeValue(slice, 99);
+
+    expect(unchanged).toEqual(slice);
+    expect([...arena.read(unchanged)]).toEqual([2, 4, 8]);
+
+    arena.free(arena.empty());
+    expect(arena.alloc(1).ptr).toBe(3);
+  });
 });

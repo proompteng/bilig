@@ -93,25 +93,15 @@ function requireComposeInvocation(required: boolean): ComposeInvocation | null {
 
 const compose = resolveComposeInvocation();
 const composeLabel = compose ? compose.label : "unavailable";
-const browserStack =
-  (normalizedBrowserStack === "compose" || normalizedBrowserStack === "auto") && compose
-    ? "compose"
-    : "local";
+const browserStack = normalizedBrowserStack === "compose" && compose ? "compose" : "local";
 
-if ((normalizedBrowserStack === "compose" || normalizedBrowserStack === "auto") && compose) {
+if (normalizedBrowserStack === "compose" && compose) {
   console.info(`BILIG_BROWSER_STACK=compose requested; using compose command "${composeLabel}"`);
 }
 
 if (normalizedBrowserStack === "compose" && !compose && isCi) {
   throw new Error(
     "BILIG_BROWSER_STACK=compose is required in CI, but neither `docker compose` nor `docker-compose` is available.",
-  );
-}
-
-if (normalizedBrowserStack === "auto" && !compose) {
-  const fallbackCommand = "`docker compose` or `docker-compose`";
-  console.warn(
-    `BILIG_BROWSER_STACK is auto and compose is unavailable; falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
   );
 }
 
@@ -217,9 +207,6 @@ function getListeningPids(port: number): number[] {
     return parsePidList(textDecoder.decode(result.stdout).trim());
   }
 
-  console.warn(
-    `No port-inspection command available; skipping preview server cleanup for port ${port}.`,
-  );
   return [];
 }
 

@@ -38,12 +38,14 @@ describe("sync relay", () => {
       fetchImpl,
     });
 
-    await relay.send({
+    const batch: EngineOpBatch = {
       id: "batch-1",
       replicaId: "worksheet-host:doc-1",
       clock: { counter: 1 },
       ops: [],
-    } as EngineOpBatch);
+    };
+
+    await relay.send(batch);
 
     expect(seenFrames[0]).toEqual(
       expect.objectContaining({
