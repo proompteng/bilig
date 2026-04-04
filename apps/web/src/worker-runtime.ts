@@ -39,8 +39,14 @@ interface WorkerSheet {
 
 interface WorkerWorkbook {
   workbookName: string;
+  cellStore: {
+    sheetIds: Uint16Array;
+    rows: Uint32Array;
+    cols: Uint16Array;
+  };
   sheetsByName: Map<string, WorkerSheet>;
   getSheet(sheetName: string): WorkerSheet | undefined;
+  getSheetNameById(sheetId: number): string;
   getQualifiedAddress(cellIndex: number): string;
 }
 
@@ -882,23 +888,28 @@ export class WorkbookWorkerRuntime {
   ): Map<string, ChangedSheetCells> {
     const changedBySheet = new Map<string, ChangedSheetCells>();
     const workbook = this.requireEngine().workbook;
+    const { cellStore } = workbook;
 
     for (let index = 0; index < changedCellIndices.length; index += 1) {
-      const qualifiedAddress = workbook.getQualifiedAddress(changedCellIndices[index]!);
-      const separator = qualifiedAddress.indexOf("!");
-      if (separator <= 0) {
+      const cellIndex = changedCellIndices[index]!;
+      const sheetId = cellStore.sheetIds[cellIndex];
+      if (sheetId === undefined || sheetId === 0) {
         continue;
       }
-      const sheetName = qualifiedAddress.slice(0, separator);
-      const address = qualifiedAddress.slice(separator + 1);
-      const parsed = parseCellAddress(address, sheetName);
+      const sheetName = workbook.getSheetNameById(sheetId);
+      if (sheetName.length === 0) {
+        continue;
+      }
+      const row = cellStore.rows[cellIndex] ?? 0;
+      const col = cellStore.cols[cellIndex] ?? 0;
+      const address = formatAddress(row, col);
       const sheetCells = changedBySheet.get(sheetName) ?? {
         addresses: new Set<string>(),
         positions: [],
       };
       if (!sheetCells.addresses.has(address)) {
         sheetCells.addresses.add(address);
-        sheetCells.positions.push({ address, row: parsed.row, col: parsed.col });
+        sheetCells.positions.push({ address, row, col });
       }
       changedBySheet.set(sheetName, sheetCells);
     }

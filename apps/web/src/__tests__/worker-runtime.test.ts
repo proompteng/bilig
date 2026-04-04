@@ -326,6 +326,38 @@ describe("WorkbookWorkerRuntime", () => {
     ]);
   });
 
+  it("collects changed cells without qualified address string round-trips", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "cell-store-impact-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    runtime.setCellValue("Sheet1", "A1", 7);
+
+    const engine = runtime["engine"];
+    if (!engine || !engine.workbook) {
+      throw new Error("Expected bootstrapped engine");
+    }
+
+    engine.workbook.getQualifiedAddress = () => {
+      throw new Error("collectChangedCellsBySheet should not use getQualifiedAddress");
+    };
+
+    const collectChangedCellsBySheet = runtime["collectChangedCellsBySheet"];
+    if (typeof collectChangedCellsBySheet !== "function") {
+      throw new Error("Expected collectChangedCellsBySheet method");
+    }
+
+    const impacts = Reflect.apply(collectChangedCellsBySheet, runtime, [[0]]) as Map<
+      string,
+      { positions: Array<{ address: string; row: number; col: number }> }
+    >;
+
+    expect(impacts.get("Sheet1")?.positions).toEqual([{ address: "A1", row: 0, col: 0 }]);
+  });
+
   it("coalesces persistence saves across edit bursts", async () => {
     vi.useFakeTimers();
     const saveJson = vi.fn(async () => {});
