@@ -12,6 +12,12 @@ import {
   TransportError,
 } from "@bilig/runtime-kernel";
 
+import {
+  resolveAgentDocumentId,
+  updateActorFromFrames,
+  wrapTransportPromise,
+  wrapTransportSync,
+} from "./document-supervisor-shared.js";
 import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
 
 type DocumentSupervisorActor = ActorRefFrom<ReturnType<typeof createDocumentSupervisorMachine>>;
@@ -26,7 +32,7 @@ export class LocalDocumentSupervisor implements DocumentControlService {
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): Effect.Effect<() => void, TransportError> {
-    return wrapSync("Failed to attach browser subscriber", () => {
+    return wrapTransportSync("Failed to attach browser subscriber", () => {
       const actor = this.ensureActor(documentId);
       actor.send({ type: "browser.attached" });
       const detach = this.manager.attachBrowser(documentId, subscriberId, send);
@@ -46,11 +52,11 @@ export class LocalDocumentSupervisor implements DocumentControlService {
   handleSyncFrame(
     frame: ProtocolFrame,
   ): Effect.Effect<ProtocolFrame | ProtocolFrame[], TransportError> {
-    return wrapPromise("Failed to handle sync frame", async () => {
+    return wrapTransportPromise("Failed to handle sync frame", async () => {
       const actor = this.ensureActor(frame.documentId);
       const responses = await this.manager.handleSyncFrame(frame);
       actor.send({ type: "operation.recorded", operation: `sync:${frame.kind}` });
-      updateFromFrames(actor, responses);
+      updateActorFromFrames(actor, responses);
       return responses;
     });
   }
@@ -59,7 +65,7 @@ export class LocalDocumentSupervisor implements DocumentControlService {
     frame: AgentFrame,
     context: AgentFrameContext = {},
   ): Effect.Effect<AgentFrame, TransportError> {
-    return wrapPromise("Failed to handle agent frame", async () => {
+    return wrapTransportPromise("Failed to handle agent frame", async () => {
       const documentId = resolveAgentDocumentId(frame);
       const actor = documentId ? this.ensureActor(documentId) : null;
       const response = await this.manager.handleAgentFrame(frame, context);
@@ -78,7 +84,7 @@ export class LocalDocumentSupervisor implements DocumentControlService {
   }
 
   getDocumentState(documentId: string): Effect.Effect<DocumentStateSummary, TransportError> {
-    return wrapSync("Failed to get document state", () => {
+    return wrapTransportSync("Failed to get document state", () => {
       const actor = this.ensureActor(documentId);
       const summary = this.manager.getDocumentState(documentId);
       actor.send({ type: "cursor.updated", cursor: summary.cursor });
@@ -97,7 +103,7 @@ export class LocalDocumentSupervisor implements DocumentControlService {
   }
 
   getLatestSnapshot(documentId: string): Effect.Effect<SnapshotPayload | null, TransportError> {
-    return wrapSync("Failed to load latest snapshot", () => {
+    return wrapTransportSync("Failed to load latest snapshot", () => {
       const snapshot = this.manager.getLatestSnapshot(documentId);
       if (!snapshot) {
         return null;
@@ -120,63 +126,4 @@ export class LocalDocumentSupervisor implements DocumentControlService {
     this.actors.set(documentId, actor);
     return actor;
   }
-}
-
-function updateFromFrames(
-  actor: DocumentSupervisorActor,
-  frames: ProtocolFrame | ProtocolFrame[],
-): void {
-  const nextFrames = Array.isArray(frames) ? frames : [frames];
-  nextFrames.forEach((frame) => {
-    if ("cursor" in frame && typeof frame.cursor === "number") {
-      actor.send({ type: "cursor.updated", cursor: frame.cursor });
-    }
-    if (frame.kind === "cursorWatermark") {
-      actor.send({ type: "snapshot.updated", cursor: frame.compactedCursor });
-    }
-    if (frame.kind === "error") {
-      actor.send({ type: "error.raised", message: frame.message });
-    }
-  });
-}
-
-function resolveAgentDocumentId(frame: AgentFrame): string | null {
-  if (frame.kind !== "request") {
-    return null;
-  }
-  if ("documentId" in frame.request && typeof frame.request.documentId === "string") {
-    return frame.request.documentId;
-  }
-  if ("sessionId" in frame.request && typeof frame.request.sessionId === "string") {
-    return frame.request.sessionId.split(":")[0] ?? null;
-  }
-  return null;
-}
-
-function wrapPromise<Success>(
-  message: string,
-  run: () => Promise<Success>,
-): Effect.Effect<Success, TransportError> {
-  return Effect.tryPromise({
-    try: run,
-    catch: (cause) =>
-      new TransportError({
-        message,
-        cause,
-      }),
-  });
-}
-
-function wrapSync<Success>(
-  message: string,
-  run: () => Success,
-): Effect.Effect<Success, TransportError> {
-  return Effect.try({
-    try: run,
-    catch: (cause) =>
-      new TransportError({
-        message,
-        cause,
-      }),
-  });
 }

@@ -12,6 +12,12 @@ import {
   TransportError,
 } from "@bilig/runtime-kernel";
 
+import {
+  resolveAgentDocumentId,
+  updateActorFromFrames,
+  wrapTransportPromise,
+  wrapTransportSync,
+} from "./document-supervisor-shared.js";
 import { DocumentSessionManager } from "./document-session-manager.js";
 
 type DocumentSupervisorActor = ActorRefFrom<ReturnType<typeof createDocumentSupervisorMachine>>;
@@ -26,7 +32,7 @@ export class SyncDocumentSupervisor implements DocumentControlService {
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): Effect.Effect<() => void, TransportError> {
-    return wrapSync("Failed to attach browser subscriber", () => {
+    return wrapTransportSync("Failed to attach browser subscriber", () => {
       const actor = this.ensureActor(documentId);
       actor.send({ type: "browser.attached" });
       const detach = this.manager.attachBrowser(documentId, subscriberId, send);
@@ -38,12 +44,12 @@ export class SyncDocumentSupervisor implements DocumentControlService {
   }
 
   openBrowserSession(frame: HelloFrame): Effect.Effect<ProtocolFrame[], TransportError> {
-    return wrapPromise("Failed to open browser session", async () => {
+    return wrapTransportPromise("Failed to open browser session", async () => {
       const actor = this.ensureActor(frame.documentId);
       const responses = await this.manager.openBrowserSession(frame);
       actor.send({ type: "operation.recorded", operation: "openBrowserSession" });
       actor.send({ type: "browser.attached" });
-      updateFromFrames(actor, responses);
+      updateActorFromFrames(actor, responses);
       return responses;
     });
   }
@@ -51,11 +57,11 @@ export class SyncDocumentSupervisor implements DocumentControlService {
   handleSyncFrame(
     frame: ProtocolFrame,
   ): Effect.Effect<ProtocolFrame | ProtocolFrame[], TransportError> {
-    return wrapPromise("Failed to handle sync frame", async () => {
+    return wrapTransportPromise("Failed to handle sync frame", async () => {
       const actor = this.ensureActor(frame.documentId);
       const response = await this.manager.handleSyncFrame(frame);
       actor.send({ type: "operation.recorded", operation: `sync:${frame.kind}` });
-      updateFromFrames(actor, response);
+      updateActorFromFrames(actor, response);
       return response;
     });
   }
@@ -64,7 +70,7 @@ export class SyncDocumentSupervisor implements DocumentControlService {
     frame: AgentFrame,
     context: AgentFrameContext = {},
   ): Effect.Effect<AgentFrame, TransportError> {
-    return wrapPromise("Failed to handle agent frame", async () => {
+    return wrapTransportPromise("Failed to handle agent frame", async () => {
       const documentId = resolveAgentDocumentId(frame);
       const actor = documentId ? this.ensureActor(documentId) : null;
       const response = await this.manager.handleAgentFrame(frame, context);
@@ -87,7 +93,7 @@ export class SyncDocumentSupervisor implements DocumentControlService {
   }
 
   getDocumentState(documentId: string): Effect.Effect<DocumentStateSummary, TransportError> {
-    return wrapPromise("Failed to get document state", async () => {
+    return wrapTransportPromise("Failed to get document state", async () => {
       const actor = this.ensureActor(documentId);
       const state = await this.manager.getDocumentState(documentId);
       actor.send({ type: "cursor.updated", cursor: state.cursor });
@@ -99,7 +105,7 @@ export class SyncDocumentSupervisor implements DocumentControlService {
   }
 
   getLatestSnapshot(documentId: string): Effect.Effect<SnapshotPayload | null, TransportError> {
-    return wrapPromise("Failed to load latest snapshot", async () => {
+    return wrapTransportPromise("Failed to load latest snapshot", async () => {
       const snapshot = await this.manager.persistence.snapshots.latest(documentId);
       if (snapshot) {
         this.ensureActor(documentId).send({
@@ -126,63 +132,4 @@ export class SyncDocumentSupervisor implements DocumentControlService {
     this.actors.set(documentId, actor);
     return actor;
   }
-}
-
-function updateFromFrames(
-  actor: DocumentSupervisorActor,
-  frames: ProtocolFrame | ProtocolFrame[],
-): void {
-  const nextFrames = Array.isArray(frames) ? frames : [frames];
-  nextFrames.forEach((frame) => {
-    if ("cursor" in frame && typeof frame.cursor === "number") {
-      actor.send({ type: "cursor.updated", cursor: frame.cursor });
-    }
-    if (frame.kind === "cursorWatermark") {
-      actor.send({ type: "snapshot.updated", cursor: frame.compactedCursor });
-    }
-    if (frame.kind === "error") {
-      actor.send({ type: "error.raised", message: frame.message });
-    }
-  });
-}
-
-function resolveAgentDocumentId(frame: AgentFrame): string | null {
-  if (frame.kind !== "request") {
-    return null;
-  }
-  if ("documentId" in frame.request && typeof frame.request.documentId === "string") {
-    return frame.request.documentId;
-  }
-  if ("sessionId" in frame.request && typeof frame.request.sessionId === "string") {
-    return frame.request.sessionId.split(":")[0] ?? null;
-  }
-  return null;
-}
-
-function wrapPromise<Success>(
-  message: string,
-  run: () => Promise<Success>,
-): Effect.Effect<Success, TransportError> {
-  return Effect.tryPromise({
-    try: run,
-    catch: (cause) =>
-      new TransportError({
-        message,
-        cause,
-      }),
-  });
-}
-
-function wrapSync<Success>(
-  message: string,
-  run: () => Success,
-): Effect.Effect<Success, TransportError> {
-  return Effect.try({
-    try: run,
-    catch: (cause) =>
-      new TransportError({
-        message,
-        cause,
-      }),
-  });
 }
