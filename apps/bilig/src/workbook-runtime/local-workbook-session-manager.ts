@@ -1,4 +1,4 @@
-import type { ErrorFrame, ProtocolFrame } from "@bilig/binary-protocol";
+import type { ProtocolFrame } from "@bilig/binary-protocol";
 import type {
   AgentEvent,
   AgentFrame,
@@ -45,6 +45,7 @@ import {
   createAppendBatchFrame,
   createHeartbeatFrame,
 } from "./sync-frame-shared.js";
+import { createUnsupportedSyncFrame, routeWorkbookSyncFrame } from "./sync-frame-router.js";
 import {
   createCloseWorkbookSessionResponse,
   createOpenWorkbookSessionResponse,
@@ -171,64 +172,55 @@ export class LocalWorkbookSessionManager {
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame[]> {
     const session = this.ensureSession(frame.documentId);
-    const documentId = frame.documentId;
-    switch (frame.kind) {
-      case "hello":
-        return createBrowserHelloReplay({
-          documentId: frame.documentId,
-          lastServerCursor: frame.lastServerCursor,
+    return routeWorkbookSyncFrame<ProtocolFrame[]>(frame, {
+      hello: (helloFrame) =>
+        createBrowserHelloReplay({
+          documentId: helloFrame.documentId,
+          lastServerCursor: helloFrame.lastServerCursor,
           latestCursor: session.cursor,
           latestSnapshot: session.latestSnapshot,
           listMissedFrames: (cursorFloor) =>
             session.batches
               .filter((entry) => entry.cursor > cursorFloor)
               .map((entry) => entry.frame),
-        });
-
-      case "appendBatch": {
-        if (!shouldApplyBatch(session.engine.replica, frame.batch)) {
-          return [createAckFrame(frame.documentId, frame.batch.id, session.cursor)];
+        }),
+      appendBatch: (appendFrame) => {
+        if (!shouldApplyBatch(session.engine.replica, appendFrame.batch)) {
+          return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
         }
-        session.engine.applyRemoteBatch(frame.batch);
+        session.engine.applyRemoteBatch(appendFrame.batch);
         session.cursor += 1;
         const committedFrame = createAppendBatchFrame(
-          frame.documentId,
+          appendFrame.documentId,
           session.cursor,
-          frame.batch,
+          appendFrame.batch,
         );
         session.batches.push({ cursor: session.cursor, frame: committedFrame });
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-        this.broadcast(frame.documentId, committedFrame);
+        this.broadcast(appendFrame.documentId, committedFrame);
         maybeCompactLocalSession(session, this.snapshotStoreContext());
-        void this.relayUpstream(session, frame.batch);
-        return [createAckFrame(frame.documentId, frame.batch.id, session.cursor)];
-      }
-
-      case "heartbeat":
-        return [createHeartbeatFrame(frame.documentId, session.cursor)];
-
-      case "cursorWatermark":
-      case "ack":
-        return [frame];
-
-      case "snapshotChunk":
-        acceptLocalSnapshotChunk(session, frame, this.snapshotStoreContext());
-        return [createAckFrame(frame.documentId, frame.snapshotId, frame.cursor)];
-
-      case "error":
-        return [frame];
-
-      default:
+        void this.relayUpstream(session, appendFrame.batch);
+        return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
+      },
+      heartbeat: (heartbeatFrame) => [
+        createHeartbeatFrame(heartbeatFrame.documentId, session.cursor),
+      ],
+      snapshotChunk: (snapshotFrame) => {
+        acceptLocalSnapshotChunk(session, snapshotFrame, this.snapshotStoreContext());
         return [
-          {
-            kind: "error",
-            documentId,
-            code: "UNSUPPORTED_SYNC_FRAME",
-            message: "Unsupported frame",
-            retryable: false,
-          } satisfies ErrorFrame,
+          createAckFrame(snapshotFrame.documentId, snapshotFrame.snapshotId, snapshotFrame.cursor),
         ];
-    }
+      },
+      passthrough: (passthroughFrame) => [passthroughFrame],
+      unsupported: (unsupportedFrame) => [
+        createUnsupportedSyncFrame(
+          unsupportedFrame.documentId,
+          "UNSUPPORTED_SYNC_FRAME",
+          unsupportedFrame.kind,
+          "Unsupported frame",
+        ),
+      ],
+    });
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {

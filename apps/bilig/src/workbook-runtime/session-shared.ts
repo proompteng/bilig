@@ -4,6 +4,9 @@ import type { WorkbookSnapshot } from "@bilig/protocol";
 
 const snapshotEncoder = new TextEncoder();
 const snapshotDecoder = new TextDecoder();
+const encodedSnapshotCache = new WeakMap<WorkbookSnapshot, Uint8Array>();
+
+export const SNAPSHOT_ASSEMBLY_MAX_AGE_MS = 5 * 60_000;
 
 export interface BrowserSubscriber {
   id: string;
@@ -26,6 +29,7 @@ interface SnapshotAssembly {
   contentType: string;
   chunkCount: number;
   chunks: Array<Uint8Array | undefined>;
+  updatedAtUnixMs: number;
 }
 
 export interface CompletedSnapshotAssembly {
@@ -114,7 +118,7 @@ export function createSnapshotPublication(
   snapshot: WorkbookSnapshot,
 ): SnapshotPublication {
   const snapshotId = `${documentId}:snapshot:${Date.now()}`;
-  const bytes = snapshotEncoder.encode(JSON.stringify(snapshot));
+  const bytes = encodeWorkbookSnapshot(snapshot);
   return createSnapshotPublicationFromBytes({
     documentId,
     snapshotId,
@@ -141,10 +145,37 @@ export function createSnapshotPublicationFromBytes(
   };
 }
 
+export function encodeWorkbookSnapshot(snapshot: WorkbookSnapshot): Uint8Array {
+  const cached = encodedSnapshotCache.get(snapshot);
+  if (cached) {
+    return cached;
+  }
+  const bytes = snapshotEncoder.encode(JSON.stringify(snapshot));
+  encodedSnapshotCache.set(snapshot, bytes);
+  return bytes;
+}
+
+function pruneExpiredSnapshotAssemblies(
+  registry: SnapshotAssemblyRegistry,
+  nowUnixMs: number,
+  maxAgeMs: number,
+): void {
+  registry.forEach((assembly, snapshotId) => {
+    if (nowUnixMs - assembly.updatedAtUnixMs > maxAgeMs) {
+      registry.delete(snapshotId);
+    }
+  });
+}
+
 export function acceptSnapshotChunk(
   registry: SnapshotAssemblyRegistry,
   frame: SnapshotChunkFrame,
+  options: { nowUnixMs?: number; maxAgeMs?: number } = {},
 ): CompletedSnapshotAssembly | null {
+  const nowUnixMs = options.nowUnixMs ?? Date.now();
+  const maxAgeMs = options.maxAgeMs ?? SNAPSHOT_ASSEMBLY_MAX_AGE_MS;
+  pruneExpiredSnapshotAssemblies(registry, nowUnixMs, maxAgeMs);
+
   const assembly = registry.get(frame.snapshotId) ?? {
     documentId: frame.documentId,
     snapshotId: frame.snapshotId,
@@ -152,8 +183,10 @@ export function acceptSnapshotChunk(
     contentType: frame.contentType,
     chunkCount: frame.chunkCount,
     chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
+    updatedAtUnixMs: nowUnixMs,
   };
   assembly.chunks[frame.chunkIndex] = frame.bytes;
+  assembly.updatedAtUnixMs = nowUnixMs;
   registry.set(frame.snapshotId, assembly);
 
   if (!assembly.chunks.every((chunk): chunk is Uint8Array => chunk !== undefined)) {

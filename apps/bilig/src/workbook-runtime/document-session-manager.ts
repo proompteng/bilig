@@ -1,4 +1,4 @@
-import type { ErrorFrame, HelloFrame, ProtocolFrame } from "@bilig/binary-protocol";
+import type { HelloFrame, ProtocolFrame } from "@bilig/binary-protocol";
 import type { AgentFrame, AgentResponse, LoadWorkbookFileRequest } from "@bilig/agent-api";
 import {
   type InMemoryDocumentPersistence,
@@ -33,6 +33,7 @@ import {
   createCursorWatermarkFrame,
   createHeartbeatFrame,
 } from "./sync-frame-shared.js";
+import { createUnsupportedSyncFrame, routeWorkbookSyncFrame } from "./sync-frame-router.js";
 import {
   createCloseWorkbookSessionResponse,
   createOpenWorkbookSessionResponse,
@@ -65,60 +66,58 @@ export class DocumentSessionManager {
   ) {}
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
-    switch (frame.kind) {
-      case "hello":
+    return routeWorkbookSyncFrame<ProtocolFrame>(frame, {
+      hello: async (helloFrame) => {
         await joinOwnedBrowserSession(
           this.persistence,
           this.ownerId,
-          frame.documentId,
-          frame.sessionId,
+          helloFrame.documentId,
+          helloFrame.sessionId,
         );
         return createCursorWatermarkFrame(
-          frame.documentId,
-          await this.persistence.batches.latestCursor(frame.documentId),
-          (await this.persistence.snapshots.latest(frame.documentId))?.cursor ?? 0,
+          helloFrame.documentId,
+          await this.persistence.batches.latestCursor(helloFrame.documentId),
+          (await this.persistence.snapshots.latest(helloFrame.documentId))?.cursor ?? 0,
         );
-
-      case "appendBatch": {
-        const stored = await this.persistence.batches.append(frame.documentId, frame.batch);
+      },
+      appendBatch: async (appendFrame) => {
+        const stored = await this.persistence.batches.append(
+          appendFrame.documentId,
+          appendFrame.batch,
+        );
         this.broadcast(
-          frame.documentId,
-          createAppendBatchFrame(frame.documentId, stored.cursor, frame.batch),
+          appendFrame.documentId,
+          createAppendBatchFrame(appendFrame.documentId, stored.cursor, appendFrame.batch),
         );
         return createAckFrame(
-          frame.documentId,
-          frame.batch.id,
+          appendFrame.documentId,
+          appendFrame.batch.id,
           stored.cursor,
           stored.receivedAtUnixMs,
         );
-      }
-
-      case "snapshotChunk":
-        await this.acceptSnapshotChunk(frame);
-        return createAckFrame(frame.documentId, frame.snapshotId, frame.cursor);
-
-      case "heartbeat":
-        return createHeartbeatFrame(
-          frame.documentId,
-          await this.persistence.batches.latestCursor(frame.documentId),
+      },
+      snapshotChunk: async (snapshotFrame) => {
+        await this.acceptSnapshotChunk(snapshotFrame);
+        return createAckFrame(
+          snapshotFrame.documentId,
+          snapshotFrame.snapshotId,
+          snapshotFrame.cursor,
         );
-
-      case "cursorWatermark":
-      case "ack":
-        return frame;
-
-      case "error":
-        return frame;
-
-      default:
-        return {
-          kind: "error",
-          documentId: "unknown",
-          code: "UNSUPPORTED_FRAME",
-          message: `Unsupported sync frame ${(frame as ProtocolFrame).kind}`,
-          retryable: false,
-        } satisfies ErrorFrame;
-    }
+      },
+      heartbeat: async (heartbeatFrame) =>
+        createHeartbeatFrame(
+          heartbeatFrame.documentId,
+          await this.persistence.batches.latestCursor(heartbeatFrame.documentId),
+        ),
+      passthrough: (passthroughFrame) => passthroughFrame,
+      unsupported: (unsupportedFrame) =>
+        createUnsupportedSyncFrame(
+          "unknown",
+          "UNSUPPORTED_FRAME",
+          unsupportedFrame.kind,
+          "Unsupported sync frame",
+        ),
+    });
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
