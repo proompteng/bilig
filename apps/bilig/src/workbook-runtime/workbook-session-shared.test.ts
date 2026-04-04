@@ -1,10 +1,13 @@
+import type { AgentFrame } from "@bilig/agent-api";
 import { describe, expect, it, vi } from "vitest";
 import { XLSX_CONTENT_TYPE } from "@bilig/agent-api";
 import * as XLSX from "xlsx";
 import {
+  createWorkbookLoadOptions,
   createCloseWorkbookSessionResponse,
   createOpenWorkbookSessionResponse,
   documentIdFromSessionId,
+  handleWorkbookAgentFrame,
   loadWorkbookIntoRuntime,
 } from "./workbook-session-shared.js";
 
@@ -66,5 +69,83 @@ describe("workbook-session-shared", () => {
         serverUrl: "http://127.0.0.1:4321",
       }),
     );
+  });
+
+  it("normalizes open and close workbook session lifecycle responses", async () => {
+    const openResponse = await handleWorkbookAgentFrame(
+      {
+        kind: "request",
+        request: {
+          kind: "openWorkbookSession",
+          id: "open-1",
+          documentId: "doc-1",
+          replicaId: "replica-1",
+        },
+      } satisfies AgentFrame,
+      {},
+      {
+        invalidFrameMessage: "bad frame",
+        errorCode: "TEST_ERROR",
+        loadWorkbookFile: vi.fn(),
+        openWorkbookSession: async () => "doc-1:replica-1",
+        closeWorkbookSession: async () => undefined,
+        getMetrics: async (request) => ({ kind: "metrics", id: request.id, value: { ok: true } }),
+      },
+    );
+
+    expect(openResponse).toEqual({
+      kind: "response",
+      response: {
+        kind: "ok",
+        id: "open-1",
+        sessionId: "doc-1:replica-1",
+      },
+    });
+
+    const closeResponse = await handleWorkbookAgentFrame(
+      {
+        kind: "request",
+        request: {
+          kind: "closeWorkbookSession",
+          id: "close-1",
+          sessionId: "doc-1:replica-1",
+        },
+      } satisfies AgentFrame,
+      {},
+      {
+        invalidFrameMessage: "bad frame",
+        errorCode: "TEST_ERROR",
+        loadWorkbookFile: vi.fn(),
+        openWorkbookSession: async () => "doc-1:replica-1",
+        closeWorkbookSession: async () => undefined,
+        getMetrics: async (request) => ({ kind: "metrics", id: request.id, value: { ok: true } }),
+      },
+    );
+
+    expect(closeResponse).toEqual({
+      kind: "response",
+      response: {
+        kind: "ok",
+        id: "close-1",
+      },
+    });
+  });
+
+  it("builds workbook load options without undefined keys", () => {
+    const options = createWorkbookLoadOptions(
+      {
+        browserAppBaseUrl: "http://127.0.0.1:3000",
+      },
+      {
+        registerPreparedSession: vi.fn(),
+        publishImportedSnapshot: vi.fn(),
+      },
+    );
+
+    expect(options).toEqual({
+      browserAppBaseUrl: "http://127.0.0.1:3000",
+      registerPreparedSession: expect.any(Function),
+      publishImportedSnapshot: expect.any(Function),
+    });
   });
 });

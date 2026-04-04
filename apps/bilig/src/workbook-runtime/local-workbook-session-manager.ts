@@ -8,7 +8,7 @@ import type {
 import { shouldApplyBatch } from "@bilig/crdt";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { UpstreamSyncRelay } from "../zero/sync-relay.js";
-import { type AgentFrameContext, routeAgentFrame } from "./agent-routing.js";
+import type { AgentFrameContext } from "./agent-routing.js";
 import { openWorkbookBrowserSession } from "./browser-session-shared.js";
 import {
   flushQueuedLocalAgentEvents,
@@ -52,8 +52,8 @@ import {
 } from "./sync-frame-shared.js";
 import { createUnsupportedSyncFrame, routeWorkbookSyncFrame } from "./sync-frame-router.js";
 import {
-  createCloseWorkbookSessionResponse,
-  createOpenWorkbookSessionResponse,
+  createWorkbookLoadOptions,
+  handleWorkbookAgentFrame,
   loadWorkbookIntoRuntime,
 } from "./workbook-session-shared.js";
 
@@ -231,14 +231,13 @@ export class LocalWorkbookSessionManager {
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
-    return routeAgentFrame(frame, context, {
+    return handleWorkbookAgentFrame(frame, context, {
       invalidFrameMessage: "Local server accepts only agent requests",
       errorCode: "LOCAL_SERVER_FAILURE",
       loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
       openWorkbookSession: (request) => {
         const session = this.ensureSession(request.documentId);
-        const sessionId = openLocalAgentSession(session, request.replicaId);
-        return createOpenWorkbookSessionResponse(request.id, sessionId);
+        return openLocalAgentSession(session, request.replicaId);
       },
       closeWorkbookSession: (request) => {
         const session = this.getSessionByAgentSessionId(request.sessionId);
@@ -249,7 +248,6 @@ export class LocalWorkbookSessionManager {
             this.removeAgentSubscription(ownedSession, sessionId, subscriptionId);
           },
         );
-        return createCloseWorkbookSessionResponse(request.id);
       },
       getMetrics: (request) => {
         const { engine } = this.getSessionByAgentSessionId(request.sessionId);
@@ -310,25 +308,22 @@ export class LocalWorkbookSessionManager {
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
   ): Promise<AgentResponse> {
-    return loadWorkbookIntoRuntime(request, context, {
-      ...(this.options.maxImportBytes !== undefined
-        ? { maxImportBytes: this.options.maxImportBytes }
-        : {}),
-      ...(this.options.publicServerUrl ? { publicServerUrl: this.options.publicServerUrl } : {}),
-      ...(this.options.browserAppBaseUrl
-        ? { browserAppBaseUrl: this.options.browserAppBaseUrl }
-        : {}),
-      registerPreparedSession: (prepared, loadRequest) => {
-        const session = this.ensureSession(prepared.documentId);
-        openLocalAgentSession(session, loadRequest.replicaId);
-      },
-      publishImportedSnapshot: (documentId, snapshot) => {
-        const session = this.ensureSession(documentId);
-        session.engine.importSnapshot(snapshot);
-        session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-        publishLocalSnapshot(session, snapshot, this.broadcast.bind(this));
-      },
-    });
+    return loadWorkbookIntoRuntime(
+      request,
+      context,
+      createWorkbookLoadOptions(this.options, {
+        registerPreparedSession: (prepared, loadRequest) => {
+          const session = this.ensureSession(prepared.documentId);
+          openLocalAgentSession(session, loadRequest.replicaId);
+        },
+        publishImportedSnapshot: (documentId, snapshot) => {
+          const session = this.ensureSession(documentId);
+          session.engine.importSnapshot(snapshot);
+          session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+          publishLocalSnapshot(session, snapshot, this.broadcast.bind(this));
+        },
+      }),
+    );
   }
 
   private removeAgentSubscription(

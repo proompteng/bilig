@@ -5,11 +5,7 @@ import {
   createInMemoryDocumentPersistence,
 } from "@bilig/storage-server";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
-import {
-  type AgentFrameContext,
-  routeAgentFrame,
-  worksheetHostUnavailableResponse,
-} from "./agent-routing.js";
+import type { AgentFrameContext } from "./agent-routing.js";
 import { openWorkbookBrowserSession } from "./browser-session-shared.js";
 import {
   closePresenceBackedWorkbookSession,
@@ -35,8 +31,8 @@ import {
 } from "./sync-frame-shared.js";
 import { createUnsupportedSyncFrame, routeWorkbookSyncFrame } from "./sync-frame-router.js";
 import {
-  createCloseWorkbookSessionResponse,
-  createOpenWorkbookSessionResponse,
+  createWorkbookLoadOptions,
+  handleWorkbookAgentFrame,
   loadWorkbookIntoRuntime,
 } from "./workbook-session-shared.js";
 
@@ -121,7 +117,7 @@ export class DocumentSessionManager {
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
-    return routeAgentFrame(frame, context, {
+    return handleWorkbookAgentFrame(frame, context, {
       invalidFrameMessage: "Sync server accepts only agent requests on the remote API ingress",
       errorCode: "SYNC_SERVER_FAILURE",
       loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
@@ -137,7 +133,7 @@ export class DocumentSessionManager {
             request,
           });
         }
-        return createOpenWorkbookSessionResponse(request.id, sessionId);
+        return sessionId;
       },
       closeWorkbookSession: async (request) => {
         await closePresenceBackedWorkbookSession(this.persistence, request.sessionId);
@@ -147,7 +143,7 @@ export class DocumentSessionManager {
             request,
           });
         }
-        return createCloseWorkbookSessionResponse(request.id);
+        return undefined;
       },
       getMetrics: async (request) => ({
         kind: "metrics",
@@ -160,12 +156,12 @@ export class DocumentSessionManager {
           ),
         },
       }),
-      handleWorksheetRequest: async (requestFrame, request) => {
-        if (!this.worksheetExecutor) {
-          return worksheetHostUnavailableResponse(request);
-        }
-        return this.worksheetExecutor.execute(requestFrame);
-      },
+      ...(this.worksheetExecutor
+        ? {
+            handleWorksheetRequest: (requestFrame: Extract<AgentFrame, { kind: "request" }>) =>
+              this.worksheetExecutor!.execute(requestFrame),
+          }
+        : {}),
     });
   }
 
@@ -213,31 +209,28 @@ export class DocumentSessionManager {
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
   ): Promise<AgentResponse> {
-    return loadWorkbookIntoRuntime(request, context, {
-      ...(this.options.maxImportBytes !== undefined
-        ? { maxImportBytes: this.options.maxImportBytes }
-        : {}),
-      ...(this.options.publicServerUrl ? { publicServerUrl: this.options.publicServerUrl } : {}),
-      ...(this.options.browserAppBaseUrl
-        ? { browserAppBaseUrl: this.options.browserAppBaseUrl }
-        : {}),
-      registerPreparedSession: async (prepared) => {
-        await joinOwnedBrowserSession(
-          this.persistence,
-          this.ownerId,
-          prepared.documentId,
-          prepared.sessionId,
-        );
-      },
-      publishImportedSnapshot: async (documentId, snapshot) => {
-        await publishPersistedSnapshot(
-          this.persistence,
-          documentId,
-          snapshot,
-          this.broadcast.bind(this),
-        );
-      },
-    });
+    return loadWorkbookIntoRuntime(
+      request,
+      context,
+      createWorkbookLoadOptions(this.options, {
+        registerPreparedSession: async (prepared) => {
+          await joinOwnedBrowserSession(
+            this.persistence,
+            this.ownerId,
+            prepared.documentId,
+            prepared.sessionId,
+          );
+        },
+        publishImportedSnapshot: async (documentId, snapshot) => {
+          await publishPersistedSnapshot(
+            this.persistence,
+            documentId,
+            snapshot,
+            this.broadcast.bind(this),
+          );
+        },
+      }),
+    );
   }
 
   private async acceptSnapshotChunk(
