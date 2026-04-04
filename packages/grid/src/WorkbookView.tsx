@@ -4,11 +4,11 @@ import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
 import { WorkbookSheetTabs } from "./WorkbookSheetTabs.js";
 import {
-  SheetGridView,
+  WorkbookGridSurface,
   type EditMovement,
   type EditSelectionBehavior,
   type SheetGridViewportSubscription,
-} from "./SheetGridView.js";
+} from "./WorkbookGridSurface.js";
 
 interface WorkbookViewProps {
   engine: GridEngineLike;
@@ -119,7 +119,7 @@ export function WorkbookView({
           sheetName={sheetName}
           value={editorValue}
         />
-        <SheetGridView
+        <WorkbookGridSurface
           editorValue={editorValue}
           editorSelectionBehavior={editorSelectionBehavior}
           engine={engine}

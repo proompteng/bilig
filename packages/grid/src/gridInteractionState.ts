@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import type { Item } from "@glideapps/glide-data-grid";
+import type { Item } from "./gridTypes.js";
 import type { HeaderSelection, PointerGeometry, VisibleRegionState } from "./gridPointer.js";
 
 export interface GridInteractionStateRefs {

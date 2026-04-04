@@ -1,4 +1,4 @@
-import type { Item, Rectangle } from "@glideapps/glide-data-grid";
+import type { Item, Rectangle } from "./gridTypes.js";
 
 export interface FillHandleOverlayBounds {
   readonly x: number;

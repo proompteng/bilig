@@ -6,7 +6,7 @@ import {
   captureGridClipboardSelection,
   handleGridKey,
   handleGridPasteCapture,
-  shouldHandleDataEditorGridKey,
+  shouldHandleGridSurfaceKey,
   shouldHandleGridWindowKey,
 } from "../gridClipboardKeyboardController.js";
 import { describe, expect, test, vi } from "vitest";
@@ -274,9 +274,9 @@ describe("gridClipboardKeyboardController", () => {
     ).toBe(false);
   });
 
-  test("filters DataEditor key handling to grid-relevant keys", () => {
+  test("filters grid-surface key handling to grid-relevant keys", () => {
     expect(
-      shouldHandleDataEditorGridKey({
+      shouldHandleGridSurfaceKey({
         altKey: false,
         ctrlKey: false,
         key: "Enter",
@@ -285,7 +285,7 @@ describe("gridClipboardKeyboardController", () => {
     ).toBe(true);
 
     expect(
-      shouldHandleDataEditorGridKey({
+      shouldHandleGridSurfaceKey({
         altKey: false,
         ctrlKey: false,
         key: "Shift",

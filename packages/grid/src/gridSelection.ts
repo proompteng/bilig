@@ -1,11 +1,6 @@
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
-import {
-  CompactSelection,
-  type GridSelection,
-  type Item,
-  type Rectangle,
-} from "@glideapps/glide-data-grid";
 import { formatAddress, indexToColumn } from "@bilig/formula";
+import { CompactSelection, type GridSelection, type Item, type Rectangle } from "./gridTypes.js";
 
 export function createGridSelection(col: number, row: number): GridSelection {
   return {

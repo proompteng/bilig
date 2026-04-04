@@ -1,5 +1,4 @@
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
-import type { Item, Rectangle } from "@glideapps/glide-data-grid";
 import {
   COLUMN_RESIZE_HANDLE_THRESHOLD,
   SCROLLBAR_GUTTER,
@@ -8,6 +7,7 @@ import {
   getVisibleColumnBounds,
   resolveColumnAtClientX,
 } from "./gridMetrics.js";
+import type { Item, Rectangle } from "./gridTypes.js";
 
 export interface VisibleRegionState {
   range: Rectangle;

@@ -1,5 +1,4 @@
 import { formatAddress } from "@bilig/formula";
-import type { GridSelection, Item } from "@glideapps/glide-data-grid";
 import {
   createColumnSliceSelection,
   createGridSelection,
@@ -7,6 +6,7 @@ import {
   createRowSliceSelection,
 } from "./gridSelection.js";
 import type { HeaderSelection } from "./gridPointer.js";
+import type { GridSelection, Item } from "./gridTypes.js";
 
 export function resolveHeaderDragSelection(
   headerAnchor: HeaderSelection,

@@ -1,6 +1,6 @@
 import { formatAddress } from "@bilig/formula";
-import type { GridSelection, Item } from "@glideapps/glide-data-grid";
 import { clampCell, clampSelectionRange, createRangeSelection } from "./gridSelection.js";
+import type { GridSelection, Item } from "./gridTypes.js";
 
 export function resolveActivatedCell(
   activatedCell: Item,

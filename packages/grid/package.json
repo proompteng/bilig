@@ -1,7 +1,7 @@
 {
   "name": "@bilig/grid",
   "version": "0.1.0",
-  "description": "Excel-like React grid shell components for bilig built on Glide Data Grid.",
+  "description": "Excel-like React workbook grid surfaces and overlays for bilig.",
   "keywords": [
     "bilig",
     "excel",
@@ -45,7 +45,6 @@
     "@bilig/core": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
-    "@glideapps/glide-data-grid": "6.0.4-alpha24",
     "typegpu": "0.10.2"
   },
   "devDependencies": {

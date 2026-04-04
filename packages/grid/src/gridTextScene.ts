@@ -1,18 +1,11 @@
-import {
-  ValueTag,
-  formatCellDisplayValue,
-  formatErrorCode,
-  shouldRightAlignCell,
-  type CellSnapshot,
-  type CellStyleRecord,
-} from "@bilig/protocol";
-import type { Item, Rectangle } from "@glideapps/glide-data-grid";
+import { ValueTag } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
-import { getResolvedCellFontFamily } from "./gridCells.js";
+import { getResolvedCellFontFamily, snapshotToRenderCell } from "./gridCells.js";
 import type { GridMetrics } from "./gridMetrics.js";
 import { getVisibleColumnBounds } from "./gridMetrics.js";
 import { indexToColumn } from "@bilig/formula";
 import type { HeaderSelection } from "./gridPointer.js";
+import type { Item, Rectangle } from "./gridTypes.js";
 
 export interface GridTextItem {
   readonly x: number;
@@ -53,7 +46,6 @@ interface BuildGridTextSceneOptions {
   readonly getCellBounds: (col: number, row: number) => Rectangle | undefined;
 }
 
-const DEFAULT_TEXT_COLOR = "#202124";
 const HEADER_TEXT_COLOR = "#5f6368";
 const HEADER_HOVER_TEXT_COLOR = "#3c4043";
 const HEADER_SELECTED_TEXT_COLOR = "#1f7a43";
@@ -101,27 +93,23 @@ export function buildGridTextScene({
       continue;
     }
 
-    const text =
-      snapshot.value.tag === ValueTag.Error
-        ? formatErrorCode(snapshot.value.code)
-        : formatCellDisplayValue(snapshot.value, snapshot.format);
-    if (text.length === 0) {
+    const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId));
+    if (renderCell.displayText.length === 0) {
       continue;
     }
 
-    const style = engine.getCellStyle(snapshot.styleId);
     items.push({
       x: bounds.x - hostBounds.left,
       y: bounds.y - hostBounds.top,
       width: bounds.width,
       height: bounds.height,
-      text,
-      align: resolveContentAlign(snapshot, style),
-      wrap: style?.alignment?.wrap === true,
-      color: style?.font?.color ?? DEFAULT_TEXT_COLOR,
-      font: resolveCanvasFont(style),
-      fontSize: style?.font?.size ?? 13,
-      underline: style?.font?.underline === true,
+      text: renderCell.displayText,
+      align: renderCell.align,
+      wrap: renderCell.wrap,
+      color: renderCell.color,
+      font: renderCell.font,
+      fontSize: renderCell.fontSize,
+      underline: renderCell.underline,
       strike: false,
     });
   }
@@ -251,32 +239,4 @@ function resolveHeaderTextColor(options: {
     return HEADER_HOVER_TEXT_COLOR;
   }
   return HEADER_TEXT_COLOR;
-}
-
-function resolveCanvasFont(style: CellStyleRecord | undefined): string {
-  const fontParts: string[] = [];
-  if (style?.font?.italic) {
-    fontParts.push("italic");
-  }
-  fontParts.push(style?.font?.bold ? "700" : "400");
-  fontParts.push(`${style?.font?.size ?? 13}px`);
-  fontParts.push(getResolvedCellFontFamily());
-  return fontParts.join(" ");
-}
-
-function resolveContentAlign(
-  snapshot: Pick<CellSnapshot, "value" | "format">,
-  style?: CellStyleRecord,
-): "left" | "center" | "right" {
-  switch (style?.alignment?.horizontal) {
-    case "left":
-      return "left";
-    case "center":
-      return "center";
-    case "right":
-      return "right";
-    case "general":
-    case undefined:
-      return shouldRightAlignCell(snapshot.value, snapshot.format) ? "right" : "left";
-  }
 }

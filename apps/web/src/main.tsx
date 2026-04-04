@@ -11,7 +11,6 @@ import { loadRuntimeSession } from "./session";
 import { resolveZeroCacheUrl, ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-connection";
 import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 
-import "@glideapps/glide-data-grid/index.css";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);

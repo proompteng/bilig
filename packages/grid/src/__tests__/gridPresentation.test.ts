@@ -33,25 +33,25 @@ describe("gridPresentation", () => {
     expect(productTheme.headerFontStyle).toContain("11px");
   });
 
-  test("makes body cells transparent when the GPU surface is active", () => {
+  test("keeps the product palette stable when the GPU surface is active", () => {
     const gpuTheme = getGridTheme({ gpuSurfaceEnabled: true });
 
-    expect(gpuTheme.accentColor).toBe("rgba(31, 122, 67, 0)");
-    expect(gpuTheme.bgCell).toBe("rgba(255, 255, 255, 0)");
-    expect(gpuTheme.bgCellMedium).toBe("rgba(255, 255, 255, 0)");
-    expect(gpuTheme.accentLight).toBe("rgba(31, 122, 67, 0)");
-    expect(gpuTheme.borderColor).toBe("rgba(218, 220, 224, 0)");
-    expect(gpuTheme.bgHeader).toBe("rgba(248, 249, 250, 0)");
-    expect(gpuTheme.bgHeaderHasFocus).toBe("rgba(230, 244, 234, 0)");
-    expect(gpuTheme.textHeaderSelected).toBe("#1f7a43");
+    expect(gpuTheme.accentColor).toBe("#1f7a43");
+    expect(gpuTheme.bgCell).toBe("#ffffff");
+    expect(gpuTheme.bgCellMedium).toBe("#f8f9fa");
+    expect(gpuTheme.accentLight).toBe("rgba(31, 122, 67, 0.14)");
+    expect(gpuTheme.borderColor).toBe("#dadce0");
+    expect(gpuTheme.bgHeader).toBe("#f8f9fa");
+    expect(gpuTheme.bgHeaderHasFocus).toBe("#e6f4ea");
+    expect(gpuTheme.textHeaderSelected).toBe("#ffffff");
   });
 
-  test("hides header text when the text overlay surface is active", () => {
+  test("keeps header text tokens stable when the text overlay surface is active", () => {
     const textSurfaceTheme = getGridTheme({ textSurfaceEnabled: true });
 
-    expect(textSurfaceTheme.textHeader).toBe("rgba(95, 99, 104, 0)");
-    expect(textSurfaceTheme.textHeaderSelected).toBe("rgba(31, 122, 67, 0)");
-    expect(textSurfaceTheme.textMedium).toBe("rgba(95, 99, 104, 0)");
-    expect(textSurfaceTheme.textLight).toBe("rgba(128, 134, 139, 0)");
+    expect(textSurfaceTheme.textHeader).toBe("#5f6368");
+    expect(textSurfaceTheme.textHeaderSelected).toBe("#ffffff");
+    expect(textSurfaceTheme.textMedium).toBe("#5f6368");
+    expect(textSurfaceTheme.textLight).toBe("#80868b");
   });
 });

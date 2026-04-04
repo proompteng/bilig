@@ -1,15 +1,8 @@
-import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-const require = createRequire(import.meta.url);
-const glideEntry = require.resolve("@glideapps/glide-data-grid", {
-  paths: [fileURLToPath(new URL("../../packages/grid", import.meta.url))],
-});
-const glidePackageRoot = resolve(dirname(glideEntry), "..", "..");
 const syncServerTarget =
   process.env["BILIG_SYNC_SERVER_TARGET"] ??
   `http://127.0.0.1:${process.env["BILIG_SYNC_SERVER_PORT"] ?? "4321"}`;
@@ -47,7 +40,6 @@ const codeSplittingGroups = [
     priority: 50,
     test(id: string) {
       return includesAny(id, [
-        "/node_modules/@glideapps/glide-data-grid/",
         "/node_modules/marked/",
         "/node_modules/react-number-format/",
         "/node_modules/react-responsive-carousel/",
@@ -113,7 +105,6 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@glideapps/glide-data-grid/index.css": resolve(glidePackageRoot, "dist/index.css"),
       "@bilig/actors": fileURLToPath(
         new URL("../../packages/actors/src/index.ts", import.meta.url),
       ),

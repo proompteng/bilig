@@ -1,10 +1,10 @@
 import { formatAddress } from "@bilig/formula";
 import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
-import type { GridSelection, Item, Rectangle } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
 import type { GridMetrics } from "./gridMetrics.js";
 import { getVisibleColumnBounds } from "./gridMetrics.js";
 import type { HeaderSelection } from "./gridPointer.js";
+import type { GridSelection, Item, Rectangle } from "./gridTypes.js";
 
 export interface GridGpuColor {
   readonly r: number;
@@ -428,7 +428,7 @@ function pushHeaderRects(options: {
 function resolveAxisSelectionRange(
   fallbackStart: number,
   fallbackEnd: number,
-  selection: GridSelection["columns"]  ,
+  selection: GridSelection["columns"],
 ): { start: number; end: number } {
   const start = selection.first();
   const end = selection.last();

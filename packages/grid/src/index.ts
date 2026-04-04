@@ -5,6 +5,7 @@ export * from "./grid-engine.js";
 export * from "./MetricsPanel.js";
 export * from "./ReplicaPanel.js";
 export * from "./SheetGridView.js";
+export * from "./WorkbookGridSurface.js";
 export * from "./WorkbookView.js";
 export * from "./useCell.js";
 export * from "./useMetrics.js";

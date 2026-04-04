@@ -1,4 +1,3 @@
-import type { Item, Rectangle } from "@glideapps/glide-data-grid";
 import type { HeaderSelection, PointerGeometry, VisibleRegionState } from "./gridPointer.js";
 import {
   resolveColumnResizeTarget,
@@ -6,6 +5,7 @@ import {
   resolvePointerCell,
 } from "./gridPointer.js";
 import type { GridMetrics } from "./gridMetrics.js";
+import type { Item, Rectangle } from "./gridTypes.js";
 
 export type GridHoverCursor = "default" | "cell" | "pointer" | "col-resize";
 

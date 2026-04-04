@@ -1,5 +1,5 @@
 import { formatAddress } from "@bilig/formula";
-import type { Rectangle } from "@glideapps/glide-data-grid";
+import type { Rectangle } from "./gridTypes.js";
 import { serializeClipboardMatrix, serializeClipboardPlainText } from "./gridClipboard.js";
 
 export interface InternalClipboardRange {

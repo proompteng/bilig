@@ -1,6 +1,6 @@
 import { formatAddress } from "@bilig/formula";
-import type { Item } from "@glideapps/glide-data-grid";
 import { sameItem } from "./gridSelection.js";
+import type { Item } from "./gridTypes.js";
 
 export function resolveBodyDoubleClickIntent(options: {
   resizeTarget: number | null;

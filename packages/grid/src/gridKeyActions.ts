@@ -1,6 +1,6 @@
-import type { Item, Rectangle } from "@glideapps/glide-data-grid";
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
 import { clampCell } from "./gridSelection.js";
+import type { Item, Rectangle } from "./gridTypes.js";
 
 export type GridEditSelectionBehavior = "select-all" | "caret-end";
 

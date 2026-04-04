@@ -2,9 +2,10 @@
 
 ## Status
 
-`bilig` still mounts `@glideapps/glide-data-grid` as the primary grid runtime in
-[packages/grid/src/SheetGridView.tsx](/Users/gregkonush/github.com/bilig/packages/grid/src/SheetGridView.tsx).
-The current custom surface already owns a meaningful part of the visible sheet plane:
+`bilig` now mounts the native
+[packages/grid/src/WorkbookGridSurface.tsx](/Users/gregkonush/github.com/bilig/packages/grid/src/WorkbookGridSurface.tsx)
+runtime as the primary workbook grid surface. The current surface owns the visible
+sheet plane directly:
 
 - body fills
 - grid lines
@@ -22,11 +23,12 @@ The current custom surface already owns a meaningful part of the visible sheet p
 - header drag guide
 - select-all corner control
 
-That is useful progress, but it is still a hybrid renderer. Glide still owns the
-main virtualization loop, most hit-testing, header/body pointer semantics, editor
-activation semantics, and the shape of the selection lifecycle.
+The current repo also routes renderer-facing text/autofit work through native
+render-cell snapshots, uses local selection containers instead of Glide selection
+objects, and falls back to Canvas2D when WebGPU is unavailable.
 
-This document defines the plan to remove Glide entirely from the workbook surface.
+This document now serves as the implementation record and cleanup plan for the
+native workbook surface rather than as a future-state proposal.
 
 ## Problem
 

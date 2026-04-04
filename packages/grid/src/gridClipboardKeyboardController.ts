@@ -1,6 +1,5 @@
 import type { MutableRefObject } from "react";
 import { formatAddress } from "@bilig/formula";
-import type { GridSelection, Item } from "@glideapps/glide-data-grid";
 import {
   createColumnSelection,
   createGridSelection,
@@ -8,6 +7,7 @@ import {
   createRowSelection,
   createSheetSelection,
 } from "./gridSelection.js";
+import type { GridSelection, Item } from "./gridTypes.js";
 import { parseClipboardContent, parseClipboardPlainText } from "./gridClipboard.js";
 import { cellToEditorSeed } from "./gridCells.js";
 import {
@@ -396,7 +396,7 @@ export function shouldHandleGridWindowKey(
   return isHandledGridKey(event);
 }
 
-export function shouldHandleDataEditorGridKey(
+export function shouldHandleGridSurfaceKey(
   event: Pick<GridKeyboardEventLike, "altKey" | "ctrlKey" | "key" | "metaKey">,
 ): boolean {
   return (

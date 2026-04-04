@@ -6,15 +6,56 @@ import {
   type CellSnapshot,
   type CellStyleRecord,
 } from "@bilig/protocol";
-import { GridCellKind, type GridCell, type Theme } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
 
 const DEFAULT_FONT_FALLBACK = '"JetBrainsMono Nerd Font","JetBrains Mono",monospace';
+const DEFAULT_TEXT_COLOR = "#202124";
 const TRANSPARENT_TEXT = "rgba(32, 33, 36, 0)";
 
 interface GridCellOptions {
   readonly booleanSurfaceEnabled?: boolean;
   readonly textSurfaceEnabled?: boolean;
+}
+
+export const GridCellKind = {
+  Number: "number",
+  Boolean: "boolean",
+  Text: "text",
+} as const;
+
+export type GridCellKind = (typeof GridCellKind)[keyof typeof GridCellKind];
+
+export interface GridThemeOverride {
+  textDark?: string;
+  baseFontStyle?: string;
+  fontFamily?: string;
+}
+
+export interface GridCell {
+  readonly kind: GridCellKind;
+  readonly allowOverlay: boolean;
+  readonly data: number | boolean | string;
+  readonly displayData?: string | undefined;
+  readonly readonly: boolean;
+  readonly copyData: string;
+  readonly contentAlign?: "left" | "center" | "right" | undefined;
+  readonly allowWrapping?: boolean | undefined;
+  readonly themeOverride?: GridThemeOverride | undefined;
+}
+
+export interface RenderCellSnapshot {
+  readonly kind: "number" | "boolean" | "error" | "string" | "empty";
+  readonly displayText: string;
+  readonly copyText: string;
+  readonly align: "left" | "center" | "right";
+  readonly wrap: boolean;
+  readonly color: string;
+  readonly font: string;
+  readonly fontSize: number;
+  readonly underline: boolean;
+  readonly numberValue?: number | undefined;
+  readonly booleanValue?: boolean | undefined;
+  readonly stringValue?: string | undefined;
 }
 
 export function cellToEditorSeed(
@@ -48,25 +89,22 @@ export function snapshotToGridCell(
   style?: CellStyleRecord,
   options?: GridCellOptions,
 ): GridCell {
-  const rawValue = cellToEditorSeed(snapshot);
-  const displayText = formatCellDisplayValue(snapshot.value, snapshot.format);
-  const contentAlign = resolveContentAlign(snapshot, style);
-  const allowWrapping = style?.alignment?.wrap === true;
+  const renderCell = snapshotToRenderCell(snapshot, style);
 
-  switch (snapshot.value.tag) {
-    case ValueTag.Number:
+  switch (renderCell.kind) {
+    case "number":
       return {
         kind: GridCellKind.Number,
         allowOverlay: false,
-        data: snapshot.value.value,
-        displayData: displayText,
+        data: renderCell.numberValue ?? 0,
+        displayData: renderCell.displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : displayText,
-        contentAlign,
-        ...(allowWrapping ? { allowWrapping: true } : {}),
+        copyData: renderCell.copyText,
+        contentAlign: renderCell.align,
+        ...(renderCell.wrap ? { allowWrapping: true } : {}),
         ...resolveTextThemeOverride(style, options),
       };
-    case ValueTag.Boolean:
+    case "boolean":
       if (options?.booleanSurfaceEnabled === true) {
         return {
           kind: GridCellKind.Text,
@@ -74,59 +112,89 @@ export function snapshotToGridCell(
           data: "",
           displayData: "",
           readonly: false,
-          copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE",
+          copyData: renderCell.copyText,
           contentAlign: "center",
         };
       }
       return {
         kind: GridCellKind.Boolean,
         allowOverlay: false,
-        data: snapshot.value.value,
+        data: renderCell.booleanValue ?? false,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE",
+        copyData: renderCell.copyText,
       };
-    case ValueTag.Error:
+    case "error":
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,
-        data: formatErrorCode(snapshot.value.code),
-        displayData: formatErrorCode(snapshot.value.code),
+        data: renderCell.displayText,
+        displayData: renderCell.displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : formatErrorCode(snapshot.value.code),
-        ...(allowWrapping ? { allowWrapping: true } : {}),
+        copyData: renderCell.copyText,
+        ...(renderCell.wrap ? { allowWrapping: true } : {}),
         ...resolveTextThemeOverride(style, options),
       };
-    case ValueTag.String:
+    case "string":
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,
-        data: snapshot.value.value,
-        displayData: displayText,
+        data: renderCell.stringValue ?? "",
+        displayData: renderCell.displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : displayText,
-        contentAlign,
-        ...(allowWrapping ? { allowWrapping: true } : {}),
+        copyData: renderCell.copyText,
+        contentAlign: renderCell.align,
+        ...(renderCell.wrap ? { allowWrapping: true } : {}),
         ...resolveTextThemeOverride(style, options),
       };
-    case ValueTag.Empty:
+    case "empty":
       return {
         kind: GridCellKind.Text,
         allowOverlay: false,
         data: "",
-        displayData: displayText,
+        displayData: renderCell.displayText,
         readonly: false,
-        copyData: snapshot.formula ? rawValue : displayText,
-        contentAlign,
-        ...(allowWrapping ? { allowWrapping: true } : {}),
+        copyData: renderCell.copyText,
+        contentAlign: renderCell.align,
+        ...(renderCell.wrap ? { allowWrapping: true } : {}),
         ...resolveTextThemeOverride(style, options),
       };
   }
 }
 
+export function snapshotToRenderCell(
+  snapshot: Pick<CellSnapshot, "formula" | "input" | "value" | "format">,
+  style?: CellStyleRecord,
+): RenderCellSnapshot {
+  const copyText = cellToEditorSeed(snapshot);
+  const displayText =
+    snapshot.value.tag === ValueTag.Error
+      ? formatErrorCode(snapshot.value.code)
+      : snapshot.value.tag === ValueTag.Boolean
+        ? snapshot.value.value
+          ? "TRUE"
+          : "FALSE"
+        : formatCellDisplayValue(snapshot.value, snapshot.format);
+
+  return {
+    kind: resolveRenderCellKind(snapshot),
+    displayText,
+    copyText,
+    align: resolveContentAlign(snapshot, style),
+    wrap: style?.alignment?.wrap === true,
+    color: style?.font?.color ?? DEFAULT_TEXT_COLOR,
+    font: resolveCanvasFont(style),
+    fontSize: style?.font?.size ?? 13,
+    underline: style?.font?.underline === true,
+    ...(snapshot.value.tag === ValueTag.Number ? { numberValue: snapshot.value.value } : {}),
+    ...(snapshot.value.tag === ValueTag.Boolean ? { booleanValue: snapshot.value.value } : {}),
+    ...(snapshot.value.tag === ValueTag.String ? { stringValue: snapshot.value.value } : {}),
+  };
+}
+
 function resolveTextThemeOverride(
   style: CellStyleRecord | undefined,
   options?: GridCellOptions,
-): { themeOverride?: Partial<Theme> } {
+): { themeOverride?: GridThemeOverride } {
   const themeOverride = cellStyleToThemeOverride(style, options);
   return themeOverride ? { themeOverride } : {};
 }
@@ -144,7 +212,7 @@ export function cellToGridCell(
 export function cellStyleToThemeOverride(
   style: CellStyleRecord | undefined,
   options?: GridCellOptions,
-): Partial<Theme> | undefined {
+): GridThemeOverride | undefined {
   const textSurfaceEnabled = options?.textSurfaceEnabled === true;
   if (!style?.font) {
     return textSurfaceEnabled ? { textDark: TRANSPARENT_TEXT } : undefined;
@@ -183,4 +251,30 @@ function resolveContentAlign(
 
 export function getResolvedCellFontFamily(): string {
   return DEFAULT_FONT_FALLBACK;
+}
+
+function resolveRenderCellKind(snapshot: Pick<CellSnapshot, "value">): RenderCellSnapshot["kind"] {
+  switch (snapshot.value.tag) {
+    case ValueTag.Number:
+      return "number";
+    case ValueTag.Boolean:
+      return "boolean";
+    case ValueTag.Error:
+      return "error";
+    case ValueTag.String:
+      return "string";
+    case ValueTag.Empty:
+      return "empty";
+  }
+}
+
+function resolveCanvasFont(style: CellStyleRecord | undefined): string {
+  const fontParts: string[] = [];
+  if (style?.font?.italic) {
+    fontParts.push("italic");
+  }
+  fontParts.push(style?.font?.bold ? "700" : "400");
+  fontParts.push(`${style?.font?.size ?? 13}px`);
+  fontParts.push(getResolvedCellFontFamily());
+  return fontParts.join(" ");
 }

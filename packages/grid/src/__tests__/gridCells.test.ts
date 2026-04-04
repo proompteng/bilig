@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { ErrorCode, ValueTag, type CellSnapshot, type CellStyleRecord } from "@bilig/protocol";
-import { GridCellKind } from "@glideapps/glide-data-grid";
-import { cellStyleToThemeOverride, cellToEditorSeed, snapshotToGridCell } from "../gridCells.js";
+import {
+  GridCellKind,
+  cellStyleToThemeOverride,
+  cellToEditorSeed,
+  snapshotToGridCell,
+  snapshotToRenderCell,
+} from "../gridCells.js";
 
 function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
   const snapshot: CellSnapshot = {
@@ -66,6 +71,42 @@ describe("gridCells", () => {
     );
     expect(formulaStringCell.kind).toBe(GridCellKind.Text);
     expect(formulaStringCell.copyData).toBe("=A1&B1");
+  });
+
+  test("derives renderer-native cell snapshots for text and autofit surfaces", () => {
+    const renderCell = snapshotToRenderCell(
+      makeSnapshot({
+        formula: "A1&B1",
+        value: { tag: ValueTag.String, value: "joined" },
+      }),
+      {
+        id: "style-render",
+        alignment: { horizontal: "center", wrap: true },
+        font: { color: "#123456", size: 15, italic: true, underline: true },
+      },
+    );
+
+    expect(renderCell).toMatchObject({
+      kind: "string",
+      displayText: "joined",
+      copyText: "=A1&B1",
+      align: "center",
+      wrap: true,
+      color: "#123456",
+      fontSize: 15,
+      underline: true,
+    });
+    expect(renderCell.font).toBe(
+      'italic 400 15px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+    );
+
+    expect(
+      snapshotToRenderCell(makeSnapshot({ value: { tag: ValueTag.Boolean, value: false } })),
+    ).toMatchObject({
+      kind: "boolean",
+      displayText: "FALSE",
+      copyText: "FALSE",
+    });
   });
 
   test("keeps fill styling out of theme overrides so grid borders stay stable", () => {

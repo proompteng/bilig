@@ -1,8 +1,11 @@
-import type { GridKeyEventArgs } from "@glideapps/glide-data-grid";
+interface GridKeyboardModifierState {
+  altKey: boolean;
+  ctrlKey: boolean;
+  key: string;
+  metaKey: boolean;
+}
 
-export function isPrintableKey(
-  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">,
-): boolean {
+export function isPrintableKey(event: GridKeyboardModifierState): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey) {
     return false;
   }
@@ -46,9 +49,7 @@ export function isNavigationKey(key: string): boolean {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
 }
 
-export function isClipboardShortcut(
-  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey">,
-): boolean {
+export function isClipboardShortcut(event: GridKeyboardModifierState): boolean {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) {
     return false;
   }
@@ -57,7 +58,7 @@ export function isClipboardShortcut(
 }
 
 export function isHandledGridKey(
-  event: Pick<GridKeyEventArgs, "altKey" | "ctrlKey" | "key" | "metaKey"> & {
+  event: GridKeyboardModifierState & {
     shiftKey?: boolean;
   },
 ): boolean {

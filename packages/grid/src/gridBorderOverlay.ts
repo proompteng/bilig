@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import { formatAddress } from "@bilig/formula";
 import type { CellStyleRecord } from "@bilig/protocol";
-import type { Item, Rectangle } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
+import type { Item, Rectangle } from "./gridTypes.js";
 
 export interface BorderOverlaySegment {
   key: string;

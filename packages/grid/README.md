@@ -1,6 +1,6 @@
 # @bilig/grid
 
-Excel-like React grid shell components for bilig built on Glide Data Grid.
+Excel-like React workbook grid surfaces and overlays for bilig.
 
 ## Install
 

@@ -1,5 +1,4 @@
 import { formatAddress } from "@bilig/formula";
-import type { GridSelection, Item } from "@glideapps/glide-data-grid";
 import {
   createColumnSelection,
   createColumnSliceSelection,
@@ -33,6 +32,7 @@ import {
   startGridColumnResize,
   type GridInteractionStateRefs,
 } from "./gridInteractionState.js";
+import type { GridSelection, Item } from "./gridTypes.js";
 
 interface PointerEventLike {
   clientX: number;

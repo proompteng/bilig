@@ -1,9 +1,9 @@
-import { CompactSelection } from "@glideapps/glide-data-grid";
 import { describe, expect, test } from "vitest";
 import { ValueTag, type CellSnapshot, type CellStyleRecord } from "@bilig/protocol";
 import { buildGridGpuScene, parseGpuColor } from "../gridGpuScene.js";
 import type { GridEngineLike } from "../grid-engine.js";
 import { getGridMetrics } from "../gridMetrics.js";
+import { CompactSelection } from "../gridTypes.js";
 
 function createCellSnapshot(
   styleId: string | undefined,

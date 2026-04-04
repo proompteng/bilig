@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import tgpu, { d, type TgpuRoot, type TgpuVertexLayout } from "typegpu";
 import type { GridGpuRect, GridGpuScene } from "./gridGpuScene.js";
+import type { GridTextItem, GridTextScene } from "./gridTextScene.js";
 
 interface GridGpuSurfaceProps {
   readonly scene: GridGpuScene;
+  readonly textScene: GridTextScene;
   readonly host: HTMLDivElement | null;
   readonly onActiveChange?: ((active: boolean) => void) | undefined;
 }
@@ -30,6 +32,8 @@ interface MutableRenderState {
   vertexBuffer: GPUBuffer | null;
   vertexCapacity: number;
 }
+
+type SurfaceMode = "inactive" | "fallback-2d" | "webgpu";
 
 const EMPTY_SCENE: GridGpuScene = Object.freeze({
   fillRects: Object.freeze([]),
@@ -67,6 +71,7 @@ const gridGpuFragmentShader = tgpu.fragmentFn({
 
 function createGridGpuPipeline(root: TgpuRoot, format: GPUTextureFormat) {
   return root.createRenderPipeline({
+    attribs: gridGpuVertexLayout.attrib,
     vertex: gridGpuVertexShader,
     fragment: gridGpuFragmentShader,
     primitive: {
@@ -90,13 +95,14 @@ function createGridGpuPipeline(root: TgpuRoot, format: GPUTextureFormat) {
   });
 }
 
-export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfaceProps) {
+export function GridGpuSurface({ scene, textScene, host, onActiveChange }: GridGpuSurfaceProps) {
+  const fallbackCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const underlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const artifactsRef = useRef<WebGpuArtifacts | null>(null);
   const underlayStateRef = useRef<MutableRenderState>({ vertexBuffer: null, vertexCapacity: 0 });
   const overlayStateRef = useRef<MutableRenderState>({ vertexBuffer: null, vertexCapacity: 0 });
-  const [isActive, setIsActive] = useState(false);
+  const [mode, setMode] = useState<SurfaceMode>("inactive");
   const [surfaceSize, setSurfaceSize] = useState<SurfaceSize>({
     width: 0,
     height: 0,
@@ -105,8 +111,8 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
   });
 
   useEffect(() => {
-    onActiveChange?.(isActive);
-  }, [isActive, onActiveChange]);
+    onActiveChange?.(mode === "webgpu");
+  }, [mode, onActiveChange]);
 
   useEffect(() => {
     if (!host) {
@@ -142,19 +148,24 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
     const overlayRenderState = overlayStateRef.current;
 
     async function initialize() {
-      if (
-        !host ||
-        !underlayCanvasRef.current ||
-        !overlayCanvasRef.current ||
-        !("gpu" in navigator)
-      ) {
-        setIsActive(false);
+      if (!host) {
+        setMode("inactive");
+        return;
+      }
+
+      if (!("gpu" in navigator)) {
+        setMode("fallback-2d");
+        return;
+      }
+
+      if (!underlayCanvasRef.current || !overlayCanvasRef.current) {
+        setMode("inactive");
         return;
       }
 
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter || cancelled) {
-        setIsActive(false);
+        setMode("fallback-2d");
         return;
       }
       const device = await adapter.requestDevice();
@@ -167,7 +178,7 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
       const overlayContext = getCanvasContext(overlayCanvasRef.current);
       if (!underlayContext || !overlayContext) {
         device.destroy();
-        setIsActive(false);
+        setMode("fallback-2d");
         return;
       }
 
@@ -185,14 +196,14 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
         pipeline,
         vertexLayout: gridGpuVertexLayout,
       };
-      setIsActive(true);
+      setMode("webgpu");
     }
 
     void initialize();
 
     return () => {
       cancelled = true;
-      setIsActive(false);
+      setMode("inactive");
       cleanupRenderState(underlayRenderState);
       cleanupRenderState(overlayRenderState);
       const artifacts = artifactsRef.current;
@@ -201,45 +212,72 @@ export function GridGpuSurface({ scene, host, onActiveChange }: GridGpuSurfacePr
     };
   }, [host]);
 
-  const activeScene = useMemo(() => (isActive ? scene : EMPTY_SCENE), [isActive, scene]);
+  const activeScene = useMemo(() => (mode === "inactive" ? EMPTY_SCENE : scene), [mode, scene]);
 
   useEffect(() => {
-    const artifacts = artifactsRef.current;
-    const underlayCanvas = underlayCanvasRef.current;
-    const overlayCanvas = overlayCanvasRef.current;
-    if (!artifacts || !underlayCanvas || !overlayCanvas) {
+    if (mode === "inactive") {
       return;
     }
 
-    const underlayContext = getCanvasContext(underlayCanvas);
-    const overlayContext = getCanvasContext(overlayCanvas);
-    if (!underlayContext || !overlayContext) {
+    if (mode === "fallback-2d") {
+      const fallbackCanvas = fallbackCanvasRef.current;
+      if (!fallbackCanvas) {
+        return;
+      }
+      configureCanvasElement(fallbackCanvas, surfaceSize);
+      renderComposite2d(fallbackCanvas, activeScene, textScene, surfaceSize);
+      return;
+    }
+
+    const underlayCanvas = underlayCanvasRef.current;
+    const overlayCanvas = overlayCanvasRef.current;
+    if (!underlayCanvas || !overlayCanvas) {
       return;
     }
 
     configureCanvasElement(underlayCanvas, surfaceSize);
     configureCanvasElement(overlayCanvas, surfaceSize);
-    configureCanvasContext(underlayContext, artifacts.device, artifacts.format);
-    configureCanvasContext(overlayContext, artifacts.device, artifacts.format);
+    if (mode === "webgpu") {
+      const artifacts = artifactsRef.current;
+      const underlayContext = getCanvasContext(underlayCanvas);
+      const overlayContext = getCanvasContext(overlayCanvas);
+      if (!artifacts || !underlayContext || !overlayContext) {
+        return;
+      }
+      configureCanvasContext(underlayContext, artifacts.device, artifacts.format);
+      configureCanvasContext(overlayContext, artifacts.device, artifacts.format);
 
-    renderRects({
-      artifacts,
-      context: underlayContext,
-      rects: activeScene.fillRects,
-      renderState: underlayStateRef.current,
-      surfaceSize,
-    });
-    renderRects({
-      artifacts,
-      context: overlayContext,
-      rects: activeScene.borderRects,
-      renderState: overlayStateRef.current,
-      surfaceSize,
-    });
-  }, [activeScene, surfaceSize]);
+      renderRects({
+        artifacts,
+        context: underlayContext,
+        rects: activeScene.fillRects,
+        renderState: underlayStateRef.current,
+        surfaceSize,
+      });
+      renderRects({
+        artifacts,
+        context: overlayContext,
+        rects: activeScene.borderRects,
+        renderState: overlayStateRef.current,
+        surfaceSize,
+      });
+      return;
+    }
+  }, [activeScene, mode, surfaceSize, textScene]);
 
-  if (!isActive) {
+  if (!host) {
     return null;
+  }
+
+  if (mode === "fallback-2d") {
+    return (
+      <canvas
+        ref={fallbackCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-20"
+        data-testid="grid-webgpu-fallback"
+      />
+    );
   }
 
   return (
@@ -339,6 +377,33 @@ function renderRects({
     .draw(0);
 }
 
+function renderComposite2d(
+  canvas: HTMLCanvasElement,
+  scene: GridGpuScene,
+  textScene: GridTextScene,
+  surfaceSize: SurfaceSize,
+): void {
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+  const dprX = surfaceSize.pixelWidth / Math.max(surfaceSize.width, 1);
+  const dprY = surfaceSize.pixelHeight / Math.max(surfaceSize.height, 1);
+  context.setTransform(dprX, 0, 0, dprY, 0, 0);
+  context.clearRect(0, 0, surfaceSize.width, surfaceSize.height);
+  for (const rect of scene.fillRects) {
+    context.fillStyle = toCssColor(rect.color);
+    context.fillRect(rect.x, rect.y, rect.width, rect.height);
+  }
+  for (const rect of scene.borderRects) {
+    context.fillStyle = toCssColor(rect.color);
+    context.fillRect(rect.x, rect.y, rect.width, rect.height);
+  }
+  for (const item of textScene.items) {
+    drawTextItem(context, item);
+  }
+}
+
 function ensureVertexBuffer(
   device: GPUDevice,
   renderState: MutableRenderState,
@@ -427,4 +492,115 @@ function isGpuCanvasContext(
     "configure" in value &&
     "getCurrentTexture" in value
   );
+}
+
+function toCssColor(color: GridGpuRect["color"]): string {
+  return `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, ${color.a})`;
+}
+
+function drawTextItem(context: CanvasRenderingContext2D, item: GridTextItem): void {
+  const insetX = 8;
+  const insetY = 4;
+  const boxX = item.x + insetX;
+  const boxY = item.y + insetY;
+  const boxWidth = Math.max(0, item.width - insetX * 2);
+  const boxHeight = Math.max(0, item.height - insetY * 2);
+  if (boxWidth <= 0 || boxHeight <= 0) {
+    return;
+  }
+
+  context.save();
+  context.beginPath();
+  context.rect(boxX, boxY, boxWidth, boxHeight);
+  context.clip();
+  context.font = item.font;
+  context.fillStyle = item.color;
+  context.strokeStyle = item.color;
+  context.textBaseline = "middle";
+  context.textAlign = item.align;
+
+  const anchorX =
+    item.align === "right"
+      ? item.x + item.width - insetX
+      : item.align === "center"
+        ? item.x + item.width / 2
+        : item.x + insetX;
+
+  if (item.wrap) {
+    const lines = wrapText(context, item.text, boxWidth);
+    const lineHeight = Math.max(14, Math.round(item.fontSize * 1.2));
+    const totalHeight = lines.length * lineHeight;
+    let baselineY = item.y + item.height / 2 - totalHeight / 2 + lineHeight / 2;
+    for (const line of lines) {
+      context.fillText(line, anchorX, baselineY);
+      drawTextDecorations(context, line, item, anchorX, baselineY);
+      baselineY += lineHeight;
+    }
+  } else {
+    const baselineY = item.y + item.height / 2;
+    context.fillText(item.text, anchorX, baselineY);
+    drawTextDecorations(context, item.text, item, anchorX, baselineY);
+  }
+
+  context.restore();
+}
+
+function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const paragraphs = text.split(/\r?\n/);
+  const lines: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (paragraph.length === 0) {
+      lines.push("");
+      continue;
+    }
+    const words = paragraph.split(/\s+/);
+    let currentLine = "";
+    for (const word of words) {
+      const candidate = currentLine.length === 0 ? word : `${currentLine} ${word}`;
+      if (context.measureText(candidate).width <= maxWidth || currentLine.length === 0) {
+        currentLine = candidate;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    lines.push(currentLine);
+  }
+  return lines.length > 0 ? lines : [text];
+}
+
+function drawTextDecorations(
+  context: CanvasRenderingContext2D,
+  text: string,
+  item: GridTextItem,
+  anchorX: number,
+  baselineY: number,
+): void {
+  if (!item.underline && !item.strike) {
+    return;
+  }
+
+  const textWidth = context.measureText(text).width;
+  const startX =
+    item.align === "right"
+      ? anchorX - textWidth
+      : item.align === "center"
+        ? anchorX - textWidth / 2
+        : anchorX;
+  const endX = startX + textWidth;
+  context.lineWidth = 1;
+
+  if (item.underline) {
+    context.beginPath();
+    context.moveTo(startX, baselineY + item.fontSize * 0.36);
+    context.lineTo(endX, baselineY + item.fontSize * 0.36);
+    context.stroke();
+  }
+
+  if (item.strike) {
+    context.beginPath();
+    context.moveTo(startX, baselineY);
+    context.lineTo(endX, baselineY);
+    context.stroke();
+  }
 }
