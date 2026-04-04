@@ -65,4 +65,6 @@ Use `tea` for Forgejo PR workflow in this repo.
 ## Commit & Pull Request Guidelines
 Use Conventional Commits: `type(scope): summary`, for example `feat(grid): add fill-handle drag selection`. Keep commits focused and imperative. By default, you may commit and push directly to `main` once local CI is green, preferably via `pnpm run ci`. When a PR is used, include scope, risk, linked issues, commands run, and screenshots for `apps/web` UI changes. If you edit protocol or formula inventory sources, regenerate and commit the outputs, because CI fails on dirty tracked files.
 
+Multiple agents may be working in the current checkout at the same time. Do not stop just because the worktree already has changes. Treat a dirty worktree as normal, avoid overwriting or reverting edits you did not make, and continue unless another agent's changes directly conflict with the files you need to modify.
+
 For large work, do not leave giant diffs uncommitted. When the working diff grows beyond roughly `1000` lines of source changes, commit the current state to `main` before the final verification pass, then run `pnpm run ci` on that committed tree so the clean-diff gate verifies the actual commit rather than an oversized dirty worktree.
