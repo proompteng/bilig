@@ -189,48 +189,41 @@ export class ZeroWorkbookBridge {
       }),
     );
 
-    const cachedCell = this.cache.peekCell(sheetName, address);
-    const needsSourceHydration =
-      !cachedCell || (cachedCell.input === undefined && cachedCell.formula === undefined);
-    if (needsSourceHydration) {
-      this.selectionDestroyers.push(
-        bindView(
-          asTypedView<CellSourceRow | undefined>(
-            this.zero.materialize(
-              queries.cellInput.one({
-                documentId: this.documentId,
-                sheetName,
-                address,
-              }),
-            ),
+    this.selectionDestroyers.push(
+      bindView(
+        asTypedView<CellSourceRow | undefined>(
+          this.zero.materialize(
+            queries.cellInput.one({
+              documentId: this.documentId,
+              sheetName,
+              address,
+            }),
           ),
-          (value) => {
-            this.selectedCellSource = value ?? null;
-            this.reprojectSelection(false);
-          },
         ),
-      );
-    }
+        (value) => {
+          this.selectedCellSource = value ?? null;
+          this.reprojectSelection(false);
+        },
+      ),
+    );
 
-    if (!cachedCell) {
-      this.selectionDestroyers.push(
-        bindView(
-          asTypedView<CellEvalRow | undefined>(
-            this.zero.materialize(
-              queries.cellEval.one({
-                documentId: this.documentId,
-                sheetName,
-                address,
-              }),
-            ),
+    this.selectionDestroyers.push(
+      bindView(
+        asTypedView<CellEvalRow | undefined>(
+          this.zero.materialize(
+            queries.cellEval.one({
+              documentId: this.documentId,
+              sheetName,
+              address,
+            }),
           ),
-          (value) => {
-            this.selectedCellEval = value ?? null;
-            this.reprojectSelection(false);
-          },
         ),
-      );
-    }
+        (value) => {
+          this.selectedCellEval = value ?? null;
+          this.reprojectSelection(false);
+        },
+      ),
+    );
 
     this.reprojectSelection(true);
   }

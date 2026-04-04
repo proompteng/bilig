@@ -1,35 +1,43 @@
-import type {
-  AckFrame,
-  CursorWatermarkFrame,
-  ErrorFrame,
-  HeartbeatFrame,
-  HelloFrame,
-  ProtocolFrame,
-} from "@bilig/binary-protocol";
-import { createSnapshotChunkFrames } from "@bilig/binary-protocol";
+import type { ErrorFrame, HelloFrame, ProtocolFrame } from "@bilig/binary-protocol";
 import type { AgentFrame, AgentResponse, LoadWorkbookFileRequest } from "@bilig/agent-api";
 import {
   type InMemoryDocumentPersistence,
   createInMemoryDocumentPersistence,
 } from "@bilig/storage-server";
-import type { WorkbookSnapshot } from "@bilig/protocol";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
 import {
   type AgentFrameContext,
-  createWorkbookLoadedResponse,
-  normalizeSessionId,
-  prepareWorkbookLoad,
   routeAgentFrame,
   worksheetHostUnavailableResponse,
 } from "./agent-routing.js";
+import { createBrowserHelloReplay } from "./browser-sync-replay.js";
 import {
-  acceptSnapshotChunk,
+  closePresenceBackedWorkbookSession,
+  countPresenceBackedWorkbookSessions,
+  joinOwnedBrowserSession,
+  openPresenceBackedWorkbookSession,
+} from "./document-presence-session-store.js";
+import {
+  acceptPersistedSnapshotChunk,
+  publishPersistedSnapshot,
+} from "./document-snapshot-store.js";
+import {
   attachBrowserSubscriber,
   broadcastToBrowsers,
   type BrowserSubscriberRegistry,
-  createSnapshotPublication,
   type SnapshotAssemblyRegistry,
 } from "./session-shared.js";
+import {
+  createAckFrame,
+  createAppendBatchFrame,
+  createCursorWatermarkFrame,
+  createHeartbeatFrame,
+} from "./sync-frame-shared.js";
+import {
+  createCloseWorkbookSessionResponse,
+  createOpenWorkbookSessionResponse,
+  loadWorkbookIntoRuntime,
+} from "./workbook-session-shared.js";
 
 export interface DocumentStateSummary {
   documentId: string;
@@ -59,49 +67,41 @@ export class DocumentSessionManager {
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
     switch (frame.kind) {
       case "hello":
-        await this.persistence.presence.join(frame.documentId, frame.sessionId);
-        await this.persistence.ownership.claim(frame.documentId, this.ownerId, Date.now() + 60_000);
-        return {
-          kind: "cursorWatermark",
-          documentId: frame.documentId,
-          cursor: await this.persistence.batches.latestCursor(frame.documentId),
-          compactedCursor: (await this.persistence.snapshots.latest(frame.documentId))?.cursor ?? 0,
-        } satisfies CursorWatermarkFrame;
+        await joinOwnedBrowserSession(
+          this.persistence,
+          this.ownerId,
+          frame.documentId,
+          frame.sessionId,
+        );
+        return createCursorWatermarkFrame(
+          frame.documentId,
+          await this.persistence.batches.latestCursor(frame.documentId),
+          (await this.persistence.snapshots.latest(frame.documentId))?.cursor ?? 0,
+        );
 
       case "appendBatch": {
         const stored = await this.persistence.batches.append(frame.documentId, frame.batch);
-        this.broadcast(frame.documentId, {
-          kind: "appendBatch",
-          documentId: frame.documentId,
-          cursor: stored.cursor,
-          batch: frame.batch,
-        });
-        return {
-          kind: "ack",
-          documentId: frame.documentId,
-          batchId: frame.batch.id,
-          cursor: stored.cursor,
-          acceptedAtUnixMs: stored.receivedAtUnixMs,
-        } satisfies AckFrame;
+        this.broadcast(
+          frame.documentId,
+          createAppendBatchFrame(frame.documentId, stored.cursor, frame.batch),
+        );
+        return createAckFrame(
+          frame.documentId,
+          frame.batch.id,
+          stored.cursor,
+          stored.receivedAtUnixMs,
+        );
       }
 
       case "snapshotChunk":
         await this.acceptSnapshotChunk(frame);
-        return {
-          kind: "ack",
-          documentId: frame.documentId,
-          batchId: frame.snapshotId,
-          cursor: frame.cursor,
-          acceptedAtUnixMs: Date.now(),
-        } satisfies AckFrame;
+        return createAckFrame(frame.documentId, frame.snapshotId, frame.cursor);
 
       case "heartbeat":
-        return {
-          kind: "heartbeat",
-          documentId: frame.documentId,
-          cursor: await this.persistence.batches.latestCursor(frame.documentId),
-          sentAtUnixMs: Date.now(),
-        } satisfies HeartbeatFrame;
+        return createHeartbeatFrame(
+          frame.documentId,
+          await this.persistence.batches.latestCursor(frame.documentId),
+        );
 
       case "cursorWatermark":
       case "ack":
@@ -127,24 +127,10 @@ export class DocumentSessionManager {
       errorCode: "SYNC_SERVER_FAILURE",
       loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
       openWorkbookSession: async (request) => {
-        const sessionId = normalizeSessionId(request.documentId, request.replicaId);
-        await this.persistence.presence.join(request.documentId, sessionId);
-        if (this.worksheetExecutor) {
-          return this.worksheetExecutor.execute({
-            kind: "request",
-            request,
-          });
-        }
-        return {
-          kind: "ok",
-          id: request.id,
-          sessionId,
-        };
-      },
-      closeWorkbookSession: async (request) => {
-        await this.persistence.presence.leave(
-          request.sessionId.split(":")[0] ?? request.sessionId,
-          request.sessionId,
+        const sessionId = await openPresenceBackedWorkbookSession(
+          this.persistence,
+          request.documentId,
+          request.replicaId,
         );
         if (this.worksheetExecutor) {
           return this.worksheetExecutor.execute({
@@ -152,21 +138,27 @@ export class DocumentSessionManager {
             request,
           });
         }
-        return {
-          kind: "ok",
-          id: request.id,
-        };
+        return createOpenWorkbookSessionResponse(request.id, sessionId);
+      },
+      closeWorkbookSession: async (request) => {
+        await closePresenceBackedWorkbookSession(this.persistence, request.sessionId);
+        if (this.worksheetExecutor) {
+          return this.worksheetExecutor.execute({
+            kind: "request",
+            request,
+          });
+        }
+        return createCloseWorkbookSessionResponse(request.id);
       },
       getMetrics: async (request) => ({
         kind: "metrics",
         id: request.id,
         value: {
           service: "bilig-app",
-          documentSessions: (
-            await this.persistence.presence.sessions(
-              request.sessionId.split(":")[0] ?? request.sessionId,
-            )
-          ).length,
+          documentSessions: await countPresenceBackedWorkbookSessions(
+            this.persistence,
+            request.sessionId,
+          ),
         },
       }),
       handleWorksheetRequest: async (requestFrame, request) => {
@@ -187,36 +179,24 @@ export class DocumentSessionManager {
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
-    await this.persistence.presence.join(frame.documentId, frame.sessionId);
-    await this.persistence.ownership.claim(frame.documentId, this.ownerId, Date.now() + 60_000);
-    const latestSnapshot = await this.persistence.snapshots.latest(frame.documentId);
-    const snapshotFrames =
-      latestSnapshot && frame.lastServerCursor < latestSnapshot.cursor
-        ? createSnapshotChunkFrames({
-            documentId: frame.documentId,
-            snapshotId: latestSnapshot.snapshotId,
-            cursor: latestSnapshot.cursor,
-            contentType: latestSnapshot.contentType,
-            bytes: latestSnapshot.bytes,
-          })
-        : [];
-    const cursorFloor = Math.max(frame.lastServerCursor, latestSnapshot?.cursor ?? 0);
-    const missed = await this.persistence.batches.listAfter(frame.documentId, cursorFloor);
-    return [
-      ...snapshotFrames,
-      ...missed.map((entry) => ({
-        kind: "appendBatch" as const,
-        documentId: entry.documentId,
-        cursor: entry.cursor,
-        batch: entry.batch,
-      })),
-      {
-        kind: "cursorWatermark",
-        documentId: frame.documentId,
-        cursor: await this.persistence.batches.latestCursor(frame.documentId),
-        compactedCursor: latestSnapshot?.cursor ?? 0,
-      } satisfies CursorWatermarkFrame,
-    ];
+    await joinOwnedBrowserSession(
+      this.persistence,
+      this.ownerId,
+      frame.documentId,
+      frame.sessionId,
+    );
+    return createBrowserHelloReplay({
+      documentId: frame.documentId,
+      lastServerCursor: frame.lastServerCursor,
+      latestCursor: this.persistence.batches.latestCursor(frame.documentId),
+      latestSnapshot: this.persistence.snapshots.latest(frame.documentId),
+      listMissedFrames: async (cursorFloor) => {
+        const missed = await this.persistence.batches.listAfter(frame.documentId, cursorFloor);
+        return missed.map((entry) =>
+          createAppendBatchFrame(entry.documentId, entry.cursor, entry.batch),
+        );
+      },
+    });
   }
 
   async getDocumentState(documentId: string): Promise<DocumentStateSummary> {
@@ -234,7 +214,7 @@ export class DocumentSessionManager {
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
   ): Promise<AgentResponse> {
-    const prepared = prepareWorkbookLoad(request, context, {
+    return loadWorkbookIntoRuntime(request, context, {
       ...(this.options.maxImportBytes !== undefined
         ? { maxImportBytes: this.options.maxImportBytes }
         : {}),
@@ -242,52 +222,29 @@ export class DocumentSessionManager {
       ...(this.options.browserAppBaseUrl
         ? { browserAppBaseUrl: this.options.browserAppBaseUrl }
         : {}),
-    });
-    await this.persistence.presence.join(prepared.documentId, prepared.sessionId);
-    await this.publishImportedSnapshot(prepared.documentId, prepared.imported.snapshot);
-    return createWorkbookLoadedResponse(request.id, prepared);
-  }
-
-  private async publishImportedSnapshot(
-    documentId: string,
-    snapshot: WorkbookSnapshot,
-  ): Promise<void> {
-    const cursor = (await this.persistence.batches.latestCursor(documentId)) + 1;
-    const publication = createSnapshotPublication(documentId, cursor, snapshot);
-
-    await this.persistence.batches.reset(documentId, cursor);
-    await this.persistence.snapshots.put({
-      documentId,
-      snapshotId: publication.snapshotId,
-      cursor,
-      contentType: publication.contentType,
-      bytes: publication.bytes,
-      createdAtUnixMs: Date.now(),
-    });
-    publication.frames.forEach((frame) => this.broadcast(documentId, frame));
-    this.broadcast(documentId, {
-      kind: "cursorWatermark",
-      documentId,
-      cursor,
-      compactedCursor: cursor,
+      registerPreparedSession: async (prepared) => {
+        await joinOwnedBrowserSession(
+          this.persistence,
+          this.ownerId,
+          prepared.documentId,
+          prepared.sessionId,
+        );
+      },
+      publishImportedSnapshot: async (documentId, snapshot) => {
+        await publishPersistedSnapshot(
+          this.persistence,
+          documentId,
+          snapshot,
+          this.broadcast.bind(this),
+        );
+      },
     });
   }
 
   private async acceptSnapshotChunk(
     frame: Extract<ProtocolFrame, { kind: "snapshotChunk" }>,
   ): Promise<void> {
-    const snapshot = acceptSnapshotChunk(this.snapshotAssemblies, frame);
-    if (!snapshot) {
-      return;
-    }
-    await this.persistence.snapshots.put({
-      documentId: snapshot.documentId,
-      snapshotId: snapshot.snapshotId,
-      cursor: snapshot.cursor,
-      contentType: snapshot.contentType,
-      bytes: snapshot.bytes,
-      createdAtUnixMs: Date.now(),
-    });
+    await acceptPersistedSnapshotChunk(this.persistence, this.snapshotAssemblies, frame);
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {

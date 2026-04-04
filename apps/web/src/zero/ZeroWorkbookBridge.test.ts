@@ -1,5 +1,6 @@
 /* oxlint-disable @typescript-eslint/no-unsafe-type-assertion */
 import { describe, expect, it, vi } from "vitest";
+import { ValueTag } from "@bilig/protocol";
 import type { TypedView, Zero } from "@rocicorp/zero";
 import type { WorkerViewportCache } from "../viewport-cache.js";
 import { ZeroWorkbookBridge } from "./ZeroWorkbookBridge.js";
@@ -261,6 +262,100 @@ describe("ZeroWorkbookBridge", () => {
             fill: { backgroundColor: "#c9daf8" },
           }),
         ],
+      }),
+    );
+
+    unsubscribe();
+    bridge.dispose();
+  });
+
+  it("hydrates authoritative selected-cell data even when cache already has a stale cell", () => {
+    const workbookView = createTypedView({
+      id: "bilig-demo",
+      name: "bilig-demo",
+      headRevision: 1,
+      calculatedRevision: 1,
+    });
+    const sheetListView = createTypedView([
+      {
+        workbookId: "bilig-demo",
+        name: "Sheet1",
+        sortOrder: 0,
+      },
+    ]);
+    const styleRegistryView = createTypedView<readonly unknown[]>([]);
+    const numberFormatRegistryView = createTypedView<readonly unknown[]>([]);
+    const initialSelectionSourceView = createTypedView<unknown>(undefined);
+    const initialSelectionEvalView = createTypedView<unknown>(undefined);
+    const selectionSourceView = createTypedView<unknown>(undefined);
+    const selectionEvalView = createTypedView<unknown>(undefined);
+
+    const views = [
+      workbookView,
+      sheetListView,
+      styleRegistryView,
+      numberFormatRegistryView,
+      initialSelectionSourceView,
+      initialSelectionEvalView,
+      selectionSourceView,
+      selectionEvalView,
+    ];
+    let index = 0;
+
+    const zero = {
+      materialize(_query: unknown) {
+        const view = views[index];
+        index += 1;
+        return view ?? createTypedView(undefined);
+      },
+    } as unknown as Zero;
+
+    const cache = {
+      setKnownSheets: vi.fn(),
+      peekCell: vi.fn(() => ({
+        sheetName: "Sheet1",
+        address: "G7",
+        value: { tag: ValueTag.Number, value: 8 },
+        input: "8",
+        flags: 0,
+        version: 1,
+      })),
+      subscribeCells: vi.fn(() => () => {}),
+      applyViewportPatch: vi.fn(() => []),
+    } as unknown as WorkerViewportCache;
+
+    const bridge = new ZeroWorkbookBridge(zero, "bilig-demo", cache, () => {});
+    bridge.setSelection("Sheet1", "G7");
+    const listener = vi.fn();
+    const unsubscribe = bridge.subscribeSelectedCell(listener);
+
+    selectionSourceView.emit({
+      workbookId: "bilig-demo",
+      sheetId: "Sheet1",
+      address: "G7",
+      rowNum: 6,
+      colNum: 6,
+      inputValue: "=F7*2",
+      editorText: "=F7*2",
+      formula: "F7*2",
+    });
+    selectionEvalView.emit({
+      workbookId: "bilig-demo",
+      sheetId: "Sheet1",
+      address: "G7",
+      rowNum: 6,
+      colNum: 6,
+      value: { tag: ValueTag.Number, value: 8 },
+      flags: 0,
+      version: 2,
+    });
+
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        address: "G7",
+        formula: "F7*2",
+        input: "=F7*2",
+        value: { tag: ValueTag.Number, value: 8 },
       }),
     );
 

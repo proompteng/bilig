@@ -1,14 +1,4 @@
-import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
-import type { CellRangeRef, CellValue, EngineEvent, WorkbookSnapshot } from "@bilig/protocol";
-import type {
-  AckFrame,
-  CursorWatermarkFrame,
-  ErrorFrame,
-  HeartbeatFrame,
-  ProtocolFrame,
-  SnapshotChunkFrame,
-} from "@bilig/binary-protocol";
-import { createSnapshotChunkFrames } from "@bilig/binary-protocol";
+import type { ErrorFrame, ProtocolFrame } from "@bilig/binary-protocol";
 import type {
   AgentEvent,
   AgentFrame,
@@ -16,78 +6,63 @@ import type {
   LoadWorkbookFileRequest,
 } from "@bilig/agent-api";
 import { shouldApplyBatch } from "@bilig/crdt";
+import { SpreadsheetEngine } from "@bilig/core";
 import type { UpstreamSyncRelay } from "../zero/sync-relay.js";
+import { type AgentFrameContext, routeAgentFrame } from "./agent-routing.js";
+import { createBrowserHelloReplay } from "./browser-sync-replay.js";
 import {
-  type AgentFrameContext,
-  createWorkbookLoadedResponse,
-  normalizeSessionId,
-  prepareWorkbookLoad,
-  routeAgentFrame,
-  type WorksheetAgentRequest,
-} from "./agent-routing.js";
+  acceptLocalSnapshotChunk,
+  getLocalCachedSnapshot,
+  invalidateLocalSnapshotCache,
+  maybeCompactLocalSession,
+  publishLocalSnapshot,
+  storeLocalCachedSnapshot,
+  type LocalSnapshotSessionState,
+  type StoredBatch,
+  type StoredSnapshotPublication,
+} from "./local-session-snapshot-store.js";
 import {
-  acceptSnapshotChunk,
+  handleLocalWorksheetAgentRequest,
+  type LocalWorksheetSessionState,
+} from "./local-worksheet-agent-handler.js";
+import {
+  closeLocalAgentSession,
+  getLocalSessionByAgentSessionId,
+  type LocalAgentRangeSubscriptionState,
+  type LocalAgentSessionState,
+  openLocalAgentSession,
+  removeLocalAgentSubscription,
+} from "./local-agent-session-store.js";
+import {
   attachBrowserSubscriber,
   broadcastToBrowsers,
   type BrowserSubscriberRegistry,
-  createSnapshotPublication,
-  decodeWorkbookSnapshotBytes,
   listBrowserSubscriberIds,
   type SnapshotAssemblyRegistry,
 } from "./session-shared.js";
 import {
-  cellCountForRange,
-  collectChangedAddressesForEvent,
-  decodeColumn,
-  encodeColumn,
-  iterateRange,
-  splitAddress,
-} from "./range-subscription-utils.js";
+  createAckFrame,
+  createAppendBatchFrame,
+  createHeartbeatFrame,
+} from "./sync-frame-shared.js";
+import {
+  createCloseWorkbookSessionResponse,
+  createOpenWorkbookSessionResponse,
+  loadWorkbookIntoRuntime,
+} from "./workbook-session-shared.js";
 
-interface AgentSession {
-  sessionId: string;
-  documentId: string;
-  replicaId: string;
-  subscriptionIds: Set<string>;
-}
-
-interface AgentRangeSubscription {
-  subscriptionId: string;
-  sessionId: string;
-  range: CellRangeRef;
-  unsubscribe: () => void;
-}
-
-interface StoredBatch {
-  cursor: number;
-  frame: Extract<ProtocolFrame, { kind: "appendBatch" }>;
-}
-
-interface StoredSnapshotPublication {
-  cursor: number;
-  snapshotId: string;
-  contentType: string;
-  bytes: Uint8Array;
-  frames: SnapshotChunkFrame[];
-}
-
-interface LocalWorkbookSession {
+interface LocalWorkbookSession extends LocalWorksheetSessionState, LocalSnapshotSessionState {
   documentId: string;
   engine: SpreadsheetEngine;
-  agentSessions: Map<string, AgentSession>;
-  agentSubscriptions: Map<string, AgentRangeSubscription>;
+  agentSessions: Map<string, LocalAgentSessionState>;
+  agentSubscriptions: Map<string, LocalAgentRangeSubscriptionState>;
   eventBacklog: AgentEvent[];
   eventFlushScheduled: boolean;
   batches: StoredBatch[];
   latestSnapshot: StoredSnapshotPublication | null;
-  snapshotCache: WorkbookSnapshot | null;
-  snapshotDirty: boolean;
-  cursor: number;
-  replicaSnapshot: EngineReplicaSnapshot | null;
   upstreamRelay: UpstreamSyncRelay | null;
   unsubscribeBatches: () => void;
   unsubscribeEvents: () => void;
-  compactScheduled: boolean;
 }
 
 export interface LocalWorkbookSessionManagerOptions {
@@ -154,21 +129,16 @@ export class LocalWorkbookSessionManager {
     };
 
     session.unsubscribeEvents = engine.subscribe(() => {
-      this.invalidateSnapshotCache(session);
+      invalidateLocalSnapshotCache(session);
     });
 
     session.unsubscribeBatches = engine.subscribeBatches((batch) => {
       session.cursor += 1;
-      const frame = {
-        kind: "appendBatch",
-        documentId,
-        cursor: session.cursor,
-        batch,
-      } satisfies Extract<ProtocolFrame, { kind: "appendBatch" }>;
+      const frame = createAppendBatchFrame(documentId, session.cursor, batch);
       session.batches.push({ cursor: session.cursor, frame });
       session.replicaSnapshot = engine.exportReplicaSnapshot();
       this.broadcast(documentId, frame);
-      this.maybeCompactSession(session);
+      maybeCompactLocalSession(session, this.snapshotStoreContext());
       void this.relayUpstream(session, batch);
     });
 
@@ -203,68 +173,47 @@ export class LocalWorkbookSessionManager {
     const session = this.ensureSession(frame.documentId);
     const documentId = frame.documentId;
     switch (frame.kind) {
-      case "hello": {
-        const snapshotFrames =
-          session.latestSnapshot && frame.lastServerCursor < session.latestSnapshot.cursor
-            ? session.latestSnapshot.frames
-            : [];
-        const missed = session.batches
-          .filter(
-            (entry) =>
-              entry.cursor > Math.max(frame.lastServerCursor, session.latestSnapshot?.cursor ?? 0),
-          )
-          .map((entry) => entry.frame);
-        return [
-          ...snapshotFrames,
-          ...missed,
-          {
-            kind: "cursorWatermark",
-            documentId: frame.documentId,
-            cursor: session.cursor,
-            compactedCursor:
-              session.latestSnapshot?.cursor ??
-              Math.max(0, session.cursor - session.batches.length),
-          } satisfies CursorWatermarkFrame,
-        ];
-      }
+      case "hello":
+        return createBrowserHelloReplay({
+          documentId: frame.documentId,
+          lastServerCursor: frame.lastServerCursor,
+          latestCursor: session.cursor,
+          latestSnapshot: session.latestSnapshot,
+          listMissedFrames: (cursorFloor) =>
+            session.batches
+              .filter((entry) => entry.cursor > cursorFloor)
+              .map((entry) => entry.frame),
+        });
 
       case "appendBatch": {
         if (!shouldApplyBatch(session.engine.replica, frame.batch)) {
-          return [this.ack(frame.documentId, frame.batch.id, session.cursor)];
+          return [createAckFrame(frame.documentId, frame.batch.id, session.cursor)];
         }
         session.engine.applyRemoteBatch(frame.batch);
         session.cursor += 1;
-        const committedFrame = {
-          kind: "appendBatch",
-          documentId: frame.documentId,
-          cursor: session.cursor,
-          batch: frame.batch,
-        } satisfies Extract<ProtocolFrame, { kind: "appendBatch" }>;
+        const committedFrame = createAppendBatchFrame(
+          frame.documentId,
+          session.cursor,
+          frame.batch,
+        );
         session.batches.push({ cursor: session.cursor, frame: committedFrame });
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
         this.broadcast(frame.documentId, committedFrame);
-        this.maybeCompactSession(session);
+        maybeCompactLocalSession(session, this.snapshotStoreContext());
         void this.relayUpstream(session, frame.batch);
-        return [this.ack(frame.documentId, frame.batch.id, session.cursor)];
+        return [createAckFrame(frame.documentId, frame.batch.id, session.cursor)];
       }
 
       case "heartbeat":
-        return [
-          {
-            kind: "heartbeat",
-            documentId: frame.documentId,
-            cursor: session.cursor,
-            sentAtUnixMs: Date.now(),
-          } satisfies HeartbeatFrame,
-        ];
+        return [createHeartbeatFrame(frame.documentId, session.cursor)];
 
       case "cursorWatermark":
       case "ack":
         return [frame];
 
       case "snapshotChunk":
-        this.acceptSnapshotChunk(session, frame);
-        return [this.ack(frame.documentId, frame.snapshotId, frame.cursor)];
+        acceptLocalSnapshotChunk(session, frame, this.snapshotStoreContext());
+        return [createAckFrame(frame.documentId, frame.snapshotId, frame.cursor)];
 
       case "error":
         return [frame];
@@ -289,31 +238,45 @@ export class LocalWorkbookSessionManager {
       loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
       openWorkbookSession: (request) => {
         const session = this.ensureSession(request.documentId);
-        const sessionId = normalizeSessionId(request.documentId, request.replicaId);
-        session.agentSessions.set(sessionId, {
-          sessionId,
-          documentId: request.documentId,
-          replicaId: request.replicaId,
-          subscriptionIds: new Set(),
-        });
-        return { kind: "ok", id: request.id, sessionId };
+        const sessionId = openLocalAgentSession(session, request.replicaId);
+        return createOpenWorkbookSessionResponse(request.id, sessionId);
       },
       closeWorkbookSession: (request) => {
         const session = this.getSessionByAgentSessionId(request.sessionId);
-        const agentSession = session.agentSessions.get(request.sessionId);
-        if (agentSession) {
-          [...agentSession.subscriptionIds].forEach((subscriptionId) => {
-            this.removeAgentSubscription(session, request.sessionId, subscriptionId);
-          });
-        }
-        session.agentSessions.delete(request.sessionId);
-        return { kind: "ok", id: request.id };
+        closeLocalAgentSession(
+          session,
+          request.sessionId,
+          (ownedSession, sessionId, subscriptionId) => {
+            this.removeAgentSubscription(ownedSession, sessionId, subscriptionId);
+          },
+        );
+        return createCloseWorkbookSessionResponse(request.id);
       },
       getMetrics: (request) => {
         const { engine } = this.getSessionByAgentSessionId(request.sessionId);
         return { kind: "metrics", id: request.id, value: engine.getLastMetrics() };
       },
-      handleWorksheetRequest: (_frame, request) => this.handleWorksheetRequest(request),
+      handleWorksheetRequest: (_frame, request) =>
+        handleLocalWorksheetAgentRequest(
+          {
+            largeRangeSubscriptionThreshold: LARGE_RANGE_SUBSCRIPTION_THRESHOLD,
+            agentSubscriptionOwners: this.agentSubscriptionOwners,
+            getSessionByAgentSessionId: (sessionId) => this.getSessionByAgentSessionId(sessionId),
+            getCachedSnapshot: (session) => getLocalCachedSnapshot(session),
+            importSnapshot: (session, snapshot) => {
+              session.engine.importSnapshot(snapshot);
+              session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+              storeLocalCachedSnapshot(session, snapshot);
+            },
+            removeAgentSubscription: (session, sessionId, subscriptionId) => {
+              this.removeAgentSubscription(session, sessionId, subscriptionId);
+            },
+            queueAgentEvent: (documentId, event) => {
+              this.queueAgentEvent(documentId, event);
+            },
+          },
+          request,
+        ),
     });
   }
 
@@ -340,47 +303,15 @@ export class LocalWorkbookSessionManager {
     };
   }
 
-  private readRange(engine: SpreadsheetEngine, range: CellRangeRef): CellValue[][] {
-    const [startColPart] = splitAddress(range.startAddress);
-    const [endColPart] = splitAddress(range.endAddress);
-    const [, startRowPart] = splitAddress(range.startAddress);
-    const [, endRowPart] = splitAddress(range.endAddress);
-    const startCol = decodeColumn(startColPart);
-    const endCol = decodeColumn(endColPart);
-    const startRow = Number.parseInt(startRowPart, 10);
-    const endRow = Number.parseInt(endRowPart, 10);
-    const width = decodeColumn(endColPart) - decodeColumn(startColPart) + 1;
-    const rows: CellValue[][] = [];
-    for (let row = startRow; row <= endRow; row += 1) {
-      const nextRow: CellValue[] = Array.from<CellValue>({ length: width });
-      for (let col = startCol; col <= endCol; col += 1) {
-        nextRow[col - startCol] = engine.getCellValue(
-          range.sheetName,
-          `${encodeColumn(col)}${row}`,
-        );
-      }
-      rows.push(nextRow);
-    }
-    return rows;
-  }
-
   private getSessionByAgentSessionId(sessionId: string): LocalWorkbookSession {
-    const documentId = sessionId.split(":")[0];
-    if (!documentId) {
-      throw new Error(`Invalid session id: ${sessionId}`);
-    }
-    const session = this.sessions.get(documentId);
-    if (!session || !session.agentSessions.has(sessionId)) {
-      throw new Error(`Unknown agent session: ${sessionId}`);
-    }
-    return session;
+    return getLocalSessionByAgentSessionId(this.sessions, sessionId);
   }
 
-  private loadWorkbookFile(
+  private async loadWorkbookFile(
     request: LoadWorkbookFileRequest,
     context: AgentFrameContext,
-  ): AgentResponse {
-    const prepared = prepareWorkbookLoad(request, context, {
+  ): Promise<AgentResponse> {
+    return loadWorkbookIntoRuntime(request, context, {
       ...(this.options.maxImportBytes !== undefined
         ? { maxImportBytes: this.options.maxImportBytes }
         : {}),
@@ -388,191 +319,17 @@ export class LocalWorkbookSessionManager {
       ...(this.options.browserAppBaseUrl
         ? { browserAppBaseUrl: this.options.browserAppBaseUrl }
         : {}),
-    });
-    const session = this.ensureSession(prepared.documentId);
-    session.agentSessions.set(prepared.sessionId, {
-      sessionId: prepared.sessionId,
-      documentId: prepared.documentId,
-      replicaId: request.replicaId,
-      subscriptionIds: session.agentSessions.get(prepared.sessionId)?.subscriptionIds ?? new Set(),
-    });
-
-    session.engine.importSnapshot(prepared.imported.snapshot);
-    session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-    this.publishSnapshot(session, prepared.imported.snapshot);
-
-    return createWorkbookLoadedResponse(request.id, prepared);
-  }
-
-  private handleWorksheetRequest(request: WorksheetAgentRequest): AgentResponse {
-    switch (request.kind) {
-      case "readRange": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        return {
-          kind: "rangeValues",
-          id: request.id,
-          values: this.readRange(engine, request.range),
-        };
-      }
-      case "writeRange": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.setRangeValues(request.range, request.values);
-        return { kind: "ok", id: request.id };
-      }
-      case "setRangeFormulas": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.setRangeFormulas(request.range, request.formulas);
-        return { kind: "ok", id: request.id };
-      }
-      case "setRangeStyle": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.setRangeStyle(request.range, request.patch);
-        return { kind: "ok", id: request.id };
-      }
-      case "clearRangeStyle": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.clearRangeStyle(request.range, request.fields);
-        return { kind: "ok", id: request.id };
-      }
-      case "setRangeNumberFormat": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.setRangeNumberFormat(request.range, request.format);
-        return { kind: "ok", id: request.id };
-      }
-      case "clearRangeNumberFormat": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.clearRangeNumberFormat(request.range);
-        return { kind: "ok", id: request.id };
-      }
-      case "clearRange": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.clearRange(request.range);
-        return { kind: "ok", id: request.id };
-      }
-      case "fillRange": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.fillRange(request.source, request.target);
-        return { kind: "ok", id: request.id };
-      }
-      case "copyRange": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.copyRange(request.source, request.target);
-        return { kind: "ok", id: request.id };
-      }
-      case "pasteRange": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        engine.pasteRange(request.source, request.target);
-        return { kind: "ok", id: request.id };
-      }
-      case "getDependents": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        const dependencies = engine.getDependents(request.sheetName, request.address);
-        return {
-          kind: "dependencies",
-          id: request.id,
-          addresses: dependencies.directDependents,
-        };
-      }
-      case "getPrecedents": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        const dependencies = engine.getDependencies(request.sheetName, request.address);
-        return {
-          kind: "dependencies",
-          id: request.id,
-          addresses: dependencies.directPrecedents,
-        };
-      }
-      case "exportSnapshot": {
-        const session = this.getSessionByAgentSessionId(request.sessionId);
-        return { kind: "snapshot", id: request.id, snapshot: this.getCachedSnapshot(session) };
-      }
-      case "importSnapshot": {
-        const session = this.getSessionByAgentSessionId(request.sessionId);
-        session.engine.importSnapshot(request.snapshot);
+      registerPreparedSession: (prepared, loadRequest) => {
+        const session = this.ensureSession(prepared.documentId);
+        openLocalAgentSession(session, loadRequest.replicaId);
+      },
+      publishImportedSnapshot: (documentId, snapshot) => {
+        const session = this.ensureSession(documentId);
+        session.engine.importSnapshot(snapshot);
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-        this.storeCachedSnapshot(session, request.snapshot);
-        return { kind: "ok", id: request.id };
-      }
-      case "subscribeRange": {
-        const session = this.getSessionByAgentSessionId(request.sessionId);
-        const agentSession = session.agentSessions.get(request.sessionId);
-        if (!agentSession) {
-          throw new Error(`Unknown agent session: ${request.sessionId}`);
-        }
-        const existingOwner = this.agentSubscriptionOwners.get(request.subscriptionId);
-        if (existingOwner) {
-          throw new Error(`Subscription id already in use: ${request.subscriptionId}`);
-        }
-
-        const rangeCellCount = cellCountForRange(request.range);
-        const changedAddresses =
-          rangeCellCount <= LARGE_RANGE_SUBSCRIPTION_THRESHOLD ? iterateRange(request.range) : null;
-        const unsubscribe = changedAddresses
-          ? session.engine.subscribeCells(request.range.sheetName, changedAddresses, () => {
-              this.queueAgentEvent(session.documentId, {
-                kind: "rangeChanged",
-                subscriptionId: request.subscriptionId,
-                range: request.range,
-                changedAddresses: [...changedAddresses],
-              });
-            })
-          : session.engine.subscribe((event: EngineEvent) => {
-              const changedInRange = collectChangedAddressesForEvent(
-                session.engine,
-                request.range,
-                event,
-              );
-              if (changedInRange.length === 0) {
-                return;
-              }
-              this.queueAgentEvent(session.documentId, {
-                kind: "rangeChanged",
-                subscriptionId: request.subscriptionId,
-                range: request.range,
-                changedAddresses: changedInRange,
-              });
-            });
-
-        session.agentSubscriptions.set(request.subscriptionId, {
-          subscriptionId: request.subscriptionId,
-          sessionId: request.sessionId,
-          range: request.range,
-          unsubscribe,
-        });
-        agentSession.subscriptionIds.add(request.subscriptionId);
-        this.agentSubscriptionOwners.set(request.subscriptionId, request.sessionId);
-        return {
-          kind: "ok",
-          id: request.id,
-          value: { subscriptionId: request.subscriptionId },
-        };
-      }
-      case "unsubscribe": {
-        const session = this.getSessionByAgentSessionId(request.sessionId);
-        this.removeAgentSubscription(session, request.sessionId, request.subscriptionId);
-        return { kind: "ok", id: request.id };
-      }
-      case "createPivotTable": {
-        const session = this.getSessionByAgentSessionId(request.sessionId);
-        session.engine.setPivotTable(request.sheetName, request.address, {
-          name: request.name,
-          source: request.source,
-          groupBy: request.groupBy,
-          values: request.values,
-        });
-        return { kind: "ok", id: request.id };
-      }
-      default: {
-        const exhaustiveRequest: never = request;
-        return {
-          kind: "error",
-          id: "unknown",
-          code: "UNSUPPORTED_AGENT_REQUEST",
-          message: `Unsupported agent request ${(exhaustiveRequest as { kind: string }).kind}`,
-          retryable: false,
-        };
-      }
-    }
+        publishLocalSnapshot(session, snapshot, this.broadcast.bind(this));
+      },
+    });
   }
 
   private removeAgentSubscription(
@@ -580,22 +337,17 @@ export class LocalWorkbookSessionManager {
     sessionId: string,
     subscriptionId: string,
   ): void {
-    const subscription = session.agentSubscriptions.get(subscriptionId);
-    if (!subscription) {
-      return;
-    }
-    if (subscription.sessionId !== sessionId) {
-      throw new Error(
-        `Subscription ${subscriptionId} does not belong to agent session ${sessionId}`,
-      );
-    }
-    subscription.unsubscribe();
-    session.agentSubscriptions.delete(subscriptionId);
-    this.agentSubscriptionOwners.delete(subscriptionId);
-    session.agentSessions.get(sessionId)?.subscriptionIds.delete(subscriptionId);
-    session.eventBacklog = session.eventBacklog.filter((event) => {
-      return event.kind !== "rangeChanged" || event.subscriptionId !== subscriptionId;
-    });
+    removeLocalAgentSubscription(
+      session,
+      sessionId,
+      subscriptionId,
+      this.agentSubscriptionOwners,
+      (removedSubscriptionId) => {
+        session.eventBacklog = session.eventBacklog.filter((event) => {
+          return event.kind !== "rangeChanged" || event.subscriptionId !== removedSubscriptionId;
+        });
+      },
+    );
   }
 
   private queueAgentEvent(documentId: string, event: AgentEvent): void {
@@ -629,104 +381,13 @@ export class LocalWorkbookSessionManager {
     broadcastToBrowsers(this.browserSubscribers, documentId, frame);
   }
 
-  private invalidateSnapshotCache(session: LocalWorkbookSession): void {
-    session.snapshotDirty = true;
-  }
-
-  private storeCachedSnapshot(
-    session: LocalWorkbookSession,
-    snapshot: Parameters<SpreadsheetEngine["importSnapshot"]>[0],
-  ): void {
-    session.snapshotCache = snapshot;
-    session.snapshotDirty = false;
-  }
-
-  private getCachedSnapshot(session: LocalWorkbookSession): WorkbookSnapshot {
-    if (session.snapshotCache && !session.snapshotDirty) {
-      return session.snapshotCache;
-    }
-    const snapshot = session.engine.exportSnapshot();
-    this.storeCachedSnapshot(session, snapshot);
-    return snapshot;
-  }
-
-  private publishSnapshot(
-    session: LocalWorkbookSession,
-    snapshot: Parameters<SpreadsheetEngine["importSnapshot"]>[0],
-  ): void {
-    const cursor = session.cursor + 1;
-    const publication = createSnapshotPublication(session.documentId, cursor, snapshot);
-    session.cursor = cursor;
-    session.batches = [];
-    session.latestSnapshot = {
-      cursor,
-      snapshotId: publication.snapshotId,
-      contentType: publication.contentType,
-      bytes: publication.bytes,
-      frames: publication.frames,
+  private snapshotStoreContext() {
+    return {
+      broadcast: this.broadcast.bind(this),
+      getSession: (documentId: string) => this.sessions.get(documentId),
+      snapshotAssemblies: this.snapshotAssemblies,
+      maxBatchBacklog: MAX_BATCH_BACKLOG,
     };
-    this.storeCachedSnapshot(session, snapshot);
-    publication.frames.forEach((frame) => this.broadcast(session.documentId, frame));
-    this.broadcast(session.documentId, {
-      kind: "cursorWatermark",
-      documentId: session.documentId,
-      cursor,
-      compactedCursor: cursor,
-    });
-  }
-
-  private acceptSnapshotChunk(
-    session: LocalWorkbookSession,
-    frame: Extract<ProtocolFrame, { kind: "snapshotChunk" }>,
-  ): void {
-    const assembled = acceptSnapshotChunk(this.snapshotAssemblies, frame);
-    if (!assembled) {
-      return;
-    }
-
-    const snapshot = decodeWorkbookSnapshotBytes(assembled);
-    session.engine.importSnapshot(snapshot);
-    session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-    session.cursor = assembled.cursor;
-    session.batches = [];
-    session.latestSnapshot = {
-      cursor: assembled.cursor,
-      snapshotId: assembled.snapshotId,
-      contentType: assembled.contentType,
-      bytes: assembled.bytes,
-      frames: createSnapshotChunkFrames({
-        documentId: assembled.documentId,
-        snapshotId: assembled.snapshotId,
-        cursor: assembled.cursor,
-        contentType: assembled.contentType,
-        bytes: assembled.bytes,
-      }),
-    };
-    this.storeCachedSnapshot(session, snapshot);
-    session.latestSnapshot.frames.forEach((snapshotFrame) =>
-      this.broadcast(session.documentId, snapshotFrame),
-    );
-    this.broadcast(session.documentId, {
-      kind: "cursorWatermark",
-      documentId: session.documentId,
-      cursor: assembled.cursor,
-      compactedCursor: assembled.cursor,
-    });
-  }
-
-  private maybeCompactSession(session: LocalWorkbookSession): void {
-    if (session.batches.length <= MAX_BATCH_BACKLOG || session.compactScheduled) {
-      return;
-    }
-    session.compactScheduled = true;
-    setImmediate(() => {
-      session.compactScheduled = false;
-      const liveSession = this.sessions.get(session.documentId);
-      if (!liveSession || liveSession.batches.length <= MAX_BATCH_BACKLOG) {
-        return;
-      }
-      this.publishSnapshot(liveSession, this.getCachedSnapshot(liveSession));
-    });
   }
 
   private async relayUpstream(
@@ -741,15 +402,5 @@ export class LocalWorkbookSessionManager {
     } catch (error) {
       console.error(`Failed to relay batch ${batch.id} for document ${session.documentId}:`, error);
     }
-  }
-
-  private ack(documentId: string, batchId: string, cursor: number): AckFrame {
-    return {
-      kind: "ack",
-      documentId,
-      batchId,
-      cursor,
-      acceptedAtUnixMs: Date.now(),
-    };
   }
 }

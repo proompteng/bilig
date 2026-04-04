@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type { AgentFrame } from "@bilig/agent-api";
 import type { ProtocolFrame } from "@bilig/binary-protocol";
 import { TransportError } from "@bilig/runtime-kernel";
+import { documentIdFromSessionId } from "./workbook-session-shared.js";
 
 interface ActorLike {
   send(event: unknown): void;
@@ -34,7 +35,7 @@ export function resolveAgentDocumentId(frame: AgentFrame): string | null {
     return frame.request.documentId;
   }
   if ("sessionId" in frame.request && typeof frame.request.sessionId === "string") {
-    return frame.request.sessionId.split(":")[0] ?? null;
+    return documentIdFromSessionId(frame.request.sessionId);
   }
   return null;
 }
