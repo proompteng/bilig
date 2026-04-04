@@ -839,9 +839,11 @@ export function SheetGridView({
 
       const move = (nativeEvent: PointerEvent) => {
         const pointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
-        setFillPreviewRange(
-          pointerCell ? resolveFillHandlePreviewRange(selectionRange, pointerCell) : null,
-        );
+        const nextPreviewRange = pointerCell
+          ? resolveFillHandlePreviewRange(selectionRange, pointerCell)
+          : null;
+        fillPreviewRangeRef.current = nextPreviewRange;
+        setFillPreviewRange(nextPreviewRange);
       };
 
       const cleanup = () => {
@@ -867,6 +869,7 @@ export function SheetGridView({
             );
           }
         }
+        fillPreviewRangeRef.current = null;
         setFillPreviewRange(null);
         cleanup();
       };
@@ -1259,7 +1262,7 @@ export function SheetGridView({
             }}
           />
         </button>
-        {isWebGpuActive && fillHandleBounds ? (
+        {fillHandleBounds ? (
           <button
             aria-label="Fill handle"
             className="absolute z-30 cursor-crosshair rounded-[2px] border border-white bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)]"
