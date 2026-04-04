@@ -22,7 +22,12 @@ import {
   routeAgentFrame,
   worksheetHostUnavailableResponse,
 } from "./agent-routing.js";
-import { createSnapshotPublication } from "./session-shared.js";
+import {
+  attachBrowserSubscriber,
+  broadcastToBrowsers,
+  type BrowserSubscriberRegistry,
+  createSnapshotPublication,
+} from "./session-shared.js";
 
 interface SnapshotAssembly {
   documentId: string;
@@ -31,11 +36,6 @@ interface SnapshotAssembly {
   contentType: string;
   chunkCount: number;
   chunks: Array<Uint8Array | undefined>;
-}
-
-interface BrowserSubscriber {
-  id: string;
-  send(frame: ProtocolFrame): void;
 }
 
 export interface DocumentStateSummary {
@@ -54,7 +54,7 @@ export interface DocumentSessionManagerOptions {
 
 export class DocumentSessionManager {
   private readonly snapshotAssemblies = new Map<string, SnapshotAssembly>();
-  private readonly browserSubscribers = new Map<string, Map<string, BrowserSubscriber>>();
+  private readonly browserSubscribers: BrowserSubscriberRegistry = new Map();
 
   constructor(
     readonly persistence: InMemoryDocumentPersistence = createInMemoryDocumentPersistence(),
@@ -190,17 +190,7 @@ export class DocumentSessionManager {
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): () => void {
-    const subscribers =
-      this.browserSubscribers.get(documentId) ?? new Map<string, BrowserSubscriber>();
-    subscribers.set(subscriberId, { id: subscriberId, send });
-    this.browserSubscribers.set(documentId, subscribers);
-    return () => {
-      const next = this.browserSubscribers.get(documentId);
-      next?.delete(subscriberId);
-      if (next && next.size === 0) {
-        this.browserSubscribers.delete(documentId);
-      }
-    };
+    return attachBrowserSubscriber(this.browserSubscribers, documentId, subscriberId, send);
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
@@ -325,6 +315,6 @@ export class DocumentSessionManager {
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    this.browserSubscribers.get(documentId)?.forEach((subscriber) => subscriber.send(frame));
+    broadcastToBrowsers(this.browserSubscribers, documentId, frame);
   }
 }

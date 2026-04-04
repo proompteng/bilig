@@ -24,12 +24,13 @@ import {
   routeAgentFrame,
   type WorksheetAgentRequest,
 } from "./agent-routing.js";
-import { createSnapshotPublication } from "./session-shared.js";
-
-interface BrowserSubscriber {
-  id: string;
-  send(frame: ProtocolFrame): void;
-}
+import {
+  attachBrowserSubscriber,
+  broadcastToBrowsers,
+  type BrowserSubscriberRegistry,
+  createSnapshotPublication,
+  listBrowserSubscriberIds,
+} from "./session-shared.js";
 
 interface AgentSession {
   sessionId: string;
@@ -61,7 +62,6 @@ interface StoredSnapshotPublication {
 interface LocalWorkbookSession {
   documentId: string;
   engine: SpreadsheetEngine;
-  browserSubscribers: Map<string, BrowserSubscriber>;
   agentSessions: Map<string, AgentSession>;
   agentSubscriptions: Map<string, AgentRangeSubscription>;
   eventBacklog: AgentEvent[];
@@ -242,6 +242,7 @@ function collectChangedAddressesForEvent(
 
 export class LocalWorkbookSessionManager {
   private readonly sessions = new Map<string, LocalWorkbookSession>();
+  private readonly browserSubscribers: BrowserSubscriberRegistry = new Map();
   private readonly agentEventListeners = new Set<(event: AgentEvent) => void>();
   private readonly agentSubscriptionOwners = new Map<string, string>();
 
@@ -261,7 +262,6 @@ export class LocalWorkbookSessionManager {
     const session: LocalWorkbookSession = {
       documentId,
       engine,
-      browserSubscribers: new Map(),
       agentSessions: new Map(),
       agentSubscriptions: new Map(),
       eventBacklog: [],
@@ -310,11 +310,8 @@ export class LocalWorkbookSessionManager {
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): () => void {
-    const session = this.ensureSession(documentId);
-    session.browserSubscribers.set(subscriberId, { id: subscriberId, send });
-    return () => {
-      session.browserSubscribers.delete(subscriberId);
-    };
+    this.ensureSession(documentId);
+    return attachBrowserSubscriber(this.browserSubscribers, documentId, subscriberId, send);
   }
 
   subscribeAgentEvents(listener: (event: AgentEvent) => void): () => void {
@@ -457,7 +454,7 @@ export class LocalWorkbookSessionManager {
     return {
       documentId,
       cursor: session.cursor,
-      browserSessions: [...session.browserSubscribers.keys()],
+      browserSessions: listBrowserSubscriberIds(this.browserSubscribers, documentId),
       agentSessions: [...session.agentSessions.keys()],
       lastBatchId: session.batches.at(-1)?.frame.batch.id ?? null,
     };
@@ -761,11 +758,7 @@ export class LocalWorkbookSessionManager {
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    const session = this.sessions.get(documentId);
-    if (!session) {
-      return;
-    }
-    session.browserSubscribers.forEach((subscriber) => subscriber.send(frame));
+    broadcastToBrowsers(this.browserSubscribers, documentId, frame);
   }
 
   private invalidateSnapshotCache(session: LocalWorkbookSession): void {

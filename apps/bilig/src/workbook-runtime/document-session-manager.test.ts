@@ -4,6 +4,35 @@ import type { AgentFrame } from "@bilig/agent-api";
 import { DocumentSessionManager } from "./document-session-manager.js";
 
 describe("DocumentSessionManager", () => {
+  it("broadcasts sync frames to attached browser subscribers", async () => {
+    const sent: unknown[] = [];
+    const manager = new DocumentSessionManager(createInMemoryDocumentPersistence());
+    const detach = manager.attachBrowser("doc-broadcast", "browser-1", (frame) => {
+      sent.push(frame);
+    });
+
+    await manager.handleSyncFrame({
+      kind: "appendBatch",
+      documentId: "doc-broadcast",
+      cursor: 0,
+      batch: {
+        id: "batch-1",
+        replicaId: "replica-1",
+        clock: { counter: 1 },
+        ops: [],
+      },
+    });
+
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        kind: "appendBatch",
+        documentId: "doc-broadcast",
+      }),
+    );
+
+    detach();
+  });
+
   it("delegates open and close session requests through the worksheet executor", async () => {
     const execute = vi.fn(async (frame: AgentFrame) => {
       if (frame.kind !== "request") {

@@ -28,6 +28,17 @@ async function openSession(
 }
 
 describe("LocalWorkbookSessionManager", () => {
+  it("tracks browser subscribers independently from workbook sessions", async () => {
+    const manager = new LocalWorkbookSessionManager();
+    const detach = manager.attachBrowser("doc-browser", "browser-1", () => {});
+
+    expect(manager.getDocumentState("doc-browser").browserSessions).toEqual(["browser-1"]);
+
+    detach();
+
+    expect(manager.getDocumentState("doc-browser").browserSessions).toEqual([]);
+  });
+
   it("compacts long batch backlogs into a snapshot", async () => {
     const manager = new LocalWorkbookSessionManager();
     const sessionId = await openSession(manager, "doc-perf");

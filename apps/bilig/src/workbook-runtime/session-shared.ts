@@ -1,13 +1,54 @@
+import type { ProtocolFrame } from "@bilig/binary-protocol";
 import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
 import type { WorkbookSnapshot } from "@bilig/protocol";
 
 const snapshotEncoder = new TextEncoder();
+
+export interface BrowserSubscriber {
+  id: string;
+  send(frame: ProtocolFrame): void;
+}
+
+export type BrowserSubscriberRegistry = Map<string, Map<string, BrowserSubscriber>>;
 
 export interface SnapshotPublication {
   snapshotId: string;
   contentType: typeof WORKBOOK_SNAPSHOT_CONTENT_TYPE;
   bytes: Uint8Array;
   frames: ReturnType<typeof createSnapshotChunkFrames>;
+}
+
+export function attachBrowserSubscriber(
+  registry: BrowserSubscriberRegistry,
+  documentId: string,
+  subscriberId: string,
+  send: (frame: ProtocolFrame) => void,
+): () => void {
+  const subscribers = registry.get(documentId) ?? new Map<string, BrowserSubscriber>();
+  subscribers.set(subscriberId, { id: subscriberId, send });
+  registry.set(documentId, subscribers);
+  return () => {
+    const next = registry.get(documentId);
+    next?.delete(subscriberId);
+    if (next && next.size === 0) {
+      registry.delete(documentId);
+    }
+  };
+}
+
+export function broadcastToBrowsers(
+  registry: BrowserSubscriberRegistry,
+  documentId: string,
+  frame: ProtocolFrame,
+): void {
+  registry.get(documentId)?.forEach((subscriber) => subscriber.send(frame));
+}
+
+export function listBrowserSubscriberIds(
+  registry: BrowserSubscriberRegistry,
+  documentId: string,
+): string[] {
+  return [...(registry.get(documentId)?.keys() ?? [])];
 }
 
 export function normalizeBaseUrl(value: string): string {
