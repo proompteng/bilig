@@ -118,14 +118,27 @@ interface ViewportSubscriptionState {
   lastRowSignatures: Map<number, string>;
 }
 
+interface ViewportCellPosition {
+  address: string;
+  row: number;
+  col: number;
+}
+
 interface ChangedSheetCells {
   addresses: Set<string>;
-  positions: { row: number; col: number }[];
+  positions: ViewportCellPosition[];
+}
+
+interface NormalizedRangeImpact {
+  rowStart: number;
+  rowEnd: number;
+  colStart: number;
+  colEnd: number;
 }
 
 interface SheetViewportImpact {
   changedCells: ChangedSheetCells | null;
-  invalidatedRanges: CellRangeRef[];
+  invalidatedRanges: NormalizedRangeImpact[];
   invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[];
   invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[];
 }
@@ -545,7 +558,6 @@ export class WorkbookWorkerRuntime {
     const styles: CellStyleRecord[] = [];
     const cells: ViewportPatchedCell[] = [];
     const full = event === null || event.invalidation === "full";
-    const changedAddresses = sheetImpact?.changedCells?.addresses ?? null;
     const invalidatedRanges = sheetImpact?.invalidatedRanges ?? [];
     const invalidatedRows = sheetImpact?.invalidatedRows ?? [];
     const invalidatedColumns = sheetImpact?.invalidatedColumns ?? [];
@@ -568,31 +580,22 @@ export class WorkbookWorkerRuntime {
         }
       }
     } else {
-      const targetAddresses = this.collectViewportAddresses(
-        viewport.sheetName,
+      const targetCells = this.collectViewportCells(
         viewport,
-        changedAddresses,
+        sheetImpact?.changedCells ?? null,
         invalidatedRanges,
       );
-      for (const address of targetAddresses) {
-        const parsed = parseCellAddress(address, viewport.sheetName);
-        if (
-          parsed.row < viewport.rowStart ||
-          parsed.row > viewport.rowEnd ||
-          parsed.col < viewport.colStart ||
-          parsed.col > viewport.colEnd
-        ) {
-          continue;
-        }
+      for (const cell of targetCells) {
         this.appendPatchedCell(
           state,
           styles,
           cells,
           viewport.sheetName,
-          parsed.row,
-          parsed.col,
+          cell.row,
+          cell.col,
           hasSheet,
           false,
+          cell.address,
         );
       }
     }
@@ -641,8 +644,8 @@ export class WorkbookWorkerRuntime {
     col: number,
     hasSheet: boolean,
     force: boolean,
+    address = formatAddress(row, col),
   ): void {
-    const address = formatAddress(row, col);
     const key = `${sheetName}!${address}`;
     const snapshot = hasSheet
       ? this.requireEngine().getCell(sheetName, address)
@@ -756,31 +759,52 @@ export class WorkbookWorkerRuntime {
     return new Map(entries.map((entry) => [entry.index, entry]));
   }
 
-  private collectViewportAddresses(
-    sheetName: string,
+  private collectViewportCells(
     viewport: ViewportPatchSubscription,
-    changedAddresses: ReadonlySet<string> | null,
-    invalidatedRanges: readonly CellRangeRef[],
-  ): Set<string> {
-    const addresses = new Set<string>(changedAddresses ?? []);
+    changedCells: ChangedSheetCells | null,
+    invalidatedRanges: readonly NormalizedRangeImpact[],
+  ): ViewportCellPosition[] {
+    const positions: ViewportCellPosition[] = [];
+    const seen = new Set<string>();
+
+    changedCells?.positions.forEach((cell) => {
+      if (
+        cell.row < viewport.rowStart ||
+        cell.row > viewport.rowEnd ||
+        cell.col < viewport.colStart ||
+        cell.col > viewport.colEnd
+      ) {
+        return;
+      }
+      const key = `${cell.row}:${cell.col}`;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      positions.push(cell);
+    });
+
     for (let index = 0; index < invalidatedRanges.length; index += 1) {
       const range = invalidatedRanges[index]!;
-      const start = parseCellAddress(range.startAddress, sheetName);
-      const end = parseCellAddress(range.endAddress, sheetName);
-      const rowStart = Math.max(viewport.rowStart, Math.min(start.row, end.row));
-      const rowEnd = Math.min(viewport.rowEnd, Math.max(start.row, end.row));
-      const colStart = Math.max(viewport.colStart, Math.min(start.col, end.col));
-      const colEnd = Math.min(viewport.colEnd, Math.max(start.col, end.col));
+      const rowStart = Math.max(viewport.rowStart, range.rowStart);
+      const rowEnd = Math.min(viewport.rowEnd, range.rowEnd);
+      const colStart = Math.max(viewport.colStart, range.colStart);
+      const colEnd = Math.min(viewport.colEnd, range.colEnd);
       if (rowStart > rowEnd || colStart > colEnd) {
         continue;
       }
       for (let row = rowStart; row <= rowEnd; row += 1) {
         for (let col = colStart; col <= colEnd; col += 1) {
-          addresses.add(formatAddress(row, col));
+          const key = `${row}:${col}`;
+          if (seen.has(key)) {
+            continue;
+          }
+          seen.add(key);
+          positions.push({ address: formatAddress(row, col), row, col });
         }
       }
     }
-    return addresses;
+    return positions;
   }
 
   private collectAxisIndices(
@@ -874,7 +898,7 @@ export class WorkbookWorkerRuntime {
       };
       if (!sheetCells.addresses.has(address)) {
         sheetCells.addresses.add(address);
-        sheetCells.positions.push({ row: parsed.row, col: parsed.col });
+        sheetCells.positions.push({ address, row: parsed.row, col: parsed.col });
       }
       changedBySheet.set(sheetName, sheetCells);
     }
@@ -899,13 +923,20 @@ export class WorkbookWorkerRuntime {
     });
 
     event.invalidatedRanges.forEach((range) => {
+      const start = parseCellAddress(range.startAddress, range.sheetName);
+      const end = parseCellAddress(range.endAddress, range.sheetName);
       const impact = impactsBySheet.get(range.sheetName) ?? {
         changedCells: null,
         invalidatedRanges: [],
         invalidatedRows: [],
         invalidatedColumns: [],
       };
-      impact.invalidatedRanges.push(range);
+      impact.invalidatedRanges.push({
+        rowStart: Math.min(start.row, end.row),
+        rowEnd: Math.max(start.row, end.row),
+        colStart: Math.min(start.col, end.col),
+        colEnd: Math.max(start.col, end.col),
+      });
       impactsBySheet.set(range.sheetName, impact);
     });
 
@@ -964,17 +995,11 @@ export class WorkbookWorkerRuntime {
 
     for (let index = 0; index < (sheetImpact?.invalidatedRanges.length ?? 0); index += 1) {
       const range = sheetImpact!.invalidatedRanges[index]!;
-      const start = parseCellAddress(range.startAddress, viewport.sheetName);
-      const end = parseCellAddress(range.endAddress, viewport.sheetName);
-      const rowStart = Math.min(start.row, end.row);
-      const rowEnd = Math.max(start.row, end.row);
-      const colStart = Math.min(start.col, end.col);
-      const colEnd = Math.max(start.col, end.col);
       if (
-        rowStart <= viewport.rowEnd &&
-        rowEnd >= viewport.rowStart &&
-        colStart <= viewport.colEnd &&
-        colEnd >= viewport.colStart
+        range.rowStart <= viewport.rowEnd &&
+        range.rowEnd >= viewport.rowStart &&
+        range.colStart <= viewport.colEnd &&
+        range.colEnd >= viewport.colStart
       ) {
         return true;
       }

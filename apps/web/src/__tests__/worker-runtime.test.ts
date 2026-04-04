@@ -292,6 +292,40 @@ describe("WorkbookWorkerRuntime", () => {
     runtime["buildViewportPatch"] = originalBuildViewportPatch;
   });
 
+  it("dedupes changed viewport cells against invalidated range expansion", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "range-dedupe-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    const collectViewportCells = runtime["collectViewportCells"];
+    if (typeof collectViewportCells !== "function") {
+      throw new Error("Expected collectViewportCells method");
+    }
+
+    const cells = Reflect.apply(collectViewportCells, runtime, [
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      },
+      {
+        addresses: new Set(["A1"]),
+        positions: [{ address: "A1", row: 0, col: 0 }],
+      },
+      [{ rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 1 }],
+    ]) as Array<{ address: string; row: number; col: number }>;
+
+    expect(cells).toEqual([
+      { address: "A1", row: 0, col: 0 },
+      { address: "B1", row: 0, col: 1 },
+    ]);
+  });
+
   it("coalesces persistence saves across edit bursts", async () => {
     vi.useFakeTimers();
     const saveJson = vi.fn(async () => {});
