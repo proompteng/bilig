@@ -215,6 +215,7 @@ function pushHeaderTextItems(options: {
         index: row,
         isSelected: row >= selectedRows.start && row <= selectedRows.end,
         kind: "row",
+        resizeGuideColumn,
       }),
       font: HEADER_FONT,
       fontSize: 11,
