@@ -33,16 +33,16 @@ export function FormulaBar({
 
   return (
     <div
-      className="formula-bar flex items-center gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2 font-sans"
+      className="formula-bar flex items-center gap-2 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 font-sans"
       data-testid="formula-bar"
     >
-      <div className="w-[96px] shrink-0">
+      <div className="w-[92px] shrink-0">
         <label className="sr-only" htmlFor="name-box-input">
           Name
         </label>
         <input
           aria-label="Name box"
-          className="box-border h-[32px] w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] outline-none transition-[border-color,box-shadow,background-color] focus:border-[var(--wb-accent)] focus:bg-[var(--wb-surface)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
+          className="box-border h-8 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] outline-none transition-[border-color,box-shadow,background-color] focus:border-[var(--wb-accent)] focus:bg-[var(--wb-surface)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
           data-testid="name-box"
           id="name-box-input"
           value={addressValue}
@@ -69,12 +69,12 @@ export function FormulaBar({
           Formula
         </label>
         <div
-          className="box-border flex h-[32px] items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)]"
+          className="box-border flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]"
           data-testid="formula-input-frame"
         >
           <span
             aria-hidden="true"
-            className="inline-flex h-full w-9 shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[12px] font-semibold uppercase tracking-[0.12em] leading-none text-[var(--wb-text-subtle)]"
+            className="inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[11px] font-semibold uppercase tracking-[0.1em] leading-none text-[var(--wb-text-subtle)]"
           >
             fx
           </span>

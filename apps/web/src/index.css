@@ -33,25 +33,25 @@
 
 @layer base {
   :root {
-    --wb-app-bg: #f4f7fb;
+    --wb-app-bg: #eef2f6;
     --wb-surface: #ffffff;
-    --wb-surface-subtle: #f8fafc;
-    --wb-surface-muted: #f1f5f9;
-    --wb-border: #d6dee8;
-    --wb-border-strong: #c3cdd9;
-    --wb-grid-border: #e7edf3;
+    --wb-surface-subtle: #f7f9fb;
+    --wb-surface-muted: #eef2f6;
+    --wb-border: #d7dee7;
+    --wb-border-strong: #c1cad6;
+    --wb-grid-border: #e3e9f0;
     --wb-text: #1f2328;
     --wb-text-muted: #5f6b7a;
     --wb-text-subtle: #7a8595;
     --wb-accent: #0b57d0;
     --wb-accent-soft: #e8f0fe;
     --wb-accent-ring: #d2e3fc;
-    --wb-hover: #eef3f9;
-    --wb-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-    --wb-shadow-md: 0 10px 24px rgba(15, 23, 42, 0.12);
-    --wb-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.14);
-    --wb-radius-control: 6px;
-    --wb-radius-panel: 8px;
+    --wb-hover: #f1f4f8;
+    --wb-shadow-sm: 0 1px 1px rgba(15, 23, 42, 0.05);
+    --wb-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.1);
+    --wb-shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.12);
+    --wb-radius-control: 5px;
+    --wb-radius-panel: 6px;
   }
 
   html,

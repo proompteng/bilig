@@ -6,10 +6,16 @@ import {
   type CellSnapshot,
   type CellStyleRecord,
 } from "@bilig/protocol";
-import { GridCellKind, type GridCell } from "@glideapps/glide-data-grid";
+import { GridCellKind, type GridCell, type Theme } from "@glideapps/glide-data-grid";
 import type { GridEngineLike } from "./grid-engine.js";
 
 const DEFAULT_FONT_FALLBACK = '"JetBrainsMono Nerd Font","JetBrains Mono",monospace';
+const TRANSPARENT_TEXT = "rgba(32, 33, 36, 0)";
+
+interface GridCellOptions {
+  readonly booleanSurfaceEnabled?: boolean;
+  readonly textSurfaceEnabled?: boolean;
+}
 
 export function cellToEditorSeed(
   snapshot: Pick<CellSnapshot, "formula" | "input" | "value">,
@@ -40,9 +46,9 @@ export function cellToEditorSeed(
 export function snapshotToGridCell(
   snapshot: Pick<CellSnapshot, "formula" | "input" | "value" | "format">,
   style?: CellStyleRecord,
+  options?: GridCellOptions,
 ): GridCell {
   const rawValue = cellToEditorSeed(snapshot);
-  const themeOverride = cellStyleToThemeOverride(style);
   const displayText = formatCellDisplayValue(snapshot.value, snapshot.format);
   const contentAlign = resolveContentAlign(snapshot, style);
   const allowWrapping = style?.alignment?.wrap === true;
@@ -58,16 +64,26 @@ export function snapshotToGridCell(
         copyData: snapshot.formula ? rawValue : displayText,
         contentAlign,
         ...(allowWrapping ? { allowWrapping: true } : {}),
-        ...(themeOverride ? { themeOverride } : {}),
+        ...resolveTextThemeOverride(style, options),
       };
     case ValueTag.Boolean:
+      if (options?.booleanSurfaceEnabled === true) {
+        return {
+          kind: GridCellKind.Text,
+          allowOverlay: false,
+          data: "",
+          displayData: "",
+          readonly: false,
+          copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE",
+          contentAlign: "center",
+        };
+      }
       return {
         kind: GridCellKind.Boolean,
         allowOverlay: false,
         data: snapshot.value.value,
         readonly: false,
         copyData: snapshot.formula ? rawValue : snapshot.value.value ? "TRUE" : "FALSE",
-        ...(themeOverride ? { themeOverride } : {}),
       };
     case ValueTag.Error:
       return {
@@ -78,7 +94,7 @@ export function snapshotToGridCell(
         readonly: false,
         copyData: snapshot.formula ? rawValue : formatErrorCode(snapshot.value.code),
         ...(allowWrapping ? { allowWrapping: true } : {}),
-        ...(themeOverride ? { themeOverride } : {}),
+        ...resolveTextThemeOverride(style, options),
       };
     case ValueTag.String:
       return {
@@ -90,7 +106,7 @@ export function snapshotToGridCell(
         copyData: snapshot.formula ? rawValue : displayText,
         contentAlign,
         ...(allowWrapping ? { allowWrapping: true } : {}),
-        ...(themeOverride ? { themeOverride } : {}),
+        ...resolveTextThemeOverride(style, options),
       };
     case ValueTag.Empty:
       return {
@@ -102,19 +118,36 @@ export function snapshotToGridCell(
         copyData: snapshot.formula ? rawValue : displayText,
         contentAlign,
         ...(allowWrapping ? { allowWrapping: true } : {}),
-        ...(themeOverride ? { themeOverride } : {}),
+        ...resolveTextThemeOverride(style, options),
       };
   }
 }
 
-export function cellToGridCell(engine: GridEngineLike, sheetName: string, addr: string): GridCell {
-  const snapshot = engine.getCell(sheetName, addr);
-  return snapshotToGridCell(snapshot, engine.getCellStyle(snapshot.styleId));
+function resolveTextThemeOverride(
+  style: CellStyleRecord | undefined,
+  options?: GridCellOptions,
+): { themeOverride?: Partial<Theme> } {
+  const themeOverride = cellStyleToThemeOverride(style, options);
+  return themeOverride ? { themeOverride } : {};
 }
 
-export function cellStyleToThemeOverride(style: CellStyleRecord | undefined) {
+export function cellToGridCell(
+  engine: GridEngineLike,
+  sheetName: string,
+  addr: string,
+  options?: GridCellOptions,
+): GridCell {
+  const snapshot = engine.getCell(sheetName, addr);
+  return snapshotToGridCell(snapshot, engine.getCellStyle(snapshot.styleId), options);
+}
+
+export function cellStyleToThemeOverride(
+  style: CellStyleRecord | undefined,
+  options?: GridCellOptions,
+): Partial<Theme> | undefined {
+  const textSurfaceEnabled = options?.textSurfaceEnabled === true;
   if (!style?.font) {
-    return undefined;
+    return textSurfaceEnabled ? { textDark: TRANSPARENT_TEXT } : undefined;
   }
   const fontStyleParts: string[] = [];
   if (style.font?.italic) {
@@ -123,7 +156,9 @@ export function cellStyleToThemeOverride(style: CellStyleRecord | undefined) {
   fontStyleParts.push(style.font?.bold ? "700" : "400");
   fontStyleParts.push(`${style.font?.size ?? 13}px`);
   return {
-    ...(style.font?.color ? { textDark: style.font.color } : {}),
+    ...(textSurfaceEnabled || style.font?.color
+      ? { textDark: textSurfaceEnabled ? TRANSPARENT_TEXT : style.font.color }
+      : {}),
     ...(fontStyleParts.length > 0 ? { baseFontStyle: fontStyleParts.join(" ") } : {}),
     fontFamily: getResolvedCellFontFamily(),
   };

@@ -6,9 +6,7 @@ import {
   Baseline,
   Bold,
   Italic,
-  Minus,
   PaintBucket,
-  Plus,
   RemoveFormatting,
   Underline,
   WrapText,
@@ -36,15 +34,9 @@ import {
 
 export type { BorderPreset } from "./workbook-toolbar-primitives.js";
 
-const FONT_FAMILY_OPTIONS = [
-  { label: "JetBrains Mono", value: "JetBrains Mono" },
-  { label: "Georgia", value: "Georgia" },
-] as const;
-
 export interface WorkbookToolbarProps {
   writesAllowed: boolean;
   currentNumberFormatKind: string;
-  selectedFontFamily: string;
   selectedFontSize: string;
   isBoldActive: boolean;
   isItalicActive: boolean;
@@ -56,10 +48,6 @@ export interface WorkbookToolbarProps {
   horizontalAlignment: CellHorizontalAlignment | null;
   isWrapActive: boolean;
   onNumberFormatChange(this: void, value: string): void;
-  onDecreaseDecimals(this: void): void;
-  onIncreaseDecimals(this: void): void;
-  onToggleGrouping(this: void): void;
-  onFontFamilyChange(this: void, value: string): void;
   onFontSizeChange(this: void, value: string): void;
   onToggleBold(this: void): void;
   onToggleItalic(this: void): void;
@@ -77,7 +65,6 @@ export interface WorkbookToolbarProps {
 export const WorkbookToolbar = memo(function WorkbookToolbar({
   writesAllowed,
   currentNumberFormatKind,
-  selectedFontFamily,
   selectedFontSize,
   isBoldActive,
   isItalicActive,
@@ -89,10 +76,6 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   horizontalAlignment,
   isWrapActive,
   onNumberFormatChange,
-  onDecreaseDecimals,
-  onIncreaseDecimals,
-  onToggleGrouping,
-  onFontFamilyChange,
   onFontSizeChange,
   onToggleBold,
   onToggleItalic,
@@ -122,27 +105,6 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
         <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
 
         <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
-          <RibbonIconButton
-            ariaLabel="Decrease decimals"
-            disabled={!writesAllowed}
-            onClick={onDecreaseDecimals}
-          >
-            <Minus className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <RibbonIconButton
-            ariaLabel="Increase decimals"
-            disabled={!writesAllowed}
-            onClick={onIncreaseDecimals}
-          >
-            <Plus className={TOOLBAR_ICON_CLASS} />
-          </RibbonIconButton>
-          <ToolbarSelect
-            ariaLabel="Font family"
-            options={FONT_FAMILY_OPTIONS}
-            value={selectedFontFamily}
-            widthClass="w-[8.75rem]"
-            onChange={onFontFamilyChange}
-          />
           <ToolbarSelect
             ariaLabel="Font size"
             options={FONT_SIZE_OPTIONS}
@@ -200,9 +162,6 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             recentColors={recentTextColors}
             swatches={GOOGLE_SHEETS_SWATCH_ROWS}
           />
-          <RibbonIconButton ariaLabel="Toggle grouping" onClick={onToggleGrouping}>
-            <span className="text-[11px] font-semibold leading-none">,</span>
-          </RibbonIconButton>
         </Toolbar.Group>
 
         <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />

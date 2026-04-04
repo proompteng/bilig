@@ -45,6 +45,9 @@ interface WorkbookViewProps {
     targetStartAddr: string,
     targetEndAddr: string,
   ): void;
+  onToggleBooleanCell?:
+    | ((sheetName: string, address: string, nextValue: boolean) => void)
+    | undefined;
   onPaste(
     this: void,
     sheetName: string,
@@ -86,6 +89,7 @@ export function WorkbookView({
   onClearCell,
   onFillRange,
   onCopyRange,
+  onToggleBooleanCell,
   onPaste,
   onSelectionLabelChange,
   ribbon,
@@ -128,6 +132,7 @@ export function WorkbookView({
           onEditorChange={onEditorChange}
           onFillRange={onFillRange}
           onPaste={onPaste}
+          onToggleBooleanCell={onToggleBooleanCell}
           onSelectionLabelChange={onSelectionLabelChange}
           onSelect={onSelect}
           subscribeViewport={subscribeViewport}

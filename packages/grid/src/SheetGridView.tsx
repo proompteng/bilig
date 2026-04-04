@@ -5,15 +5,15 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  type PointerEvent as ReactPointerEvent,
   useRef,
   useState,
 } from "react";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
 import type { CellStyleRecord, Viewport } from "@bilig/protocol";
-import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
+import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
 import {
   DataEditor,
-  type FillPatternEventArgs,
   type DataEditorRef,
   type DrawCellCallback,
   type GridColumn,
@@ -22,11 +22,15 @@ import {
   type Rectangle,
 } from "@glideapps/glide-data-grid";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
+import { GridGpuSurface } from "./GridGpuSurface.js";
+import { GridTextOverlay } from "./GridTextOverlay.js";
 import {
   buildBorderOverlayState,
   shouldRefreshBorderOverlay,
   type BorderOverlaySegment,
 } from "./gridBorderOverlay.js";
+import { buildGridGpuScene, type GridGpuScene } from "./gridGpuScene.js";
+import { buildGridTextScene, type GridTextScene } from "./gridTextScene.js";
 import {
   EMPTY_COLUMN_WIDTHS,
   MAX_COLUMN_WIDTH,
@@ -37,9 +41,16 @@ import {
 } from "./gridMetrics.js";
 import {
   createGridSelection,
+  createSheetSelection,
   formatSelectionSummary,
+  isSheetSelection,
   rectangleToAddresses,
 } from "./gridSelection.js";
+import {
+  resolveFillHandleOverlayBounds,
+  resolveFillHandlePreviewRange,
+  type FillHandleOverlayBounds,
+} from "./gridFillHandle.js";
 import {
   createPointerGeometry,
   resolveHeaderSelection as resolveHeaderSelectionFromGeometry,
@@ -50,6 +61,7 @@ import {
   type PointerGeometry,
   type VisibleRegionState,
 } from "./gridPointer.js";
+import { resolveGridHoverState, sameGridHoverState, type GridHoverState } from "./gridHover.js";
 import { cellToEditorSeed, cellToGridCell, getResolvedCellFontFamily } from "./gridCells.js";
 import { isHandledGridKey } from "./gridKeyboard.js";
 import { getEditorTextAlign, getGridTheme, getOverlayStyle } from "./gridPresentation.js";
@@ -119,6 +131,9 @@ interface SheetGridViewProps {
     targetStartAddr: string,
     targetEndAddr: string,
   ): void;
+  onToggleBooleanCell?:
+    | ((sheetName: string, address: string, nextValue: boolean) => void)
+    | undefined;
   onPaste(
     this: void,
     sheetName: string,
@@ -177,6 +192,7 @@ export function SheetGridView({
   onClearCell,
   onFillRange,
   onCopyRange,
+  onToggleBooleanCell,
   onPaste,
   subscribeViewport,
   columnWidths: controlledColumnWidths,
@@ -184,6 +200,8 @@ export function SheetGridView({
   onAutofitColumn,
   onVisibleViewportChange,
 }: SheetGridViewProps) {
+  const emptyGpuScene = useMemo<GridGpuScene>(() => ({ fillRects: [], borderRects: [] }), []);
+  const emptyTextScene = useMemo<GridTextScene>(() => ({ items: [] }), []);
   const editorRef = useRef<DataEditorRef | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const wasEditingOverlayRef = useRef(false);
@@ -205,6 +223,8 @@ export function SheetGridView({
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingTypeSeedRef = useRef<string | null>(null);
   const visibleBorderSignaturesRef = useRef(new Map<string, string>());
+  const fillPreviewRangeRef = useRef<Rectangle | null>(null);
+  const fillHandleCleanupRef = useRef<(() => void) | null>(null);
   const interactionState = useMemo(
     () => ({
       ignoreNextPointerSelectionRef,
@@ -222,6 +242,21 @@ export function SheetGridView({
   );
   const [borderOverlayRevision, setBorderOverlayRevision] = useState(0);
   const [borderSegments, setBorderSegments] = useState<readonly BorderOverlaySegment[]>([]);
+  const [gpuScene, setGpuScene] = useState<GridGpuScene>(emptyGpuScene);
+  const [textScene, setTextScene] = useState<GridTextScene>(emptyTextScene);
+  const [fillHandleBounds, setFillHandleBounds] = useState<FillHandleOverlayBounds | undefined>(
+    undefined,
+  );
+  const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null);
+  const [hoverState, setHoverState] = useState<GridHoverState>({
+    cell: null,
+    header: null,
+    cursor: "default",
+  });
+  const [activeResizeColumn, setActiveResizeColumn] = useState<number | null>(null);
+  const [activeHeaderDrag, setActiveHeaderDrag] = useState<HeaderSelection | null>(null);
+  const [isWebGpuActive, setIsWebGpuActive] = useState(false);
+  const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null);
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
@@ -259,8 +294,12 @@ export function SheetGridView({
   }, [columnWidths]);
 
   const getCellContent = useCallback(
-    ([col, row]: Item) => cellToGridCell(engine, sheetName, formatAddress(row, col)),
-    [engine, sheetName],
+    ([col, row]: Item) =>
+      cellToGridCell(engine, sheetName, formatAddress(row, col), {
+        booleanSurfaceEnabled: isWebGpuActive,
+        textSurfaceEnabled: isWebGpuActive,
+      }),
+    [engine, isWebGpuActive, sheetName],
   );
 
   const visibleItems = useMemo<Item[]>(() => {
@@ -284,6 +323,7 @@ export function SheetGridView({
     () => visibleItems.map(([col, row]) => formatAddress(row, col)),
     [visibleItems],
   );
+  const selectionRange = gridSelection.current?.range ?? null;
   const visibleDamage = useMemo(() => visibleItems.map((cell) => ({ cell })), [visibleItems]);
   const deferredVisibleRegion = useDeferredValue(visibleRegion);
   const deferredVisibleItems = useDeferredValue(visibleItems);
@@ -301,6 +341,16 @@ export function SheetGridView({
       visibleRegion.range.y,
     ],
   );
+
+  useEffect(() => {
+    fillPreviewRangeRef.current = fillPreviewRange;
+  }, [fillPreviewRange]);
+
+  useEffect(() => {
+    return () => {
+      fillHandleCleanupRef.current?.();
+    };
+  }, []);
 
   useEffect(() => {
     onVisibleViewportChange?.(viewport);
@@ -333,6 +383,10 @@ export function SheetGridView({
     const editor = editorRef.current;
     if (!hostBounds || !editor) {
       setBorderSegments([]);
+      setGpuScene(emptyGpuScene);
+      setFillHandleBounds(undefined);
+      setFillPreviewRange(null);
+      setTextScene(emptyTextScene);
       return;
     }
 
@@ -345,7 +399,88 @@ export function SheetGridView({
     );
     visibleBorderSignaturesRef.current = nextOverlayState.signatures;
     setBorderSegments(nextOverlayState.segments);
-  }, [borderOverlayRevision, deferredVisibleItems, deferredVisibleRegion, engine, sheetName]);
+    setGpuScene(
+      buildGridGpuScene({
+        engine,
+        columnWidths,
+        fillPreviewRange,
+        gridMetrics,
+        gridSelection,
+        activeHeaderDrag,
+        hoveredCell: hoverState.cell,
+        hoveredHeader: hoverState.header,
+        resizeGuideColumn:
+          activeResizeColumn ??
+          (hoverState.cursor === "col-resize" && hoverState.header?.kind === "column"
+            ? hoverState.header.index
+            : null),
+        selectedCell: [selectedCell.col, selectedCell.row],
+        selectionRange,
+        sheetName,
+        visibleItems: deferredVisibleItems,
+        visibleRegion: deferredVisibleRegion,
+        hostBounds,
+        getCellBounds: (col, row) => editor.getBounds(col, row),
+      }),
+    );
+    setTextScene(
+      buildGridTextScene({
+        engine,
+        columnWidths,
+        gridMetrics,
+        activeHeaderDrag,
+        hoveredHeader: hoverState.header,
+        resizeGuideColumn:
+          activeResizeColumn ??
+          (hoverState.cursor === "col-resize" && hoverState.header?.kind === "column"
+            ? hoverState.header.index
+            : null),
+        selectedCell: [selectedCell.col, selectedCell.row],
+        selectionRange,
+        sheetName,
+        visibleItems: deferredVisibleItems,
+        visibleRegion: deferredVisibleRegion,
+        hostBounds,
+        getCellBounds: (col, row) => editor.getBounds(col, row),
+      }),
+    );
+    if (
+      selectionRange &&
+      gridSelection.columns.length === 0 &&
+      gridSelection.rows.length === 0 &&
+      !fillPreviewRange
+    ) {
+      setFillHandleBounds(
+        resolveFillHandleOverlayBounds({
+          sourceRange: selectionRange,
+          hostBounds,
+          getCellBounds: (col, row) => editor.getBounds(col, row),
+        }),
+      );
+    } else {
+      setFillHandleBounds(undefined);
+    }
+  }, [
+    borderOverlayRevision,
+    columnWidths,
+    deferredVisibleItems,
+    deferredVisibleRegion,
+    emptyGpuScene,
+    emptyTextScene,
+    engine,
+    fillPreviewRange,
+    gridMetrics,
+    gridSelection,
+    activeHeaderDrag,
+    hoverState.cell,
+    hoverState.header,
+    hoverState.cursor,
+    activeResizeColumn,
+    sheetName,
+    selectedCell.col,
+    selectedCell.row,
+    selectionRange,
+  ]);
 
   useLayoutEffect(() => {
     editorRef.current?.scrollTo(selectedCell.col, selectedCell.row);
@@ -434,6 +569,22 @@ export function SheetGridView({
       onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, addr)), selectionBehavior);
     },
     [engine, onBeginEdit, sheetName],
+  );
+
+  const toggleBooleanCellAt = useCallback(
+    (col: number, row: number): boolean => {
+      if (!onToggleBooleanCell) {
+        return false;
+      }
+      const address = formatAddress(row, col);
+      const snapshot = engine.getCell(sheetName, address);
+      if (snapshot.value.tag !== ValueTag.Boolean) {
+        return false;
+      }
+      onToggleBooleanCell(sheetName, address, !snapshot.value.value);
+      return true;
+    },
+    [engine, onToggleBooleanCell, sheetName],
   );
 
   const resolvePointerGeometry = useCallback(
@@ -543,6 +694,7 @@ export function SheetGridView({
     () => formatSelectionSummary(gridSelection, selectedAddr),
     [gridSelection, selectedAddr],
   );
+  const isEntireSheetSelected = useMemo(() => isSheetSelection(gridSelection), [gridSelection]);
 
   const applyClipboardValues = useCallback(
     (target: Item, values: readonly (readonly string[])[]) => {
@@ -580,6 +732,9 @@ export function SheetGridView({
         editorValue,
         event,
         gridSelection,
+        isSelectedCellBoolean: () =>
+          engine.getCell(sheetName, formatAddress(selectedCell.row, selectedCell.col)).value.tag ===
+          ValueTag.Boolean,
         isEditingCell,
         onCancelEdit,
         onClearCell,
@@ -591,12 +746,16 @@ export function SheetGridView({
         selectedCell,
         setGridSelection,
         suppressNextNativePasteRef,
+        toggleSelectedBooleanCell: () => {
+          toggleBooleanCellAt(selectedCell.col, selectedCell.row);
+        },
       });
     },
     [
       applyClipboardValues,
       beginSelectedEdit,
       captureInternalClipboardSelection,
+      engine,
       editorValue,
       gridSelection,
       isEditingCell,
@@ -605,7 +764,9 @@ export function SheetGridView({
       onCommitEdit,
       onEditorChange,
       onSelect,
+      sheetName,
       selectedCell,
+      toggleBooleanCellAt,
     ],
   );
 
@@ -658,19 +819,117 @@ export function SheetGridView({
     [editorValue],
   );
 
-  const gridTheme = useMemo(() => getGridTheme(), []);
+  const gridTheme = useMemo(
+    () =>
+      getGridTheme({
+        gpuSurfaceEnabled: isWebGpuActive,
+        textSurfaceEnabled: isWebGpuActive,
+      }),
+    [isWebGpuActive],
+  );
 
-  const handleFillPattern = useCallback(
-    (event: FillPatternEventArgs) => {
-      const source = rectangleToAddresses(event.patternSource);
-      const target = rectangleToAddresses(event.fillDestination);
-      if (source.startAddress === target.startAddress && source.endAddress === target.endAddress) {
+  const handleFillHandlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!selectionRange) {
         return;
       }
       event.preventDefault();
-      onFillRange(source.startAddress, source.endAddress, target.startAddress, target.endAddress);
+      event.stopPropagation();
+      focusGrid();
+
+      const move = (nativeEvent: PointerEvent) => {
+        const pointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
+        setFillPreviewRange(
+          pointerCell ? resolveFillHandlePreviewRange(selectionRange, pointerCell) : null,
+        );
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up, true);
+        fillHandleCleanupRef.current = null;
+      };
+
+      const finish = () => {
+        const previewRange = fillPreviewRangeRef.current;
+        if (previewRange) {
+          const source = rectangleToAddresses(selectionRange);
+          const target = rectangleToAddresses(previewRange);
+          if (
+            source.startAddress !== target.startAddress ||
+            source.endAddress !== target.endAddress
+          ) {
+            onFillRange(
+              source.startAddress,
+              source.endAddress,
+              target.startAddress,
+              target.endAddress,
+            );
+          }
+        }
+        setFillPreviewRange(null);
+        cleanup();
+      };
+
+      const up = () => {
+        finish();
+      };
+
+      fillHandleCleanupRef.current?.();
+      fillHandleCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up, true);
     },
-    [onFillRange],
+    [focusGrid, onFillRange, resolvePointerCell, selectionRange],
+  );
+
+  const refreshHoverState = useCallback(
+    (clientX: number, clientY: number, buttons: number) => {
+      if (buttons !== 0 || fillPreviewRangeRef.current) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
+      const geometry = resolvePointerGeometry(visibleRegion);
+      if (!geometry) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
+      const next = resolveGridHoverState({
+        clientX,
+        clientY,
+        region: visibleRegion,
+        geometry,
+        columnWidths,
+        defaultColumnWidth: gridMetrics.columnWidth,
+        gridMetrics,
+        selectedCell: [selectedCell.col, selectedCell.row],
+        selectedCellBounds:
+          editorRef.current?.getBounds(selectedCell.col, selectedCell.row) ?? null,
+        selectionRange,
+        hasColumnSelection: gridSelection.columns.length > 0,
+        hasRowSelection: gridSelection.rows.length > 0,
+      });
+      setHoverState((current) => (sameGridHoverState(current, next) ? current : next));
+    },
+    [
+      columnWidths,
+      gridMetrics,
+      gridSelection.columns.length,
+      gridSelection.rows.length,
+      resolvePointerGeometry,
+      selectedCell.col,
+      selectedCell.row,
+      selectionRange,
+      visibleRegion,
+    ],
   );
 
   const applyColumnWidth = useCallback(
@@ -749,7 +1008,7 @@ export function SheetGridView({
     (args, drawContent) => {
       const snapshot = engine.getCell(sheetName, formatAddress(args.row, args.col));
       const style = engine.getCellStyle(snapshot.styleId);
-      if (style?.fill?.backgroundColor) {
+      if (!isWebGpuActive && style?.fill?.backgroundColor) {
         args.ctx.save();
         args.ctx.fillStyle = style.fill.backgroundColor;
         args.ctx.fillRect(
@@ -761,7 +1020,7 @@ export function SheetGridView({
         args.ctx.restore();
       }
       drawContent();
-      if (!style) {
+      if (!style || isWebGpuActive) {
         return;
       }
       if (style.font?.underline && "displayData" in args.cell) {
@@ -773,8 +1032,22 @@ export function SheetGridView({
         );
       }
     },
-    [engine, gridTheme.editorFontSize, sheetName],
+    [engine, gridTheme.editorFontSize, isWebGpuActive, sheetName],
   );
+
+  const handleHostRef = useCallback((node: HTMLDivElement | null) => {
+    hostRef.current = node;
+    setHostElement(node);
+  }, []);
+
+  const handleSelectEntireSheet = useCallback(() => {
+    if (isEditingCell) {
+      onCommitEdit();
+    }
+    setGridSelection(createSheetSelection());
+    onSelect(formatAddress(0, 0));
+    focusGrid();
+  }, [focusGrid, isEditingCell, onCommitEdit, onSelect]);
 
   return (
     <div
@@ -787,6 +1060,7 @@ export function SheetGridView({
         data-default-column-width={gridMetrics.columnWidth}
         data-testid="sheet-grid"
         role="grid"
+        style={{ cursor: hoverState.cursor }}
         onKeyDownCapture={(event) => {
           const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code);
           resetGridPointerInteraction(interactionState, {
@@ -874,8 +1148,47 @@ export function SheetGridView({
             setGridSelection,
             visibleRegion,
           });
+          refreshHoverState(event.clientX, event.clientY, event.buttons);
+        }}
+        onPointerLeave={() => {
+          if (activeResizeColumn !== null) {
+            return;
+          }
+          setHoverState((current) =>
+            sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+              ? current
+              : { cell: null, header: null, cursor: "default" },
+          );
         }}
         onPointerDownCapture={(event) => {
+          const pointerGeometry = resolvePointerGeometry(visibleRegion);
+          const resizeTarget =
+            pointerGeometry === null
+              ? null
+              : resolveColumnResizeTarget(
+                  event.clientX,
+                  event.clientY,
+                  visibleRegion,
+                  pointerGeometry,
+                  columnWidths,
+                  gridMetrics.columnWidth,
+                );
+          const headerSelection =
+            pointerGeometry === null
+              ? null
+              : resolveHeaderSelectionAtPointer(
+                  event.clientX,
+                  event.clientY,
+                  visibleRegion,
+                  pointerGeometry,
+                );
+          setActiveResizeColumn(resizeTarget);
+          setActiveHeaderDrag(resizeTarget === null ? headerSelection : null);
+          setHoverState((current) =>
+            sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+              ? current
+              : { cell: null, header: null, cursor: "default" },
+          );
           handleGridPointerDown({
             columnWidths,
             defaultColumnWidth: gridMetrics.columnWidth,
@@ -915,122 +1228,173 @@ export function SheetGridView({
             setGridSelection,
             visibleRegion,
           });
+          setActiveHeaderDrag(null);
+          refreshHoverState(event.clientX, event.clientY, 0);
         }}
-        ref={hostRef}
+        ref={handleHostRef}
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
       >
-        <DataEditor
-          ref={editorRef}
-          cellActivationBehavior="double-click"
-          className="glide-sheet-grid"
-          columns={columns}
-          drawCell={drawCell}
-          drawFocusRing={true}
-          editOnType={false}
-          fillHandle={true}
-          freezeColumns={0}
-          getCellContent={getCellContent}
-          getCellsForSelection={true}
-          gridSelection={gridSelection}
-          headerHeight={gridMetrics.headerHeight}
-          height="100%"
-          maxColumnWidth={MAX_COLUMN_WIDTH}
-          minColumnWidth={MIN_COLUMN_WIDTH}
-          onColumnResizeStart={() => {
-            startGridResize(interactionState);
-          }}
-          onColumnResize={(_column: GridColumn, newSize: number, columnIndex: number) => {
-            applyColumnWidth(columnIndex, newSize);
-          }}
-          onColumnResizeEnd={(_column: GridColumn, newSize: number, columnIndex: number) => {
-            applyColumnWidth(columnIndex, newSize);
-            finishGridResize(interactionState);
-          }}
-          onCellActivated={([col, row]) => {
-            handleGridCellActivated({
-              activatedCell: [col, row],
-              dragAnchorCell: dragAnchorCellRef.current,
-              interactionState,
-              onSelect,
-              pendingPointerCell: pendingPointerCellRef.current,
-              setGridSelection,
-            });
-          }}
-          onDelete={() => {
-            onClearCell();
-            return false;
-          }}
-          onFillPattern={handleFillPattern}
-          onHeaderClicked={(col, event) => {
-            handleGridHeaderClick({
-              applyColumnWidth,
-              columnIndex: col,
-              computeAutofitColumnWidth,
-              event,
-              focusGrid,
-              interactionState,
-              isEditingCell,
-              onCommitEdit: () => onCommitEdit(),
-              onSelect,
-              selectedRow: selectedCell.row,
-              setGridSelection,
-            });
-          }}
-          onGridSelectionChange={(nextSelection) => {
-            handleGridSelectionChange({
-              dragAnchorCell: dragAnchorCellRef.current,
-              dragPointerCell: dragPointerCellRef.current,
-              interactionState,
-              isEditingCell,
-              nextSelection,
-              now: window.performance.now(),
-              onCommitEdit: () => onCommitEdit(),
-              onSelect,
-              pendingPointerCell: pendingPointerCellRef.current,
-              selectedCell: [selectedCell.col, selectedCell.row],
-              setGridSelection,
-            });
-          }}
-          onKeyDown={(event) => {
-            if (!shouldHandleDataEditorGridKey(event)) {
-              return;
-            }
-            handleGridKey(event);
-          }}
-          onPaste={(target, values) => {
-            applyClipboardValues(target, values);
-            return false;
-          }}
-          onVisibleRegionChanged={(range, tx, ty) => {
-            startTransition(() => {
-              setVisibleRegion((current) => {
-                const next = { range, tx, ty };
-                return sameVisibleRegion(current, next) ? current : next;
-              });
-            });
-          }}
-          rowHeight={gridMetrics.rowHeight}
-          columnSelect="multi"
-          columnSelectionBlending="additive"
-          columnSelectionMode="multi"
-          rowMarkers={{
-            kind: "clickable-number",
+        <GridGpuSurface host={hostElement} scene={gpuScene} onActiveChange={setIsWebGpuActive} />
+        <GridTextOverlay active={isWebGpuActive} host={hostElement} scene={textScene} />
+        <button
+          aria-label="Select entire sheet"
+          className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"
+          data-testid="grid-select-entire-sheet"
+          onClick={handleSelectEntireSheet}
+          style={{
+            height: gridMetrics.headerHeight,
+            left: 0,
+            top: 0,
             width: gridMetrics.rowMarkerWidth,
-            headerDisabled: true,
           }}
-          rowSelect="multi"
-          rowSelectionBlending="additive"
-          rowSelectionMode="multi"
-          rows={MAX_ROWS}
-          smoothScrollX={true}
-          smoothScrollY={false}
-          theme={gridTheme}
-          trapFocus={false}
-          verticalBorder={true}
-          width="100%"
-        />
-        {borderSegments.length > 0 ? (
+          type="button"
+        >
+          <span
+            aria-hidden="true"
+            className="block h-0 w-0 border-t-[11px] border-r-[11px] border-t-transparent border-r-current opacity-80"
+            style={{
+              color: isEntireSheetSelected ? "var(--wb-accent)" : "currentColor",
+              transform: "translate(2px, 1px)",
+            }}
+          />
+        </button>
+        {isWebGpuActive && fillHandleBounds ? (
+          <button
+            aria-label="Fill handle"
+            className="absolute z-30 cursor-crosshair rounded-[2px] border border-white bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)]"
+            onPointerDown={handleFillHandlePointerDown}
+            style={{
+              height: fillHandleBounds.height,
+              left: fillHandleBounds.x,
+              top: fillHandleBounds.y,
+              width: fillHandleBounds.width,
+            }}
+            type="button"
+          />
+        ) : null}
+        <div className="relative z-[1] h-full">
+          <DataEditor
+            ref={editorRef}
+            cellActivationBehavior="double-click"
+            className="glide-sheet-grid"
+            columns={columns}
+            drawCell={drawCell}
+            drawFocusRing={!isWebGpuActive}
+            editOnType={false}
+            experimental={{
+              disableAccessibilityTree: true,
+              kineticScrollPerfHack: true,
+              renderStrategy: "direct",
+            }}
+            fillHandle={false}
+            freezeColumns={0}
+            getCellContent={getCellContent}
+            getCellsForSelection={true}
+            gridSelection={gridSelection}
+            headerHeight={gridMetrics.headerHeight}
+            height="100%"
+            maxColumnWidth={MAX_COLUMN_WIDTH}
+            minColumnWidth={MIN_COLUMN_WIDTH}
+            onColumnResizeStart={() => {
+              startGridResize(interactionState);
+            }}
+            onColumnResize={(_column: GridColumn, newSize: number, columnIndex: number) => {
+              setActiveResizeColumn(columnIndex);
+              applyColumnWidth(columnIndex, newSize);
+            }}
+            onColumnResizeEnd={(_column: GridColumn, newSize: number, columnIndex: number) => {
+              applyColumnWidth(columnIndex, newSize);
+              setActiveResizeColumn(null);
+              finishGridResize(interactionState);
+            }}
+            onCellActivated={([col, row]) => {
+              handleGridCellActivated({
+                activatedCell: [col, row],
+                dragAnchorCell: dragAnchorCellRef.current,
+                interactionState,
+                onSelect,
+                pendingPointerCell: pendingPointerCellRef.current,
+                setGridSelection,
+              });
+              if (isWebGpuActive) {
+                toggleBooleanCellAt(col, row);
+              }
+            }}
+            onDelete={() => {
+              onClearCell();
+              return false;
+            }}
+            onHeaderClicked={(col, event) => {
+              handleGridHeaderClick({
+                applyColumnWidth,
+                columnIndex: col,
+                computeAutofitColumnWidth,
+                event,
+                focusGrid,
+                interactionState,
+                isEditingCell,
+                onCommitEdit: () => onCommitEdit(),
+                onSelect,
+                selectedRow: selectedCell.row,
+                setGridSelection,
+              });
+            }}
+            onGridSelectionChange={(nextSelection) => {
+              handleGridSelectionChange({
+                dragAnchorCell: dragAnchorCellRef.current,
+                dragPointerCell: dragPointerCellRef.current,
+                interactionState,
+                isEditingCell,
+                nextSelection,
+                now: window.performance.now(),
+                onCommitEdit: () => onCommitEdit(),
+                onSelect,
+                pendingPointerCell: pendingPointerCellRef.current,
+                selectedCell: [selectedCell.col, selectedCell.row],
+                setGridSelection,
+              });
+            }}
+            onKeyDown={(event) => {
+              if (!shouldHandleDataEditorGridKey(event)) {
+                return;
+              }
+              handleGridKey(event);
+            }}
+            onPaste={(target, values) => {
+              applyClipboardValues(target, values);
+              return false;
+            }}
+            onVisibleRegionChanged={(range, tx, ty) => {
+              startTransition(() => {
+                setVisibleRegion((current) => {
+                  const next = { range, tx, ty };
+                  return sameVisibleRegion(current, next) ? current : next;
+                });
+              });
+            }}
+            rowHeight={gridMetrics.rowHeight}
+            columnSelect="multi"
+            columnSelectionBlending="additive"
+            columnSelectionMode="multi"
+            rowMarkers={{
+              kind: "clickable-number",
+              width: gridMetrics.rowMarkerWidth,
+              headerDisabled: true,
+            }}
+            rowSelect="multi"
+            rowSelectionBlending="additive"
+            rowSelectionMode="multi"
+            rows={MAX_ROWS}
+            smoothScrollX={true}
+            smoothScrollY={false}
+            theme={gridTheme}
+            trapFocus={false}
+            verticalBorder={true}
+            width="100%"
+          />
+        </div>
+        {!isWebGpuActive && borderSegments.length > 0 ? (
           <div
             className="pointer-events-none absolute inset-0 z-10"
             aria-hidden="true"

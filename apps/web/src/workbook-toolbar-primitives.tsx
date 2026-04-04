@@ -24,17 +24,7 @@ import {
   type ToolbarSelectOption,
 } from "./workbook-toolbar-theme.js";
 
-export type BorderPreset =
-  | "all"
-  | "inner"
-  | "horizontal"
-  | "vertical"
-  | "outer"
-  | "left"
-  | "top"
-  | "right"
-  | "bottom"
-  | "clear";
+export type BorderPreset = "all" | "outer" | "left" | "top" | "right" | "bottom" | "clear";
 
 interface BorderPresetOption {
   key: BorderPreset;
@@ -55,9 +45,6 @@ interface RibbonButtonProps {
 
 const BORDER_PRESET_OPTIONS: readonly BorderPresetOption[] = [
   { key: "all", label: "All borders", shortLabel: "All", icon: BorderAllIcon },
-  { key: "inner", label: "Inner borders", shortLabel: "Inner", icon: BorderAllIcon },
-  { key: "horizontal", label: "Horizontal borders", shortLabel: "Horizontal", icon: BorderTopIcon },
-  { key: "vertical", label: "Vertical borders", shortLabel: "Vertical", icon: BorderLeftIcon },
   { key: "outer", label: "Outer borders", shortLabel: "Outer", icon: BorderFullIcon },
   { key: "left", label: "Left border", shortLabel: "Left", icon: BorderLeftIcon },
   { key: "top", label: "Top border", shortLabel: "Top", icon: BorderTopIcon },
@@ -107,7 +94,7 @@ export const BorderPresetMenu = memo(function BorderPresetMenu({
         <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
           <Popover.Popup
             aria-label="Border presets"
-            className={classNames(TOOLBAR_BORDER_POPUP_CLASS, "w-[244px]")}
+            className={classNames(TOOLBAR_BORDER_POPUP_CLASS, "w-[188px]")}
           >
             <div className="grid grid-cols-2 gap-1">
               {BORDER_PRESET_OPTIONS.map(({ key, label, shortLabel, icon }) => (

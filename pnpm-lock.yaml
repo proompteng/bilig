@@ -357,6 +357,13 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.4
+      typegpu:
+        specifier: 0.10.2
+        version: 0.10.2
+    devDependencies:
+      '@webgpu/types':
+        specifier: ^0.1.69
+        version: 0.1.69
 
   packages/protocol: {}
 
@@ -2233,6 +2240,9 @@ packages:
   '@vitest/utils@4.1.2':
     resolution: {integrity: sha512-xw2/TiX82lQHA06cgbqRKFb5lCAy3axQ4H4SoUFhUsg+wztiet+co86IAMDtF6Vm1hc7J6j09oh/rgDn+JdKIQ==}
 
+  '@webgpu/types@0.1.69':
+    resolution: {integrity: sha512-RPmm6kgRbI8e98zSD3RVACvnuktIja5+yLgDAkTmxLr90BEwdTXRQWNLF3ETTTyH/8mKhznZuN5AveXYFEsMGQ==}
+
   '@wyw-in-js/processor-utils@0.6.0':
     resolution: {integrity: sha512-5YAZMUmF+S2HaqheKfew6ybbYBMnF10PjIgI7ieyuFxCohyqJNF4xdo6oHftv2z5Z4vCQ0OZHtDOQyDImBYwmg==}
     engines: {node: '>=16.0.0'}
@@ -3693,6 +3703,10 @@ packages:
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
+  tinyest@0.3.1:
+    resolution: {integrity: sha512-SJNnjbvTEo5VmIjsMYpUFL34b9RyaI382r1v7gyVXZpd4VnjIZKMrGk1mphXM4zkhrs3hZfO1Xwv63DoZX50yw==}
+    engines: {node: '>=12.20.0'}
+
   tinyexec@1.0.4:
     resolution: {integrity: sha512-u9r3uZC0bdpGOXtlxUIdwf9pkmvhqJdrVCH9fapQtgy/OeTTMZ1nqH7agtvEfmGui6e1XxjcdrlxvxJvc3sMqw==}
     engines: {node: '>=18'}
@@ -3742,6 +3756,9 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  tsover-runtime@0.0.5:
+    resolution: {integrity: sha512-OwpUKI97GvNRVukCE4jtCzUwQvnn6Wyu4a3LikaNF1GXosopXW4J928/EdBsKBxLKv/NP7RjuwhGFkkR1UCdjA==}
+
   tsx@4.21.0:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
@@ -3749,6 +3766,13 @@ packages:
 
   tunnel-agent@0.6.0:
     resolution: {integrity: sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w==}
+
+  typed-binary@4.3.3:
+    resolution: {integrity: sha512-W2hLsSzt3k/tg38gDE4Fn/QiwcoqGuUHBc2cb3mXuH7KcYxe/GM57vzW14s2/bawB4R5knGgGq8Xb57vsaJ4Sg==}
+
+  typegpu@0.10.2:
+    resolution: {integrity: sha512-5DZRvNtsbvRM++MONmwxfX0+vYAZgPKnGNCB8nnr3jwXo/gaOJ51WcgKRU8cHvK0RvMikCCVdolwBeEC0B9m7A==}
+    engines: {node: '>=12.20.0'}
 
   typescript@6.0.2:
     resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
@@ -3765,6 +3789,10 @@ packages:
   undici@7.24.6:
     resolution: {integrity: sha512-Xi4agocCbRzt0yYMZGMA6ApD7gvtUFaxm4ZmeacWI4cZxaF6C+8I8QfofC20NAePiB/IcvZmzkJ7XPa471AEtA==}
     engines: {node: '>=20.18.1'}
+
+  unplugin@2.3.11:
+    resolution: {integrity: sha512-5uKD0nqiYVzlmCRs01Fhs2BdkEgBS3SAVP6ndrBsuK42iC2+JHyxM05Rm9G8+5mkmRtzMZGY8Ct5+mliZxU/Ww==}
+    engines: {node: '>=18.12.0'}
 
   url-pattern@1.0.3:
     resolution: {integrity: sha512-uQcEj/2puA4aq1R3A2+VNVBgaWYR24FdWjl7VNW83rnWftlhyzOZ/tBjezRiC2UkIzuxC8Top3IekN3vUf1WxA==}
@@ -3893,6 +3921,9 @@ packages:
   webidl-conversions@8.0.1:
     resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
     engines: {node: '>=20'}
+
+  webpack-virtual-modules@0.6.2:
+    resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
 
   whatwg-mimetype@5.0.0:
     resolution: {integrity: sha512-sXcNcHOC51uPGF0P/D4NVtrkjSU2fNsm9iog4ZvZJsL3rjoDAzXZhkm2MWt1y+PUdggKAYVoMAIYcs78wJ51Cw==}
@@ -5768,6 +5799,8 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@webgpu/types@0.1.69': {}
+
   '@wyw-in-js/processor-utils@0.6.0':
     dependencies:
       '@babel/generator': 7.29.1
@@ -7230,6 +7263,8 @@ snapshots:
 
   tinybench@2.9.0: {}
 
+  tinyest@0.3.1: {}
+
   tinyexec@1.0.4: {}
 
   tinyglobby@0.2.15:
@@ -7267,6 +7302,11 @@ snapshots:
 
   tslib@2.8.1: {}
 
+  tsover-runtime@0.0.5:
+    dependencies:
+      minimatch: 9.0.9
+      unplugin: 2.3.11
+
   tsx@4.21.0:
     dependencies:
       esbuild: 0.27.4
@@ -7278,6 +7318,14 @@ snapshots:
     dependencies:
       safe-buffer: 5.2.1
 
+  typed-binary@4.3.3: {}
+
+  typegpu@0.10.2:
+    dependencies:
+      tinyest: 0.3.1
+      tsover-runtime: 0.0.5
+      typed-binary: 4.3.3
+
   typescript@6.0.2: {}
 
   typical@7.3.0: {}
@@ -7285,6 +7333,13 @@ snapshots:
   undici-types@7.18.2: {}
 
   undici@7.24.6: {}
+
+  unplugin@2.3.11:
+    dependencies:
+      '@jridgewell/remapping': 2.3.5
+      acorn: 8.16.0
+      picomatch: 4.0.4
+      webpack-virtual-modules: 0.6.2
 
   url-pattern@1.0.3: {}
 
@@ -7370,6 +7425,8 @@ snapshots:
   webidl-conversions@3.0.1: {}
 
   webidl-conversions@8.0.1: {}
+
+  webpack-virtual-modules@0.6.2: {}
 
   whatwg-mimetype@5.0.0: {}
 

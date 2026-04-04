@@ -5,13 +5,11 @@ import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bi
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
   type CellNumberFormatInput,
-  type CellNumberFormatPreset,
   type CellRangeRef,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
   formatErrorCode,
-  normalizeCellNumberFormatPreset,
   parseCellNumberFormatCode,
   type CellSnapshot,
   type CellStyleField,
@@ -60,8 +58,6 @@ const DEFAULT_BORDER_SIDE = {
   weight: "thin",
   color: "#111827",
 } as const;
-const DEFAULT_FONT_FAMILY = "JetBrains Mono";
-
 function createNextSheetName(sheetNames: readonly string[]): string {
   const existing = new Set(sheetNames);
   let index = 1;
@@ -330,33 +326,6 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
     target instanceof HTMLSelectElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   );
-}
-
-function adjustNumberFormatDecimals(
-  currentFormat: CellNumberFormatPreset,
-  delta: number,
-): CellNumberFormatPreset {
-  switch (currentFormat.kind) {
-    case "number":
-    case "percent":
-    case "currency":
-    case "accounting":
-      return normalizeCellNumberFormatPreset({
-        ...currentFormat,
-        decimals: (currentFormat.decimals ?? 0) + delta,
-      });
-    case "general":
-    case "text":
-      return normalizeCellNumberFormatPreset({
-        kind: "number",
-        decimals: Math.max(0, delta > 0 ? 1 : 0),
-        useGrouping: true,
-      });
-    case "date":
-    case "time":
-    case "datetime":
-      return currentFormat;
-  }
 }
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
@@ -823,6 +792,18 @@ function WorkerWorkbookAppInner({
     clearSelectedRange();
   }, [clearSelectedRange, writesAllowed]);
 
+  const toggleBooleanCell = useCallback(
+    (sheetName: string, address: string, nextValue: boolean) => {
+      if (!writesAllowed) {
+        return;
+      }
+      void applyParsedInput(sheetName, address, { kind: "value", value: nextValue }).catch(
+        reportRuntimeError,
+      );
+    },
+    [applyParsedInput, reportRuntimeError, writesAllowed],
+  );
+
   const pasteIntoSelection = useCallback(
     (sheetName: string, startAddr: string, values: readonly (readonly string[])[]) => {
       const start = parseCellAddress(startAddr, sheetName);
@@ -966,7 +947,6 @@ function WorkerWorkbookAppInner({
   const selectedStyle = workerHandle?.cache.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format);
-  const selectedFontFamily = selectedStyle?.font?.family ?? DEFAULT_FONT_FAMILY;
   const selectedFontSize = String(selectedStyle?.font?.size ?? 11);
   const isBoldActive = selectedStyle?.font?.bold === true;
   const isItalicActive = selectedStyle?.font?.italic === true;
@@ -1119,16 +1099,6 @@ function WorkerWorkbookAppInner({
           await applyRowBorder(endRow, endRow, "bottom");
           await applyColumnBorder(endCol, endCol, "right");
           return;
-        case "inner":
-          await applyRowBorder(startRow + 1, endRow, "top");
-          await applyColumnBorder(startCol + 1, endCol, "left");
-          return;
-        case "horizontal":
-          await applyRowBorder(startRow + 1, endRow, "top");
-          return;
-        case "vertical":
-          await applyColumnBorder(startCol + 1, endCol, "left");
-          return;
         case "outer":
           await applyRowBorder(startRow, startRow, "top");
           await applyRowBorder(endRow, endRow, "bottom");
@@ -1261,44 +1231,6 @@ function WorkerWorkbookAppInner({
     [invokeMutation, selectionRange],
   );
 
-  const adjustSelectionDecimals = useCallback(
-    async (delta: number) => {
-      const nextFormat = adjustNumberFormatDecimals(currentNumberFormat, delta);
-      if (nextFormat.kind === "general") {
-        await invokeMutation("clearRangeNumberFormat", selectionRange);
-        return;
-      }
-      await invokeMutation("setRangeNumberFormat", selectionRange, nextFormat);
-    },
-    [currentNumberFormat, invokeMutation, selectionRange],
-  );
-
-  const toggleSelectionGrouping = useCallback(async () => {
-    switch (currentNumberFormat.kind) {
-      case "number":
-      case "currency":
-      case "accounting":
-        await invokeMutation("setRangeNumberFormat", selectionRange, {
-          ...currentNumberFormat,
-          useGrouping: !currentNumberFormat.useGrouping,
-        });
-        return;
-      case "general":
-      case "text":
-        await invokeMutation("setRangeNumberFormat", selectionRange, {
-          kind: "number",
-          decimals: 0,
-          useGrouping: true,
-        });
-        return;
-      case "percent":
-      case "date":
-      case "time":
-      case "datetime":
-        return;
-    }
-  }, [currentNumberFormat, invokeMutation, selectionRange]);
-
   useEffect(() => {
     const handleWindowShortcut = (event: KeyboardEvent) => {
       if (event.defaultPrevented || isTextEntryTarget(event.target) || event.altKey) {
@@ -1422,17 +1354,8 @@ function WorkerWorkbookAppInner({
         onFillColorSelect={(color, source) => {
           void applyFillColor(color, source);
         }}
-        onDecreaseDecimals={() => {
-          void adjustSelectionDecimals(-1);
-        }}
-        onFontFamilyChange={(value) => {
-          void applyRangeStyle({ font: { family: value === DEFAULT_FONT_FAMILY ? null : value } });
-        }}
         onFontSizeChange={(value) => {
           void applyRangeStyle({ font: { size: value ? Number(value) : null } });
-        }}
-        onIncreaseDecimals={() => {
-          void adjustSelectionDecimals(1);
         }}
         onHorizontalAlignmentChange={(alignment) => {
           void applyRangeStyle({
@@ -1450,9 +1373,6 @@ function WorkerWorkbookAppInner({
         onTextColorSelect={(color, source) => {
           void applyTextColor(color, source);
         }}
-        onToggleGrouping={() => {
-          void toggleSelectionGrouping();
-        }}
         onToggleBold={() => {
           void applyRangeStyle({ font: { bold: !isBoldActive } });
         }}
@@ -1469,7 +1389,6 @@ function WorkerWorkbookAppInner({
         }}
         recentFillColors={visibleRecentFillColors}
         recentTextColors={visibleRecentTextColors}
-        selectedFontFamily={selectedFontFamily}
         selectedFontSize={selectedFontSize}
         writesAllowed={writesAllowed}
       />
@@ -1488,13 +1407,10 @@ function WorkerWorkbookAppInner({
       isItalicActive,
       isUnderlineActive,
       isWrapActive,
-      adjustSelectionDecimals,
       resetFillColor,
       resetTextColor,
-      selectedFontFamily,
       selectedFontSize,
       setNumberFormatPreset,
-      toggleSelectionGrouping,
       visibleRecentFillColors,
       visibleRecentTextColors,
       writesAllowed,
@@ -1563,6 +1479,7 @@ function WorkerWorkbookAppInner({
               onEditorChange={handleEditorChange}
               onFillRange={fillSelectionRange}
               onPaste={pasteIntoSelection}
+              onToggleBooleanCell={toggleBooleanCell}
               onRenameSheet={writesAllowed ? renameSheet : undefined}
               onSelectionLabelChange={setSelectionLabel}
               onSelect={(addr) => selectAddress(selection.sheetName, addr)}

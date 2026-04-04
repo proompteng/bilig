@@ -182,6 +182,15 @@ export function createSheetSelection(): GridSelection {
   };
 }
 
+export function isSheetSelection(selection: GridSelection): boolean {
+  return (
+    selection.columns.first() === 0 &&
+    selection.columns.last() === MAX_COLS - 1 &&
+    selection.rows.first() === 0 &&
+    selection.rows.last() === MAX_ROWS - 1
+  );
+}
+
 export function sameItem(left: Item | null, right: Item | null): boolean {
   return left !== null && right !== null && left[0] === right[0] && left[1] === right[1];
 }

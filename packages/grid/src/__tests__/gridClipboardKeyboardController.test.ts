@@ -159,6 +159,7 @@ describe("gridClipboardKeyboardController", () => {
         preventDefault: vi.fn(),
       },
       gridSelection: createGridSelection(2, 4),
+      isSelectedCellBoolean: () => false,
       isEditingCell: false,
       onCancelEdit: vi.fn(),
       onClearCell: vi.fn(),
@@ -170,10 +171,83 @@ describe("gridClipboardKeyboardController", () => {
       selectedCell: { col: 2, row: 4 },
       setGridSelection,
       suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell: vi.fn(),
     });
 
     expect(setGridSelection.mock.calls[0]?.[0]?.current?.cell).toEqual([2, 5]);
     expect(onSelect).toHaveBeenCalledWith("C6");
+  });
+
+  test("toggles boolean cells with space instead of entering text edit mode", () => {
+    const toggleSelectedBooleanCell = vi.fn();
+    const preventDefault = vi.fn();
+
+    handleGridKey({
+      applyClipboardValues: vi.fn(),
+      beginSelectedEdit: vi.fn(),
+      captureInternalClipboardSelection: vi.fn(),
+      editorValue: "",
+      event: {
+        key: " ",
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault,
+      },
+      gridSelection: createGridSelection(1, 1),
+      isSelectedCellBoolean: () => true,
+      isEditingCell: false,
+      onCancelEdit: vi.fn(),
+      onClearCell: vi.fn(),
+      onCommitEdit: vi.fn(),
+      onEditorChange: vi.fn(),
+      onSelect: vi.fn(),
+      pendingKeyboardPasteSequenceRef: { current: 0 },
+      pendingTypeSeedRef: { current: null },
+      selectedCell: { col: 1, row: 1 },
+      setGridSelection: vi.fn(),
+      suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell,
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(toggleSelectedBooleanCell).toHaveBeenCalledTimes(1);
+  });
+
+  test("select-all updates the active address to A1", () => {
+    const setGridSelection = vi.fn();
+    const onSelect = vi.fn();
+
+    handleGridKey({
+      applyClipboardValues: vi.fn(),
+      beginSelectedEdit: vi.fn(),
+      captureInternalClipboardSelection: vi.fn(),
+      editorValue: "",
+      event: {
+        key: "a",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+      },
+      gridSelection: createGridSelection(3, 7),
+      isSelectedCellBoolean: () => false,
+      isEditingCell: false,
+      onCancelEdit: vi.fn(),
+      onClearCell: vi.fn(),
+      onCommitEdit: vi.fn(),
+      onEditorChange: vi.fn(),
+      onSelect,
+      pendingKeyboardPasteSequenceRef: { current: 0 },
+      pendingTypeSeedRef: { current: null },
+      selectedCell: { col: 3, row: 7 },
+      setGridSelection,
+      suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell: vi.fn(),
+    });
+
+    expect(setGridSelection).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith("A1");
   });
 
   test("only claims global grid shortcuts when focus is on the document body", () => {

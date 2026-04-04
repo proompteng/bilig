@@ -548,9 +548,6 @@ async function pickToolbarBorderPreset(
   page: ToolbarPage,
   presetLabel:
     | "All borders"
-    | "Inner borders"
-    | "Horizontal borders"
-    | "Vertical borders"
     | "Outer borders"
     | "Left border"
     | "Top border"
@@ -567,22 +564,6 @@ const TOOLBAR_SYNC_ACTIONS: readonly ToolbarSyncAction[] = [
     label: "number-format-accounting",
     apply: async (activePage) =>
       await selectToolbarOption(activePage, "Number format", "Accounting", "accounting"),
-  },
-  {
-    label: "increase-decimals",
-    apply: async (activePage) => await activePage.getByLabel("Increase decimals").click(),
-  },
-  {
-    label: "decrease-decimals",
-    apply: async (activePage) => await activePage.getByLabel("Decrease decimals").click(),
-  },
-  {
-    label: "toggle-grouping",
-    apply: async (activePage) => await activePage.getByLabel("Toggle grouping").click(),
-  },
-  {
-    label: "font-family-georgia",
-    apply: async (activePage) => await selectToolbarOption(activePage, "Font family", "Georgia"),
   },
   {
     label: "font-size-14",
@@ -620,18 +601,6 @@ const TOOLBAR_SYNC_ACTIONS: readonly ToolbarSyncAction[] = [
   {
     label: "border-all",
     apply: async (activePage) => await pickToolbarBorderPreset(activePage, "All borders"),
-  },
-  {
-    label: "border-inner",
-    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Inner borders"),
-  },
-  {
-    label: "border-horizontal",
-    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Horizontal borders"),
-  },
-  {
-    label: "border-vertical",
-    apply: async (activePage) => await pickToolbarBorderPreset(activePage, "Vertical borders"),
   },
   {
     label: "border-outer",
@@ -970,8 +939,6 @@ test("web app keeps toolbar controls aligned and consistently sized", async ({ p
 
   const controls = [
     page.getByLabel("Number format"),
-    page.getByLabel("Decrease decimals"),
-    page.getByLabel("Font family"),
     page.getByLabel("Font size"),
     page.getByLabel("Bold"),
     page.getByLabel("Italic"),
@@ -1799,6 +1766,11 @@ test("web app relocates relative formulas when using the fill handle", async ({ 
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
 
+  await nameBox.fill("G7");
+  await nameBox.press("Enter");
+  await formulaInput.fill("");
+  await formulaInput.press("Enter");
+
   await nameBox.fill("F6");
   await nameBox.press("Enter");
   await formulaInput.fill("3");
@@ -1870,17 +1842,17 @@ test("web app applies core formatting shortcuts from the keyboard", async ({ pag
   const grid = page.getByTestId("sheet-grid");
   await clickProductCell(page, 0, 0);
   await grid.press(`${PRIMARY_MODIFIER}+B`);
-  await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await expect(page.getByLabel("Bold")).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/);
   await grid.press(`${PRIMARY_MODIFIER}+I`);
-  await expect(page.getByLabel("Italic")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await expect(page.getByLabel("Italic")).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/);
   await grid.press(`${PRIMARY_MODIFIER}+U`);
-  await expect(page.getByLabel("Underline")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await expect(page.getByLabel("Underline")).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/);
   await grid.press(`${PRIMARY_MODIFIER}+Shift+E`);
-  await expect(page.getByLabel("Align center")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await expect(page.getByLabel("Align center")).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/);
   await grid.press(`${PRIMARY_MODIFIER}+Shift+R`);
-  await expect(page.getByLabel("Align right")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await expect(page.getByLabel("Align right")).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/);
   await grid.press(`${PRIMARY_MODIFIER}+Shift+L`);
-  await expect(page.getByLabel("Align left")).toHaveClass(/bg-\[#e6f4ea\]/);
+  await expect(page.getByLabel("Align left")).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/);
 });
 
 test("web app supports row, column, and full-sheet selection shortcuts", async ({ page }) => {

@@ -86,6 +86,7 @@ interface HandleGridKeyOptions {
   editorValue: string;
   event: GridKeyboardEventLike;
   gridSelection: GridSelection;
+  isSelectedCellBoolean(this: void): boolean;
   isEditingCell: boolean;
   onCancelEdit(this: void): void;
   onClearCell(this: void): void;
@@ -97,6 +98,7 @@ interface HandleGridKeyOptions {
   selectedCell: SelectedCellLike;
   setGridSelection(this: void, selection: GridSelection): void;
   suppressNextNativePasteRef: MutableRefObject<boolean>;
+  toggleSelectedBooleanCell(this: void): void;
 }
 
 interface HandleGridPasteCaptureOptions {
@@ -192,6 +194,7 @@ export function handleGridKey({
   editorValue,
   event,
   gridSelection,
+  isSelectedCellBoolean,
   isEditingCell,
   onCancelEdit,
   onClearCell,
@@ -203,7 +206,23 @@ export function handleGridKey({
   selectedCell,
   setGridSelection,
   suppressNextNativePasteRef,
+  toggleSelectedBooleanCell,
 }: HandleGridKeyOptions): void {
+  if (
+    !isEditingCell &&
+    event.key === " " &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    isSelectedCellBoolean()
+  ) {
+    event.preventDefault();
+    event.cancel?.();
+    toggleSelectedBooleanCell();
+    return;
+  }
+
   const currentSelectionCell = gridSelection.current?.cell ?? null;
   const currentSelectionRange = gridSelection.current?.range ?? null;
   const action = resolveGridKeyAction({
@@ -299,6 +318,7 @@ export function handleGridKey({
       return;
     case "select-all":
       setGridSelection(createSheetSelection());
+      onSelect(formatAddress(0, 0));
       return;
   }
 }

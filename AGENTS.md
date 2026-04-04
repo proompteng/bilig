@@ -17,6 +17,25 @@ Use Node `24+`, Bun, and `pnpm@10.32.1`.
 ## Coding Style & Naming Conventions
 Write strict TypeScript with ESM imports and explicit `.js` suffixes where the codebase already uses them. `oxfmt` enforces 2-space indentation, double quotes, and semicolons. Use `PascalCase` for React components and follow nearby filename conventions elsewhere. Avoid `any`; lint also fails on floating promises.
 
+## Frontend UI System
+For workbook and app-shell UI, React Spectrum's architectural discipline is the source of truth, using the local repo at `~/github.com/react-spectrum` as reference rather than copying ad hoc styles from the web. Follow the distilled guidance in `docs/react-spectrum-ui-philosophy.md`.
+
+Required rules:
+
+- Separate state, behavior, and themed rendering. Do not leave keyboard policy, pointer policy, and visual structure tangled inside giant render components when a controller or hook can own the behavior.
+- Style from shared tokens first. Prefer shared CSS variables and theme constants over one-off colors, radii, shadows, and heights.
+- Keep the UI quiet by default. Enterprise polish comes from density, rhythm, contrast hierarchy, and consistency, not blur, glow, oversized rounding, or decorative chrome.
+- Use one density system per surface. Toolbar controls, formula bar controls, tabs, chips, and popovers should align on a deliberate shared height and radius system unless there is a documented product reason not to.
+- Treat accessibility as behavior, not cleanup. Menus, popovers, tabs, color pickers, and toolbar controls must have explicit labeling, focus visibility, keyboard semantics, and predictable close/focus behavior.
+- Keep public component APIs boring and stable. Use `is...`, `allows...`, `on...`, and `on...Change` naming consistently, and prefer extensible string unions over booleans when the API may grow.
+
+Avoid:
+
+- hardcoded styling values inside components when a token should exist
+- private CSS-selector overrides as the main customization mechanism
+- mixing product logic, geometry math, and themed markup in one file
+- making the workbook shell louder when the hierarchy can be improved instead
+
 ## AssemblyScript & WASM
 `packages/wasm-kernel` is the repo’s AssemblyScript/WebAssembly fast path. AssemblyScript is TypeScript-like, but it compiles ahead-of-time to a static WebAssembly binary and exposes WebAssembly-native types such as `i32` and `f64`, so do not treat `assembly/` code like general app TypeScript. Keep kernel code deterministic, numeric, and explicit about value shapes. In this repo, JS remains the semantic source of truth; AssemblyScript is used to accelerate closed, computation-heavy formula families only after JS parity and differential tests are green. Build the kernel with `pnpm wasm:build`.
 

@@ -10,6 +10,9 @@ const glideEntry = require.resolve("@glideapps/glide-data-grid", {
   paths: [fileURLToPath(new URL("../../packages/grid", import.meta.url))],
 });
 const glidePackageRoot = resolve(dirname(glideEntry), "..", "..");
+const syncServerTarget =
+  process.env["BILIG_SYNC_SERVER_TARGET"] ??
+  `http://127.0.0.1:${process.env["BILIG_SYNC_SERVER_PORT"] ?? "4321"}`;
 
 function includesAny(id: string, patterns: readonly string[]): boolean {
   const normalizedId = id.replaceAll("\\", "/");
@@ -147,6 +150,31 @@ export default defineConfig({
       "@bilig/wasm-kernel": fileURLToPath(
         new URL("../../packages/wasm-kernel/src/index.ts", import.meta.url),
       ),
+    },
+  },
+  server: {
+    proxy: {
+      "/runtime-config.json": {
+        target: syncServerTarget,
+        changeOrigin: true,
+      },
+      "/v2": {
+        target: syncServerTarget,
+        changeOrigin: true,
+      },
+      "/api/zero": {
+        target: syncServerTarget,
+        changeOrigin: true,
+      },
+      "/zero": {
+        target: syncServerTarget,
+        changeOrigin: true,
+        ws: true,
+      },
+      "/healthz": {
+        target: syncServerTarget,
+        changeOrigin: true,
+      },
     },
   },
 });

@@ -32,4 +32,26 @@ describe("gridPresentation", () => {
     expect(productTheme.fontFamily).toContain("JetBrainsMono Nerd Font");
     expect(productTheme.headerFontStyle).toContain("11px");
   });
+
+  test("makes body cells transparent when the GPU surface is active", () => {
+    const gpuTheme = getGridTheme({ gpuSurfaceEnabled: true });
+
+    expect(gpuTheme.accentColor).toBe("rgba(31, 122, 67, 0)");
+    expect(gpuTheme.bgCell).toBe("rgba(255, 255, 255, 0)");
+    expect(gpuTheme.bgCellMedium).toBe("rgba(255, 255, 255, 0)");
+    expect(gpuTheme.accentLight).toBe("rgba(31, 122, 67, 0)");
+    expect(gpuTheme.borderColor).toBe("rgba(218, 220, 224, 0)");
+    expect(gpuTheme.bgHeader).toBe("rgba(248, 249, 250, 0)");
+    expect(gpuTheme.bgHeaderHasFocus).toBe("rgba(230, 244, 234, 0)");
+    expect(gpuTheme.textHeaderSelected).toBe("#1f7a43");
+  });
+
+  test("hides header text when the text overlay surface is active", () => {
+    const textSurfaceTheme = getGridTheme({ textSurfaceEnabled: true });
+
+    expect(textSurfaceTheme.textHeader).toBe("rgba(95, 99, 104, 0)");
+    expect(textSurfaceTheme.textHeaderSelected).toBe("rgba(31, 122, 67, 0)");
+    expect(textSurfaceTheme.textMedium).toBe("rgba(95, 99, 104, 0)");
+    expect(textSurfaceTheme.textLight).toBe("rgba(128, 134, 139, 0)");
+  });
 });

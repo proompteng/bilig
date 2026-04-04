@@ -88,4 +88,25 @@ describe("gridCells", () => {
       fontFamily: '"JetBrainsMono Nerd Font","JetBrains Mono",monospace',
     });
   });
+
+  test("makes text cells transparent when the text surface is active and routes booleans to the custom surface", () => {
+    const textCell = snapshotToGridCell(
+      makeSnapshot({ value: { tag: ValueTag.String, value: "hello" } }),
+      undefined,
+      { textSurfaceEnabled: true },
+    );
+    expect(textCell.kind).toBe(GridCellKind.Text);
+    expect(textCell.themeOverride).toEqual({
+      textDark: "rgba(32, 33, 36, 0)",
+    });
+
+    const booleanCell = snapshotToGridCell(
+      makeSnapshot({ value: { tag: ValueTag.Boolean, value: true } }),
+      undefined,
+      { booleanSurfaceEnabled: true, textSurfaceEnabled: true },
+    );
+    expect(booleanCell.kind).toBe(GridCellKind.Text);
+    expect(booleanCell.displayData).toBe("");
+    expect(booleanCell.copyData).toBe("TRUE");
+  });
 });

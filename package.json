@@ -13,7 +13,7 @@
     "dev": "pnpm dev:web-local",
     "dev:web": "pnpm --filter @bilig/web dev",
     "dev:local": "pnpm --filter @bilig/app dev",
-    "dev:web-local": "pnpm --parallel --stream --filter @bilig/app --filter @bilig/web run dev",
+    "dev:web-local": "bun scripts/run-dev-web-local.ts",
     "dev:sync": "pnpm --filter @bilig/app dev",
     "docker:build:app": "docker buildx build --load --target bilig-runtime -t registry.ide-newton.ts.net/lab/bilig-app:${BILIG_IMAGE_TAG:-local} .",
     "docker:publish:app": "docker buildx build --platform ${BILIG_IMAGE_PLATFORMS:-linux/amd64,linux/arm64} --provenance=false --sbom=false --push --target bilig-runtime -t registry.ide-newton.ts.net/lab/bilig-app:${BILIG_IMAGE_TAG:-local} .",

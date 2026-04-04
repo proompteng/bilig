@@ -5,7 +5,9 @@ import {
   createGridSelection,
   createRangeSelection,
   createRowSliceSelection,
+  createSheetSelection,
   formatSelectionSummary,
+  isSheetSelection,
   rectangleToAddresses,
 } from "../gridSelection.js";
 
@@ -20,6 +22,11 @@ describe("gridSelection", () => {
   test("formats row and column slice selections", () => {
     expect(formatSelectionSummary(createColumnSliceSelection(1, 3, 0), "A1")).toBe("B:D");
     expect(formatSelectionSummary(createRowSliceSelection(0, 1, 3), "A1")).toBe("2:4");
+  });
+
+  test("detects full sheet selections", () => {
+    expect(isSheetSelection(createSheetSelection())).toBe(true);
+    expect(isSheetSelection(createGridSelection(0, 0))).toBe(false);
   });
 
   test("clamps oversized ranges and converts them to addresses", () => {

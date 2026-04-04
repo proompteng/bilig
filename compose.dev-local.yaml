@@ -1,0 +1,35 @@
+services:
+  postgres:
+    ports:
+      - "55432:5432"
+
+  zero-cache-local:
+    image: rocicorp/zero:1.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -f http://localhost:4848/keepalive
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    environment:
+      ZERO_PORT: "4848"
+      ZERO_REPLICA_FILE: /data/zero.db
+      ZERO_ADMIN_PASSWORD: local-zero-admin
+      ZERO_APP_ID: bilig_v2
+      ZERO_APP_PUBLICATIONS: zero_data_v2
+      ZERO_UPSTREAM_DB: postgresql://bilig:bilig@postgres:5432/bilig
+      ZERO_CVR_DB: postgresql://bilig:bilig@postgres:5432/bilig
+      ZERO_CHANGE_DB: postgresql://bilig:bilig@postgres:5432/bilig
+      ZERO_QUERY_URL: http://host.docker.internal:${BILIG_DEV_APP_PORT:-4321}/api/zero/v2/query
+      ZERO_MUTATE_URL: http://host.docker.internal:${BILIG_DEV_APP_PORT:-4321}/api/zero/v2/mutate
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4848:4848"
+    volumes:
+      - zero-replica-data:/data
