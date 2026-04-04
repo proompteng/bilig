@@ -1,4 +1,4 @@
-import type { ProtocolFrame } from "@bilig/binary-protocol";
+import type { HelloFrame, ProtocolFrame } from "@bilig/binary-protocol";
 import type {
   AgentEvent,
   AgentFrame,
@@ -9,7 +9,12 @@ import { shouldApplyBatch } from "@bilig/crdt";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { UpstreamSyncRelay } from "../zero/sync-relay.js";
 import { type AgentFrameContext, routeAgentFrame } from "./agent-routing.js";
-import { createBrowserHelloReplay } from "./browser-sync-replay.js";
+import { openWorkbookBrowserSession } from "./browser-session-shared.js";
+import {
+  flushQueuedLocalAgentEvents,
+  queueLocalAgentEvent,
+  removeQueuedSubscriptionEvents,
+} from "./local-agent-event-queue.js";
 import {
   acceptLocalSnapshotChunk,
   getLocalCachedSnapshot,
@@ -170,21 +175,21 @@ export class LocalWorkbookSessionManager {
     };
   }
 
-  async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame[]> {
+  async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
     const session = this.ensureSession(frame.documentId);
+    return openWorkbookBrowserSession(frame, {
+      latestCursor: session.cursor,
+      latestSnapshot: session.latestSnapshot,
+      listMissedFrames: (cursorFloor) =>
+        session.batches.filter((entry) => entry.cursor > cursorFloor).map((entry) => entry.frame),
+    });
+  }
+
+  async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame[]> {
     return routeWorkbookSyncFrame<ProtocolFrame[]>(frame, {
-      hello: (helloFrame) =>
-        createBrowserHelloReplay({
-          documentId: helloFrame.documentId,
-          lastServerCursor: helloFrame.lastServerCursor,
-          latestCursor: session.cursor,
-          latestSnapshot: session.latestSnapshot,
-          listMissedFrames: (cursorFloor) =>
-            session.batches
-              .filter((entry) => entry.cursor > cursorFloor)
-              .map((entry) => entry.frame),
-        }),
+      hello: (helloFrame) => this.openBrowserSession(helloFrame),
       appendBatch: (appendFrame) => {
+        const session = this.ensureSession(appendFrame.documentId);
         if (!shouldApplyBatch(session.engine.replica, appendFrame.batch)) {
           return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
         }
@@ -202,10 +207,12 @@ export class LocalWorkbookSessionManager {
         void this.relayUpstream(session, appendFrame.batch);
         return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
       },
-      heartbeat: (heartbeatFrame) => [
-        createHeartbeatFrame(heartbeatFrame.documentId, session.cursor),
-      ],
+      heartbeat: (heartbeatFrame) => {
+        const session = this.ensureSession(heartbeatFrame.documentId);
+        return [createHeartbeatFrame(heartbeatFrame.documentId, session.cursor)];
+      },
       snapshotChunk: (snapshotFrame) => {
+        const session = this.ensureSession(snapshotFrame.documentId);
         acceptLocalSnapshotChunk(session, snapshotFrame, this.snapshotStoreContext());
         return [
           createAckFrame(snapshotFrame.documentId, snapshotFrame.snapshotId, snapshotFrame.cursor),
@@ -335,38 +342,17 @@ export class LocalWorkbookSessionManager {
       subscriptionId,
       this.agentSubscriptionOwners,
       (removedSubscriptionId) => {
-        session.eventBacklog = session.eventBacklog.filter((event) => {
-          return event.kind !== "rangeChanged" || event.subscriptionId !== removedSubscriptionId;
-        });
+        removeQueuedSubscriptionEvents(session, removedSubscriptionId);
       },
     );
   }
 
   private queueAgentEvent(documentId: string, event: AgentEvent): void {
-    const session = this.sessions.get(documentId);
-    if (!session) {
-      return;
-    }
-    session.eventBacklog.push(event);
-    if (session.eventFlushScheduled) {
-      return;
-    }
-    session.eventFlushScheduled = true;
-    setImmediate(() => {
-      session.eventFlushScheduled = false;
-      this.flushQueuedAgentEvents(documentId);
-    });
+    queueLocalAgentEvent(this.agentEventQueueContext(), documentId, event);
   }
 
   private flushQueuedAgentEvents(documentId: string): void {
-    const session = this.sessions.get(documentId);
-    if (!session || session.eventBacklog.length === 0 || this.agentEventListeners.size === 0) {
-      return;
-    }
-    const pending = session.eventBacklog.splice(0);
-    pending.forEach((event) => {
-      this.agentEventListeners.forEach((listener) => listener(event));
-    });
+    flushQueuedLocalAgentEvents(this.agentEventQueueContext(), documentId);
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
@@ -379,6 +365,13 @@ export class LocalWorkbookSessionManager {
       getSession: (documentId: string) => this.sessions.get(documentId),
       snapshotAssemblies: this.snapshotAssemblies,
       maxBatchBacklog: MAX_BATCH_BACKLOG,
+    };
+  }
+
+  private agentEventQueueContext() {
+    return {
+      getSession: (documentId: string) => this.sessions.get(documentId),
+      listeners: this.agentEventListeners,
     };
   }
 

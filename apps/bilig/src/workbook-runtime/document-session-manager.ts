@@ -10,7 +10,7 @@ import {
   routeAgentFrame,
   worksheetHostUnavailableResponse,
 } from "./agent-routing.js";
-import { createBrowserHelloReplay } from "./browser-sync-replay.js";
+import { openWorkbookBrowserSession } from "./browser-session-shared.js";
 import {
   closePresenceBackedWorkbookSession,
   countPresenceBackedWorkbookSessions,
@@ -178,15 +178,15 @@ export class DocumentSessionManager {
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
-    await joinOwnedBrowserSession(
-      this.persistence,
-      this.ownerId,
-      frame.documentId,
-      frame.sessionId,
-    );
-    return createBrowserHelloReplay({
-      documentId: frame.documentId,
-      lastServerCursor: frame.lastServerCursor,
+    return openWorkbookBrowserSession(frame, {
+      register: async (helloFrame) => {
+        await joinOwnedBrowserSession(
+          this.persistence,
+          this.ownerId,
+          helloFrame.documentId,
+          helloFrame.sessionId,
+        );
+      },
       latestCursor: this.persistence.batches.latestCursor(frame.documentId),
       latestSnapshot: this.persistence.snapshots.latest(frame.documentId),
       listMissedFrames: async (cursorFloor) => {

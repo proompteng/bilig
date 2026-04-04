@@ -44,9 +44,14 @@ export class LocalDocumentSupervisor implements DocumentControlService {
   }
 
   openBrowserSession(frame: HelloFrame): Effect.Effect<ProtocolFrame[], TransportError> {
-    return this.handleSyncFrame(frame).pipe(
-      Effect.map((result) => (Array.isArray(result) ? result : [result])),
-    );
+    return wrapTransportPromise("Failed to open browser session", async () => {
+      const actor = this.ensureActor(frame.documentId);
+      const responses = await this.manager.openBrowserSession(frame);
+      actor.send({ type: "operation.recorded", operation: "openBrowserSession" });
+      actor.send({ type: "browser.attached" });
+      updateActorFromFrames(actor, responses);
+      return responses;
+    });
   }
 
   handleSyncFrame(
