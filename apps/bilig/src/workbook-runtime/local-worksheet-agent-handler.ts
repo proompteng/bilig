@@ -10,6 +10,7 @@ import type {
 import {
   cellCountForRange,
   collectChangedAddressesForEvent,
+  getRangeBounds,
   iterateRange,
 } from "./range-subscription-utils.js";
 
@@ -133,24 +134,26 @@ export function handleLocalWorksheetAgentRequest<SessionState extends LocalWorks
         throw new Error(`Subscription id already in use: ${request.subscriptionId}`);
       }
 
+      const bounds = getRangeBounds(request.range);
       const rangeCellCount = cellCountForRange(request.range);
-      const changedAddresses =
+      const watchedAddresses =
         rangeCellCount <= context.largeRangeSubscriptionThreshold
           ? iterateRange(request.range)
           : null;
-      const unsubscribe = changedAddresses
-        ? session.engine.subscribeCells(request.range.sheetName, changedAddresses, () => {
+      const unsubscribe = watchedAddresses
+        ? session.engine.subscribeCells(request.range.sheetName, watchedAddresses, () => {
             context.queueAgentEvent(session.documentId, {
               kind: "rangeChanged",
               subscriptionId: request.subscriptionId,
               range: request.range,
-              changedAddresses: [...changedAddresses],
+              changedAddresses: [...watchedAddresses],
             });
           })
         : session.engine.subscribe((event: EngineEvent) => {
             const changedInRange = collectChangedAddressesForEvent(
               session.engine,
               request.range,
+              bounds,
               event,
             );
             if (changedInRange.length === 0) {
@@ -168,6 +171,8 @@ export function handleLocalWorksheetAgentRequest<SessionState extends LocalWorks
         subscriptionId: request.subscriptionId,
         sessionId: request.sessionId,
         range: request.range,
+        bounds,
+        watchedAddresses,
         unsubscribe,
       });
       agentSession.subscriptionIds.add(request.subscriptionId);

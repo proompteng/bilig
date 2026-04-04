@@ -1,4 +1,5 @@
 import type { CellRangeRef } from "@bilig/protocol";
+import type { RangeBounds } from "./range-subscription-utils.js";
 import { normalizeSessionId } from "./agent-routing.js";
 import { documentIdFromSessionId } from "./workbook-session-shared.js";
 
@@ -13,6 +14,8 @@ export interface LocalAgentRangeSubscriptionState {
   subscriptionId: string;
   sessionId: string;
   range: CellRangeRef;
+  bounds: RangeBounds;
+  watchedAddresses: readonly string[] | null;
   unsubscribe: () => void;
 }
 

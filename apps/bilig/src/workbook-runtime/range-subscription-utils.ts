@@ -1,20 +1,41 @@
 import { SpreadsheetEngine } from "@bilig/core";
+import { formatAddress } from "@bilig/formula";
 import type { CellRangeRef, EngineEvent } from "@bilig/protocol";
 
-export function iterateRange(range: CellRangeRef): string[] {
+export interface RangeBounds {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+}
+
+export function getRangeBounds(range: CellRangeRef): RangeBounds {
   const [startColPart, startRowPart] = splitAddress(range.startAddress);
   const [endColPart, endRowPart] = splitAddress(range.endAddress);
-  const startCol = decodeColumn(startColPart);
-  const endCol = decodeColumn(endColPart);
-  const startRow = Number.parseInt(startRowPart, 10);
-  const endRow = Number.parseInt(endRowPart, 10);
-  const addresses: string[] = [];
-  for (let row = startRow; row <= endRow; row += 1) {
-    for (let col = startCol; col <= endCol; col += 1) {
-      addresses.push(`${encodeColumn(col)}${row}`);
+  return {
+    startCol: decodeColumn(startColPart),
+    endCol: decodeColumn(endColPart),
+    startRow: Number.parseInt(startRowPart, 10),
+    endRow: Number.parseInt(endRowPart, 10),
+  };
+}
+
+export function iterateRangeBounds(bounds: RangeBounds): string[] {
+  const width = bounds.endCol - bounds.startCol + 1;
+  const height = bounds.endRow - bounds.startRow + 1;
+  const addresses = Array.from<string>({ length: width * height });
+  let index = 0;
+  for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+    for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+      addresses[index] = `${encodeColumn(col)}${row}`;
+      index += 1;
     }
   }
   return addresses;
+}
+
+export function iterateRange(range: CellRangeRef): string[] {
+  return iterateRangeBounds(getRangeBounds(range));
 }
 
 export function splitAddress(address: string): [string, string] {
@@ -45,94 +66,84 @@ export function encodeColumn(value: number): string {
 }
 
 export function cellCountForRange(range: CellRangeRef): number {
-  const [startColPart, startRowPart] = splitAddress(range.startAddress);
-  const [endColPart, endRowPart] = splitAddress(range.endAddress);
-  const width = decodeColumn(endColPart) - decodeColumn(startColPart) + 1;
-  const height = Number.parseInt(endRowPart, 10) - Number.parseInt(startRowPart, 10) + 1;
+  const bounds = getRangeBounds(range);
+  const width = bounds.endCol - bounds.startCol + 1;
+  const height = bounds.endRow - bounds.startRow + 1;
   return width * height;
 }
 
 function collectChangedAddressesInRange(
   engine: SpreadsheetEngine,
   range: CellRangeRef,
+  bounds: RangeBounds,
   changedCellIndices: readonly number[] | Uint32Array,
 ): string[] {
-  const [startColPart, startRowPart] = splitAddress(range.startAddress);
-  const [endColPart, endRowPart] = splitAddress(range.endAddress);
-  const startCol = decodeColumn(startColPart);
-  const endCol = decodeColumn(endColPart);
-  const startRow = Number.parseInt(startRowPart, 10);
-  const endRow = Number.parseInt(endRowPart, 10);
-  const changedAddresses: string[] = [];
+  const sheet = engine.workbook.getSheet(range.sheetName);
+  if (!sheet) {
+    return [];
+  }
+  const targetSheetId = sheet.id;
+  const changedAddresses = Array.from<string>({ length: changedCellIndices.length });
+  let changedAddressCount = 0;
 
   for (let index = 0; index < changedCellIndices.length; index += 1) {
-    const qualifiedAddress = engine.workbook.getQualifiedAddress(changedCellIndices[index]!);
-    if (!qualifiedAddress.startsWith(`${range.sheetName}!`)) {
+    const cellIndex = changedCellIndices[index]!;
+    if (engine.workbook.cellStore.sheetIds[cellIndex] !== targetSheetId) {
       continue;
     }
-    const address = qualifiedAddress.slice(range.sheetName.length + 1);
-    const parsed = splitAddress(address);
-    const col = decodeColumn(parsed[0]);
-    const row = Number.parseInt(parsed[1], 10);
-    if (col < startCol || col > endCol || row < startRow || row > endRow) {
+    const row = engine.workbook.cellStore.rows[cellIndex]!;
+    const col = engine.workbook.cellStore.cols[cellIndex]!;
+    if (
+      col < bounds.startCol ||
+      col > bounds.endCol ||
+      row < bounds.startRow ||
+      row > bounds.endRow
+    ) {
       continue;
     }
-    changedAddresses.push(address);
+    changedAddresses[changedAddressCount] = formatAddress(row, col);
+    changedAddressCount += 1;
   }
 
-  return changedAddresses;
+  return changedAddresses.slice(0, changedAddressCount);
 }
 
 function collectAddressesForIntersection(
-  range: CellRangeRef,
-  startAddress: string,
-  endAddress: string,
+  rangeBounds: RangeBounds,
+  invalidatedRange: CellRangeRef,
 ): string[] {
-  const rangeStart = splitAddress(range.startAddress);
-  const rangeEnd = splitAddress(range.endAddress);
-  const eventStart = splitAddress(startAddress);
-  const eventEnd = splitAddress(endAddress);
-
-  const startCol = Math.max(decodeColumn(rangeStart[0]), decodeColumn(eventStart[0]));
-  const endCol = Math.min(decodeColumn(rangeEnd[0]), decodeColumn(eventEnd[0]));
-  const startRow = Math.max(Number.parseInt(rangeStart[1], 10), Number.parseInt(eventStart[1], 10));
-  const endRow = Math.min(Number.parseInt(rangeEnd[1], 10), Number.parseInt(eventEnd[1], 10));
+  const invalidatedBounds = getRangeBounds(invalidatedRange);
+  const startCol = Math.max(rangeBounds.startCol, invalidatedBounds.startCol);
+  const endCol = Math.min(rangeBounds.endCol, invalidatedBounds.endCol);
+  const startRow = Math.max(rangeBounds.startRow, invalidatedBounds.startRow);
+  const endRow = Math.min(rangeBounds.endRow, invalidatedBounds.endRow);
 
   if (startCol > endCol || startRow > endRow) {
     return [];
   }
 
-  const changedAddresses: string[] = [];
-  for (let row = startRow; row <= endRow; row += 1) {
-    for (let col = startCol; col <= endCol; col += 1) {
-      changedAddresses.push(`${encodeColumn(col)}${row}`);
-    }
-  }
-  return changedAddresses;
+  return iterateRangeBounds({ startCol, endCol, startRow, endRow });
 }
 
 export function collectChangedAddressesForEvent(
   engine: SpreadsheetEngine,
   range: CellRangeRef,
+  bounds: RangeBounds,
   event: EngineEvent,
 ): string[] {
   if (event.invalidation === "full") {
-    return iterateRange(range);
+    return iterateRangeBounds(bounds);
   }
 
   const changedAddresses = new Set(
-    collectChangedAddressesInRange(engine, range, event.changedCellIndices),
+    collectChangedAddressesInRange(engine, range, bounds, event.changedCellIndices),
   );
   for (let index = 0; index < event.invalidatedRanges.length; index += 1) {
     const invalidatedRange = event.invalidatedRanges[index]!;
     if (invalidatedRange.sheetName !== range.sheetName) {
       continue;
     }
-    collectAddressesForIntersection(
-      range,
-      invalidatedRange.startAddress,
-      invalidatedRange.endAddress,
-    ).forEach((address) => {
+    collectAddressesForIntersection(bounds, invalidatedRange).forEach((address) => {
       changedAddresses.add(address);
     });
   }

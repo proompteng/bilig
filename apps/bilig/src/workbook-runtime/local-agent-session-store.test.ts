@@ -37,6 +37,8 @@ describe("local-agent-session-store", () => {
         startAddress: "A1",
         endAddress: "A1",
       },
+      bounds: { startRow: 1, endRow: 1, startCol: 1, endCol: 1 },
+      watchedAddresses: ["A1"],
       unsubscribe: vi.fn(),
     });
     session.agentSessions.get(sessionId)?.subscriptionIds.add("sub-1");
@@ -63,6 +65,8 @@ describe("local-agent-session-store", () => {
         startAddress: "A1",
         endAddress: "B2",
       },
+      bounds: { startRow: 1, endRow: 2, startCol: 1, endCol: 2 },
+      watchedAddresses: null,
       unsubscribe,
     });
     session.agentSessions.get(sessionId)?.subscriptionIds.add("sub-3");
