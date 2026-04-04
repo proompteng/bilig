@@ -44,11 +44,8 @@ import {
   createHeartbeatFrame,
 } from "./sync-frame-shared.js";
 import { createUnsupportedSyncFrame } from "./sync-frame-router.js";
-import {
-  createWorkbookLoadOptions,
-  handleWorkbookAgentFrame,
-  loadWorkbookIntoRuntime,
-} from "./workbook-session-shared.js";
+import { createWorkbookLoadOptions, loadWorkbookIntoRuntime } from "./workbook-session-shared.js";
+import { WorkbookSessionCore } from "./workbook-session-core.js";
 import { WorkbookSyncSessionHost } from "./workbook-sync-session-host.js";
 
 interface LocalWorkbookSession extends LocalWorksheetSessionState, LocalSnapshotSessionState {
@@ -93,7 +90,7 @@ export class LocalWorkbookSessionManager {
   private readonly sessions = new Map<string, LocalWorkbookSession>();
   private readonly agentEventListeners = new Set<(event: AgentEvent) => void>();
   private readonly agentSubscriptionOwners = new Map<string, string>();
-  private readonly syncSessionHost: WorkbookSyncSessionHost<ProtocolFrame[]>;
+  private readonly sessionCore: WorkbookSessionCore<ProtocolFrame[]>;
 
   constructor(private readonly options: LocalWorkbookSessionManagerOptions = {}) {
     const browserSessionHost = new WorkbookBrowserSessionHost({
@@ -104,7 +101,7 @@ export class LocalWorkbookSessionManager {
           .batches.filter((entry) => entry.cursor > cursorFloor)
           .map((entry) => entry.frame),
     });
-    this.syncSessionHost = new WorkbookSyncSessionHost<ProtocolFrame[]>({
+    const syncSessionHost = new WorkbookSyncSessionHost<ProtocolFrame[]>({
       browserSessionHost,
       hello: (helloFrame) => this.openBrowserSession(helloFrame),
       appendBatch: (appendFrame) => {
@@ -146,6 +143,51 @@ export class LocalWorkbookSessionManager {
           "Unsupported frame",
         ),
       ],
+    });
+    this.sessionCore = new WorkbookSessionCore({
+      syncSessionHost,
+      invalidFrameMessage: "Local server accepts only agent requests",
+      errorCode: "LOCAL_SERVER_FAILURE",
+      loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
+      openWorkbookSession: (request) => {
+        const session = this.ensureSession(request.documentId);
+        return openLocalAgentSession(session, request.replicaId);
+      },
+      closeWorkbookSession: (request) => {
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        closeLocalAgentSession(
+          session,
+          request.sessionId,
+          (ownedSession, sessionId, subscriptionId) => {
+            this.removeAgentSubscription(ownedSession, sessionId, subscriptionId);
+          },
+        );
+      },
+      getMetrics: (request) => {
+        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
+        return { kind: "metrics", id: request.id, value: engine.getLastMetrics() };
+      },
+      handleWorksheetRequest: (_frame, request) =>
+        handleLocalWorksheetAgentRequest(
+          {
+            largeRangeSubscriptionThreshold: LARGE_RANGE_SUBSCRIPTION_THRESHOLD,
+            agentSubscriptionOwners: this.agentSubscriptionOwners,
+            getSessionByAgentSessionId: (sessionId) => this.getSessionByAgentSessionId(sessionId),
+            getCachedSnapshot: (session) => getLocalCachedSnapshot(session),
+            importSnapshot: (session, snapshot) => {
+              session.engine.importSnapshot(snapshot);
+              session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+              storeLocalCachedSnapshot(session, snapshot);
+            },
+            removeAgentSubscription: (session, sessionId, subscriptionId) => {
+              this.removeAgentSubscription(session, sessionId, subscriptionId);
+            },
+            queueAgentEvent: (documentId, event) => {
+              this.queueAgentEvent(documentId, event);
+            },
+          },
+          request,
+        ),
     });
   }
 
@@ -207,7 +249,7 @@ export class LocalWorkbookSessionManager {
     send: (frame: ProtocolFrame) => void,
   ): () => void {
     this.ensureSession(documentId);
-    return this.syncSessionHost.attachBrowser(documentId, subscriberId, send);
+    return this.sessionCore.attachBrowser(documentId, subscriberId, send);
   }
 
   subscribeAgentEvents(listener: (event: AgentEvent) => void): () => void {
@@ -222,58 +264,15 @@ export class LocalWorkbookSessionManager {
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
     this.ensureSession(frame.documentId);
-    return this.syncSessionHost.openBrowserSession(frame);
+    return this.sessionCore.openBrowserSession(frame);
   }
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame[]> {
-    return this.syncSessionHost.handleSyncFrame(frame);
+    return this.sessionCore.handleSyncFrame(frame);
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
-    return handleWorkbookAgentFrame(frame, context, {
-      invalidFrameMessage: "Local server accepts only agent requests",
-      errorCode: "LOCAL_SERVER_FAILURE",
-      loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
-      openWorkbookSession: (request) => {
-        const session = this.ensureSession(request.documentId);
-        return openLocalAgentSession(session, request.replicaId);
-      },
-      closeWorkbookSession: (request) => {
-        const session = this.getSessionByAgentSessionId(request.sessionId);
-        closeLocalAgentSession(
-          session,
-          request.sessionId,
-          (ownedSession, sessionId, subscriptionId) => {
-            this.removeAgentSubscription(ownedSession, sessionId, subscriptionId);
-          },
-        );
-      },
-      getMetrics: (request) => {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        return { kind: "metrics", id: request.id, value: engine.getLastMetrics() };
-      },
-      handleWorksheetRequest: (_frame, request) =>
-        handleLocalWorksheetAgentRequest(
-          {
-            largeRangeSubscriptionThreshold: LARGE_RANGE_SUBSCRIPTION_THRESHOLD,
-            agentSubscriptionOwners: this.agentSubscriptionOwners,
-            getSessionByAgentSessionId: (sessionId) => this.getSessionByAgentSessionId(sessionId),
-            getCachedSnapshot: (session) => getLocalCachedSnapshot(session),
-            importSnapshot: (session, snapshot) => {
-              session.engine.importSnapshot(snapshot);
-              session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-              storeLocalCachedSnapshot(session, snapshot);
-            },
-            removeAgentSubscription: (session, sessionId, subscriptionId) => {
-              this.removeAgentSubscription(session, sessionId, subscriptionId);
-            },
-            queueAgentEvent: (documentId, event) => {
-              this.queueAgentEvent(documentId, event);
-            },
-          },
-          request,
-        ),
-    });
+    return this.sessionCore.handleAgentFrame(frame, context);
   }
 
   getDocumentState(documentId: string): LocalDocumentStateSummary {
@@ -281,7 +280,7 @@ export class LocalWorkbookSessionManager {
     return {
       documentId,
       cursor: session.cursor,
-      browserSessions: this.syncSessionHost.listSubscriberIds(documentId),
+      browserSessions: this.sessionCore.listSubscriberIds(documentId),
       agentSessions: [...session.agentSessions.keys()],
       lastBatchId: session.batches.at(-1)?.frame.batch.id ?? null,
     };
@@ -350,14 +349,14 @@ export class LocalWorkbookSessionManager {
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    this.syncSessionHost.broadcast(documentId, frame);
+    this.sessionCore.broadcast(documentId, frame);
   }
 
   private snapshotStoreContext() {
     return {
       broadcast: this.broadcast.bind(this),
       getSession: (documentId: string) => this.sessions.get(documentId),
-      snapshotAssemblies: this.syncSessionHost.snapshotAssemblies,
+      snapshotAssemblies: this.sessionCore.snapshotAssemblies,
       maxBatchBacklog: MAX_BATCH_BACKLOG,
     };
   }

@@ -24,11 +24,8 @@ import {
   createHeartbeatFrame,
 } from "./sync-frame-shared.js";
 import { createUnsupportedSyncFrame } from "./sync-frame-router.js";
-import {
-  createWorkbookLoadOptions,
-  handleWorkbookAgentFrame,
-  loadWorkbookIntoRuntime,
-} from "./workbook-session-shared.js";
+import { createWorkbookLoadOptions, loadWorkbookIntoRuntime } from "./workbook-session-shared.js";
+import { WorkbookSessionCore } from "./workbook-session-core.js";
 import { WorkbookSyncSessionHost } from "./workbook-sync-session-host.js";
 
 export interface DocumentStateSummary {
@@ -46,7 +43,7 @@ export interface DocumentSessionManagerOptions {
 }
 
 export class DocumentSessionManager {
-  private readonly syncSessionHost: WorkbookSyncSessionHost<ProtocolFrame>;
+  private readonly sessionCore: WorkbookSessionCore<ProtocolFrame>;
 
   constructor(
     readonly persistence: InMemoryDocumentPersistence = createInMemoryDocumentPersistence(),
@@ -66,7 +63,7 @@ export class DocumentSessionManager {
         );
       },
     });
-    this.syncSessionHost = new WorkbookSyncSessionHost<ProtocolFrame>({
+    const syncSessionHost = new WorkbookSyncSessionHost<ProtocolFrame>({
       browserSessionHost,
       hello: async (helloFrame) => {
         await joinOwnedBrowserSession(
@@ -119,14 +116,8 @@ export class DocumentSessionManager {
           "Unsupported sync frame",
         ),
     });
-  }
-
-  async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
-    return this.syncSessionHost.handleSyncFrame(frame);
-  }
-
-  async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
-    return handleWorkbookAgentFrame(frame, context, {
+    this.sessionCore = new WorkbookSessionCore({
+      syncSessionHost,
       invalidFrameMessage: "Sync server accepts only agent requests on the remote API ingress",
       errorCode: "SYNC_SERVER_FAILURE",
       loadWorkbookFile: (request, requestContext) => this.loadWorkbookFile(request, requestContext),
@@ -174,16 +165,24 @@ export class DocumentSessionManager {
     });
   }
 
+  async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
+    return this.sessionCore.handleSyncFrame(frame);
+  }
+
+  async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
+    return this.sessionCore.handleAgentFrame(frame, context);
+  }
+
   attachBrowser(
     documentId: string,
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): () => void {
-    return this.syncSessionHost.attachBrowser(documentId, subscriberId, send);
+    return this.sessionCore.attachBrowser(documentId, subscriberId, send);
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
-    return this.syncSessionHost.openBrowserSession(frame);
+    return this.sessionCore.openBrowserSession(frame);
   }
 
   async getDocumentState(documentId: string): Promise<DocumentStateSummary> {
@@ -230,12 +229,12 @@ export class DocumentSessionManager {
   ): Promise<void> {
     await acceptPersistedSnapshotChunk(
       this.persistence,
-      this.syncSessionHost.snapshotAssemblies,
+      this.sessionCore.snapshotAssemblies,
       frame,
     );
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    this.syncSessionHost.broadcast(documentId, frame);
+    this.sessionCore.broadcast(documentId, frame);
   }
 }
