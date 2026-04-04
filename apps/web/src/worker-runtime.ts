@@ -123,6 +123,13 @@ interface ChangedSheetCells {
   positions: { row: number; col: number }[];
 }
 
+interface SheetViewportImpact {
+  changedCells: ChangedSheetCells | null;
+  invalidatedRanges: CellRangeRef[];
+  invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[];
+  invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[];
+}
+
 function styleSignature(style: CellStyleRecord): string {
   const fill = style.fill?.backgroundColor ?? "";
   const font = style.font;
@@ -178,6 +185,7 @@ export class WorkbookWorkerRuntime {
   private engineSubscription: (() => void) | null = null;
   private externalSyncState: SyncState | null = null;
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionState>();
+  private readonly viewportSubscriptionsBySheet = new Map<string, Set<ViewportSubscriptionState>>();
   private readonly formatIds = new Map<string, number>([["", 0]]);
   private readonly styles = new Map<string, CellStyleRecord>([
     [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
@@ -367,8 +375,10 @@ export class WorkbookWorkerRuntime {
     };
     listener(encodeViewportPatch(this.buildViewportPatch(state, null)));
     this.viewportSubscriptions.add(state);
+    this.addViewportSubscription(state);
     return () => {
       this.viewportSubscriptions.delete(state);
+      this.removeViewportSubscription(state);
     };
   }
 
@@ -381,6 +391,7 @@ export class WorkbookWorkerRuntime {
     }
     this.persistQueued = false;
     this.viewportSubscriptions.clear();
+    this.viewportSubscriptionsBySheet.clear();
     this.styles.clear();
     this.styles.set(DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID });
     this.snapshotCache = null;
@@ -464,25 +475,22 @@ export class WorkbookWorkerRuntime {
     event: EngineEvent | null,
     metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
   ): void {
-    const changedCellsBySheet =
-      event && event.invalidation !== "full"
-        ? this.collectChangedCellsBySheet(event.changedCellIndices)
-        : null;
-    const impactedSheets =
-      event === null ? null : this.collectImpactedSheets(event, changedCellsBySheet);
-    for (const subscription of this.viewportSubscriptions) {
+    const impactsBySheet = event === null ? null : this.collectSheetViewportImpacts(event);
+    const impactedSheets = impactsBySheet === null ? null : new Set(impactsBySheet.keys());
+    for (const subscription of this.getViewportSubscriptionsForEvent(event, impactedSheets)) {
+      const sheetImpact = impactsBySheet?.get(subscription.subscription.sheetName) ?? null;
       if (
         event !== null &&
         !this.viewportPatchMayBeImpacted(
           subscription.subscription,
           event,
-          changedCellsBySheet,
+          sheetImpact,
           impactedSheets,
         )
       ) {
         continue;
       }
-      const patch = this.buildViewportPatch(subscription, event, metrics, changedCellsBySheet);
+      const patch = this.buildViewportPatch(subscription, event, metrics, sheetImpact);
       if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0) {
         continue;
       }
@@ -490,11 +498,46 @@ export class WorkbookWorkerRuntime {
     }
   }
 
+  private addViewportSubscription(state: ViewportSubscriptionState): void {
+    const subscriptions =
+      this.viewportSubscriptionsBySheet.get(state.subscription.sheetName) ?? new Set();
+    subscriptions.add(state);
+    this.viewportSubscriptionsBySheet.set(state.subscription.sheetName, subscriptions);
+  }
+
+  private removeViewportSubscription(state: ViewportSubscriptionState): void {
+    const subscriptions = this.viewportSubscriptionsBySheet.get(state.subscription.sheetName);
+    if (!subscriptions) {
+      return;
+    }
+    subscriptions.delete(state);
+    if (subscriptions.size === 0) {
+      this.viewportSubscriptionsBySheet.delete(state.subscription.sheetName);
+    }
+  }
+
+  private getViewportSubscriptionsForEvent(
+    event: EngineEvent | null,
+    impactedSheets: ReadonlySet<string> | null,
+  ): Iterable<ViewportSubscriptionState> {
+    if (event === null || event.invalidation === "full" || impactedSheets === null) {
+      return this.viewportSubscriptions;
+    }
+
+    const subscriptions = new Set<ViewportSubscriptionState>();
+    impactedSheets.forEach((sheetName) => {
+      this.viewportSubscriptionsBySheet.get(sheetName)?.forEach((subscription) => {
+        subscriptions.add(subscription);
+      });
+    });
+    return subscriptions;
+  }
+
   private buildViewportPatch(
     state: ViewportSubscriptionState,
     event: EngineEvent | null,
     metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
-    changedCellsBySheet: ReadonlyMap<string, ChangedSheetCells> | null = null,
+    sheetImpact: SheetViewportImpact | null = null,
   ): ViewportPatch {
     const engine = this.requireEngine();
     const viewport = state.subscription;
@@ -502,21 +545,10 @@ export class WorkbookWorkerRuntime {
     const styles: CellStyleRecord[] = [];
     const cells: ViewportPatchedCell[] = [];
     const full = event === null || event.invalidation === "full";
-    const changedAddresses = changedCellsBySheet?.get(viewport.sheetName)?.addresses ?? null;
-    const invalidatedRanges =
-      event?.invalidatedRanges.filter(
-        (range: CellRangeRef) => range.sheetName === viewport.sheetName,
-      ) ?? [];
-    const invalidatedRows =
-      event?.invalidatedRows.filter(
-        (entry: { sheetName: string; startIndex: number; endIndex: number }) =>
-          entry.sheetName === viewport.sheetName,
-      ) ?? [];
-    const invalidatedColumns =
-      event?.invalidatedColumns.filter(
-        (entry: { sheetName: string; startIndex: number; endIndex: number }) =>
-          entry.sheetName === viewport.sheetName,
-      ) ?? [];
+    const changedAddresses = sheetImpact?.changedCells?.addresses ?? null;
+    const invalidatedRanges = sheetImpact?.invalidatedRanges ?? [];
+    const invalidatedRows = sheetImpact?.invalidatedRows ?? [];
+    const invalidatedColumns = sheetImpact?.invalidatedColumns ?? [];
 
     if (full) {
       state.lastCellSignatures.clear();
@@ -850,30 +882,62 @@ export class WorkbookWorkerRuntime {
     return changedBySheet;
   }
 
-  private collectImpactedSheets(
-    event: EngineEvent,
-    changedCellsBySheet: ReadonlyMap<string, ChangedSheetCells> | null,
-  ): Set<string> | null {
-    const impactedSheets = new Set<string>();
-    changedCellsBySheet?.forEach((_cells, sheetName) => {
-      impactedSheets.add(sheetName);
+  private collectSheetViewportImpacts(event: EngineEvent): Map<string, SheetViewportImpact> | null {
+    const changedCellsBySheet =
+      event.invalidation !== "full"
+        ? this.collectChangedCellsBySheet(event.changedCellIndices)
+        : null;
+    const impactsBySheet = new Map<string, SheetViewportImpact>();
+
+    changedCellsBySheet?.forEach((changedCells, sheetName) => {
+      impactsBySheet.set(sheetName, {
+        changedCells,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+      });
     });
+
     event.invalidatedRanges.forEach((range) => {
-      impactedSheets.add(range.sheetName);
+      const impact = impactsBySheet.get(range.sheetName) ?? {
+        changedCells: null,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+      };
+      impact.invalidatedRanges.push(range);
+      impactsBySheet.set(range.sheetName, impact);
     });
+
     event.invalidatedRows.forEach((entry) => {
-      impactedSheets.add(entry.sheetName);
+      const impact = impactsBySheet.get(entry.sheetName) ?? {
+        changedCells: null,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+      };
+      impact.invalidatedRows.push(entry);
+      impactsBySheet.set(entry.sheetName, impact);
     });
+
     event.invalidatedColumns.forEach((entry) => {
-      impactedSheets.add(entry.sheetName);
+      const impact = impactsBySheet.get(entry.sheetName) ?? {
+        changedCells: null,
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+      };
+      impact.invalidatedColumns.push(entry);
+      impactsBySheet.set(entry.sheetName, impact);
     });
-    return impactedSheets.size > 0 ? impactedSheets : null;
+
+    return impactsBySheet.size > 0 ? impactsBySheet : null;
   }
 
   private viewportPatchMayBeImpacted(
     viewport: ViewportPatchSubscription,
     event: EngineEvent,
-    changedCellsBySheet: ReadonlyMap<string, ChangedSheetCells> | null,
+    sheetImpact: SheetViewportImpact | null,
     impactedSheets: ReadonlySet<string> | null,
   ): boolean {
     if (event.invalidation === "full") {
@@ -884,7 +948,7 @@ export class WorkbookWorkerRuntime {
       return false;
     }
 
-    const changedCells = changedCellsBySheet?.get(viewport.sheetName);
+    const changedCells = sheetImpact?.changedCells;
     if (changedCells) {
       for (const parsed of changedCells.positions) {
         if (
@@ -898,11 +962,8 @@ export class WorkbookWorkerRuntime {
       }
     }
 
-    for (let index = 0; index < event.invalidatedRanges.length; index += 1) {
-      const range = event.invalidatedRanges[index]!;
-      if (range.sheetName !== viewport.sheetName) {
-        continue;
-      }
+    for (let index = 0; index < (sheetImpact?.invalidatedRanges.length ?? 0); index += 1) {
+      const range = sheetImpact!.invalidatedRanges[index]!;
       const start = parseCellAddress(range.startAddress, viewport.sheetName);
       const end = parseCellAddress(range.endAddress, viewport.sheetName);
       const rowStart = Math.min(start.row, end.row);
@@ -919,10 +980,9 @@ export class WorkbookWorkerRuntime {
       }
     }
 
-    for (let index = 0; index < event.invalidatedRows.length; index += 1) {
-      const rowInvalidation = event.invalidatedRows[index]!;
+    for (let index = 0; index < (sheetImpact?.invalidatedRows.length ?? 0); index += 1) {
+      const rowInvalidation = sheetImpact!.invalidatedRows[index]!;
       if (
-        rowInvalidation.sheetName === viewport.sheetName &&
         rowInvalidation.startIndex <= viewport.rowEnd &&
         rowInvalidation.endIndex >= viewport.rowStart
       ) {
@@ -930,10 +990,9 @@ export class WorkbookWorkerRuntime {
       }
     }
 
-    for (let index = 0; index < event.invalidatedColumns.length; index += 1) {
-      const columnInvalidation = event.invalidatedColumns[index]!;
+    for (let index = 0; index < (sheetImpact?.invalidatedColumns.length ?? 0); index += 1) {
+      const columnInvalidation = sheetImpact!.invalidatedColumns[index]!;
       if (
-        columnInvalidation.sheetName === viewport.sheetName &&
         columnInvalidation.startIndex <= viewport.colEnd &&
         columnInvalidation.endIndex >= viewport.colStart
       ) {

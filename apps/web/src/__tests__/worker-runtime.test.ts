@@ -234,6 +234,64 @@ describe("WorkbookWorkerRuntime", () => {
     expect(offregion).toHaveLength(1);
   });
 
+  it("builds viewport patches only for subscriptions on impacted sheets", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "sheet-index-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    runtime.renderCommit([{ kind: "upsertSheet", name: "Sheet2", order: 1 }]);
+
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 2,
+      },
+      () => {},
+    );
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet2",
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 2,
+      },
+      () => {},
+    );
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet2",
+        rowStart: 10,
+        rowEnd: 12,
+        colStart: 10,
+        colEnd: 12,
+      },
+      () => {},
+    );
+
+    const originalBuildViewportPatch = runtime["buildViewportPatch"];
+    if (typeof originalBuildViewportPatch !== "function") {
+      throw new Error("Expected buildViewportPatch method");
+    }
+
+    let buildViewportPatchCalls = 0;
+    runtime["buildViewportPatch"] = (...args: unknown[]) => {
+      buildViewportPatchCalls += 1;
+      return Reflect.apply(originalBuildViewportPatch, runtime, args);
+    };
+
+    runtime.setCellValue("Sheet1", "A1", 321);
+
+    expect(buildViewportPatchCalls).toBe(1);
+    runtime["buildViewportPatch"] = originalBuildViewportPatch;
+  });
+
   it("coalesces persistence saves across edit bursts", async () => {
     vi.useFakeTimers();
     const saveJson = vi.fn(async () => {});
