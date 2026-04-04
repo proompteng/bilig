@@ -1,5 +1,5 @@
-import { SpreadsheetEngine } from "@bilig/core";
-import type { CellRangeRef, CellValue, EngineEvent, WorkbookSnapshot } from "@bilig/protocol";
+import type { SpreadsheetEngine } from "@bilig/core";
+import type { EngineEvent, WorkbookSnapshot } from "@bilig/protocol";
 import type { AgentEvent, AgentResponse } from "@bilig/agent-api";
 import type { WorksheetAgentRequest } from "./agent-routing.js";
 import type {
@@ -10,10 +10,7 @@ import type {
 import {
   cellCountForRange,
   collectChangedAddressesForEvent,
-  decodeColumn,
-  encodeColumn,
   iterateRange,
-  splitAddress,
 } from "./range-subscription-utils.js";
 
 export interface LocalWorksheetSessionState extends LocalAgentSessionContainer {
@@ -35,27 +32,6 @@ export interface LocalWorksheetAgentHandlerContext<
   queueAgentEvent(documentId: string, event: AgentEvent): void;
 }
 
-export function readRange(engine: SpreadsheetEngine, range: CellRangeRef): CellValue[][] {
-  const [startColPart] = splitAddress(range.startAddress);
-  const [endColPart] = splitAddress(range.endAddress);
-  const [, startRowPart] = splitAddress(range.startAddress);
-  const [, endRowPart] = splitAddress(range.endAddress);
-  const startCol = decodeColumn(startColPart);
-  const endCol = decodeColumn(endColPart);
-  const startRow = Number.parseInt(startRowPart, 10);
-  const endRow = Number.parseInt(endRowPart, 10);
-  const width = decodeColumn(endColPart) - decodeColumn(startColPart) + 1;
-  const rows: CellValue[][] = [];
-  for (let row = startRow; row <= endRow; row += 1) {
-    const nextRow: CellValue[] = Array.from<CellValue>({ length: width });
-    for (let col = startCol; col <= endCol; col += 1) {
-      nextRow[col - startCol] = engine.getCellValue(range.sheetName, `${encodeColumn(col)}${row}`);
-    }
-    rows.push(nextRow);
-  }
-  return rows;
-}
-
 export function handleLocalWorksheetAgentRequest<SessionState extends LocalWorksheetSessionState>(
   context: LocalWorksheetAgentHandlerContext<SessionState>,
   request: WorksheetAgentRequest,
@@ -66,7 +42,7 @@ export function handleLocalWorksheetAgentRequest<SessionState extends LocalWorks
       return {
         kind: "rangeValues",
         id: request.id,
-        values: readRange(engine, request.range),
+        values: engine.getRangeValues(request.range),
       };
     }
     case "writeRange": {

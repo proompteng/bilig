@@ -1277,18 +1277,21 @@ export class SpreadsheetEngine {
       );
     }
 
-    const ops: EngineOp[] = [];
+    const opCount = expectedHeight * expectedWidth;
+    const ops = Array.from<EngineOp>({ length: opCount });
+    let opIndex = 0;
     for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
       for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
-        ops.push({
+        ops[opIndex] = {
           kind: "setCellValue",
           sheetName: range.sheetName,
           address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
           value: values[rowOffset]![colOffset] ?? null,
-        });
+        };
+        opIndex += 1;
       }
     }
-    this.executeLocalTransaction(ops, ops.length);
+    this.executeLocalTransaction(ops, opCount);
   }
 
   setRangeFormulas(range: CellRangeRef, formulas: readonly (readonly string[])[]): void {
@@ -1304,28 +1307,39 @@ export class SpreadsheetEngine {
       );
     }
 
-    const ops: EngineOp[] = [];
+    const opCount = expectedHeight * expectedWidth;
+    const ops = Array.from<EngineOp>({ length: opCount });
+    let opIndex = 0;
     for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
       for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
-        ops.push({
+        ops[opIndex] = {
           kind: "setCellFormula",
           sheetName: range.sheetName,
           address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
           formula: formulas[rowOffset]![colOffset] ?? "",
-        });
+        };
+        opIndex += 1;
       }
     }
-    this.executeLocalTransaction(ops, ops.length);
+    this.executeLocalTransaction(ops, opCount);
   }
 
   clearRange(range: CellRangeRef): void {
-    const addresses = expandRangeAddresses(range);
-    const ops: EngineOp[] = addresses.map((address) => ({
-      kind: "clearCell",
-      sheetName: range.sheetName,
-      address,
-    }));
-    this.executeLocalTransaction(ops);
+    const bounds = normalizeRange(range);
+    const opCount = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+    const ops = Array.from<EngineOp>({ length: opCount });
+    let opIndex = 0;
+    for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+      for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+        ops[opIndex] = {
+          kind: "clearCell",
+          sheetName: range.sheetName,
+          address: formatAddress(row, col),
+        };
+        opIndex += 1;
+      }
+    }
+    this.executeLocalTransaction(ops, opCount);
   }
 
   fillRange(source: CellRangeRef, target: CellRangeRef): void {
@@ -1500,6 +1514,10 @@ export class SpreadsheetEngine {
       return emptyValue();
     }
     return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+  }
+
+  getRangeValues(range: CellRangeRef): CellValue[][] {
+    return this.readRangeValueMatrix(range);
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
@@ -5491,6 +5509,30 @@ export class SpreadsheetEngine {
     return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
   }
 
+  private readRangeValueMatrix(range: CellRangeRef): CellValue[][] {
+    const bounds = normalizeRange(range);
+    const width = bounds.endCol - bounds.startCol + 1;
+    const height = bounds.endRow - bounds.startRow + 1;
+    const rows = Array.from<CellValue[]>({ length: height });
+    const sheet = this.workbook.getSheet(range.sheetName);
+
+    for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+      const row = bounds.startRow + rowOffset;
+      const values = Array.from<CellValue>({ length: width });
+      for (let colOffset = 0; colOffset < width; colOffset += 1) {
+        const col = bounds.startCol + colOffset;
+        const cellIndex = sheet?.grid.get(row, col) ?? -1;
+        values[colOffset] =
+          cellIndex === -1
+            ? emptyValue()
+            : this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+      }
+      rows[rowOffset] = values;
+    }
+
+    return rows;
+  }
+
   private readRangeValues(
     sheetName: string,
     start: string,
@@ -5504,10 +5546,18 @@ export class SpreadsheetEngine {
     if (range.kind !== "cells") {
       return [];
     }
-    const values: CellValue[] = [];
-    for (let row = range.start.row; row <= range.end.row; row += 1) {
-      for (let col = range.start.col; col <= range.end.col; col += 1) {
-        values.push(this.readCellValue(sheetName, formatAddress(row, col)));
+    const rows = this.readRangeValueMatrix({
+      sheetName,
+      startAddress: start,
+      endAddress: end,
+    });
+    const values = Array.from<CellValue>({ length: rows.length * (rows[0]?.length ?? 0) });
+    let valueIndex = 0;
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex]!;
+      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+        values[valueIndex] = row[colIndex]!;
+        valueIndex += 1;
       }
     }
     return values;
@@ -6832,17 +6882,6 @@ function normalizeRange(range: CellRangeRef): {
     startCol: Math.min(start.col, end.col),
     endCol: Math.max(start.col, end.col),
   };
-}
-
-function expandRangeAddresses(range: CellRangeRef): string[] {
-  const bounds = normalizeRange(range);
-  const addresses: string[] = [];
-  for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
-    for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
-      addresses.push(formatAddress(row, col));
-    }
-  }
-  return addresses;
 }
 
 export const selectors = {

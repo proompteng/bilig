@@ -5349,6 +5349,45 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 0 });
   });
 
+  it("reads rectangular range values as a dense matrix without per-cell callers", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    engine.setRangeValues({ sheetName: "Sheet1", startAddress: "B2", endAddress: "C3" }, [
+      [11, 12],
+      [13, 14],
+    ]);
+    engine.setCellFormula("Sheet1", "D2", "SUM(B2:C2)");
+
+    expect(
+      engine.getRangeValues({
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "D3",
+      }),
+    ).toEqual([
+      [
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Empty },
+      ],
+      [
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Number, value: 11 },
+        { tag: ValueTag.Number, value: 12 },
+        { tag: ValueTag.Number, value: 23 },
+      ],
+      [
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.Number, value: 13 },
+        { tag: ValueTag.Number, value: 14 },
+        { tag: ValueTag.Empty },
+      ],
+    ]);
+  });
+
   it("copies and fills rectangular ranges", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();
