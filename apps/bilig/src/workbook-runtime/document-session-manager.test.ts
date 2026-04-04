@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
 import { createInMemoryDocumentPersistence } from "@bilig/storage-server";
 import type { AgentFrame } from "@bilig/agent-api";
 import { DocumentSessionManager } from "./document-session-manager.js";
@@ -100,5 +101,50 @@ describe("DocumentSessionManager", () => {
     });
     expect(execute).toHaveBeenCalledTimes(2);
     expect((await manager.getDocumentState("doc-1")).sessions).toEqual([]);
+  });
+
+  it("assembles uploaded snapshot chunks into persisted browser snapshots", async () => {
+    const manager = new DocumentSessionManager(createInMemoryDocumentPersistence());
+    const snapshot = {
+      version: 1 as const,
+      workbook: {
+        name: "Imported",
+      },
+      sheets: [
+        {
+          name: "Sheet1",
+          order: 0,
+          cells: [{ address: "A1", value: 42 }],
+        },
+      ],
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+    const chunkFrames = createSnapshotChunkFrames({
+      documentId: "doc-snapshot",
+      snapshotId: "doc-snapshot:snapshot:1",
+      cursor: 6,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes,
+    });
+
+    await Promise.all(chunkFrames.map((frame) => manager.handleSyncFrame(frame)));
+
+    const helloFrames = await manager.openBrowserSession({
+      kind: "hello",
+      documentId: "doc-snapshot",
+      replicaId: "browser-1",
+      sessionId: "browser-1",
+      protocolVersion: 1,
+      lastServerCursor: 0,
+      capabilities: [],
+    });
+
+    expect(helloFrames.some((frame) => frame.kind === "snapshotChunk")).toBe(true);
+    expect(helloFrames).toContainEqual({
+      kind: "cursorWatermark",
+      documentId: "doc-snapshot",
+      cursor: 0,
+      compactedCursor: 6,
+    });
   });
 });

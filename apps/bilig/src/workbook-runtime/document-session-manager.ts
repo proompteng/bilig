@@ -23,20 +23,13 @@ import {
   worksheetHostUnavailableResponse,
 } from "./agent-routing.js";
 import {
+  acceptSnapshotChunk,
   attachBrowserSubscriber,
   broadcastToBrowsers,
   type BrowserSubscriberRegistry,
   createSnapshotPublication,
+  type SnapshotAssemblyRegistry,
 } from "./session-shared.js";
-
-interface SnapshotAssembly {
-  documentId: string;
-  snapshotId: string;
-  cursor: number;
-  contentType: string;
-  chunkCount: number;
-  chunks: Array<Uint8Array | undefined>;
-}
 
 export interface DocumentStateSummary {
   documentId: string;
@@ -53,7 +46,7 @@ export interface DocumentSessionManagerOptions {
 }
 
 export class DocumentSessionManager {
-  private readonly snapshotAssemblies = new Map<string, SnapshotAssembly>();
+  private readonly snapshotAssemblies: SnapshotAssemblyRegistry = new Map();
   private readonly browserSubscribers: BrowserSubscriberRegistry = new Map();
 
   constructor(
@@ -283,35 +276,18 @@ export class DocumentSessionManager {
   private async acceptSnapshotChunk(
     frame: Extract<ProtocolFrame, { kind: "snapshotChunk" }>,
   ): Promise<void> {
-    const assembly = this.snapshotAssemblies.get(frame.snapshotId) ?? {
-      documentId: frame.documentId,
-      snapshotId: frame.snapshotId,
-      cursor: frame.cursor,
-      contentType: frame.contentType,
-      chunkCount: frame.chunkCount,
-      chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
-    };
-    assembly.chunks[frame.chunkIndex] = frame.bytes;
-    this.snapshotAssemblies.set(frame.snapshotId, assembly);
-
-    if (assembly.chunks.every((chunk): chunk is Uint8Array => chunk !== undefined)) {
-      const totalLength = assembly.chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-      const bytes = new Uint8Array(totalLength);
-      let offset = 0;
-      assembly.chunks.forEach((chunk) => {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      });
-      await this.persistence.snapshots.put({
-        documentId: frame.documentId,
-        snapshotId: frame.snapshotId,
-        cursor: frame.cursor,
-        contentType: frame.contentType,
-        bytes,
-        createdAtUnixMs: Date.now(),
-      });
-      this.snapshotAssemblies.delete(frame.snapshotId);
+    const snapshot = acceptSnapshotChunk(this.snapshotAssemblies, frame);
+    if (!snapshot) {
+      return;
     }
+    await this.persistence.snapshots.put({
+      documentId: snapshot.documentId,
+      snapshotId: snapshot.snapshotId,
+      cursor: snapshot.cursor,
+      contentType: snapshot.contentType,
+      bytes: snapshot.bytes,
+      createdAtUnixMs: Date.now(),
+    });
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {

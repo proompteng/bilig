@@ -1,8 +1,9 @@
-import type { ProtocolFrame } from "@bilig/binary-protocol";
+import type { ProtocolFrame, SnapshotChunkFrame } from "@bilig/binary-protocol";
 import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
 import type { WorkbookSnapshot } from "@bilig/protocol";
 
 const snapshotEncoder = new TextEncoder();
+const snapshotDecoder = new TextDecoder();
 
 export interface BrowserSubscriber {
   id: string;
@@ -17,6 +18,25 @@ export interface SnapshotPublication {
   bytes: Uint8Array;
   frames: ReturnType<typeof createSnapshotChunkFrames>;
 }
+
+interface SnapshotAssembly {
+  documentId: string;
+  snapshotId: string;
+  cursor: number;
+  contentType: string;
+  chunkCount: number;
+  chunks: Array<Uint8Array | undefined>;
+}
+
+export interface CompletedSnapshotAssembly {
+  documentId: string;
+  snapshotId: string;
+  cursor: number;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+export type SnapshotAssemblyRegistry = Map<string, SnapshotAssembly>;
 
 export function attachBrowserSubscriber(
   registry: BrowserSubscriberRegistry,
@@ -95,16 +115,108 @@ export function createSnapshotPublication(
 ): SnapshotPublication {
   const snapshotId = `${documentId}:snapshot:${Date.now()}`;
   const bytes = snapshotEncoder.encode(JSON.stringify(snapshot));
-  return {
+  return createSnapshotPublicationFromBytes({
+    documentId,
     snapshotId,
+    cursor,
     contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
     bytes,
+  });
+}
+
+export function createSnapshotPublicationFromBytes(
+  snapshot: CompletedSnapshotAssembly,
+): SnapshotPublication {
+  return {
+    snapshotId: snapshot.snapshotId,
+    contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+    bytes: snapshot.bytes,
     frames: createSnapshotChunkFrames({
-      documentId,
-      snapshotId,
-      cursor,
-      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
-      bytes,
+      documentId: snapshot.documentId,
+      snapshotId: snapshot.snapshotId,
+      cursor: snapshot.cursor,
+      contentType: snapshot.contentType,
+      bytes: snapshot.bytes,
     }),
   };
+}
+
+export function acceptSnapshotChunk(
+  registry: SnapshotAssemblyRegistry,
+  frame: SnapshotChunkFrame,
+): CompletedSnapshotAssembly | null {
+  const assembly = registry.get(frame.snapshotId) ?? {
+    documentId: frame.documentId,
+    snapshotId: frame.snapshotId,
+    cursor: frame.cursor,
+    contentType: frame.contentType,
+    chunkCount: frame.chunkCount,
+    chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
+  };
+  assembly.chunks[frame.chunkIndex] = frame.bytes;
+  registry.set(frame.snapshotId, assembly);
+
+  if (!assembly.chunks.every((chunk): chunk is Uint8Array => chunk !== undefined)) {
+    return null;
+  }
+
+  const totalLength = assembly.chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const bytes = new Uint8Array(totalLength);
+  let offset = 0;
+  assembly.chunks.forEach((chunk) => {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  });
+  registry.delete(frame.snapshotId);
+
+  return {
+    documentId: assembly.documentId,
+    snapshotId: assembly.snapshotId,
+    cursor: assembly.cursor,
+    contentType: assembly.contentType,
+    bytes,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
+  if (!isRecord(value) || value["version"] !== 1) {
+    return false;
+  }
+  const workbook = value["workbook"];
+  if (!isRecord(workbook) || typeof workbook["name"] !== "string") {
+    return false;
+  }
+  const sheets = value["sheets"];
+  if (!Array.isArray(sheets)) {
+    return false;
+  }
+  return sheets.every((sheet) => {
+    if (
+      !isRecord(sheet) ||
+      typeof sheet["name"] !== "string" ||
+      typeof sheet["order"] !== "number"
+    ) {
+      return false;
+    }
+    const cells = sheet["cells"];
+    if (!Array.isArray(cells)) {
+      return false;
+    }
+    return cells.every((cell) => isRecord(cell) && typeof cell["address"] === "string");
+  });
+}
+
+export function decodeWorkbookSnapshotBytes(snapshot: CompletedSnapshotAssembly): WorkbookSnapshot {
+  if (snapshot.contentType !== WORKBOOK_SNAPSHOT_CONTENT_TYPE) {
+    throw new Error(`Unsupported snapshot content type: ${snapshot.contentType}`);
+  }
+  const decoded: unknown = JSON.parse(snapshotDecoder.decode(snapshot.bytes));
+  if (!isWorkbookSnapshot(decoded)) {
+    throw new Error("Workbook snapshot payload does not match the expected schema");
+  }
+  return decoded;
 }

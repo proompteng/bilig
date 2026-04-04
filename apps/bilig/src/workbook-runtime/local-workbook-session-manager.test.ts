@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ProtocolFrame } from "@bilig/binary-protocol";
+import {
+  WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+  createSnapshotChunkFrames,
+  type ProtocolFrame,
+} from "@bilig/binary-protocol";
 import type { AgentFrame } from "@bilig/agent-api";
 import { LocalWorkbookSessionManager } from "./local-workbook-session-manager.js";
 
@@ -205,5 +209,91 @@ describe("LocalWorkbookSessionManager", () => {
     expect(thirdResponse.response.snapshot.sheets[0]?.cells).toContainEqual(
       expect.objectContaining({ address: "A1", value: 123 }),
     );
+  });
+
+  it("imports snapshot chunks through the local sync host", async () => {
+    const manager = new LocalWorkbookSessionManager();
+    const sourceSessionId = await openSession(manager, "doc-source");
+    const browserFrames: ProtocolFrame[] = [];
+    manager.attachBrowser("doc-imported", "browser-1", (frame) => {
+      browserFrames.push(frame);
+    });
+
+    await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "writeRange",
+        id: "write-source",
+        sessionId: sourceSessionId,
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+        values: [[987]],
+      },
+    } satisfies AgentFrame);
+
+    const exported = await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "exportSnapshot",
+        id: "export-source",
+        sessionId: sourceSessionId,
+      },
+    } satisfies AgentFrame);
+
+    if (exported.kind !== "response" || exported.response.kind !== "snapshot") {
+      throw new Error("Expected snapshot export");
+    }
+
+    const bytes = new TextEncoder().encode(JSON.stringify(exported.response.snapshot));
+    const chunkFrames = createSnapshotChunkFrames({
+      documentId: "doc-imported",
+      snapshotId: "doc-imported:snapshot:1",
+      cursor: 4,
+      contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+      bytes,
+    });
+
+    const responses = await Promise.all(chunkFrames.map((frame) => manager.handleSyncFrame(frame)));
+    responses.forEach((responseFrames) => {
+      expect(responseFrames).toContainEqual(
+        expect.objectContaining({
+          kind: "ack",
+          documentId: "doc-imported",
+          batchId: "doc-imported:snapshot:1",
+          cursor: 4,
+        }),
+      );
+    });
+
+    const importedSessionId = await openSession(manager, "doc-imported");
+    const imported = await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "readRange",
+        id: "read-imported",
+        sessionId: importedSessionId,
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+      },
+    } satisfies AgentFrame);
+
+    if (imported.kind !== "response" || imported.response.kind !== "rangeValues") {
+      throw new Error("Expected imported range values");
+    }
+
+    expect(imported.response.values[0]?.[0]).toEqual(expect.objectContaining({ value: 987 }));
+    expect(browserFrames.some((frame) => frame.kind === "snapshotChunk")).toBe(true);
+    expect(browserFrames).toContainEqual({
+      kind: "cursorWatermark",
+      documentId: "doc-imported",
+      cursor: 4,
+      compactedCursor: 4,
+    });
   });
 });
