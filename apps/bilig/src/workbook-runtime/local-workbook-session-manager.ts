@@ -9,7 +9,7 @@ import { shouldApplyBatch } from "@bilig/crdt";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { UpstreamSyncRelay } from "../zero/sync-relay.js";
 import type { AgentFrameContext } from "./agent-routing.js";
-import { openWorkbookBrowserSession } from "./browser-session-shared.js";
+import { WorkbookBrowserSessionHost } from "./browser-session-host.js";
 import {
   flushQueuedLocalAgentEvents,
   queueLocalAgentEvent,
@@ -38,13 +38,6 @@ import {
   openLocalAgentSession,
   removeLocalAgentSubscription,
 } from "./local-agent-session-store.js";
-import {
-  attachBrowserSubscriber,
-  broadcastToBrowsers,
-  type BrowserSubscriberRegistry,
-  listBrowserSubscriberIds,
-  type SnapshotAssemblyRegistry,
-} from "./session-shared.js";
 import {
   createAckFrame,
   createAppendBatchFrame,
@@ -97,12 +90,20 @@ const LARGE_RANGE_SUBSCRIPTION_THRESHOLD = 256;
 
 export class LocalWorkbookSessionManager {
   private readonly sessions = new Map<string, LocalWorkbookSession>();
-  private readonly snapshotAssemblies: SnapshotAssemblyRegistry = new Map();
-  private readonly browserSubscribers: BrowserSubscriberRegistry = new Map();
   private readonly agentEventListeners = new Set<(event: AgentEvent) => void>();
   private readonly agentSubscriptionOwners = new Map<string, string>();
+  private readonly browserSessionHost: WorkbookBrowserSessionHost;
 
-  constructor(private readonly options: LocalWorkbookSessionManagerOptions = {}) {}
+  constructor(private readonly options: LocalWorkbookSessionManagerOptions = {}) {
+    this.browserSessionHost = new WorkbookBrowserSessionHost({
+      latestCursor: (documentId) => this.ensureSession(documentId).cursor,
+      latestSnapshot: (documentId) => this.ensureSession(documentId).latestSnapshot,
+      listMissedFrames: (documentId, cursorFloor) =>
+        this.ensureSession(documentId)
+          .batches.filter((entry) => entry.cursor > cursorFloor)
+          .map((entry) => entry.frame),
+    });
+  }
 
   private ensureSession(documentId: string): LocalWorkbookSession {
     const existing = this.sessions.get(documentId);
@@ -162,7 +163,7 @@ export class LocalWorkbookSessionManager {
     send: (frame: ProtocolFrame) => void,
   ): () => void {
     this.ensureSession(documentId);
-    return attachBrowserSubscriber(this.browserSubscribers, documentId, subscriberId, send);
+    return this.browserSessionHost.attachBrowser(documentId, subscriberId, send);
   }
 
   subscribeAgentEvents(listener: (event: AgentEvent) => void): () => void {
@@ -176,13 +177,8 @@ export class LocalWorkbookSessionManager {
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
-    const session = this.ensureSession(frame.documentId);
-    return openWorkbookBrowserSession(frame, {
-      latestCursor: session.cursor,
-      latestSnapshot: session.latestSnapshot,
-      listMissedFrames: (cursorFloor) =>
-        session.batches.filter((entry) => entry.cursor > cursorFloor).map((entry) => entry.frame),
-    });
+    this.ensureSession(frame.documentId);
+    return this.browserSessionHost.openBrowserSession(frame);
   }
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame[]> {
@@ -282,7 +278,7 @@ export class LocalWorkbookSessionManager {
     return {
       documentId,
       cursor: session.cursor,
-      browserSessions: listBrowserSubscriberIds(this.browserSubscribers, documentId),
+      browserSessions: this.browserSessionHost.listSubscriberIds(documentId),
       agentSessions: [...session.agentSessions.keys()],
       lastBatchId: session.batches.at(-1)?.frame.batch.id ?? null,
     };
@@ -351,14 +347,14 @@ export class LocalWorkbookSessionManager {
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    broadcastToBrowsers(this.browserSubscribers, documentId, frame);
+    this.browserSessionHost.broadcast(documentId, frame);
   }
 
   private snapshotStoreContext() {
     return {
       broadcast: this.broadcast.bind(this),
       getSession: (documentId: string) => this.sessions.get(documentId),
-      snapshotAssemblies: this.snapshotAssemblies,
+      snapshotAssemblies: this.browserSessionHost.snapshotAssemblies,
       maxBatchBacklog: MAX_BATCH_BACKLOG,
     };
   }

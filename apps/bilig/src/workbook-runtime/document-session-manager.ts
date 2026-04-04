@@ -6,7 +6,7 @@ import {
 } from "@bilig/storage-server";
 import type { WorksheetExecutor } from "./worksheet-executor.js";
 import type { AgentFrameContext } from "./agent-routing.js";
-import { openWorkbookBrowserSession } from "./browser-session-shared.js";
+import { WorkbookBrowserSessionHost } from "./browser-session-host.js";
 import {
   closePresenceBackedWorkbookSession,
   countPresenceBackedWorkbookSessions,
@@ -17,12 +17,6 @@ import {
   acceptPersistedSnapshotChunk,
   publishPersistedSnapshot,
 } from "./document-snapshot-store.js";
-import {
-  attachBrowserSubscriber,
-  broadcastToBrowsers,
-  type BrowserSubscriberRegistry,
-  type SnapshotAssemblyRegistry,
-} from "./session-shared.js";
 import {
   createAckFrame,
   createAppendBatchFrame,
@@ -51,15 +45,27 @@ export interface DocumentSessionManagerOptions {
 }
 
 export class DocumentSessionManager {
-  private readonly snapshotAssemblies: SnapshotAssemblyRegistry = new Map();
-  private readonly browserSubscribers: BrowserSubscriberRegistry = new Map();
+  private readonly browserSessionHost: WorkbookBrowserSessionHost;
 
   constructor(
     readonly persistence: InMemoryDocumentPersistence = createInMemoryDocumentPersistence(),
     private readonly ownerId = "bilig-app",
     private readonly worksheetExecutor: WorksheetExecutor | null = null,
     private readonly options: DocumentSessionManagerOptions = {},
-  ) {}
+  ) {
+    this.browserSessionHost = new WorkbookBrowserSessionHost({
+      register: (frame) =>
+        joinOwnedBrowserSession(this.persistence, this.ownerId, frame.documentId, frame.sessionId),
+      latestCursor: (documentId) => this.persistence.batches.latestCursor(documentId),
+      latestSnapshot: (documentId) => this.persistence.snapshots.latest(documentId),
+      listMissedFrames: async (documentId, cursorFloor) => {
+        const missed = await this.persistence.batches.listAfter(documentId, cursorFloor);
+        return missed.map((entry) =>
+          createAppendBatchFrame(entry.documentId, entry.cursor, entry.batch),
+        );
+      },
+    });
+  }
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
     return routeWorkbookSyncFrame<ProtocolFrame>(frame, {
@@ -170,28 +176,11 @@ export class DocumentSessionManager {
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): () => void {
-    return attachBrowserSubscriber(this.browserSubscribers, documentId, subscriberId, send);
+    return this.browserSessionHost.attachBrowser(documentId, subscriberId, send);
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
-    return openWorkbookBrowserSession(frame, {
-      register: async (helloFrame) => {
-        await joinOwnedBrowserSession(
-          this.persistence,
-          this.ownerId,
-          helloFrame.documentId,
-          helloFrame.sessionId,
-        );
-      },
-      latestCursor: this.persistence.batches.latestCursor(frame.documentId),
-      latestSnapshot: this.persistence.snapshots.latest(frame.documentId),
-      listMissedFrames: async (cursorFloor) => {
-        const missed = await this.persistence.batches.listAfter(frame.documentId, cursorFloor);
-        return missed.map((entry) =>
-          createAppendBatchFrame(entry.documentId, entry.cursor, entry.batch),
-        );
-      },
-    });
+    return this.browserSessionHost.openBrowserSession(frame);
   }
 
   async getDocumentState(documentId: string): Promise<DocumentStateSummary> {
@@ -236,10 +225,14 @@ export class DocumentSessionManager {
   private async acceptSnapshotChunk(
     frame: Extract<ProtocolFrame, { kind: "snapshotChunk" }>,
   ): Promise<void> {
-    await acceptPersistedSnapshotChunk(this.persistence, this.snapshotAssemblies, frame);
+    await acceptPersistedSnapshotChunk(
+      this.persistence,
+      this.browserSessionHost.snapshotAssemblies,
+      frame,
+    );
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    broadcastToBrowsers(this.browserSubscribers, documentId, frame);
+    this.browserSessionHost.broadcast(documentId, frame);
   }
 }
