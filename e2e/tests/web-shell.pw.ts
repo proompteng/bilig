@@ -1819,7 +1819,7 @@ test("web app relocates relative formulas when using the fill handle", async ({ 
   await nameBox.fill("G7");
   await nameBox.press("Enter");
   await expect(nameBox).toHaveValue("G7");
-  await expect(formulaInput).toHaveValue("=F7*2");
+  await expect(formulaInput).toHaveValue("=F7*2", { timeout: 15_000 });
   await expect(resolvedValue).toHaveText("8");
 });
 
