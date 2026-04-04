@@ -118,6 +118,11 @@ interface ViewportSubscriptionState {
   lastRowSignatures: Map<number, string>;
 }
 
+interface ChangedSheetCells {
+  addresses: Set<string>;
+  positions: { row: number; col: number }[];
+}
+
 function styleSignature(style: CellStyleRecord): string {
   const fill = style.fill?.backgroundColor ?? "";
   const font = style.font;
@@ -178,6 +183,8 @@ export class WorkbookWorkerRuntime {
     [DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID }],
   ]);
   private nextFormatId = 1;
+  private snapshotCache: WorkbookSnapshot | null = null;
+  private snapshotDirty = true;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private persistInFlight: Promise<void> | null = null;
   private persistQueued = false;
@@ -198,6 +205,8 @@ export class WorkbookWorkerRuntime {
     this.cleanup();
     this.bootstrapOptions = options;
     this.externalSyncState = null;
+    this.snapshotCache = null;
+    this.snapshotDirty = true;
     const engine = new SpreadsheetEngine({
       workbookName: options.documentId,
       replicaId: options.replicaId,
@@ -220,6 +229,7 @@ export class WorkbookWorkerRuntime {
     }
 
     this.engineSubscription = engine.subscribe((event) => {
+      this.invalidateSnapshotCache();
       this.schedulePersistState();
       this.broadcastViewportPatches(event);
     });
@@ -241,6 +251,7 @@ export class WorkbookWorkerRuntime {
   async replaceSnapshot(snapshot: WorkbookSnapshot): Promise<WorkbookWorkerStateSnapshot> {
     const engine = this.requireEngine();
     engine.importSnapshot(snapshot);
+    this.storeCachedSnapshot(snapshot);
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
@@ -252,7 +263,7 @@ export class WorkbookWorkerRuntime {
   }
 
   exportSnapshot(): WorkbookSnapshot {
-    return this.requireEngine().exportSnapshot();
+    return this.getCachedSnapshot();
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
@@ -372,6 +383,8 @@ export class WorkbookWorkerRuntime {
     this.viewportSubscriptions.clear();
     this.styles.clear();
     this.styles.set(DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID });
+    this.snapshotCache = null;
+    this.snapshotDirty = true;
     this.engine = null;
   }
 
@@ -429,7 +442,7 @@ export class WorkbookWorkerRuntime {
 
     const documentId = this.bootstrapOptions.documentId;
     const persisted: PersistedWorkbookState = {
-      snapshot: this.engine.exportSnapshot(),
+      snapshot: this.getCachedSnapshot(),
       replica: this.engine.exportReplicaSnapshot(),
     };
     this.persistQueued = false;
@@ -451,12 +464,25 @@ export class WorkbookWorkerRuntime {
     event: EngineEvent | null,
     metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
   ): void {
-    const changedAddressesBySheet =
+    const changedCellsBySheet =
       event && event.invalidation !== "full"
-        ? this.collectChangedAddressesBySheet(event.changedCellIndices)
+        ? this.collectChangedCellsBySheet(event.changedCellIndices)
         : null;
+    const impactedSheets =
+      event === null ? null : this.collectImpactedSheets(event, changedCellsBySheet);
     for (const subscription of this.viewportSubscriptions) {
-      const patch = this.buildViewportPatch(subscription, event, metrics, changedAddressesBySheet);
+      if (
+        event !== null &&
+        !this.viewportPatchMayBeImpacted(
+          subscription.subscription,
+          event,
+          changedCellsBySheet,
+          impactedSheets,
+        )
+      ) {
+        continue;
+      }
+      const patch = this.buildViewportPatch(subscription, event, metrics, changedCellsBySheet);
       if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0) {
         continue;
       }
@@ -468,7 +494,7 @@ export class WorkbookWorkerRuntime {
     state: ViewportSubscriptionState,
     event: EngineEvent | null,
     metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
-    changedAddressesBySheet: Map<string, Set<string>> | null = null,
+    changedCellsBySheet: ReadonlyMap<string, ChangedSheetCells> | null = null,
   ): ViewportPatch {
     const engine = this.requireEngine();
     const viewport = state.subscription;
@@ -476,7 +502,7 @@ export class WorkbookWorkerRuntime {
     const styles: CellStyleRecord[] = [];
     const cells: ViewportPatchedCell[] = [];
     const full = event === null || event.invalidation === "full";
-    const changedAddresses = changedAddressesBySheet?.get(viewport.sheetName) ?? null;
+    const changedAddresses = changedCellsBySheet?.get(viewport.sheetName)?.addresses ?? null;
     const invalidatedRanges =
       event?.invalidatedRanges.filter(
         (range: CellRangeRef) => range.sheetName === viewport.sheetName,
@@ -795,10 +821,10 @@ export class WorkbookWorkerRuntime {
     return formatCellDisplayValue(snapshot.value, snapshot.format);
   }
 
-  private collectChangedAddressesBySheet(
+  private collectChangedCellsBySheet(
     changedCellIndices: readonly number[] | Uint32Array,
-  ): Map<string, Set<string>> {
-    const changedBySheet = new Map<string, Set<string>>();
+  ): Map<string, ChangedSheetCells> {
+    const changedBySheet = new Map<string, ChangedSheetCells>();
     const workbook = this.requireEngine().workbook;
 
     for (let index = 0; index < changedCellIndices.length; index += 1) {
@@ -809,12 +835,113 @@ export class WorkbookWorkerRuntime {
       }
       const sheetName = qualifiedAddress.slice(0, separator);
       const address = qualifiedAddress.slice(separator + 1);
-      const sheetAddresses = changedBySheet.get(sheetName) ?? new Set<string>();
-      sheetAddresses.add(address);
-      changedBySheet.set(sheetName, sheetAddresses);
+      const parsed = parseCellAddress(address, sheetName);
+      const sheetCells = changedBySheet.get(sheetName) ?? {
+        addresses: new Set<string>(),
+        positions: [],
+      };
+      if (!sheetCells.addresses.has(address)) {
+        sheetCells.addresses.add(address);
+        sheetCells.positions.push({ row: parsed.row, col: parsed.col });
+      }
+      changedBySheet.set(sheetName, sheetCells);
     }
 
     return changedBySheet;
+  }
+
+  private collectImpactedSheets(
+    event: EngineEvent,
+    changedCellsBySheet: ReadonlyMap<string, ChangedSheetCells> | null,
+  ): Set<string> | null {
+    const impactedSheets = new Set<string>();
+    changedCellsBySheet?.forEach((_cells, sheetName) => {
+      impactedSheets.add(sheetName);
+    });
+    event.invalidatedRanges.forEach((range) => {
+      impactedSheets.add(range.sheetName);
+    });
+    event.invalidatedRows.forEach((entry) => {
+      impactedSheets.add(entry.sheetName);
+    });
+    event.invalidatedColumns.forEach((entry) => {
+      impactedSheets.add(entry.sheetName);
+    });
+    return impactedSheets.size > 0 ? impactedSheets : null;
+  }
+
+  private viewportPatchMayBeImpacted(
+    viewport: ViewportPatchSubscription,
+    event: EngineEvent,
+    changedCellsBySheet: ReadonlyMap<string, ChangedSheetCells> | null,
+    impactedSheets: ReadonlySet<string> | null,
+  ): boolean {
+    if (event.invalidation === "full") {
+      return impactedSheets === null || impactedSheets.has(viewport.sheetName);
+    }
+
+    if (impactedSheets !== null && !impactedSheets.has(viewport.sheetName)) {
+      return false;
+    }
+
+    const changedCells = changedCellsBySheet?.get(viewport.sheetName);
+    if (changedCells) {
+      for (const parsed of changedCells.positions) {
+        if (
+          parsed.row >= viewport.rowStart &&
+          parsed.row <= viewport.rowEnd &&
+          parsed.col >= viewport.colStart &&
+          parsed.col <= viewport.colEnd
+        ) {
+          return true;
+        }
+      }
+    }
+
+    for (let index = 0; index < event.invalidatedRanges.length; index += 1) {
+      const range = event.invalidatedRanges[index]!;
+      if (range.sheetName !== viewport.sheetName) {
+        continue;
+      }
+      const start = parseCellAddress(range.startAddress, viewport.sheetName);
+      const end = parseCellAddress(range.endAddress, viewport.sheetName);
+      const rowStart = Math.min(start.row, end.row);
+      const rowEnd = Math.max(start.row, end.row);
+      const colStart = Math.min(start.col, end.col);
+      const colEnd = Math.max(start.col, end.col);
+      if (
+        rowStart <= viewport.rowEnd &&
+        rowEnd >= viewport.rowStart &&
+        colStart <= viewport.colEnd &&
+        colEnd >= viewport.colStart
+      ) {
+        return true;
+      }
+    }
+
+    for (let index = 0; index < event.invalidatedRows.length; index += 1) {
+      const rowInvalidation = event.invalidatedRows[index]!;
+      if (
+        rowInvalidation.sheetName === viewport.sheetName &&
+        rowInvalidation.startIndex <= viewport.rowEnd &&
+        rowInvalidation.endIndex >= viewport.rowStart
+      ) {
+        return true;
+      }
+    }
+
+    for (let index = 0; index < event.invalidatedColumns.length; index += 1) {
+      const columnInvalidation = event.invalidatedColumns[index]!;
+      if (
+        columnInvalidation.sheetName === viewport.sheetName &&
+        columnInvalidation.startIndex <= viewport.colEnd &&
+        columnInvalidation.endIndex >= viewport.colStart
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private snapshotValueSignature(snapshot: CellSnapshot): string {
@@ -840,5 +967,22 @@ export class WorkbookWorkerRuntime {
       flags: 0,
       version: 0,
     };
+  }
+
+  private invalidateSnapshotCache(): void {
+    this.snapshotDirty = true;
+  }
+
+  private storeCachedSnapshot(snapshot: WorkbookSnapshot): WorkbookSnapshot {
+    this.snapshotCache = snapshot;
+    this.snapshotDirty = false;
+    return snapshot;
+  }
+
+  private getCachedSnapshot(): WorkbookSnapshot {
+    if (this.snapshotCache && !this.snapshotDirty) {
+      return this.snapshotCache;
+    }
+    return this.storeCachedSnapshot(this.requireEngine().exportSnapshot());
   }
 }

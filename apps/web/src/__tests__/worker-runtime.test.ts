@@ -169,6 +169,71 @@ describe("WorkbookWorkerRuntime", () => {
     expect(patch?.columns).toEqual([{ index: 1, size: 160, hidden: false }]);
   });
 
+  it("skips unrelated viewport subscriptions when an edit is outside their sheet or region", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "fanout-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    runtime.renderCommit([{ kind: "upsertSheet", name: "Sheet2", order: 1 }]);
+
+    const primary = new Array<ReturnType<typeof decodeViewportPatch>>();
+    const offsheet = new Array<ReturnType<typeof decodeViewportPatch>>();
+    const offregion = new Array<ReturnType<typeof decodeViewportPatch>>();
+
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 2,
+      },
+      (bytes) => {
+        primary.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet2",
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 2,
+      },
+      (bytes) => {
+        offsheet.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 10,
+        rowEnd: 12,
+        colStart: 10,
+        colEnd: 12,
+      },
+      (bytes) => {
+        offregion.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    expect(primary).toHaveLength(1);
+    expect(offsheet).toHaveLength(1);
+    expect(offregion).toHaveLength(1);
+
+    runtime.setCellValue("Sheet1", "A1", 123);
+
+    expect(primary).toHaveLength(2);
+    expect(primary[1]?.cells[0]?.snapshot.address).toBe("A1");
+    expect(offsheet).toHaveLength(1);
+    expect(offregion).toHaveLength(1);
+  });
+
   it("coalesces persistence saves across edit bursts", async () => {
     vi.useFakeTimers();
     const saveJson = vi.fn(async () => {});
@@ -199,5 +264,30 @@ describe("WorkbookWorkerRuntime", () => {
     await vi.advanceTimersByTimeAsync(120);
 
     expect(saveJson).toHaveBeenCalledTimes(2);
+  });
+
+  it("reuses exported snapshots until the workbook changes", async () => {
+    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    await runtime.bootstrap({
+      documentId: "snapshot-cache-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    const first = runtime.exportSnapshot();
+    const second = runtime.exportSnapshot();
+
+    expect(second).toBe(first);
+
+    runtime.setCellValue("Sheet1", "A1", 42);
+
+    const third = runtime.exportSnapshot();
+    const fourth = runtime.exportSnapshot();
+
+    expect(third).not.toBe(first);
+    expect(third.sheets[0]?.cells).toContainEqual(
+      expect.objectContaining({ address: "A1", value: 42 }),
+    );
+    expect(fourth).toBe(third);
   });
 });

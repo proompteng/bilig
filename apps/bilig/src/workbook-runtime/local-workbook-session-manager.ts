@@ -1,5 +1,5 @@
 import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
-import type { CellRangeRef, CellValue, EngineEvent } from "@bilig/protocol";
+import type { CellRangeRef, CellValue, EngineEvent, WorkbookSnapshot } from "@bilig/protocol";
 import type {
   AckFrame,
   CursorWatermarkFrame,
@@ -68,10 +68,13 @@ interface LocalWorkbookSession {
   eventFlushScheduled: boolean;
   batches: StoredBatch[];
   latestSnapshot: StoredSnapshotPublication | null;
+  snapshotCache: WorkbookSnapshot | null;
+  snapshotDirty: boolean;
   cursor: number;
   replicaSnapshot: EngineReplicaSnapshot | null;
   upstreamRelay: UpstreamSyncRelay | null;
   unsubscribeBatches: () => void;
+  unsubscribeEvents: () => void;
   compactScheduled: boolean;
 }
 
@@ -265,12 +268,19 @@ export class LocalWorkbookSessionManager {
       eventFlushScheduled: false,
       batches: [],
       latestSnapshot: null,
+      snapshotCache: null,
+      snapshotDirty: true,
       cursor: 0,
       replicaSnapshot: null,
       upstreamRelay: this.options.createSyncRelay?.(documentId) ?? null,
       unsubscribeBatches: () => {},
+      unsubscribeEvents: () => {},
       compactScheduled: false,
     };
+
+    session.unsubscribeEvents = engine.subscribe(() => {
+      this.invalidateSnapshotCache(session);
+    });
 
     session.unsubscribeBatches = engine.subscribeBatches((batch) => {
       session.cursor += 1;
@@ -608,13 +618,14 @@ export class LocalWorkbookSessionManager {
         };
       }
       case "exportSnapshot": {
-        const { engine } = this.getSessionByAgentSessionId(request.sessionId);
-        return { kind: "snapshot", id: request.id, snapshot: engine.exportSnapshot() };
+        const session = this.getSessionByAgentSessionId(request.sessionId);
+        return { kind: "snapshot", id: request.id, snapshot: this.getCachedSnapshot(session) };
       }
       case "importSnapshot": {
         const session = this.getSessionByAgentSessionId(request.sessionId);
         session.engine.importSnapshot(request.snapshot);
         session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+        this.storeCachedSnapshot(session, request.snapshot);
         return { kind: "ok", id: request.id };
       }
       case "subscribeRange": {
@@ -757,6 +768,27 @@ export class LocalWorkbookSessionManager {
     session.browserSubscribers.forEach((subscriber) => subscriber.send(frame));
   }
 
+  private invalidateSnapshotCache(session: LocalWorkbookSession): void {
+    session.snapshotDirty = true;
+  }
+
+  private storeCachedSnapshot(
+    session: LocalWorkbookSession,
+    snapshot: Parameters<SpreadsheetEngine["importSnapshot"]>[0],
+  ): void {
+    session.snapshotCache = snapshot;
+    session.snapshotDirty = false;
+  }
+
+  private getCachedSnapshot(session: LocalWorkbookSession): WorkbookSnapshot {
+    if (session.snapshotCache && !session.snapshotDirty) {
+      return session.snapshotCache;
+    }
+    const snapshot = session.engine.exportSnapshot();
+    this.storeCachedSnapshot(session, snapshot);
+    return snapshot;
+  }
+
   private publishSnapshot(
     session: LocalWorkbookSession,
     snapshot: Parameters<SpreadsheetEngine["importSnapshot"]>[0],
@@ -772,6 +804,7 @@ export class LocalWorkbookSessionManager {
       bytes: publication.bytes,
       frames: publication.frames,
     };
+    this.storeCachedSnapshot(session, snapshot);
     publication.frames.forEach((frame) => this.broadcast(session.documentId, frame));
     this.broadcast(session.documentId, {
       kind: "cursorWatermark",
@@ -792,7 +825,7 @@ export class LocalWorkbookSessionManager {
       if (!liveSession || liveSession.batches.length <= MAX_BATCH_BACKLOG) {
         return;
       }
-      this.publishSnapshot(liveSession, liveSession.engine.exportSnapshot());
+      this.publishSnapshot(liveSession, this.getCachedSnapshot(liveSession));
     });
   }
 

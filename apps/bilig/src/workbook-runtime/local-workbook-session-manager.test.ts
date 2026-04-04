@@ -129,4 +129,70 @@ describe("LocalWorkbookSessionManager", () => {
 
     unsubscribeEvents();
   });
+
+  it("reuses cached snapshots for repeated export requests until a write occurs", async () => {
+    const manager = new LocalWorkbookSessionManager();
+    const sessionId = await openSession(manager, "doc-snapshot-cache");
+
+    const firstResponse = await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "exportSnapshot",
+        id: "export-1",
+        sessionId,
+      },
+    } satisfies AgentFrame);
+    const secondResponse = await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "exportSnapshot",
+        id: "export-2",
+        sessionId,
+      },
+    } satisfies AgentFrame);
+
+    if (
+      firstResponse.kind !== "response" ||
+      firstResponse.response.kind !== "snapshot" ||
+      secondResponse.kind !== "response" ||
+      secondResponse.response.kind !== "snapshot"
+    ) {
+      throw new Error("Expected snapshot responses");
+    }
+
+    expect(secondResponse.response.snapshot).toBe(firstResponse.response.snapshot);
+
+    await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "writeRange",
+        id: "write-1",
+        sessionId,
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+        values: [[123]],
+      },
+    } satisfies AgentFrame);
+
+    const thirdResponse = await manager.handleAgentFrame({
+      kind: "request",
+      request: {
+        kind: "exportSnapshot",
+        id: "export-3",
+        sessionId,
+      },
+    } satisfies AgentFrame);
+
+    if (thirdResponse.kind !== "response" || thirdResponse.response.kind !== "snapshot") {
+      throw new Error("Expected snapshot response after write");
+    }
+
+    expect(thirdResponse.response.snapshot).not.toBe(firstResponse.response.snapshot);
+    expect(thirdResponse.response.snapshot.sheets[0]?.cells).toContainEqual(
+      expect.objectContaining({ address: "A1", value: 123 }),
+    );
+  });
 });
