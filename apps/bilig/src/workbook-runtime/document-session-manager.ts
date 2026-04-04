@@ -23,12 +23,13 @@ import {
   createCursorWatermarkFrame,
   createHeartbeatFrame,
 } from "./sync-frame-shared.js";
-import { createUnsupportedSyncFrame, routeWorkbookSyncFrame } from "./sync-frame-router.js";
+import { createUnsupportedSyncFrame } from "./sync-frame-router.js";
 import {
   createWorkbookLoadOptions,
   handleWorkbookAgentFrame,
   loadWorkbookIntoRuntime,
 } from "./workbook-session-shared.js";
+import { WorkbookSyncSessionHost } from "./workbook-sync-session-host.js";
 
 export interface DocumentStateSummary {
   documentId: string;
@@ -45,7 +46,7 @@ export interface DocumentSessionManagerOptions {
 }
 
 export class DocumentSessionManager {
-  private readonly browserSessionHost: WorkbookBrowserSessionHost;
+  private readonly syncSessionHost: WorkbookSyncSessionHost<ProtocolFrame>;
 
   constructor(
     readonly persistence: InMemoryDocumentPersistence = createInMemoryDocumentPersistence(),
@@ -53,7 +54,7 @@ export class DocumentSessionManager {
     private readonly worksheetExecutor: WorksheetExecutor | null = null,
     private readonly options: DocumentSessionManagerOptions = {},
   ) {
-    this.browserSessionHost = new WorkbookBrowserSessionHost({
+    const browserSessionHost = new WorkbookBrowserSessionHost({
       register: (frame) =>
         joinOwnedBrowserSession(this.persistence, this.ownerId, frame.documentId, frame.sessionId),
       latestCursor: (documentId) => this.persistence.batches.latestCursor(documentId),
@@ -65,10 +66,8 @@ export class DocumentSessionManager {
         );
       },
     });
-  }
-
-  async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
-    return routeWorkbookSyncFrame<ProtocolFrame>(frame, {
+    this.syncSessionHost = new WorkbookSyncSessionHost<ProtocolFrame>({
+      browserSessionHost,
       hello: async (helloFrame) => {
         await joinOwnedBrowserSession(
           this.persistence,
@@ -114,12 +113,16 @@ export class DocumentSessionManager {
       passthrough: (passthroughFrame) => passthroughFrame,
       unsupported: (unsupportedFrame) =>
         createUnsupportedSyncFrame(
-          "unknown",
+          unsupportedFrame.documentId,
           "UNSUPPORTED_FRAME",
           unsupportedFrame.kind,
           "Unsupported sync frame",
         ),
     });
+  }
+
+  async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame> {
+    return this.syncSessionHost.handleSyncFrame(frame);
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
@@ -176,11 +179,11 @@ export class DocumentSessionManager {
     subscriberId: string,
     send: (frame: ProtocolFrame) => void,
   ): () => void {
-    return this.browserSessionHost.attachBrowser(documentId, subscriberId, send);
+    return this.syncSessionHost.attachBrowser(documentId, subscriberId, send);
   }
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
-    return this.browserSessionHost.openBrowserSession(frame);
+    return this.syncSessionHost.openBrowserSession(frame);
   }
 
   async getDocumentState(documentId: string): Promise<DocumentStateSummary> {
@@ -227,12 +230,12 @@ export class DocumentSessionManager {
   ): Promise<void> {
     await acceptPersistedSnapshotChunk(
       this.persistence,
-      this.browserSessionHost.snapshotAssemblies,
+      this.syncSessionHost.snapshotAssemblies,
       frame,
     );
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    this.browserSessionHost.broadcast(documentId, frame);
+    this.syncSessionHost.broadcast(documentId, frame);
   }
 }

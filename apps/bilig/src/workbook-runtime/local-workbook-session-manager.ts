@@ -43,12 +43,13 @@ import {
   createAppendBatchFrame,
   createHeartbeatFrame,
 } from "./sync-frame-shared.js";
-import { createUnsupportedSyncFrame, routeWorkbookSyncFrame } from "./sync-frame-router.js";
+import { createUnsupportedSyncFrame } from "./sync-frame-router.js";
 import {
   createWorkbookLoadOptions,
   handleWorkbookAgentFrame,
   loadWorkbookIntoRuntime,
 } from "./workbook-session-shared.js";
+import { WorkbookSyncSessionHost } from "./workbook-sync-session-host.js";
 
 interface LocalWorkbookSession extends LocalWorksheetSessionState, LocalSnapshotSessionState {
   documentId: string;
@@ -92,16 +93,59 @@ export class LocalWorkbookSessionManager {
   private readonly sessions = new Map<string, LocalWorkbookSession>();
   private readonly agentEventListeners = new Set<(event: AgentEvent) => void>();
   private readonly agentSubscriptionOwners = new Map<string, string>();
-  private readonly browserSessionHost: WorkbookBrowserSessionHost;
+  private readonly syncSessionHost: WorkbookSyncSessionHost<ProtocolFrame[]>;
 
   constructor(private readonly options: LocalWorkbookSessionManagerOptions = {}) {
-    this.browserSessionHost = new WorkbookBrowserSessionHost({
+    const browserSessionHost = new WorkbookBrowserSessionHost({
       latestCursor: (documentId) => this.ensureSession(documentId).cursor,
       latestSnapshot: (documentId) => this.ensureSession(documentId).latestSnapshot,
       listMissedFrames: (documentId, cursorFloor) =>
         this.ensureSession(documentId)
           .batches.filter((entry) => entry.cursor > cursorFloor)
           .map((entry) => entry.frame),
+    });
+    this.syncSessionHost = new WorkbookSyncSessionHost<ProtocolFrame[]>({
+      browserSessionHost,
+      hello: (helloFrame) => this.openBrowserSession(helloFrame),
+      appendBatch: (appendFrame) => {
+        const session = this.ensureSession(appendFrame.documentId);
+        if (!shouldApplyBatch(session.engine.replica, appendFrame.batch)) {
+          return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
+        }
+        session.engine.applyRemoteBatch(appendFrame.batch);
+        session.cursor += 1;
+        const committedFrame = createAppendBatchFrame(
+          appendFrame.documentId,
+          session.cursor,
+          appendFrame.batch,
+        );
+        session.batches.push({ cursor: session.cursor, frame: committedFrame });
+        session.replicaSnapshot = session.engine.exportReplicaSnapshot();
+        this.broadcast(appendFrame.documentId, committedFrame);
+        maybeCompactLocalSession(session, this.snapshotStoreContext());
+        void this.relayUpstream(session, appendFrame.batch);
+        return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
+      },
+      snapshotChunk: (snapshotFrame) => {
+        const session = this.ensureSession(snapshotFrame.documentId);
+        acceptLocalSnapshotChunk(session, snapshotFrame, this.snapshotStoreContext());
+        return [
+          createAckFrame(snapshotFrame.documentId, snapshotFrame.snapshotId, snapshotFrame.cursor),
+        ];
+      },
+      heartbeat: (heartbeatFrame) => {
+        const session = this.ensureSession(heartbeatFrame.documentId);
+        return [createHeartbeatFrame(heartbeatFrame.documentId, session.cursor)];
+      },
+      passthrough: (passthroughFrame) => [passthroughFrame],
+      unsupported: (unsupportedFrame) => [
+        createUnsupportedSyncFrame(
+          unsupportedFrame.documentId,
+          "UNSUPPORTED_SYNC_FRAME",
+          unsupportedFrame.kind,
+          "Unsupported frame",
+        ),
+      ],
     });
   }
 
@@ -163,7 +207,7 @@ export class LocalWorkbookSessionManager {
     send: (frame: ProtocolFrame) => void,
   ): () => void {
     this.ensureSession(documentId);
-    return this.browserSessionHost.attachBrowser(documentId, subscriberId, send);
+    return this.syncSessionHost.attachBrowser(documentId, subscriberId, send);
   }
 
   subscribeAgentEvents(listener: (event: AgentEvent) => void): () => void {
@@ -178,52 +222,11 @@ export class LocalWorkbookSessionManager {
 
   async openBrowserSession(frame: HelloFrame): Promise<ProtocolFrame[]> {
     this.ensureSession(frame.documentId);
-    return this.browserSessionHost.openBrowserSession(frame);
+    return this.syncSessionHost.openBrowserSession(frame);
   }
 
   async handleSyncFrame(frame: ProtocolFrame): Promise<ProtocolFrame[]> {
-    return routeWorkbookSyncFrame<ProtocolFrame[]>(frame, {
-      hello: (helloFrame) => this.openBrowserSession(helloFrame),
-      appendBatch: (appendFrame) => {
-        const session = this.ensureSession(appendFrame.documentId);
-        if (!shouldApplyBatch(session.engine.replica, appendFrame.batch)) {
-          return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
-        }
-        session.engine.applyRemoteBatch(appendFrame.batch);
-        session.cursor += 1;
-        const committedFrame = createAppendBatchFrame(
-          appendFrame.documentId,
-          session.cursor,
-          appendFrame.batch,
-        );
-        session.batches.push({ cursor: session.cursor, frame: committedFrame });
-        session.replicaSnapshot = session.engine.exportReplicaSnapshot();
-        this.broadcast(appendFrame.documentId, committedFrame);
-        maybeCompactLocalSession(session, this.snapshotStoreContext());
-        void this.relayUpstream(session, appendFrame.batch);
-        return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
-      },
-      heartbeat: (heartbeatFrame) => {
-        const session = this.ensureSession(heartbeatFrame.documentId);
-        return [createHeartbeatFrame(heartbeatFrame.documentId, session.cursor)];
-      },
-      snapshotChunk: (snapshotFrame) => {
-        const session = this.ensureSession(snapshotFrame.documentId);
-        acceptLocalSnapshotChunk(session, snapshotFrame, this.snapshotStoreContext());
-        return [
-          createAckFrame(snapshotFrame.documentId, snapshotFrame.snapshotId, snapshotFrame.cursor),
-        ];
-      },
-      passthrough: (passthroughFrame) => [passthroughFrame],
-      unsupported: (unsupportedFrame) => [
-        createUnsupportedSyncFrame(
-          unsupportedFrame.documentId,
-          "UNSUPPORTED_SYNC_FRAME",
-          unsupportedFrame.kind,
-          "Unsupported frame",
-        ),
-      ],
-    });
+    return this.syncSessionHost.handleSyncFrame(frame);
   }
 
   async handleAgentFrame(frame: AgentFrame, context: AgentFrameContext = {}): Promise<AgentFrame> {
@@ -278,7 +281,7 @@ export class LocalWorkbookSessionManager {
     return {
       documentId,
       cursor: session.cursor,
-      browserSessions: this.browserSessionHost.listSubscriberIds(documentId),
+      browserSessions: this.syncSessionHost.listSubscriberIds(documentId),
       agentSessions: [...session.agentSessions.keys()],
       lastBatchId: session.batches.at(-1)?.frame.batch.id ?? null,
     };
@@ -347,14 +350,14 @@ export class LocalWorkbookSessionManager {
   }
 
   private broadcast(documentId: string, frame: ProtocolFrame): void {
-    this.browserSessionHost.broadcast(documentId, frame);
+    this.syncSessionHost.broadcast(documentId, frame);
   }
 
   private snapshotStoreContext() {
     return {
       broadcast: this.broadcast.bind(this),
       getSession: (documentId: string) => this.sessions.get(documentId),
-      snapshotAssemblies: this.browserSessionHost.snapshotAssemblies,
+      snapshotAssemblies: this.syncSessionHost.snapshotAssemblies,
       maxBatchBacklog: MAX_BATCH_BACKLOG,
     };
   }
