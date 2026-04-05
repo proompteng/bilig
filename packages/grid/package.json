@@ -45,7 +45,7 @@
     "@bilig/core": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
-    "typegpu": "0.10.2"
+    "clsx": "^2.1.1"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.69"

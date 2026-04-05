@@ -1,5 +1,4 @@
 import {
-  startTransition,
   useDeferredValue,
   useCallback,
   useEffect,
@@ -10,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
-import type { Viewport } from "@bilig/protocol";
+import type { CellSnapshot, Viewport } from "@bilig/protocol";
 import { MAX_COLS, MAX_ROWS, ValueTag } from "@bilig/protocol";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
 import { GridGpuSurface } from "./GridGpuSurface.js";
@@ -26,6 +25,7 @@ import {
   type GridRect,
 } from "./gridMetrics.js";
 import {
+  createRectangleSelectionFromRange,
   createGridSelection,
   createSheetSelection,
   formatSelectionSummary,
@@ -37,6 +37,11 @@ import {
   resolveFillHandlePreviewRange,
   type FillHandleOverlayBounds,
 } from "./gridFillHandle.js";
+import {
+  resolveMovedRange,
+  resolveSelectionMoveAnchorCell,
+  sameRectangle,
+} from "./gridRangeMove.js";
 import {
   createPointerGeometry,
   resolveHeaderSelection as resolveHeaderSelectionFromGeometry,
@@ -50,7 +55,12 @@ import {
 import { resolveGridHoverState, sameGridHoverState, type GridHoverState } from "./gridHover.js";
 import { cellToEditorSeed, getResolvedCellFontFamily, snapshotToRenderCell } from "./gridCells.js";
 import { isHandledGridKey } from "./gridKeyboard.js";
-import { getEditorTextAlign, getGridTheme, getOverlayStyle } from "./gridPresentation.js";
+import {
+  getEditorPresentation,
+  getEditorTextAlign,
+  getGridTheme,
+  getOverlayStyle,
+} from "./gridPresentation.js";
 import type { InternalClipboardRange } from "./gridInternalClipboard.js";
 import {
   finishGridResize,
@@ -89,6 +99,7 @@ export interface WorkbookGridSurfaceProps {
   engine: GridEngineLike;
   sheetName: string;
   selectedAddr: string;
+  selectedCellSnapshot: CellSnapshot;
   editorValue: string;
   editorSelectionBehavior: EditSelectionBehavior;
   resolvedValue: string;
@@ -108,6 +119,13 @@ export interface WorkbookGridSurfaceProps {
     targetEndAddr: string,
   ): void;
   onCopyRange(
+    this: void,
+    sourceStartAddr: string,
+    sourceEndAddr: string,
+    targetStartAddr: string,
+    targetEndAddr: string,
+  ): void;
+  onMoveRange(
     this: void,
     sourceStartAddr: string,
     sourceEndAddr: string,
@@ -162,6 +180,7 @@ export function WorkbookGridSurface({
   engine,
   sheetName,
   selectedAddr,
+  selectedCellSnapshot,
   editorValue,
   editorSelectionBehavior,
   resolvedValue,
@@ -175,6 +194,7 @@ export function WorkbookGridSurface({
   onClearCell,
   onFillRange,
   onCopyRange,
+  onMoveRange,
   onToggleBooleanCell,
   onPaste,
   subscribeViewport,
@@ -203,12 +223,20 @@ export function WorkbookGridSurface({
   const pendingKeyboardPasteSequenceRef = useRef(0);
   const suppressNextNativePasteRef = useRef(false);
   const activeSheetRef = useRef(sheetName);
+  const autoScrollSelectionRef = useRef<{ sheetName: string; col: number; row: number } | null>(
+    null,
+  );
   const columnResizeActiveRef = useRef(false);
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingTypeSeedRef = useRef<string | null>(null);
   const fillPreviewRangeRef = useRef<Rectangle | null>(null);
   const fillHandleCleanupRef = useRef<(() => void) | null>(null);
+  const rangeMoveCleanupRef = useRef<(() => void) | null>(null);
+  const rangeMoveSourceRangeRef = useRef<Rectangle | null>(null);
+  const rangeMovePreviewRangeRef = useRef<Rectangle | null>(null);
+  const rangeMoveAnchorOffsetRef = useRef<Item | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const scrollSyncFrameRef = useRef<number | null>(null);
   const interactionState = useMemo(
     () => ({
       ignoreNextPointerSelectionRef,
@@ -225,12 +253,8 @@ export function WorkbookGridSurface({
     [],
   );
   const [sceneRevision, setSceneRevision] = useState(0);
-  const [gpuScene, setGpuScene] = useState<GridGpuScene>(emptyGpuScene);
-  const [textScene, setTextScene] = useState<GridTextScene>(emptyTextScene);
-  const [fillHandleBounds, setFillHandleBounds] = useState<FillHandleOverlayBounds | undefined>(
-    undefined,
-  );
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null);
+  const [isRangeMoveDragging, setIsRangeMoveDragging] = useState(false);
   const [hoverState, setHoverState] = useState<GridHoverState>({
     cell: null,
     header: null,
@@ -378,6 +402,9 @@ export function WorkbookGridSurface({
       visibleRegion.range.y,
     ],
   );
+  const invalidateScene = useCallback(() => {
+    setSceneRevision((current) => current + 1);
+  }, []);
 
   const syncVisibleRegion = useCallback(() => {
     const scrollViewport = scrollViewportRef.current;
@@ -402,6 +429,7 @@ export function WorkbookGridSurface({
   useEffect(() => {
     return () => {
       fillHandleCleanupRef.current?.();
+      rangeMoveCleanupRef.current?.();
       resizeCleanupRef.current?.();
     };
   }, []);
@@ -417,17 +445,28 @@ export function WorkbookGridSurface({
     }
 
     syncVisibleRegion();
-    const handleScroll = () => {
-      startTransition(() => {
+    const scheduleVisibleRegionSync = () => {
+      if (scrollSyncFrameRef.current !== null) {
+        return;
+      }
+      scrollSyncFrameRef.current = window.requestAnimationFrame(() => {
+        scrollSyncFrameRef.current = null;
         syncVisibleRegion();
       });
     };
+    const handleScroll = () => {
+      scheduleVisibleRegionSync();
+    };
     scrollViewport.addEventListener("scroll", handleScroll, { passive: true });
     const observer = new ResizeObserver(() => {
-      syncVisibleRegion();
+      scheduleVisibleRegionSync();
     });
     observer.observe(scrollViewport);
     return () => {
+      if (scrollSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollSyncFrameRef.current);
+        scrollSyncFrameRef.current = null;
+      }
       observer.disconnect();
       scrollViewport.removeEventListener("scroll", handleScroll);
     };
@@ -435,105 +474,60 @@ export function WorkbookGridSurface({
 
   useEffect(() => {
     if (subscribeViewport) {
-      return subscribeViewport(sheetName, viewport, () => {
-        startTransition(() => {
-          setSceneRevision((current) => current + 1);
-        });
-      });
+      return subscribeViewport(sheetName, viewport, invalidateScene);
     }
-    return engine.subscribeCells(sheetName, visibleAddresses, () => {
-      startTransition(() => {
-        setSceneRevision((current) => current + 1);
-      });
+    return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene);
+  }, [engine, invalidateScene, sheetName, subscribeViewport, viewport, visibleAddresses]);
+
+  const resizeGuideColumn = useMemo(
+    () =>
+      activeResizeColumn ??
+      (hoverState.cursor === "col-resize" && hoverState.header?.kind === "column"
+        ? hoverState.header.index
+        : null),
+    [activeResizeColumn, hoverState.cursor, hoverState.header],
+  );
+
+  const gpuScene = useMemo<GridGpuScene>(() => {
+    if (!hostElement) {
+      return emptyGpuScene;
+    }
+    // The engine mutates behind a stable object identity, so explicit revision
+    // reads are required to force scene recomputation on viewport invalidations.
+    void sceneRevision;
+    return buildGridGpuScene({
+      engine,
+      columnWidths,
+      fillPreviewRange,
+      gridMetrics,
+      gridSelection,
+      activeHeaderDrag,
+      hoveredCell: hoverState.cell,
+      hoveredHeader: hoverState.header,
+      resizeGuideColumn,
+      selectedCell: [selectedCell.col, selectedCell.row],
+      selectionRange,
+      sheetName,
+      visibleItems: deferredVisibleItems,
+      visibleRegion: deferredVisibleRegion,
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: getCellLocalBounds,
     });
-  }, [engine, sheetName, subscribeViewport, viewport, visibleAddresses]);
-
-  useEffect(() => {
-    if (!hostRef.current) {
-      setGpuScene(emptyGpuScene);
-      setFillHandleBounds(undefined);
-      setFillPreviewRange(null);
-      setTextScene(emptyTextScene);
-      return;
-    }
-
-    setGpuScene(
-      buildGridGpuScene({
-        engine,
-        columnWidths,
-        fillPreviewRange,
-        gridMetrics,
-        gridSelection,
-        activeHeaderDrag,
-        hoveredCell: hoverState.cell,
-        hoveredHeader: hoverState.header,
-        resizeGuideColumn:
-          activeResizeColumn ??
-          (hoverState.cursor === "col-resize" && hoverState.header?.kind === "column"
-            ? hoverState.header.index
-            : null),
-        selectedCell: [selectedCell.col, selectedCell.row],
-        selectionRange,
-        sheetName,
-        visibleItems: deferredVisibleItems,
-        visibleRegion: deferredVisibleRegion,
-        hostBounds: { left: 0, top: 0 },
-        getCellBounds: getCellLocalBounds,
-      }),
-    );
-    setTextScene(
-      buildGridTextScene({
-        engine,
-        columnWidths,
-        gridMetrics,
-        activeHeaderDrag,
-        hoveredHeader: hoverState.header,
-        resizeGuideColumn:
-          activeResizeColumn ??
-          (hoverState.cursor === "col-resize" && hoverState.header?.kind === "column"
-            ? hoverState.header.index
-            : null),
-        selectedCell: [selectedCell.col, selectedCell.row],
-        selectionRange,
-        sheetName,
-        visibleItems: deferredVisibleItems,
-        visibleRegion: deferredVisibleRegion,
-        hostBounds: { left: 0, top: 0 },
-        getCellBounds: getCellLocalBounds,
-      }),
-    );
-    if (
-      selectionRange &&
-      gridSelection.columns.length === 0 &&
-      gridSelection.rows.length === 0 &&
-      !fillPreviewRange
-    ) {
-      setFillHandleBounds(
-        resolveFillHandleOverlayBounds({
-          sourceRange: selectionRange,
-          hostBounds: { left: 0, top: 0 },
-          getCellBounds: getCellLocalBounds,
-        }),
-      );
-    } else {
-      setFillHandleBounds(undefined);
-    }
   }, [
     activeHeaderDrag,
-    activeResizeColumn,
     columnWidths,
     deferredVisibleItems,
     deferredVisibleRegion,
     emptyGpuScene,
-    emptyTextScene,
     engine,
     fillPreviewRange,
     getCellLocalBounds,
     gridMetrics,
     gridSelection,
+    hostElement,
     hoverState.cell,
-    hoverState.cursor,
     hoverState.header,
+    resizeGuideColumn,
     sceneRevision,
     selectedCell.col,
     selectedCell.row,
@@ -541,11 +535,96 @@ export function WorkbookGridSurface({
     sheetName,
   ]);
 
+  const textScene = useMemo<GridTextScene>(() => {
+    if (!hostElement) {
+      return emptyTextScene;
+    }
+    // The engine mutates behind a stable object identity, so explicit revision
+    // reads are required to force scene recomputation on viewport invalidations.
+    void sceneRevision;
+    return buildGridTextScene({
+      engine,
+      columnWidths,
+      editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
+      gridMetrics,
+      activeHeaderDrag,
+      hoveredHeader: hoverState.header,
+      resizeGuideColumn,
+      selectedCell: [selectedCell.col, selectedCell.row],
+      selectedCellSnapshot,
+      selectionRange,
+      sheetName,
+      visibleItems: deferredVisibleItems,
+      visibleRegion: deferredVisibleRegion,
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: getCellLocalBounds,
+    });
+  }, [
+    activeHeaderDrag,
+    columnWidths,
+    deferredVisibleItems,
+    deferredVisibleRegion,
+    emptyTextScene,
+    engine,
+    getCellLocalBounds,
+    gridMetrics,
+    hostElement,
+    hoverState.header,
+    isEditingCell,
+    resizeGuideColumn,
+    sceneRevision,
+    selectedCellSnapshot,
+    selectedCell.col,
+    selectedCell.row,
+    selectionRange,
+    sheetName,
+  ]);
+
+  const fillHandleBounds = useMemo<FillHandleOverlayBounds | undefined>(() => {
+    if (
+      !hostElement ||
+      !selectionRange ||
+      gridSelection.columns.length > 0 ||
+      gridSelection.rows.length > 0 ||
+      fillPreviewRange ||
+      isRangeMoveDragging
+    ) {
+      return undefined;
+    }
+    return resolveFillHandleOverlayBounds({
+      sourceRange: selectionRange,
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: getCellLocalBounds,
+    });
+  }, [
+    fillPreviewRange,
+    getCellLocalBounds,
+    gridSelection.columns.length,
+    gridSelection.rows.length,
+    hostElement,
+    isRangeMoveDragging,
+    selectionRange,
+  ]);
+
   useLayoutEffect(() => {
     const scrollViewport = scrollViewportRef.current;
     if (!scrollViewport) {
       return;
     }
+    const previousAutoScrollSelection = autoScrollSelectionRef.current;
+    const nextAutoScrollSelection = {
+      sheetName,
+      col: selectedCell.col,
+      row: selectedCell.row,
+    };
+    const selectionChanged = hasSelectionTargetChanged(
+      previousAutoScrollSelection,
+      nextAutoScrollSelection,
+    );
+    if (!selectionChanged) {
+      return;
+    }
+    autoScrollSelectionRef.current = nextAutoScrollSelection;
     scrollCellIntoView({
       cell: [selectedCell.col, selectedCell.row],
       columnWidths,
@@ -776,6 +855,12 @@ export function WorkbookGridSurface({
     [gridSelection, selectedAddr],
   );
   const isEntireSheetSelected = useMemo(() => isSheetSelection(gridSelection), [gridSelection]);
+  const allowsRangeMove = Boolean(
+    selectionRange &&
+    gridSelection.columns.length === 0 &&
+    gridSelection.rows.length === 0 &&
+    !fillPreviewRange,
+  );
 
   const applyClipboardValues = useCallback(
     (target: Item, values: readonly (readonly string[])[]) => {
@@ -895,6 +980,15 @@ export function WorkbookGridSurface({
     [isEditingCell, overlayBounds],
   );
 
+  const editorPresentation = useMemo(() => {
+    const selectedCellStyle = engine.getCellStyle(selectedCellSnapshot.styleId);
+    const renderCell = snapshotToRenderCell(selectedCellSnapshot, selectedCellStyle);
+    return getEditorPresentation({
+      renderCell,
+      fillColor: selectedCellStyle?.fill?.backgroundColor,
+    });
+  }, [engine, selectedCellSnapshot]);
+
   const editorTextAlign = useMemo<"left" | "right">(
     () => getEditorTextAlign(editorValue),
     [editorValue],
@@ -960,6 +1054,14 @@ export function WorkbookGridSurface({
 
   const refreshHoverState = useCallback(
     (clientX: number, clientY: number, buttons: number) => {
+      if (isRangeMoveDragging) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "grabbing" })
+            ? current
+            : { cell: null, header: null, cursor: "grabbing" },
+        );
+        return;
+      }
       if (buttons !== 0 || fillPreviewRangeRef.current) {
         setHoverState((current) =>
           sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
@@ -974,6 +1076,17 @@ export function WorkbookGridSurface({
           sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
             ? current
             : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
+      const rangeMoveAnchorCell = allowsRangeMove
+        ? resolveSelectionMoveAnchorCell(clientX, clientY, selectionRange, getCellScreenBounds)
+        : null;
+      if (rangeMoveAnchorCell) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "grab" })
+            ? current
+            : { cell: null, header: null, cursor: "grab" },
         );
         return;
       }
@@ -999,11 +1112,92 @@ export function WorkbookGridSurface({
       gridMetrics,
       gridSelection.columns.length,
       gridSelection.rows.length,
+      isRangeMoveDragging,
       resolvePointerGeometry,
+      allowsRangeMove,
       selectedCell.col,
       selectedCell.row,
       selectionRange,
       visibleRegion,
+    ],
+  );
+
+  const beginRangeMove = useCallback(
+    (pointerCell: Item) => {
+      if (!selectionRange) {
+        return;
+      }
+      const sourceRange = selectionRange;
+      const anchorOffset: Item = [pointerCell[0] - sourceRange.x, pointerCell[1] - sourceRange.y];
+      rangeMoveCleanupRef.current?.();
+      rangeMoveSourceRangeRef.current = sourceRange;
+      rangeMovePreviewRangeRef.current = sourceRange;
+      rangeMoveAnchorOffsetRef.current = anchorOffset;
+      setIsRangeMoveDragging(true);
+      setHoverState({ cell: null, header: null, cursor: "grabbing" });
+      if (isEditingCell) {
+        onCommitEdit();
+      }
+      focusGrid();
+
+      const move = (nativeEvent: PointerEvent) => {
+        const nextPointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
+        if (!nextPointerCell) {
+          return;
+        }
+        const nextRange = resolveMovedRange(sourceRange, nextPointerCell, anchorOffset);
+        if (sameRectangle(rangeMovePreviewRangeRef.current, nextRange)) {
+          return;
+        }
+        rangeMovePreviewRangeRef.current = nextRange;
+        setGridSelection(createRectangleSelectionFromRange(nextRange));
+      };
+
+      const cleanup = (clientX?: number, clientY?: number) => {
+        window.removeEventListener("pointermove", move, true);
+        window.removeEventListener("pointerup", up, true);
+        rangeMoveCleanupRef.current = null;
+        rangeMoveSourceRangeRef.current = null;
+        rangeMovePreviewRangeRef.current = null;
+        rangeMoveAnchorOffsetRef.current = null;
+        setIsRangeMoveDragging(false);
+        if (clientX !== undefined && clientY !== undefined) {
+          refreshHoverState(clientX, clientY, 0);
+        }
+      };
+
+      const up = (nativeEvent: PointerEvent) => {
+        const resolvedSourceRange = rangeMoveSourceRangeRef.current ?? sourceRange;
+        const resolvedTargetRange = rangeMovePreviewRangeRef.current ?? resolvedSourceRange;
+        cleanup(nativeEvent.clientX, nativeEvent.clientY);
+        setGridSelection(createRectangleSelectionFromRange(resolvedTargetRange));
+        onSelect(formatAddress(resolvedTargetRange.y, resolvedTargetRange.x));
+        if (sameRectangle(resolvedSourceRange, resolvedTargetRange)) {
+          return;
+        }
+        const sourceAddresses = rectangleToAddresses(resolvedSourceRange);
+        const targetAddresses = rectangleToAddresses(resolvedTargetRange);
+        onMoveRange(
+          sourceAddresses.startAddress,
+          sourceAddresses.endAddress,
+          targetAddresses.startAddress,
+          targetAddresses.endAddress,
+        );
+      };
+
+      rangeMoveCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", move, true);
+      window.addEventListener("pointerup", up, true);
+    },
+    [
+      focusGrid,
+      isEditingCell,
+      onCommitEdit,
+      onMoveRange,
+      onSelect,
+      refreshHoverState,
+      resolvePointerCell,
+      selectionRange,
     ],
   );
 
@@ -1122,15 +1316,11 @@ export function WorkbookGridSurface({
   }, [focusGrid, isEditingCell, onCommitEdit, onSelect]);
 
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]"
-      data-testid="sheet-grid-shell"
-    >
+    <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
       <div
         className="sheet-grid-host min-h-0 flex-1 bg-[var(--wb-surface)] pr-2 pb-2"
         data-column-width-overrides={columnWidthOverridesAttr}
         data-default-column-width={gridMetrics.columnWidth}
-        data-webgpu-active={isWebGpuActive}
         data-testid="sheet-grid"
         role="grid"
         style={{ cursor: hoverState.cursor }}
@@ -1229,7 +1419,7 @@ export function WorkbookGridSurface({
           refreshHoverState(event.clientX, event.clientY, event.buttons);
         }}
         onPointerLeave={() => {
-          if (activeResizeColumn !== null) {
+          if (activeResizeColumn !== null || isRangeMoveDragging) {
             return;
           }
           setHoverState((current) =>
@@ -1276,6 +1466,26 @@ export function WorkbookGridSurface({
             return;
           }
 
+          if (allowsRangeMove) {
+            const rangeMoveAnchorCell = resolveSelectionMoveAnchorCell(
+              event.clientX,
+              event.clientY,
+              selectionRange,
+              getCellScreenBounds,
+            );
+            if (rangeMoveAnchorCell) {
+              event.preventDefault();
+              event.stopPropagation();
+              resetGridPointerInteraction(interactionState, {
+                clearIgnoreNextPointerSelection: true,
+              });
+              setActiveResizeColumn(null);
+              setActiveHeaderDrag(null);
+              beginRangeMove(rangeMoveAnchorCell);
+              return;
+            }
+          }
+
           const headerSelection =
             pointerGeometry === null
               ? null
@@ -1311,6 +1521,9 @@ export function WorkbookGridSurface({
           });
         }}
         onPointerUpCapture={(event) => {
+          if (isRangeMoveDragging) {
+            return;
+          }
           const clickedCell =
             dragDidMoveRef.current || dragHeaderSelectionRef.current
               ? null
@@ -1355,17 +1568,8 @@ export function WorkbookGridSurface({
         <div ref={scrollViewportRef} aria-hidden="true" className="absolute inset-0 overflow-auto">
           <div style={{ height: totalGridHeight, width: totalGridWidth }} />
         </div>
-        <GridGpuSurface
-          host={hostElement}
-          scene={gpuScene}
-          textScene={textScene}
-          onActiveChange={setIsWebGpuActive}
-        />
-        <GridTextOverlay
-          active={hostElement !== null && isWebGpuActive}
-          host={hostElement}
-          scene={textScene}
-        />
+        <GridGpuSurface host={hostElement} scene={gpuScene} onActiveChange={setIsWebGpuActive} />
+        <GridTextOverlay active={hostElement !== null && isWebGpuActive} scene={textScene} />
         <button
           aria-label="Select entire sheet"
           className="absolute z-20 flex items-center justify-center border-r border-b border-[var(--wb-border-subtle)] bg-[var(--wb-muted)] text-[var(--wb-text-muted)] outline-none transition-colors hover:bg-[var(--wb-muted-strong)] hover:text-[var(--wb-text)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent)] focus-visible:ring-offset-0"
@@ -1391,7 +1595,7 @@ export function WorkbookGridSurface({
         {fillHandleBounds ? (
           <button
             aria-label="Fill handle"
-            className="absolute z-30 cursor-crosshair rounded-[2px] border border-white bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)]"
+            className="absolute z-30 cursor-crosshair rounded-full border border-white bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)]"
             onPointerDown={handleFillHandlePointerDown}
             style={{
               height: fillHandleBounds.height,
@@ -1410,9 +1614,14 @@ export function WorkbookGridSurface({
           onCancel={onCancelEdit}
           onChange={onEditorChange}
           onCommit={onCommitEdit}
+          backgroundColor={editorPresentation.backgroundColor}
+          color={editorPresentation.color}
+          font={editorPresentation.font}
+          fontSize={editorPresentation.fontSize}
           resolvedValue={resolvedValue}
           selectionBehavior={editorSelectionBehavior}
           textAlign={editorTextAlign}
+          underline={editorPresentation.underline}
           value={editorValue}
           style={overlayStyle}
         />
@@ -1534,4 +1743,16 @@ function scrollCellIntoView(options: {
   } else if (cellTop + gridMetrics.rowHeight > scrollViewport.scrollTop + bodyHeight) {
     scrollViewport.scrollTop = cellTop + gridMetrics.rowHeight - bodyHeight;
   }
+}
+
+export function hasSelectionTargetChanged(
+  previousSelection: { sheetName: string; col: number; row: number } | null,
+  nextSelection: { sheetName: string; col: number; row: number },
+): boolean {
+  return (
+    previousSelection === null ||
+    previousSelection.sheetName !== nextSelection.sheetName ||
+    previousSelection.col !== nextSelection.col ||
+    previousSelection.row !== nextSelection.row
+  );
 }

@@ -67,6 +67,18 @@ export function createRangeSelection(
   };
 }
 
+export function createRectangleSelectionFromRange(range: Rectangle): GridSelection {
+  return {
+    current: {
+      cell: [range.x, range.y],
+      range: { ...range },
+      rangeStack: [],
+    },
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty(),
+  };
+}
+
 export function formatSelectionSummary(selection: GridSelection, fallbackAddress: string): string {
   const selectedColumnStart = selection.columns.first();
   const selectedColumnEnd = selection.columns.last();

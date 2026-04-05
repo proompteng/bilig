@@ -61,6 +61,11 @@ export type WorkbookEventPayload =
       target: CellRangeRef;
     }
   | {
+      kind: "moveRange";
+      source: CellRangeRef;
+      target: CellRangeRef;
+    }
+  | {
       kind: "updateColumnWidth";
       sheetName: string;
       columnIndex: number;
@@ -140,6 +145,7 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
       return Array.isArray(value["ops"]);
     case "fillRange":
     case "copyRange":
+    case "moveRange":
       return isCellRangeRef(value["source"]) && isCellRangeRef(value["target"]);
     case "updateColumnWidth":
       return (
@@ -200,6 +206,7 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
       return [rangeRegion(payload.range)];
     case "fillRange":
     case "copyRange":
+    case "moveRange":
       return [rangeRegion(payload.source), rangeRegion(payload.target)];
     case "setRangeStyle":
     case "clearRangeStyle":
@@ -242,6 +249,9 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return;
     case "copyRange":
       engine.copyRange(payload.source, payload.target);
+      return;
+    case "moveRange":
+      engine.moveRange(payload.source, payload.target);
       return;
     case "updateColumnWidth":
       engine.updateColumnMetadata(payload.sheetName, payload.columnIndex, 1, payload.width, null);

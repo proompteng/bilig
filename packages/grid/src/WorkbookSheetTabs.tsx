@@ -1,22 +1,58 @@
 import React from "react";
+import { Button } from "@base-ui/react/button";
 import { Tabs } from "@base-ui/react/tabs";
+import { cn } from "./cn.js";
 
 interface WorkbookSheetTabsProps {
   sheetName: string;
   sheetNames: string[];
-  statusBar?: React.ReactNode;
+  selectionStatus?: React.ReactNode;
   onSelectSheet(this: void, sheetName: string): void;
   onCreateSheet?: (() => void) | undefined;
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined;
 }
 
-const TAB_CLASS_NAME =
-  "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-transparent bg-transparent px-3 text-[12px] font-medium text-[var(--wb-text-muted)] outline-none transition-[background-color,border-color,color,box-shadow] hover:border-[var(--wb-border)] hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] focus-visible:border-[var(--wb-accent)] focus-visible:bg-[var(--wb-surface)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] data-[active]:border-[var(--wb-border)] data-[active]:bg-[var(--wb-surface)] data-[active]:text-[var(--wb-text)] data-[active]:shadow-[var(--wb-shadow-sm)]";
+const SHEET_STRIP_CLASS =
+  "flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 py-1.5";
+const SHEET_TABS_ROOT_CLASS = "min-w-0";
+const SHEET_LIST_CLASS =
+  "relative flex max-w-full items-center gap-1 overflow-x-auto rounded-[calc(var(--wb-radius-control)+4px)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-1";
+const SHEET_INDICATOR_CLASS =
+  "pointer-events-none absolute inset-y-1 rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[left,top,width,height] duration-150 ease-out";
+const SHEET_RENAME_SHELL_CLASS =
+  "relative z-[1] inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent)] bg-[var(--wb-surface)] px-3 shadow-[var(--wb-shadow-sm)]";
+const SHEET_ACTION_BUTTON_CLASS =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-subtle)] outline-none transition-[background-color,border-color,color,box-shadow] hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] hover:shadow-[var(--wb-shadow-sm)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] disabled:cursor-not-allowed disabled:opacity-50";
+
+function SheetAddIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 16 16">
+      <path
+        d="M8 3.25v9.5M3.25 8h9.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function getSheetTabClassName(state: Tabs.Tab.State): string {
+  return cn(
+    "relative z-[1] inline-flex h-8 items-center rounded-[var(--wb-radius-control)] px-3 text-[12px] outline-none transition-[color,font-weight] duration-150",
+    state.active
+      ? "font-semibold text-[var(--wb-text)]"
+      : "font-medium text-[var(--wb-text-subtle)] hover:text-[var(--wb-text)]",
+    !state.disabled &&
+      "focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:text-[var(--wb-text)]",
+    state.disabled && "cursor-not-allowed opacity-50",
+  );
+}
 
 export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
   sheetName,
   sheetNames,
-  statusBar,
+  selectionStatus,
   onSelectSheet,
   onCreateSheet,
   onRenameSheet,
@@ -70,22 +106,21 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
   }, [cancelSheetRename, renamingSheetName, sheetNames]);
 
   return (
-    <div className="flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 py-1.5">
+    <div className={SHEET_STRIP_CLASS}>
       <div className="flex min-w-0 items-center gap-1.5">
-        <Tabs.Root value={sheetName} onValueChange={(value) => onSelectSheet(String(value))}>
-          <Tabs.List
-            aria-label="Sheets"
-            className="flex max-w-full items-center gap-1 overflow-x-auto pr-1"
-          >
+        <Tabs.Root
+          className={SHEET_TABS_ROOT_CLASS}
+          value={sheetName}
+          onValueChange={(value) => onSelectSheet(String(value))}
+        >
+          <Tabs.List aria-label="Sheets" className={SHEET_LIST_CLASS}>
+            <Tabs.Indicator className={SHEET_INDICATOR_CLASS} renderBeforeHydration />
             {sheetNames.map((name) =>
               renamingSheetName === name ? (
-                <div
-                  className={`${TAB_CLASS_NAME} ${sheetName === name ? "border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)]" : ""}`}
-                  key={name}
-                >
+                <div className={SHEET_RENAME_SHELL_CLASS} key={name}>
                   <input
                     aria-label={`Rename ${name}`}
-                    className="w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-medium text-[var(--wb-text)] outline-none"
+                    className="w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-semibold text-[var(--wb-text)] outline-none"
                     onBlur={() => commitSheetRename(name)}
                     onChange={(event) => setRenameDraft(event.target.value)}
                     onClick={(event) => event.stopPropagation()}
@@ -106,7 +141,7 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
                 </div>
               ) : (
                 <Tabs.Tab
-                  className={TAB_CLASS_NAME}
+                  className={getSheetTabClassName}
                   key={name}
                   onDoubleClick={() => startSheetRename(name)}
                   onKeyDown={(event) => {
@@ -115,6 +150,7 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
                       startSheetRename(name);
                     }
                   }}
+                  title={name}
                   value={name}
                 >
                   {name}
@@ -124,19 +160,19 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
           </Tabs.List>
         </Tabs.Root>
         {onCreateSheet ? (
-          <button
+          <Button
             aria-label="Create sheet"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[18px] leading-none text-[var(--wb-text-muted)] outline-none transition-[background-color,border-color,color,box-shadow] hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] hover:shadow-[var(--wb-shadow-sm)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+            className={SHEET_ACTION_BUTTON_CLASS}
             onClick={onCreateSheet}
             title="Add sheet"
             type="button"
           >
-            +
-          </button>
+            <SheetAddIcon />
+          </Button>
         ) : null}
       </div>
-      {statusBar ? (
-        <div className="inline-flex flex-wrap items-center gap-1.5">{statusBar}</div>
+      {selectionStatus ? (
+        <div className="inline-flex flex-wrap items-center gap-1.5">{selectionStatus}</div>
       ) : null}
     </div>
   );

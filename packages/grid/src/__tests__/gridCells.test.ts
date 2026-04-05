@@ -45,7 +45,7 @@ describe("gridCells", () => {
     ).toBe("hello");
   });
 
-  test("converts snapshots into Glide cells", () => {
+  test("converts snapshots into grid cells", () => {
     const numberCell = snapshotToGridCell(
       makeSnapshot({ value: { tag: ValueTag.Number, value: 12 } }),
     );

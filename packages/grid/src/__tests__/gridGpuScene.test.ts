@@ -171,22 +171,16 @@ describe("gridGpuScene", () => {
       y: 49,
       width: 198,
       height: 70,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.12 },
+      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
     });
     expect(scene.borderRects).toContainEqual({
       x: 100,
       y: 48,
       width: 200,
-      height: 2,
+      height: 1,
       color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
     });
-    expect(scene.fillRects).toContainEqual({
-      x: 297,
-      y: 117,
-      width: 6,
-      height: 6,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
-    });
+    expect(scene.fillRects.some((rect) => rect.width === 6 && rect.height === 6)).toBe(false);
   });
 
   test("adds GPU-backed header backgrounds and selection highlights", () => {
@@ -408,14 +402,14 @@ describe("gridGpuScene", () => {
       y: 25,
       width: 102,
       height: 42,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.12 },
+      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
     });
     expect(scene.fillRects).toContainEqual({
       x: 47,
       y: 25,
       width: 206,
       height: 20,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.12 },
+      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
     });
   });
 

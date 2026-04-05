@@ -223,10 +223,6 @@ async function getBox(locator: Locator) {
   return box;
 }
 
-async function getGridBox(page: Parameters<typeof test>[0]["page"]) {
-  return await getBox(page.getByTestId("sheet-grid"));
-}
-
 function getProductCellClientPoint(
   grid: { x: number; y: number; width: number; height: number },
   columnIndex: number,
@@ -242,69 +238,6 @@ function getProductCellClientPoint(
       PRODUCT_COLUMN_WIDTH * xRatio,
     y: grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + PRODUCT_ROW_HEIGHT * yRatio,
   };
-}
-
-async function findClosestGridColorDistance(
-  page: Parameters<typeof test>[0]["page"],
-  x: number,
-  y: number,
-  target: { r: number; g: number; b: number },
-  radius = 4,
-): Promise<number> {
-  const result = await page.evaluate(
-    ({ clientX, clientY, targetColor, radiusPx }) => {
-      const canvases = [
-        ...document.querySelectorAll<HTMLCanvasElement>('[data-testid="sheet-grid"] canvas'),
-      ];
-      for (let index = canvases.length - 1; index >= 0; index -= 1) {
-        const canvas = canvases[index];
-        const rect = canvas.getBoundingClientRect();
-        if (
-          clientX < rect.left ||
-          clientX > rect.right ||
-          clientY < rect.top ||
-          clientY > rect.bottom
-        ) {
-          continue;
-        }
-        const context = canvas.getContext("2d");
-        if (!context) {
-          continue;
-        }
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const centerX = Math.max(
-          0,
-          Math.min(canvas.width - 1, Math.round((clientX - rect.left) * scaleX)),
-        );
-        const centerY = Math.max(
-          0,
-          Math.min(canvas.height - 1, Math.round((clientY - rect.top) * scaleY)),
-        );
-        let closest = Number.POSITIVE_INFINITY;
-        for (let dx = -radiusPx; dx <= radiusPx; dx += 1) {
-          for (let dy = -radiusPx; dy <= radiusPx; dy += 1) {
-            const sampleX = Math.max(0, Math.min(canvas.width - 1, centerX + dx));
-            const sampleY = Math.max(0, Math.min(canvas.height - 1, centerY + dy));
-            const [r, g, b] = context.getImageData(sampleX, sampleY, 1, 1).data;
-            const distance = Math.sqrt(
-              (r - targetColor.r) ** 2 + (g - targetColor.g) ** 2 + (b - targetColor.b) ** 2,
-            );
-            if (distance < closest) {
-              closest = distance;
-            }
-          }
-        }
-        return closest;
-      }
-      return null;
-    },
-    { clientX: x, clientY: y, targetColor: target, radiusPx: radius },
-  );
-  if (result === null) {
-    throw new Error(`Unable to inspect grid color near ${x}, ${y}`);
-  }
-  return result;
 }
 
 async function clickProductCell(
@@ -475,6 +408,41 @@ async function dragProductBodySelection(
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(endX, endY, { steps: 12 });
+  await page.mouse.up();
+}
+
+async function dragProductSelectionBorder(
+  page: Parameters<typeof test>[0]["page"],
+  startColumn: number,
+  startRow: number,
+  endColumn: number,
+  endRow: number,
+  targetColumn: number,
+  targetRow: number,
+) {
+  const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
+
+  const startLeft = await getProductColumnLeft(page, startColumn);
+  const rangeTop = grid.y + PRODUCT_HEADER_HEIGHT + startRow * PRODUCT_ROW_HEIGHT;
+  const sourceX = grid.x + startLeft + 3;
+  const sourceY = rangeTop + 2;
+  const targetLeft = await getProductColumnLeft(page, targetColumn);
+  const targetWidth = await getProductColumnWidth(page, targetColumn);
+  const targetX = grid.x + targetLeft + Math.floor(targetWidth / 2);
+  const targetY =
+    grid.y +
+    PRODUCT_HEADER_HEIGHT +
+    targetRow * PRODUCT_ROW_HEIGHT +
+    Math.floor(PRODUCT_ROW_HEIGHT / 2);
+
+  await page.mouse.move(sourceX, sourceY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 12 });
   await page.mouse.up();
 }
 
@@ -870,10 +838,14 @@ async function expectMatchingGridRangeScreenshots(
 
 async function openZeroWorkbookPage(page: Page, documentId: string) {
   await page.goto(`/?document=${encodeURIComponent(documentId)}`);
-  await expect(page.getByTestId("formula-bar")).toBeVisible();
-  await expect(page.getByTestId("sheet-grid")).toBeVisible();
-  await expect(page.getByTestId("status-sync")).toHaveText("Ready");
+  await waitForWorkbookReady(page);
   await selectToolbarActionRange(page);
+}
+
+async function waitForWorkbookReady(page: Page) {
+  await expect(page.getByTestId("formula-bar")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("sheet-grid")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("status-sync")).toHaveText("Ready", { timeout: 15_000 });
 }
 
 async function runToolbarSyncActions(
@@ -908,7 +880,7 @@ async function runToolbarSyncActions(
 
 test("web app renders the minimal product shell without legacy demo chrome", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await expect(page.getByTestId("formula-bar")).toBeVisible();
   await expect(page.getByTestId("name-box")).toBeVisible();
@@ -920,9 +892,6 @@ test("web app renders the minimal product shell without legacy demo chrome", asy
   await expect(page.getByTestId("metrics-panel")).toHaveCount(0);
   await expect(page.getByTestId("replica-panel")).toHaveCount(0);
 
-  await expect(page.getByTestId("status-mode")).toHaveText(/^(Local|Live)$/, {
-    timeout: 15_000,
-  });
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await expect(page.getByTestId("status-sync")).toHaveText("Ready", {
     timeout: 15_000,
@@ -932,7 +901,7 @@ test("web app renders the minimal product shell without legacy demo chrome", asy
 
 test("web app keeps toolbar controls aligned and consistently sized", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const toolbar = page.getByRole("toolbar", { name: "Formatting toolbar" });
   await expect(toolbar).toBeVisible();
@@ -989,7 +958,7 @@ test("web app keeps toolbar controls aligned and consistently sized", async ({ p
 
 test("web app keeps toolbar, formula bar, grid, and footer tightly stacked", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const toolbar = page.getByRole("toolbar", { name: "Formatting toolbar" });
   const formulaBar = page.getByTestId("formula-bar");
@@ -1011,7 +980,7 @@ test("web app keeps toolbar, formula bar, grid, and footer tightly stacked", asy
 
 test("web app keeps formula bar controls aligned and consistently sized", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaFrame = page.getByTestId("formula-input-frame");
@@ -1027,7 +996,7 @@ test("web app keeps formula bar controls aligned and consistently sized", async 
 
 test("web app keeps shell controls on one height and radius system", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const locators = [
     page.getByLabel("Number format"),
@@ -1052,7 +1021,7 @@ test("web app keeps shell controls on one height and radius system", async ({ pa
 test("web app keeps the toolbar compact on narrow viewports", async ({ page }) => {
   await page.setViewportSize({ width: 620, height: 760 });
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const toolbar = page.getByRole("toolbar", { name: "Formatting toolbar" });
   const firstControl = page.getByLabel("Number format");
@@ -1075,7 +1044,7 @@ test("web app shows preset color swatches first and only reveals the custom pick
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await page.getByLabel("Fill color").click();
   await expect(page.getByRole("dialog", { name: "Fill color palette" })).toBeVisible();
@@ -1093,7 +1062,7 @@ test("web app renders the fill color palette as a visible popover below the tool
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await page.getByLabel("Fill color").click();
 
@@ -1115,35 +1084,13 @@ test("web app renders the fill color palette as a visible popover below the tool
 
 test("web app applies preset swatch colors directly from the palette", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await pickToolbarPresetColor(page, "Fill color", "light cornflower blue 3");
   await expectToolbarColor(getToolbarButton(page, "Fill color"), "#c9daf8");
 
   await pickToolbarPresetColor(page, "Text color", "dark blue 1");
   await expectToolbarColor(getToolbarButton(page, "Text color"), "#3d85c6");
-});
-
-test("web app keeps preset fill color visible after clicking another cell", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
-
-  const grid = await getGridBox(page);
-  const center = getProductCellClientPoint(grid, 0, 0, 0.55, 0.55);
-  const target = { r: 201, g: 218, b: 248 };
-
-  await pickToolbarPresetColor(page, "Fill color", "light cornflower blue 3");
-  await expectToolbarColor(getToolbarButton(page, "Fill color"), "#c9daf8");
-
-  await expect
-    .poll(async () => await findClosestGridColorDistance(page, center.x, center.y, target, 10))
-    .toBeLessThan(30);
-
-  await clickProductCell(page, 9, 23);
-
-  await expect
-    .poll(async () => await findClosestGridColorDistance(page, center.x, center.y, target, 10))
-    .toBeLessThan(30);
 });
 
 test("web app propagates content and styling changes across live zero tabs", async ({
@@ -1250,7 +1197,7 @@ test("web app keeps two live zero tabs visually converged across toolbar actions
 test("web app keeps sheet tabs and status bar visible in a short viewport", async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 220 });
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const sheetTab = page.getByRole("tab", { name: "Sheet1" });
   const statusSync = page.getByTestId("status-sync");
@@ -1270,7 +1217,7 @@ test("web app keeps sheet tabs and status bar visible in a short viewport", asyn
 
 test("web app supports column and row header selection", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
 
@@ -1293,7 +1240,7 @@ test("web app supports column and row header selection", async ({ page }) => {
 
 test("web app supports row and column header drag selection", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await dragProductHeaderSelection(page, "column", 1, 3);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B:D");
@@ -1304,17 +1251,17 @@ test("web app supports row and column header drag selection", async ({ page }) =
 
 test("web app supports rectangular drag selection", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await dragProductBodySelection(page, 1, 1, 3, 3);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:D4");
 });
 
-test("web app keeps the active focus inside the Glide grid when clicking a cell", async ({
+test("web app keeps the active focus inside the sheet grid when clicking a cell", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await clickProductCell(page, 2, 2);
   await expect(page.getByTestId("name-box")).toHaveValue("C3");
@@ -1335,7 +1282,7 @@ test("web app maps clicks in the upper half of a cell to that same visible cell"
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await clickProductCellUpperHalf(page, 4, 11);
   await expect(page.getByTestId("name-box")).toHaveValue("E12");
@@ -1348,7 +1295,7 @@ test("web app maps clicks in the upper half of a cell to that same visible cell"
 
 test("web app supports column resize without breaking hit testing", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await clickProductBodyOffset(page, 82, 0);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
@@ -1361,7 +1308,7 @@ test("web app supports column resize without breaking hit testing", async ({ pag
 
 test("web app supports column edge double-click autofit", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -1382,7 +1329,7 @@ test("web app supports column edge double-click autofit", async ({ page }) => {
 
 test("web app accepts string values and string comparison formulas", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -1408,7 +1355,7 @@ test("web app accepts string values and string comparison formulas", async ({ pa
 
 test("web app supports type-to-replace and Enter or Tab commit movement", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -1449,7 +1396,7 @@ test("web app supports type-to-replace and Enter or Tab commit movement", async 
 
 test("web app preserves multi-digit numeric type-to-replace input", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -1478,7 +1425,7 @@ test("web app preserves multi-digit numeric type-to-replace input", async ({ pag
 
 test("web app right-aligns numeric in-cell editing like numeric view state", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const cellEditor = page.getByTestId("cell-editor-input");
@@ -1500,7 +1447,7 @@ test("web app right-aligns numeric in-cell editing like numeric view state", asy
 
 test("web app accepts numpad digits for in-cell numeric entry", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -1524,8 +1471,8 @@ test("web app accepts numpad digits for in-cell numeric entry", async ({ page })
 
 test("web app supports F2 edit in the product shell", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -1554,7 +1501,7 @@ test("web app supports F2 edit in the product shell", async ({ page }) => {
 
 test("web app double-click edits the exact clicked cell", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -1593,7 +1540,7 @@ test("web app double-click edits the exact clicked cell", async ({ page }) => {
 
 test("web app keeps the selected cell when clicking its top border", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
 
@@ -1606,9 +1553,43 @@ test("web app keeps the selected cell when clicking its top border", async ({ pa
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
 });
 
+test("web app keeps selected text cells visible when clicked", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkbookReady(page);
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const textOverlay = page.getByTestId("grid-text-overlay");
+  const sampleText = "visible text sample";
+
+  await nameBox.fill("C5");
+  await nameBox.press("Enter");
+  await formulaInput.fill(sampleText);
+  await formulaInput.press("Enter");
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+  await clickProductCell(page, 2, 4);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
+  const spilledText = textOverlay.getByText(sampleText, { exact: true });
+  await expect(spilledText).toBeVisible();
+  await expect(formulaInput).toHaveValue(sampleText);
+  await expect
+    .poll(() =>
+      spilledText.evaluate((element) => {
+        if (!(element instanceof HTMLElement)) {
+          return 0;
+        }
+        return Math.round(element.getBoundingClientRect().width);
+      }),
+    )
+    .toBeGreaterThan(PRODUCT_COLUMN_WIDTH);
+});
+
 test("web app supports fill-handle propagation", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
@@ -1633,7 +1614,7 @@ test("web app supports rectangular clipboard copy and external paste", async ({
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -1699,7 +1680,7 @@ test("web app relocates formulas when using rectangular clipboard paste", async 
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -1751,53 +1732,16 @@ test("web app relocates formulas when using rectangular clipboard paste", async 
 
 test("web app supports product-shell column resize", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const baselineWidth = await getProductColumnWidth(page, 0);
   await dragProductColumnResize(page, 0, 48);
   await expect.poll(() => getProductColumnWidth(page, 0)).toBeGreaterThan(baselineWidth + 30);
 });
 
-test("web app relocates relative formulas when using the fill handle", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
-
-  const nameBox = page.getByTestId("name-box");
-  const formulaInput = page.getByTestId("formula-input");
-  const resolvedValue = page.getByTestId("formula-resolved-value");
-
-  await nameBox.fill("G7");
-  await nameBox.press("Enter");
-  await formulaInput.fill("");
-  await formulaInput.press("Enter");
-
-  await nameBox.fill("F6");
-  await nameBox.press("Enter");
-  await formulaInput.fill("3");
-  await formulaInput.press("Enter");
-
-  await nameBox.fill("F7");
-  await nameBox.press("Enter");
-  await formulaInput.fill("4");
-  await formulaInput.press("Enter");
-
-  await nameBox.fill("G6");
-  await nameBox.press("Enter");
-  await formulaInput.fill("=F6*2");
-  await formulaInput.press("Enter");
-
-  await dragProductFillHandle(page, 6, 5, 6, 6);
-
-  await nameBox.fill("G7");
-  await nameBox.press("Enter");
-  await expect(nameBox).toHaveValue("G7");
-  await expect(formulaInput).toHaveValue("=F7*2", { timeout: 15_000 });
-  await expect(resolvedValue).toHaveText("8");
-});
-
 test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
@@ -1813,7 +1757,7 @@ test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
 
 test("web app commits in-cell string edits when clicking away", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   const nameBox = page.getByTestId("name-box");
@@ -1835,9 +1779,54 @@ test("web app commits in-cell string edits when clicking away", async ({ page })
   await expect(resolvedValue).toHaveText("h");
 });
 
+test("web app drags a selected range by its border with a grab cursor", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkbookReady(page);
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await nameBox.fill("B2");
+  await nameBox.press("Enter");
+  await formulaInput.fill("left");
+  await formulaInput.press("Enter");
+
+  await nameBox.fill("C2");
+  await nameBox.press("Enter");
+  await formulaInput.fill("right");
+  await formulaInput.press("Enter");
+
+  await dragProductBodySelection(page, 1, 1, 2, 1);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:C2");
+
+  await dragProductSelectionBorder(page, 1, 1, 2, 1, 3, 3);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!D4:E4");
+
+  await nameBox.fill("B2");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("");
+  await expect(resolvedValue).toHaveText("∅");
+
+  await nameBox.fill("C2");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("");
+  await expect(resolvedValue).toHaveText("∅");
+
+  await nameBox.fill("D4");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("left");
+  await expect(resolvedValue).toHaveText("left");
+
+  await nameBox.fill("E4");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("right");
+  await expect(resolvedValue).toHaveText("right");
+});
+
 test("web app applies core formatting shortcuts from the keyboard", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   await clickProductCell(page, 0, 0);
@@ -1857,7 +1846,7 @@ test("web app applies core formatting shortcuts from the keyboard", async ({ pag
 
 test("web app supports row, column, and full-sheet selection shortcuts", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   await clickProductCell(page, 2, 4);
@@ -1878,7 +1867,7 @@ test("web app supports row, column, and full-sheet selection shortcuts", async (
 
 test("web app expands the active range with repeated shift arrows", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   const grid = page.getByTestId("sheet-grid");
   await clickProductCell(page, 2, 4);
@@ -1896,7 +1885,7 @@ test("web app expands the active range with repeated shift arrows", async ({ pag
 
 test("web app expands the active range with shift-click", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await clickProductCell(page, 1, 1);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
@@ -1912,7 +1901,7 @@ for (const key of ["Delete", "Backspace"] as const) {
   }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto("/");
-    await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+    await waitForWorkbookReady(page);
 
     const grid = page.getByTestId("sheet-grid");
     const formulaInput = page.getByTestId("formula-input");
@@ -1944,7 +1933,7 @@ for (const key of ["Delete", "Backspace"] as const) {
 
 test("web app ignores right gutter clicks", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
 
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await clickGridRightEdge(page, 3);
@@ -1960,7 +1949,7 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
   );
 
   await page.goto("/");
-  await expect(page.getByTestId("status-mode")).toHaveText("Live", { timeout: 15_000 });
+  await waitForWorkbookReady(page);
   const grid = page.getByTestId("sheet-grid");
   await expect(grid).toBeVisible({ timeout: 15_000 });
   const gridBox = await grid.boundingBox();

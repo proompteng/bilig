@@ -91,6 +91,11 @@ export function handleLocalWorksheetAgentRequest<SessionState extends LocalWorks
       engine.copyRange(request.source, request.target);
       return { kind: "ok", id: request.id };
     }
+    case "moveRange": {
+      const { engine } = context.getSessionByAgentSessionId(request.sessionId);
+      engine.moveRange(request.source, request.target);
+      return { kind: "ok", id: request.id };
+    }
     case "pasteRange": {
       const { engine } = context.getSessionByAgentSessionId(request.sessionId);
       engine.pasteRange(request.source, request.target);

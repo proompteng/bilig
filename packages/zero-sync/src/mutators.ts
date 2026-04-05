@@ -226,6 +226,7 @@ export const mutators = defineMutators({
     renderCommit: defineMutator(renderCommitArgsSchema, noop),
     fillRange: defineMutator(rangeMutationArgsSchema, noop),
     copyRange: defineMutator(rangeMutationArgsSchema, noop),
+    moveRange: defineMutator(rangeMutationArgsSchema, noop),
     updateColumnWidth: defineMutator(updateColumnWidthArgsSchema, noop),
     setRangeStyle: defineMutator(setRangeStyleArgsSchema, noop),
     clearRangeStyle: defineMutator(clearRangeStyleArgsSchema, noop),

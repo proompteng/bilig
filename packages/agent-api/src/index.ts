@@ -91,6 +91,7 @@ export type AgentRequest =
   | { kind: "clearRange"; id: string; sessionId: string; range: CellRangeRef }
   | { kind: "fillRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }
   | { kind: "copyRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }
+  | { kind: "moveRange"; id: string; sessionId: string; source: CellRangeRef; target: CellRangeRef }
   | {
       kind: "pasteRange";
       id: string;

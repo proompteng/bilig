@@ -93,4 +93,48 @@ describe("WorkerViewportCache", () => {
 
     expect(cache.peekCell("Sheet1", "D5")).toBeUndefined();
   });
+
+  it("applies optimistic style patches to cached cells in range", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch(createPatch());
+    cache.applyOptimisticRangeStyle(
+      { sheetName: "Sheet1", startAddress: "D5", endAddress: "D5" },
+      { fill: { backgroundColor: "#c9daf8" } },
+    );
+
+    const snapshot = cache.getCell("Sheet1", "D5");
+    const style = cache.getCellStyle(snapshot.styleId);
+
+    expect(style).toMatchObject({
+      fill: { backgroundColor: "#c9daf8" },
+    });
+  });
+
+  it("clears optimistic style fields without dropping unrelated style state", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch({
+      ...createPatch("style-filled"),
+      styles: [
+        {
+          id: "style-filled",
+          fill: { backgroundColor: "#c9daf8" },
+          font: { bold: true, color: "#111827" },
+        },
+      ],
+    });
+
+    cache.clearOptimisticRangeStyle({ sheetName: "Sheet1", startAddress: "D5", endAddress: "D5" }, [
+      "backgroundColor",
+    ]);
+
+    const snapshot = cache.getCell("Sheet1", "D5");
+    const style = cache.getCellStyle(snapshot.styleId);
+
+    expect(style).toMatchObject({
+      font: { bold: true, color: "#111827" },
+    });
+    expect(style?.fill).toBeUndefined();
+  });
 });

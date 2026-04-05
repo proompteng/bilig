@@ -1,4 +1,4 @@
-import { ValueTag } from "@bilig/protocol";
+import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
 import { getResolvedCellFontFamily, snapshotToRenderCell } from "./gridCells.js";
 import type { GridMetrics } from "./gridMetrics.js";
@@ -37,7 +37,9 @@ interface BuildGridTextSceneOptions {
   };
   readonly gridMetrics: GridMetrics;
   readonly columnWidths: Readonly<Record<number, number>>;
+  readonly editingCell?: Item | null;
   readonly selectedCell: Item;
+  readonly selectedCellSnapshot?: CellSnapshot | null;
   readonly selectionRange?: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
   readonly hoveredHeader?: HeaderSelection | null;
   readonly activeHeaderDrag?: HeaderSelection | null;
@@ -60,7 +62,9 @@ export function buildGridTextScene({
   visibleRegion,
   gridMetrics,
   columnWidths,
+  editingCell = null,
   selectedCell,
+  selectedCellSnapshot = null,
   selectionRange = null,
   hoveredHeader = null,
   activeHeaderDrag = null,
@@ -83,38 +87,185 @@ export function buildGridTextScene({
   });
 
   for (const [col, row] of visibleItems) {
-    const bounds = getCellBounds(col, row);
-    if (!bounds) {
+    if (editingCell && editingCell[0] === col && editingCell[1] === row) {
       continue;
     }
 
-    const snapshot = engine.getCell(sheetName, `${indexToColumn(col)}${row + 1}`);
-    if (snapshot.value.tag === ValueTag.Boolean) {
-      continue;
-    }
-
-    const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId));
-    if (renderCell.displayText.length === 0) {
-      continue;
-    }
-
-    items.push({
-      x: bounds.x - hostBounds.left,
-      y: bounds.y - hostBounds.top,
-      width: bounds.width,
-      height: bounds.height,
-      text: renderCell.displayText,
-      align: renderCell.align,
-      wrap: renderCell.wrap,
-      color: renderCell.color,
-      font: renderCell.font,
-      fontSize: renderCell.fontSize,
-      underline: renderCell.underline,
-      strike: false,
+    const item = buildCellTextItem({
+      engine,
+      sheetName,
+      col,
+      row,
+      hostBounds,
+      getCellBounds,
+      visibleColumnEnd: visibleRegion.range.x + visibleRegion.range.width - 1,
+      selectedAddress:
+        col === selectedCell[0] && row === selectedCell[1]
+          ? `${indexToColumn(col)}${row + 1}`
+          : null,
+      snapshotOverride: selectedCellSnapshot,
     });
+    if (item) {
+      items.push(item);
+    }
   }
 
   return { items };
+}
+
+function buildCellTextItem({
+  engine,
+  sheetName,
+  col,
+  row,
+  hostBounds,
+  getCellBounds,
+  visibleColumnEnd,
+  selectedAddress = null,
+  snapshotOverride = null,
+}: {
+  engine: GridEngineLike;
+  sheetName: string;
+  col: number;
+  row: number;
+  hostBounds: Pick<DOMRect, "left" | "top">;
+  getCellBounds: (col: number, row: number) => Rectangle | undefined;
+  visibleColumnEnd: number;
+  selectedAddress?: string | null;
+  snapshotOverride?: CellSnapshot | null;
+}): GridTextItem | null {
+  const bounds = getCellBounds(col, row);
+  if (!bounds) {
+    return null;
+  }
+
+  const address = `${indexToColumn(col)}${row + 1}`;
+  const snapshot = resolveCellTextSnapshot({
+    address,
+    engine,
+    sheetName,
+    selectedAddress,
+    snapshotOverride,
+  });
+  if (snapshot.value.tag === ValueTag.Boolean) {
+    return null;
+  }
+
+  const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId));
+  if (renderCell.displayText.length === 0) {
+    return null;
+  }
+
+  const renderBounds = resolveTextRenderBounds({
+    engine,
+    sheetName,
+    row,
+    col,
+    bounds,
+    visibleColumnEnd,
+    getCellBounds,
+    renderCell,
+  });
+
+  return {
+    x: renderBounds.x - hostBounds.left,
+    y: renderBounds.y - hostBounds.top,
+    width: renderBounds.width,
+    height: renderBounds.height,
+    text: renderCell.displayText,
+    align: renderCell.align,
+    wrap: renderCell.wrap,
+    color: renderCell.color,
+    font: renderCell.font,
+    fontSize: renderCell.fontSize,
+    underline: renderCell.underline,
+    strike: false,
+  };
+}
+
+function resolveCellTextSnapshot({
+  address,
+  engine,
+  sheetName,
+  selectedAddress,
+  snapshotOverride,
+}: {
+  address: string;
+  engine: GridEngineLike;
+  sheetName: string;
+  selectedAddress: string | null;
+  snapshotOverride: CellSnapshot | null;
+}): CellSnapshot {
+  const engineSnapshot = engine.getCell(sheetName, address);
+  if (!snapshotOverride || selectedAddress !== address || snapshotOverride.address !== address) {
+    return engineSnapshot;
+  }
+
+  const engineRenderCell = snapshotToRenderCell(
+    engineSnapshot,
+    engine.getCellStyle(engineSnapshot.styleId),
+  );
+  const overrideRenderCell = snapshotToRenderCell(
+    snapshotOverride,
+    engine.getCellStyle(snapshotOverride.styleId),
+  );
+
+  if (engineRenderCell.displayText.length > 0 && overrideRenderCell.displayText.length === 0) {
+    return engineSnapshot;
+  }
+  if (overrideRenderCell.displayText.length > 0 && engineRenderCell.displayText.length === 0) {
+    return snapshotOverride;
+  }
+
+  return snapshotOverride;
+}
+
+function resolveTextRenderBounds(options: {
+  engine: GridEngineLike;
+  sheetName: string;
+  row: number;
+  col: number;
+  bounds: Rectangle;
+  visibleColumnEnd: number;
+  getCellBounds: (col: number, row: number) => Rectangle | undefined;
+  renderCell: ReturnType<typeof snapshotToRenderCell>;
+}): Rectangle {
+  const { engine, sheetName, row, col, bounds, visibleColumnEnd, getCellBounds, renderCell } =
+    options;
+
+  if (
+    renderCell.wrap ||
+    renderCell.align !== "left" ||
+    (renderCell.kind !== "string" && renderCell.kind !== "error")
+  ) {
+    return bounds;
+  }
+
+  let spillWidth = bounds.width;
+  for (let spillCol = col + 1; spillCol <= visibleColumnEnd; spillCol += 1) {
+    const spillBounds = getCellBounds(spillCol, row);
+    if (!spillBounds) {
+      break;
+    }
+    const spillSnapshot = engine.getCell(sheetName, `${indexToColumn(spillCol)}${row + 1}`);
+    const spillRenderCell = snapshotToRenderCell(
+      spillSnapshot,
+      engine.getCellStyle(spillSnapshot.styleId),
+    );
+    if (spillRenderCell.displayText.length > 0) {
+      break;
+    }
+    spillWidth = spillBounds.x + spillBounds.width - bounds.x;
+  }
+
+  if (spillWidth === bounds.width) {
+    return bounds;
+  }
+
+  return {
+    ...bounds,
+    width: spillWidth,
+  };
 }
 
 function pushHeaderTextItems(options: {

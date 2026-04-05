@@ -56,6 +56,34 @@ function asTypedView<T>(view: unknown): TypedView<T> {
   return view as TypedView<T>;
 }
 
+function mergeSelectedCellEval(
+  cached: CellSnapshot | undefined,
+  selection: { sheetName: string; address: string },
+  evalRow: CellEvalRow | null,
+  authoritativeFormat: string | undefined,
+): CellSnapshot | undefined {
+  if (!evalRow) {
+    return cached;
+  }
+  return {
+    ...(cached ?? {
+      sheetName: selection.sheetName,
+      address: selection.address,
+      value: evalRow.value,
+      flags: evalRow.flags,
+      version: evalRow.version,
+    }),
+    sheetName: selection.sheetName,
+    address: selection.address,
+    value: evalRow.value,
+    flags: evalRow.flags,
+    version: evalRow.version,
+    ...(evalRow.styleId ? { styleId: evalRow.styleId } : {}),
+    ...(evalRow.formatId ? { numberFormatId: evalRow.formatId } : {}),
+    ...(authoritativeFormat ? { format: authoritativeFormat } : {}),
+  };
+}
+
 export class ZeroWorkbookBridge {
   private readonly tileManager: TileSubscriptionManager;
   private readonly workbookListeners = new Set<WorkbookListener>();
@@ -333,25 +361,18 @@ export class ZeroWorkbookBridge {
   }
 
   private currentSelectedCell(): CellSnapshot | null {
+    const cachedCell = this.cache.peekCell(this.selection.sheetName, this.selection.address);
     const authoritativeFormat =
       this.selectedCellEval?.formatCode ??
       (this.selectedCellEval?.formatId
         ? this.numberFormatsById.get(this.selectedCellEval.formatId)
         : undefined);
-    const authoritativeCell = this.selectedCellEval
-      ? {
-          sheetName: this.selection.sheetName,
-          address: this.selection.address,
-          value: this.selectedCellEval.value,
-          flags: this.selectedCellEval.flags,
-          version: this.selectedCellEval.version,
-          ...(this.selectedCellEval.styleId ? { styleId: this.selectedCellEval.styleId } : {}),
-          ...(this.selectedCellEval.formatId
-            ? { numberFormatId: this.selectedCellEval.formatId }
-            : {}),
-          ...(authoritativeFormat ? { format: authoritativeFormat } : {}),
-        }
-      : this.cache.peekCell(this.selection.sheetName, this.selection.address);
+    const authoritativeCell = mergeSelectedCellEval(
+      cachedCell,
+      this.selection,
+      this.selectedCellEval,
+      authoritativeFormat,
+    );
     return buildSelectedCellSnapshot(
       this.selection.sheetName,
       this.selection.address,

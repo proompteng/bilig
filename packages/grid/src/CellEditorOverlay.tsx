@@ -33,6 +33,11 @@ interface CellEditorOverlayProps {
   resolvedValue: string;
   selectionBehavior?: "select-all" | "caret-end";
   textAlign?: "left" | "right";
+  backgroundColor?: string;
+  color?: string;
+  font?: string;
+  fontSize?: number;
+  underline?: boolean;
   onChange(this: void, next: string): void;
   onCommit(this: void, movement?: EditMovement): void;
   onCancel(this: void): void;
@@ -45,6 +50,11 @@ export function CellEditorOverlay({
   resolvedValue: _resolvedValue,
   selectionBehavior = "select-all",
   textAlign = "left",
+  backgroundColor = "#ffffff",
+  color = "#202124",
+  font,
+  fontSize = 13,
+  underline = false,
   onChange,
   onCommit,
   onCancel,
@@ -89,13 +99,23 @@ export function CellEditorOverlay({
   };
 
   return (
-    <div className="cell-editor-overlay" data-testid="cell-editor-overlay" style={style}>
+    <div
+      className="cell-editor-overlay"
+      data-testid="cell-editor-overlay"
+      style={{ ...style, backgroundColor }}
+    >
       <input
         aria-label={`${label} editor`}
-        className="h-full w-full border-0 bg-transparent px-2 text-[13px] leading-tight text-[#202124] outline-none"
+        className="h-full w-full border-0 bg-transparent px-2 leading-tight outline-none"
         data-testid="cell-editor-input"
         ref={inputRef}
-        style={{ textAlign }}
+        style={{
+          color,
+          font,
+          fontSize,
+          textAlign,
+          textDecorationLine: underline ? "underline" : undefined,
+        }}
         value={value}
         onBlur={() => {
           if (!blurArmedRef.current) {

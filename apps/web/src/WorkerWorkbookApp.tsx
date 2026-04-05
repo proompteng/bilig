@@ -24,6 +24,7 @@ import { loadPersistedSelection, persistSelection } from "./selection-persistenc
 import { WorkerViewportCache } from "./viewport-cache.js";
 import { WorkbookToolbar, type BorderPreset } from "./workbook-toolbar.js";
 import { isPresetColor, mergeRecentCustomColors, normalizeHexColor } from "./workbook-colors.js";
+import { cn } from "./cn.js";
 
 type EditingMode = "idle" | "cell" | "formula";
 
@@ -257,6 +258,77 @@ function getNormalizedRangeBounds(range: CellRangeRef): {
     startCol: Math.min(start.col, end.col),
     endCol: Math.max(start.col, end.col),
   };
+}
+
+function cloneCellSnapshotForAddress(
+  snapshot: CellSnapshot,
+  sheetName: string,
+  address: string,
+): CellSnapshot {
+  return {
+    ...snapshot,
+    sheetName,
+    address,
+    version: snapshot.version + 1,
+  };
+}
+
+function applyOptimisticMoveRange(
+  cache: WorkerViewportCache,
+  source: CellRangeRef,
+  target: CellRangeRef,
+): void {
+  const sourceBounds = getNormalizedRangeBounds(source);
+  const targetBounds = getNormalizedRangeBounds(target);
+  const height = sourceBounds.endRow - sourceBounds.startRow + 1;
+  const width = sourceBounds.endCol - sourceBounds.startCol + 1;
+  const sourceMatrix: CellSnapshot[][] = [];
+
+  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+    const row: CellSnapshot[] = [];
+    for (let colOffset = 0; colOffset < width; colOffset += 1) {
+      row.push(
+        cache.getCell(
+          source.sheetName,
+          formatAddress(sourceBounds.startRow + rowOffset, sourceBounds.startCol + colOffset),
+        ),
+      );
+    }
+    sourceMatrix.push(row);
+  }
+
+  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < width; colOffset += 1) {
+      const sourceAddress = formatAddress(
+        sourceBounds.startRow + rowOffset,
+        sourceBounds.startCol + colOffset,
+      );
+      cache.setCellSnapshot(
+        cloneCellSnapshotForAddress(
+          emptyCellSnapshot(source.sheetName, sourceAddress),
+          source.sheetName,
+          sourceAddress,
+        ),
+      );
+    }
+  }
+
+  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < width; colOffset += 1) {
+      const sourceSnapshot = sourceMatrix[rowOffset]![colOffset]!;
+      const targetAddress = formatAddress(
+        targetBounds.startRow + rowOffset,
+        targetBounds.startCol + colOffset,
+      );
+      cache.setCellSnapshot(
+        cloneCellSnapshotForAddress(
+          { ...sourceSnapshot, address: targetAddress, sheetName: target.sheetName },
+          target.sheetName,
+          targetAddress,
+        ),
+      );
+    }
+  }
 }
 
 function createRangeRef(
@@ -575,6 +647,12 @@ function WorkerWorkbookAppInner({
           const [source, target] = args;
           assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid copyRange args");
           runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
+          return Promise.resolve();
+        }
+        case "moveRange": {
+          const [source, target] = args;
+          assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid moveRange args");
+          runZeroMutation(mutators.workbook.moveRange({ documentId, source, target }));
           return Promise.resolve();
         }
         case "updateColumnWidth": {
@@ -911,6 +989,40 @@ function WorkerWorkbookAppInner({
     [invokeMutation, reportRuntimeError],
   );
 
+  const moveSelectionRange = useCallback(
+    (
+      sourceStartAddr: string,
+      sourceEndAddr: string,
+      targetStartAddr: string,
+      targetEndAddr: string,
+    ) => {
+      const targetSelection = selectionRef.current;
+      const source = {
+        sheetName: targetSelection.sheetName,
+        startAddress: sourceStartAddr,
+        endAddress: sourceEndAddr,
+      };
+      const target = {
+        sheetName: targetSelection.sheetName,
+        startAddress: targetStartAddr,
+        endAddress: targetEndAddr,
+      };
+      const cache = workerHandleRef.current?.cache;
+      if (cache) {
+        applyOptimisticMoveRange(cache, source, target);
+      }
+      void invokeMutation("moveRange", source, target)
+        .then(() => {
+          editorTargetRef.current = selectionRef.current;
+          editingModeRef.current = "idle";
+          setEditingMode("idle");
+          return undefined;
+        })
+        .catch(reportRuntimeError);
+    },
+    [invokeMutation, reportRuntimeError],
+  );
+
   const selectAddress = useCallback(
     (sheetName: string, address: string) => {
       if (editingModeRef.current !== "idle") {
@@ -970,6 +1082,7 @@ function WorkerWorkbookAppInner({
     [currentTextColor, recentTextColors],
   );
   const statusModeLabel = formatConnectionStateLabel(connectionState.name);
+  const statusModeValue = connectionState.name === "connected" ? "Live" : statusModeLabel;
 
   const subscribeViewport = useCallback(
     (
@@ -985,7 +1098,6 @@ function WorkerWorkbookAppInner({
     [runtimeController],
   );
 
-  const statusModeValue = connectionState.name === "connected" ? "Live" : statusModeLabel;
   const statusSyncValue = !runtimeReady
     ? "Loading"
     : !runtimeConfig.persistState || zeroHealthReady
@@ -996,25 +1108,49 @@ function WorkerWorkbookAppInner({
   const statusChipClass =
     "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]";
 
-  const statusBar = useMemo(
+  const selectionStatus = useMemo(
+    () => (
+      <span className={statusChipClass} data-testid="status-selection">
+        {selection.sheetName}!{selectionLabel}
+      </span>
+    ),
+    [selection.sheetName, selectionLabel, statusChipClass],
+  );
+
+  const headerStatus = useMemo(
     () => (
       <>
-        <span className={statusChipClass} data-testid="status-mode">
-          {statusModeValue}
+        <span
+          aria-label={`Workbook status: ${statusModeValue}, ${statusSyncValue}`}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)]"
+          data-testid="status-mode"
+          role="status"
+          title={statusSyncValue}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "block h-2.5 w-2.5 rounded-full",
+              statusSyncValue === "Ready"
+                ? "bg-[#1f7a43]"
+                : statusSyncValue === "Syncing" || statusSyncValue === "Loading"
+                  ? "bg-[#b26a00]"
+                  : "bg-[#b42318]",
+            )}
+          />
+          <span className="sr-only">{statusModeValue}</span>
         </span>
-        <span className={statusChipClass} data-testid="status-selection">
-          {selection.sheetName}!{selectionLabel}
-        </span>
-        <span className={statusChipClass} data-testid="status-sync">
+        <span className="sr-only" data-testid="status-sync">
           {statusSyncValue}
         </span>
       </>
     ),
-    [selection.sheetName, selectionLabel, statusChipClass, statusModeValue, statusSyncValue],
+    [statusModeValue, statusSyncValue],
   );
 
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
+      workerHandleRef.current?.cache.applyOptimisticRangeStyle(selectionRange, patch);
       await invokeMutation("setRangeStyle", selectionRange, patch);
     },
     [invokeMutation, selectionRange],
@@ -1022,6 +1158,7 @@ function WorkerWorkbookAppInner({
 
   const clearRangeStyleFields = useCallback(
     async (fields?: CellStyleField[]) => {
+      workerHandleRef.current?.cache.clearOptimisticRangeStyle(selectionRange, fields);
       await invokeMutation("clearRangeStyle", selectionRange, fields);
     },
     [invokeMutation, selectionRange],
@@ -1478,6 +1615,7 @@ function WorkerWorkbookAppInner({
               onCreateSheet={writesAllowed ? createSheet : undefined}
               onEditorChange={handleEditorChange}
               onFillRange={fillSelectionRange}
+              onMoveRange={moveSelectionRange}
               onPaste={pasteIntoSelection}
               onToggleBooleanCell={toggleBooleanCell}
               onRenameSheet={writesAllowed ? renameSheet : undefined}
@@ -1486,9 +1624,11 @@ function WorkerWorkbookAppInner({
               onSelectSheet={(sheetName) => selectAddress(sheetName, "A1")}
               resolvedValue={resolvedValue}
               selectedAddr={selection.address}
+              selectedCellSnapshot={selectedCell}
+              selectionStatus={selectionStatus}
               sheetName={selection.sheetName}
               sheetNames={sheetNames}
-              statusBar={statusBar}
+              headerStatus={headerStatus}
               subscribeViewport={subscribeViewport}
               columnWidths={columnWidths}
             />

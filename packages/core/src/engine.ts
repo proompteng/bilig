@@ -1413,6 +1413,52 @@ export class SpreadsheetEngine {
     this.executeLocalTransaction(ops, ops.length);
   }
 
+  moveRange(source: CellRangeRef, target: CellRangeRef): void {
+    const sourceMatrix = this.readRangeCells(source);
+    const targetBounds = normalizeRange(target);
+    const sourceBounds = normalizeRange(source);
+    const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1;
+    const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1;
+    const targetHeight = targetBounds.endRow - targetBounds.startRow + 1;
+    const targetWidth = targetBounds.endCol - targetBounds.startCol + 1;
+    if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
+      throw new Error("moveRange requires source and target dimensions to match exactly");
+    }
+
+    const ops: EngineOp[] = [];
+    for (let row = sourceBounds.startRow; row <= sourceBounds.endRow; row += 1) {
+      for (let col = sourceBounds.startCol; col <= sourceBounds.endCol; col += 1) {
+        ops.push({
+          kind: "clearCell",
+          sheetName: source.sheetName,
+          address: formatAddress(row, col),
+        });
+      }
+    }
+    for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
+        const nextAddress = formatAddress(
+          targetBounds.startRow + rowOffset,
+          targetBounds.startCol + colOffset,
+        );
+        const sourceAddress = formatAddress(
+          sourceBounds.startRow + rowOffset,
+          sourceBounds.startCol + colOffset,
+        );
+        ops.push(
+          ...this.toCellStateOps(
+            target.sheetName,
+            nextAddress,
+            sourceMatrix[rowOffset]![colOffset]!,
+            source.sheetName,
+            sourceAddress,
+          ),
+        );
+      }
+    }
+    this.executeLocalTransaction(ops, ops.length);
+  }
+
   pasteRange(source: CellRangeRef, target: CellRangeRef): void {
     this.copyRange(source, target);
   }

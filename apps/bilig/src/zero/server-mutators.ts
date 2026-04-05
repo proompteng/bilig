@@ -412,6 +412,25 @@ export async function handleServerMutator(
       return;
     }
 
+    case "workbook.moveRange": {
+      const parsed = rangeMutationArgsSchema.parse(args);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "moveRange",
+          source: parsed.source,
+          target: parsed.target,
+        },
+        runtimeManager,
+        (engine) => {
+          engine.moveRange(parsed.source, parsed.target);
+        },
+        session,
+      );
+      return;
+    }
+
     case "workbook.updateColumnWidth": {
       const parsed = updateColumnWidthArgsSchema.parse(args);
       await commitWorkbookMutation(

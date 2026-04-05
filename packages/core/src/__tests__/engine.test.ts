@@ -227,6 +227,61 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 16 });
   });
 
+  it("moves a range and clears the source cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "B2", "left");
+    engine.setCellValue("Sheet1", "C2", "right");
+
+    engine.moveRange(
+      { sheetName: "Sheet1", startAddress: "B2", endAddress: "C2" },
+      { sheetName: "Sheet1", startAddress: "D4", endAddress: "E4" },
+    );
+
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "D4")).toEqual(
+      expect.objectContaining({
+        tag: ValueTag.String,
+        value: "left",
+      }),
+    );
+    expect(engine.getCellValue("Sheet1", "E4")).toEqual(
+      expect.objectContaining({
+        tag: ValueTag.String,
+        value: "right",
+      }),
+    );
+  });
+
+  it("moves overlapping ranges without losing cells", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", "first");
+    engine.setCellValue("Sheet1", "B1", "second");
+
+    engine.moveRange(
+      { sheetName: "Sheet1", startAddress: "A1", endAddress: "B1" },
+      { sheetName: "Sheet1", startAddress: "B1", endAddress: "C1" },
+    );
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual(
+      expect.objectContaining({
+        tag: ValueTag.String,
+        value: "first",
+      }),
+    );
+    expect(engine.getCellValue("Sheet1", "C1")).toEqual(
+      expect.objectContaining({
+        tag: ValueTag.String,
+        value: "second",
+      }),
+    );
+  });
+
   it("relocates formulas when filling down", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

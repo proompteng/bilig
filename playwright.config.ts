@@ -20,6 +20,9 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        launchOptions: {
+          args: ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist"],
+        },
       },
     },
   ],

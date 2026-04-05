@@ -1,5 +1,5 @@
 import React from "react";
-import type { Viewport } from "@bilig/protocol";
+import type { CellSnapshot, Viewport } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
 import { WorkbookSheetTabs } from "./WorkbookSheetTabs.js";
@@ -15,6 +15,7 @@ interface WorkbookViewProps {
   sheetNames: string[];
   sheetName: string;
   selectedAddr: string;
+  selectedCellSnapshot: CellSnapshot;
   editorValue: string;
   editorSelectionBehavior: EditSelectionBehavior;
   resolvedValue: string;
@@ -45,6 +46,13 @@ interface WorkbookViewProps {
     targetStartAddr: string,
     targetEndAddr: string,
   ): void;
+  onMoveRange(
+    this: void,
+    sourceStartAddr: string,
+    sourceEndAddr: string,
+    targetStartAddr: string,
+    targetEndAddr: string,
+  ): void;
   onToggleBooleanCell?:
     | ((sheetName: string, address: string, nextValue: boolean) => void)
     | undefined;
@@ -56,7 +64,8 @@ interface WorkbookViewProps {
   ): void;
   onSelectionLabelChange?: ((label: string) => void) | undefined;
   ribbon?: React.ReactNode;
-  statusBar?: React.ReactNode;
+  selectionStatus?: React.ReactNode;
+  headerStatus?: React.ReactNode;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
@@ -71,6 +80,7 @@ export function WorkbookView({
   sheetNames,
   sheetName,
   selectedAddr,
+  selectedCellSnapshot,
   editorValue,
   editorSelectionBehavior,
   resolvedValue,
@@ -89,11 +99,13 @@ export function WorkbookView({
   onClearCell,
   onFillRange,
   onCopyRange,
+  onMoveRange,
   onToggleBooleanCell,
   onPaste,
   onSelectionLabelChange,
   ribbon,
-  statusBar,
+  selectionStatus,
+  headerStatus,
   subscribeViewport,
   columnWidths,
   onColumnWidthChange,
@@ -105,7 +117,14 @@ export function WorkbookView({
       className="flex h-screen flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
       data-testid="workbook-shell"
     >
-      {ribbon ? <div className="shrink-0">{ribbon}</div> : null}
+      {ribbon || headerStatus ? (
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface)]">
+          <div className="min-w-0 flex-1">{ribbon}</div>
+          {headerStatus ? (
+            <div className="flex min-h-10 shrink-0 items-center px-2.5 py-1">{headerStatus}</div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
         <FormulaBar
           address={selectedAddr}
@@ -131,6 +150,7 @@ export function WorkbookView({
           onCopyRange={onCopyRange}
           onEditorChange={onEditorChange}
           onFillRange={onFillRange}
+          onMoveRange={onMoveRange}
           onPaste={onPaste}
           onToggleBooleanCell={onToggleBooleanCell}
           onSelectionLabelChange={onSelectionLabelChange}
@@ -142,6 +162,7 @@ export function WorkbookView({
           onVisibleViewportChange={onVisibleViewportChange}
           resolvedValue={resolvedValue}
           selectedAddr={selectedAddr}
+          selectedCellSnapshot={selectedCellSnapshot}
           sheetName={sheetName}
         />
         <WorkbookSheetTabs
@@ -150,7 +171,7 @@ export function WorkbookView({
           onSelectSheet={onSelectSheet}
           sheetName={sheetName}
           sheetNames={sheetNames}
-          statusBar={statusBar}
+          selectionStatus={selectionStatus}
         />
       </div>
     </section>

@@ -7,7 +7,7 @@ import {
 import type { GridMetrics } from "./gridMetrics.js";
 import type { Item, Rectangle } from "./gridTypes.js";
 
-export type GridHoverCursor = "default" | "cell" | "pointer" | "col-resize";
+export type GridHoverCursor = "default" | "cell" | "pointer" | "col-resize" | "grab" | "grabbing";
 
 export interface GridHoverState {
   readonly cell: Item | null;

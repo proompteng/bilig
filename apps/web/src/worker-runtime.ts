@@ -71,6 +71,7 @@ interface WorkerEngine {
   renderCommit(ops: CommitOp[]): void;
   fillRange(source: CellRangeRef, target: CellRangeRef): void;
   copyRange(source: CellRangeRef, target: CellRangeRef): void;
+  moveRange(source: CellRangeRef, target: CellRangeRef): void;
   updateColumnMetadata(
     sheetName: string,
     start: number,
@@ -346,6 +347,10 @@ export class WorkbookWorkerRuntime {
 
   copyRange(source: CellRangeRef, target: CellRangeRef): void {
     this.requireEngine().copyRange(source, target);
+  }
+
+  moveRange(source: CellRangeRef, target: CellRangeRef): void {
+    this.requireEngine().moveRange(source, target);
   }
 
   updateColumnWidth(sheetName: string, columnIndex: number, width: number): number {

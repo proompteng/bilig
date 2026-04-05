@@ -29,6 +29,7 @@
     "@hugeicons/react": "1.1.6",
     "@rocicorp/zero": "1.1.1",
     "@xstate/react": "6.1.0",
+    "clsx": "^2.1.1",
     "effect": "3.21.0",
     "lucide-react": "^1.7.0",
     "react": "19.2.4",

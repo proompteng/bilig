@@ -1,5 +1,14 @@
+import type { RenderCellSnapshot } from "./gridCells.js";
 import { isNumericEditorSeed } from "./gridKeyboard.js";
 import type { Rectangle } from "./gridTypes.js";
+
+export interface GridEditorPresentation {
+  readonly backgroundColor: string;
+  readonly color: string;
+  readonly font: string;
+  readonly fontSize: number;
+  readonly underline: boolean;
+}
 
 export function getOverlayStyle(isEditingCell: boolean, overlayBounds: Rectangle | undefined) {
   if (!isEditingCell || !overlayBounds) {
@@ -16,6 +25,20 @@ export function getOverlayStyle(isEditingCell: boolean, overlayBounds: Rectangle
 
 export function getEditorTextAlign(editorValue: string): "left" | "right" {
   return isNumericEditorSeed(editorValue) ? "right" : "left";
+}
+
+export function getEditorPresentation(options: {
+  renderCell: RenderCellSnapshot;
+  fillColor?: string | null | undefined;
+}): GridEditorPresentation {
+  const { renderCell, fillColor } = options;
+  return {
+    backgroundColor: fillColor?.trim() ? fillColor : "#ffffff",
+    color: renderCell.color,
+    font: renderCell.font,
+    fontSize: renderCell.fontSize,
+    underline: renderCell.underline,
+  };
 }
 
 export function getGridTheme(options?: {

@@ -55,14 +55,12 @@ const HEADER_FILL_COLOR = parseGpuColor("#f8f9fa");
 const HEADER_SELECTED_FILL_COLOR = parseGpuColor("#e6f4ea");
 const HEADER_HOVER_FILL_COLOR = parseGpuColor("#f1f3f4");
 const HEADER_DRAG_ANCHOR_FILL_COLOR = parseGpuColor("#d7eadf");
-const SELECTION_FILL_COLOR = parseGpuColor("rgba(31, 122, 67, 0.12)");
+const SELECTION_FILL_COLOR = parseGpuColor("rgba(31, 122, 67, 0.06)");
 const SELECTION_OUTLINE_COLOR = parseGpuColor("#1f7a43");
 const HOVER_FILL_COLOR = parseGpuColor("rgba(95, 99, 104, 0.06)");
 const HOVER_OUTLINE_COLOR = parseGpuColor("rgba(95, 99, 104, 0.45)");
 const RESIZE_GUIDE_COLOR = parseGpuColor("#1f7a43");
 const RESIZE_GUIDE_GLOW_COLOR = parseGpuColor("rgba(31, 122, 67, 0.18)");
-const FILL_HANDLE_COLOR = parseGpuColor("#1f7a43");
-const FILL_HANDLE_OUTLINE_COLOR = parseGpuColor("#ffffff");
 const CHECKBOX_BORDER_COLOR = parseGpuColor("#5f6368");
 const CHECKBOX_SURFACE_COLOR = parseGpuColor("#ffffff");
 const CHECKBOX_SELECTED_COLOR = parseGpuColor("#1f7a43");
@@ -196,7 +194,7 @@ export function buildGridGpuScene({
     pushSelectionRects({
       allowHandle: true,
       borderRects,
-      fillColor: parseGpuColor("rgba(31, 122, 67, 0.08)"),
+      fillColor: parseGpuColor("rgba(31, 122, 67, 0.04)"),
       fillRects,
       getCellBounds,
       hostBounds,
@@ -650,7 +648,9 @@ function pushSelectionRects(options: {
     });
   }
 
-  const outlineThickness = 2;
+  // Sheets-style range outlines read as a single-pixel stroke, with the fill
+  // starting just inside the border so underlying content stays legible.
+  const outlineThickness = 1;
   borderRects.push(
     {
       x: selectionRect.x,
@@ -685,47 +685,6 @@ function pushSelectionRects(options: {
   if (!allowHandle) {
     return;
   }
-
-  const handleSize = 6;
-  const handleX = selectionRect.x + selectionRect.width - handleSize / 2;
-  const handleY = selectionRect.y + selectionRect.height - handleSize / 2;
-  borderRects.push(
-    {
-      x: handleX - 1,
-      y: handleY - 1,
-      width: handleSize + 2,
-      height: 1,
-      color: FILL_HANDLE_OUTLINE_COLOR,
-    },
-    {
-      x: handleX - 1,
-      y: handleY + handleSize,
-      width: handleSize + 2,
-      height: 1,
-      color: FILL_HANDLE_OUTLINE_COLOR,
-    },
-    {
-      x: handleX - 1,
-      y: handleY - 1,
-      width: 1,
-      height: handleSize + 2,
-      color: FILL_HANDLE_OUTLINE_COLOR,
-    },
-    {
-      x: handleX + handleSize,
-      y: handleY - 1,
-      width: 1,
-      height: handleSize + 2,
-      color: FILL_HANDLE_OUTLINE_COLOR,
-    },
-  );
-  fillRects.push({
-    x: handleX,
-    y: handleY,
-    width: handleSize,
-    height: handleSize,
-    color: FILL_HANDLE_COLOR,
-  });
 }
 
 function pushBooleanCellRects(
