@@ -9,15 +9,13 @@ function createCellSnapshot(
   styleId: string | undefined = "style-1",
 ): CellSnapshot {
   return {
+    sheetName: "Sheet1",
     address: "A1",
     input: "",
-    formula: null,
-    styleId,
     value,
-    format: null,
-    transient: null,
-    dependencies: [],
-    volatile: false,
+    flags: 0,
+    version: 0,
+    ...(styleId ? { styleId } : {}),
   };
 }
 

@@ -10,13 +10,11 @@ import {
 
 function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
   const snapshot: CellSnapshot = {
+    sheetName: "Sheet1",
     address: "A1",
-    input: null,
-    formula: null,
     value: { tag: ValueTag.Empty },
-    dependents: [],
-    precedents: [],
-    stale: false,
+    flags: 0,
+    version: 0,
     ...overrides,
   };
   return snapshot;
