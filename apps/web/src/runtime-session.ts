@@ -26,10 +26,18 @@ export interface WorkerRuntimeSelection {
   readonly address: string;
 }
 
+export type WorkerRuntimeSessionPhase =
+  | "hydratingLocal"
+  | "syncing"
+  | "reconciling"
+  | "recovering"
+  | "steady";
+
 export interface WorkerRuntimeSessionCallbacks {
   readonly onRuntimeState: (runtimeState: WorkbookWorkerStateSnapshot) => void;
   readonly onSelection: (selection: WorkerRuntimeSelection) => void;
   readonly onError: (message: string) => void;
+  readonly onPhase?: (phase: WorkerRuntimeSessionPhase) => void;
 }
 
 export type ZeroClient = Zero;
@@ -269,6 +277,7 @@ export async function createWorkerRuntimeSessionController(
   let pendingRevisionState: WorkbookRevisionState | null = null;
   let rebaseQueue = Promise.resolve();
   let selectionViewportCleanup = EMPTY_UNSUBSCRIBE;
+  let currentPhase: WorkerRuntimeSessionPhase = "hydratingLocal";
   const liveSync = input.zero
     ? new ZeroWorkbookRevisionSync({
         zero: input.zero,
@@ -281,6 +290,14 @@ export async function createWorkerRuntimeSessionController(
         },
       })
     : null;
+
+  const publishPhase = (phase: WorkerRuntimeSessionPhase) => {
+    if (currentPhase === phase) {
+      return;
+    }
+    currentPhase = phase;
+    callbacks.onPhase?.(phase);
+  };
 
   const publishRuntimeState = (runtimeState: WorkbookWorkerStateSnapshot) => {
     currentRuntimeState = runtimeState;
@@ -366,6 +383,7 @@ export async function createWorkerRuntimeSessionController(
       await applySelection(reconcileSelection(currentSelection, runtimeState.sheetNames));
       return runAuthoritativeRebase();
     }
+    publishPhase("recovering");
     const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
     if (!snapshot) {
       throw new Error("Authoritative workbook snapshot was not available for rebase");
@@ -395,19 +413,27 @@ export async function createWorkerRuntimeSessionController(
       requestedAuthoritativeRevision,
       revisionState.headRevision,
     );
-    rebaseQueue = rebaseQueue
-      .catch(() => undefined)
-      .then(() => runAuthoritativeRebase())
-      .catch((error) => {
+    const previousRebaseQueue = rebaseQueue;
+    rebaseQueue = (async () => {
+      await previousRebaseQueue.catch(() => undefined);
+      publishPhase("reconciling");
+      try {
+        await runAuthoritativeRebase();
+      } catch (error) {
         if (!disposed) {
           callbacks.onError(toErrorMessage(error));
         }
-        return undefined;
-      });
+      } finally {
+        if (!disposed) {
+          publishPhase("steady");
+        }
+      }
+    })();
   };
 
   callbacks.onRuntimeState(currentRuntimeState);
   callbacks.onSelection(currentSelection);
+  callbacks.onPhase?.(currentPhase);
 
   try {
     const bootstrap = await invokeWorkerMethod(
@@ -429,6 +455,7 @@ export async function createWorkerRuntimeSessionController(
     requestedAuthoritativeRevision = currentAuthoritativeRevision;
 
     if (!bootstrap.restoredFromPersistence || bootstrap.requiresAuthoritativeHydrate) {
+      publishPhase("syncing");
       const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
       if (snapshot) {
         const hydratedState = await invokeWorkerMethod(
@@ -443,6 +470,7 @@ export async function createWorkerRuntimeSessionController(
     }
 
     bootstrapped = true;
+    publishPhase("steady");
     if (pendingRevisionState) {
       queueAuthoritativeRebase(pendingRevisionState);
     }

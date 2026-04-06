@@ -726,6 +726,7 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - warm-start now comes from the local SQLite state path rather than JSON persistence
 - the worker has a persisted pending-mutation queue with crash-safe journal replay
 - `viewport-cache.ts` has been deleted and replaced with `projected-viewport-store.ts`
+- `runtime-machine.ts` now models the real worker session lifecycle with local hydrate, steady-state sync, offline, reconcile, and recovery phases
 
 **Still not completed**
 
@@ -1179,7 +1180,7 @@ It should stop constructing only a thin projected viewport store plus live Zero 
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/runtime-machine.ts`
 
-Expand the state machine to reflect the real lifecycle:
+The state machine now reflects the real lifecycle:
 
 - `booting`
 - `hydratingLocal`
@@ -1191,7 +1192,7 @@ Expand the state machine to reflect the real lifecycle:
 - `recovering`
 - `failed`
 
-That gives the shell correct save/sync/status behavior.
+It also now tracks connection-driven steady states through the runtime actor instead of leaving the shell to infer them from ad hoc effects.
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/projected-viewport-store.ts`
 

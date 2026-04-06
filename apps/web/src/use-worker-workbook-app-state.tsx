@@ -42,6 +42,7 @@ export function useWorkerWorkbookAppState(input: {
       documentId,
       replicaId,
       persistState: runtimeConfig.persistState,
+      connectionStateName: connectionState.name,
       zero,
       initialSelection,
     },
@@ -51,10 +52,7 @@ export function useWorkerWorkbookAppState(input: {
   const runtimeState = useSelector(runtimeActorRef, (snapshot) => snapshot.context.runtimeState);
   const selection = useSelector(runtimeActorRef, (snapshot) => snapshot.context.selection);
   const runtimeError = useSelector(runtimeActorRef, (snapshot) => snapshot.context.error);
-  const loading = useSelector(runtimeActorRef, (snapshot) =>
-    snapshot.matches({ active: "booting" }),
-  );
-  const runtimeReady = !loading && Boolean(workerHandle);
+  const runtimeReady = Boolean(workerHandle);
   const workbookReady = runtimeReady;
   const emptySelectedCell = useMemo(
     () => emptyCellSnapshot(selection.sheetName, selection.address),
@@ -101,6 +99,13 @@ export function useWorkerWorkbookAppState(input: {
   useEffect(() => {
     connectionStateRef.current = connectionState.name;
   }, [connectionState.name]);
+
+  useEffect(() => {
+    runtimeActorRef.send({
+      type: "connection.changed",
+      connectionStateName: connectionState.name,
+    });
+  }, [connectionState.name, runtimeActorRef]);
 
   useEffect(() => {
     if (!runtimeReady) {

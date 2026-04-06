@@ -173,6 +173,7 @@ describe("createWorkerRuntimeSessionController", () => {
     });
     const runtimeStates: string[] = [];
     const selections: string[] = [];
+    const phases: string[] = [];
 
     const controller = await createWorkerRuntimeSessionController(
       {
@@ -200,11 +201,15 @@ describe("createWorkerRuntimeSessionController", () => {
         onError(message) {
           throw new Error(message);
         },
+        onPhase(phase) {
+          phases.push(phase);
+        },
       },
     );
 
     expect(runtimeStates.at(-1)).toBe("phase0-doc");
     expect(selections.at(-1)).toBe("Sheet1!B2");
+    expect(phases).toEqual(["hydratingLocal", "syncing", "steady"]);
     expect(controller.handle.viewportStore.getCell("Sheet1", "B2").value).toEqual({
       tag: ValueTag.Number,
       value: 41,
@@ -336,6 +341,7 @@ describe("createWorkerRuntimeSessionController", () => {
       calculatedRevision: 0,
     });
     const zero = createSequencedZeroViews(workbookView);
+    const phases: string[] = [];
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -388,6 +394,9 @@ describe("createWorkerRuntimeSessionController", () => {
         onError(message) {
           throw new Error(message);
         },
+        onPhase(phase) {
+          phases.push(phase);
+        },
       },
     );
 
@@ -407,6 +416,86 @@ describe("createWorkerRuntimeSessionController", () => {
         tag: ValueTag.Number,
         value: 17,
       });
+    });
+    expect(phases).toContain("reconciling");
+
+    controller.dispose();
+  });
+
+  it("enters recovering when authoritative rebase falls back to a snapshot", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const workbookView = createMockZeroView<unknown>({
+      headRevision: 0,
+      calculatedRevision: 0,
+    });
+    const zero = createSequencedZeroViews(workbookView);
+    const phases: string[] = [];
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/snapshot/latest")) {
+        return new Response(JSON.stringify(createSnapshot([{ address: "A1", value: 33 }])), {
+          status: 200,
+          headers: {
+            "content-type": "application/vnd.bilig.workbook+json",
+          },
+        });
+      }
+      if (url.includes("/events?afterRevision=0")) {
+        return new Response(
+          JSON.stringify({
+            afterRevision: 0,
+            headRevision: 2,
+            calculatedRevision: 2,
+            events: [],
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: false,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        zero: zero.zero,
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+        onPhase(phase) {
+          phases.push(phase);
+        },
+      },
+    );
+
+    workbookView.emit({
+      headRevision: 2,
+      calculatedRevision: 2,
+    });
+
+    await vi.waitFor(() => {
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+    expect(phases).toContain("recovering");
+    expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 33,
     });
 
     controller.dispose();
