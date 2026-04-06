@@ -98,15 +98,15 @@ export function FormulaBar({
               }
             }}
             onChange={(event) => {
+              const nextValue = event.target.value;
               if (!isEditing) {
-                onBeginEdit(event.target.value);
-                return;
+                onBeginEdit(nextValue);
               }
-              onChange(event.target.value);
+              onChange(nextValue);
             }}
             onFocus={() => {
               if (!isEditing) {
-                onBeginEdit();
+                onBeginEdit(value);
               }
             }}
             onKeyDown={(event) => {

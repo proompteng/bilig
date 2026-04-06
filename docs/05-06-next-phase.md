@@ -730,10 +730,15 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - stable `sheet_id` now survives engine snapshots, browser local SQLite tables, and the server sheet projection diff path
 - the worker now owns a hot `128 x 32` tile cache for full local viewport reads
 - the real SQLite migration harness now covers legacy `sheet_id` backfill into authoritative and overlay tables
+- reconnect failure coverage now verifies a transient authoritative event-fetch failure does not drop submitted local ops and that the next revision signal retries cleanly
+- submitted pending ops now have a crash/reopen durability harness on the real normalized SQLite path before authoritative absorption
+- browser-path coverage now exercises the real OPFS reload path and the same-document single-writer fallback path in live browser tests
+- a browser same-cell editor-draft harness now verifies a remote write does not clobber an in-progress local draft and that cancelling reveals the authoritative remote value
+- `bench:contracts` now enforces worker local visible edit p95 and reports the real `100k` worker warm-start path
 
 **Still not completed**
 
-- storage/reconnect/rebase failure harnesses and perf gates
+- warm-start p95 is still well above the roadmap target, so the worker warm-start SLO is measured but not yet a passing CI gate
 - collaboration/product layers in Phases 2 through 4
 
 **What this roadmap now needs to do**

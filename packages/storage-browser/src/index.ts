@@ -18,6 +18,7 @@ export type {
   WorkbookLocalViewportCell,
 } from "./workbook-local-base.js";
 export {
+  createMemoryWorkbookLocalStoreFactory,
   createOpfsWorkbookLocalStoreFactory,
   WorkbookLocalStoreLockedError,
   type OpfsWorkbookLocalStoreFactoryOptions,

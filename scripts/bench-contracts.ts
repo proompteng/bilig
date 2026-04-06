@@ -4,6 +4,10 @@ import { runLoadBenchmark } from "../packages/benchmarks/src/benchmark-load.ts";
 import { runRangeAggregateBenchmark } from "../packages/benchmarks/src/benchmark-range-heavy.ts";
 import { runTopologyEditBenchmark } from "../packages/benchmarks/src/benchmark-topology-edit.ts";
 import { runRenderCommitBenchmark } from "../packages/benchmarks/src/benchmark-renderer.ts";
+import {
+  runWorkerVisibleEditBenchmark,
+  runWorkerWarmStartBenchmark,
+} from "./bench-worker-runtime.ts";
 
 const baseBudgets = {
   load100kP95Ms: 1500,
@@ -16,6 +20,7 @@ const baseBudgets = {
   topologyEdit10kElapsedP95Ms: 80,
   topologyEdit10kRecalcP95Ms: 80,
   renderCommit10kP95Ms: 50,
+  workerVisibleEdit10kP95Ms: 16,
 };
 const toleranceMultiplier = Number.parseFloat(
   process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"),
@@ -113,6 +118,16 @@ const topologyRuns = await sampleBenchmark(() => runTopologyEditBenchmark(10_000
 const renderRuns = await sampleBenchmark(() => runRenderCommitBenchmark(10_000), 5, {
   warmupIterations: 1,
 });
+const workerWarmStartRuns = await sampleBenchmark(() => runWorkerWarmStartBenchmark(100_000), 3, {
+  warmupIterations: 1,
+});
+const workerVisibleEditRuns = await sampleBenchmark(
+  () => runWorkerVisibleEditBenchmark(10_000),
+  5,
+  {
+    warmupIterations: 1,
+  },
+);
 
 const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
 const loadWorkingSetDelta = summarizeNumbers(
@@ -134,6 +149,16 @@ const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.a
 
 const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
 const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
+const workerWarmStartElapsed = summarizeNumbers(workerWarmStartRuns.map((run) => run.elapsedMs));
+const workerWarmStartWorkingSetDelta = summarizeNumbers(
+  workerWarmStartRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
+);
+const workerVisibleEditElapsed = summarizeNumbers(
+  workerVisibleEditRuns.map((run) => run.visiblePatchMs),
+);
+const workerVisibleEditCommitElapsed = summarizeNumbers(
+  workerVisibleEditRuns.map((run) => run.commitMs),
+);
 
 assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
 
@@ -160,6 +185,11 @@ assertBudget(
 assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
 assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
 assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
+assertBudget(
+  "10k worker local visible edit p95",
+  workerVisibleEditElapsed.p95,
+  budgets.workerVisibleEdit10kP95Ms,
+);
 
 console.log(
   JSON.stringify(
@@ -173,6 +203,8 @@ console.log(
         rangeAggregates10k: rangeRuns.length,
         topologyEdit10k: topologyRuns.length,
         renderCommit10k: renderRuns.length,
+        workerWarmStart100k: workerWarmStartRuns.length,
+        workerVisibleEdit10k: workerVisibleEditRuns.length,
       },
       results: {
         load100k: {
@@ -214,6 +246,20 @@ console.log(
           elapsedMs: renderElapsed,
           rssAfterBytes: renderRssAfter,
           runs: renderRuns,
+        },
+        workerWarmStart100k: {
+          scenario: "worker-warm-start",
+          materializedCells: 100_000,
+          elapsedMs: workerWarmStartElapsed,
+          workingSetDeltaBytes: workerWarmStartWorkingSetDelta,
+          runs: workerWarmStartRuns,
+        },
+        workerVisibleEdit10k: {
+          scenario: "worker-visible-edit",
+          materializedCells: 10_000,
+          visiblePatchMs: workerVisibleEditElapsed,
+          commitMs: workerVisibleEditCommitElapsed,
+          runs: workerVisibleEditRuns,
         },
       },
     },

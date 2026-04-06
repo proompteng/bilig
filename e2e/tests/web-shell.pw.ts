@@ -1217,6 +1217,78 @@ test("web app keeps two live zero tabs visually converged across toolbar actions
   }
 });
 
+test("web app preserves an in-progress local draft when another tab edits the same cell", async ({
+  page,
+}) => {
+  test.slow();
+  const documentId = `playwright-zero-same-cell-draft-${Date.now()}`;
+  const mirrorPage = await page.context().newPage();
+  const viewport = page.viewportSize();
+  if (viewport) {
+    await mirrorPage.setViewportSize(viewport);
+  }
+
+  try {
+    await Promise.all([
+      openZeroWorkbookPage(page, documentId),
+      openZeroWorkbookPage(mirrorPage, documentId),
+    ]);
+    await expect(page.getByTestId("worker-error")).toHaveCount(0);
+    await expect(mirrorPage.getByTestId("worker-error")).toHaveCount(0);
+
+    const formulaInput = page.getByTestId("formula-input");
+    const mirrorFormulaInput = mirrorPage.getByTestId("formula-input");
+
+    await clickProductCell(page, 0, 0);
+    await clickProductCell(mirrorPage, 0, 0);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+    await expect(mirrorPage.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+    await formulaInput.focus();
+    await formulaInput.selectText();
+    await page.keyboard.type("local-draft");
+    await expect(formulaInput).toHaveValue("local-draft");
+
+    await mirrorFormulaInput.focus();
+    await mirrorFormulaInput.selectText();
+    await mirrorPage.keyboard.type("remote");
+    await mirrorFormulaInput.press("Enter");
+    await expect(mirrorFormulaInput).toHaveValue("remote");
+
+    await expect(formulaInput).toHaveValue("local-draft");
+
+    await formulaInput.press("Escape");
+    await expect(formulaInput).toHaveValue("remote");
+  } finally {
+    await mirrorPage.close().catch(() => undefined);
+  }
+});
+
+test("web app restores persisted workbook state after a full reload", async ({ page }) => {
+  const documentId = `playwright-zero-reload-persist-${Date.now()}`;
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await openZeroWorkbookPage(page, documentId);
+  await expect(page.getByTestId("worker-error")).toHaveCount(0);
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+  await formulaInput.fill("17");
+  await formulaInput.press("Enter");
+  await expect(formulaInput).toHaveValue("17");
+  await expect(resolvedValue).toHaveText("17");
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForWorkbookReady(page);
+  await expect(page.getByTestId("worker-error")).toHaveCount(0);
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+  await expect(formulaInput).toHaveValue("17");
+  await expect(resolvedValue).toHaveText("17");
+});
+
 test("web app keeps sheet tabs and status bar visible in a short viewport", async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 220 });
   await page.goto("/");

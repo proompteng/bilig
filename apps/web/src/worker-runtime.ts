@@ -147,6 +147,10 @@ export class WorkbookWorkerRuntime {
     await this.engine?.ready();
   }
 
+  dispose(): void {
+    this.cleanup();
+  }
+
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerBootstrapResult> {
     this.cleanup();
     this.bootstrapOptions = options;

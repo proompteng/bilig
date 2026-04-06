@@ -9,7 +9,10 @@ import type {
   WorkbookLocalStoreFactory,
   WorkbookStoredState,
 } from "@bilig/storage-browser";
-import { WorkbookLocalStoreLockedError } from "@bilig/storage-browser";
+import {
+  WorkbookLocalStoreLockedError,
+  createMemoryWorkbookLocalStoreFactory,
+} from "@bilig/storage-browser";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
 import { buildWorkbookLocalAuthoritativeBase } from "../worker-local-base.js";
@@ -360,6 +363,39 @@ describe("WorkbookWorkerRuntime", () => {
     expect(received[1]?.cells.find((cell) => cell.snapshot.address === "B1")?.displayText).toBe(
       "14",
     );
+  });
+
+  it("emits invalid formulas through incremental viewport patches as #VALUE!", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    await runtime.bootstrap({
+      documentId: "invalid-formula-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    runtime.setCellFormula("Sheet1", "A1", "1+");
+
+    expect(received).toHaveLength(2);
+    expect(received[1]?.full).toBe(false);
+    expect(received[1]?.cells).toHaveLength(1);
+    expect(received[1]?.cells[0]?.displayText).toBe("#VALUE!");
+    expect(received[1]?.cells[0]?.editorText).toBe("#VALUE!");
   });
 
   it("skips persistence restore when bootstrapped in ephemeral mode", async () => {
@@ -796,6 +832,73 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(reloaded.listPendingMutations()).toEqual([]);
     expect(reloaded.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+  });
+
+  it("reopens submitted pending mutations from sqlite and absorbs them on authoritative ack", async () => {
+    const localStoreFactory = createMemoryWorkbookLocalStoreFactory();
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "submitted-reopen-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const pending = await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+    await runtime.markPendingMutationSubmitted(pending.id);
+
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
+    await reloaded.bootstrap({
+      documentId: "submitted-reopen-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        submittedAtUnixMs: expect.any(Number),
+        status: "submitted",
+      },
+    ]);
+
+    await reloaded.applyAuthoritativeEvents(
+      [
+        {
+          revision: 1,
+          clientMutationId: pending.id,
+          payload: {
+            kind: "setCellValue",
+            sheetName: "Sheet1",
+            address: "A1",
+            value: 17,
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(reloaded.listPendingMutations()).toEqual([]);
+    expect(reloaded.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+
+    const afterAck = new WorkbookWorkerRuntime({ localStoreFactory });
+    await afterAck.bootstrap({
+      documentId: "submitted-reopen-doc",
+      replicaId: "browser:after-ack",
+      persistState: true,
+    });
+
+    expect(afterAck.listPendingMutations()).toEqual([]);
+    expect(afterAck.getCell("Sheet1", "A1").value).toEqual({
       tag: ValueTag.Number,
       value: 17,
     });

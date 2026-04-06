@@ -1,4 +1,5 @@
 import { ValueTag } from "./enums.js";
+import { formatErrorCode } from "./types.js";
 import type {
   CellDateStyle,
   CellNumberFormatInput,
@@ -176,7 +177,7 @@ export function formatCellDisplayValue(value: CellValue, formatCode: string | un
     case ValueTag.String:
       return value.value;
     case ValueTag.Error:
-      return "#ERROR!";
+      return formatErrorCode(value.code);
     case ValueTag.Number:
       return formatNumberValue(value.value, format);
   }

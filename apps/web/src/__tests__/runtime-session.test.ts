@@ -162,6 +162,40 @@ function createSequencedZeroViews(...views: Array<{ zero: { materialize(): unkno
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function expectPendingMutationId(value: unknown): string {
+  if (!isRecord(value) || typeof value["id"] !== "string") {
+    throw new Error("Expected a pending mutation payload with an id");
+  }
+  return value["id"];
+}
+
+function expectPendingMutationSummaries(
+  value: unknown,
+): Array<{ id: string; status: "pending" | "submitted" }> {
+  if (!Array.isArray(value)) {
+    throw new Error("Expected a pending mutation list");
+  }
+  return value.flatMap((entry) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry["id"] !== "string" ||
+      (entry["status"] !== "pending" && entry["status"] !== "submitted")
+    ) {
+      throw new Error("Expected a pending mutation summary");
+    }
+    return [
+      {
+        id: entry["id"],
+        status: entry["status"],
+      },
+    ];
+  });
+}
+
 describe("createWorkerRuntimeSessionController", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -497,6 +531,130 @@ describe("createWorkerRuntimeSessionController", () => {
       tag: ValueTag.Number,
       value: 33,
     });
+
+    controller.dispose();
+  });
+
+  it("retries failed authoritative rebases without losing submitted pending ops", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const workbookView = createMockZeroView<unknown>({
+      headRevision: 0,
+      calculatedRevision: 0,
+    });
+    const zero = createSequencedZeroViews(workbookView);
+    const phases: string[] = [];
+    const errors: string[] = [];
+    let pendingMutationId = "";
+    let eventFetchCount = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/snapshot/latest")) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes("/events?afterRevision=0")) {
+        eventFetchCount += 1;
+        if (eventFetchCount === 1) {
+          return new Response("upstream error", { status: 500 });
+        }
+        return new Response(
+          JSON.stringify({
+            afterRevision: 0,
+            headRevision: 1,
+            calculatedRevision: 1,
+            events: [
+              {
+                revision: 1,
+                clientMutationId: pendingMutationId,
+                payload: {
+                  kind: "setCellValue",
+                  sheetName: "Sheet1",
+                  address: "A1",
+                  value: 17,
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: true,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        zero: zero.zero,
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          errors.push(message);
+        },
+        onPhase(phase) {
+          phases.push(phase);
+        },
+      },
+    );
+
+    pendingMutationId = expectPendingMutationId(
+      await controller.invoke("enqueuePendingMutation", {
+        method: "setCellValue",
+        args: ["Sheet1", "A1", 17],
+      }),
+    );
+    await controller.invoke("markPendingMutationSubmitted", pendingMutationId);
+
+    workbookView.emit({
+      headRevision: 1,
+      calculatedRevision: 1,
+    });
+
+    await vi.waitFor(() => {
+      expect(errors).toContain("Failed to load authoritative events (500)");
+    });
+    expect(expectPendingMutationSummaries(await controller.invoke("listPendingMutations"))).toEqual(
+      [
+        expect.objectContaining({
+          id: pendingMutationId,
+          status: "submitted",
+        }),
+      ],
+    );
+    expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+
+    workbookView.emit({
+      headRevision: 1,
+      calculatedRevision: 1,
+    });
+
+    await vi.waitFor(async () => {
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      expect(
+        expectPendingMutationSummaries(await controller.invoke("listPendingMutations")),
+      ).toEqual([]);
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+        tag: ValueTag.Number,
+        value: 17,
+      });
+    });
+    expect(phases.filter((phase) => phase === "reconciling")).toHaveLength(2);
 
     controller.dispose();
   });

@@ -23,6 +23,7 @@ const WORKBOOK_VFS_DIRECTORY = "/bilig/workbooks";
 const WORKBOOK_VFS_INITIAL_CAPACITY = 12;
 
 let sqliteRuntimePromise: Promise<{ sqlite3: Sqlite3Static; poolUtil: SAHPoolUtil }> | null = null;
+let memorySqliteRuntimePromise: Promise<Sqlite3Static> | null = null;
 
 export class WorkbookLocalStoreLockedError extends Error {
   override readonly name = "WorkbookLocalStoreLockedError";
@@ -200,8 +201,11 @@ async function getSqliteRuntime(
   return await sqliteRuntimePromise;
 }
 
-class OpfsWorkbookLocalStore implements WorkbookLocalStore {
-  constructor(private readonly db: Database) {}
+class SqliteWorkbookLocalStore implements WorkbookLocalStore {
+  constructor(
+    private readonly db: Database,
+    private readonly closeDbOnClose = true,
+  ) {}
 
   async loadState(): Promise<WorkbookStoredState | null> {
     const row = readSingleObjectRow(
@@ -450,8 +454,24 @@ class OpfsWorkbookLocalStore implements WorkbookLocalStore {
   }
 
   close(): void {
-    this.db.close();
+    if (this.closeDbOnClose) {
+      this.db.close();
+    }
   }
+}
+
+async function getMemorySqliteRuntime(): Promise<Sqlite3Static> {
+  if (!memorySqliteRuntimePromise) {
+    memorySqliteRuntimePromise = (async () => {
+      try {
+        return await sqlite3InitModule();
+      } catch (error) {
+        memorySqliteRuntimePromise = null;
+        throw error;
+      }
+    })();
+  }
+  return await memorySqliteRuntimePromise;
 }
 
 export function createOpfsWorkbookLocalStoreFactory(
@@ -470,7 +490,7 @@ export function createOpfsWorkbookLocalStoreFactory(
         const path = `/workbooks/${sanitizeDocumentId(documentId)}.sqlite`;
         const db = new poolUtil.OpfsSAHPoolDb(path);
         initializeWorkbookLocalStoreSchema(db);
-        return new OpfsWorkbookLocalStore(db);
+        return new SqliteWorkbookLocalStore(db);
       } catch (error) {
         if (isAccessHandleConflict(error)) {
           throw new WorkbookLocalStoreLockedError(
@@ -479,6 +499,23 @@ export function createOpfsWorkbookLocalStoreFactory(
         }
         throw error;
       }
+    },
+  };
+}
+
+export function createMemoryWorkbookLocalStoreFactory(): WorkbookLocalStoreFactory {
+  const databases = new Map<string, Database>();
+
+  return {
+    async open(documentId: string): Promise<WorkbookLocalStore> {
+      let db = databases.get(documentId);
+      if (!db) {
+        const sqlite3 = await getMemorySqliteRuntime();
+        db = new sqlite3.oo1.DB(":memory:", "c");
+        initializeWorkbookLocalStoreSchema(db);
+        databases.set(documentId, db);
+      }
+      return new SqliteWorkbookLocalStore(db, false);
     },
   };
 }
