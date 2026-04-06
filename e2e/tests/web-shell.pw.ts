@@ -1629,7 +1629,6 @@ test("web app accepts numpad digits for in-cell numeric entry", async ({ page })
   await page.goto("/");
   await waitForWorkbookReady(page);
 
-  const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
   const cellEditor = page.getByTestId("cell-editor-input");
 
@@ -1643,9 +1642,9 @@ test("web app accepts numpad digits for in-cell numeric entry", async ({ page })
   await expect(cellEditor).toHaveValue("123");
   await page.keyboard.press("Enter");
 
-  await expect(nameBox).toHaveValue("A2");
-  await nameBox.fill("A1");
-  await nameBox.press("Enter");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A2");
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await expect(formulaInput).toHaveValue("123");
 });
 
