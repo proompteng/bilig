@@ -92,6 +92,13 @@ describe("memory workbook local store", () => {
     store.close();
 
     const reopened = await factory.open("memory-doc");
+    await expect(reopened.loadBootstrapState()).resolves.toEqual({
+      workbookName: "memory-doc",
+      sheetNames: ["Sheet1"],
+      materializedCellCount: 1,
+      authoritativeRevision: 7,
+      appliedPendingLocalSeq: 3,
+    });
     expect(await reopened.loadState()).toMatchObject({
       authoritativeRevision: 7,
       appliedPendingLocalSeq: 3,

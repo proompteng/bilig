@@ -734,7 +734,7 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - submitted pending ops now have a crash/reopen durability harness on the real normalized SQLite path before authoritative absorption
 - browser-path coverage now exercises the real OPFS reload path and the same-document single-writer fallback path in live browser tests
 - a browser same-cell editor-draft harness now verifies a remote write does not clobber an in-progress local draft and that cancelling reveals the authoritative remote value
-- removing the redundant bootstrap repersist and lazily materializing the authoritative engine dropped the real `100k` worker warm-start p95 to roughly `0.30s`
+- booting giant workbooks from SQLite bootstrap metadata plus tile-backed first paint, while deferring full projection-engine materialization off the critical path, dropped the real `100k` and `250k` worker warm-start p95 to single-digit milliseconds locally
 - `bench:contracts` now enforces both worker local visible edit p95 and worker `100k` warm-start p95
 - `bench:contracts` now also enforces worker reconnect catch-up with `100` pending ops p95 `<2s` on the real SQLite-backed worker runtime path for a `10k` active workbook, including authoritative drift, local rebase, submission drain, and authoritative absorption
 - Zero-backed coarse collaborator presence is now live in the mounted workbook header, with session-scoped location heartbeats and click-to-jump on active collaborator cells
@@ -746,8 +746,8 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 **Roadmap status now**
 
-- the roadmap’s product/platform feature work is now implemented end to end
-- the remaining gap is Phase 4 performance hardening: the dense `250k` warm-start contract is now enforced at `<800ms`, while the original `<700ms` stretch target is still not closed
+- the roadmap is now implemented end to end, including the final Phase 4 giant-workbook warm-start hardening
+- `bench:contracts` now enforces the original dense `250k` worker warm-start target at `<700ms`
 - this document should now be treated as implemented architecture, not a future-state gap list
 
 ### Dependency list
@@ -971,7 +971,7 @@ Implemented.
 - the monolith agent runtime now exposes scratchpad creation as a first-class app-server tool, so the assistant can branch a workbook into a what-if document without leaving the spreadsheet
 - the right rail now renders those comprehension results as structured insight cards instead of raw JSON blobs
 - `packages/benchmarks` now ships deterministic named giant-workbook corpus cases for `100k` and `250k` dense and multisheet workbooks, with stable viewport metadata for CI and perf harnesses
-- `bench:contracts` now enforces dense-corpus `100k` and `250k` load and worker warm-start budgets on the real SQLite-backed local-runtime path, with the current `250k` warm-start gate set at `<800ms`
+- `bench:contracts` now enforces dense-corpus `100k` and `250k` load and worker warm-start budgets on the real SQLite-backed local-runtime path, with the `250k` warm-start gate set at the original `<700ms` target
 
 **User-visible outcomes**
 

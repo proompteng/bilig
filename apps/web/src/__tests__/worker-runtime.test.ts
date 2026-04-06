@@ -25,6 +25,20 @@ function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLoc
   return nextMutation;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookStoredState["snapshot"] {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"])
+  );
+}
+
 function buildViewportFromAuthoritativeBase(input: {
   authoritativeBase: WorkbookLocalAuthoritativeBase;
   sheetName: string;
@@ -246,7 +260,56 @@ function createMemoryLocalStoreFactory(seed?: {
     : null;
   return {
     async open() {
+      if (currentState && currentAuthoritativeBase === null) {
+        const snapshot = currentState.snapshot;
+        if (isWorkbookSnapshot(snapshot)) {
+          const engine = new SpreadsheetEngine({ workbookName: "derived", replicaId: "derived" });
+          await engine.ready();
+          engine.importSnapshot(snapshot);
+          currentAuthoritativeBase = buildWorkbookLocalAuthoritativeBase(engine);
+          currentProjectionOverlay ??= {
+            cells: [],
+            rowAxisEntries: [],
+            columnAxisEntries: [],
+            styles: [],
+          };
+        }
+      }
       return {
+        async loadBootstrapState() {
+          const sheetNames =
+            currentAuthoritativeBase?.sheets.map((sheet) => sheet.name) ??
+            (isRecord(currentState?.snapshot) && Array.isArray(currentState.snapshot["sheets"])
+              ? currentState.snapshot["sheets"].flatMap((sheet) =>
+                  isRecord(sheet) && typeof sheet["name"] === "string" ? [sheet["name"]] : [],
+                )
+              : []);
+          const workbookName =
+            isRecord(currentState?.snapshot) &&
+            isRecord(currentState.snapshot["workbook"]) &&
+            typeof currentState.snapshot["workbook"]["name"] === "string"
+              ? currentState.snapshot["workbook"]["name"]
+              : "Sheet1";
+          const state = currentState
+            ? {
+                workbookName,
+                sheetNames,
+                materializedCellCount:
+                  currentAuthoritativeBase?.cellRenders.length ??
+                  (isRecord(currentState.snapshot) && Array.isArray(currentState.snapshot["sheets"])
+                    ? currentState.snapshot["sheets"].reduce((count, sheet) => {
+                        if (!isRecord(sheet) || !Array.isArray(sheet["cells"])) {
+                          return count;
+                        }
+                        return count + sheet["cells"].length;
+                      }, 0)
+                    : 0),
+                authoritativeRevision: currentState.authoritativeRevision,
+                appliedPendingLocalSeq: currentState.appliedPendingLocalSeq,
+              }
+            : null;
+          return state ? structuredClone(state) : null;
+        },
         async loadState() {
           return currentState ? structuredClone(currentState) : null;
         },
@@ -355,7 +418,7 @@ describe("WorkbookWorkerRuntime", () => {
       "7",
     );
 
-    runtime.setCellFormula("Sheet1", "B1", "A1*2");
+    await runtime.setCellFormula("Sheet1", "B1", "A1*2");
 
     expect(received).toHaveLength(2);
     expect(received[1]?.full).toBe(false);
@@ -389,7 +452,7 @@ describe("WorkbookWorkerRuntime", () => {
       },
     );
 
-    runtime.setCellFormula("Sheet1", "A1", "1+");
+    await runtime.setCellFormula("Sheet1", "A1", "1+");
 
     expect(received).toHaveLength(2);
     expect(received[1]?.full).toBe(false);
@@ -466,7 +529,7 @@ describe("WorkbookWorkerRuntime", () => {
       },
     );
 
-    runtime.setRangeStyle(
+    await runtime.setRangeStyle(
       { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
       { fill: { backgroundColor: "#336699" }, font: { family: "Fira Sans" } },
     );
@@ -489,6 +552,15 @@ describe("WorkbookWorkerRuntime", () => {
       localStoreFactory: {
         async open() {
           return {
+            async loadBootstrapState() {
+              return {
+                workbookName: "base-doc",
+                sheetNames: ["Sheet1"],
+                materializedCellCount: 250_000,
+                authoritativeRevision: 0,
+                appliedPendingLocalSeq: 0,
+              };
+            },
             async loadState() {
               return {
                 snapshot: seedEngine.exportSnapshot(),
@@ -555,6 +627,96 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(viewportReadCount).toBe(1);
     expect(received[0]?.cells[0]?.displayText).toBe("42");
+  });
+
+  it("defers persisted snapshot parsing until the projection engine is actually needed", async () => {
+    vi.useFakeTimers();
+    const seedEngine = new SpreadsheetEngine({ workbookName: "lazy-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 42);
+
+    let loadStateCount = 0;
+    let viewportReadCount = 0;
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: {
+        async open() {
+          return {
+            async loadBootstrapState() {
+              return {
+                workbookName: "lazy-doc",
+                sheetNames: ["Sheet1"],
+                materializedCellCount: 250_000,
+                authoritativeRevision: 0,
+                appliedPendingLocalSeq: 0,
+              };
+            },
+            async loadState() {
+              loadStateCount += 1;
+              return {
+                snapshot: seedEngine.exportSnapshot(),
+                replica: seedEngine.exportReplicaSnapshot(),
+                authoritativeRevision: 0,
+                appliedPendingLocalSeq: 0,
+              };
+            },
+            async persistProjectionState() {},
+            async ingestAuthoritativeDelta() {},
+            async listPendingMutations() {
+              return [];
+            },
+            async appendPendingMutation() {},
+            async updatePendingMutation() {},
+            async removePendingMutation() {},
+            readViewportProjection() {
+              viewportReadCount += 1;
+              return {
+                sheetId: 1,
+                sheetName: "Sheet1",
+                cells: [
+                  {
+                    row: 0,
+                    col: 0,
+                    snapshot: {
+                      sheetName: "Sheet1",
+                      address: "A1",
+                      value: { tag: ValueTag.Number, value: 42 },
+                      flags: 0,
+                      version: 1,
+                    },
+                  },
+                ],
+                rowAxisEntries: [],
+                columnAxisEntries: [],
+                styles: [{ id: "style-0" }],
+              };
+            },
+            close() {},
+          };
+        },
+      },
+    });
+
+    await runtime.bootstrap({
+      documentId: "lazy-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(loadStateCount).toBe(0);
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 42,
+    });
+    expect(viewportReadCount).toBe(1);
+    expect(loadStateCount).toBe(0);
+
+    await runtime.setCellValue("Sheet1", "A1", 99);
+
+    expect(loadStateCount).toBe(1);
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 99,
+    });
   });
 
   it("does not rewrite normalized sqlite state on a clean persisted restore", async () => {
@@ -764,7 +926,7 @@ describe("WorkbookWorkerRuntime", () => {
       },
     );
 
-    runtime.updateColumnWidth("Sheet1", 1, 160);
+    await runtime.updateColumnWidth("Sheet1", 1, 160);
 
     const patch = received.at(-1);
     expect(patch?.full).toBe(false);
@@ -1096,7 +1258,7 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: true,
     });
 
-    runtime.setCellValue("Sheet1", "A1", 17);
+    await runtime.setCellValue("Sheet1", "A1", 17);
     await runtime.enqueuePendingMutation({
       method: "setCellValue",
       args: ["Sheet1", "A1", 17],
@@ -1135,7 +1297,7 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: false,
     });
 
-    runtime.renderCommit([{ kind: "upsertSheet", name: "Sheet2", order: 1 }]);
+    await runtime.renderCommit([{ kind: "upsertSheet", name: "Sheet2", order: 1 }]);
 
     const primary = new Array<ReturnType<typeof decodeViewportPatch>>();
     const offsheet = new Array<ReturnType<typeof decodeViewportPatch>>();
@@ -1184,7 +1346,7 @@ describe("WorkbookWorkerRuntime", () => {
     expect(offsheet).toHaveLength(1);
     expect(offregion).toHaveLength(1);
 
-    runtime.setCellValue("Sheet1", "A1", 123);
+    await runtime.setCellValue("Sheet1", "A1", 123);
 
     expect(primary).toHaveLength(2);
     expect(primary[1]?.cells[0]?.snapshot.address).toBe("A1");
@@ -1202,7 +1364,7 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: false,
     });
 
-    runtime.renderCommit([{ kind: "upsertSheet", name: "Sheet2", order: 1 }]);
+    await runtime.renderCommit([{ kind: "upsertSheet", name: "Sheet2", order: 1 }]);
 
     runtime.subscribeViewportPatches(
       {
@@ -1246,7 +1408,7 @@ describe("WorkbookWorkerRuntime", () => {
       return Reflect.apply(originalBuildViewportPatch, runtime, args);
     };
 
-    runtime.setCellValue("Sheet1", "A1", 321);
+    await runtime.setCellValue("Sheet1", "A1", 321);
 
     expect(buildViewportPatchCalls).toBe(1);
     runtime["buildViewportPatch"] = originalBuildViewportPatch;
@@ -1293,7 +1455,7 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: false,
     });
 
-    runtime.setCellValue("Sheet1", "A1", 7);
+    await runtime.setCellValue("Sheet1", "A1", 7);
 
     const engine = runtime["engine"];
     if (!engine || !engine.workbook) {
@@ -1325,9 +1487,9 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(persistProjectionState).toHaveBeenCalledTimes(1);
 
-    runtime.setCellValue("Sheet1", "A1", 1);
-    runtime.setCellValue("Sheet1", "A2", 2);
-    runtime.setCellValue("Sheet1", "A3", 3);
+    await runtime.setCellValue("Sheet1", "A1", 1);
+    await runtime.setCellValue("Sheet1", "A2", 2);
+    await runtime.setCellValue("Sheet1", "A3", 3);
 
     expect(persistProjectionState).toHaveBeenCalledTimes(1);
   });
@@ -1347,7 +1509,7 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(second).toBe(first);
 
-    runtime.setCellValue("Sheet1", "A1", 42);
+    await runtime.setCellValue("Sheet1", "A1", 42);
 
     const third = runtime.exportSnapshot();
     const fourth = runtime.exportSnapshot();

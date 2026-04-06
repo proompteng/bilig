@@ -6,7 +6,7 @@ import {
   type WorkbookAgentPreviewSummary,
 } from "@bilig/agent-api";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
-import { formatAddress, indexToColumn } from "@bilig/formula";
+import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
 import {
   createOpfsWorkbookLocalStoreFactory,
   type WorkbookLocalStore,
@@ -93,6 +93,18 @@ export interface WorkbookWorkerBootstrapResult {
   requiresAuthoritativeHydrate: boolean;
 }
 
+const EMPTY_METRICS: RecalcMetrics = {
+  batchId: 0,
+  changedInputCount: 0,
+  dirtyFormulaCount: 0,
+  wasmFormulaCount: 0,
+  jsFormulaCount: 0,
+  rangeNodeVisits: 0,
+  recalcMs: 0,
+  compileMs: 0,
+};
+const DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT = 100_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -121,7 +133,10 @@ export class WorkbookWorkerRuntime {
   private readonly localStoreFactory: WorkbookLocalStoreFactory;
   private localStore: WorkbookLocalStore | null = null;
   private engine: (SpreadsheetEngine & WorkerEngine) | null = null;
+  private projectionEnginePromise: Promise<SpreadsheetEngine & WorkerEngine> | null = null;
+  private projectionBuildVersion = 0;
   private authoritativeEngine: SpreadsheetEngine | null = null;
+  private authoritativeStateSource: "none" | "memory" | "localStore" = "none";
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
   private externalSyncState: SyncState | null = null;
@@ -134,6 +149,7 @@ export class WorkbookWorkerRuntime {
   private nextFormatId = 1;
   private snapshotCache: WorkbookSnapshot | null = null;
   private snapshotDirty = true;
+  private runtimeStateCache: WorkbookWorkerStateSnapshot | null = null;
   private authoritativeSnapshotCache: WorkbookSnapshot | null = null;
   private authoritativeSnapshotDirty = true;
   private authoritativeReplicaCache: EngineReplicaSnapshot | null = null;
@@ -157,7 +173,7 @@ export class WorkbookWorkerRuntime {
   }
 
   async ready(): Promise<void> {
-    await this.engine?.ready();
+    await (await this.getProjectionEngine()).ready();
   }
 
   dispose(): void {
@@ -168,6 +184,7 @@ export class WorkbookWorkerRuntime {
     this.cleanup();
     this.bootstrapOptions = options;
     this.externalSyncState = null;
+    this.runtimeStateCache = null;
     this.snapshotCache = null;
     this.snapshotDirty = true;
     this.pendingMutations = [];
@@ -177,15 +194,22 @@ export class WorkbookWorkerRuntime {
     this.projectionOverlayScope = null;
     let restoredFromPersistence = false;
     let requiresAuthoritativeHydrate = false;
+    let restoredBootstrapState: {
+      workbookName: string;
+      sheetNames: readonly string[];
+      materializedCellCount: number;
+      authoritativeRevision: number;
+      appliedPendingLocalSeq: number;
+    } | null = null;
     let restoredState: WorkbookStoredState | null = null;
     if (options.persistState) {
       try {
         this.localStore = await this.localStoreFactory.open(options.documentId);
-        restoredState = await this.localStore.loadState();
-        if (restoredState) {
+        restoredBootstrapState = await this.localStore.loadBootstrapState();
+        if (restoredBootstrapState) {
           restoredFromPersistence = true;
-          this.authoritativeRevision = restoredState.authoritativeRevision;
-          this.appliedPendingLocalSeq = restoredState.appliedPendingLocalSeq;
+          this.authoritativeRevision = restoredBootstrapState.authoritativeRevision;
+          this.appliedPendingLocalSeq = restoredBootstrapState.appliedPendingLocalSeq;
         }
       } catch (error) {
         if (!(error instanceof WorkbookLocalStoreLockedError)) {
@@ -208,33 +232,45 @@ export class WorkbookWorkerRuntime {
         ) + 1;
     }
 
-    const restoredSnapshot = isWorkbookSnapshotValue(restoredState?.snapshot)
-      ? restoredState.snapshot
-      : null;
-    const restoredReplica = isEngineReplicaSnapshotValue(restoredState?.replica)
-      ? restoredState.replica
-      : null;
     const highestPendingLocalSeq = this.pendingMutations.at(-1)?.localSeq ?? 0;
-    if (restoredSnapshot === null && this.pendingMutations.length > 0) {
+    if (restoredBootstrapState === null && this.pendingMutations.length > 0) {
       requiresAuthoritativeHydrate = true;
     }
 
-    if (restoredSnapshot || restoredReplica) {
-      this.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica);
-    }
-    const { engine, overlayScope } = await this.createProjectionEngineFromState({
-      snapshot: restoredSnapshot,
-      replica: restoredReplica,
-    });
-    this.projectionOverlayScope = overlayScope;
-    this.installEngine(engine);
     const projectionMatchesRestoredLocalStore =
       Boolean(this.localStore) &&
-      restoredState !== null &&
-      restoredState.appliedPendingLocalSeq === highestPendingLocalSeq;
+      restoredBootstrapState !== null &&
+      restoredBootstrapState.appliedPendingLocalSeq === highestPendingLocalSeq;
     this.projectionMatchesLocalStore = projectionMatchesRestoredLocalStore;
-    if (!requiresAuthoritativeHydrate && !projectionMatchesRestoredLocalStore) {
-      await this.persistStateNow();
+
+    const shouldDeferProjectionEngineBootstrap =
+      projectionMatchesRestoredLocalStore &&
+      restoredBootstrapState !== null &&
+      restoredBootstrapState.materializedCellCount >= DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT;
+
+    if (shouldDeferProjectionEngineBootstrap && restoredBootstrapState !== null) {
+      this.authoritativeStateSource = "localStore";
+      this.runtimeStateCache = this.buildRuntimeStateFromBootstrapState(restoredBootstrapState);
+    } else {
+      restoredState = this.localStore ? await this.localStore.loadState() : null;
+      const parsedRestoredSnapshot = isWorkbookSnapshotValue(restoredState?.snapshot)
+        ? restoredState.snapshot
+        : null;
+      const parsedRestoredReplica = isEngineReplicaSnapshotValue(restoredState?.replica)
+        ? restoredState.replica
+        : null;
+      if (parsedRestoredSnapshot || parsedRestoredReplica) {
+        this.installRestoredAuthoritativeState(parsedRestoredSnapshot, parsedRestoredReplica);
+      }
+      const { engine, overlayScope } = await this.createProjectionEngineFromState({
+        snapshot: parsedRestoredSnapshot,
+        replica: parsedRestoredReplica,
+      });
+      this.projectionOverlayScope = overlayScope;
+      this.installEngine(engine);
+      if (!requiresAuthoritativeHydrate && !projectionMatchesRestoredLocalStore) {
+        await this.persistStateNow();
+      }
     }
 
     return {
@@ -245,13 +281,22 @@ export class WorkbookWorkerRuntime {
   }
 
   getRuntimeState(): WorkbookWorkerStateSnapshot {
+    const cachedState = this.runtimeStateCache;
+    if (cachedState) {
+      return {
+        workbookName: cachedState.workbookName,
+        sheetNames: [...cachedState.sheetNames],
+        metrics: { ...cachedState.metrics },
+        syncState: this.externalSyncState ?? cachedState.syncState,
+      };
+    }
     const engine = this.requireEngine();
-    return {
+    return this.storeRuntimeState({
       workbookName: engine.workbook.workbookName,
       sheetNames: this.listSheetNames(),
       metrics: { ...engine.getLastMetrics() },
-      syncState: this.externalSyncState ?? engine.getSyncState(),
-    };
+      syncState: engine.getSyncState(),
+    });
   }
 
   getAuthoritativeRevision(): number {
@@ -262,6 +307,8 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot,
     authoritativeRevision = this.authoritativeRevision,
   ): Promise<WorkbookWorkerStateSnapshot> {
+    this.projectionBuildVersion += 1;
+    this.projectionEnginePromise = null;
     const authoritativeEngine = await this.createEngineFromState({
       snapshot,
       replica: null,
@@ -283,6 +330,8 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot,
     authoritativeRevision: number,
   ): Promise<WorkbookWorkerStateSnapshot> {
+    this.projectionBuildVersion += 1;
+    this.projectionEnginePromise = null;
     const authoritativeEngine = await this.createEngineFromState({
       snapshot,
       replica: null,
@@ -304,6 +353,8 @@ export class WorkbookWorkerRuntime {
     events: readonly AuthoritativeWorkbookEventRecord[],
     authoritativeRevision: number,
   ): Promise<WorkbookWorkerStateSnapshot> {
+    this.projectionBuildVersion += 1;
+    this.projectionEnginePromise = null;
     if (!events.every((event) => isAuthoritativeWorkbookEventRecord(event))) {
       throw new Error("Invalid authoritative workbook event batch");
     }
@@ -385,7 +436,17 @@ export class WorkbookWorkerRuntime {
   }
 
   exportSnapshot(): WorkbookSnapshot {
-    return this.getCachedSnapshot();
+    if (this.engine) {
+      return this.getCachedSnapshot();
+    }
+    if (
+      this.pendingMutations.length === 0 &&
+      this.authoritativeSnapshotCache &&
+      !this.authoritativeSnapshotDirty
+    ) {
+      return this.authoritativeSnapshotCache;
+    }
+    throw new Error("Workbook worker runtime projection snapshot is not ready");
   }
 
   async previewAgentCommandBundle(
@@ -395,7 +456,9 @@ export class WorkbookWorkerRuntime {
       throw new Error("Invalid workbook agent preview bundle");
     }
     return await buildWorkbookAgentPreview({
-      snapshot: this.exportSnapshot(),
+      snapshot: this.engine
+        ? this.exportSnapshot()
+        : (await this.getProjectionEngine()).exportSnapshot(),
       replicaId: this.requireBootstrapOptions().replicaId,
       bundle,
     });
@@ -435,7 +498,7 @@ export class WorkbookWorkerRuntime {
         args: [...nextMutation.args],
       });
     }
-    applyPendingWorkbookMutationToEngine(this.requireEngine(), nextMutation);
+    applyPendingWorkbookMutationToEngine(await this.getProjectionEngine(), nextMutation);
     await this.persistStateNow();
     return {
       ...nextMutation,
@@ -476,85 +539,103 @@ export class WorkbookWorkerRuntime {
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
-    const engine = this.requireEngine();
+    const engine = this.engine;
+    if (!engine) {
+      const localCell = this.readProjectedCellFromLocalStore(sheetName, address);
+      if (localCell) {
+        this.scheduleProjectionEngineMaterialization();
+        return localCell;
+      }
+      return this.emptyCellSnapshot(sheetName, address);
+    }
     if (!engine.workbook.getSheet(sheetName)) {
       return this.emptyCellSnapshot(sheetName, address);
     }
     return engine.getCell(sheetName, address);
   }
 
-  setCellValue(sheetName: string, address: string, value: CellSnapshot["input"]): CellSnapshot {
+  async setCellValue(
+    sheetName: string,
+    address: string,
+    value: CellSnapshot["input"],
+  ): Promise<CellSnapshot> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().setCellValue(sheetName, address, value ?? null);
+    (await this.getProjectionEngine()).setCellValue(sheetName, address, value ?? null);
     return this.getCell(sheetName, address);
   }
 
-  setCellFormula(sheetName: string, address: string, formula: string): CellSnapshot {
+  async setCellFormula(sheetName: string, address: string, formula: string): Promise<CellSnapshot> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().setCellFormula(sheetName, address, formula);
+    (await this.getProjectionEngine()).setCellFormula(sheetName, address, formula);
     return this.getCell(sheetName, address);
   }
 
-  setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void {
+  async setRangeStyle(range: CellRangeRef, patch: CellStylePatch): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().setRangeStyle(range, patch);
+    (await this.getProjectionEngine()).setRangeStyle(range, patch);
   }
 
-  clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
+  async clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().clearRangeStyle(range, fields);
+    (await this.getProjectionEngine()).clearRangeStyle(range, fields);
   }
 
-  setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
+  async setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().setRangeNumberFormat(range, format);
+    (await this.getProjectionEngine()).setRangeNumberFormat(range, format);
   }
 
-  clearRangeNumberFormat(range: CellRangeRef): void {
+  async clearRangeNumberFormat(range: CellRangeRef): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().clearRangeNumberFormat(range);
+    (await this.getProjectionEngine()).clearRangeNumberFormat(range);
   }
 
-  clearRange(range: CellRangeRef): void {
+  async clearRange(range: CellRangeRef): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().clearRange(range);
+    (await this.getProjectionEngine()).clearRange(range);
   }
 
-  clearCell(sheetName: string, address: string): CellSnapshot {
+  async clearCell(sheetName: string, address: string): Promise<CellSnapshot> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().clearCell(sheetName, address);
+    (await this.getProjectionEngine()).clearCell(sheetName, address);
     return this.getCell(sheetName, address);
   }
 
-  renderCommit(ops: CommitOp[]): void {
+  async renderCommit(ops: CommitOp[]): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().renderCommit(ops);
+    (await this.getProjectionEngine()).renderCommit(ops);
   }
 
-  fillRange(source: CellRangeRef, target: CellRangeRef): void {
+  async fillRange(source: CellRangeRef, target: CellRangeRef): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().fillRange(source, target);
+    (await this.getProjectionEngine()).fillRange(source, target);
   }
 
-  copyRange(source: CellRangeRef, target: CellRangeRef): void {
+  async copyRange(source: CellRangeRef, target: CellRangeRef): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().copyRange(source, target);
+    (await this.getProjectionEngine()).copyRange(source, target);
   }
 
-  moveRange(source: CellRangeRef, target: CellRangeRef): void {
+  async moveRange(source: CellRangeRef, target: CellRangeRef): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    this.requireEngine().moveRange(source, target);
+    (await this.getProjectionEngine()).moveRange(source, target);
   }
 
-  updateColumnWidth(sheetName: string, columnIndex: number, width: number): number {
+  async updateColumnWidth(sheetName: string, columnIndex: number, width: number): Promise<number> {
     this.markProjectionDivergedFromLocalStore();
     const clamped = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
-    this.requireEngine().updateColumnMetadata(sheetName, columnIndex, 1, clamped, null);
+    (await this.getProjectionEngine()).updateColumnMetadata(
+      sheetName,
+      columnIndex,
+      1,
+      clamped,
+      null,
+    );
     return clamped;
   }
 
-  autofitColumn(sheetName: string, columnIndex: number): number {
-    const engine = this.requireEngine();
+  async autofitColumn(sheetName: string, columnIndex: number): Promise<number> {
+    const engine = await this.getProjectionEngine();
     const sheet = engine.workbook.getSheet(sheetName);
     let widest = indexToColumn(columnIndex).length * AUTOFIT_CHAR_WIDTH;
 
@@ -566,7 +647,7 @@ export class WorkbookWorkerRuntime {
       widest = Math.max(widest, display.length * AUTOFIT_CHAR_WIDTH);
     });
 
-    return this.updateColumnWidth(sheetName, columnIndex, widest + AUTOFIT_PADDING);
+    return await this.updateColumnWidth(sheetName, columnIndex, widest + AUTOFIT_PADDING);
   }
 
   subscribe(listener: (event: EngineEvent) => void): () => void {
@@ -591,7 +672,10 @@ export class WorkbookWorkerRuntime {
       lastColumnSignatures: new Map<number, string>(),
       lastRowSignatures: new Map<number, string>(),
     };
-    listener(encodeViewportPatch(this.buildViewportPatch(state, null)));
+    listener(encodeViewportPatch(this.buildViewportPatch(state, null, this.getCurrentMetrics())));
+    if (!this.engine && this.canReadLocalProjectionForViewport()) {
+      this.scheduleProjectionEngineMaterialization();
+    }
     this.viewportSubscriptions.add(state);
     this.addViewportSubscription(state);
     return () => {
@@ -601,8 +685,10 @@ export class WorkbookWorkerRuntime {
   }
 
   private cleanup(): void {
+    this.projectionBuildVersion += 1;
     this.engineSubscription?.();
     this.engineSubscription = null;
+    this.projectionEnginePromise = null;
     this.persistQueued = false;
     this.viewportSubscriptions.clear();
     this.viewportSubscriptionsBySheet.clear();
@@ -610,10 +696,12 @@ export class WorkbookWorkerRuntime {
     this.styles.set(DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID });
     this.snapshotCache = null;
     this.snapshotDirty = true;
+    this.runtimeStateCache = null;
     this.authoritativeSnapshotCache = null;
     this.authoritativeSnapshotDirty = true;
     this.authoritativeReplicaCache = null;
     this.authoritativeReplicaDirty = true;
+    this.authoritativeStateSource = "none";
     this.pendingMutations = [];
     this.nextPendingMutationSeq = 1;
     this.appliedPendingLocalSeq = 0;
@@ -657,14 +745,116 @@ export class WorkbookWorkerRuntime {
   }
 
   private markProjectionDivergedFromLocalStore(): void {
+    this.projectionBuildVersion += 1;
+    this.projectionEnginePromise = null;
     this.projectionMatchesLocalStore = false;
     this.viewportTileStore.reset();
   }
 
   private listSheetNames(): string[] {
-    return [...this.requireEngine().workbook.sheetsByName.values()]
-      .toSorted((left, right) => left.order - right.order)
-      .map((sheet) => sheet.name);
+    if (this.engine) {
+      return [...this.engine.workbook.sheetsByName.values()]
+        .toSorted((left, right) => left.order - right.order)
+        .map((sheet) => sheet.name);
+    }
+    return [...(this.runtimeStateCache?.sheetNames ?? ["Sheet1"])];
+  }
+
+  private storeRuntimeState(state: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot {
+    this.runtimeStateCache = {
+      workbookName: state.workbookName,
+      sheetNames: [...state.sheetNames],
+      metrics: { ...state.metrics },
+      syncState: state.syncState,
+    };
+    return {
+      workbookName: state.workbookName,
+      sheetNames: [...state.sheetNames],
+      metrics: { ...state.metrics },
+      syncState: this.externalSyncState ?? state.syncState,
+    };
+  }
+
+  private buildRuntimeStateFromBootstrapState(state: {
+    workbookName: string;
+    sheetNames: readonly string[];
+    materializedCellCount: number;
+    authoritativeRevision: number;
+    appliedPendingLocalSeq: number;
+  }): WorkbookWorkerStateSnapshot {
+    return this.storeRuntimeState({
+      workbookName: state.workbookName,
+      sheetNames: [...state.sheetNames],
+      metrics: { ...EMPTY_METRICS },
+      syncState: "syncing",
+    });
+  }
+
+  private updateRuntimeStateFromEngine(
+    engine: SpreadsheetEngine & WorkerEngine = this.requireEngine(),
+  ): WorkbookWorkerStateSnapshot {
+    return this.storeRuntimeState({
+      workbookName: engine.workbook.workbookName,
+      sheetNames: [...engine.workbook.sheetsByName.values()]
+        .toSorted((left, right) => left.order - right.order)
+        .map((sheet) => sheet.name),
+      metrics: { ...engine.getLastMetrics() },
+      syncState: engine.getSyncState(),
+    });
+  }
+
+  private getCurrentMetrics(): RecalcMetrics {
+    if (this.engine) {
+      return { ...this.engine.getLastMetrics() };
+    }
+    return { ...(this.runtimeStateCache?.metrics ?? EMPTY_METRICS) };
+  }
+
+  private async getAuthoritativeStateInput(): Promise<{
+    snapshot: WorkbookSnapshot | null;
+    replica: EngineReplicaSnapshot | null;
+  }> {
+    if (this.authoritativeStateSource === "localStore") {
+      const restoredState = this.localStore ? await this.localStore.loadState() : null;
+      const restoredSnapshot = isWorkbookSnapshotValue(restoredState?.snapshot)
+        ? restoredState.snapshot
+        : null;
+      const restoredReplica = isEngineReplicaSnapshotValue(restoredState?.replica)
+        ? restoredState.replica
+        : null;
+      this.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica);
+    }
+    const snapshot =
+      this.authoritativeSnapshotDirty && this.authoritativeEngine
+        ? this.storeCachedAuthoritativeSnapshot(this.authoritativeEngine.exportSnapshot())
+        : this.authoritativeSnapshotCache;
+    const replica =
+      this.authoritativeReplicaDirty && this.authoritativeEngine
+        ? this.storeCachedAuthoritativeReplica(this.authoritativeEngine.exportReplicaSnapshot())
+        : this.authoritativeReplicaCache;
+    return {
+      snapshot,
+      replica,
+    };
+  }
+
+  private readProjectedCellFromLocalStore(sheetName: string, address: string): CellSnapshot | null {
+    if (!this.canReadLocalProjectionForViewport() || !this.localStore) {
+      return null;
+    }
+    const parsed = parseCellAddress(address, sheetName);
+    const localBase = this.viewportTileStore.readViewport({
+      localStore: this.localStore,
+      sheetName,
+      viewport: {
+        rowStart: parsed.row,
+        rowEnd: parsed.row,
+        colStart: parsed.col,
+        colEnd: parsed.col,
+      },
+    });
+    const cell = localBase?.cells.find((entry) => entry.snapshot.address === address);
+    return cell ? structuredClone(cell.snapshot) : null;
   }
 
   private async createEngineFromState(input: {
@@ -722,6 +912,7 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot | null,
     replica: EngineReplicaSnapshot | null,
   ): void {
+    this.authoritativeStateSource = "memory";
     this.authoritativeEngine = engine;
     this.storeCachedAuthoritativeSnapshot(snapshot ?? engine.exportSnapshot());
     this.storeCachedAuthoritativeReplica(replica ?? engine.exportReplicaSnapshot());
@@ -731,6 +922,7 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot | null,
     replica: EngineReplicaSnapshot | null,
   ): void {
+    this.authoritativeStateSource = "memory";
     this.authoritativeEngine = null;
     this.authoritativeSnapshotCache = snapshot;
     this.authoritativeSnapshotDirty = snapshot === null;
@@ -742,17 +934,18 @@ export class WorkbookWorkerRuntime {
     if (this.authoritativeEngine) {
       return this.authoritativeEngine;
     }
+    const authoritativeState = await this.getAuthoritativeStateInput();
     const engine = await this.createEngineFromState({
-      snapshot: this.authoritativeSnapshotCache,
-      replica: this.authoritativeReplicaCache,
+      snapshot: authoritativeState.snapshot,
+      replica: authoritativeState.replica,
     });
     this.authoritativeEngine = engine;
-    if (this.authoritativeSnapshotCache) {
+    if (authoritativeState.snapshot) {
       this.authoritativeSnapshotDirty = false;
     } else {
       this.storeCachedAuthoritativeSnapshot(engine.exportSnapshot());
     }
-    if (this.authoritativeReplicaCache) {
+    if (authoritativeState.replica) {
       this.authoritativeReplicaDirty = false;
     } else {
       this.storeCachedAuthoritativeReplica(engine.exportReplicaSnapshot());
@@ -764,15 +957,54 @@ export class WorkbookWorkerRuntime {
     engine: SpreadsheetEngine;
     overlayScope: ProjectionOverlayScope | null;
   }> {
-    return await this.createProjectionEngineFromState({
-      snapshot: this.getAuthoritativeSnapshot(),
-      replica: this.getAuthoritativeReplica(),
-    });
+    const authoritativeState = await this.getAuthoritativeStateInput();
+    return await this.createProjectionEngineFromState(authoritativeState);
+  }
+
+  private async getProjectionEngine(): Promise<SpreadsheetEngine & WorkerEngine> {
+    if (this.engine) {
+      return this.engine;
+    }
+    if (this.projectionEnginePromise) {
+      return await this.projectionEnginePromise;
+    }
+    const buildVersion = this.projectionBuildVersion;
+    const buildPromise = (async () => {
+      const { engine, overlayScope } = await this.rebuildProjectionEngine();
+      if (buildVersion !== this.projectionBuildVersion) {
+        return this.engine ?? engine;
+      }
+      this.projectionOverlayScope = overlayScope;
+      this.installEngine(engine);
+      return this.requireEngine();
+    })();
+    this.projectionEnginePromise = buildPromise;
+    try {
+      return await buildPromise;
+    } finally {
+      if (this.projectionEnginePromise === buildPromise) {
+        this.projectionEnginePromise = null;
+      }
+    }
+  }
+
+  private scheduleProjectionEngineMaterialization(): void {
+    if (this.engine || this.projectionEnginePromise || !this.bootstrapOptions) {
+      return;
+    }
+    const scheduledVersion = this.projectionBuildVersion;
+    setTimeout(() => {
+      if (scheduledVersion !== this.projectionBuildVersion || this.engine) {
+        return;
+      }
+      void this.getProjectionEngine().catch(() => undefined);
+    }, 0);
   }
 
   private installEngine(engine: SpreadsheetEngine & WorkerEngine): void {
     this.engineSubscription?.();
     this.engine = engine;
+    this.updateRuntimeStateFromEngine(engine);
     this.engineSubscription = engine.subscribe((event) => {
       this.invalidateSnapshotCache();
       if (this.pendingMutations.length > 0) {
@@ -781,6 +1013,7 @@ export class WorkbookWorkerRuntime {
           collectProjectionOverlayScopeFromEngineEvents(engine, [event]),
         );
       }
+      this.updateRuntimeStateFromEngine(engine);
       this.broadcastViewportPatches(event);
     });
   }
@@ -813,6 +1046,7 @@ export class WorkbookWorkerRuntime {
     }
 
     const authoritativeEngine = await this.getAuthoritativeEngine();
+    const projectionEngine = await this.getProjectionEngine();
     const persisted: WorkbookStoredState = {
       snapshot: this.getAuthoritativeSnapshot(),
       replica: this.getAuthoritativeReplica(),
@@ -829,7 +1063,7 @@ export class WorkbookWorkerRuntime {
       authoritativeBase: buildWorkbookLocalAuthoritativeBase(authoritativeEngine),
       projectionOverlay: buildWorkbookLocalProjectionOverlay({
         authoritativeEngine,
-        projectionEngine: this.requireEngine(),
+        projectionEngine,
         scope: this.getProjectionOverlayScopeForPersist(),
       }),
     });
@@ -849,7 +1083,7 @@ export class WorkbookWorkerRuntime {
 
   private broadcastViewportPatches(
     event: EngineEvent | null,
-    metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
+    metrics: RecalcMetrics = this.getCurrentMetrics(),
   ): void {
     const impactsBySheet =
       event === null ? null : collectSheetViewportImpacts(this.requireEngine(), event);
@@ -908,7 +1142,7 @@ export class WorkbookWorkerRuntime {
   private buildViewportPatch(
     state: ViewportSubscriptionState,
     event: EngineEvent | null,
-    metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
+    metrics: RecalcMetrics = this.getCurrentMetrics(),
     sheetImpact: SheetViewportImpact | null = null,
   ): ViewportPatch {
     if (

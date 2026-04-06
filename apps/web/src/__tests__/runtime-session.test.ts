@@ -1,6 +1,7 @@
 import { MessageChannel } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkerEngineHost } from "@bilig/worker-transport";
+import { formatAddress } from "@bilig/formula";
 import type {
   WorkbookLocalMutationRecord,
   WorkbookLocalStoreFactory,
@@ -8,6 +9,7 @@ import type {
 } from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
+import { applyPendingWorkbookMutationToEngine } from "../worker-runtime-mutation-replay.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime.js";
 import { createWorkerRuntimeSessionController } from "../runtime-session.js";
 
@@ -17,23 +19,88 @@ function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLoc
   return nextMutation;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"])
+  );
+}
+
 function createMemoryLocalStoreFactory(seed?: {
   state?: WorkbookStoredState | null;
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
   let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
+  let currentEngine: SpreadsheetEngine | null = null;
+  const loadCurrentEngine = async (): Promise<SpreadsheetEngine | null> => {
+    if (!currentState) {
+      currentEngine = null;
+      return null;
+    }
+    currentEngine = new SpreadsheetEngine({ workbookName: "derived", replicaId: "derived" });
+    await currentEngine.ready();
+    if (isWorkbookSnapshot(currentState.snapshot)) {
+      currentEngine.importSnapshot(currentState.snapshot);
+    }
+    currentPendingMutations.forEach((mutation) => {
+      applyPendingWorkbookMutationToEngine(currentEngine!, mutation);
+    });
+    return currentEngine;
+  };
   return {
     async open() {
+      await loadCurrentEngine();
       return {
+        async loadBootstrapState() {
+          const workbookName =
+            isRecord(currentState?.snapshot) &&
+            isRecord(currentState.snapshot["workbook"]) &&
+            typeof currentState.snapshot["workbook"]["name"] === "string"
+              ? currentState.snapshot["workbook"]["name"]
+              : "Sheet1";
+          const sheetNames =
+            isRecord(currentState?.snapshot) && Array.isArray(currentState.snapshot["sheets"])
+              ? currentState.snapshot["sheets"].flatMap((sheet) =>
+                  isRecord(sheet) && typeof sheet["name"] === "string" ? [sheet["name"]] : [],
+                )
+              : [];
+          const state = currentState
+            ? {
+                workbookName,
+                sheetNames,
+                materializedCellCount:
+                  isRecord(currentState.snapshot) && Array.isArray(currentState.snapshot["sheets"])
+                    ? currentState.snapshot["sheets"].reduce((count, sheet) => {
+                        if (!isRecord(sheet) || !Array.isArray(sheet["cells"])) {
+                          return count;
+                        }
+                        return count + sheet["cells"].length;
+                      }, 0)
+                    : 0,
+                authoritativeRevision: currentState.authoritativeRevision,
+                appliedPendingLocalSeq: currentState.appliedPendingLocalSeq,
+              }
+            : null;
+          return state ? structuredClone(state) : null;
+        },
         async loadState() {
           return currentState ? structuredClone(currentState) : null;
         },
         async persistProjectionState(input) {
           currentState = structuredClone(input.state);
+          await loadCurrentEngine();
         },
         async ingestAuthoritativeDelta(input) {
           currentState = structuredClone(input.state);
+          await loadCurrentEngine();
           if ((input.removePendingMutationIds?.length ?? 0) > 0) {
             const removedIds = new Set(input.removePendingMutationIds);
             currentPendingMutations = currentPendingMutations.filter(
@@ -46,19 +113,51 @@ function createMemoryLocalStoreFactory(seed?: {
         },
         async appendPendingMutation(mutation) {
           currentPendingMutations.push(cloneMutationRecord(mutation));
+          await loadCurrentEngine();
         },
         async updatePendingMutation(mutation) {
           currentPendingMutations = currentPendingMutations.map((entry) =>
             entry.id === mutation.id ? cloneMutationRecord(mutation) : entry,
           );
+          await loadCurrentEngine();
         },
         async removePendingMutation(id) {
           currentPendingMutations = currentPendingMutations.filter(
             (mutation) => mutation.id !== id,
           );
+          await loadCurrentEngine();
         },
-        readViewportProjection() {
-          return null;
+        readViewportProjection(sheetName, viewport) {
+          if (!currentEngine) {
+            return null;
+          }
+          const sheet = currentEngine.workbook.getSheet(sheetName);
+          if (!sheet) {
+            return null;
+          }
+          const cells = [];
+          for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
+            for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
+              const address = formatAddress(row, col);
+              const snapshot = currentEngine.getCell(sheetName, address);
+              if (
+                snapshot.value.tag === ValueTag.Empty &&
+                snapshot.input == null &&
+                !snapshot.formula
+              ) {
+                continue;
+              }
+              cells.push({ row, col, snapshot });
+            }
+          }
+          return {
+            sheetId: sheet.id,
+            sheetName,
+            cells,
+            rowAxisEntries: currentEngine.getRowAxisEntries(sheetName),
+            columnAxisEntries: currentEngine.getColumnAxisEntries(sheetName),
+            styles: [{ id: "style-0" }],
+          };
         },
         close() {},
       };
@@ -160,10 +259,6 @@ function createSequencedZeroViews(...views: Array<{ zero: { materialize(): unkno
       },
     },
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function expectPendingMutationId(value: unknown): string {

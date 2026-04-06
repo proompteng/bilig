@@ -25,7 +25,7 @@ const baseBudgets = {
   topologyEdit10kRecalcP95Ms: 80,
   renderCommit10kP95Ms: 50,
   workerWarmStart100kP95Ms: 500,
-  workerWarmStart250kP95Ms: 800,
+  workerWarmStart250kP95Ms: 700,
   workerVisibleEdit10kP95Ms: 16,
   workerReconnectCatchUp100PendingP95Ms: 2000,
 };

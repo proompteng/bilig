@@ -68,6 +68,25 @@ function parseSheetIdsFromSnapshotJson(snapshotJson: string | null): Map<string,
   }
 }
 
+function parseWorkbookNameFromSnapshotJson(snapshotJson: string | null): string | null {
+  if (typeof snapshotJson !== "string") {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(snapshotJson) as unknown;
+    if (
+      !isRecord(parsed) ||
+      !isRecord(parsed["workbook"]) ||
+      typeof parsed["workbook"]["name"] !== "string"
+    ) {
+      return null;
+    }
+    return parsed["workbook"]["name"];
+  } catch {
+    return null;
+  }
+}
+
 function backfillSheetIds(db: Database): void {
   const snapshotRow = readSingleObjectRow(
     db,
@@ -174,6 +193,38 @@ function backfillSheetIds(db: Database): void {
   }
 }
 
+function backfillWorkbookName(db: Database): void {
+  const row = readSingleObjectRow(
+    db,
+    `
+      SELECT workbook_name AS workbookName,
+             snapshot_json AS snapshotJson
+        FROM runtime_state
+       WHERE id = 1
+    `,
+  );
+  if (!row) {
+    return;
+  }
+  if (typeof row["workbookName"] === "string" && row["workbookName"].length > 0) {
+    return;
+  }
+  const workbookName = parseWorkbookNameFromSnapshotJson(
+    typeof row["snapshotJson"] === "string" ? row["snapshotJson"] : null,
+  );
+  if (!workbookName) {
+    return;
+  }
+  db.exec(
+    `
+      UPDATE runtime_state
+         SET workbook_name = ?
+       WHERE id = 1
+    `,
+    { bind: [workbookName] },
+  );
+}
+
 export function initializeWorkbookLocalStoreSchema(db: Database): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -183,6 +234,7 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
 
     CREATE TABLE IF NOT EXISTS runtime_state (
       id INTEGER PRIMARY KEY CHECK (id = 1),
+      workbook_name TEXT NOT NULL DEFAULT '',
       snapshot_json TEXT NOT NULL,
       replica_json TEXT NOT NULL,
       authoritative_revision INTEGER NOT NULL,
@@ -307,6 +359,7 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
   `);
 
   ensureColumn(db, "runtime_state", "applied_pending_local_seq", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "runtime_state", "workbook_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "pending_op", "submitted_at_ms", "INTEGER");
   ensureColumn(db, "authoritative_sheet", "sheet_id", "INTEGER");
   ensureColumn(db, "authoritative_cell_input", "sheet_id", "INTEGER");
@@ -318,6 +371,7 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
   ensureColumn(db, "projection_overlay_column_axis", "sheet_id", "INTEGER");
 
   backfillSheetIds(db);
+  backfillWorkbookName(db);
 
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS authoritative_sheet_sheet_id_idx

@@ -36,6 +36,14 @@ export interface WorkbookStoredState {
   readonly appliedPendingLocalSeq: number;
 }
 
+export interface WorkbookBootstrapState {
+  readonly workbookName: string;
+  readonly sheetNames: readonly string[];
+  readonly materializedCellCount: number;
+  readonly authoritativeRevision: number;
+  readonly appliedPendingLocalSeq: number;
+}
+
 export interface WorkbookLocalMutationRecord {
   readonly id: string;
   readonly localSeq: number;
@@ -48,6 +56,7 @@ export interface WorkbookLocalMutationRecord {
 }
 
 export interface WorkbookLocalStore {
+  loadBootstrapState(): Promise<WorkbookBootstrapState | null>;
   loadState(): Promise<WorkbookStoredState | null>;
   persistProjectionState(input: {
     readonly state: WorkbookStoredState;
@@ -131,6 +140,27 @@ function parseWorkbookStoredState(value: unknown): WorkbookStoredState | null {
   };
 }
 
+function parseWorkbookBootstrapState(value: unknown): WorkbookBootstrapState | null {
+  if (
+    !isRecord(value) ||
+    typeof value["workbookName"] !== "string" ||
+    !Array.isArray(value["sheetNames"]) ||
+    !value["sheetNames"].every((sheetName) => typeof sheetName === "string") ||
+    typeof value["materializedCellCount"] !== "number" ||
+    typeof value["authoritativeRevision"] !== "number" ||
+    typeof value["appliedPendingLocalSeq"] !== "number"
+  ) {
+    return null;
+  }
+  return {
+    workbookName: value["workbookName"],
+    sheetNames: [...value["sheetNames"]],
+    materializedCellCount: value["materializedCellCount"],
+    authoritativeRevision: value["authoritativeRevision"],
+    appliedPendingLocalSeq: value["appliedPendingLocalSeq"],
+  };
+}
+
 function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutationRecord | null {
   if (
     !isRecord(value) ||
@@ -201,11 +231,71 @@ async function getSqliteRuntime(
   return await sqliteRuntimePromise;
 }
 
+function extractWorkbookName(snapshot: unknown): string | null {
+  if (
+    isRecord(snapshot) &&
+    isRecord(snapshot["workbook"]) &&
+    typeof snapshot["workbook"]["name"] === "string"
+  ) {
+    return snapshot["workbook"]["name"];
+  }
+  return null;
+}
+
 class SqliteWorkbookLocalStore implements WorkbookLocalStore {
   constructor(
     private readonly db: Database,
+    private readonly defaultWorkbookName: string,
     private readonly closeDbOnClose = true,
   ) {}
+
+  async loadBootstrapState(): Promise<WorkbookBootstrapState | null> {
+    const row = readSingleObjectRow(
+      this.db,
+      `
+        SELECT workbook_name AS workbookName,
+               (SELECT COUNT(*) FROM authoritative_cell_render) AS materializedCellCount,
+               authoritative_revision AS authoritativeRevision,
+               applied_pending_local_seq AS appliedPendingLocalSeq
+          FROM runtime_state
+         WHERE id = 1
+      `,
+    );
+    if (!row) {
+      return null;
+    }
+
+    const sheetNames: string[] = [];
+    const statement = this.db.prepare(
+      `
+        SELECT name
+          FROM authoritative_sheet
+         ORDER BY sort_order ASC, name ASC
+      `,
+    );
+    try {
+      while (statement.step()) {
+        const sheet = statement.get({});
+        if (typeof sheet["name"] === "string") {
+          sheetNames.push(sheet["name"]);
+        }
+      }
+    } finally {
+      statement.finalize();
+    }
+
+    return parseWorkbookBootstrapState({
+      workbookName:
+        typeof row["workbookName"] === "string" && row["workbookName"].length > 0
+          ? row["workbookName"]
+          : this.defaultWorkbookName,
+      sheetNames,
+      materializedCellCount:
+        typeof row["materializedCellCount"] === "number" ? row["materializedCellCount"] : 0,
+      authoritativeRevision: row["authoritativeRevision"],
+      appliedPendingLocalSeq: row["appliedPendingLocalSeq"],
+    });
+  }
 
   async loadState(): Promise<WorkbookStoredState | null> {
     const row = readSingleObjectRow(
@@ -258,14 +348,16 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
         `
           INSERT INTO runtime_state (
             id,
+            workbook_name,
             snapshot_json,
             replica_json,
             authoritative_revision,
             applied_pending_local_seq,
             updated_at_ms
           )
-          VALUES (1, ?, ?, ?, ?, ?)
+          VALUES (1, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+            workbook_name = excluded.workbook_name,
             snapshot_json = excluded.snapshot_json,
             replica_json = excluded.replica_json,
             authoritative_revision = excluded.authoritative_revision,
@@ -274,6 +366,7 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
         `,
         {
           bind: [
+            extractWorkbookName(input.state.snapshot) ?? this.defaultWorkbookName,
             JSON.stringify(input.state.snapshot),
             JSON.stringify(input.state.replica),
             input.state.authoritativeRevision,
@@ -310,14 +403,16 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
         `
           INSERT INTO runtime_state (
             id,
+            workbook_name,
             snapshot_json,
             replica_json,
             authoritative_revision,
             applied_pending_local_seq,
             updated_at_ms
           )
-          VALUES (1, ?, ?, ?, ?, ?)
+          VALUES (1, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+            workbook_name = excluded.workbook_name,
             snapshot_json = excluded.snapshot_json,
             replica_json = excluded.replica_json,
             authoritative_revision = excluded.authoritative_revision,
@@ -326,6 +421,7 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
         `,
         {
           bind: [
+            extractWorkbookName(input.state.snapshot) ?? this.defaultWorkbookName,
             JSON.stringify(input.state.snapshot),
             JSON.stringify(input.state.replica),
             input.state.authoritativeRevision,
@@ -490,7 +586,7 @@ export function createOpfsWorkbookLocalStoreFactory(
         const path = `/workbooks/${sanitizeDocumentId(documentId)}.sqlite`;
         const db = new poolUtil.OpfsSAHPoolDb(path);
         initializeWorkbookLocalStoreSchema(db);
-        return new SqliteWorkbookLocalStore(db);
+        return new SqliteWorkbookLocalStore(db, documentId);
       } catch (error) {
         if (isAccessHandleConflict(error)) {
           throw new WorkbookLocalStoreLockedError(
@@ -515,7 +611,7 @@ export function createMemoryWorkbookLocalStoreFactory(): WorkbookLocalStoreFacto
         initializeWorkbookLocalStoreSchema(db);
         databases.set(documentId, db);
       }
-      return new SqliteWorkbookLocalStore(db, false);
+      return new SqliteWorkbookLocalStore(db, documentId, false);
     },
   };
 }

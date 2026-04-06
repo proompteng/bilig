@@ -11,7 +11,7 @@
 - local visible edit response p95 `< 16ms`
 - `10k` downstream recalc p95 `< 25ms`
 - dense `100k` worker warm-start p95 `< 500ms`
-- dense `250k` worker warm-start p95 `< 800ms`
+- dense `250k` worker warm-start p95 `< 700ms`
 - dense `250k` snapshot restore p95 `< 1000ms`
 - richer multisheet corpus cases are benchmark fixtures for investigation and optimization, not hard CI gates yet
 

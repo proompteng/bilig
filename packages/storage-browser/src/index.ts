@@ -22,6 +22,7 @@ export {
   createOpfsWorkbookLocalStoreFactory,
   WorkbookLocalStoreLockedError,
   type OpfsWorkbookLocalStoreFactoryOptions,
+  type WorkbookBootstrapState,
   type WorkbookLocalMutationRecord,
   type WorkbookLocalStore,
   type WorkbookLocalStoreFactory,
