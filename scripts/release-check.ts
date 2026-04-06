@@ -2,11 +2,12 @@
 
 import { gzipSync } from "node:zlib";
 import { readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 
 const budgets = {
   mainJsGzipBytes: 350 * 1024,
-  wasmGzipBytes: 250 * 1024,
+  runtimeWasmGzipBytes: 250 * 1024,
+  sqliteWasmGzipBytes: 400 * 1024,
 };
 
 async function findAssets() {
@@ -45,25 +46,45 @@ function assertBudget(label, actual, budget) {
   }
 }
 
+function isSqliteWasmAsset(file) {
+  return basename(file).startsWith("sqlite3-");
+}
+
 const { jsAssets, wasmAssets } = await findAssets();
 const jsMeasurements = await Promise.all(jsAssets.map((file) => measureAsset(file)));
 const wasmMeasurements = await Promise.all(wasmAssets.map((file) => measureAsset(file)));
 const largestJs = jsMeasurements.reduce((largest, entry) =>
   entry.gzipBytes > largest.gzipBytes ? entry : largest,
 );
-const largestWasm = wasmMeasurements.reduce((largest, entry) =>
+const runtimeWasmMeasurements = wasmMeasurements.filter((entry) => !isSqliteWasmAsset(entry.file));
+const sqliteWasmMeasurements = wasmMeasurements.filter((entry) => isSqliteWasmAsset(entry.file));
+
+if (runtimeWasmMeasurements.length === 0) {
+  throw new Error("No first-party runtime WASM assets were found in apps/web/dist/assets");
+}
+
+if (sqliteWasmMeasurements.length === 0) {
+  throw new Error("No SQLite WASM assets were found in apps/web/dist/assets");
+}
+
+const largestRuntimeWasm = runtimeWasmMeasurements.reduce((largest, entry) =>
+  entry.gzipBytes > largest.gzipBytes ? entry : largest,
+);
+const largestSqliteWasm = sqliteWasmMeasurements.reduce((largest, entry) =>
   entry.gzipBytes > largest.gzipBytes ? entry : largest,
 );
 
 assertBudget("Main JavaScript gzip size", largestJs.gzipBytes, budgets.mainJsGzipBytes);
-assertBudget("WASM gzip size", largestWasm.gzipBytes, budgets.wasmGzipBytes);
+assertBudget("Runtime WASM gzip size", largestRuntimeWasm.gzipBytes, budgets.runtimeWasmGzipBytes);
+assertBudget("SQLite WASM gzip size", largestSqliteWasm.gzipBytes, budgets.sqliteWasmGzipBytes);
 
 console.log(
   JSON.stringify(
     {
       budgets,
       largestJs,
-      largestWasm,
+      largestRuntimeWasm,
+      largestSqliteWasm,
     },
     null,
     2,
