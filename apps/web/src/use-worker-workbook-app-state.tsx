@@ -3,16 +3,18 @@ import { useActorRef, useSelector } from "@xstate/react";
 import type { CommitOp } from "@bilig/core";
 import type { EditMovement, EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { LiteralInput, Viewport } from "@bilig/protocol";
+import type { CellSnapshot, LiteralInput, Viewport } from "@bilig/protocol";
 import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import { loadPersistedSelection, persistSelection } from "./selection-persistence.js";
 import { ProjectedViewportStore } from "./projected-viewport-store.js";
+import { WorkbookEditorConflictBanner } from "./WorkbookEditorConflictBanner.js";
 import {
   type EditingMode,
   type ParsedEditorInput,
+  type WorkbookEditorConflict,
   type ZeroConnectionState,
   canAttemptRemoteSync,
   clampSelectionMovement,
@@ -20,7 +22,11 @@ import {
   emptyCellSnapshot,
   normalizeSheetNameKey,
   parseEditorInput,
+  parsedEditorInputEquals,
+  parsedEditorInputFromSnapshot,
+  parsedEditorInputMatchesSnapshot,
   parseSelectionRangeLabel,
+  sameCellContent,
   toEditorValue,
   toResolvedValue,
 } from "./worker-workbook-app-model.js";
@@ -80,11 +86,13 @@ export function useWorkerWorkbookAppState(input: {
   const [editorSelectionBehavior, setEditorSelectionBehavior] =
     useState<EditSelectionBehavior>("select-all");
   const [editingMode, setEditingMode] = useState<EditingMode>("idle");
+  const [editorConflict, setEditorConflict] = useState<WorkbookEditorConflict | null>(null);
   const selectionRef = useRef(selection);
   const workerHandleRef = useRef(workerHandle);
   const editorValueRef = useRef(editorValue);
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
+  const editorBaseSnapshotRef = useRef<CellSnapshot>(emptySelectedCell);
   const zeroRef = useRef<ZeroClient>(zero);
   const connectionStateRef = useRef(connectionState.name);
   const visibleViewportRef = useRef<Viewport>(selectionViewport(selection));
@@ -225,6 +233,54 @@ export function useWorkerWorkbookAppState(input: {
     [selectedCell],
   );
 
+  const cloneLiveSelectedCell = useCallback(
+    (nextSelection = selectionRef.current) => structuredClone(getLiveSelectedCell(nextSelection)),
+    [getLiveSelectedCell],
+  );
+
+  const resetEditorConflictTracking = useCallback(
+    (nextSelection = selectionRef.current) => {
+      editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextSelection);
+      setEditorConflict(null);
+    },
+    [cloneLiveSelectedCell],
+  );
+
+  const completeEditNavigation = useCallback(
+    (targetSelection: WorkerRuntimeSelection, movement?: EditMovement) => {
+      if (!movement) {
+        selectionRef.current = targetSelection;
+        editorTargetRef.current = targetSelection;
+        return targetSelection;
+      }
+      const nextAddress = clampSelectionMovement(
+        targetSelection.address,
+        targetSelection.sheetName,
+        movement,
+      );
+      const nextSelection = { sheetName: targetSelection.sheetName, address: nextAddress };
+      selectionRef.current = nextSelection;
+      editorTargetRef.current = nextSelection;
+      runtimeActorRef.send({ type: "selection.changed", selection: nextSelection });
+      return nextSelection;
+    },
+    [runtimeActorRef],
+  );
+
+  const finishEditingWithAuthoritative = useCallback(
+    (targetSelection: WorkerRuntimeSelection, movement?: EditMovement) => {
+      const nextSelection = completeEditNavigation(targetSelection, movement);
+      const nextEditorValue = toEditorValue(cloneLiveSelectedCell(nextSelection));
+      editorValueRef.current = nextEditorValue;
+      setEditorValue(nextEditorValue);
+      setEditorSelectionBehavior("select-all");
+      editingModeRef.current = "idle";
+      setEditingMode("idle");
+      resetEditorConflictTracking(nextSelection);
+    },
+    [cloneLiveSelectedCell, completeEditNavigation, resetEditorConflictTracking],
+  );
+
   const beginEditing = useCallback(
     (
       seed?: string,
@@ -235,14 +291,17 @@ export function useWorkerWorkbookAppState(input: {
         return;
       }
       const nextEditorValue = seed ?? toEditorValue(getLiveSelectedCell());
+      const nextTarget = selectionRef.current;
+      editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextTarget);
+      setEditorConflict(null);
       editorValueRef.current = nextEditorValue;
       setEditorValue(nextEditorValue);
       setEditorSelectionBehavior(selectionBehavior);
-      editorTargetRef.current = selectionRef.current;
+      editorTargetRef.current = nextTarget;
       editingModeRef.current = mode;
       setEditingMode(mode);
     },
-    [getLiveSelectedCell, writesAllowed],
+    [cloneLiveSelectedCell, getLiveSelectedCell, writesAllowed],
   );
 
   const applyParsedInput = useCallback(
@@ -272,26 +331,56 @@ export function useWorkerWorkbookAppState(input: {
           ? toEditorValue(getLiveSelectedCell(targetSelection))
           : editorValueRef.current;
       const parsed = parseEditorInput(nextValue);
-      editorTargetRef.current = targetSelection;
+      const baseSnapshot = editorBaseSnapshotRef.current;
+      const authoritativeSnapshot = cloneLiveSelectedCell(targetSelection);
+      const draftMatchesAuthoritative = parsedEditorInputMatchesSnapshot(
+        parsed,
+        authoritativeSnapshot,
+      );
+      const draftMatchesBase = parsedEditorInputEquals(
+        parsed,
+        parsedEditorInputFromSnapshot(baseSnapshot),
+      );
+
+      if (!sameCellContent(baseSnapshot, authoritativeSnapshot) && !draftMatchesAuthoritative) {
+        if (draftMatchesBase) {
+          finishEditingWithAuthoritative(targetSelection, movement);
+          return;
+        }
+        setEditorConflict({
+          sheetName: targetSelection.sheetName,
+          address: targetSelection.address,
+          phase: "compare",
+          baseSnapshot,
+          authoritativeSnapshot,
+        });
+        return;
+      }
+
+      if (draftMatchesAuthoritative) {
+        finishEditingWithAuthoritative(targetSelection, movement);
+        return;
+      }
+
+      const nextSelection = completeEditNavigation(targetSelection, movement);
+      setEditorSelectionBehavior("select-all");
       editingModeRef.current = "idle";
       setEditingMode("idle");
-      setEditorSelectionBehavior("select-all");
-      if (movement) {
-        const nextAddress = clampSelectionMovement(
-          targetSelection.address,
-          targetSelection.sheetName,
-          movement,
-        );
-        const nextSelection = { sheetName: targetSelection.sheetName, address: nextAddress };
-        selectionRef.current = nextSelection;
-        runtimeActorRef.send({ type: "selection.changed", selection: nextSelection });
-      }
-      editorTargetRef.current = selectionRef.current;
+      resetEditorConflictTracking(nextSelection);
       void applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed).catch(
         reportRuntimeError,
       );
     },
-    [applyParsedInput, getLiveSelectedCell, reportRuntimeError, runtimeActorRef, writesAllowed],
+    [
+      applyParsedInput,
+      cloneLiveSelectedCell,
+      completeEditNavigation,
+      finishEditingWithAuthoritative,
+      getLiveSelectedCell,
+      reportRuntimeError,
+      resetEditorConflictTracking,
+      writesAllowed,
+    ],
   );
 
   const cancelEditor = useCallback(() => {
@@ -302,7 +391,8 @@ export function useWorkerWorkbookAppState(input: {
     editorTargetRef.current = selectionRef.current;
     editingModeRef.current = "idle";
     setEditingMode("idle");
-  }, [getLiveSelectedCell]);
+    resetEditorConflictTracking();
+  }, [getLiveSelectedCell, resetEditorConflictTracking]);
 
   const clearSelectedRange = useCallback(() => {
     if (!writesAllowed) {
@@ -314,10 +404,18 @@ export function useWorkerWorkbookAppState(input: {
     editorTargetRef.current = selectionRef.current;
     editingModeRef.current = "idle";
     setEditingMode("idle");
+    resetEditorConflictTracking();
     void invokeMutation("clearRange", targetRange).catch((error: unknown) => {
       reportRuntimeError(error);
     });
-  }, [invokeMutation, reportRuntimeError, selection.sheetName, selectionLabel, writesAllowed]);
+  }, [
+    invokeMutation,
+    reportRuntimeError,
+    resetEditorConflictTracking,
+    selection.sheetName,
+    selectionLabel,
+    writesAllowed,
+  ]);
 
   const clearSelectedCell = useCallback(() => {
     if (!writesAllowed) {
@@ -381,8 +479,9 @@ export function useWorkerWorkbookAppState(input: {
       editorTargetRef.current = selectionRef.current;
       editingModeRef.current = "idle";
       setEditingMode("idle");
+      resetEditorConflictTracking();
     },
-    [invokeMutation, reportRuntimeError],
+    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
   );
 
   const fillSelectionRange = useCallback(
@@ -408,11 +507,12 @@ export function useWorkerWorkbookAppState(input: {
           editorTargetRef.current = selectionRef.current;
           editingModeRef.current = "idle";
           setEditingMode("idle");
+          resetEditorConflictTracking();
           return undefined;
         })
         .catch(reportRuntimeError);
     },
-    [invokeMutation, reportRuntimeError],
+    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
   );
 
   const copySelectionRange = useCallback(
@@ -438,11 +538,12 @@ export function useWorkerWorkbookAppState(input: {
           editorTargetRef.current = selectionRef.current;
           editingModeRef.current = "idle";
           setEditingMode("idle");
+          resetEditorConflictTracking();
           return undefined;
         })
         .catch(reportRuntimeError);
     },
-    [invokeMutation, reportRuntimeError],
+    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
   );
 
   const moveSelectionRange = useCallback(
@@ -468,11 +569,12 @@ export function useWorkerWorkbookAppState(input: {
           editorTargetRef.current = selectionRef.current;
           editingModeRef.current = "idle";
           setEditingMode("idle");
+          resetEditorConflictTracking();
           return undefined;
         })
         .catch(reportRuntimeError);
     },
-    [invokeMutation, reportRuntimeError],
+    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
   );
 
   const selectAddress = useCallback(
@@ -496,25 +598,142 @@ export function useWorkerWorkbookAppState(input: {
       }
       selectionRef.current = nextSelection;
       editorTargetRef.current = nextSelection;
+      resetEditorConflictTracking(nextSelection);
       runtimeActorRef.send({ type: "selection.changed", selection: nextSelection });
     },
-    [runtimeActorRef],
+    [resetEditorConflictTracking, runtimeActorRef],
   );
 
-  const handleEditorChange = useCallback((next: string) => {
-    editorValueRef.current = next;
-    setEditorValue(next);
-    setEditingMode((current) => {
-      const nextMode = current === "idle" ? "cell" : current;
-      editingModeRef.current = nextMode;
-      return nextMode;
+  const handleEditorChange = useCallback(
+    (next: string) => {
+      if (editingModeRef.current === "idle") {
+        editorBaseSnapshotRef.current = cloneLiveSelectedCell(selectionRef.current);
+        setEditorConflict(null);
+      }
+      editorValueRef.current = next;
+      setEditorValue(next);
+      setEditingMode((current) => {
+        const nextMode = current === "idle" ? "cell" : current;
+        editingModeRef.current = nextMode;
+        return nextMode;
+      });
+    },
+    [cloneLiveSelectedCell],
+  );
+
+  useEffect(() => {
+    if (editingMode === "idle") {
+      return;
+    }
+    const targetSelection = editorTargetRef.current;
+    if (
+      selection.sheetName !== targetSelection.sheetName ||
+      selection.address !== targetSelection.address
+    ) {
+      return;
+    }
+    const authoritativeSnapshot = cloneLiveSelectedCell(targetSelection);
+    const baseSnapshot = editorBaseSnapshotRef.current;
+    const parsedDraft = parseEditorInput(editorValueRef.current);
+
+    if (
+      sameCellContent(baseSnapshot, authoritativeSnapshot) ||
+      parsedEditorInputMatchesSnapshot(parsedDraft, authoritativeSnapshot)
+    ) {
+      setEditorConflict((current) => (current === null ? current : null));
+      return;
+    }
+
+    setEditorConflict((current) => {
+      const nextPhase =
+        current?.sheetName === targetSelection.sheetName &&
+        current?.address === targetSelection.address &&
+        current.phase === "compare"
+          ? "compare"
+          : "badge";
+      if (
+        current?.sheetName === targetSelection.sheetName &&
+        current?.address === targetSelection.address &&
+        current.phase === nextPhase &&
+        sameCellContent(current.baseSnapshot, baseSnapshot) &&
+        sameCellContent(current.authoritativeSnapshot, authoritativeSnapshot)
+      ) {
+        return current;
+      }
+      return {
+        sheetName: targetSelection.sheetName,
+        address: targetSelection.address,
+        phase: nextPhase,
+        baseSnapshot,
+        authoritativeSnapshot,
+      };
     });
+  }, [cloneLiveSelectedCell, editingMode, selectedCell, selection.address, selection.sheetName]);
+
+  const reviewEditorConflict = useCallback(() => {
+    const targetSelection = editorTargetRef.current;
+    setEditorConflict((current) => {
+      if (
+        current?.sheetName !== targetSelection.sheetName ||
+        current?.address !== targetSelection.address
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        phase: "compare",
+        authoritativeSnapshot: cloneLiveSelectedCell(targetSelection),
+      };
+    });
+  }, [cloneLiveSelectedCell]);
+
+  const applyEditorConflictDraft = useCallback(() => {
+    const targetSelection = editorTargetRef.current;
+    const parsed = parseEditorInput(editorValueRef.current);
+    const nextSelection = completeEditNavigation(targetSelection);
+    setEditorSelectionBehavior("select-all");
+    editingModeRef.current = "idle";
+    setEditingMode("idle");
+    resetEditorConflictTracking(nextSelection);
+    void applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed).catch(
+      reportRuntimeError,
+    );
+  }, [applyParsedInput, completeEditNavigation, reportRuntimeError, resetEditorConflictTracking]);
+
+  const keepEditorConflictAuthoritative = useCallback(() => {
+    finishEditingWithAuthoritative(editorTargetRef.current);
+  }, [finishEditingWithAuthoritative]);
+
+  const keepEditorConflictDraftLocal = useCallback(() => {
+    setEditorConflict((current) => (current ? { ...current, phase: "badge" } : current));
   }, []);
 
   const isEditing = editingMode !== "idle";
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
+  const editorConflictBanner = useMemo(() => {
+    if (editorConflict === null) {
+      return null;
+    }
+    return (
+      <WorkbookEditorConflictBanner
+        conflict={editorConflict}
+        localDraft={editorValue}
+        onApplyMine={applyEditorConflictDraft}
+        onKeepAuthoritative={keepEditorConflictAuthoritative}
+        onKeepDraftLocal={keepEditorConflictDraftLocal}
+        onReview={reviewEditorConflict}
+      />
+    );
+  }, [
+    applyEditorConflictDraft,
+    editorValue,
+    editorConflict,
+    keepEditorConflictAuthoritative,
+    keepEditorConflictDraftLocal,
+    reviewEditorConflict,
+  ]);
   const handleVisibleViewportChange = useCallback((viewport: Viewport) => {
     visibleViewportRef.current = viewport;
   }, []);
@@ -686,6 +905,7 @@ export function useWorkerWorkbookAppState(input: {
     copySelectionRange,
     createSheet,
     changesPanel,
+    editorConflictBanner,
     editorSelectionBehavior,
     fillSelectionRange,
     handleEditorChange,

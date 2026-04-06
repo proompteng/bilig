@@ -17,6 +17,14 @@ export type ParsedEditorInput =
   | { kind: "formula"; formula: string }
   | { kind: "value"; value: LiteralInput };
 
+export interface WorkbookEditorConflict {
+  readonly sheetName: string;
+  readonly address: string;
+  readonly phase: "badge" | "compare";
+  readonly baseSnapshot: CellSnapshot;
+  readonly authoritativeSnapshot: CellSnapshot;
+}
+
 export type ZeroConnectionState =
   | { name: "connected" }
   | { name: "connecting"; reason?: string }
@@ -120,6 +128,62 @@ export function parseEditorInput(rawValue: string): ParsedEditorInput {
     return { kind: "value", value: numeric };
   }
   return { kind: "value", value: normalized };
+}
+
+export function parsedEditorInputFromSnapshot(snapshot: CellSnapshot): ParsedEditorInput {
+  if (typeof snapshot.formula === "string") {
+    return { kind: "formula", formula: snapshot.formula };
+  }
+  if (snapshot.input !== undefined && snapshot.input !== null) {
+    return { kind: "value", value: snapshot.input };
+  }
+  switch (snapshot.value.tag) {
+    case ValueTag.Empty:
+      return { kind: "clear" };
+    case ValueTag.Number:
+      return { kind: "value", value: snapshot.value.value };
+    case ValueTag.Boolean:
+      return { kind: "value", value: snapshot.value.value };
+    case ValueTag.String:
+      return { kind: "value", value: snapshot.value.value };
+    case ValueTag.Error:
+      return { kind: "value", value: formatErrorCode(snapshot.value.code) };
+  }
+}
+
+export function parsedEditorInputEquals(
+  left: ParsedEditorInput,
+  right: ParsedEditorInput,
+): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+  switch (left.kind) {
+    case "clear":
+      return true;
+    case "formula":
+      return right.kind === "formula" && left.formula === right.formula;
+    case "value":
+      return right.kind === "value" && left.value === right.value;
+    default: {
+      const exhaustiveLeft: never = left;
+      return exhaustiveLeft;
+    }
+  }
+}
+
+export function parsedEditorInputMatchesSnapshot(
+  parsed: ParsedEditorInput,
+  snapshot: CellSnapshot,
+): boolean {
+  return parsedEditorInputEquals(parsed, parsedEditorInputFromSnapshot(snapshot));
+}
+
+export function sameCellContent(left: CellSnapshot, right: CellSnapshot): boolean {
+  return parsedEditorInputEquals(
+    parsedEditorInputFromSnapshot(left),
+    parsedEditorInputFromSnapshot(right),
+  );
 }
 
 export function clampSelectionMovement(

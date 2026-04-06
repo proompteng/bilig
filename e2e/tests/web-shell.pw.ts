@@ -1264,6 +1264,62 @@ test("web app preserves an in-progress local draft when another tab edits the sa
   }
 });
 
+test("web app compares and applies a stale same-cell draft without losing local work", async ({
+  page,
+}) => {
+  test.slow();
+  const documentId = `playwright-zero-same-cell-conflict-${Date.now()}`;
+  const mirrorPage = await page.context().newPage();
+  const viewport = page.viewportSize();
+  if (viewport) {
+    await mirrorPage.setViewportSize(viewport);
+  }
+
+  try {
+    await Promise.all([
+      openZeroWorkbookPage(page, documentId),
+      openZeroWorkbookPage(mirrorPage, documentId),
+    ]);
+    await expect(page.getByTestId("worker-error")).toHaveCount(0);
+    await expect(mirrorPage.getByTestId("worker-error")).toHaveCount(0);
+
+    const formulaInput = page.getByTestId("formula-input");
+    const mirrorFormulaInput = mirrorPage.getByTestId("formula-input");
+
+    await clickProductCell(page, 0, 0);
+    await clickProductCell(mirrorPage, 0, 0);
+    await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+    await expect(mirrorPage.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+    await formulaInput.focus();
+    await formulaInput.selectText();
+    await page.keyboard.type("local-draft");
+    await expect(formulaInput).toHaveValue("local-draft");
+
+    await mirrorFormulaInput.focus();
+    await mirrorFormulaInput.selectText();
+    await mirrorPage.keyboard.type("remote");
+    await mirrorFormulaInput.press("Enter");
+    await expect(mirrorFormulaInput).toHaveValue("remote");
+
+    await expect(page.getByTestId("editor-conflict-banner")).toContainText(
+      "Remote update detected in Sheet1!A1 while you were editing.",
+    );
+    await expect(formulaInput).toHaveValue("local-draft");
+
+    await formulaInput.press("Enter");
+    await expect(page.getByTestId("editor-conflict-apply-mine")).toBeVisible();
+
+    await page.getByTestId("editor-conflict-apply-mine").click();
+
+    await expect(page.getByTestId("editor-conflict-banner")).toHaveCount(0);
+    await expect(formulaInput).toHaveValue("local-draft");
+    await expect(mirrorFormulaInput).toHaveValue("local-draft");
+  } finally {
+    await mirrorPage.close().catch(() => undefined);
+  }
+});
+
 test("web app restores persisted workbook state after a full reload", async ({ page }) => {
   const documentId = `playwright-zero-reload-persist-${Date.now()}`;
   const formulaInput = page.getByTestId("formula-input");

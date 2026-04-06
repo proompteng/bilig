@@ -54,6 +54,7 @@ function WorkerWorkbookAppInner({
           degraded.
         </div>
       ) : null}
+      {app.editorConflictBanner}
       <div className="relative flex min-h-0 flex-1">
         <div className="min-h-0 min-w-0 flex-1">
           {app.workbookReady && app.workerHandle ? (
