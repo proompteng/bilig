@@ -35,6 +35,10 @@
     "./generate-workbook": {
       "types": "./dist/generate-workbook.d.ts",
       "import": "./dist/generate-workbook.js"
+    },
+    "./workbook-corpus": {
+      "types": "./dist/workbook-corpus.d.ts",
+      "import": "./dist/workbook-corpus.js"
     }
   },
   "publishConfig": {

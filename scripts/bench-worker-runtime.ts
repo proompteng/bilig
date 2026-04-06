@@ -1,6 +1,12 @@
 import { performance } from "node:perf_hooks";
 import { SpreadsheetEngine } from "../packages/core/src/engine.js";
 import { formatAddress } from "../packages/formula/src/addressing.js";
+import {
+  buildWorkbookBenchmarkCorpus,
+  isWorkbookBenchmarkCorpusId,
+  type WorkbookBenchmarkCorpusFamily,
+  type WorkbookBenchmarkCorpusId,
+} from "../packages/benchmarks/src/workbook-corpus.js";
 import { createMemoryWorkbookLocalStoreFactory } from "../packages/storage-browser/src/index.js";
 import { decodeViewportPatch } from "../packages/worker-transport/src/index.js";
 import { buildWorkbookSnapshot } from "../packages/benchmarks/src/generate-workbook.js";
@@ -17,6 +23,8 @@ import { WorkbookWorkerRuntime } from "../apps/web/src/worker-runtime.js";
 interface WorkerWarmStartBenchmarkResult {
   scenario: "worker-warm-start";
   materializedCells: number;
+  corpusCaseId: WorkbookBenchmarkCorpusId | null;
+  corpusFamily: WorkbookBenchmarkCorpusFamily | null;
   elapsedMs: number;
   viewportCellCount: number;
   memory: MemoryMeasurement;
@@ -38,6 +46,21 @@ interface WorkerReconnectCatchUpBenchmarkResult {
   ackMs: number;
   catchUpMs: number;
   finalPendingMutationCount: number;
+}
+
+interface PersistedWorkerSeed {
+  readonly documentId: string;
+  readonly localStoreFactory: ReturnType<typeof createMemoryWorkbookLocalStoreFactory>;
+  readonly materializedCells: number;
+  readonly corpusCaseId: WorkbookBenchmarkCorpusId | null;
+  readonly corpusFamily: WorkbookBenchmarkCorpusFamily | null;
+  readonly viewport: {
+    readonly sheetName: string;
+    readonly rowStart: number;
+    readonly rowEnd: number;
+    readonly colStart: number;
+    readonly colEnd: number;
+  };
 }
 
 async function runSequentially<T>(
@@ -80,7 +103,17 @@ function hasNumericCellValue(
   );
 }
 
-async function seedWorkerLocalStore(documentId: string, materializedCells: number) {
+async function seedWorkerLocalStore(
+  documentId: string,
+  materializedCells: number,
+): Promise<PersistedWorkerSeed> {
+  const viewport = {
+    sheetName: "Sheet1",
+    rowStart: 0,
+    rowEnd: 39,
+    colStart: 0,
+    colEnd: 1,
+  } as const;
   const localStoreFactory = createMemoryWorkbookLocalStoreFactory();
   const seedEngine = new SpreadsheetEngine({ workbookName: documentId, replicaId: "seed" });
   await seedEngine.ready();
@@ -102,37 +135,79 @@ async function seedWorkerLocalStore(documentId: string, materializedCells: numbe
   });
   store.close();
 
-  return localStoreFactory;
+  return {
+    documentId,
+    localStoreFactory,
+    materializedCells,
+    corpusCaseId: null,
+    corpusFamily: null,
+    viewport,
+  };
+}
+
+async function seedWorkerLocalStoreFromCorpus(
+  documentId: string,
+  corpusId: WorkbookBenchmarkCorpusId,
+): Promise<PersistedWorkerSeed> {
+  const corpus = buildWorkbookBenchmarkCorpus(corpusId);
+  const localStoreFactory = createMemoryWorkbookLocalStoreFactory();
+  const seedEngine = new SpreadsheetEngine({ workbookName: documentId, replicaId: "seed" });
+  await seedEngine.ready();
+  seedEngine.importSnapshot(corpus.snapshot);
+
+  const store = await localStoreFactory.open(documentId);
+  await store.persistProjectionState({
+    state: {
+      snapshot: seedEngine.exportSnapshot(),
+      replica: seedEngine.exportReplicaSnapshot(),
+      authoritativeRevision: 0,
+      appliedPendingLocalSeq: 0,
+    },
+    authoritativeBase: buildWorkbookLocalAuthoritativeBase(seedEngine),
+    projectionOverlay: buildWorkbookLocalProjectionOverlay({
+      authoritativeEngine: seedEngine,
+      projectionEngine: seedEngine,
+    }),
+  });
+  store.close();
+
+  return {
+    documentId,
+    localStoreFactory,
+    materializedCells: corpus.materializedCellCount,
+    corpusCaseId: corpus.id,
+    corpusFamily: corpus.family,
+    viewport: corpus.primaryViewport,
+  };
 }
 
 export async function runWorkerWarmStartBenchmark(
-  materializedCells = 100_000,
+  input: number | WorkbookBenchmarkCorpusId = 100_000,
 ): Promise<WorkerWarmStartBenchmarkResult> {
-  const documentId = `worker-warm-start-${materializedCells}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const localStoreFactory = await seedWorkerLocalStore(documentId, materializedCells);
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+  const seed =
+    typeof input === "string"
+      ? await seedWorkerLocalStoreFromCorpus(
+          `worker-warm-start-${input}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          input,
+        )
+      : await seedWorkerLocalStore(
+          `worker-warm-start-${String(input)}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          input,
+        );
+  const runtime = new WorkbookWorkerRuntime({ localStoreFactory: seed.localStoreFactory });
 
   const memoryBefore = sampleMemory();
   const started = performance.now();
   await runtime.bootstrap({
-    documentId,
+    documentId: seed.documentId,
     replicaId: "browser:test",
     persistState: true,
   });
 
   let viewportCellCount = 0;
-  runtime.subscribeViewportPatches(
-    {
-      sheetName: "Sheet1",
-      rowStart: 0,
-      rowEnd: 39,
-      colStart: 0,
-      colEnd: 1,
-    },
-    (bytes) => {
-      viewportCellCount = decodeViewportPatch(bytes).cells.length;
-    },
-  );
+  runtime.subscribeViewportPatches(seed.viewport, (bytes) => {
+    viewportCellCount = decodeViewportPatch(bytes).cells.length;
+  });
 
   const elapsedMs = performance.now() - started;
   const memoryAfter = sampleMemory();
@@ -140,7 +215,9 @@ export async function runWorkerWarmStartBenchmark(
 
   return {
     scenario: "worker-warm-start",
-    materializedCells,
+    materializedCells: seed.materializedCells,
+    corpusCaseId: seed.corpusCaseId,
+    corpusFamily: seed.corpusFamily,
     elapsedMs,
     viewportCellCount,
     memory: measureMemory(memoryBefore, memoryAfter),
@@ -151,8 +228,8 @@ export async function runWorkerVisibleEditBenchmark(
   materializedCells = 10_000,
 ): Promise<WorkerVisibleEditBenchmarkResult> {
   const documentId = `worker-visible-edit-${materializedCells}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const localStoreFactory = await seedWorkerLocalStore(documentId, materializedCells);
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+  const seed = await seedWorkerLocalStore(documentId, materializedCells);
+  const runtime = new WorkbookWorkerRuntime({ localStoreFactory: seed.localStoreFactory });
 
   await runtime.bootstrap({
     documentId,
@@ -214,8 +291,8 @@ export async function runWorkerReconnectCatchUpBenchmark(
   pendingMutationCount = 100,
 ): Promise<WorkerReconnectCatchUpBenchmarkResult> {
   const documentId = `worker-reconnect-${materializedCells}-${pendingMutationCount}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const localStoreFactory = await seedWorkerLocalStore(documentId, materializedCells);
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+  const seed = await seedWorkerLocalStore(documentId, materializedCells);
+  const runtime = new WorkbookWorkerRuntime({ localStoreFactory: seed.localStoreFactory });
 
   await runtime.bootstrap({
     documentId,
@@ -322,4 +399,23 @@ export async function runWorkerReconnectCatchUpBenchmark(
     catchUpMs,
     finalPendingMutationCount,
   };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const benchmark = process.argv[2] ?? "warm-start";
+
+  if (benchmark !== "warm-start") {
+    throw new Error(`Unknown worker benchmark: ${benchmark}`);
+  }
+
+  const rawInput = process.argv[3] ?? "100000";
+  const input: number | WorkbookBenchmarkCorpusId = /^\d+$/.test(rawInput)
+    ? Number.parseInt(rawInput, 10)
+    : isWorkbookBenchmarkCorpusId(rawInput)
+      ? rawInput
+      : (() => {
+          throw new Error(`Unknown workbook benchmark corpus: ${rawInput}`);
+        })();
+
+  console.log(JSON.stringify(await runWorkerWarmStartBenchmark(input), null, 2));
 }

@@ -744,22 +744,11 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - same-cell stale-submit conflicts now keep the local draft alive, surface a remote-change badge during editing, and require an explicit compare choice before a non-trivial stale draft can overwrite the authoritative cell
 - authoritative `workbook_change` rows now persist replayable undo bundles, support one-click authoritative revert from the mounted changes pane, and mark reverted revisions in shared history
 
-**Still not completed**
+**Roadmap status now**
 
-- Phase 3 preview/apply bundle execution and Phase 4 import/comprehension layers
-
-**What this roadmap now needs to do**
-
-- focus only on the still-missing production work
-- treat worker cutover and hot-path file splits as done
-- stop referring to deleted bridge behavior as active architecture
-
-### Prioritized initiative table
-
-| Priority | Initiative                                                | Why now                                          |
-| -------- | --------------------------------------------------------- | ------------------------------------------------ |
-| 1        | Build plan/preview/apply AI on semantic bundles           | Biggest differentiated UX after local-first core |
-| 2        | Build giant-data staging and workbook comprehension tools | The remaining moat after collaboration and AI    |
+- the roadmap’s product/platform feature work is now implemented end to end
+- the remaining gap is Phase 4 performance hardening: the dense `250k` warm-start contract is now enforced at `<800ms`, while the original `<700ms` stretch target is still not closed
+- this document should now be treated as implemented architecture, not a future-state gap list
 
 ### Dependency list
 
@@ -864,7 +853,7 @@ Make `bilig` genuinely local-first.
 Make shared workbook work smoother than Sheets for serious day-to-day use.
 
 **Status**
-Implemented.
+Partially implemented.
 
 **User-visible outcomes**
 
@@ -966,7 +955,7 @@ Implemented.
 Make giant-data workbook work obviously better than incumbents.
 
 **Status**
-Partially implemented.
+Implemented.
 
 **Already implemented**
 
@@ -981,6 +970,8 @@ Partially implemented.
 - the monolith agent runtime now exposes multi-hop dependency tracing for the active selection or any addressed cell
 - the monolith agent runtime now exposes scratchpad creation as a first-class app-server tool, so the assistant can branch a workbook into a what-if document without leaving the spreadsheet
 - the right rail now renders those comprehension results as structured insight cards instead of raw JSON blobs
+- `packages/benchmarks` now ships deterministic named giant-workbook corpus cases for `100k` and `250k` dense and multisheet workbooks, with stable viewport metadata for CI and perf harnesses
+- `bench:contracts` now enforces dense-corpus `100k` and `250k` load and worker warm-start budgets on the real SQLite-backed local-runtime path, with the current `250k` warm-start gate set at `<800ms`
 
 **User-visible outcomes**
 
@@ -988,6 +979,7 @@ Partially implemented.
 - workbook comprehension tools
 - scenario/scratchpad flows for heavy analysis
 - high-confidence large-model cleanup and restructure
+- giant-workbook reopen feels bounded by enforced local-runtime budgets instead of ad hoc perf checks
 
 **Engineering outcomes**
 
@@ -995,6 +987,7 @@ Partially implemented.
 - workbook semantic index
 - scenario/checkpoint tools
 - larger-scale runtime budgets
+- named giant-workbook benchmark corpus with CI coverage
 
 **Key epics**
 

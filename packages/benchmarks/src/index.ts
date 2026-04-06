@@ -12,12 +12,14 @@ export * from "./benchmark-topology-edit.js";
 export * from "./generate-workbook.js";
 export * from "./metrics.js";
 export * from "./stats.js";
+export * from "./workbook-corpus.js";
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const results = [];
   results.push(await runLoadBenchmark(10_000));
   results.push(await runLoadBenchmark(50_000));
   results.push(await runLoadBenchmark(100_000));
+  results.push(await runLoadBenchmark("dense-mixed-250k"));
   results.push(await runEditBenchmark(100));
   results.push(await runEditBenchmark(1_000));
   results.push(await runEditBenchmark(10_000));

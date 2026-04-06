@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
+import { spawn } from "node:child_process";
 import { runEditBenchmark } from "../packages/benchmarks/src/benchmark-edit.ts";
 import { runLoadBenchmark } from "../packages/benchmarks/src/benchmark-load.ts";
+import { collectGarbage } from "../packages/benchmarks/src/metrics.ts";
 import { runRangeAggregateBenchmark } from "../packages/benchmarks/src/benchmark-range-heavy.ts";
 import { runTopologyEditBenchmark } from "../packages/benchmarks/src/benchmark-topology-edit.ts";
 import { runRenderCommitBenchmark } from "../packages/benchmarks/src/benchmark-renderer.ts";
@@ -12,6 +14,7 @@ import {
 
 const baseBudgets = {
   load100kP95Ms: 1500,
+  load250kP95Ms: 1000,
   load100kWorkingSetDeltaBytes: 250 * 1024 * 1024,
   edit10kElapsedP95Ms: 120,
   edit10kRecalcMedianMs: 50,
@@ -22,6 +25,7 @@ const baseBudgets = {
   topologyEdit10kRecalcP95Ms: 80,
   renderCommit10kP95Ms: 50,
   workerWarmStart100kP95Ms: 500,
+  workerWarmStart250kP95Ms: 800,
   workerVisibleEdit10kP95Ms: 16,
   workerReconnectCatchUp100PendingP95Ms: 2000,
 };
@@ -89,7 +93,12 @@ function quantile(sortedValues, percentile) {
 }
 
 async function sampleBenchmark(runner, iterations, { warmupIterations = 0 } = {}) {
-  const run = () => runner();
+  const run = async () => {
+    collectGarbage();
+    const result = await runner();
+    collectGarbage();
+    return result;
+  };
 
   await Array.from({ length: warmupIterations }).reduce((previous) => {
     return previous.then(() => run());
@@ -106,7 +115,57 @@ async function sampleBenchmark(runner, iterations, { warmupIterations = 0 } = {}
   return runs;
 }
 
-const loadRuns = await sampleBenchmark(() => runLoadBenchmark(100_000), 5, {
+async function runIsolatedBenchmark<T>(scriptPath: string, args: readonly string[]): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const child = spawn(process.execPath, [scriptPath, ...args], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr || stdout || `Benchmark process exited with code ${String(code)}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error) {
+        reject(
+          new Error(
+            `Failed to parse benchmark output from ${scriptPath}: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+      }
+    });
+  });
+}
+
+function runIsolatedLoadBenchmark(
+  input: Parameters<typeof runLoadBenchmark>[0],
+): Promise<Awaited<ReturnType<typeof runLoadBenchmark>>> {
+  return runIsolatedBenchmark("packages/benchmarks/src/benchmark-load.ts", [String(input)]);
+}
+
+function runIsolatedWorkerWarmStartBenchmark(
+  input: Parameters<typeof runWorkerWarmStartBenchmark>[0],
+): Promise<Awaited<ReturnType<typeof runWorkerWarmStartBenchmark>>> {
+  return runIsolatedBenchmark("scripts/bench-worker-runtime.ts", ["warm-start", String(input)]);
+}
+
+const loadRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense-mixed-100k"), 5, {
+  warmupIterations: 1,
+});
+const load250kRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense-mixed-250k"), 3, {
   warmupIterations: 1,
 });
 const editRuns = await sampleBenchmark(() => runEditBenchmark(10_000), 5, {
@@ -121,9 +180,20 @@ const topologyRuns = await sampleBenchmark(() => runTopologyEditBenchmark(10_000
 const renderRuns = await sampleBenchmark(() => runRenderCommitBenchmark(10_000), 5, {
   warmupIterations: 1,
 });
-const workerWarmStartRuns = await sampleBenchmark(() => runWorkerWarmStartBenchmark(100_000), 3, {
-  warmupIterations: 1,
-});
+const workerWarmStartRuns = await sampleBenchmark(
+  () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-100k"),
+  3,
+  {
+    warmupIterations: 1,
+  },
+);
+const workerWarmStart250kRuns = await sampleBenchmark(
+  () => runIsolatedWorkerWarmStartBenchmark("dense-mixed-250k"),
+  3,
+  {
+    warmupIterations: 1,
+  },
+);
 const workerVisibleEditRuns = await sampleBenchmark(
   () => runWorkerVisibleEditBenchmark(10_000),
   5,
@@ -140,6 +210,7 @@ const workerReconnectCatchUpRuns = await sampleBenchmark(
 );
 
 const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
+const load250kElapsed = summarizeNumbers(load250kRuns.map((run) => run.elapsedMs));
 const loadWorkingSetDelta = summarizeNumbers(
   loadRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
 );
@@ -160,8 +231,16 @@ const topologyRssAfter = summarizeNumbers(topologyRuns.map((run) => run.memory.a
 const renderElapsed = summarizeNumbers(renderRuns.map((run) => run.elapsedMs));
 const renderRssAfter = summarizeNumbers(renderRuns.map((run) => run.memory.after.rssBytes));
 const workerWarmStartElapsed = summarizeNumbers(workerWarmStartRuns.map((run) => run.elapsedMs));
+const workerWarmStart250kElapsed = summarizeNumbers(
+  workerWarmStart250kRuns.map((run) => run.elapsedMs),
+);
 const workerWarmStartWorkingSetDelta = summarizeNumbers(
   workerWarmStartRuns.map((run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes),
+);
+const workerWarmStart250kWorkingSetDelta = summarizeNumbers(
+  workerWarmStart250kRuns.map(
+    (run) => run.memory.delta.heapUsedBytes + run.memory.delta.externalBytes,
+  ),
 );
 const workerVisibleEditElapsed = summarizeNumbers(
   workerVisibleEditRuns.map((run) => run.visiblePatchMs),
@@ -185,6 +264,7 @@ const workerReconnectAckElapsed = summarizeNumbers(
 assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
 
 assertBudget("100k snapshot load p95", loadElapsed.p95, budgets.load100kP95Ms);
+assertBudget("250k snapshot load p95", load250kElapsed.p95, budgets.load250kP95Ms);
 assertBudget(
   "100k snapshot load working-set delta",
   loadWorkingSetDelta.max,
@@ -213,6 +293,11 @@ assertBudget(
   budgets.workerWarmStart100kP95Ms,
 );
 assertBudget(
+  "250k worker warm-start p95",
+  workerWarmStart250kElapsed.p95,
+  budgets.workerWarmStart250kP95Ms,
+);
+assertBudget(
   "10k worker local visible edit p95",
   workerVisibleEditElapsed.p95,
   budgets.workerVisibleEdit10kP95Ms,
@@ -231,22 +316,32 @@ console.log(
       toleranceMultiplier,
       sampleCounts: {
         load100k: loadRuns.length,
+        load250k: load250kRuns.length,
         edit10k: editRuns.length,
         rangeAggregates10k: rangeRuns.length,
         topologyEdit10k: topologyRuns.length,
         renderCommit10k: renderRuns.length,
         workerWarmStart100k: workerWarmStartRuns.length,
+        workerWarmStart250k: workerWarmStart250kRuns.length,
         workerVisibleEdit10k: workerVisibleEditRuns.length,
         workerReconnectCatchUp100Pending: workerReconnectCatchUpRuns.length,
       },
       results: {
         load100k: {
           scenario: "load",
-          materializedCells: 100_000,
+          corpusCaseId: "dense-mixed-100k",
+          materializedCells: loadRuns[0]?.materializedCells ?? 100_000,
           elapsedMs: loadElapsed,
           workingSetDeltaBytes: loadWorkingSetDelta,
           heapUsedAfterBytes: loadHeapUsedAfter,
           runs: loadRuns,
+        },
+        load250k: {
+          scenario: "load",
+          corpusCaseId: "dense-mixed-250k",
+          materializedCells: load250kRuns[0]?.materializedCells ?? 250_000,
+          elapsedMs: load250kElapsed,
+          runs: load250kRuns,
         },
         edit10k: {
           scenario: "single-edit",
@@ -282,10 +377,19 @@ console.log(
         },
         workerWarmStart100k: {
           scenario: "worker-warm-start",
-          materializedCells: 100_000,
+          corpusCaseId: "dense-mixed-100k",
+          materializedCells: workerWarmStartRuns[0]?.materializedCells ?? 100_000,
           elapsedMs: workerWarmStartElapsed,
           workingSetDeltaBytes: workerWarmStartWorkingSetDelta,
           runs: workerWarmStartRuns,
+        },
+        workerWarmStart250k: {
+          scenario: "worker-warm-start",
+          corpusCaseId: "dense-mixed-250k",
+          materializedCells: workerWarmStart250kRuns[0]?.materializedCells ?? 250_000,
+          elapsedMs: workerWarmStart250kElapsed,
+          workingSetDeltaBytes: workerWarmStart250kWorkingSetDelta,
+          runs: workerWarmStart250kRuns,
         },
         workerVisibleEdit10k: {
           scenario: "worker-visible-edit",
