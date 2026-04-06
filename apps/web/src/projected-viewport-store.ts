@@ -87,6 +87,16 @@ function cellStyleSignature(style: CellStyleRecord): string {
   ].join("|");
 }
 
+function isCellInsideViewport(snapshot: CellSnapshot, viewport: Viewport): boolean {
+  const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
+  return (
+    parsed.row >= viewport.rowStart &&
+    parsed.row <= viewport.rowEnd &&
+    parsed.col >= viewport.colStart &&
+    parsed.col <= viewport.colEnd
+  );
+}
+
 interface CellSubscription {
   sheetName: string;
   addresses: Set<string>;
@@ -302,6 +312,31 @@ export class ProjectedViewportStore implements GridEngineLike {
       }
       this.cellStyles.set(style.id, style);
     });
+    if (patch.full) {
+      const incomingKeys = new Set(
+        patch.cells.map((cell) => `${patch.viewport.sheetName}!${cell.snapshot.address}`),
+      );
+      const sheetCellKeys = this.cellKeysBySheet.get(patch.viewport.sheetName);
+      if (sheetCellKeys) {
+        for (const key of sheetCellKeys) {
+          if (incomingKeys.has(key)) {
+            continue;
+          }
+          const snapshot = this.cellSnapshots.get(key);
+          if (!snapshot || !isCellInsideViewport(snapshot, patch.viewport)) {
+            continue;
+          }
+          this.cellSnapshots.delete(key);
+          sheetCellKeys.delete(key);
+          changedKeys.add(key);
+          if (!damagedCellKeys.has(key)) {
+            const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
+            damage.push({ cell: [parsed.col, parsed.row] });
+            damagedCellKeys.add(key);
+          }
+        }
+      }
+    }
     for (const cell of patch.cells) {
       const key = `${patch.viewport.sheetName}!${cell.snapshot.address}`;
       const current = this.cellSnapshots.get(key);

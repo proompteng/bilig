@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import type {
+  WorkbookLocalAuthoritativeBase,
   WorkbookLocalMutationRecord,
   WorkbookLocalStoreFactory,
   WorkbookStoredState,
@@ -21,9 +22,13 @@ function createMemoryLocalStoreFactory(seed?: {
   state?: WorkbookStoredState | null;
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
   onSaveState?: (state: WorkbookStoredState) => Promise<void> | void;
+  authoritativeBase?: WorkbookLocalAuthoritativeBase | null;
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
   let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
+  let currentAuthoritativeBase = seed?.authoritativeBase
+    ? structuredClone(seed.authoritativeBase)
+    : null;
   return {
     async open() {
       return {
@@ -49,6 +54,71 @@ function createMemoryLocalStoreFactory(seed?: {
           currentPendingMutations = currentPendingMutations.filter(
             (mutation) => mutation.id !== id,
           );
+        },
+        replaceAuthoritativeBase(base) {
+          currentAuthoritativeBase = structuredClone(base);
+        },
+        readViewportBase(sheetName, viewport) {
+          const authoritativeBase = currentAuthoritativeBase;
+          if (!authoritativeBase) {
+            return null;
+          }
+          const styles = authoritativeBase.styles.filter((style) => {
+            return (
+              style.id === "style-0" ||
+              authoritativeBase.cellRenders.some((cell) => {
+                return (
+                  cell.sheetName === sheetName &&
+                  cell.styleId === style.id &&
+                  cell.rowNum >= viewport.rowStart &&
+                  cell.rowNum <= viewport.rowEnd &&
+                  cell.colNum >= viewport.colStart &&
+                  cell.colNum <= viewport.colEnd
+                );
+              })
+            );
+          });
+          return {
+            sheetName,
+            cells: authoritativeBase.cellRenders
+              .filter((cell) => {
+                return (
+                  cell.sheetName === sheetName &&
+                  cell.rowNum >= viewport.rowStart &&
+                  cell.rowNum <= viewport.rowEnd &&
+                  cell.colNum >= viewport.colStart &&
+                  cell.colNum <= viewport.colEnd
+                );
+              })
+              .map((cell) => {
+                const input = authoritativeBase.cellInputs.find(
+                  (entry) => entry.sheetName === cell.sheetName && entry.address === cell.address,
+                );
+                return {
+                  row: cell.rowNum,
+                  col: cell.colNum,
+                  snapshot: {
+                    sheetName: cell.sheetName,
+                    address: cell.address,
+                    value: structuredClone(cell.value),
+                    flags: cell.flags,
+                    version: cell.version,
+                    styleId: cell.styleId,
+                    numberFormatId: cell.numberFormatId,
+                    input: input?.input,
+                    formula: input?.formula,
+                    format: input?.format,
+                  },
+                };
+              }),
+            rowAxisEntries: authoritativeBase.rowAxisEntries
+              .filter((entry) => entry.sheetName === sheetName)
+              .map((entry) => structuredClone(entry.entry)),
+            columnAxisEntries: authoritativeBase.columnAxisEntries
+              .filter((entry) => entry.sheetName === sheetName)
+              .map((entry) => structuredClone(entry.entry)),
+            styles: structuredClone(styles),
+          };
         },
         close() {},
       };
@@ -192,6 +262,82 @@ describe("WorkbookWorkerRuntime", () => {
       font: { family: "Fira Sans" },
     });
     expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id);
+  });
+
+  it("builds the initial full viewport patch from the local authoritative base when it matches the projection", async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: "base-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    let viewportReadCount = 0;
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: {
+        async open() {
+          return {
+            async loadState() {
+              return {
+                snapshot: seedEngine.exportSnapshot(),
+                replica: seedEngine.exportReplicaSnapshot(),
+                authoritativeRevision: 0,
+                appliedPendingLocalSeq: 0,
+              };
+            },
+            async saveState() {},
+            async listPendingMutations() {
+              return [];
+            },
+            async appendPendingMutation() {},
+            async updatePendingMutation() {},
+            async removePendingMutation() {},
+            replaceAuthoritativeBase() {},
+            readViewportBase() {
+              viewportReadCount += 1;
+              return {
+                sheetName: "Sheet1",
+                cells: [
+                  {
+                    row: 0,
+                    col: 0,
+                    snapshot: {
+                      sheetName: "Sheet1",
+                      address: "A1",
+                      value: { tag: ValueTag.Number, value: 42 },
+                      flags: 0,
+                      version: 1,
+                    },
+                  },
+                ],
+                rowAxisEntries: [],
+                columnAxisEntries: [],
+                styles: [{ id: "style-0" }],
+              };
+            },
+            close() {},
+          };
+        },
+      },
+    });
+
+    await runtime.bootstrap({
+      documentId: "base-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    expect(viewportReadCount).toBe(1);
+    expect(received[0]?.cells[0]?.displayText).toBe("42");
   });
 
   it("patches only affected axis entries for column metadata edits", async () => {

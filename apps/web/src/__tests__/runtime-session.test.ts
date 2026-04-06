@@ -48,6 +48,10 @@ function createMemoryLocalStoreFactory(seed?: {
             (mutation) => mutation.id !== id,
           );
         },
+        replaceAuthoritativeBase() {},
+        readViewportBase() {
+          return null;
+        },
         close() {},
       };
     },

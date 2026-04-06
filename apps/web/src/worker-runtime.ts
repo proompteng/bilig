@@ -31,7 +31,6 @@ import {
 import {
   encodeViewportPatch,
   type ViewportPatch,
-  type ViewportPatchedCell,
   type ViewportPatchSubscription,
 } from "@bilig/worker-transport";
 import {
@@ -42,25 +41,23 @@ import {
 } from "./workbook-sync.js";
 import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
 import {
-  buildAxisPatches,
   collectSheetViewportImpacts,
-  collectViewportCells,
-  indexAxisEntries,
   normalizeViewport,
-  styleSignature,
   viewportPatchMayBeImpacted,
   type SheetViewportImpact,
   type ViewportSubscriptionState,
   type WorkerEngine,
 } from "./worker-runtime-support.js";
-
-const PRODUCT_COLUMN_WIDTH = 104;
-const PRODUCT_ROW_HEIGHT = 22;
-const MIN_COLUMN_WIDTH = 44;
-const MAX_COLUMN_WIDTH = 480;
-const AUTOFIT_PADDING = 28;
-const AUTOFIT_CHAR_WIDTH = 8;
-const DEFAULT_STYLE_ID = "style-0";
+import {
+  AUTOFIT_CHAR_WIDTH,
+  AUTOFIT_PADDING,
+  DEFAULT_STYLE_ID,
+  MAX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  buildViewportPatchFromEngine,
+  buildViewportPatchFromLocalBase,
+} from "./worker-runtime-viewport.js";
+import { buildWorkbookLocalAuthoritativeBase } from "./worker-local-base.js";
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
@@ -132,6 +129,7 @@ export class WorkbookWorkerRuntime {
   private nextPendingMutationSeq = 1;
   private appliedPendingLocalSeq = 0;
   private authoritativeRevision = 0;
+  private projectionMatchesLocalBase = false;
 
   constructor(
     options: {
@@ -154,6 +152,7 @@ export class WorkbookWorkerRuntime {
     this.pendingMutations = [];
     this.nextPendingMutationSeq = 1;
     this.appliedPendingLocalSeq = 0;
+    this.projectionMatchesLocalBase = false;
     let restoredFromPersistence = false;
     let requiresAuthoritativeHydrate = false;
     let restoredState: WorkbookStoredState | null = null;
@@ -218,6 +217,7 @@ export class WorkbookWorkerRuntime {
           })
         : await this.rebuildProjectionEngine();
     this.installEngine(engine);
+    this.projectionMatchesLocalBase = pendingMutationsToReplay.length === 0;
     if (!requiresAuthoritativeHydrate) {
       await this.persistStateNow();
     }
@@ -256,6 +256,7 @@ export class WorkbookWorkerRuntime {
     this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
     const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
+    this.projectionMatchesLocalBase = this.pendingMutations.length === 0;
     this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
@@ -275,6 +276,7 @@ export class WorkbookWorkerRuntime {
     this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
     const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
+    this.projectionMatchesLocalBase = this.pendingMutations.length === 0;
     this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
@@ -312,6 +314,7 @@ export class WorkbookWorkerRuntime {
     this.invalidateAuthoritativeStateCache();
     const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
+    this.projectionMatchesLocalBase = this.pendingMutations.length === 0;
     this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
@@ -354,6 +357,7 @@ export class WorkbookWorkerRuntime {
     };
     this.pendingMutations.push(nextMutation);
     this.appliedPendingLocalSeq = localSeq;
+    this.projectionMatchesLocalBase = false;
     if (this.bootstrapOptions?.persistState && this.localStore) {
       await this.localStore.appendPendingMutation({
         ...nextMutation,
@@ -393,6 +397,7 @@ export class WorkbookWorkerRuntime {
       return;
     }
     this.pendingMutations = nextMutations;
+    this.projectionMatchesLocalBase = nextMutations.length === 0;
     if (this.bootstrapOptions?.persistState && this.localStore) {
       await this.localStore.removePendingMutation(id);
     }
@@ -407,57 +412,70 @@ export class WorkbookWorkerRuntime {
   }
 
   setCellValue(sheetName: string, address: string, value: CellSnapshot["input"]): CellSnapshot {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().setCellValue(sheetName, address, value ?? null);
     return this.getCell(sheetName, address);
   }
 
   setCellFormula(sheetName: string, address: string, formula: string): CellSnapshot {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().setCellFormula(sheetName, address, formula);
     return this.getCell(sheetName, address);
   }
 
   setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().setRangeStyle(range, patch);
   }
 
   clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().clearRangeStyle(range, fields);
   }
 
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().setRangeNumberFormat(range, format);
   }
 
   clearRangeNumberFormat(range: CellRangeRef): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().clearRangeNumberFormat(range);
   }
 
   clearRange(range: CellRangeRef): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().clearRange(range);
   }
 
   clearCell(sheetName: string, address: string): CellSnapshot {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().clearCell(sheetName, address);
     return this.getCell(sheetName, address);
   }
 
   renderCommit(ops: CommitOp[]): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().renderCommit(ops);
   }
 
   fillRange(source: CellRangeRef, target: CellRangeRef): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().fillRange(source, target);
   }
 
   copyRange(source: CellRangeRef, target: CellRangeRef): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().copyRange(source, target);
   }
 
   moveRange(source: CellRangeRef, target: CellRangeRef): void {
+    this.markProjectionDivergedFromLocalBase();
     this.requireEngine().moveRange(source, target);
   }
 
   updateColumnWidth(sheetName: string, columnIndex: number, width: number): number {
+    this.markProjectionDivergedFromLocalBase();
     const clamped = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
     this.requireEngine().updateColumnMetadata(sheetName, columnIndex, 1, clamped, null);
     return clamped;
@@ -528,6 +546,7 @@ export class WorkbookWorkerRuntime {
     this.nextPendingMutationSeq = 1;
     this.appliedPendingLocalSeq = 0;
     this.authoritativeRevision = 0;
+    this.projectionMatchesLocalBase = false;
     this.localStore?.close();
     this.localStore = null;
     this.authoritativeEngine = null;
@@ -557,6 +576,14 @@ export class WorkbookWorkerRuntime {
 
   private canPersistState(): boolean {
     return Boolean(this.bootstrapOptions?.persistState && this.localStore);
+  }
+
+  private canReadLocalBaseForViewport(): boolean {
+    return Boolean(this.localStore && this.projectionMatchesLocalBase);
+  }
+
+  private markProjectionDivergedFromLocalBase(): void {
+    this.projectionMatchesLocalBase = false;
   }
 
   private listSheetNames(): string[] {
@@ -649,6 +676,9 @@ export class WorkbookWorkerRuntime {
     if (!localStore) {
       return;
     }
+    localStore.replaceAuthoritativeBase(
+      buildWorkbookLocalAuthoritativeBase(this.requireAuthoritativeEngine()),
+    );
     const savePromise = localStore.saveState(persisted);
     this.persistInFlight = savePromise;
     try {
@@ -727,165 +757,31 @@ export class WorkbookWorkerRuntime {
     metrics: RecalcMetrics = this.requireEngine().getLastMetrics(),
     sheetImpact: SheetViewportImpact | null = null,
   ): ViewportPatch {
-    const engine = this.requireEngine();
-    const viewport = state.subscription;
-    const hasSheet = engine.workbook.getSheet(viewport.sheetName) !== undefined;
-    const styles: CellStyleRecord[] = [];
-    const cells: ViewportPatchedCell[] = [];
-    const full = event === null || event.invalidation === "full";
-    const invalidatedRanges = sheetImpact?.invalidatedRanges ?? [];
-    const invalidatedRows = sheetImpact?.invalidatedRows ?? [];
-    const invalidatedColumns = sheetImpact?.invalidatedColumns ?? [];
-
-    if (full) {
-      state.lastCellSignatures.clear();
-      state.lastStyleSignatures.clear();
-      for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
-        for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
-          this.appendPatchedCell(
-            state,
-            styles,
-            cells,
-            viewport.sheetName,
-            row,
-            col,
-            hasSheet,
-            true,
-          );
-        }
-      }
-    } else {
-      const targetCells = collectViewportCells(
-        viewport,
-        sheetImpact?.changedCells ?? null,
-        invalidatedRanges,
+    if ((event === null || event.invalidation === "full") && this.canReadLocalBaseForViewport()) {
+      const localBase = this.localStore?.readViewportBase(
+        state.subscription.sheetName,
+        state.subscription,
       );
-      for (const cell of targetCells) {
-        this.appendPatchedCell(
+      if (localBase) {
+        return buildViewportPatchFromLocalBase({
           state,
-          styles,
-          cells,
-          viewport.sheetName,
-          cell.row,
-          cell.col,
-          hasSheet,
-          false,
-          cell.address,
-        );
+          metrics,
+          base: localBase,
+          getFormatId: (format) => this.getFormatId(format),
+        });
       }
     }
 
-    const columnEntries = indexAxisEntries(engine.getColumnAxisEntries(viewport.sheetName));
-    const rowEntries = indexAxisEntries(engine.getRowAxisEntries(viewport.sheetName));
-    const { patches: columns, signatures: columnSignatures } = buildAxisPatches(
-      viewport.colStart,
-      viewport.colEnd,
-      columnEntries,
-      PRODUCT_COLUMN_WIDTH,
-      state.lastColumnSignatures,
-      full,
-      invalidatedColumns,
-    );
-    const { patches: rows, signatures: rowSignatures } = buildAxisPatches(
-      viewport.rowStart,
-      viewport.rowEnd,
-      rowEntries,
-      PRODUCT_ROW_HEIGHT,
-      state.lastRowSignatures,
-      full,
-      invalidatedRows,
-    );
-    state.lastColumnSignatures = columnSignatures;
-    state.lastRowSignatures = rowSignatures;
-
-    return {
-      version: state.nextVersion++,
-      full,
-      viewport,
-      metrics: { ...metrics },
-      styles,
-      cells,
-      columns,
-      rows,
-    };
-  }
-
-  private appendPatchedCell(
-    state: ViewportSubscriptionState,
-    styles: CellStyleRecord[],
-    cells: ViewportPatchedCell[],
-    sheetName: string,
-    row: number,
-    col: number,
-    hasSheet: boolean,
-    force: boolean,
-    address = formatAddress(row, col),
-  ): void {
-    const key = `${sheetName}!${address}`;
-    const snapshot = hasSheet
-      ? this.requireEngine().getCell(sheetName, address)
-      : this.emptyCellSnapshot(sheetName, address);
-    const formatId = this.getFormatId(snapshot.format);
-    const style = this.getStyleRecord(snapshot.styleId ?? DEFAULT_STYLE_ID);
-    const nextStyleSignature = styleSignature(style);
-    const previousStyleSignature = state.lastStyleSignatures.get(style.id);
-    if (
-      force ||
-      previousStyleSignature !== nextStyleSignature ||
-      !state.knownStyleIds.has(style.id)
-    ) {
-      state.knownStyleIds.add(style.id);
-      state.lastStyleSignatures.set(style.id, nextStyleSignature);
-      styles.push(style);
-    }
-    const editorText = this.toEditorText(snapshot);
-    const displayText = this.toDisplayText(snapshot);
-    const copyText = snapshot.formula ? editorText : displayText;
-    const signature = this.buildPatchedCellSignature(
-      snapshot,
-      displayText,
-      copyText,
-      editorText,
-      formatId,
-      style.id,
-    );
-    if (force || state.lastCellSignatures.get(key) !== signature) {
-      cells.push({
-        row,
-        col,
-        snapshot,
-        displayText,
-        copyText,
-        editorText,
-        formatId,
-        styleId: style.id,
-      });
-    }
-    state.lastCellSignatures.set(key, signature);
-  }
-
-  private buildPatchedCellSignature(
-    snapshot: CellSnapshot,
-    displayText: string,
-    copyText: string,
-    editorText: string,
-    formatId: number,
-    styleId: string,
-  ): string {
-    return [
-      snapshot.version,
-      snapshot.flags,
-      snapshot.formula ?? "",
-      snapshot.input ?? "",
-      snapshot.format ?? "",
-      snapshot.styleId ?? "",
-      formatId,
-      styleId,
-      this.snapshotValueSignature(snapshot),
-      displayText,
-      copyText,
-      editorText,
-    ].join("|");
+    return buildViewportPatchFromEngine({
+      state,
+      event,
+      metrics,
+      sheetImpact,
+      engine: this.requireEngine(),
+      emptyCellSnapshot: (sheetName, address) => this.emptyCellSnapshot(sheetName, address),
+      getStyleRecord: (styleId) => this.getStyleRecord(styleId),
+      getFormatId: (format) => this.getFormatId(format),
+    });
   }
 
   private getStyleRecord(styleId: string): CellStyleRecord {
@@ -909,36 +805,8 @@ export class WorkbookWorkerRuntime {
     return nextId;
   }
 
-  private toEditorText(snapshot: CellSnapshot): string {
-    if (snapshot.formula) {
-      return `=${snapshot.formula}`;
-    }
-    if (snapshot.input === null || snapshot.input === undefined) {
-      return this.toDisplayText(snapshot);
-    }
-    if (typeof snapshot.input === "boolean") {
-      return snapshot.input ? "TRUE" : "FALSE";
-    }
-    return String(snapshot.input);
-  }
-
   private toDisplayText(snapshot: CellSnapshot): string {
     return formatCellDisplayValue(snapshot.value, snapshot.format);
-  }
-
-  private snapshotValueSignature(snapshot: CellSnapshot): string {
-    switch (snapshot.value.tag) {
-      case ValueTag.Number:
-        return `n:${snapshot.value.value}`;
-      case ValueTag.Boolean:
-        return `b:${snapshot.value.value ? 1 : 0}`;
-      case ValueTag.String:
-        return `s:${snapshot.value.stringId}:${snapshot.value.value}`;
-      case ValueTag.Error:
-        return `e:${snapshot.value.code}`;
-      case ValueTag.Empty:
-        return "empty";
-    }
   }
 
   private emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {

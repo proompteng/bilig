@@ -6,6 +6,14 @@ export {
   type BrowserMetadataStore,
   type BrowserMetadataStoreOptions,
 } from "./browser-metadata-store.js";
+export type {
+  WorkbookLocalAuthoritativeBase,
+  WorkbookLocalBaseCellInputRecord,
+  WorkbookLocalBaseCellRenderRecord,
+  WorkbookLocalBaseSheetRecord,
+  WorkbookLocalViewportBase,
+  WorkbookLocalViewportCell,
+} from "./workbook-local-base.js";
 export {
   createOpfsWorkbookLocalStoreFactory,
   WorkbookLocalStoreLockedError,

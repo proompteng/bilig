@@ -4,6 +4,17 @@ import sqlite3InitModule, {
   type SqlValue,
   type Sqlite3Static,
 } from "@sqlite.org/sqlite-wasm";
+import {
+  ValueTag,
+  type CellSnapshot,
+  type CellStyleRecord,
+  type WorkbookAxisEntrySnapshot,
+} from "@bilig/protocol";
+import type {
+  WorkbookLocalAuthoritativeBase,
+  WorkbookLocalViewportBase,
+  WorkbookLocalViewportCell,
+} from "./workbook-local-base.js";
 
 const WORKBOOK_VFS_NAME = "bilig-opfs-sahpool";
 const WORKBOOK_VFS_DIRECTORY = "/bilig/workbooks";
@@ -40,6 +51,16 @@ export interface WorkbookLocalStore {
   appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
   updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
   removePendingMutation(id: string): Promise<void>;
+  replaceAuthoritativeBase(base: WorkbookLocalAuthoritativeBase): void;
+  readViewportBase(
+    sheetName: string,
+    viewport: {
+      rowStart: number;
+      rowEnd: number;
+      colStart: number;
+      colEnd: number;
+    },
+  ): WorkbookLocalViewportBase | null;
   close(): void;
 }
 
@@ -124,6 +145,147 @@ function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutation
   };
 }
 
+function parseCellSnapshotValue(value: unknown): CellSnapshot["value"] | null {
+  if (!isRecord(value) || typeof value["tag"] !== "number") {
+    return null;
+  }
+  const tag = value["tag"] as ValueTag;
+  switch (tag) {
+    case ValueTag.Empty:
+      return { tag: ValueTag.Empty };
+    case ValueTag.Number:
+      return typeof value["value"] === "number"
+        ? { tag: ValueTag.Number, value: value["value"] }
+        : null;
+    case ValueTag.Boolean:
+      return typeof value["value"] === "boolean"
+        ? { tag: ValueTag.Boolean, value: value["value"] }
+        : null;
+    case ValueTag.String:
+      return typeof value["value"] === "string"
+        ? {
+            tag: ValueTag.String,
+            value: value["value"],
+            stringId: typeof value["stringId"] === "number" ? value["stringId"] : 0,
+          }
+        : null;
+    case ValueTag.Error:
+      return typeof value["code"] === "number"
+        ? { tag: ValueTag.Error, code: value["code"] }
+        : null;
+    default:
+      return null;
+  }
+}
+
+function parseCellSnapshotFromBaseRow(
+  row: Record<string, SqlValue>,
+): WorkbookLocalViewportCell | null {
+  const address = row["address"];
+  const sheetName = row["sheetName"];
+  const rowNum = row["rowNum"];
+  const colNum = row["colNum"];
+  const valueJson = row["valueJson"];
+  const flags = row["flags"];
+  const version = row["version"];
+  if (
+    typeof address !== "string" ||
+    typeof sheetName !== "string" ||
+    typeof rowNum !== "number" ||
+    typeof colNum !== "number" ||
+    typeof valueJson !== "string" ||
+    typeof flags !== "number" ||
+    typeof version !== "number"
+  ) {
+    return null;
+  }
+  try {
+    const parsedValue = parseCellSnapshotValue(JSON.parse(valueJson) as unknown);
+    if (!parsedValue) {
+      return null;
+    }
+    const inputJson = row["inputJson"];
+    const snapshot: CellSnapshot = {
+      sheetName,
+      address,
+      value: parsedValue,
+      flags,
+      version,
+    };
+    if (typeof inputJson === "string") {
+      const parsedInput = JSON.parse(inputJson) as unknown;
+      if (
+        parsedInput === null ||
+        typeof parsedInput === "boolean" ||
+        typeof parsedInput === "number" ||
+        typeof parsedInput === "string"
+      ) {
+        snapshot.input = parsedInput;
+      }
+    }
+    if (typeof row["formula"] === "string") {
+      snapshot.formula = row["formula"];
+    }
+    if (typeof row["format"] === "string") {
+      snapshot.format = row["format"];
+    }
+    if (typeof row["styleId"] === "string") {
+      snapshot.styleId = row["styleId"];
+    }
+    if (typeof row["numberFormatId"] === "string") {
+      snapshot.numberFormatId = row["numberFormatId"];
+    }
+    return {
+      row: rowNum,
+      col: colNum,
+      snapshot,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseAxisEntrySnapshot(row: Record<string, SqlValue>): WorkbookAxisEntrySnapshot | null {
+  const id = row["id"];
+  const entryIndex = row["entryIndex"];
+  if (typeof id !== "string" || typeof entryIndex !== "number") {
+    return null;
+  }
+  const entry: WorkbookAxisEntrySnapshot = {
+    id,
+    index: entryIndex,
+  };
+  if (typeof row["size"] === "number") {
+    entry.size = row["size"];
+  }
+  if (typeof row["hidden"] === "number") {
+    entry.hidden = row["hidden"] !== 0;
+  } else if (typeof row["hidden"] === "boolean") {
+    entry.hidden = row["hidden"];
+  }
+  return entry;
+}
+
+function parseCellStyleRecord(row: Record<string, SqlValue>): CellStyleRecord | null {
+  const id = row["id"];
+  const recordJson = row["recordJson"];
+  if (typeof id !== "string" || typeof recordJson !== "string") {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(recordJson) as unknown;
+    if (!isRecord(parsed)) {
+      return null;
+    }
+    return {
+      ...(parsed as Omit<CellStyleRecord, "id">),
+      id,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function readSingleObjectRow(
   db: Database,
   sql: string,
@@ -172,6 +334,69 @@ function initializeSchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS pending_op_local_seq_idx
       ON pending_op(local_seq);
+
+    CREATE TABLE IF NOT EXISTS authoritative_sheet (
+      name TEXT PRIMARY KEY,
+      sort_order INTEGER NOT NULL,
+      freeze_rows INTEGER NOT NULL DEFAULT 0,
+      freeze_cols INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS authoritative_cell_input (
+      sheet_name TEXT NOT NULL REFERENCES authoritative_sheet(name) ON DELETE CASCADE,
+      address TEXT NOT NULL,
+      row_num INTEGER NOT NULL,
+      col_num INTEGER NOT NULL,
+      input_json TEXT,
+      formula TEXT,
+      format TEXT,
+      PRIMARY KEY (sheet_name, address)
+    );
+
+    CREATE TABLE IF NOT EXISTS authoritative_cell_render (
+      sheet_name TEXT NOT NULL REFERENCES authoritative_sheet(name) ON DELETE CASCADE,
+      address TEXT NOT NULL,
+      row_num INTEGER NOT NULL,
+      col_num INTEGER NOT NULL,
+      value_json TEXT NOT NULL,
+      flags INTEGER NOT NULL,
+      version INTEGER NOT NULL,
+      style_id TEXT,
+      number_format_id TEXT,
+      PRIMARY KEY (sheet_name, address)
+    );
+
+    CREATE TABLE IF NOT EXISTS authoritative_row_axis (
+      sheet_name TEXT NOT NULL REFERENCES authoritative_sheet(name) ON DELETE CASCADE,
+      axis_index INTEGER NOT NULL,
+      axis_id TEXT NOT NULL,
+      size INTEGER,
+      hidden BOOLEAN,
+      PRIMARY KEY (sheet_name, axis_index)
+    );
+
+    CREATE TABLE IF NOT EXISTS authoritative_column_axis (
+      sheet_name TEXT NOT NULL REFERENCES authoritative_sheet(name) ON DELETE CASCADE,
+      axis_index INTEGER NOT NULL,
+      axis_id TEXT NOT NULL,
+      size INTEGER,
+      hidden BOOLEAN,
+      PRIMARY KEY (sheet_name, axis_index)
+    );
+
+    CREATE TABLE IF NOT EXISTS authoritative_style (
+      style_id TEXT PRIMARY KEY,
+      record_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS authoritative_cell_render_viewport_idx
+      ON authoritative_cell_render(sheet_name, row_num, col_num);
+
+    CREATE INDEX IF NOT EXISTS authoritative_row_axis_viewport_idx
+      ON authoritative_row_axis(sheet_name, axis_index);
+
+    CREATE INDEX IF NOT EXISTS authoritative_column_axis_viewport_idx
+      ON authoritative_column_axis(sheet_name, axis_index);
   `);
   const appliedPendingColumn = readSingleObjectRow(
     db,
@@ -405,6 +630,294 @@ class OpfsWorkbookLocalStore implements WorkbookLocalStore {
     this.db.exec("DELETE FROM pending_op WHERE op_id = ?", {
       bind: [id],
     });
+  }
+
+  replaceAuthoritativeBase(base: WorkbookLocalAuthoritativeBase): void {
+    this.db.transaction((db) => {
+      db.exec("DELETE FROM authoritative_cell_input");
+      db.exec("DELETE FROM authoritative_cell_render");
+      db.exec("DELETE FROM authoritative_row_axis");
+      db.exec("DELETE FROM authoritative_column_axis");
+      db.exec("DELETE FROM authoritative_style");
+      db.exec("DELETE FROM authoritative_sheet");
+
+      const insertSheet = db.prepare(
+        `
+          INSERT INTO authoritative_sheet (name, sort_order, freeze_rows, freeze_cols)
+          VALUES (?, ?, ?, ?)
+        `,
+      );
+      const insertInput = db.prepare(
+        `
+          INSERT INTO authoritative_cell_input (
+            sheet_name,
+            address,
+            row_num,
+            col_num,
+            input_json,
+            formula,
+            format
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+      );
+      const insertRender = db.prepare(
+        `
+          INSERT INTO authoritative_cell_render (
+            sheet_name,
+            address,
+            row_num,
+            col_num,
+            value_json,
+            flags,
+            version,
+            style_id,
+            number_format_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      );
+      const insertAxis = (tableName: "authoritative_row_axis" | "authoritative_column_axis") =>
+        db.prepare(
+          `
+            INSERT INTO ${tableName} (
+              sheet_name,
+              axis_index,
+              axis_id,
+              size,
+              hidden
+            )
+            VALUES (?, ?, ?, ?, ?)
+          `,
+        );
+      const insertStyle = db.prepare(
+        `
+          INSERT INTO authoritative_style (style_id, record_json)
+          VALUES (?, ?)
+        `,
+      );
+      const insertRowAxis = insertAxis("authoritative_row_axis");
+      const insertColumnAxis = insertAxis("authoritative_column_axis");
+      try {
+        for (const sheet of base.sheets) {
+          insertSheet.bind([sheet.name, sheet.sortOrder, sheet.freezeRows, sheet.freezeCols]);
+          insertSheet.step();
+          insertSheet.reset();
+        }
+        for (const cell of base.cellInputs) {
+          insertInput.bind([
+            cell.sheetName,
+            cell.address,
+            cell.rowNum,
+            cell.colNum,
+            cell.input === undefined ? null : JSON.stringify(cell.input),
+            cell.formula ?? null,
+            cell.format ?? null,
+          ]);
+          insertInput.step();
+          insertInput.reset();
+        }
+        for (const cell of base.cellRenders) {
+          insertRender.bind([
+            cell.sheetName,
+            cell.address,
+            cell.rowNum,
+            cell.colNum,
+            JSON.stringify(cell.value),
+            cell.flags,
+            cell.version,
+            cell.styleId ?? null,
+            cell.numberFormatId ?? null,
+          ]);
+          insertRender.step();
+          insertRender.reset();
+        }
+        for (const axis of base.rowAxisEntries) {
+          insertRowAxis.bind([
+            axis.sheetName,
+            axis.entry.index,
+            axis.entry.id,
+            axis.entry.size ?? null,
+            axis.entry.hidden ?? null,
+          ]);
+          insertRowAxis.step();
+          insertRowAxis.reset();
+        }
+        for (const axis of base.columnAxisEntries) {
+          insertColumnAxis.bind([
+            axis.sheetName,
+            axis.entry.index,
+            axis.entry.id,
+            axis.entry.size ?? null,
+            axis.entry.hidden ?? null,
+          ]);
+          insertColumnAxis.step();
+          insertColumnAxis.reset();
+        }
+        for (const style of base.styles) {
+          insertStyle.bind([style.id, JSON.stringify(style)]);
+          insertStyle.step();
+          insertStyle.reset();
+        }
+      } finally {
+        insertSheet.finalize();
+        insertInput.finalize();
+        insertRender.finalize();
+        insertRowAxis.finalize();
+        insertColumnAxis.finalize();
+        insertStyle.finalize();
+      }
+    });
+  }
+
+  readViewportBase(
+    sheetName: string,
+    viewport: {
+      rowStart: number;
+      rowEnd: number;
+      colStart: number;
+      colEnd: number;
+    },
+  ): WorkbookLocalViewportBase | null {
+    const sheetRecord = readSingleObjectRow(
+      this.db,
+      `
+        SELECT name,
+               sort_order AS sortOrder,
+               freeze_rows AS freezeRows,
+               freeze_cols AS freezeCols
+          FROM authoritative_sheet
+         WHERE name = ?
+      `,
+      [sheetName],
+    );
+    if (!sheetRecord) {
+      return null;
+    }
+
+    const cells: WorkbookLocalViewportCell[] = [];
+    const cellStatement = this.db.prepare(
+      `
+        SELECT render.sheet_name AS sheetName,
+               render.address AS address,
+               render.row_num AS rowNum,
+               render.col_num AS colNum,
+               render.value_json AS valueJson,
+               render.flags AS flags,
+               render.version AS version,
+               render.style_id AS styleId,
+               render.number_format_id AS numberFormatId,
+               input.input_json AS inputJson,
+               input.formula AS formula,
+               input.format AS format
+          FROM authoritative_cell_render AS render
+          LEFT JOIN authoritative_cell_input AS input
+            ON input.sheet_name = render.sheet_name
+           AND input.address = render.address
+         WHERE render.sheet_name = ?
+           AND render.row_num >= ?
+           AND render.row_num <= ?
+           AND render.col_num >= ?
+           AND render.col_num <= ?
+         ORDER BY render.row_num ASC, render.col_num ASC
+      `,
+    );
+    const styleIds = new Set<string>(["style-0"]);
+    try {
+      cellStatement.bind([
+        sheetName,
+        viewport.rowStart,
+        viewport.rowEnd,
+        viewport.colStart,
+        viewport.colEnd,
+      ]);
+      while (cellStatement.step()) {
+        const parsed = parseCellSnapshotFromBaseRow(cellStatement.get({}));
+        if (!parsed) {
+          continue;
+        }
+        cells.push(parsed);
+        if (parsed.snapshot.styleId) {
+          styleIds.add(parsed.snapshot.styleId);
+        }
+      }
+    } finally {
+      cellStatement.finalize();
+    }
+
+    const readAxisEntries = (
+      tableName: "authoritative_row_axis" | "authoritative_column_axis",
+      start: number,
+      end: number,
+    ): WorkbookAxisEntrySnapshot[] => {
+      const rows: WorkbookAxisEntrySnapshot[] = [];
+      const statement = this.db.prepare(
+        `
+          SELECT axis_id AS id,
+                 axis_index AS entryIndex,
+                 size,
+                 hidden
+            FROM ${tableName}
+           WHERE sheet_name = ?
+             AND axis_index >= ?
+             AND axis_index <= ?
+           ORDER BY axis_index ASC
+        `,
+      );
+      try {
+        statement.bind([sheetName, start, end]);
+        while (statement.step()) {
+          const entry = parseAxisEntrySnapshot(statement.get({}));
+          if (entry) {
+            rows.push(entry);
+          }
+        }
+      } finally {
+        statement.finalize();
+      }
+      return rows;
+    };
+
+    const readStyles = (): CellStyleRecord[] => {
+      const styles: CellStyleRecord[] = [];
+      const statement = this.db.prepare(
+        `
+          SELECT style_id AS id,
+                 record_json AS recordJson
+            FROM authoritative_style
+           WHERE style_id = ?
+        `,
+      );
+      try {
+        for (const styleId of styleIds) {
+          statement.bind([styleId]);
+          if (statement.step()) {
+            const style = parseCellStyleRecord(statement.get({}));
+            if (style) {
+              styles.push(style);
+            }
+          } else if (styleId === "style-0") {
+            styles.push({ id: "style-0" });
+          }
+          statement.reset();
+        }
+      } finally {
+        statement.finalize();
+      }
+      return styles;
+    };
+
+    return {
+      sheetName,
+      cells,
+      rowAxisEntries: readAxisEntries("authoritative_row_axis", viewport.rowStart, viewport.rowEnd),
+      columnAxisEntries: readAxisEntries(
+        "authoritative_column_axis",
+        viewport.colStart,
+        viewport.colEnd,
+      ),
+      styles: readStyles(),
+    };
   }
 
   close(): void {

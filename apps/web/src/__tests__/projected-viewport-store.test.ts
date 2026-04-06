@@ -262,6 +262,33 @@ describe("ProjectedViewportStore", () => {
     });
   });
 
+  it("clears stale viewport cells on full patches without dropping cells outside the viewport", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.setCellSnapshot({
+      sheetName: "Sheet1",
+      address: "A1",
+      value: { tag: ValueTag.String, value: "pinned", stringId: 1 },
+      flags: 0,
+      version: 1,
+    });
+    cache.applyViewportPatch({ ...createPatch(), full: true });
+
+    const damage = cache.applyViewportPatch({
+      ...createPatch(),
+      full: true,
+      cells: [],
+    });
+
+    expect(damage).toEqual([{ cell: [3, 4] }]);
+    expect(cache.peekCell("Sheet1", "D5")).toBeUndefined();
+    expect(cache.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.String,
+      value: "pinned",
+      stringId: 1,
+    });
+  });
+
   it("drops stale sheet cache entries when sheets disappear", () => {
     const cache = new ProjectedViewportStore();
 
