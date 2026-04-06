@@ -1,5 +1,10 @@
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import { isWorkbookEventPayload, type WorkbookEventPayload } from "@bilig/zero-sync";
+import {
+  isWorkbookChangeUndoBundle,
+  isWorkbookEventPayload,
+  type WorkbookChangeUndoBundle,
+  type WorkbookEventPayload,
+} from "@bilig/zero-sync";
 import type { CellRangeRef } from "@bilig/protocol";
 import type { QueryResultRow, Queryable } from "./store.js";
 import { resolveWorkbookSheetRef } from "./workbook-sheet-ref.js";
@@ -24,6 +29,7 @@ export interface AppendWorkbookChangeInput {
   readonly actorUserId: string;
   readonly clientMutationId: string | null;
   readonly payload: WorkbookEventPayload;
+  readonly undoBundle: WorkbookChangeUndoBundle | null;
   readonly createdAtUnixMs: number;
 }
 
@@ -33,6 +39,24 @@ interface WorkbookChangeInsertRow {
   readonly actorUserId: string;
   readonly clientMutationId: string | null;
   readonly descriptor: WorkbookChangeDescriptor;
+  readonly undoBundle: WorkbookChangeUndoBundle | null;
+  readonly revertsRevision: number | null;
+  readonly createdAtUnixMs: number;
+}
+
+export interface WorkbookChangeRecord {
+  readonly revision: number;
+  readonly actorUserId: string;
+  readonly clientMutationId: string | null;
+  readonly eventKind: WorkbookEventPayload["kind"];
+  readonly summary: string;
+  readonly sheetId: number | null;
+  readonly sheetName: string | null;
+  readonly anchorAddress: string | null;
+  readonly range: WorkbookChangeRange | null;
+  readonly undoBundle: WorkbookChangeUndoBundle | null;
+  readonly revertedByRevision: number | null;
+  readonly revertsRevision: number | null;
   readonly createdAtUnixMs: number;
 }
 
@@ -42,6 +66,22 @@ interface WorkbookEventBackfillRow extends QueryResultRow {
   readonly actorUserId?: unknown;
   readonly clientMutationId?: unknown;
   readonly payload?: unknown;
+  readonly createdAtUnixMs?: unknown;
+}
+
+interface WorkbookChangeSelectRow extends QueryResultRow {
+  readonly revision?: unknown;
+  readonly actorUserId?: unknown;
+  readonly clientMutationId?: unknown;
+  readonly eventKind?: unknown;
+  readonly summary?: unknown;
+  readonly sheetId?: unknown;
+  readonly sheetName?: unknown;
+  readonly anchorAddress?: unknown;
+  readonly rangeJson?: unknown;
+  readonly undoBundleJson?: unknown;
+  readonly revertedByRevision?: unknown;
+  readonly revertsRevision?: unknown;
   readonly createdAtUnixMs?: unknown;
 }
 
@@ -74,6 +114,81 @@ function normalizeRange(range: CellRangeRef): WorkbookChangeRange {
     sheetName: range.sheetName,
     startAddress: formatAddress(Math.min(start.row, end.row), Math.min(start.col, end.col)),
     endAddress: formatAddress(Math.max(start.row, end.row), Math.max(start.col, end.col)),
+  };
+}
+
+function normalizeWorkbookChangeRange(value: unknown): WorkbookChangeRange | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const sheetName = value["sheetName"];
+  const startAddress = value["startAddress"];
+  const endAddress = value["endAddress"];
+  if (
+    typeof sheetName !== "string" ||
+    typeof startAddress !== "string" ||
+    typeof endAddress !== "string"
+  ) {
+    return null;
+  }
+  return {
+    sheetName,
+    startAddress,
+    endAddress,
+  };
+}
+
+function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookChangeRecord | null {
+  const revision = parseNumericValue(row.revision);
+  const sheetId = parseNumericValue(row.sheetId);
+  const revertedByRevision = parseNumericValue(row.revertedByRevision);
+  const revertsRevision = parseNumericValue(row.revertsRevision);
+  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
+  if (
+    revision === null ||
+    createdAtUnixMs === null ||
+    typeof row.actorUserId !== "string" ||
+    typeof row.eventKind !== "string" ||
+    typeof row.summary !== "string"
+  ) {
+    return null;
+  }
+  const range = normalizeWorkbookChangeRange(row.rangeJson);
+  const eventKind = row.eventKind;
+  if (
+    eventKind !== "applyBatch" &&
+    eventKind !== "setCellValue" &&
+    eventKind !== "setCellFormula" &&
+    eventKind !== "clearCell" &&
+    eventKind !== "clearRange" &&
+    eventKind !== "renderCommit" &&
+    eventKind !== "fillRange" &&
+    eventKind !== "copyRange" &&
+    eventKind !== "moveRange" &&
+    eventKind !== "updateColumnWidth" &&
+    eventKind !== "setRangeStyle" &&
+    eventKind !== "clearRangeStyle" &&
+    eventKind !== "setRangeNumberFormat" &&
+    eventKind !== "clearRangeNumberFormat" &&
+    eventKind !== "restoreVersion" &&
+    eventKind !== "revertChange"
+  ) {
+    return null;
+  }
+  return {
+    revision,
+    actorUserId: row.actorUserId,
+    clientMutationId: typeof row.clientMutationId === "string" ? row.clientMutationId : null,
+    eventKind,
+    summary: row.summary,
+    sheetId,
+    sheetName: typeof row.sheetName === "string" ? row.sheetName : null,
+    anchorAddress: typeof row.anchorAddress === "string" ? row.anchorAddress : null,
+    range,
+    undoBundle: isWorkbookChangeUndoBundle(row.undoBundleJson) ? row.undoBundleJson : null,
+    revertedByRevision,
+    revertsRevision,
+    createdAtUnixMs,
   };
 }
 
@@ -384,6 +499,14 @@ export function buildWorkbookChangeDescriptor(
               }
             : null,
       };
+    case "revertChange":
+      return {
+        eventKind: payload.kind,
+        summary: `Reverted r${payload.targetRevision}: ${payload.targetSummary}`,
+        sheetName: payload.sheetName ?? payload.range?.sheetName ?? null,
+        anchorAddress: payload.address ?? payload.range?.startAddress ?? null,
+        range: payload.range ? normalizeRange(payload.range) : null,
+      };
     case "applyBatch":
       return {
         eventKind: payload.kind,
@@ -417,9 +540,12 @@ async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow)
         sheet_name,
         anchor_address,
         range_json,
+        undo_bundle_json,
+        reverted_by_revision,
+        reverts_revision,
         created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13, $14)
       ON CONFLICT (workbook_id, revision)
       DO UPDATE SET
         actor_user_id = EXCLUDED.actor_user_id,
@@ -430,6 +556,9 @@ async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow)
         sheet_name = EXCLUDED.sheet_name,
         anchor_address = EXCLUDED.anchor_address,
         range_json = EXCLUDED.range_json,
+        undo_bundle_json = EXCLUDED.undo_bundle_json,
+        reverted_by_revision = EXCLUDED.reverted_by_revision,
+        reverts_revision = EXCLUDED.reverts_revision,
         created_at = EXCLUDED.created_at
     `,
     [
@@ -443,8 +572,30 @@ async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow)
       sheetRef.sheetName,
       row.descriptor.anchorAddress,
       JSON.stringify(row.descriptor.range),
+      row.undoBundle === null ? null : JSON.stringify(row.undoBundle),
+      null,
+      row.revertsRevision,
       row.createdAtUnixMs,
     ],
+  );
+}
+
+async function markWorkbookChangeReverted(
+  db: Queryable,
+  input: {
+    readonly documentId: string;
+    readonly revision: number;
+    readonly revertedByRevision: number;
+  },
+): Promise<void> {
+  await db.query(
+    `
+      UPDATE workbook_change
+         SET reverted_by_revision = $3
+       WHERE workbook_id = $1
+         AND revision = $2
+    `,
+    [input.documentId, input.revision, input.revertedByRevision],
   );
 }
 
@@ -461,10 +612,18 @@ export async function ensureWorkbookChangeSchema(db: Queryable): Promise<void> {
       sheet_name TEXT,
       anchor_address TEXT,
       range_json JSONB,
+      undo_bundle_json JSONB,
+      reverted_by_revision BIGINT,
+      reverts_revision BIGINT,
       created_at BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, revision)
     );
   `);
+  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS undo_bundle_json JSONB;`);
+  await db.query(
+    `ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverted_by_revision BIGINT;`,
+  );
+  await db.query(`ALTER TABLE workbook_change ADD COLUMN IF NOT EXISTS reverts_revision BIGINT;`);
   await db.query(
     `CREATE INDEX IF NOT EXISTS workbook_change_workbook_created_idx ON workbook_change(workbook_id, created_at DESC, revision DESC);`,
   );
@@ -480,8 +639,48 @@ export async function appendWorkbookChange(
     actorUserId: input.actorUserId,
     clientMutationId: input.clientMutationId,
     descriptor: buildWorkbookChangeDescriptor(input.payload),
+    undoBundle: input.undoBundle,
+    revertsRevision: input.payload.kind === "revertChange" ? input.payload.targetRevision : null,
     createdAtUnixMs: input.createdAtUnixMs,
   });
+  if (input.payload.kind === "revertChange") {
+    await markWorkbookChangeReverted(db, {
+      documentId: input.documentId,
+      revision: input.payload.targetRevision,
+      revertedByRevision: input.revision,
+    });
+  }
+}
+
+export async function loadWorkbookChange(
+  db: Queryable,
+  documentId: string,
+  revision: number,
+): Promise<WorkbookChangeRecord | null> {
+  const result = await db.query<WorkbookChangeSelectRow>(
+    `
+      SELECT revision AS "revision",
+             actor_user_id AS "actorUserId",
+             client_mutation_id AS "clientMutationId",
+             event_kind AS "eventKind",
+             summary AS "summary",
+             sheet_id AS "sheetId",
+             sheet_name AS "sheetName",
+             anchor_address AS "anchorAddress",
+             range_json AS "rangeJson",
+             undo_bundle_json AS "undoBundleJson",
+             reverted_by_revision AS "revertedByRevision",
+             reverts_revision AS "revertsRevision",
+             created_at AS "createdAtUnixMs"
+        FROM workbook_change
+       WHERE workbook_id = $1
+         AND revision = $2
+       LIMIT 1
+    `,
+    [documentId, revision],
+  );
+  const row = result.rows[0];
+  return row ? normalizeWorkbookChangeRecord(row) : null;
 }
 
 export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
@@ -518,12 +717,13 @@ export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
       return [];
     }
     return [
-      insertWorkbookChange(db, {
+      appendWorkbookChange(db, {
         documentId: row.workbookId,
         revision,
         actorUserId: row.actorUserId,
         clientMutationId: typeof row.clientMutationId === "string" ? row.clientMutationId : null,
-        descriptor: buildWorkbookChangeDescriptor(row.payload),
+        payload: row.payload,
+        undoBundle: null,
         createdAtUnixMs,
       }),
     ];

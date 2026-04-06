@@ -9,9 +9,20 @@ import type {
 import { parseCellAddress } from "@bilig/formula";
 import { applyBatchArgsSchema } from "./mutators.js";
 import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
+import type { EngineOp } from "@bilig/workbook-domain";
 import { z } from "zod";
 
 type EngineOpBatch = z.infer<typeof applyBatchArgsSchema>["batch"];
+
+export type WorkbookChangeUndoBundle =
+  | {
+      kind: "engineOps";
+      ops: EngineOp[];
+    }
+  | {
+      kind: "snapshot";
+      snapshot: WorkbookSnapshot;
+    };
 
 export interface DirtyRegion {
   sheetName: string;
@@ -98,6 +109,15 @@ export type WorkbookEventPayload =
       sheetName?: string;
       address?: string;
       snapshot: WorkbookSnapshot;
+    }
+  | {
+      kind: "revertChange";
+      targetRevision: number;
+      targetSummary: string;
+      sheetName?: string;
+      address?: string;
+      range?: CellRangeRef;
+      appliedBundle: WorkbookChangeUndoBundle;
     };
 
 export interface WorkbookEventRecord {
@@ -147,6 +167,20 @@ function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
     typeof value["workbook"]["name"] === "string" &&
     Array.isArray(value["sheets"])
   );
+}
+
+export function isWorkbookChangeUndoBundle(value: unknown): value is WorkbookChangeUndoBundle {
+  if (!isRecord(value) || typeof value["kind"] !== "string") {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "engineOps":
+      return Array.isArray(value["ops"]);
+    case "snapshot":
+      return isWorkbookSnapshot(value["snapshot"]);
+    default:
+      return false;
+  }
 }
 
 export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPayload {
@@ -207,6 +241,15 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
         (value["sheetName"] === undefined || typeof value["sheetName"] === "string") &&
         (value["address"] === undefined || typeof value["address"] === "string") &&
         isWorkbookSnapshot(value["snapshot"])
+      );
+    case "revertChange":
+      return (
+        typeof value["targetRevision"] === "number" &&
+        typeof value["targetSummary"] === "string" &&
+        (value["sheetName"] === undefined || typeof value["sheetName"] === "string") &&
+        (value["address"] === undefined || typeof value["address"] === "string") &&
+        (value["range"] === undefined || isCellRangeRef(value["range"])) &&
+        isWorkbookChangeUndoBundle(value["appliedBundle"])
       );
     default:
       return false;
@@ -281,6 +324,7 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "renderCommit":
     case "updateColumnWidth":
     case "restoreVersion":
+    case "revertChange":
       return null;
     default: {
       const exhaustive: never = payload;
@@ -335,6 +379,13 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return;
     case "restoreVersion":
       engine.importSnapshot(payload.snapshot);
+      return;
+    case "revertChange":
+      if (payload.appliedBundle.kind === "engineOps") {
+        engine.applyOps(payload.appliedBundle.ops);
+        return;
+      }
+      engine.importSnapshot(payload.appliedBundle.snapshot);
       return;
     default: {
       const exhaustive: never = payload;

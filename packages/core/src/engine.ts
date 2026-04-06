@@ -3419,9 +3419,56 @@ export class SpreadsheetEngine {
     this.applyBatch(batch, "remote");
   }
 
-  private executeLocalTransaction(ops: EngineOp[], potentialNewCells?: number): void {
+  captureUndoOps<T>(mutate: () => T): {
+    result: T;
+    undoOps: readonly EngineOp[] | null;
+  } {
+    const previousUndoDepth = this.undoStack.length;
+    const result = mutate();
+    if (this.undoStack.length === previousUndoDepth) {
+      return {
+        result,
+        undoOps: null,
+      };
+    }
+    if (this.undoStack.length === previousUndoDepth + 1) {
+      return {
+        result,
+        undoOps: structuredClone(this.undoStack.at(-1)?.inverse.ops ?? null),
+      };
+    }
+    throw new Error("Expected a single local transaction while capturing undo ops");
+  }
+
+  applyOps(
+    ops: readonly EngineOp[],
+    options: {
+      captureUndo?: boolean;
+      potentialNewCells?: number;
+    } = {},
+  ): readonly EngineOp[] | null {
+    const nextOps = structuredClone([...ops]);
+    if (nextOps.length === 0) {
+      return null;
+    }
+    if (options.captureUndo) {
+      return this.executeLocalTransaction(nextOps, options.potentialNewCells);
+    }
+    this.executeTransaction(
+      options.potentialNewCells === undefined
+        ? { ops: nextOps }
+        : { ops: nextOps, potentialNewCells: options.potentialNewCells },
+      "restore",
+    );
+    return null;
+  }
+
+  private executeLocalTransaction(
+    ops: EngineOp[],
+    potentialNewCells?: number,
+  ): readonly EngineOp[] | null {
     if (ops.length === 0) {
-      return;
+      return null;
     }
     const forward: TransactionRecord =
       potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
@@ -3434,6 +3481,7 @@ export class SpreadsheetEngine {
       this.undoStack.push({ forward, inverse });
       this.redoStack.length = 0;
     }
+    return structuredClone(inverse.ops);
   }
 
   private executeTransaction(

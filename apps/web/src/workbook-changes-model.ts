@@ -1,3 +1,4 @@
+import { isWorkbookChangeUndoBundle, type WorkbookChangeUndoBundle } from "@bilig/zero-sync";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 
 export interface WorkbookChangeRange {
@@ -16,6 +17,9 @@ export interface WorkbookChangeRow {
   readonly sheetName: string | null;
   readonly anchorAddress: string | null;
   readonly rangeJson: WorkbookChangeRange | null;
+  readonly undoBundleJson: WorkbookChangeUndoBundle | null;
+  readonly revertedByRevision: number | null;
+  readonly revertsRevision: number | null;
   readonly createdAt: number;
 }
 
@@ -31,6 +35,9 @@ export interface WorkbookChangeEntry {
   readonly targetLabel: string | null;
   readonly createdAt: number;
   readonly isJumpable: boolean;
+  readonly canRevert: boolean;
+  readonly revertedByRevision: number | null;
+  readonly revertsRevision: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,6 +87,8 @@ function normalizeWorkbookChangeRow(value: unknown): WorkbookChangeRow | null {
   const sheetId = value["sheetId"];
   const sheetName = value["sheetName"];
   const anchorAddress = value["anchorAddress"];
+  const revertedByRevision = value["revertedByRevision"];
+  const revertsRevision = value["revertsRevision"];
   return {
     revision,
     actorUserId,
@@ -90,6 +99,11 @@ function normalizeWorkbookChangeRow(value: unknown): WorkbookChangeRow | null {
     sheetName: typeof sheetName === "string" ? sheetName : null,
     anchorAddress: typeof anchorAddress === "string" ? anchorAddress : null,
     rangeJson: normalizeWorkbookChangeRange(value["rangeJson"]),
+    undoBundleJson: isWorkbookChangeUndoBundle(value["undoBundleJson"])
+      ? value["undoBundleJson"]
+      : null,
+    revertedByRevision: typeof revertedByRevision === "number" ? revertedByRevision : null,
+    revertsRevision: typeof revertsRevision === "number" ? revertsRevision : null,
     createdAt,
   };
 }
@@ -149,6 +163,12 @@ export function selectWorkbookChangeEntries(input: {
         typeof sheetName === "string" &&
         typeof address === "string" &&
         knownSheetNames.has(sheetName),
+      canRevert:
+        row.undoBundleJson !== null &&
+        row.revertedByRevision === null &&
+        row.eventKind !== "revertChange",
+      revertedByRevision: row.revertedByRevision,
+      revertsRevision: row.revertsRevision,
     } satisfies WorkbookChangeEntry;
   });
 }

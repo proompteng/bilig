@@ -287,4 +287,89 @@ describe("workbook-version-store", () => {
 
     expect(latestQuery(queryable).text).toContain("DELETE FROM workbook_version");
   });
+
+  it("routes revertChange through the authoritative mutation path and records a revert event", async () => {
+    const currentSnapshot = await createSnapshot("A1", "before");
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes("FROM workbook_change") && values?.[1] === 7
+          ? [
+              {
+                revision: 7,
+                actorUserId: "sam@example.com",
+                clientMutationId: "mutation-7",
+                eventKind: "setCellValue",
+                summary: "Updated Sheet1!A1",
+                sheetId: 1,
+                sheetName: "Sheet1",
+                anchorAddress: "A1",
+                rangeJson: {
+                  sheetName: "Sheet1",
+                  startAddress: "A1",
+                  endAddress: "A1",
+                },
+                undoBundleJson: {
+                  kind: "engineOps",
+                  ops: [{ kind: "clearCell", sheetName: "Sheet1", address: "A1" }],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 123_000,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text) =>
+        text.includes("FROM sheets")
+          ? [{ sheetId: 1, sheetName: "Sheet1" } satisfies QueryResultRow]
+          : null,
+    ]);
+    const runtimeManager = new WorkbookRuntimeManager({
+      loadMetadata: async () => ({
+        headRevision: 7,
+        calculatedRevision: 7,
+        ownerUserId: "alex@example.com",
+      }),
+      loadState: async () => ({
+        snapshot: currentSnapshot,
+        replicaSnapshot: null,
+        headRevision: 7,
+        calculatedRevision: 7,
+        ownerUserId: "alex@example.com",
+      }),
+    });
+
+    await handleServerMutator(
+      {
+        dbTransaction: {
+          wrappedTransaction: queryable,
+        },
+      },
+      "workbook.revertChange",
+      {
+        documentId: "doc-1",
+        revision: 7,
+      },
+      runtimeManager,
+      {
+        userID: "alex@example.com",
+        roles: ["editor"],
+      },
+    );
+
+    const workbookEventInsert = queryable.calls.find((call) =>
+      call.text.includes("INSERT INTO workbook_event"),
+    );
+    expect(workbookEventInsert?.values?.[4]).toContain('"kind":"revertChange"');
+    expect(workbookEventInsert?.values?.[4]).toContain('"targetRevision":7');
+
+    const workbookChangeInsert = queryable.calls.find((call) =>
+      call.text.includes("INSERT INTO workbook_change"),
+    );
+    expect(workbookChangeInsert?.values?.[4]).toBe("revertChange");
+
+    const revertMarkQuery = queryable.calls.find((call) =>
+      call.text.includes("UPDATE workbook_change"),
+    );
+    expect(revertMarkQuery?.values).toEqual(["doc-1", 7, 8]);
+  });
 });

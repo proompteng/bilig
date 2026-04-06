@@ -16,6 +16,7 @@ import {
   type AuthoritativeWorkbookEventRecord,
   deriveDirtyRegions,
   isWorkbookEventPayload,
+  type WorkbookChangeUndoBundle,
   type DirtyRegion,
   type WorkbookEventPayload,
   type WorkbookEventRecord,
@@ -115,6 +116,7 @@ export interface PersistWorkbookMutationOptions {
   updatedBy: string;
   ownerUserId: string;
   eventPayload: WorkbookEventPayload;
+  undoBundle: WorkbookChangeUndoBundle | null;
   clientMutationId?: string | null;
 }
 
@@ -2184,6 +2186,7 @@ export async function persistWorkbookMutation(
     actorUserId: options.updatedBy,
     clientMutationId: options.clientMutationId ?? null,
     payload: options.eventPayload,
+    undoBundle: options.undoBundle,
     createdAtUnixMs: Date.parse(updatedAt),
   });
   await reconcileWorkbookSheetViews({

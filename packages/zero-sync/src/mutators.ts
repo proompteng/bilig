@@ -254,6 +254,10 @@ export const restoreWorkbookVersionArgsSchema = baseMutationArgsSchema.extend({
   id: z.string().min(1),
 });
 
+export const revertWorkbookChangeArgsSchema = baseMutationArgsSchema.extend({
+  revision: z.number().int().positive(),
+});
+
 async function noop(): Promise<void> {}
 
 export const mutators = defineMutators({
@@ -278,6 +282,7 @@ export const mutators = defineMutators({
     createVersion: defineMutator(workbookVersionArgsSchema, noop),
     deleteVersion: defineMutator(deleteWorkbookVersionArgsSchema, noop),
     restoreVersion: defineMutator(restoreWorkbookVersionArgsSchema, noop),
+    revertChange: defineMutator(revertWorkbookChangeArgsSchema, noop),
   },
 });
 

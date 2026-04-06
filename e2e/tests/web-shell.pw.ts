@@ -1320,6 +1320,35 @@ test("web app compares and applies a stale same-cell draft without losing local 
   }
 });
 
+test("web app reverts an authoritative change from the changes pane", async ({ page }) => {
+  const documentId = `playwright-zero-change-revert-${Date.now()}`;
+  await openZeroWorkbookPage(page, documentId);
+
+  const formulaInput = page.getByTestId("formula-input");
+  const changesToggle = page.getByTestId("workbook-changes-toggle");
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+  await formulaInput.fill("seed");
+  await formulaInput.press("Enter");
+  await expect(formulaInput).toHaveValue("seed");
+
+  await expect(changesToggle).toContainText("1");
+  await changesToggle.click();
+
+  const changeRows = page.getByTestId("workbook-change-row");
+  await expect(changeRows).toHaveCount(1);
+  await expect(changeRows.first()).toContainText("Updated Sheet1!A1");
+
+  await page.getByTestId("workbook-change-revert").click();
+
+  await expect(formulaInput).toHaveValue("");
+  await expect(changesToggle).toContainText("2");
+  await expect(changeRows).toHaveCount(2);
+  await expect(changeRows.first()).toContainText("Reverted r1: Updated Sheet1!A1");
+  await expect(changeRows.nth(1)).toContainText("Reverted in r2");
+});
+
 test("web app restores persisted workbook state after a full reload", async ({ page }) => {
   const documentId = `playwright-zero-reload-persist-${Date.now()}`;
   const formulaInput = page.getByTestId("formula-input");

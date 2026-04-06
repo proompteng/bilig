@@ -5404,6 +5404,32 @@ describe("SpreadsheetEngine", () => {
     expect(engine.getCellValue("Sheet1", "C2")).toEqual({ tag: ValueTag.Number, value: 0 });
   });
 
+  it("captures undo ops for a local mutation and reapplies raw engine ops deterministically", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "spec" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const { undoOps } = engine.captureUndoOps(() => {
+      engine.setCellValue("Sheet1", "A1", "seed");
+    });
+
+    expect(engine.getCellValue("Sheet1", "A1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "seed",
+    });
+    expect(undoOps).not.toBeNull();
+
+    const redoOps = engine.applyOps(undoOps ?? [], { captureUndo: true });
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+    expect(redoOps).not.toBeNull();
+
+    engine.applyOps(redoOps ?? [], { captureUndo: true });
+    expect(engine.getCellValue("Sheet1", "A1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "seed",
+    });
+  });
+
   it("reads rectangular range values as a dense matrix without per-cell callers", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "spec" });
     await engine.ready();

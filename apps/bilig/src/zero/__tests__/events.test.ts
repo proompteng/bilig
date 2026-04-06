@@ -30,6 +30,44 @@ describe("workbook events", () => {
     });
   });
 
+  it("replays revertChange events from persisted undo bundles", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "event-test",
+    });
+    await engine.ready();
+
+    applyWorkbookEvent(engine, {
+      kind: "setCellValue",
+      sheetName: "Sheet1",
+      address: "A1",
+      value: "seed",
+    });
+    expect(engine.getCellValue("Sheet1", "A1")).toMatchObject({
+      tag: ValueTag.String,
+      value: "seed",
+    });
+
+    applyWorkbookEvent(engine, {
+      kind: "revertChange",
+      targetRevision: 1,
+      targetSummary: "Updated Sheet1!A1",
+      sheetName: "Sheet1",
+      address: "A1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A1",
+      },
+      appliedBundle: {
+        kind: "engineOps",
+        ops: [{ kind: "clearCell", sheetName: "Sheet1", address: "A1" }],
+      },
+    });
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
+  });
+
   it("derives focused dirty regions for common source edits", () => {
     expect(
       deriveDirtyRegions({

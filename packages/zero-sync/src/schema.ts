@@ -158,6 +158,9 @@ const workbookChange = table("workbook_change")
     sheetName: string().from("sheet_name").optional(),
     anchorAddress: string().from("anchor_address").optional(),
     rangeJson: json().from("range_json").optional(),
+    undoBundleJson: json().from("undo_bundle_json").optional(),
+    revertedByRevision: number().from("reverted_by_revision").optional(),
+    revertsRevision: number().from("reverts_revision").optional(),
     createdAt: number().from("created_at"),
   })
   .primaryKey("workbookId", "revision");

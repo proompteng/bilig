@@ -742,10 +742,10 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - authoritative `sheet_view` rows now persist beside workbook metadata, sync through Zero with owner-aware visibility rules, and render as private/shared named views with exact viewport restore in the browser shell
 - authoritative `workbook_version` rows now persist named workbook checkpoints beside workbook revisions, sync through Zero as version metadata, render in a mounted versions pane, and restore through the same authoritative mutation/rebase path as any other workbook change
 - same-cell stale-submit conflicts now keep the local draft alive, surface a remote-change badge during editing, and require an explicit compare choice before a non-trivial stale draft can overwrite the authoritative cell
+- authoritative `workbook_change` rows now persist replayable undo bundles, support one-click authoritative revert from the mounted changes pane, and mark reverted revisions in shared history
 
 **Still not completed**
 
-- change bundle revert/undo flows
 - Phase 3 and Phase 4 agent/import/comprehension layers
 
 **What this roadmap now needs to do**
@@ -756,11 +756,10 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 ### Prioritized initiative table
 
-| Priority | Initiative                                                   | Why now                                                                 |
-| -------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| 1        | Finish collaboration integrity: compare + revertable history | Turns the current collaboration shell into a trustworthy daily workflow |
-| 2        | Build plan/preview/apply AI on semantic bundles              | Biggest differentiated UX after local-first core                        |
-| 3        | Build giant-data staging and workbook comprehension tools    | The remaining moat after collaboration and semantic AI                  |
+| Priority | Initiative                                                | Why now                                          |
+| -------- | --------------------------------------------------------- | ------------------------------------------------ |
+| 1        | Build plan/preview/apply AI on semantic bundles           | Biggest differentiated UX after local-first core |
+| 2        | Build giant-data staging and workbook comprehension tools | The remaining moat after collaboration and AI    |
 
 ### Dependency list
 
@@ -863,6 +862,9 @@ Make `bilig` genuinely local-first.
 
 **Objective**
 Make shared workbook work smoother than Sheets for serious day-to-day use.
+
+**Status**
+Implemented.
 
 **User-visible outcomes**
 

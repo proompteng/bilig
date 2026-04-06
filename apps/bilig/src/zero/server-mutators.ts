@@ -1,4 +1,5 @@
 import { SpreadsheetEngine } from "@bilig/core";
+import type { EngineOp } from "@bilig/workbook-domain";
 import type {
   CellBorderSidePatch,
   CellNumberFormatInput,
@@ -19,6 +20,7 @@ import {
   deleteSheetViewArgsSchema,
   rangeMutationArgsSchema,
   renderCommitArgsSchema,
+  revertWorkbookChangeArgsSchema,
   restoreWorkbookVersionArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
@@ -28,6 +30,7 @@ import {
   updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
   workbookVersionArgsSchema,
+  type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
 } from "@bilig/zero-sync";
 import { z } from "zod";
@@ -36,6 +39,7 @@ import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
 import { deleteWorkbookSheetView, upsertWorkbookSheetView } from "./sheet-view-store.js";
+import { loadWorkbookChange } from "./workbook-change-store.js";
 import {
   createWorkbookVersion,
   deleteWorkbookVersion,
@@ -219,12 +223,55 @@ function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIde
   return session.userID;
 }
 
+function toEngineUndoBundle(undoOps: readonly EngineOp[] | null): WorkbookChangeUndoBundle | null {
+  if (!undoOps || undoOps.length === 0) {
+    return null;
+  }
+  return {
+    kind: "engineOps",
+    ops: structuredClone([...undoOps]),
+  };
+}
+
+function captureEngineUndoBundle(
+  engine: SpreadsheetEngine,
+  mutate: (engine: SpreadsheetEngine) => void,
+): WorkbookChangeUndoBundle | null {
+  return toEngineUndoBundle(
+    engine.captureUndoOps(() => {
+      mutate(engine);
+    }).undoOps,
+  );
+}
+
+function applyWorkbookChangeUndoBundle(
+  engine: SpreadsheetEngine,
+  undoBundle: WorkbookChangeUndoBundle,
+): WorkbookChangeUndoBundle | null {
+  switch (undoBundle.kind) {
+    case "engineOps":
+      return toEngineUndoBundle(engine.applyOps(undoBundle.ops, { captureUndo: true }));
+    case "snapshot": {
+      const redoSnapshot = engine.exportSnapshot();
+      engine.importSnapshot(undoBundle.snapshot);
+      return {
+        kind: "snapshot",
+        snapshot: redoSnapshot,
+      };
+    }
+    default: {
+      const exhaustive: never = undoBundle;
+      return exhaustive;
+    }
+  }
+}
+
 async function commitWorkbookMutation(
   documentId: string,
   tx: ServerTransactionLike,
   eventPayload: WorkbookEventPayload,
   runtimeManager: WorkbookRuntimeManager,
-  mutate: (engine: SpreadsheetEngine) => void,
+  mutate: (engine: SpreadsheetEngine) => WorkbookChangeUndoBundle | null,
   clientMutationId?: string,
   session?: SessionIdentity,
   updatedBy = session?.userID ?? "system",
@@ -234,7 +281,7 @@ async function commitWorkbookMutation(
     await acquireWorkbookMutationLock(db, documentId);
     const state = await runtimeManager.loadRuntime(db, documentId);
     try {
-      mutate(state.engine);
+      const undoBundle = mutate(state.engine);
       const ownerUserId = resolveOwnerUserId(state, session);
       const result = await persistWorkbookMutation(db, documentId, {
         previousState: state,
@@ -242,6 +289,7 @@ async function commitWorkbookMutation(
         updatedBy,
         ownerUserId,
         eventPayload,
+        undoBundle,
         ...(clientMutationId !== undefined ? { clientMutationId } : {}),
       });
       runtimeManager.commitMutation(documentId, {
@@ -283,7 +331,7 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.applyRemoteBatch(parsed.batch);
+          return toEngineUndoBundle(engine.applyOps(parsed.batch.ops, { captureUndo: true }));
         },
         parsed.clientMutationId,
         session,
@@ -308,7 +356,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.setCellValue(parsed.sheetName, parsed.address, parsed.value);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.setCellValue(parsed.sheetName, parsed.address, parsed.value);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -329,7 +379,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.setCellFormula(parsed.sheetName, parsed.address, parsed.formula);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.setCellFormula(parsed.sheetName, parsed.address, parsed.formula);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -349,7 +401,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.clearCell(parsed.sheetName, parsed.address);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.clearCell(parsed.sheetName, parsed.address);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -368,7 +422,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.clearRange(parsed.range);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.clearRange(parsed.range);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -387,7 +443,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.renderCommit(parsed.ops);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.renderCommit(parsed.ops);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -407,7 +465,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.fillRange(parsed.source, parsed.target);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.fillRange(parsed.source, parsed.target);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -427,7 +487,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.copyRange(parsed.source, parsed.target);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.copyRange(parsed.source, parsed.target);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -447,7 +509,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.moveRange(parsed.source, parsed.target);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.moveRange(parsed.source, parsed.target);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -468,7 +532,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -489,7 +555,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.setRangeStyle(parsed.range, patch);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.setRangeStyle(parsed.range, patch);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -516,7 +584,9 @@ export async function handleServerMutator(
         eventPayload,
         runtimeManager,
         (engine) => {
-          engine.clearRangeStyle(parsed.range, parsed.fields);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.clearRangeStyle(parsed.range, parsed.fields);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -537,7 +607,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.setRangeNumberFormat(parsed.range, format);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.setRangeNumberFormat(parsed.range, format);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -556,7 +628,9 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
-          engine.clearRangeNumberFormat(parsed.range);
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.clearRangeNumberFormat(parsed.range);
+          });
         },
         parsed.clientMutationId,
         session,
@@ -659,11 +733,74 @@ export async function handleServerMutator(
         },
         runtimeManager,
         (engine) => {
+          const undoSnapshot = engine.exportSnapshot();
           engine.importSnapshot(version.snapshot);
+          return {
+            kind: "snapshot",
+            snapshot: undoSnapshot,
+          };
         },
         parsed.clientMutationId,
         session,
       );
+      return;
+    }
+
+    case "workbook.revertChange": {
+      const parsed = revertWorkbookChangeArgsSchema.parse(args);
+      await runtimeManager.runExclusive(parsed.documentId, async () => {
+        const db = serverTx.dbTransaction.wrappedTransaction;
+        await acquireWorkbookMutationLock(db, parsed.documentId);
+        const state = await runtimeManager.loadRuntime(db, parsed.documentId);
+        const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision);
+        if (!targetChange) {
+          throw new Error("Workbook change was not found");
+        }
+        if (!targetChange.undoBundle) {
+          throw new Error("Workbook change is not revertible");
+        }
+        if (targetChange.revertedByRevision !== null) {
+          throw new Error(
+            `Workbook change was already reverted in r${targetChange.revertedByRevision}`,
+          );
+        }
+        if (targetChange.eventKind === "revertChange" || targetChange.revertsRevision !== null) {
+          throw new Error("Reverting a revert change is not supported");
+        }
+        const eventPayload: WorkbookEventPayload = {
+          kind: "revertChange",
+          targetRevision: targetChange.revision,
+          targetSummary: targetChange.summary,
+          ...(targetChange.sheetName ? { sheetName: targetChange.sheetName } : {}),
+          ...(targetChange.anchorAddress ? { address: targetChange.anchorAddress } : {}),
+          ...(targetChange.range ? { range: targetChange.range } : {}),
+          appliedBundle: targetChange.undoBundle,
+        };
+        try {
+          const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle);
+          const ownerUserId = resolveOwnerUserId(state, session);
+          const result = await persistWorkbookMutation(db, parsed.documentId, {
+            previousState: state,
+            nextEngine: state.engine,
+            updatedBy: session?.userID ?? "system",
+            ownerUserId,
+            eventPayload,
+            undoBundle,
+            ...(parsed.clientMutationId !== undefined
+              ? { clientMutationId: parsed.clientMutationId }
+              : {}),
+          });
+          runtimeManager.commitMutation(parsed.documentId, {
+            projectionCommit: result.projectionCommit,
+            headRevision: result.revision,
+            calculatedRevision: result.calculatedRevision,
+            ownerUserId,
+          });
+        } catch (error) {
+          runtimeManager.invalidate(parsed.documentId);
+          throw error;
+        }
+      });
       return;
     }
 
