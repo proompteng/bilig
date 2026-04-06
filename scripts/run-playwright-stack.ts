@@ -13,6 +13,8 @@ const e2eReadyUrl =
   process.env["BILIG_E2E_READY_URL"] ?? `http://127.0.0.1:${e2eReadyPort}/healthz`;
 const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
+const e2eZeroKeepaliveUrl =
+  process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
 
 function dockerDaemonReady(): boolean {
   const result = Bun.spawnSync(["docker", "ps"], {
@@ -203,6 +205,7 @@ try {
   await waitForHttp(`${e2eBaseUrl}/healthz`);
   await waitForHttp(`${e2eSyncServerUrl}/healthz`);
   await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10));
+  await waitForHttp(e2eZeroKeepaliveUrl);
   readinessServer = Bun.serve({
     hostname: "127.0.0.1",
     port: Number.parseInt(e2eReadyPort, 10),

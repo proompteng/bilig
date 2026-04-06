@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { useActorRef, useSelector } from "@xstate/react";
 import type { CommitOp } from "@bilig/core";
 import { WorkbookView, type EditMovement, type EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import {
-  type CellNumberFormatInput,
   type CellRangeRef,
   MAX_COLS,
   MAX_ROWS,
@@ -16,7 +16,7 @@ import {
   type CellStylePatch,
   type LiteralInput,
 } from "@bilig/protocol";
-import { mutators, type BiligRuntimeConfig } from "@bilig/zero-sync";
+import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
@@ -24,6 +24,19 @@ import { loadPersistedSelection, persistSelection } from "./selection-persistenc
 import { WorkerViewportCache } from "./viewport-cache.js";
 import { WorkbookToolbar, type BorderPreset } from "./workbook-toolbar.js";
 import { isPresetColor, mergeRecentCustomColors, normalizeHexColor } from "./workbook-colors.js";
+import {
+  buildZeroWorkbookMutation,
+  isCellNumberFormatInputValue,
+  isCellRangeRef,
+  isCellStyleFieldList,
+  isCellStylePatchValue,
+  isCommitOps,
+  isLiteralInput,
+  isPendingWorkbookMutationList,
+  type PendingWorkbookMutation,
+  type PendingWorkbookMutationInput,
+  type WorkbookMutationMethod,
+} from "./workbook-sync.js";
 import { cn } from "./cn.js";
 
 type EditingMode = "idle" | "cell" | "formula";
@@ -79,40 +92,6 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
   }
-}
-
-function isLiteralInput(value: unknown): value is LiteralInput {
-  return (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
-}
-
-function isCellRangeRef(value: unknown): value is CellRangeRef {
-  return (
-    isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["startAddress"] === "string" &&
-    typeof value["endAddress"] === "string"
-  );
-}
-
-function isCellStyleFieldList(value: unknown): value is CellStyleField[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
-}
-
-function isCellStylePatchValue(value: unknown): value is CellStylePatch {
-  return isRecord(value);
-}
-
-function isCellNumberFormatInputValue(value: unknown): value is CellNumberFormatInput {
-  return typeof value === "string" || isRecord(value);
-}
-
-function isCommitOps(value: unknown): value is CommitOp[] {
-  return Array.isArray(value);
 }
 
 function toResolvedValue(cell: CellSnapshot): string {
@@ -260,77 +239,6 @@ function getNormalizedRangeBounds(range: CellRangeRef): {
   };
 }
 
-function cloneCellSnapshotForAddress(
-  snapshot: CellSnapshot,
-  sheetName: string,
-  address: string,
-): CellSnapshot {
-  return {
-    ...snapshot,
-    sheetName,
-    address,
-    version: snapshot.version + 1,
-  };
-}
-
-function applyOptimisticMoveRange(
-  cache: WorkerViewportCache,
-  source: CellRangeRef,
-  target: CellRangeRef,
-): void {
-  const sourceBounds = getNormalizedRangeBounds(source);
-  const targetBounds = getNormalizedRangeBounds(target);
-  const height = sourceBounds.endRow - sourceBounds.startRow + 1;
-  const width = sourceBounds.endCol - sourceBounds.startCol + 1;
-  const sourceMatrix: CellSnapshot[][] = [];
-
-  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-    const row: CellSnapshot[] = [];
-    for (let colOffset = 0; colOffset < width; colOffset += 1) {
-      row.push(
-        cache.getCell(
-          source.sheetName,
-          formatAddress(sourceBounds.startRow + rowOffset, sourceBounds.startCol + colOffset),
-        ),
-      );
-    }
-    sourceMatrix.push(row);
-  }
-
-  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-    for (let colOffset = 0; colOffset < width; colOffset += 1) {
-      const sourceAddress = formatAddress(
-        sourceBounds.startRow + rowOffset,
-        sourceBounds.startCol + colOffset,
-      );
-      cache.setCellSnapshot(
-        cloneCellSnapshotForAddress(
-          emptyCellSnapshot(source.sheetName, sourceAddress),
-          source.sheetName,
-          sourceAddress,
-        ),
-      );
-    }
-  }
-
-  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-    for (let colOffset = 0; colOffset < width; colOffset += 1) {
-      const sourceSnapshot = sourceMatrix[rowOffset]![colOffset]!;
-      const targetAddress = formatAddress(
-        targetBounds.startRow + rowOffset,
-        targetBounds.startCol + colOffset,
-      );
-      cache.setCellSnapshot(
-        cloneCellSnapshotForAddress(
-          { ...sourceSnapshot, address: targetAddress, sheetName: target.sheetName },
-          target.sheetName,
-          targetAddress,
-        ),
-      );
-    }
-  }
-}
-
 function createRangeRef(
   sheetName: string,
   startRow: number,
@@ -364,6 +272,10 @@ function formatConnectionStateLabel(state: ZeroConnectionState["name"]): string 
   }
 }
 
+function canAttemptRemoteSync(state: ZeroConnectionState["name"]): boolean {
+  return state === "connected";
+}
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -371,13 +283,16 @@ function toErrorMessage(error: unknown): string {
   return JSON.stringify(error);
 }
 
-function isMutationErrorResult(value: unknown): value is { type: "error"; error: unknown } {
+function isMutationErrorResult(value: unknown): value is {
+  type: "error";
+  error: { type: "app" | "zero"; message: string; details?: unknown };
+} {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "type" in value &&
-    value.type === "error" &&
-    "error" in value
+    isRecord(value) &&
+    value["type"] === "error" &&
+    isRecord(value["error"]) &&
+    (value["error"]["type"] === "app" || value["error"]["type"] === "zero") &&
+    typeof value["error"]["message"] === "string"
   );
 }
 
@@ -446,7 +361,7 @@ function WorkerWorkbookAppInner({
   });
   const runtimeController = useSelector(runtimeActorRef, (snapshot) => snapshot.context.controller);
   const workerHandle = useSelector(runtimeActorRef, (snapshot) => snapshot.context.handle);
-  const bridgeState = useSelector(runtimeActorRef, (snapshot) => snapshot.context.bridgeState);
+  const runtimeState = useSelector(runtimeActorRef, (snapshot) => snapshot.context.runtimeState);
   const selection = useSelector(runtimeActorRef, (snapshot) => snapshot.context.selection);
   const runtimeError = useSelector(runtimeActorRef, (snapshot) => snapshot.context.error);
   const loading = useSelector(runtimeActorRef, (snapshot) =>
@@ -472,6 +387,8 @@ function WorkerWorkbookAppInner({
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
   const zeroRef = useRef<ZeroClient>(zero);
+  const connectionStateRef = useRef(connectionState.name);
+  const syncQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -498,11 +415,20 @@ function WorkerWorkbookAppInner({
   }, [zero]);
 
   useEffect(() => {
-    if (!runtimeConfig.persistState || !runtimeReady) {
+    connectionStateRef.current = connectionState.name;
+  }, [connectionState.name]);
+
+  useEffect(() => {
+    if (!runtimeReady) {
       setZeroHealthReady(false);
       return;
     }
-    if (connectionState.name === "error" || connectionState.name === "closed") {
+    if (
+      connectionState.name === "disconnected" ||
+      connectionState.name === "needs-auth" ||
+      connectionState.name === "error" ||
+      connectionState.name === "closed"
+    ) {
       setZeroHealthReady(false);
       return;
     }
@@ -530,10 +456,10 @@ function WorkerWorkbookAppInner({
     return () => {
       cancelled = true;
     };
-  }, [connectionState.name, runtimeConfig.persistState, runtimeReady]);
+  }, [connectionState.name, runtimeReady]);
 
-  const writesAllowed =
-    connectionState.name === "connected" || connectionState.name === "connecting";
+  const writesAllowed = runtimeReady;
+  const remoteSyncAvailable = canAttemptRemoteSync(connectionState.name);
 
   const columnWidths = useSyncExternalStore(
     useCallback(
@@ -563,36 +489,130 @@ function WorkerWorkbookAppInner({
     [runtimeActorRef],
   );
 
-  const runZeroMutation = useCallback(
-    (mutation: Parameters<ZeroClient["mutate"]>[0]) => {
-      const result = zeroRef.current.mutate(mutation);
-      const observerResult =
-        (result as { server?: Promise<unknown> }).server ??
-        (result as { client?: Promise<unknown> }).client;
-      if (!observerResult) {
-        return;
+  const runSerializedSyncTask = useCallback(
+    async (task: () => Promise<unknown>): Promise<unknown> => {
+      const previousTask = syncQueueRef.current;
+      let releaseQueue = () => {};
+      syncQueueRef.current = new Promise<void>((resolve) => {
+        releaseQueue = resolve;
+      });
+      await previousTask.catch(() => {});
+      try {
+        return await task();
+      } finally {
+        releaseQueue();
       }
-      void observerResult
-        .then((serverResult) => {
-          if (isMutationErrorResult(serverResult)) {
-            const error = serverResult.error;
-            reportRuntimeError(error instanceof Error ? error : new Error(toErrorMessage(error)));
-          }
-          return undefined;
-        })
-        .catch(reportRuntimeError);
     },
-    [reportRuntimeError],
+    [],
   );
 
-  const invokeMutation = useCallback(
-    (method: string, ...args: unknown[]): Promise<void> => {
-      if (!writesAllowed) {
-        return Promise.reject(
-          new Error(`Writes are unavailable while Zero is ${connectionState.name}`),
-        );
+  const listPendingMutations = useCallback(async (): Promise<
+    readonly PendingWorkbookMutation[]
+  > => {
+    if (!runtimeController) {
+      throw new Error("Workbook runtime is not ready");
+    }
+    const value = await runtimeController.invoke("listPendingMutations");
+    assert(
+      isPendingWorkbookMutationList(value),
+      "Worker returned an invalid pending workbook mutation list",
+    );
+    return value;
+  }, [runtimeController]);
+
+  const enqueuePendingMutation = useCallback(
+    async (mutation: PendingWorkbookMutationInput): Promise<void> => {
+      if (!runtimeController) {
+        throw new Error("Workbook runtime is not ready");
+      }
+      await runtimeController.invoke("enqueuePendingMutation", mutation);
+    },
+    [runtimeController],
+  );
+
+  const runZeroMutation = useCallback(
+    async (
+      mutation: PendingWorkbookMutationInput,
+    ): Promise<{ ok: true } | { ok: false; retryable: boolean; error: Error }> => {
+      try {
+        const result = zeroRef.current.mutate(buildZeroWorkbookMutation(documentId, mutation));
+        const observerResult =
+          (result as { server?: Promise<unknown> }).server ??
+          (result as { client?: Promise<unknown> }).client;
+        if (!observerResult) {
+          return { ok: true };
+        }
+        const remoteResult = await observerResult;
+        if (!isMutationErrorResult(remoteResult)) {
+          return { ok: true };
+        }
+        const details =
+          remoteResult.error.type === "app" && remoteResult.error.details !== undefined
+            ? ` (${JSON.stringify(remoteResult.error.details)})`
+            : "";
+        return {
+          ok: false,
+          retryable: remoteResult.error.type === "zero",
+          error: new Error(`${remoteResult.error.message}${details}`),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          retryable: true,
+          error: error instanceof Error ? error : new Error(toErrorMessage(error)),
+        };
+      }
+    },
+    [documentId],
+  );
+
+  const drainPendingMutationsLocked = useCallback(async (): Promise<void> => {
+    if (!runtimeController || !canAttemptRemoteSync(connectionStateRef.current)) {
+      return;
+    }
+
+    const drainBatch = async (
+      pendingMutations: readonly PendingWorkbookMutation[],
+      index = 0,
+    ): Promise<void> => {
+      const mutation = pendingMutations[index];
+      if (!mutation) {
+        return;
+      }
+      if (!canAttemptRemoteSync(connectionStateRef.current)) {
+        return;
       }
 
+      const remoteResult = await runZeroMutation(mutation);
+      if (!remoteResult.ok) {
+        if (!remoteResult.retryable) {
+          throw remoteResult.error;
+        }
+        return;
+      }
+
+      await runtimeController.invoke("ackPendingMutation", mutation.id);
+      await drainBatch(pendingMutations, index + 1);
+    };
+
+    await drainBatch(await listPendingMutations());
+  }, [listPendingMutations, runZeroMutation, runtimeController]);
+
+  const drainPendingMutations = useCallback(async (): Promise<void> => {
+    try {
+      await runSerializedSyncTask(drainPendingMutationsLocked);
+    } catch (error) {
+      reportRuntimeError(error);
+    }
+  }, [drainPendingMutationsLocked, reportRuntimeError, runSerializedSyncTask]);
+
+  const invokeMutation = useCallback(
+    async (method: WorkbookMutationMethod, ...args: unknown[]): Promise<void> => {
+      if (!runtimeController) {
+        throw new Error("Workbook runtime is not ready");
+      }
+
+      let mutation: PendingWorkbookMutationInput;
       switch (method) {
         case "setCellValue": {
           const [sheetName, address, value] = args;
@@ -600,10 +620,8 @@ function WorkerWorkbookAppInner({
             typeof sheetName === "string" && typeof address === "string" && isLiteralInput(value),
             "Invalid setCellValue args",
           );
-          runZeroMutation(
-            mutators.workbook.setCellValue({ documentId, sheetName, address, value }),
-          );
-          return Promise.resolve();
+          mutation = { method, args: [sheetName, address, value] };
+          break;
         }
         case "setCellFormula": {
           const [sheetName, address, formula] = args;
@@ -613,15 +631,8 @@ function WorkerWorkbookAppInner({
               typeof formula === "string",
             "Invalid setCellFormula args",
           );
-          runZeroMutation(
-            mutators.workbook.setCellFormula({
-              documentId,
-              sheetName,
-              address,
-              formula,
-            }),
-          );
-          return Promise.resolve();
+          mutation = { method, args: [sheetName, address, formula] };
+          break;
         }
         case "clearCell": {
           const [sheetName, address] = args;
@@ -629,38 +640,38 @@ function WorkerWorkbookAppInner({
             typeof sheetName === "string" && typeof address === "string",
             "Invalid clearCell args",
           );
-          runZeroMutation(mutators.workbook.clearCell({ documentId, sheetName, address }));
-          return Promise.resolve();
+          mutation = { method, args: [sheetName, address] };
+          break;
         }
         case "clearRange": {
           const [range] = args;
           assert(isCellRangeRef(range), "Invalid clearRange args");
-          runZeroMutation(mutators.workbook.clearRange({ documentId, range }));
-          return Promise.resolve();
+          mutation = { method, args: [range] };
+          break;
         }
         case "renderCommit": {
           const [ops] = args;
           assert(isCommitOps(ops), "Invalid renderCommit args");
-          runZeroMutation(mutators.workbook.renderCommit({ documentId, ops }));
-          return Promise.resolve();
+          mutation = { method, args: [ops] };
+          break;
         }
         case "fillRange": {
           const [source, target] = args;
           assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid fillRange args");
-          runZeroMutation(mutators.workbook.fillRange({ documentId, source, target }));
-          return Promise.resolve();
+          mutation = { method, args: [source, target] };
+          break;
         }
         case "copyRange": {
           const [source, target] = args;
           assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid copyRange args");
-          runZeroMutation(mutators.workbook.copyRange({ documentId, source, target }));
-          return Promise.resolve();
+          mutation = { method, args: [source, target] };
+          break;
         }
         case "moveRange": {
           const [source, target] = args;
           assert(isCellRangeRef(source) && isCellRangeRef(target), "Invalid moveRange args");
-          runZeroMutation(mutators.workbook.moveRange({ documentId, source, target }));
-          return Promise.resolve();
+          mutation = { method, args: [source, target] };
+          break;
         }
         case "updateColumnWidth": {
           const [sheetName, columnIndex, width] = args;
@@ -670,15 +681,8 @@ function WorkerWorkbookAppInner({
               typeof width === "number",
             "Invalid updateColumnWidth args",
           );
-          runZeroMutation(
-            mutators.workbook.updateColumnWidth({
-              documentId,
-              sheetName,
-              columnIndex,
-              width,
-            }),
-          );
-          return Promise.resolve();
+          mutation = { method, args: [sheetName, columnIndex, width] };
+          break;
         }
         case "setRangeStyle": {
           const [range, patch] = args;
@@ -686,8 +690,8 @@ function WorkerWorkbookAppInner({
             isCellRangeRef(range) && isCellStylePatchValue(patch),
             "Invalid setRangeStyle args",
           );
-          runZeroMutation(mutators.workbook.setRangeStyle({ documentId, range, patch }));
-          return Promise.resolve();
+          mutation = { method, args: [range, patch] };
+          break;
         }
         case "clearRangeStyle": {
           const [range, fields] = args;
@@ -695,8 +699,8 @@ function WorkerWorkbookAppInner({
             isCellRangeRef(range) && (fields === undefined || isCellStyleFieldList(fields)),
             "Invalid clearRangeStyle args",
           );
-          runZeroMutation(mutators.workbook.clearRangeStyle({ documentId, range, fields }));
-          return Promise.resolve();
+          mutation = { method, args: [range, fields] };
+          break;
         }
         case "setRangeNumberFormat": {
           const [range, format] = args;
@@ -704,27 +708,93 @@ function WorkerWorkbookAppInner({
             isCellRangeRef(range) && isCellNumberFormatInputValue(format),
             "Invalid setRangeNumberFormat args",
           );
-          runZeroMutation(
-            mutators.workbook.setRangeNumberFormat({
-              documentId,
-              range,
-              format,
-            }),
-          );
-          return Promise.resolve();
+          mutation = { method, args: [range, format] };
+          break;
         }
         case "clearRangeNumberFormat": {
           const [range] = args;
           assert(isCellRangeRef(range), "Invalid clearRangeNumberFormat args");
-          runZeroMutation(mutators.workbook.clearRangeNumberFormat({ documentId, range }));
-          return Promise.resolve();
+          mutation = { method, args: [range] };
+          break;
         }
         default:
-          return Promise.reject(new Error(`Unsupported workbook mutation: ${method}`));
+          throw new Error("Unsupported workbook mutation");
+      }
+
+      await runtimeController.invoke(mutation.method, ...mutation.args);
+      await runSerializedSyncTask(async () => {
+        const pendingMutations = await listPendingMutations();
+        const hasPendingBacklog = pendingMutations.length > 0;
+        if (!canAttemptRemoteSync(connectionStateRef.current) || hasPendingBacklog) {
+          await enqueuePendingMutation(mutation);
+          if (canAttemptRemoteSync(connectionStateRef.current) && hasPendingBacklog) {
+            await drainPendingMutationsLocked();
+          }
+          return;
+        }
+
+        const remoteResult = await runZeroMutation(mutation);
+        if (remoteResult.ok) {
+          return;
+        }
+        if (remoteResult.retryable) {
+          await enqueuePendingMutation(mutation);
+          return;
+        }
+        throw remoteResult.error;
+      });
+    },
+    [
+      drainPendingMutationsLocked,
+      enqueuePendingMutation,
+      listPendingMutations,
+      runSerializedSyncTask,
+      runZeroMutation,
+      runtimeController,
+    ],
+  );
+
+  const invokeColumnWidthMutation = useCallback(
+    async (
+      sheetName: string,
+      columnIndex: number,
+      width: number,
+      options?: { flush?: boolean },
+    ): Promise<void> => {
+      const cache = workerHandleRef.current?.cache;
+      const previousWidth = cache?.getColumnWidths(sheetName)[columnIndex];
+      if (cache) {
+        const applyOptimisticWidth = () => {
+          cache.setColumnWidth(sheetName, columnIndex, width);
+        };
+        if (options?.flush) {
+          flushSync(applyOptimisticWidth);
+        } else {
+          applyOptimisticWidth();
+        }
+      }
+      try {
+        await invokeMutation("updateColumnWidth", sheetName, columnIndex, width);
+      } catch (error) {
+        if (
+          cache &&
+          previousWidth !== undefined &&
+          cache.getColumnWidths(sheetName)[columnIndex] === width
+        ) {
+          cache.setColumnWidth(sheetName, columnIndex, previousWidth);
+        }
+        throw error;
       }
     },
-    [connectionState.name, documentId, runZeroMutation, writesAllowed],
+    [invokeMutation],
   );
+
+  useEffect(() => {
+    if (!runtimeController || !canAttemptRemoteSync(connectionState.name)) {
+      return;
+    }
+    void drainPendingMutations();
+  }, [connectionState.name, drainPendingMutations, runtimeController]);
 
   const getLiveSelectedCell = useCallback(
     (nextSelection = selectionRef.current) => {
@@ -759,45 +829,6 @@ function WorkerWorkbookAppInner({
 
   const applyParsedInput = useCallback(
     async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
-      const cache = workerHandleRef.current?.cache;
-      if (cache) {
-        const current = cache.peekCell(sheetName, address) ?? emptyCellSnapshot(sheetName, address);
-        const next: CellSnapshot = {
-          ...current,
-          sheetName,
-          address,
-          version: current.version + 1,
-        };
-
-        if (parsed.kind === "formula") {
-          next.formula = parsed.formula;
-          next.input = parsed.formula;
-          next.value = { tag: ValueTag.Empty };
-        } else if (parsed.kind === "clear") {
-          delete next.formula;
-          delete next.input;
-          next.value = { tag: ValueTag.Empty };
-        } else if (parsed.value === null) {
-          delete next.formula;
-          next.input = null;
-          next.value = { tag: ValueTag.Empty };
-        } else if (typeof parsed.value === "number") {
-          delete next.formula;
-          next.input = parsed.value;
-          next.value = { tag: ValueTag.Number, value: parsed.value };
-        } else if (typeof parsed.value === "boolean") {
-          delete next.formula;
-          next.input = parsed.value;
-          next.value = { tag: ValueTag.Boolean, value: parsed.value };
-        } else {
-          delete next.formula;
-          next.input = parsed.value;
-          next.value = { tag: ValueTag.String, value: parsed.value, stringId: 0 };
-        }
-
-        cache.setCellSnapshot(next);
-      }
-
       if (parsed.kind === "formula") {
         await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
         return;
@@ -860,7 +891,6 @@ function WorkerWorkbookAppInner({
       return;
     }
     const targetRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
-    workerHandleRef.current?.cache.applyOptimisticClearRange(targetRange);
     editorValueRef.current = "";
     setEditorValue("");
     editorTargetRef.current = selectionRef.current;
@@ -1015,10 +1045,6 @@ function WorkerWorkbookAppInner({
         startAddress: targetStartAddr,
         endAddress: targetEndAddr,
       };
-      const cache = workerHandleRef.current?.cache;
-      if (cache) {
-        applyOptimisticMoveRange(cache, source, target);
-      }
       void invokeMutation("moveRange", source, target)
         .then(() => {
           editorTargetRef.current = selectionRef.current;
@@ -1033,6 +1059,13 @@ function WorkerWorkbookAppInner({
 
   const selectAddress = useCallback(
     (sheetName: string, address: string) => {
+      if (
+        editingModeRef.current === "idle" &&
+        selectionRef.current.sheetName === sheetName &&
+        selectionRef.current.address === address
+      ) {
+        return;
+      }
       if (editingModeRef.current !== "idle") {
         editorTargetRef.current = { sheetName, address };
         editingModeRef.current = "idle";
@@ -1061,8 +1094,8 @@ function WorkerWorkbookAppInner({
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
   const sheetNames = useMemo(
-    () => [...(bridgeState?.sheetNames ?? [selection.sheetName])],
-    [bridgeState?.sheetNames, selection.sheetName],
+    () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
+    [runtimeState?.sheetNames, selection.sheetName],
   );
   const selectedStyle = workerHandle?.cache.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
@@ -1090,7 +1123,7 @@ function WorkerWorkbookAppInner({
     [currentTextColor, recentTextColors],
   );
   const statusModeLabel = formatConnectionStateLabel(connectionState.name);
-  const statusModeValue = connectionState.name === "connected" ? "Live" : statusModeLabel;
+  const statusModeValue = remoteSyncAvailable ? "Live" : statusModeLabel;
 
   const subscribeViewport = useCallback(
     (
@@ -1108,11 +1141,15 @@ function WorkerWorkbookAppInner({
 
   const statusSyncValue = !runtimeReady
     ? "Loading"
-    : !runtimeConfig.persistState || zeroHealthReady
-      ? "Ready"
+    : connectionState.name === "connected"
+      ? zeroHealthReady
+        ? "Ready"
+        : "Syncing"
       : connectionState.name === "connecting"
         ? "Syncing"
-        : "Unavailable";
+        : connectionState.name === "disconnected"
+          ? "Local"
+          : "Unavailable";
   const statusChipClass =
     "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]";
 
@@ -1158,7 +1195,6 @@ function WorkerWorkbookAppInner({
 
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
-      workerHandleRef.current?.cache.applyOptimisticRangeStyle(selectionRange, patch);
       await invokeMutation("setRangeStyle", selectionRange, patch);
     },
     [invokeMutation, selectionRange],
@@ -1166,7 +1202,6 @@ function WorkerWorkbookAppInner({
 
   const clearRangeStyleFields = useCallback(
     async (fields?: CellStyleField[]) => {
-      workerHandleRef.current?.cache.clearOptimisticRangeStyle(selectionRange, fields);
       await invokeMutation("clearRangeStyle", selectionRange, fields);
     },
     [invokeMutation, selectionRange],
@@ -1273,7 +1308,6 @@ function WorkerWorkbookAppInner({
 
   const createSheet = useCallback(() => {
     const nextSheetName = createNextSheetName(sheetNames);
-    workerHandle?.cache.setKnownSheets([...sheetNames, nextSheetName]);
     void invokeMutation("renderCommit", [
       {
         kind: "upsertSheet",
@@ -1283,7 +1317,7 @@ function WorkerWorkbookAppInner({
     ])
       .then(() => selectAddress(nextSheetName, "A1"))
       .catch(reportRuntimeError);
-  }, [invokeMutation, reportRuntimeError, selectAddress, sheetNames, workerHandle]);
+  }, [invokeMutation, reportRuntimeError, selectAddress, sheetNames]);
 
   const renameSheet = useCallback(
     (currentName: string, nextName: string) => {
@@ -1302,9 +1336,6 @@ function WorkerWorkbookAppInner({
         return;
       }
 
-      workerHandle?.cache.setKnownSheets(
-        sheetNames.map((name) => (name === currentName ? trimmedName : name)),
-      );
       void invokeMutation("renderCommit", [
         {
           kind: "renameSheet",
@@ -1320,7 +1351,7 @@ function WorkerWorkbookAppInner({
         })
         .catch(reportRuntimeError);
     },
-    [invokeMutation, reportRuntimeError, selectAddress, sheetNames, workerHandle],
+    [invokeMutation, reportRuntimeError, selectAddress, sheetNames],
   );
 
   const setNumberFormatPreset = useCallback(
@@ -1572,10 +1603,10 @@ function WorkerWorkbookAppInner({
           {runtimeError}
         </div>
       ) : null}
-      {runtimeReady && !writesAllowed ? (
+      {runtimeReady && !remoteSyncAvailable ? (
         <div className="border-b border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-2 text-sm text-[var(--wb-accent)]">
-          Zero is {statusModeLabel.toLowerCase()}. Editing is disabled until the connection
-          recovers.
+          Zero is {statusModeLabel.toLowerCase()}. Local edits remain available while sync is
+          degraded.
         </div>
       ) : null}
       <div className="relative flex min-h-0 flex-1">
@@ -1595,13 +1626,9 @@ function WorkerWorkbookAppInner({
                 }
               }}
               onAutofitColumn={(columnIndex: number, fallbackWidth: number) => {
-                workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, fallbackWidth);
-                return invokeMutation(
-                  "updateColumnWidth",
-                  selection.sheetName,
-                  columnIndex,
-                  fallbackWidth,
-                )
+                return invokeColumnWidthMutation(selection.sheetName, columnIndex, fallbackWidth, {
+                  flush: true,
+                })
                   .then(() => undefined)
                   .catch(reportRuntimeError);
               }}
@@ -1610,13 +1637,9 @@ function WorkerWorkbookAppInner({
               onCancelEdit={cancelEditor}
               onClearCell={clearSelectedCell}
               onColumnWidthChange={(columnIndex: number, newSize: number) => {
-                workerHandle?.cache.setColumnWidth(selection.sheetName, columnIndex, newSize);
-                void invokeMutation(
-                  "updateColumnWidth",
-                  selection.sheetName,
-                  columnIndex,
-                  newSize,
-                ).catch(reportRuntimeError);
+                void invokeColumnWidthMutation(selection.sheetName, columnIndex, newSize).catch(
+                  reportRuntimeError,
+                );
               }}
               onCommitEdit={commitEditor}
               onCopyRange={copySelectionRange}

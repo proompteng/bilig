@@ -1009,7 +1009,6 @@ export function WorkbookGridSurface({
       event.preventDefault();
       event.stopPropagation();
       focusGrid();
-      const handleElement = event.currentTarget;
       fillHandleCleanupRef.current?.();
       fillPreviewRangeRef.current = null;
       setFillPreviewRange(null);
@@ -1020,7 +1019,6 @@ export function WorkbookGridSurface({
           ? current
           : { cell: null, header: null, cursor: "default" },
       );
-      handleElement.setPointerCapture(event.pointerId);
 
       const move = (nativeEvent: PointerEvent) => {
         if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
@@ -1039,16 +1037,11 @@ export function WorkbookGridSurface({
           return;
         }
         fillHandleCleanupRef.current = null;
-        handleElement.removeEventListener("pointermove", move);
-        handleElement.removeEventListener("pointerup", up);
-        handleElement.removeEventListener("pointercancel", cancel);
-        handleElement.removeEventListener("lostpointercapture", lostPointerCapture);
-        const pointerId = fillHandlePointerIdRef.current;
+        window.removeEventListener("pointermove", move, true);
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", cancel, true);
         fillHandlePointerIdRef.current = null;
         setIsFillHandleDragging(false);
-        if (pointerId !== null && handleElement.hasPointerCapture(pointerId)) {
-          handleElement.releasePointerCapture(pointerId);
-        }
         setHoverState((current) =>
           sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
             ? current
@@ -1094,20 +1087,10 @@ export function WorkbookGridSurface({
         cleanup();
       };
 
-      const lostPointerCapture = (nativeEvent: PointerEvent) => {
-        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
-          return;
-        }
-        fillPreviewRangeRef.current = null;
-        setFillPreviewRange(null);
-        cleanup();
-      };
-
       fillHandleCleanupRef.current = cleanup;
-      handleElement.addEventListener("pointermove", move);
-      handleElement.addEventListener("pointerup", up);
-      handleElement.addEventListener("pointercancel", cancel);
-      handleElement.addEventListener("lostpointercapture", lostPointerCapture);
+      window.addEventListener("pointermove", move, true);
+      window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", cancel, true);
     },
     [focusGrid, onFillRange, resolvePointerCell, selectionRange],
   );

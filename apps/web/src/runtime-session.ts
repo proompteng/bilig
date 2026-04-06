@@ -1,8 +1,13 @@
-import type { CellSnapshot, RecalcMetrics, Viewport } from "@bilig/protocol";
+import type { Zero } from "@rocicorp/zero";
+import { createWorkerEngineClient, type MessagePortLike } from "@bilig/worker-transport";
+import type { CellSnapshot, RecalcMetrics, Viewport, WorkbookSnapshot } from "@bilig/protocol";
 import { ValueTag } from "@bilig/protocol";
-import type { WorkbookWorkerStateSnapshot } from "./worker-runtime.js";
+import type {
+  WorkbookWorkerBootstrapResult,
+  WorkbookWorkerStateSnapshot,
+} from "./worker-runtime.js";
 import { WorkerViewportCache } from "./viewport-cache.js";
-import { ZeroWorkbookBridge, type ZeroWorkbookBridgeState } from "./zero/ZeroWorkbookBridge.js";
+import { ZeroWorkbookLiveSync } from "./runtime-zero-live.js";
 
 export interface WorkerHandle {
   readonly cache: WorkerViewportCache;
@@ -15,26 +20,31 @@ export interface WorkerRuntimeSelection {
 
 export interface WorkerRuntimeSessionCallbacks {
   readonly onRuntimeState: (runtimeState: WorkbookWorkerStateSnapshot) => void;
-  readonly onBridgeState: (bridgeState: ZeroWorkbookBridgeState | null) => void;
   readonly onSelection: (selection: WorkerRuntimeSelection) => void;
   readonly onError: (message: string) => void;
 }
 
-export type ZeroClient = ConstructorParameters<typeof ZeroWorkbookBridge>[0];
+export type ZeroClient = Zero;
+
+export interface ZeroWorkbookSyncSource {
+  materialize(query: unknown): unknown;
+}
 
 export interface CreateWorkerRuntimeSessionInput {
   readonly documentId: string;
   readonly replicaId: string;
   readonly persistState: boolean;
-  readonly zero: ZeroClient;
   readonly initialSelection: WorkerRuntimeSelection;
+  readonly zero?: ZeroWorkbookSyncSource;
+  readonly fetchImpl?: typeof fetch;
+  readonly createWorker?: () => WorkerSessionPort;
 }
 
 export interface WorkerRuntimeSessionController {
   readonly handle: WorkerHandle;
   readonly runtimeState: WorkbookWorkerStateSnapshot;
-  readonly bridgeState: ZeroWorkbookBridgeState | null;
   readonly selection: WorkerRuntimeSelection;
+  readonly invoke: (method: string, ...args: unknown[]) => Promise<unknown>;
   readonly setSelection: (selection: WorkerRuntimeSelection) => Promise<void>;
   readonly subscribeViewport: (
     sheetName: string,
@@ -43,6 +53,10 @@ export interface WorkerRuntimeSessionController {
     sheetViewId?: string,
   ) => () => void;
   readonly dispose: () => void;
+}
+
+interface WorkerSessionPort extends MessagePortLike {
+  terminate?: () => void;
 }
 
 const EMPTY_METRICS: RecalcMetrics = {
@@ -55,8 +69,74 @@ const EMPTY_METRICS: RecalcMetrics = {
   recalcMs: 0,
   compileMs: 0,
 };
+const EMPTY_UNSUBSCRIBE = () => {};
 
-function noop(): void {}
+function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnapshot {
+  return {
+    workbookName: documentId,
+    sheetNames: ["Sheet1"],
+    metrics: EMPTY_METRICS,
+    syncState: "syncing",
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"])
+  );
+}
+
+function isCellSnapshot(value: unknown): value is CellSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value["sheetName"] === "string" &&
+    typeof value["address"] === "string" &&
+    typeof value["flags"] === "number" &&
+    typeof value["version"] === "number" &&
+    isRecord(value["value"]) &&
+    typeof value["value"]["tag"] === "number"
+  );
+}
+
+function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerStateSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value["workbookName"] === "string" &&
+    Array.isArray(value["sheetNames"]) &&
+    value["sheetNames"].every((sheetName) => typeof sheetName === "string") &&
+    isRecord(value["metrics"]) &&
+    typeof value["syncState"] === "string"
+  );
+}
+
+function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorkerBootstrapResult {
+  return (
+    isRecord(value) &&
+    typeof value["restoredFromPersistence"] === "boolean" &&
+    isWorkbookWorkerStateSnapshot(value["runtimeState"])
+  );
+}
+
+async function invokeWorkerMethod<T>(
+  client: ReturnType<typeof createWorkerEngineClient>,
+  method: string,
+  guard: (value: unknown) => value is T,
+  ...args: unknown[]
+): Promise<T> {
+  const value = await client.invoke(method, ...args);
+  if (!guard(value)) {
+    throw new Error(`Worker method ${method} returned an unexpected payload`);
+  }
+  return value;
+}
 
 function emptyCellSnapshot(selection: WorkerRuntimeSelection): CellSnapshot {
   return {
@@ -70,6 +150,10 @@ function emptyCellSnapshot(selection: WorkerRuntimeSelection): CellSnapshot {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function sameSelection(left: WorkerRuntimeSelection, right: WorkerRuntimeSelection): boolean {
+  return left.sheetName === right.sheetName && left.address === right.address;
 }
 
 function reconcileSelection(
@@ -88,85 +172,191 @@ function reconcileSelection(
   };
 }
 
-function createRuntimeState(
+async function loadLatestWorkbookSnapshot(
   documentId: string,
-  bridgeState: ZeroWorkbookBridgeState | null,
-): WorkbookWorkerStateSnapshot {
-  return {
-    workbookName: bridgeState?.workbookName ?? documentId,
-    sheetNames: bridgeState?.sheetNames ? [...bridgeState.sheetNames] : ["Sheet1"],
-    metrics: EMPTY_METRICS,
-    syncState: bridgeState ? "live" : "syncing",
-  };
+  fetchImpl: typeof fetch,
+): Promise<WorkbookSnapshot | null> {
+  const response = await fetchImpl(
+    `/v2/documents/${encodeURIComponent(documentId)}/snapshot/latest`,
+    {
+      headers: {
+        accept: "application/json, application/vnd.bilig.workbook+json",
+      },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to load workbook snapshot (${response.status})`);
+  }
+  const parsed: unknown = JSON.parse(await response.text());
+  if (!isWorkbookSnapshot(parsed)) {
+    throw new Error("Workbook snapshot payload does not match the expected schema");
+  }
+  return parsed;
+}
+
+function createWorkbookWorker(): WorkerSessionPort {
+  return new Worker(new URL("./workbook.worker.ts", import.meta.url), {
+    type: "module",
+  }) as WorkerSessionPort;
 }
 
 export async function createWorkerRuntimeSessionController(
   input: CreateWorkerRuntimeSessionInput,
   callbacks: WorkerRuntimeSessionCallbacks,
 ): Promise<WorkerRuntimeSessionController> {
-  const cache = new WorkerViewportCache();
-  cache.setKnownSheets([input.initialSelection.sheetName]);
+  const workerPort = (input.createWorker ?? createWorkbookWorker)();
+  const client = createWorkerEngineClient({ port: workerPort });
+  const cache = new WorkerViewportCache(client);
   const handle: WorkerHandle = { cache };
+  const fetchImpl = input.fetchImpl ?? fetch;
   let currentSelection = input.initialSelection;
-  let currentBridgeState: ZeroWorkbookBridgeState | null = null;
-  let currentRuntimeState = createRuntimeState(input.documentId, null);
+  let currentRuntimeState = createInitialRuntimeState(input.documentId);
   let disposed = false;
-  let unsubscribeBridgeWorkbook: () => void = noop;
+  const liveSync = input.zero
+    ? new ZeroWorkbookLiveSync({
+        zero: input.zero,
+        documentId: input.documentId,
+        cache,
+        onError(message) {
+          if (!disposed) {
+            callbacks.onError(message);
+          }
+        },
+      })
+    : null;
 
-  const reportError = (error: unknown) => {
-    if (disposed) {
-      return;
-    }
-    callbacks.onError(toErrorMessage(error));
+  const publishRuntimeState = (runtimeState: WorkbookWorkerStateSnapshot) => {
+    currentRuntimeState = runtimeState;
+    cache.setKnownSheets(runtimeState.sheetNames);
+    callbacks.onRuntimeState(runtimeState);
   };
-
-  const zeroBridge = new ZeroWorkbookBridge(input.zero, input.documentId, cache, reportError);
 
   const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {
     currentSelection = selection;
     callbacks.onSelection(selection);
-    zeroBridge.setSelection(selection.sheetName, selection.address);
-    return cache.peekCell(selection.sheetName, selection.address) ?? emptyCellSnapshot(selection);
+    const snapshot = await invokeWorkerMethod(
+      client,
+      "getCell",
+      isCellSnapshot,
+      selection.sheetName,
+      selection.address,
+    );
+    cache.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection));
+    liveSync?.setSelection(selection);
+    return snapshot ?? emptyCellSnapshot(selection);
+  };
+
+  const refreshRuntimeState = async (): Promise<void> => {
+    const runtimeState = await invokeWorkerMethod(
+      client,
+      "getRuntimeState",
+      isWorkbookWorkerStateSnapshot,
+    );
+    publishRuntimeState(runtimeState);
+    const reconciledSelection = reconcileSelection(currentSelection, runtimeState.sheetNames);
+    if (
+      reconciledSelection.sheetName !== currentSelection.sheetName ||
+      reconciledSelection.address !== currentSelection.address
+    ) {
+      await applySelection(reconciledSelection);
+    }
   };
 
   callbacks.onRuntimeState(currentRuntimeState);
   callbacks.onSelection(currentSelection);
 
-  unsubscribeBridgeWorkbook = zeroBridge.subscribeWorkbookState((state) => {
-    currentBridgeState = state;
-    currentRuntimeState = createRuntimeState(input.documentId, state);
-    callbacks.onBridgeState(state);
-    callbacks.onRuntimeState(currentRuntimeState);
-    cache.setKnownSheets(state.sheetNames);
-    const reconciledSelection = reconcileSelection(currentSelection, state.sheetNames);
-    if (
-      reconciledSelection.sheetName !== currentSelection.sheetName ||
-      reconciledSelection.address !== currentSelection.address
-    ) {
-      currentSelection = reconciledSelection;
-      callbacks.onSelection(currentSelection);
-      zeroBridge.setSelection(currentSelection.sheetName, currentSelection.address);
+  try {
+    const bootstrap = await invokeWorkerMethod(
+      client,
+      "bootstrap",
+      isWorkbookWorkerBootstrapResult,
+      {
+        documentId: input.documentId,
+        replicaId: input.replicaId,
+        persistState: input.persistState,
+      },
+    );
+    publishRuntimeState(bootstrap.runtimeState);
+
+    if (!bootstrap.restoredFromPersistence) {
+      const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
+      if (snapshot) {
+        const hydratedState = await invokeWorkerMethod(
+          client,
+          "replaceSnapshot",
+          isWorkbookWorkerStateSnapshot,
+          snapshot,
+        );
+        publishRuntimeState(hydratedState);
+      }
     }
-  });
+
+    await applySelection(reconcileSelection(currentSelection, currentRuntimeState.sheetNames));
+  } catch (error) {
+    liveSync?.dispose();
+    client.dispose();
+    workerPort.terminate?.();
+    throw error;
+  }
 
   return {
-    handle,
-    runtimeState: currentRuntimeState,
-    bridgeState: currentBridgeState,
-    selection: currentSelection,
-    async setSelection(selection) {
-      await applySelection(selection);
+    get handle() {
+      return handle;
     },
-    subscribeViewport(sheetName, viewport, listener, sheetViewId) {
-      return zeroBridge.subscribeViewport(sheetName, viewport, listener, sheetViewId);
+    get runtimeState() {
+      return currentRuntimeState;
+    },
+    get selection() {
+      return currentSelection;
+    },
+    async invoke(method, ...args) {
+      try {
+        const result = await client.invoke(method, ...args);
+        if (method === "renderCommit" || method === "replaceSnapshot") {
+          await refreshRuntimeState();
+        }
+        return result;
+      } catch (error) {
+        if (!disposed) {
+          callbacks.onError(toErrorMessage(error));
+        }
+        throw error;
+      }
+    },
+    async setSelection(selection) {
+      try {
+        if (sameSelection(selection, currentSelection)) {
+          return;
+        }
+        await applySelection(selection);
+      } catch (error) {
+        if (!disposed) {
+          callbacks.onError(toErrorMessage(error));
+        }
+        throw error;
+      }
+    },
+    subscribeViewport(sheetName, viewport, listener) {
+      const unsubscribeWorker = cache.subscribeViewport(sheetName, viewport, listener);
+      const unsubscribeLive =
+        liveSync?.subscribeViewport(sheetName, viewport, listener) ?? EMPTY_UNSUBSCRIBE;
+      return () => {
+        unsubscribeLive();
+        unsubscribeWorker();
+      };
     },
     dispose() {
       if (disposed) {
         return;
       }
       disposed = true;
-      unsubscribeBridgeWorkbook();
-      zeroBridge.dispose();
+      liveSync?.dispose();
+      client.dispose();
+      workerPort.terminate?.();
     },
   };
 }

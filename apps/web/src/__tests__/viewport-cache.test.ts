@@ -63,6 +63,177 @@ describe("WorkerViewportCache", () => {
     expect(cache.getCell("Sheet1", "D5").styleId).toBeUndefined();
   });
 
+  it("keeps an equal-version local formula snapshot when a later patch drops the formula", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.Boolean, value: true },
+            input: '=A1="HELLO"',
+            formula: 'A1="HELLO"',
+            flags: 0,
+            version: 3,
+          },
+          displayText: "TRUE",
+          copyText: '=A1="HELLO"',
+          editorText: '=A1="HELLO"',
+          formatId: 0,
+          styleId: "style-0",
+        },
+      ],
+    });
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.Boolean, value: false },
+            flags: 0,
+            version: 3,
+          },
+          displayText: "FALSE",
+          copyText: "FALSE",
+          editorText: "FALSE",
+          formatId: 0,
+          styleId: "style-0",
+        },
+      ],
+    });
+
+    expect(cache.getCell("Sheet1", "D5")).toMatchObject({
+      value: { tag: ValueTag.Boolean, value: true },
+      formula: 'A1="HELLO"',
+      version: 3,
+    });
+  });
+
+  it("keeps a local formula snapshot when a newer eval-only patch drops source metadata", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.Boolean, value: true },
+            input: '=A1="HELLO"',
+            formula: 'A1="HELLO"',
+            flags: 0,
+            version: 3,
+          },
+          displayText: "TRUE",
+          copyText: '=A1="HELLO"',
+          editorText: '=A1="HELLO"',
+          formatId: 0,
+          styleId: "style-0",
+        },
+      ],
+    });
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.Boolean, value: false },
+            flags: 0,
+            version: 4,
+          },
+          displayText: "FALSE",
+          copyText: "FALSE",
+          editorText: "FALSE",
+          formatId: 0,
+          styleId: "style-0",
+        },
+      ],
+    });
+
+    expect(cache.getCell("Sheet1", "D5")).toMatchObject({
+      value: { tag: ValueTag.Boolean, value: true },
+      formula: 'A1="HELLO"',
+      version: 3,
+    });
+  });
+
+  it("accepts a newer literal snapshot when the source input is present", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.Boolean, value: true },
+            input: '=A1="HELLO"',
+            formula: 'A1="HELLO"',
+            flags: 0,
+            version: 3,
+          },
+          displayText: "TRUE",
+          copyText: '=A1="HELLO"',
+          editorText: '=A1="HELLO"',
+          formatId: 0,
+          styleId: "style-0",
+        },
+      ],
+    });
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.Boolean, value: false },
+            input: false,
+            flags: 0,
+            version: 4,
+          },
+          displayText: "FALSE",
+          copyText: "FALSE",
+          editorText: "FALSE",
+          formatId: 0,
+          styleId: "style-0",
+        },
+      ],
+    });
+
+    const snapshot = cache.getCell("Sheet1", "D5");
+    expect(snapshot).toMatchObject({
+      value: { tag: ValueTag.Boolean, value: false },
+      input: false,
+      version: 4,
+    });
+    expect("formula" in snapshot).toBe(false);
+  });
+
   it("reports damage when a style record changes without a newer cell snapshot", () => {
     const cache = new WorkerViewportCache();
 

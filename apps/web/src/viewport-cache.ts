@@ -51,6 +51,26 @@ function cellSnapshotSignature(snapshot: CellSnapshot): string {
   ].join("|");
 }
 
+function shouldKeepCurrentSnapshot(current: CellSnapshot, incoming: CellSnapshot): boolean {
+  if (
+    current.formula !== undefined &&
+    incoming.formula === undefined &&
+    incoming.input === undefined
+  ) {
+    return true;
+  }
+  if (current.version > incoming.version) {
+    return true;
+  }
+  if (current.version < incoming.version) {
+    return false;
+  }
+  // Zero source/eval rows can briefly lag the worker patch and drop formula metadata while
+  // keeping the same cell version. Preserve the local formula snapshot until source metadata
+  // catches up.
+  return current.formula !== undefined && incoming.formula === undefined;
+}
+
 function cellStyleSignature(style: CellStyleRecord): string {
   const fill = style.fill?.backgroundColor ?? "";
   const font = style.font;
@@ -242,7 +262,7 @@ export class WorkerViewportCache implements GridEngineLike {
     listener: (damage?: readonly { cell: CellItem }[]) => void,
   ): () => void {
     if (!this.client) {
-      throw new Error("Local worker viewport subscriptions are unavailable in the Zero runtime");
+      throw new Error("Worker viewport subscriptions require a worker engine client");
     }
     const viewportKey = `${sheetName}:${viewport.rowStart}:${viewport.rowEnd}:${viewport.colStart}:${viewport.colEnd}`;
     this.activeViewports.set(viewportKey, viewport);
@@ -290,7 +310,7 @@ export class WorkerViewportCache implements GridEngineLike {
       const current = this.cellSnapshots.get(key);
       if (current) {
         const incoming = cell.snapshot;
-        if (current.version > incoming.version) {
+        if (shouldKeepCurrentSnapshot(current, incoming)) {
           continue;
         }
         if (cellSnapshotSignature(current) === cellSnapshotSignature(incoming)) {

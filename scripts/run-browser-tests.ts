@@ -120,6 +120,8 @@ const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
 const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
 const e2eSyncServerUrl =
   process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
+const e2eZeroKeepaliveUrl =
+  process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
 
 const PREVIEW_PORTS = [4179, 4180];
 
@@ -367,6 +369,7 @@ async function runComposePlaywright(): Promise<void> {
     await waitForHttp(`${e2eBaseUrl}/healthz`);
     await waitForHttp(`${e2eSyncServerUrl}/healthz`);
     await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10));
+    await waitForHttp(e2eZeroKeepaliveUrl);
     runPlaywright(playwrightArgs);
   } catch (error) {
     const logs = collectComposeLogs();

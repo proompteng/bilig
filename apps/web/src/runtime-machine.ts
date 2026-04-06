@@ -7,14 +7,12 @@ import {
   type WorkerRuntimeSelection,
   type WorkerRuntimeSessionController,
 } from "./runtime-session.js";
-import type { ZeroWorkbookBridgeState } from "./zero/ZeroWorkbookBridge.js";
 
 interface WorkerRuntimeMachineContext {
   readonly sessionInput: WorkerRuntimeMachineInput;
   readonly controller: WorkerRuntimeSessionController | null;
   readonly handle: WorkerHandle | null;
   readonly runtimeState: WorkbookWorkerStateSnapshot | null;
-  readonly bridgeState: ZeroWorkbookBridgeState | null;
   readonly selection: WorkerRuntimeSelection;
   readonly error: string | null;
 }
@@ -27,7 +25,6 @@ type WorkerRuntimeMachineEvent =
       controller: WorkerRuntimeSessionController;
     }
   | { type: "session.runtime"; runtimeState: WorkbookWorkerStateSnapshot }
-  | { type: "session.bridge"; bridgeState: ZeroWorkbookBridgeState | null }
   | { type: "session.selection"; selection: WorkerRuntimeSelection }
   | { type: "session.error"; message: string }
   | { type: "session.failed"; message: string };
@@ -81,9 +78,6 @@ export function createWorkerRuntimeMachine() {
         {
           onRuntimeState(runtimeState) {
             sendBack({ type: "session.runtime", runtimeState });
-          },
-          onBridgeState(bridgeState) {
-            sendBack({ type: "session.bridge", bridgeState });
           },
           onSelection(selection) {
             pendingSelection = selection;
@@ -157,7 +151,6 @@ export function createWorkerRuntimeMachine() {
       controller: null,
       handle: null,
       runtimeState: null,
-      bridgeState: null,
       selection: input.initialSelection,
       error: null,
     }),
@@ -185,11 +178,6 @@ export function createWorkerRuntimeMachine() {
               runtimeState: ({ event }) => event.runtimeState,
             }),
           },
-          "session.bridge": {
-            actions: assign({
-              bridgeState: ({ event }) => event.bridgeState,
-            }),
-          },
           "session.selection": {
             actions: assign({
               selection: ({ event }) => event.selection,
@@ -207,7 +195,6 @@ export function createWorkerRuntimeMachine() {
               controller: () => null,
               handle: () => null,
               runtimeState: () => null,
-              bridgeState: () => null,
             }),
           },
         },
@@ -221,7 +208,6 @@ export function createWorkerRuntimeMachine() {
                   handle: ({ event }) => event.controller.handle,
                   controller: ({ event }) => event.controller,
                   runtimeState: ({ event }) => event.controller.runtimeState,
-                  bridgeState: ({ event }) => event.controller.bridgeState,
                   selection: ({ event }) => event.controller.selection,
                   error: () => null,
                 }),
@@ -239,7 +225,6 @@ export function createWorkerRuntimeMachine() {
               handle: () => null,
               controller: () => null,
               runtimeState: () => null,
-              bridgeState: () => null,
               error: () => null,
             }),
           },

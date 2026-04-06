@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createActor } from "xstate";
-import { Zero } from "@rocicorp/zero";
 import { createWorkerRuntimeMachine } from "../runtime-machine.js";
 import { WorkerViewportCache } from "../viewport-cache.js";
 import type {
@@ -9,8 +8,6 @@ import type {
   WorkerRuntimeSessionCallbacks,
   WorkerRuntimeSessionController,
 } from "../runtime-session.js";
-
-const zeroStub: CreateWorkerRuntimeSessionInput["zero"] = Object.create(Zero.prototype);
 
 function createWorkerHandle(): WorkerHandle {
   return {
@@ -38,8 +35,8 @@ function createController(
       },
       syncState: "local-only",
     },
-    bridgeState: null,
     selection,
+    invoke: vi.fn(async () => undefined),
     setSelection: vi.fn(async () => undefined),
     subscribeViewport: () => () => {},
     dispose: vi.fn(),
@@ -64,7 +61,6 @@ describe("worker runtime machine", () => {
         documentId: "book-1",
         replicaId: "browser:test",
         persistState: true,
-        zero: zeroStub,
         initialSelection: { sheetName: "Sheet1", address: "A1" },
         createSession,
       },
@@ -103,7 +99,6 @@ describe("worker runtime machine", () => {
         documentId: "book-1",
         replicaId: "browser:test",
         persistState: true,
-        zero: zeroStub,
         initialSelection: { sheetName: "Sheet1", address: "A1" },
         createSession,
       },

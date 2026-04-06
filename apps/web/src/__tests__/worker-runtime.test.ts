@@ -169,6 +169,44 @@ describe("WorkbookWorkerRuntime", () => {
     expect(patch?.columns).toEqual([{ index: 1, size: 160, hidden: false }]);
   });
 
+  it("persists pending workbook mutations across bootstraps and removes them on ack", async () => {
+    const persistence = createMemoryPersistence();
+    const runtime = new WorkbookWorkerRuntime({ persistence });
+    await runtime.bootstrap({
+      documentId: "pending-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const pending = await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+
+    expect(runtime.listPendingMutations()).toEqual([pending]);
+
+    const reloaded = new WorkbookWorkerRuntime({ persistence });
+    await reloaded.bootstrap({
+      documentId: "pending-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.listPendingMutations()).toEqual([pending]);
+
+    await reloaded.ackPendingMutation(pending.id);
+    expect(reloaded.listPendingMutations()).toEqual([]);
+
+    const afterAck = new WorkbookWorkerRuntime({ persistence });
+    await afterAck.bootstrap({
+      documentId: "pending-doc",
+      replicaId: "browser:after-ack",
+      persistState: true,
+    });
+
+    expect(afterAck.listPendingMutations()).toEqual([]);
+  });
+
   it("skips unrelated viewport subscriptions when an edit is outside their sheet or region", async () => {
     const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
     await runtime.bootstrap({
