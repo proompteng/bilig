@@ -5,6 +5,7 @@ import { runRangeAggregateBenchmark } from "../packages/benchmarks/src/benchmark
 import { runTopologyEditBenchmark } from "../packages/benchmarks/src/benchmark-topology-edit.ts";
 import { runRenderCommitBenchmark } from "../packages/benchmarks/src/benchmark-renderer.ts";
 import {
+  runWorkerReconnectCatchUpBenchmark,
   runWorkerVisibleEditBenchmark,
   runWorkerWarmStartBenchmark,
 } from "./bench-worker-runtime.ts";
@@ -22,6 +23,7 @@ const baseBudgets = {
   renderCommit10kP95Ms: 50,
   workerWarmStart100kP95Ms: 500,
   workerVisibleEdit10kP95Ms: 16,
+  workerReconnectCatchUp100PendingP95Ms: 2000,
 };
 const toleranceMultiplier = Number.parseFloat(
   process.env.BILIG_BENCH_TOLERANCE ?? (process.env.CI ? "1.5" : "1"),
@@ -129,6 +131,13 @@ const workerVisibleEditRuns = await sampleBenchmark(
     warmupIterations: 1,
   },
 );
+const workerReconnectCatchUpRuns = await sampleBenchmark(
+  () => runWorkerReconnectCatchUpBenchmark(10_000, 100),
+  3,
+  {
+    warmupIterations: 1,
+  },
+);
 
 const loadElapsed = summarizeNumbers(loadRuns.map((run) => run.elapsedMs));
 const loadWorkingSetDelta = summarizeNumbers(
@@ -159,6 +168,18 @@ const workerVisibleEditElapsed = summarizeNumbers(
 );
 const workerVisibleEditCommitElapsed = summarizeNumbers(
   workerVisibleEditRuns.map((run) => run.commitMs),
+);
+const workerReconnectCatchUpElapsed = summarizeNumbers(
+  workerReconnectCatchUpRuns.map((run) => run.catchUpMs),
+);
+const workerReconnectRebaseElapsed = summarizeNumbers(
+  workerReconnectCatchUpRuns.map((run) => run.rebaseMs),
+);
+const workerReconnectSubmitDrainElapsed = summarizeNumbers(
+  workerReconnectCatchUpRuns.map((run) => run.submitDrainMs),
+);
+const workerReconnectAckElapsed = summarizeNumbers(
+  workerReconnectCatchUpRuns.map((run) => run.ackMs),
 );
 
 assertAllRunsUseWasmFastPath("10k range aggregate benchmark", rangeRuns, 10_000);
@@ -196,6 +217,11 @@ assertBudget(
   workerVisibleEditElapsed.p95,
   budgets.workerVisibleEdit10kP95Ms,
 );
+assertBudget(
+  "100 pending worker reconnect catch-up p95",
+  workerReconnectCatchUpElapsed.p95,
+  budgets.workerReconnectCatchUp100PendingP95Ms,
+);
 
 console.log(
   JSON.stringify(
@@ -211,6 +237,7 @@ console.log(
         renderCommit10k: renderRuns.length,
         workerWarmStart100k: workerWarmStartRuns.length,
         workerVisibleEdit10k: workerVisibleEditRuns.length,
+        workerReconnectCatchUp100Pending: workerReconnectCatchUpRuns.length,
       },
       results: {
         load100k: {
@@ -266,6 +293,16 @@ console.log(
           visiblePatchMs: workerVisibleEditElapsed,
           commitMs: workerVisibleEditCommitElapsed,
           runs: workerVisibleEditRuns,
+        },
+        workerReconnectCatchUp100Pending: {
+          scenario: "worker-reconnect-catch-up",
+          materializedCells: 10_000,
+          pendingMutationCount: 100,
+          catchUpMs: workerReconnectCatchUpElapsed,
+          rebaseMs: workerReconnectRebaseElapsed,
+          submitDrainMs: workerReconnectSubmitDrainElapsed,
+          ackMs: workerReconnectAckElapsed,
+          runs: workerReconnectCatchUpRuns,
         },
       },
     },

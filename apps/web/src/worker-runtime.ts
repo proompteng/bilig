@@ -59,7 +59,13 @@ import {
 } from "./worker-runtime-viewport.js";
 import { buildWorkbookLocalAuthoritativeBase } from "./worker-local-base.js";
 import { buildWorkbookLocalAuthoritativeDelta } from "./worker-local-authoritative-delta.js";
-import { buildWorkbookLocalProjectionOverlay } from "./worker-local-overlay.js";
+import {
+  buildWorkbookLocalProjectionOverlay,
+  collectProjectionOverlayScopeFromEngineEvents,
+  createEmptyProjectionOverlayScope,
+  mergeProjectionOverlayScopes,
+  type ProjectionOverlayScope,
+} from "./worker-local-overlay.js";
 import { WorkerViewportTileStore } from "./worker-viewport-tile-store.js";
 
 export interface WorkbookWorkerBootstrapOptions {
@@ -133,6 +139,7 @@ export class WorkbookWorkerRuntime {
   private appliedPendingLocalSeq = 0;
   private authoritativeRevision = 0;
   private projectionMatchesLocalStore = false;
+  private projectionOverlayScope: ProjectionOverlayScope | null = null;
   private readonly viewportTileStore = new WorkerViewportTileStore();
 
   constructor(
@@ -161,6 +168,7 @@ export class WorkbookWorkerRuntime {
     this.nextPendingMutationSeq = 1;
     this.appliedPendingLocalSeq = 0;
     this.projectionMatchesLocalStore = false;
+    this.projectionOverlayScope = null;
     let restoredFromPersistence = false;
     let requiresAuthoritativeHydrate = false;
     let restoredState: WorkbookStoredState | null = null;
@@ -208,11 +216,11 @@ export class WorkbookWorkerRuntime {
     if (restoredSnapshot || restoredReplica) {
       this.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica);
     }
-    const engine = await this.createEngineFromState({
+    const { engine, overlayScope } = await this.createProjectionEngineFromState({
       snapshot: restoredSnapshot,
       replica: restoredReplica,
-      pendingMutationsToReplay: this.pendingMutations,
     });
+    this.projectionOverlayScope = overlayScope;
     this.installEngine(engine);
     const projectionMatchesRestoredLocalStore =
       Boolean(this.localStore) &&
@@ -251,11 +259,11 @@ export class WorkbookWorkerRuntime {
     const authoritativeEngine = await this.createEngineFromState({
       snapshot,
       replica: null,
-      pendingMutationsToReplay: [],
     });
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
     this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
-    const engine = await this.rebuildProjectionEngine();
+    const { engine, overlayScope } = await this.rebuildProjectionEngine();
+    this.projectionOverlayScope = overlayScope;
     this.installEngine(engine);
     this.projectionMatchesLocalStore = false;
     this.viewportTileStore.reset();
@@ -272,11 +280,11 @@ export class WorkbookWorkerRuntime {
     const authoritativeEngine = await this.createEngineFromState({
       snapshot,
       replica: null,
-      pendingMutationsToReplay: [],
     });
     this.authoritativeRevision = authoritativeRevision;
     this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
-    const engine = await this.rebuildProjectionEngine();
+    const { engine, overlayScope } = await this.rebuildProjectionEngine();
+    this.projectionOverlayScope = overlayScope;
     this.installEngine(engine);
     this.projectionMatchesLocalStore = false;
     this.viewportTileStore.reset();
@@ -321,7 +329,8 @@ export class WorkbookWorkerRuntime {
     }
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
     this.invalidateAuthoritativeStateCache();
-    const engine = await this.rebuildProjectionEngine();
+    const { engine, overlayScope } = await this.rebuildProjectionEngine();
+    this.projectionOverlayScope = overlayScope;
     this.installEngine(engine);
     this.invalidateSnapshotCache();
     const localStore = this.bootstrapOptions?.persistState ? this.localStore : null;
@@ -344,6 +353,7 @@ export class WorkbookWorkerRuntime {
         projectionOverlay: buildWorkbookLocalProjectionOverlay({
           authoritativeEngine,
           projectionEngine: engine,
+          scope: this.getProjectionOverlayScopeForPersist(),
         }),
         removePendingMutationIds: [...absorbedMutationIds],
       });
@@ -590,6 +600,7 @@ export class WorkbookWorkerRuntime {
     this.appliedPendingLocalSeq = 0;
     this.authoritativeRevision = 0;
     this.projectionMatchesLocalStore = false;
+    this.projectionOverlayScope = null;
     this.viewportTileStore.reset();
     this.localStore?.close();
     this.localStore = null;
@@ -640,7 +651,6 @@ export class WorkbookWorkerRuntime {
   private async createEngineFromState(input: {
     snapshot: WorkbookSnapshot | null;
     replica: EngineReplicaSnapshot | null;
-    pendingMutationsToReplay: readonly PendingWorkbookMutation[];
   }): Promise<SpreadsheetEngine> {
     const options = this.requireBootstrapOptions();
     const engine = new SpreadsheetEngine({
@@ -657,10 +667,35 @@ export class WorkbookWorkerRuntime {
     if (engine.workbook.sheetsByName.size === 0) {
       engine.createSheet("Sheet1");
     }
-    for (const mutation of input.pendingMutationsToReplay) {
-      applyPendingWorkbookMutationToEngine(engine, mutation);
-    }
     return engine;
+  }
+
+  private async createProjectionEngineFromState(input: {
+    snapshot: WorkbookSnapshot | null;
+    replica: EngineReplicaSnapshot | null;
+  }): Promise<{
+    engine: SpreadsheetEngine;
+    overlayScope: ProjectionOverlayScope | null;
+  }> {
+    const engine = await this.createEngineFromState(input);
+    if (this.pendingMutations.length === 0) {
+      return { engine, overlayScope: null };
+    }
+    const replayEvents: EngineEvent[] = [];
+    const unsubscribe = engine.subscribe((event) => {
+      replayEvents.push(event);
+    });
+    try {
+      this.pendingMutations.forEach((mutation) => {
+        applyPendingWorkbookMutationToEngine(engine, mutation);
+      });
+    } finally {
+      unsubscribe();
+    }
+    return {
+      engine,
+      overlayScope: collectProjectionOverlayScopeFromEngineEvents(engine, replayEvents),
+    };
   }
 
   private installAuthoritativeEngine(
@@ -691,7 +726,6 @@ export class WorkbookWorkerRuntime {
     const engine = await this.createEngineFromState({
       snapshot: this.authoritativeSnapshotCache,
       replica: this.authoritativeReplicaCache,
-      pendingMutationsToReplay: [],
     });
     this.authoritativeEngine = engine;
     if (this.authoritativeSnapshotCache) {
@@ -707,11 +741,13 @@ export class WorkbookWorkerRuntime {
     return engine;
   }
 
-  private async rebuildProjectionEngine(): Promise<SpreadsheetEngine> {
-    return await this.createEngineFromState({
+  private async rebuildProjectionEngine(): Promise<{
+    engine: SpreadsheetEngine;
+    overlayScope: ProjectionOverlayScope | null;
+  }> {
+    return await this.createProjectionEngineFromState({
       snapshot: this.getAuthoritativeSnapshot(),
       replica: this.getAuthoritativeReplica(),
-      pendingMutationsToReplay: this.pendingMutations,
     });
   }
 
@@ -720,8 +756,21 @@ export class WorkbookWorkerRuntime {
     this.engine = engine;
     this.engineSubscription = engine.subscribe((event) => {
       this.invalidateSnapshotCache();
+      if (this.pendingMutations.length > 0) {
+        this.projectionOverlayScope = mergeProjectionOverlayScopes(
+          this.projectionOverlayScope,
+          collectProjectionOverlayScopeFromEngineEvents(engine, [event]),
+        );
+      }
       this.broadcastViewportPatches(event);
     });
+  }
+
+  private getProjectionOverlayScopeForPersist(): ProjectionOverlayScope | null {
+    if (this.projectionOverlayScope) {
+      return this.projectionOverlayScope;
+    }
+    return this.pendingMutations.length === 0 ? createEmptyProjectionOverlayScope() : null;
   }
 
   private async persistStateNow(): Promise<void> {
@@ -762,6 +811,7 @@ export class WorkbookWorkerRuntime {
       projectionOverlay: buildWorkbookLocalProjectionOverlay({
         authoritativeEngine,
         projectionEngine: this.requireEngine(),
+        scope: this.getProjectionOverlayScopeForPersist(),
       }),
     });
     this.persistInFlight = savePromise;

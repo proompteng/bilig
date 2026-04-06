@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { SpreadsheetEngine } from "../packages/core/src/engine.js";
+import { formatAddress } from "../packages/formula/src/addressing.js";
 import { createMemoryWorkbookLocalStoreFactory } from "../packages/storage-browser/src/index.js";
 import { decodeViewportPatch } from "../packages/worker-transport/src/index.js";
 import { buildWorkbookSnapshot } from "../packages/benchmarks/src/generate-workbook.js";
@@ -8,6 +9,7 @@ import {
   sampleMemory,
   type MemoryMeasurement,
 } from "../packages/benchmarks/src/metrics.js";
+import type { AuthoritativeWorkbookEventRecord } from "../packages/zero-sync/src/index.js";
 import { buildWorkbookLocalAuthoritativeBase } from "../apps/web/src/worker-local-base.js";
 import { buildWorkbookLocalProjectionOverlay } from "../apps/web/src/worker-local-overlay.js";
 import { WorkbookWorkerRuntime } from "../apps/web/src/worker-runtime.js";
@@ -25,6 +27,57 @@ interface WorkerVisibleEditBenchmarkResult {
   materializedCells: number;
   visiblePatchMs: number;
   commitMs: number;
+}
+
+interface WorkerReconnectCatchUpBenchmarkResult {
+  scenario: "worker-reconnect-catch-up";
+  materializedCells: number;
+  pendingMutationCount: number;
+  rebaseMs: number;
+  submitDrainMs: number;
+  ackMs: number;
+  catchUpMs: number;
+  finalPendingMutationCount: number;
+}
+
+async function runSequentially<T>(
+  items: readonly T[],
+  task: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  await items.reduce<Promise<void>>((previous, item, index) => {
+    return previous.then(() => task(item, index));
+  }, Promise.resolve());
+}
+
+function buildSetCellValueEvent(input: {
+  revision: number;
+  address: string;
+  value: number;
+  clientMutationId?: string | null;
+}): AuthoritativeWorkbookEventRecord {
+  return {
+    revision: input.revision,
+    clientMutationId: input.clientMutationId ?? null,
+    payload: {
+      kind: "setCellValue",
+      sheetName: "Sheet1",
+      address: input.address,
+      value: input.value,
+    },
+  };
+}
+
+function hasNumericCellValue(
+  runtime: WorkbookWorkerRuntime,
+  address: string,
+  value: number,
+): boolean {
+  const snapshotValue = runtime.getCell("Sheet1", address).value;
+  return (
+    "value" in snapshotValue &&
+    typeof snapshotValue.value === "number" &&
+    snapshotValue.value === value
+  );
 }
 
 async function seedWorkerLocalStore(documentId: string, materializedCells: number) {
@@ -153,5 +206,120 @@ export async function runWorkerVisibleEditBenchmark(
     materializedCells,
     visiblePatchMs,
     commitMs,
+  };
+}
+
+export async function runWorkerReconnectCatchUpBenchmark(
+  materializedCells = 10_000,
+  pendingMutationCount = 100,
+): Promise<WorkerReconnectCatchUpBenchmarkResult> {
+  const documentId = `worker-reconnect-${materializedCells}-${pendingMutationCount}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const localStoreFactory = await seedWorkerLocalStore(documentId, materializedCells);
+  const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+
+  await runtime.bootstrap({
+    documentId,
+    replicaId: "browser:test",
+    persistState: true,
+  });
+
+  const pendingMutations = new Array<Awaited<ReturnType<typeof runtime.enqueuePendingMutation>>>();
+  const pendingIndexes = Array.from({ length: pendingMutationCount }, (_, index) => index);
+  await runSequentially(pendingIndexes, async (index) => {
+    const localValue = 200_000 + index;
+    const pending = await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", formatAddress(index, 0), localValue],
+    });
+    pendingMutations.push(pending);
+  });
+
+  runtime.subscribeViewportPatches(
+    {
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: 127,
+      colStart: 0,
+      colEnd: 1,
+    },
+    () => {},
+  );
+
+  const remoteEvents = pendingIndexes.map((index) =>
+    buildSetCellValueEvent({
+      revision: index + 1,
+      address: formatAddress(index, 1),
+      value: 300_000 + index,
+    }),
+  );
+
+  const catchUpStarted = performance.now();
+  const rebaseStarted = catchUpStarted;
+  await runtime.applyAuthoritativeEvents(remoteEvents, remoteEvents.length);
+  const rebaseMs = performance.now() - rebaseStarted;
+
+  if (runtime.listPendingMutations().length !== pendingMutationCount) {
+    throw new Error("Reconnect rebase dropped pending mutations before authoritative ack");
+  }
+  if (!hasNumericCellValue(runtime, "A1", 200_000)) {
+    throw new Error("Reconnect rebase lost the first local pending value");
+  }
+  if (
+    !hasNumericCellValue(
+      runtime,
+      formatAddress(pendingMutationCount - 1, 0),
+      200_000 + pendingMutationCount - 1,
+    )
+  ) {
+    throw new Error("Reconnect rebase lost the trailing local pending value");
+  }
+  if (!hasNumericCellValue(runtime, "B1", 300_000)) {
+    throw new Error("Reconnect rebase failed to apply the first authoritative drift value");
+  }
+  if (
+    !hasNumericCellValue(
+      runtime,
+      formatAddress(pendingMutationCount - 1, 1),
+      300_000 + pendingMutationCount - 1,
+    )
+  ) {
+    throw new Error("Reconnect rebase failed to apply the trailing authoritative drift value");
+  }
+
+  const submitDrainStarted = performance.now();
+  await runSequentially(pendingMutations, async (mutation) => {
+    await runtime.markPendingMutationSubmitted(mutation.id);
+  });
+  const submitDrainMs = performance.now() - submitDrainStarted;
+
+  const ackEvents = pendingMutations.map((mutation, index) =>
+    buildSetCellValueEvent({
+      revision: remoteEvents.length + index + 1,
+      address: formatAddress(index, 0),
+      value: 200_000 + index,
+      clientMutationId: mutation.id,
+    }),
+  );
+  const ackStarted = performance.now();
+  await runtime.applyAuthoritativeEvents(ackEvents, remoteEvents.length + ackEvents.length);
+  const ackMs = performance.now() - ackStarted;
+  const catchUpMs = performance.now() - catchUpStarted;
+
+  const finalPendingMutationCount = runtime.listPendingMutations().length;
+  runtime.dispose();
+
+  if (finalPendingMutationCount !== 0) {
+    throw new Error("Reconnect catch-up did not absorb all pending mutations");
+  }
+
+  return {
+    scenario: "worker-reconnect-catch-up",
+    materializedCells,
+    pendingMutationCount,
+    rebaseMs,
+    submitDrainMs,
+    ackMs,
+    catchUpMs,
+    finalPendingMutationCount,
   };
 }

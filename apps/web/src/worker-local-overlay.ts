@@ -1,5 +1,6 @@
 import type { SpreadsheetEngine } from "@bilig/core";
 import type { WorkbookLocalProjectionOverlay } from "@bilig/storage-browser";
+import type { EngineEvent } from "@bilig/protocol";
 import {
   ValueTag,
   type CellSnapshot,
@@ -7,8 +8,16 @@ import {
   type CellValue,
   type WorkbookAxisEntrySnapshot,
 } from "@bilig/protocol";
-import { parseCellAddress } from "@bilig/formula";
+import { formatAddress, parseCellAddress } from "@bilig/formula";
+import { collectChangedCellsBySheet } from "./worker-runtime-support.js";
 import { collectMaterializedSheetAddresses } from "./worker-local-materialization.js";
+
+export interface ProjectionOverlayScope {
+  readonly fullScan: boolean;
+  readonly cellAddressesBySheet: Map<string, Set<string>>;
+  readonly rowAxisIndicesBySheet: Map<string, Set<number>>;
+  readonly columnAxisIndicesBySheet: Map<string, Set<number>>;
+}
 
 function valueEquals(left: CellValue, right: CellValue): boolean {
   if (left.tag !== right.tag) {
@@ -89,11 +98,7 @@ function listUnionMaterializedAddresses(
   collectMaterializedSheetAddresses(projectionEngine, sheetName).forEach((address) => {
     addresses.add(address);
   });
-  return [...addresses].toSorted((left, right) => {
-    const leftParsed = parseCellAddress(left, sheetName);
-    const rightParsed = parseCellAddress(right, sheetName);
-    return leftParsed.row - rightParsed.row || leftParsed.col - rightParsed.col;
-  });
+  return sortAddresses(addresses, sheetName);
 }
 
 function listAxisIndices(
@@ -107,28 +112,251 @@ function listAxisIndices(
   return [...indices].toSorted((left, right) => left - right);
 }
 
+function sortAddresses(addresses: Iterable<string>, sheetName: string): string[] {
+  return [...addresses].toSorted((left, right) => {
+    const leftParsed = parseCellAddress(left, sheetName);
+    const rightParsed = parseCellAddress(right, sheetName);
+    return leftParsed.row - rightParsed.row || leftParsed.col - rightParsed.col;
+  });
+}
+
+function addAddressToScope(
+  entries: Map<string, Set<string>>,
+  sheetName: string,
+  address: string,
+): void {
+  const addresses = entries.get(sheetName) ?? new Set<string>();
+  addresses.add(address);
+  entries.set(sheetName, addresses);
+}
+
+function addAxisIndexToScope(
+  entries: Map<string, Set<number>>,
+  sheetName: string,
+  index: number,
+): void {
+  const indices = entries.get(sheetName) ?? new Set<number>();
+  indices.add(index);
+  entries.set(sheetName, indices);
+}
+
+function addRangeToScope(
+  scope: ProjectionOverlayScope,
+  input: {
+    sheetName: string;
+    startAddress: string;
+    endAddress: string;
+  },
+): void {
+  const start = parseCellAddress(input.startAddress, input.sheetName);
+  const end = parseCellAddress(input.endAddress, input.sheetName);
+  const rowStart = Math.min(start.row, end.row);
+  const rowEnd = Math.max(start.row, end.row);
+  const colStart = Math.min(start.col, end.col);
+  const colEnd = Math.max(start.col, end.col);
+  for (let row = rowStart; row <= rowEnd; row += 1) {
+    for (let col = colStart; col <= colEnd; col += 1) {
+      addAddressToScope(scope.cellAddressesBySheet, input.sheetName, formatAddress(row, col));
+    }
+  }
+}
+
+export function createEmptyProjectionOverlayScope(): ProjectionOverlayScope {
+  return {
+    fullScan: false,
+    cellAddressesBySheet: new Map<string, Set<string>>(),
+    rowAxisIndicesBySheet: new Map<string, Set<number>>(),
+    columnAxisIndicesBySheet: new Map<string, Set<number>>(),
+  };
+}
+
+function cloneProjectionOverlayScope(scope: ProjectionOverlayScope): ProjectionOverlayScope {
+  return {
+    fullScan: scope.fullScan,
+    cellAddressesBySheet: new Map(
+      [...scope.cellAddressesBySheet.entries()].map(([sheetName, addresses]) => [
+        sheetName,
+        new Set(addresses),
+      ]),
+    ),
+    rowAxisIndicesBySheet: new Map(
+      [...scope.rowAxisIndicesBySheet.entries()].map(([sheetName, indices]) => [
+        sheetName,
+        new Set(indices),
+      ]),
+    ),
+    columnAxisIndicesBySheet: new Map(
+      [...scope.columnAxisIndicesBySheet.entries()].map(([sheetName, indices]) => [
+        sheetName,
+        new Set(indices),
+      ]),
+    ),
+  };
+}
+
+function hasProjectionOverlayScopeEntries(scope: ProjectionOverlayScope): boolean {
+  return (
+    scope.fullScan ||
+    scope.cellAddressesBySheet.size > 0 ||
+    scope.rowAxisIndicesBySheet.size > 0 ||
+    scope.columnAxisIndicesBySheet.size > 0
+  );
+}
+
+function mergeScopeEntries<T>(target: Map<string, Set<T>>, source: Map<string, Set<T>>): void {
+  source.forEach((sourceEntries, sheetName) => {
+    const targetEntries = target.get(sheetName) ?? new Set<T>();
+    sourceEntries.forEach((entry) => {
+      targetEntries.add(entry);
+    });
+    target.set(sheetName, targetEntries);
+  });
+}
+
+function listScopedSheetNames(scope: ProjectionOverlayScope): string[] {
+  return [
+    ...new Set([
+      ...scope.cellAddressesBySheet.keys(),
+      ...scope.rowAxisIndicesBySheet.keys(),
+      ...scope.columnAxisIndicesBySheet.keys(),
+    ]),
+  ];
+}
+
+function resolveCellAddresses(input: {
+  authoritativeEngine: SpreadsheetEngine;
+  projectionEngine: SpreadsheetEngine;
+  sheetName: string;
+  scope: ProjectionOverlayScope | null;
+}): string[] {
+  if (input.scope === null || input.scope.fullScan) {
+    return listUnionMaterializedAddresses(
+      input.authoritativeEngine,
+      input.projectionEngine,
+      input.sheetName,
+    );
+  }
+  return sortAddresses(
+    input.scope.cellAddressesBySheet.get(input.sheetName) ?? [],
+    input.sheetName,
+  );
+}
+
+function resolveAxisIndices(
+  scopeEntries: Map<string, Set<number>>,
+  authoritativeEntries: readonly WorkbookAxisEntrySnapshot[],
+  projectionEntries: readonly WorkbookAxisEntrySnapshot[],
+  sheetName: string,
+  scope: ProjectionOverlayScope | null,
+): number[] {
+  if (scope === null || scope.fullScan) {
+    return listAxisIndices(authoritativeEntries, projectionEntries);
+  }
+  return [...(scopeEntries.get(sheetName) ?? [])].toSorted((left, right) => left - right);
+}
+
+export function collectProjectionOverlayScopeFromEngineEvents(
+  engine: SpreadsheetEngine,
+  events: readonly EngineEvent[],
+): ProjectionOverlayScope | null {
+  if (events.length === 0) {
+    return null;
+  }
+  const scope = createEmptyProjectionOverlayScope();
+  for (const event of events) {
+    if (event.invalidation === "full") {
+      return {
+        ...scope,
+        fullScan: true,
+      };
+    }
+    collectChangedCellsBySheet(engine, event.changedCellIndices).forEach(
+      (changedCells, sheetName) => {
+        changedCells.addresses.forEach((address) => {
+          addAddressToScope(scope.cellAddressesBySheet, sheetName, address);
+        });
+      },
+    );
+    event.invalidatedRanges.forEach((range) => {
+      addRangeToScope(scope, range);
+    });
+    event.invalidatedRows.forEach((entry) => {
+      for (let index = entry.startIndex; index <= entry.endIndex; index += 1) {
+        addAxisIndexToScope(scope.rowAxisIndicesBySheet, entry.sheetName, index);
+      }
+    });
+    event.invalidatedColumns.forEach((entry) => {
+      for (let index = entry.startIndex; index <= entry.endIndex; index += 1) {
+        addAxisIndexToScope(scope.columnAxisIndicesBySheet, entry.sheetName, index);
+      }
+    });
+  }
+  return hasProjectionOverlayScopeEntries(scope) ? scope : null;
+}
+
+export function mergeProjectionOverlayScopes(
+  current: ProjectionOverlayScope | null,
+  incoming: ProjectionOverlayScope | null,
+): ProjectionOverlayScope | null {
+  if (incoming === null) {
+    return current ? cloneProjectionOverlayScope(current) : null;
+  }
+  if (current === null) {
+    return cloneProjectionOverlayScope(incoming);
+  }
+  if (current.fullScan || incoming.fullScan) {
+    return {
+      fullScan: true,
+      cellAddressesBySheet: new Map<string, Set<string>>(),
+      rowAxisIndicesBySheet: new Map<string, Set<number>>(),
+      columnAxisIndicesBySheet: new Map<string, Set<number>>(),
+    };
+  }
+  const merged = cloneProjectionOverlayScope(current);
+  mergeScopeEntries(merged.cellAddressesBySheet, incoming.cellAddressesBySheet);
+  mergeScopeEntries(merged.rowAxisIndicesBySheet, incoming.rowAxisIndicesBySheet);
+  mergeScopeEntries(merged.columnAxisIndicesBySheet, incoming.columnAxisIndicesBySheet);
+  return merged;
+}
+
 export function buildWorkbookLocalProjectionOverlay(input: {
   authoritativeEngine: SpreadsheetEngine;
   projectionEngine: SpreadsheetEngine;
+  scope?: ProjectionOverlayScope | null;
 }): WorkbookLocalProjectionOverlay {
-  const { authoritativeEngine, projectionEngine } = input;
+  const { authoritativeEngine, projectionEngine, scope = null } = input;
+  if (scope && !scope.fullScan && listScopedSheetNames(scope).length === 0) {
+    return {
+      cells: [],
+      rowAxisEntries: [],
+      columnAxisEntries: [],
+      styles: [],
+    };
+  }
+
   const cells: Array<WorkbookLocalProjectionOverlay["cells"][number]> = [];
   const rowAxisEntries: Array<WorkbookLocalProjectionOverlay["rowAxisEntries"][number]> = [];
   const columnAxisEntries: Array<WorkbookLocalProjectionOverlay["columnAxisEntries"][number]> = [];
   const overlayStyleIds = new Set<string>();
+  const sheetNames =
+    scope && !scope.fullScan
+      ? listScopedSheetNames(scope)
+      : listOrderedSheetNames(authoritativeEngine, projectionEngine);
 
-  for (const sheetName of listOrderedSheetNames(authoritativeEngine, projectionEngine)) {
+  for (const sheetName of sheetNames) {
     const sheet =
       projectionEngine.workbook.getSheet(sheetName) ??
       authoritativeEngine.workbook.getSheet(sheetName);
     if (!sheet) {
       continue;
     }
-    for (const address of listUnionMaterializedAddresses(
+
+    for (const address of resolveCellAddresses({
       authoritativeEngine,
       projectionEngine,
       sheetName,
-    )) {
+      scope,
+    })) {
       const authoritativeSnapshot = authoritativeEngine.getCell(sheetName, address);
       const projectionSnapshot = projectionEngine.getCell(sheetName, address);
       if (snapshotEquals(authoritativeSnapshot, projectionSnapshot)) {
@@ -163,7 +391,13 @@ export function buildWorkbookLocalProjectionOverlay(input: {
     const projectionRowAxisByIndex = new Map(
       projectionRowAxisEntries.map((entry) => [entry.index, entry]),
     );
-    for (const index of listAxisIndices(authoritativeRowAxisEntries, projectionRowAxisEntries)) {
+    for (const index of resolveAxisIndices(
+      scope?.rowAxisIndicesBySheet ?? new Map<string, Set<number>>(),
+      authoritativeRowAxisEntries,
+      projectionRowAxisEntries,
+      sheetName,
+      scope,
+    )) {
       const authoritativeEntry = authoritativeRowAxisByIndex.get(index);
       const projectionEntry = projectionRowAxisByIndex.get(index);
       if (axisEntryEquals(authoritativeEntry, projectionEntry)) {
@@ -189,9 +423,12 @@ export function buildWorkbookLocalProjectionOverlay(input: {
     const projectionColumnAxisByIndex = new Map(
       projectionColumnAxisEntries.map((entry) => [entry.index, entry]),
     );
-    for (const index of listAxisIndices(
+    for (const index of resolveAxisIndices(
+      scope?.columnAxisIndicesBySheet ?? new Map<string, Set<number>>(),
       authoritativeColumnAxisEntries,
       projectionColumnAxisEntries,
+      sheetName,
+      scope,
     )) {
       const authoritativeEntry = authoritativeColumnAxisByIndex.get(index);
       const projectionEntry = projectionColumnAxisByIndex.get(index);

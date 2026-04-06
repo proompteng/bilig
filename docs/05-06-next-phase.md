@@ -736,10 +736,10 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - a browser same-cell editor-draft harness now verifies a remote write does not clobber an in-progress local draft and that cancelling reveals the authoritative remote value
 - removing the redundant bootstrap repersist and lazily materializing the authoritative engine dropped the real `100k` worker warm-start p95 to roughly `0.30s`
 - `bench:contracts` now enforces both worker local visible edit p95 and worker `100k` warm-start p95
+- `bench:contracts` now also enforces worker reconnect catch-up with `100` pending ops p95 `<2s` on the real SQLite-backed worker runtime path for a `10k` active workbook, including authoritative drift, local rebase, submission drain, and authoritative absorption
 
 **Still not completed**
 
-- reconnect after offline drift with `100` pending ops does not yet have a dedicated CI performance contract
 - collaboration/product layers in Phases 2 through 4
 
 **What this roadmap now needs to do**
@@ -750,11 +750,11 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 ### Prioritized initiative table
 
-| Priority | Initiative                                                  | Why now                                                            |
-| -------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1        | Add storage and reconnect failure harnesses                 | The local-first architecture is now in place; it needs failure proofing |
-| 2        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation                            |
-| 3        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core                   |
+| Priority | Initiative                                                | Why now                                                |
+| -------- | --------------------------------------------------------- | ------------------------------------------------------ |
+| 1        | Add private views, changes pane, collaborator jump        | Best near-term workflow differentiation                |
+| 2        | Build plan/preview/apply AI on semantic bundles           | Biggest differentiated UX after local-first core       |
+| 3        | Build giant-data staging and workbook comprehension tools | The remaining moat after collaboration and semantic AI |
 
 ### Dependency list
 
