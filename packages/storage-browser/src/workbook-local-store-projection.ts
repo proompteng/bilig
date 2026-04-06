@@ -6,6 +6,7 @@ import {
   type WorkbookAxisEntrySnapshot,
 } from "@bilig/protocol";
 import type {
+  WorkbookLocalAuthoritativeDelta,
   WorkbookLocalAuthoritativeBase,
   WorkbookLocalProjectionOverlay,
   WorkbookLocalViewportBase,
@@ -188,17 +189,29 @@ function clearWorkbookProjectionTables(db: Database): void {
   db.exec("DELETE FROM projection_overlay_style");
 }
 
-export function writeWorkbookAuthoritativeBase(
+function replaceAuthoritativeStyles(db: Database, styles: readonly CellStyleRecord[]): void {
+  db.exec("DELETE FROM authoritative_style");
+  const insertStyle = db.prepare(
+    `
+      INSERT INTO authoritative_style (style_id, record_json)
+      VALUES (?, ?)
+    `,
+  );
+  try {
+    for (const style of styles) {
+      insertStyle.bind([style.id, JSON.stringify(style)]);
+      insertStyle.step();
+      insertStyle.reset();
+    }
+  } finally {
+    insertStyle.finalize();
+  }
+}
+
+function insertWorkbookAuthoritativeBaseRows(
   db: Database,
   base: WorkbookLocalAuthoritativeBase,
 ): void {
-  db.exec("DELETE FROM authoritative_cell_input");
-  db.exec("DELETE FROM authoritative_cell_render");
-  db.exec("DELETE FROM authoritative_row_axis");
-  db.exec("DELETE FROM authoritative_column_axis");
-  db.exec("DELETE FROM authoritative_style");
-  db.exec("DELETE FROM authoritative_sheet");
-
   const insertSheet = db.prepare(
     `
       INSERT INTO authoritative_sheet (name, sort_order, freeze_rows, freeze_cols)
@@ -248,12 +261,6 @@ export function writeWorkbookAuthoritativeBase(
         VALUES (?, ?, ?, ?, ?)
       `,
     );
-  const insertStyle = db.prepare(
-    `
-      INSERT INTO authoritative_style (style_id, record_json)
-      VALUES (?, ?)
-    `,
-  );
   const insertRowAxis = insertAxis("authoritative_row_axis");
   const insertColumnAxis = insertAxis("authoritative_column_axis");
   try {
@@ -312,19 +319,56 @@ export function writeWorkbookAuthoritativeBase(
       insertColumnAxis.step();
       insertColumnAxis.reset();
     }
-    for (const style of base.styles) {
-      insertStyle.bind([style.id, JSON.stringify(style)]);
-      insertStyle.step();
-      insertStyle.reset();
-    }
   } finally {
     insertSheet.finalize();
     insertInput.finalize();
     insertRender.finalize();
     insertRowAxis.finalize();
     insertColumnAxis.finalize();
-    insertStyle.finalize();
   }
+}
+
+function deleteAuthoritativeSheets(db: Database, sheetNames: readonly string[]): void {
+  if (sheetNames.length === 0) {
+    return;
+  }
+  const statement = db.prepare("DELETE FROM authoritative_sheet WHERE name = ?");
+  try {
+    for (const sheetName of sheetNames) {
+      statement.bind([sheetName]);
+      statement.step();
+      statement.reset();
+    }
+  } finally {
+    statement.finalize();
+  }
+}
+
+export function writeWorkbookAuthoritativeBase(
+  db: Database,
+  base: WorkbookLocalAuthoritativeBase,
+): void {
+  db.exec("DELETE FROM authoritative_cell_input");
+  db.exec("DELETE FROM authoritative_cell_render");
+  db.exec("DELETE FROM authoritative_row_axis");
+  db.exec("DELETE FROM authoritative_column_axis");
+  db.exec("DELETE FROM authoritative_style");
+  db.exec("DELETE FROM authoritative_sheet");
+  insertWorkbookAuthoritativeBaseRows(db, base);
+  replaceAuthoritativeStyles(db, base.styles);
+}
+
+export function writeWorkbookAuthoritativeDelta(
+  db: Database,
+  delta: WorkbookLocalAuthoritativeDelta,
+): void {
+  if (delta.replaceAll) {
+    writeWorkbookAuthoritativeBase(db, delta.base);
+    return;
+  }
+  deleteAuthoritativeSheets(db, delta.replacedSheetNames);
+  insertWorkbookAuthoritativeBaseRows(db, delta.base);
+  replaceAuthoritativeStyles(db, delta.base.styles);
 }
 
 export function writeWorkbookProjectionOverlay(

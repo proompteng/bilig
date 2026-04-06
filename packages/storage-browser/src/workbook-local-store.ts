@@ -5,6 +5,7 @@ import sqlite3InitModule, {
   type Sqlite3Static,
 } from "@sqlite.org/sqlite-wasm";
 import type {
+  WorkbookLocalAuthoritativeDelta,
   WorkbookLocalAuthoritativeBase,
   WorkbookLocalProjectionOverlay,
   WorkbookLocalViewportBase,
@@ -12,6 +13,7 @@ import type {
 import {
   readWorkbookViewportProjection,
   writeWorkbookAuthoritativeBase,
+  writeWorkbookAuthoritativeDelta,
   writeWorkbookProjectionOverlay,
 } from "./workbook-local-store-projection.js";
 import { initializeWorkbookLocalStoreSchema } from "./workbook-local-store-schema.js";
@@ -50,6 +52,12 @@ export interface WorkbookLocalStore {
     readonly state: WorkbookStoredState;
     readonly authoritativeBase: WorkbookLocalAuthoritativeBase;
     readonly projectionOverlay: WorkbookLocalProjectionOverlay;
+  }): Promise<void>;
+  ingestAuthoritativeDelta(input: {
+    readonly state: WorkbookStoredState;
+    readonly authoritativeDelta: WorkbookLocalAuthoritativeDelta;
+    readonly projectionOverlay: WorkbookLocalProjectionOverlay;
+    readonly removePendingMutationIds?: readonly string[];
   }): Promise<void>;
   listPendingMutations(): Promise<WorkbookLocalMutationRecord[]>;
   appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
@@ -241,6 +249,58 @@ class OpfsWorkbookLocalStore implements WorkbookLocalStore {
   }): Promise<void> {
     this.db.transaction((db) => {
       writeWorkbookAuthoritativeBase(db, input.authoritativeBase);
+      writeWorkbookProjectionOverlay(db, input.projectionOverlay);
+      db.exec(
+        `
+          INSERT INTO runtime_state (
+            id,
+            snapshot_json,
+            replica_json,
+            authoritative_revision,
+            applied_pending_local_seq,
+            updated_at_ms
+          )
+          VALUES (1, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            snapshot_json = excluded.snapshot_json,
+            replica_json = excluded.replica_json,
+            authoritative_revision = excluded.authoritative_revision,
+            applied_pending_local_seq = excluded.applied_pending_local_seq,
+            updated_at_ms = excluded.updated_at_ms
+        `,
+        {
+          bind: [
+            JSON.stringify(input.state.snapshot),
+            JSON.stringify(input.state.replica),
+            input.state.authoritativeRevision,
+            input.state.appliedPendingLocalSeq,
+            Date.now(),
+          ],
+        },
+      );
+    });
+  }
+
+  async ingestAuthoritativeDelta(input: {
+    readonly state: WorkbookStoredState;
+    readonly authoritativeDelta: WorkbookLocalAuthoritativeDelta;
+    readonly projectionOverlay: WorkbookLocalProjectionOverlay;
+    readonly removePendingMutationIds?: readonly string[];
+  }): Promise<void> {
+    this.db.transaction((db) => {
+      if ((input.removePendingMutationIds?.length ?? 0) > 0) {
+        const deletePendingMutation = db.prepare("DELETE FROM pending_op WHERE op_id = ?");
+        try {
+          input.removePendingMutationIds?.forEach((id) => {
+            deletePendingMutation.bind([id]);
+            deletePendingMutation.step();
+            deletePendingMutation.reset();
+          });
+        } finally {
+          deletePendingMutation.finalize();
+        }
+      }
+      writeWorkbookAuthoritativeDelta(db, input.authoritativeDelta);
       writeWorkbookProjectionOverlay(db, input.projectionOverlay);
       db.exec(
         `

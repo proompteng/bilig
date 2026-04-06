@@ -72,6 +72,12 @@ export interface WorkbookLocalProjectionOverlay {
   readonly styles: readonly CellStyleRecord[];
 }
 
+export interface WorkbookLocalAuthoritativeDelta {
+  readonly replaceAll: boolean;
+  readonly replacedSheetNames: readonly string[];
+  readonly base: WorkbookLocalAuthoritativeBase;
+}
+
 export interface WorkbookLocalViewportCell {
   readonly row: number;
   readonly col: number;

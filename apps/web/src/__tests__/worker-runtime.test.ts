@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import type {
+  WorkbookLocalAuthoritativeDelta,
   WorkbookLocalAuthoritativeBase,
   WorkbookLocalMutationRecord,
   WorkbookLocalProjectionOverlay,
@@ -171,10 +172,49 @@ function mergeViewportWithProjectionOverlay(input: {
   };
 }
 
+function mergeAuthoritativeBaseDelta(input: {
+  currentBase: WorkbookLocalAuthoritativeBase | null;
+  authoritativeDelta: WorkbookLocalAuthoritativeDelta;
+}): WorkbookLocalAuthoritativeBase {
+  const { currentBase, authoritativeDelta } = input;
+  if (authoritativeDelta.replaceAll || currentBase === null) {
+    return structuredClone(authoritativeDelta.base);
+  }
+
+  const replacedSheetNames = new Set(authoritativeDelta.replacedSheetNames);
+  return {
+    sheets: [
+      ...currentBase.sheets.filter((sheet) => !replacedSheetNames.has(sheet.name)),
+      ...structuredClone(authoritativeDelta.base.sheets),
+    ].toSorted((left, right) => left.sortOrder - right.sortOrder),
+    cellInputs: [
+      ...currentBase.cellInputs.filter((cell) => !replacedSheetNames.has(cell.sheetName)),
+      ...structuredClone(authoritativeDelta.base.cellInputs),
+    ],
+    cellRenders: [
+      ...currentBase.cellRenders.filter((cell) => !replacedSheetNames.has(cell.sheetName)),
+      ...structuredClone(authoritativeDelta.base.cellRenders),
+    ],
+    rowAxisEntries: [
+      ...currentBase.rowAxisEntries.filter((entry) => !replacedSheetNames.has(entry.sheetName)),
+      ...structuredClone(authoritativeDelta.base.rowAxisEntries),
+    ],
+    columnAxisEntries: [
+      ...currentBase.columnAxisEntries.filter((entry) => !replacedSheetNames.has(entry.sheetName)),
+      ...structuredClone(authoritativeDelta.base.columnAxisEntries),
+    ],
+    styles: structuredClone(authoritativeDelta.base.styles),
+  };
+}
+
 function createMemoryLocalStoreFactory(seed?: {
   state?: WorkbookStoredState | null;
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
   onPersistProjectionState?: (state: WorkbookStoredState) => Promise<void> | void;
+  onIngestAuthoritativeDelta?: (
+    state: WorkbookStoredState,
+    delta: WorkbookLocalAuthoritativeDelta,
+  ) => Promise<void> | void;
   onReadViewportProjection?: () => void;
   authoritativeBase?: WorkbookLocalAuthoritativeBase | null;
   projectionOverlay?: WorkbookLocalProjectionOverlay | null;
@@ -198,6 +238,21 @@ function createMemoryLocalStoreFactory(seed?: {
           currentAuthoritativeBase = structuredClone(input.authoritativeBase);
           currentProjectionOverlay = structuredClone(input.projectionOverlay);
           await seed?.onPersistProjectionState?.(input.state);
+        },
+        async ingestAuthoritativeDelta(input) {
+          currentState = structuredClone(input.state);
+          currentAuthoritativeBase = mergeAuthoritativeBaseDelta({
+            currentBase: currentAuthoritativeBase,
+            authoritativeDelta: input.authoritativeDelta,
+          });
+          currentProjectionOverlay = structuredClone(input.projectionOverlay);
+          if ((input.removePendingMutationIds?.length ?? 0) > 0) {
+            const removedIds = new Set(input.removePendingMutationIds);
+            currentPendingMutations = currentPendingMutations.filter(
+              (mutation) => !removedIds.has(mutation.id),
+            );
+          }
+          await seed?.onIngestAuthoritativeDelta?.(input.state, input.authoritativeDelta);
         },
         async listPendingMutations() {
           return currentPendingMutations.map(cloneMutationRecord);
@@ -393,6 +448,7 @@ describe("WorkbookWorkerRuntime", () => {
               };
             },
             async persistProjectionState() {},
+            async ingestAuthoritativeDelta() {},
             async listPendingMutations() {
               return [];
             },
@@ -664,6 +720,55 @@ describe("WorkbookWorkerRuntime", () => {
     expect(reloaded.getCell("Sheet1", "A1").value).toEqual({
       tag: ValueTag.Number,
       value: 17,
+    });
+  });
+
+  it("ingests narrow authoritative event batches through delta persistence", async () => {
+    const persistProjectionState = vi.fn(async () => {});
+    const ingestAuthoritativeDelta = vi.fn(async () => {});
+    const localStoreFactory = createMemoryLocalStoreFactory({
+      onPersistProjectionState: persistProjectionState,
+      onIngestAuthoritativeDelta: ingestAuthoritativeDelta,
+    });
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "authoritative-delta-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(persistProjectionState).toHaveBeenCalledTimes(1);
+    expect(ingestAuthoritativeDelta).toHaveBeenCalledTimes(0);
+
+    await runtime.applyAuthoritativeEvents(
+      [
+        {
+          revision: 1,
+          clientMutationId: null,
+          payload: {
+            kind: "setCellValue",
+            sheetName: "Sheet1",
+            address: "B2",
+            value: 23,
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(persistProjectionState).toHaveBeenCalledTimes(1);
+    expect(ingestAuthoritativeDelta).toHaveBeenCalledTimes(1);
+
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
+    await reloaded.bootstrap({
+      documentId: "authoritative-delta-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.getCell("Sheet1", "B2").value).toEqual({
+      tag: ValueTag.Number,
+      value: 23,
     });
   });
 

@@ -7,6 +7,7 @@ export {
   type BrowserMetadataStoreOptions,
 } from "./browser-metadata-store.js";
 export type {
+  WorkbookLocalAuthoritativeDelta,
   WorkbookLocalAuthoritativeBase,
   WorkbookLocalBaseCellInputRecord,
   WorkbookLocalBaseCellRenderRecord,

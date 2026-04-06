@@ -58,6 +58,7 @@ import {
   buildViewportPatchFromLocalBase,
 } from "./worker-runtime-viewport.js";
 import { buildWorkbookLocalAuthoritativeBase } from "./worker-local-base.js";
+import { buildWorkbookLocalAuthoritativeDelta } from "./worker-local-authoritative-delta.js";
 import { buildWorkbookLocalProjectionOverlay } from "./worker-local-overlay.js";
 
 export interface WorkbookWorkerBootstrapOptions {
@@ -283,32 +284,59 @@ export class WorkbookWorkerRuntime {
       throw new Error("Invalid authoritative workbook event batch");
     }
     const authoritativeEngine = this.requireAuthoritativeEngine();
+    const previousSheetNames = [...authoritativeEngine.workbook.sheetsByName.keys()];
+    const authoritativeEngineEvents: EngineEvent[] = [];
+    const unsubscribe = authoritativeEngine.subscribe((event) => {
+      authoritativeEngineEvents.push(event);
+    });
     const absorbedMutationIds = new Set(
       events.flatMap((event) =>
         typeof event.clientMutationId === "string" ? [event.clientMutationId] : [],
       ),
     );
-    events.forEach((event) => {
-      applyWorkbookEvent(authoritativeEngine, event.payload);
-    });
+    try {
+      events.forEach((event) => {
+        applyWorkbookEvent(authoritativeEngine, event.payload);
+      });
+    } finally {
+      unsubscribe();
+    }
     if (absorbedMutationIds.size > 0) {
       this.pendingMutations = this.pendingMutations.filter((mutation) => {
         return !absorbedMutationIds.has(mutation.id);
       });
-      const localStore = this.bootstrapOptions?.persistState ? this.localStore : null;
-      if (localStore) {
-        await Promise.all(
-          [...absorbedMutationIds].map((id) => localStore.removePendingMutation(id)),
-        );
-      }
     }
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
     this.invalidateAuthoritativeStateCache();
     const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
-    this.projectionMatchesLocalStore = false;
     this.invalidateSnapshotCache();
-    await this.persistStateNow();
+    const localStore = this.bootstrapOptions?.persistState ? this.localStore : null;
+    if (localStore) {
+      const persisted: WorkbookStoredState = {
+        snapshot: this.getAuthoritativeSnapshot(),
+        replica: this.getAuthoritativeReplica(),
+        authoritativeRevision: this.authoritativeRevision,
+        appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
+      };
+      await localStore.ingestAuthoritativeDelta({
+        state: persisted,
+        authoritativeDelta: buildWorkbookLocalAuthoritativeDelta({
+          engine: authoritativeEngine,
+          payloads: events.map((event) => event.payload),
+          engineEvents: authoritativeEngineEvents,
+          previousSheetNames,
+        }),
+        projectionOverlay: buildWorkbookLocalProjectionOverlay({
+          authoritativeEngine,
+          projectionEngine: engine,
+        }),
+        removePendingMutationIds: [...absorbedMutationIds],
+      });
+      this.projectionMatchesLocalStore = true;
+    } else {
+      this.projectionMatchesLocalStore = false;
+    }
     this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
   }

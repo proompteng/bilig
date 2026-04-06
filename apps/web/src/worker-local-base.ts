@@ -3,21 +3,34 @@ import type { WorkbookLocalAuthoritativeBase } from "@bilig/storage-browser";
 import { parseCellAddress } from "@bilig/formula";
 import { collectMaterializedSheetAddresses } from "./worker-local-materialization.js";
 
-export function buildWorkbookLocalAuthoritativeBase(
+function buildWorkbookLocalSheetRecords(
   engine: SpreadsheetEngine,
-): WorkbookLocalAuthoritativeBase {
-  const sheets = [...engine.workbook.sheetsByName.values()]
-    .toSorted((left, right) => left.order - right.order)
-    .map((sheet) => {
+  sheetNames: readonly string[],
+): WorkbookLocalAuthoritativeBase["sheets"] {
+  return sheetNames
+    .flatMap((sheetName) => {
+      const sheet = engine.workbook.getSheet(sheetName);
+      if (!sheet) {
+        return [];
+      }
       const freezePane = engine.getFreezePane(sheet.name);
-      return {
-        name: sheet.name,
-        sortOrder: sheet.order,
-        freezeRows: freezePane?.rows ?? 0,
-        freezeCols: freezePane?.cols ?? 0,
-      };
-    });
+      return [
+        {
+          name: sheet.name,
+          sortOrder: sheet.order,
+          freezeRows: freezePane?.rows ?? 0,
+          freezeCols: freezePane?.cols ?? 0,
+        },
+      ];
+    })
+    .toSorted((left, right) => left.sortOrder - right.sortOrder);
+}
 
+export function buildWorkbookLocalAuthoritativeBaseForSheets(
+  engine: SpreadsheetEngine,
+  sheetNames: readonly string[],
+): WorkbookLocalAuthoritativeBase {
+  const sheets = buildWorkbookLocalSheetRecords(engine, sheetNames);
   const cellInputs: Array<WorkbookLocalAuthoritativeBase["cellInputs"][number]> = [];
   const cellRenders: Array<WorkbookLocalAuthoritativeBase["cellRenders"][number]> = [];
   const rowAxisEntries: Array<WorkbookLocalAuthoritativeBase["rowAxisEntries"][number]> = [];
@@ -71,4 +84,13 @@ export function buildWorkbookLocalAuthoritativeBase(
     columnAxisEntries,
     styles: engine.workbook.listCellStyles(),
   };
+}
+
+export function buildWorkbookLocalAuthoritativeBase(
+  engine: SpreadsheetEngine,
+): WorkbookLocalAuthoritativeBase {
+  return buildWorkbookLocalAuthoritativeBaseForSheets(
+    engine,
+    [...engine.workbook.sheetsByName.values()].map((sheet) => sheet.name),
+  );
 }

@@ -32,6 +32,15 @@ function createMemoryLocalStoreFactory(seed?: {
         async persistProjectionState(input) {
           currentState = structuredClone(input.state);
         },
+        async ingestAuthoritativeDelta(input) {
+          currentState = structuredClone(input.state);
+          if ((input.removePendingMutationIds?.length ?? 0) > 0) {
+            const removedIds = new Set(input.removePendingMutationIds);
+            currentPendingMutations = currentPendingMutations.filter(
+              (mutation) => !removedIds.has(mutation.id),
+            );
+          }
+        },
         async listPendingMutations() {
           return currentPendingMutations.map(cloneMutationRecord);
         },
