@@ -1507,8 +1507,8 @@ test("web app preserves multi-digit numeric type-to-replace input", async ({ pag
   await page.keyboard.press("Enter");
 
   await expect(nameBox).toHaveValue("A2");
-  await nameBox.fill("A1");
-  await nameBox.press("Enter");
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
   await expect(formulaInput).toHaveValue("123");
 
   await clickProductCell(page, 1, 0);
