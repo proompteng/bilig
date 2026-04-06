@@ -89,6 +89,7 @@ function WorkerWorkbookAppInner({
                   .invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize)
                   .catch(app.reportRuntimeError);
               }}
+              onVisibleViewportChange={app.handleVisibleViewportChange}
               onCommitEdit={app.commitEditor}
               onCopyRange={app.copySelectionRange}
               onCreateSheet={app.writesAllowed ? app.createSheet : undefined}
@@ -108,11 +109,13 @@ function WorkerWorkbookAppInner({
               sheetName={app.selection.sheetName}
               sheetNames={app.sheetNames}
               headerStatus={app.headerStatus}
+              restoreViewportTarget={app.restoreViewportTarget}
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
             />
           ) : null}
         </div>
+        {app.viewsPanel}
         {app.changesPanel}
       </div>
     </div>

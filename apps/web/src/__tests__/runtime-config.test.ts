@@ -7,6 +7,7 @@ const BASE_CONFIG = {
   zeroCacheUrl: "http://127.0.0.1:4848",
   defaultDocumentId: "bilig-demo",
   persistState: true,
+  currentUserId: "guest:test",
 } as const;
 
 describe("resolveRuntimeConfig", () => {
@@ -20,6 +21,7 @@ describe("resolveRuntimeConfig", () => {
 
     expect(resolveRuntimeConfig(BASE_CONFIG)).toMatchObject({
       documentId: "multiplayer-debug",
+      currentUserId: "guest:test",
       persistState: true,
     });
   });

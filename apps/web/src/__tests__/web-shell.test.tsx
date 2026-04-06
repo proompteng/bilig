@@ -23,12 +23,18 @@ vi.mock("../WorkerWorkbookApp", () => ({
     config,
     connectionState,
   }: {
-    config: { defaultDocumentId: string; zeroCacheUrl: string; persistState: boolean };
+    config: {
+      defaultDocumentId: string;
+      zeroCacheUrl: string;
+      persistState: boolean;
+      currentUserId: string;
+    };
     connectionState: { name: string };
   }) => (
     <div
       data-connection-state={connectionState.name}
       data-default-document-id={config.defaultDocumentId}
+      data-current-user-id={config.currentUserId}
       data-persist-state={String(config.persistState)}
       data-testid="workbook-shell"
       data-zero-cache-url={config.zeroCacheUrl}
@@ -59,6 +65,7 @@ describe("web shell", () => {
             zeroCacheUrl: "http://127.0.0.1:4848",
             defaultDocumentId: "bilig-demo",
             persistState: true,
+            currentUserId: "guest:test",
           }}
         />,
       );
@@ -67,6 +74,7 @@ describe("web shell", () => {
     const workbookShell = host.querySelector("[data-testid='workbook-shell']");
     expect(workbookShell).not.toBeNull();
     expect(workbookShell?.getAttribute("data-default-document-id")).toBe("bilig-demo");
+    expect(workbookShell?.getAttribute("data-current-user-id")).toBe("guest:test");
     expect(workbookShell?.getAttribute("data-zero-cache-url")).toBe("http://127.0.0.1:4848");
     expect(workbookShell?.getAttribute("data-persist-state")).toBe("true");
     expect(workbookShell?.getAttribute("data-connection-state")).toBe("connected");

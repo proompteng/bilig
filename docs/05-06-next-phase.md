@@ -739,10 +739,10 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - `bench:contracts` now also enforces worker reconnect catch-up with `100` pending ops p95 `<2s` on the real SQLite-backed worker runtime path for a `10k` active workbook, including authoritative drift, local rebase, submission drain, and authoritative absorption
 - Zero-backed coarse collaborator presence is now live in the mounted workbook header, with session-scoped location heartbeats and click-to-jump on active collaborator cells
 - authoritative `workbook_change` rows now persist beside workbook revisions, sync through Zero, and render in a mounted changes pane with jump-to-change targets in the browser shell
+- authoritative `sheet_view` rows now persist beside workbook metadata, sync through Zero with owner-aware visibility rules, and render as private/shared named views with exact viewport restore in the browser shell
 
 **Still not completed**
 
-- private and named views
 - change bundle revert/undo flows and named versions
 - same-cell conflict compare UX beyond the existing draft-preservation guarantees
 - Phase 3 and Phase 4 agent/import/comprehension layers
@@ -757,7 +757,7 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 | Priority | Initiative                                                | Why now                                                |
 | -------- | --------------------------------------------------------- | ------------------------------------------------------ |
-| 1        | Add private views, changes pane, collaborator jump        | Best near-term workflow differentiation                |
+| 1        | Finish collaboration integrity: compare + revertable history | Turns the current collaboration shell into a trustworthy daily workflow |
 | 2        | Build plan/preview/apply AI on semantic bundles           | Biggest differentiated UX after local-first core       |
 | 3        | Build giant-data staging and workbook comprehension tools | The remaining moat after collaboration and semantic AI |
 
@@ -865,26 +865,20 @@ Make shared workbook work smoother than Sheets for serious day-to-day use.
 
 **User-visible outcomes**
 
-- private views
-- named views
-- presence and jump-to-collaborator
 - show changes
 - conflict UX that preserves drafts
+- named versions and revertable history
 
 **Engineering outcomes**
 
 - change bundle model
-- presence feed
-- view model
 - editor/remote reconcile guarantees
 
 **Key epics**
 
-- `workbook_change` UI and pipeline
-- private/saved view state
-- collaborator presence and location jump
 - same-cell conflict compare flow
 - named versions / undo bundles
+- revertable change bundle execution
 
 **Dependencies**
 
@@ -899,9 +893,8 @@ Make shared workbook work smoother than Sheets for serious day-to-day use.
 **Exit criteria**
 
 - no lost typing during remote edits
-- private views do not disturb others
 - change bundle jump/revert works
-- > 50% of shared pilot workbooks use views, changes, or collaborator jump
+- named version restore works
 
 ### Phase 3: agent-native workbook platform
 

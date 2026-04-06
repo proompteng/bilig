@@ -47,6 +47,14 @@ const workbookGet = defineQuery(workbookQueryArgsSchema, ({ args: { documentId }
   zql.workbooks.where("id", documentId).one(),
 );
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function resolveQueryUserId(ctx: unknown): string {
+  return isRecord(ctx) && typeof ctx["userID"] === "string" ? ctx["userID"] : "";
+}
+
 const sheetByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
   zql.sheets.where("workbookId", documentId).orderBy("sortOrder", "asc"),
 );
@@ -121,6 +129,18 @@ const presenceCoarseByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
   zql.presence_coarse.where("workbookId", documentId).orderBy("updatedAt", "desc"),
 );
 
+const sheetViewByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId }, ctx }) =>
+  zql.sheet_view
+    .where((eb) =>
+      eb.and(
+        eb.cmp("workbookId", documentId),
+        eb.or(eb.cmp("visibility", "shared"), eb.cmp("ownerUserId", resolveQueryUserId(ctx))),
+      ),
+    )
+    .orderBy("updatedAt", "desc")
+    .orderBy("name", "asc"),
+);
+
 const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
   zql.workbook_change
     .where("workbookId", documentId)
@@ -180,6 +200,12 @@ export const queries = defineQueries({
   },
   presence: {
     byWorkbook: presenceCoarseByWorkbook,
+  },
+  sheetView: {
+    byWorkbook: sheetViewByWorkbook,
+  },
+  sheetViews: {
+    byWorkbook: sheetViewByWorkbook,
   },
   workbookChange: {
     byWorkbook: workbookChangeByWorkbook,

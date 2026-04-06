@@ -131,6 +131,21 @@ const presenceCoarse = table("presence_coarse")
   })
   .primaryKey("workbookId", "sessionId");
 
+const sheetView = table("sheet_view")
+  .columns({
+    workbookId: string().from("workbook_id"),
+    id: string(),
+    ownerUserId: string().from("owner_user_id"),
+    name: string(),
+    visibility: string<"private" | "shared">(),
+    sheetId: number().from("sheet_id").optional(),
+    sheetName: string().from("sheet_name").optional(),
+    address: string(),
+    viewportJson: json().from("viewport_json"),
+    updatedAt: number().from("updated_at"),
+  })
+  .primaryKey("workbookId", "id");
+
 const workbookChange = table("workbook_change")
   .columns({
     workbookId: string().from("workbook_id"),
@@ -159,6 +174,7 @@ export const schema = createSchema({
     cellEval,
     definedNames,
     presenceCoarse,
+    sheetView,
     workbookChange,
   ],
   relationships: [],

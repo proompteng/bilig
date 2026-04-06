@@ -63,7 +63,9 @@ function resolveBooleanEnv(value: string | undefined, fallback: boolean): boolea
   throw new Error(`Invalid boolean environment value: ${value}`);
 }
 
-function resolveWebRuntimeConfig(env: Record<string, string | undefined>): BiligRuntimeConfig {
+function resolveWebRuntimeConfig(
+  env: Record<string, string | undefined>,
+): Omit<BiligRuntimeConfig, "currentUserId"> {
   const zeroCacheUrl = env["BILIG_ZERO_CACHE_URL"]?.trim() || "/zero";
   const defaultDocumentId = env["BILIG_DEFAULT_DOCUMENT_ID"]?.trim() || "bilig-demo";
 
@@ -166,8 +168,12 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   }));
 
   app.get("/runtime-config.json", async (_request, reply) => {
+    const session = resolveSessionIdentity(_request, reply);
     reply.header("cache-control", "no-store");
-    return webRuntimeConfig;
+    return {
+      ...webRuntimeConfig,
+      currentUserId: session.userID,
+    } satisfies BiligRuntimeConfig;
   });
 
   app.get(

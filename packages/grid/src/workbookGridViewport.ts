@@ -85,6 +85,23 @@ export function scrollCellIntoView(options: {
   }
 }
 
+export function resolveViewportScrollPosition(options: {
+  viewport: Pick<VisibleRegionState["range"], "x" | "y"> | { colStart: number; rowStart: number };
+  sortedColumnWidthOverrides: readonly (readonly [number, number])[];
+  gridMetrics: ReturnType<typeof getGridMetrics>;
+}): { scrollLeft: number; scrollTop: number } {
+  const colStart = "colStart" in options.viewport ? options.viewport.colStart : options.viewport.x;
+  const rowStart = "rowStart" in options.viewport ? options.viewport.rowStart : options.viewport.y;
+  return {
+    scrollLeft: resolveColumnOffset(
+      colStart,
+      options.sortedColumnWidthOverrides,
+      options.gridMetrics.columnWidth,
+    ),
+    scrollTop: rowStart * options.gridMetrics.rowHeight,
+  };
+}
+
 export function hasSelectionTargetChanged(
   previousSelection: { sheetName: string; col: number; row: number } | null,
   nextSelection: { sheetName: string; col: number; row: number },

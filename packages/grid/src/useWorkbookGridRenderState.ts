@@ -40,6 +40,7 @@ import type { SheetGridViewportSubscription } from "./workbookGridSurfaceTypes.j
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
+  resolveViewportScrollPosition,
   resolveVisibleRegionFromScroll,
   scrollCellIntoView,
 } from "./workbookGridViewport.js";
@@ -81,6 +82,12 @@ export function useWorkbookGridRenderState(input: {
   controlledColumnWidths?: Readonly<Record<number, number>> | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
+  restoreViewportTarget?:
+    | {
+        readonly token: number;
+        readonly viewport: Viewport;
+      }
+    | undefined;
 }) {
   const {
     engine,
@@ -92,6 +99,7 @@ export function useWorkbookGridRenderState(input: {
     subscribeViewport,
     controlledColumnWidths,
     onVisibleViewportChange,
+    restoreViewportTarget,
   } = input;
   const emptyGpuScene = useMemo<GridGpuScene>(() => ({ fillRects: [], borderRects: [] }), []);
   const emptyTextScene = useMemo<GridTextScene>(() => ({ items: [] }), []);
@@ -101,6 +109,7 @@ export function useWorkbookGridRenderState(input: {
   const autoScrollSelectionRef = useRef<{ sheetName: string; col: number; row: number } | null>(
     null,
   );
+  const restoredViewportTokenRef = useRef<number | null>(null);
   const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scrollSyncFrameRef = useRef<number | null>(null);
   const [sceneRevision, setSceneRevision] = useState(0);
@@ -523,6 +532,24 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
   ]);
+
+  useLayoutEffect(() => {
+    const scrollViewport = scrollViewportRef.current;
+    if (!scrollViewport || !restoreViewportTarget) {
+      return;
+    }
+    if (restoredViewportTokenRef.current === restoreViewportTarget.token) {
+      return;
+    }
+    restoredViewportTokenRef.current = restoreViewportTarget.token;
+    const { scrollLeft: nextScrollLeft, scrollTop: nextScrollTop } = resolveViewportScrollPosition({
+      viewport: restoreViewportTarget.viewport,
+      sortedColumnWidthOverrides,
+      gridMetrics,
+    });
+    scrollViewport.scrollLeft = nextScrollLeft;
+    scrollViewport.scrollTop = nextScrollTop;
+  }, [gridMetrics, restoreViewportTarget, sortedColumnWidthOverrides]);
 
   const refreshOverlayBounds = useCallback(() => {
     const next = getCellScreenBounds(selectedCell.col, selectedCell.row);

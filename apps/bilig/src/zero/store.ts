@@ -21,6 +21,7 @@ import {
   type WorkbookEventRecord,
 } from "@bilig/zero-sync";
 import { appendWorkbookChange } from "./workbook-change-store.js";
+import { reconcileWorkbookSheetViews } from "./sheet-view-store.js";
 import {
   buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine,
@@ -2184,6 +2185,11 @@ export async function persistWorkbookMutation(
     clientMutationId: options.clientMutationId ?? null,
     payload: options.eventPayload,
     createdAtUnixMs: Date.parse(updatedAt),
+  });
+  await reconcileWorkbookSheetViews({
+    db,
+    documentId,
+    payload: options.eventPayload,
   });
 
   await supersedePendingRecalcJobs(db, documentId, revision);

@@ -2,6 +2,7 @@ export interface BiligRuntimeConfig {
   zeroCacheUrl: string;
   defaultDocumentId: string;
   persistState: boolean;
+  currentUserId: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,6 +32,7 @@ export function parseRuntimeConfig(value: unknown): BiligRuntimeConfig {
     zeroCacheUrl: requireNonEmptyString(value["zeroCacheUrl"], "zeroCacheUrl"),
     defaultDocumentId: requireNonEmptyString(value["defaultDocumentId"], "defaultDocumentId"),
     persistState: requireBoolean(value["persistState"], "persistState"),
+    currentUserId: requireNonEmptyString(value["currentUserId"], "currentUserId"),
   };
 }
 

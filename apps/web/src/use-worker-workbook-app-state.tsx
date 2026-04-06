@@ -3,10 +3,11 @@ import { useActorRef, useSelector } from "@xstate/react";
 import type { CommitOp } from "@bilig/core";
 import type { EditMovement, EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { LiteralInput } from "@bilig/protocol";
+import type { LiteralInput, Viewport } from "@bilig/protocol";
 import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
+import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import { loadPersistedSelection, persistSelection } from "./selection-persistence.js";
 import { ProjectedViewportStore } from "./projected-viewport-store.js";
 import {
@@ -28,8 +29,19 @@ import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
+import { useWorkbookViewsPane } from "./use-workbook-views-pane.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
+
+function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
+  const parsed = parseCellAddress(selection.address, selection.sheetName);
+  return {
+    rowStart: parsed.row,
+    rowEnd: parsed.row,
+    colStart: parsed.col,
+    colEnd: parsed.col,
+  };
+}
 
 export function useWorkerWorkbookAppState(input: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
@@ -74,6 +86,15 @@ export function useWorkerWorkbookAppState(input: {
   const editorTargetRef = useRef(selection);
   const zeroRef = useRef<ZeroClient>(zero);
   const connectionStateRef = useRef(connectionState.name);
+  const visibleViewportRef = useRef<Viewport>(selectionViewport(selection));
+  const restoreViewportTokenRef = useRef(0);
+  const [restoreViewportTarget, setRestoreViewportTarget] = useState<
+    | {
+        readonly token: number;
+        readonly viewport: Viewport;
+      }
+    | undefined
+  >(undefined);
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -455,10 +476,11 @@ export function useWorkerWorkbookAppState(input: {
 
   const selectAddress = useCallback(
     (sheetName: string, address: string) => {
+      const previousSelection = selectionRef.current;
       if (
         editingModeRef.current === "idle" &&
-        selectionRef.current.sheetName === sheetName &&
-        selectionRef.current.address === address
+        previousSelection.sheetName === sheetName &&
+        previousSelection.address === address
       ) {
         return;
       }
@@ -468,6 +490,9 @@ export function useWorkerWorkbookAppState(input: {
         setEditingMode("idle");
       }
       const nextSelection = { sheetName, address };
+      if (previousSelection.sheetName !== sheetName) {
+        visibleViewportRef.current = selectionViewport(nextSelection);
+      }
       selectionRef.current = nextSelection;
       editorTargetRef.current = nextSelection;
       runtimeActorRef.send({ type: "selection.changed", selection: nextSelection });
@@ -489,6 +514,9 @@ export function useWorkerWorkbookAppState(input: {
   const isEditingCell = editingMode === "cell";
   const visibleEditorValue = isEditing ? editorValue : toEditorValue(selectedCell);
   const resolvedValue = toResolvedValue(selectedCell);
+  const handleVisibleViewportChange = useCallback((viewport: Viewport) => {
+    visibleViewportRef.current = viewport;
+  }, []);
   const sheetNames = useMemo(
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
@@ -508,6 +536,26 @@ export function useWorkerWorkbookAppState(input: {
     enabled: runtimeReady,
     onJump: (sheetName, address) => {
       selectAddress(sheetName, address);
+    },
+  });
+  const { viewsPanel, viewsToggle } = useWorkbookViewsPane({
+    documentId,
+    currentUserId: runtimeConfig.currentUserId,
+    selection,
+    sheetNames,
+    zero,
+    enabled: runtimeReady,
+    getCurrentViewport: () => visibleViewportRef.current,
+    onApply: (view) => {
+      if (!view.sheetName) {
+        return;
+      }
+      restoreViewportTokenRef.current += 1;
+      setRestoreViewportTarget({
+        token: restoreViewportTokenRef.current,
+        viewport: view.viewport,
+      });
+      selectAddress(view.sheetName, view.address);
     },
   });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
@@ -598,6 +646,7 @@ export function useWorkerWorkbookAppState(input: {
     return (
       <>
         {toolbarHeaderStatus}
+        {viewsToggle}
         {changesToggle}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
@@ -609,7 +658,7 @@ export function useWorkerWorkbookAppState(input: {
         ) : null}
       </>
     );
-  }, [changesToggle, collaborators, selectAddress, toolbarHeaderStatus]);
+  }, [changesToggle, collaborators, selectAddress, toolbarHeaderStatus, viewsToggle]);
 
   return {
     beginEditing,
@@ -624,6 +673,7 @@ export function useWorkerWorkbookAppState(input: {
     fillSelectionRange,
     handleEditorChange,
     headerStatus,
+    handleVisibleViewportChange,
     invokeColumnWidthMutation,
     isEditing,
     isEditingCell,
@@ -646,8 +696,10 @@ export function useWorkerWorkbookAppState(input: {
     subscribeViewport,
     toggleBooleanCell,
     visibleEditorValue,
+    viewsPanel,
     workbookReady,
     workerHandle,
     writesAllowed,
+    restoreViewportTarget,
   };
 }

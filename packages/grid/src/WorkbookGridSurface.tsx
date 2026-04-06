@@ -24,6 +24,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     controlledColumnWidths: props.columnWidths,
     onVisibleViewportChange: props.onVisibleViewportChange,
     onColumnWidthChange: props.onColumnWidthChange,
+    restoreViewportTarget: props.restoreViewportTarget,
   });
   const interactions = useWorkbookGridInteractions({
     engine: props.engine,

@@ -73,6 +73,12 @@ interface WorkbookViewProps {
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
+  restoreViewportTarget?:
+    | {
+        readonly token: number;
+        readonly viewport: Viewport;
+      }
+    | undefined;
 }
 
 export function WorkbookView({
@@ -111,6 +117,7 @@ export function WorkbookView({
   onColumnWidthChange,
   onAutofitColumn,
   onVisibleViewportChange,
+  restoreViewportTarget,
 }: WorkbookViewProps) {
   return (
     <section
@@ -160,6 +167,7 @@ export function WorkbookView({
           onColumnWidthChange={onColumnWidthChange}
           onAutofitColumn={onAutofitColumn}
           onVisibleViewportChange={onVisibleViewportChange}
+          restoreViewportTarget={restoreViewportTarget}
           resolvedValue={resolvedValue}
           selectedAddr={selectedAddr}
           selectedCellSnapshot={selectedCellSnapshot}

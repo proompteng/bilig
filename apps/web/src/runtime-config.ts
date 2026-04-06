@@ -3,6 +3,7 @@ import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 export interface RuntimeConfig {
   documentId: string;
   persistState: boolean;
+  currentUserId: string;
 }
 
 function createSessionDocumentId(defaultDocumentId: string): string {
@@ -28,6 +29,7 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
     return {
       documentId: explicitDocumentId,
       persistState: true,
+      currentUserId: config.currentUserId,
     };
   }
 
@@ -36,5 +38,6 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
       ? createSessionDocumentId(config.defaultDocumentId)
       : config.defaultDocumentId,
     persistState: ephemeralDocument ? false : config.persistState,
+    currentUserId: config.currentUserId,
   };
 }

@@ -62,4 +62,10 @@ export interface WorkbookGridSurfaceProps {
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
+  restoreViewportTarget?:
+    | {
+        readonly token: number;
+        readonly viewport: Viewport;
+      }
+    | undefined;
 }

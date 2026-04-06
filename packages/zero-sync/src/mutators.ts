@@ -201,16 +201,33 @@ export const updatePresenceArgsSchema = baseMutationArgsSchema.extend({
   selection: z.any().optional(),
 });
 
-export const sheetViewArgsSchema = baseMutationArgsSchema.extend({
-  id: z.string().min(1),
-  sheetId: z.string().min(1),
-  name: z.string().min(1),
-  kind: z.enum(["filter", "sort", "slicer"]),
-  filterJson: z.any(),
-  sortJson: z.any(),
-  slicerJson: z.any(),
-  isDefault: z.boolean(),
-});
+const workbookViewportSchema = z
+  .object({
+    rowStart: z.number().int().nonnegative(),
+    rowEnd: z.number().int().nonnegative(),
+    colStart: z.number().int().nonnegative(),
+    colEnd: z.number().int().nonnegative(),
+  })
+  .refine(
+    (viewport) => viewport.rowEnd >= viewport.rowStart && viewport.colEnd >= viewport.colStart,
+    {
+      message: "viewport bounds must be ordered",
+    },
+  );
+
+export const sheetViewArgsSchema = baseMutationArgsSchema
+  .extend({
+    id: z.string().min(1),
+    sheetId: z.number().int().positive().optional(),
+    sheetName: z.string().trim().min(1).optional(),
+    name: z.string().trim().min(1),
+    visibility: z.enum(["private", "shared"]),
+    address: z.string().min(1),
+    viewport: workbookViewportSchema,
+  })
+  .refine((args) => args.sheetId !== undefined || args.sheetName !== undefined, {
+    message: "sheetId or sheetName is required",
+  });
 
 export const deleteSheetViewArgsSchema = baseMutationArgsSchema.extend({
   id: z.string().min(1),

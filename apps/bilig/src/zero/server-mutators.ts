@@ -15,12 +15,14 @@ import {
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
+  deleteSheetViewArgsSchema,
   rangeMutationArgsSchema,
   renderCommitArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  sheetViewArgsSchema,
   updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
   type WorkbookEventPayload,
@@ -30,6 +32,7 @@ import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
+import { deleteWorkbookSheetView, upsertWorkbookSheetView } from "./sheet-view-store.js";
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -563,6 +566,32 @@ export async function handleServerMutator(
         sheetName: parsed.sheetName ?? null,
         address: parsed.address ?? null,
         selection: parsed.selection,
+      });
+      return;
+    }
+
+    case "workbook.upsertSheetView": {
+      const parsed = sheetViewArgsSchema.parse(args);
+      await upsertWorkbookSheetView(serverTx.dbTransaction.wrappedTransaction, {
+        documentId: parsed.documentId,
+        id: parsed.id,
+        ownerUserId: session?.userID ?? "system",
+        name: parsed.name,
+        visibility: parsed.visibility,
+        sheetId: parsed.sheetId ?? null,
+        sheetName: parsed.sheetName ?? null,
+        address: parsed.address,
+        viewport: parsed.viewport,
+      });
+      return;
+    }
+
+    case "workbook.deleteSheetView": {
+      const parsed = deleteSheetViewArgsSchema.parse(args);
+      await deleteWorkbookSheetView(serverTx.dbTransaction.wrappedTransaction, {
+        documentId: parsed.documentId,
+        id: parsed.id,
+        ownerUserId: session?.userID ?? "system",
       });
       return;
     }
