@@ -93,3 +93,108 @@ describe("sync-server zero keepalive", () => {
     }
   });
 });
+
+describe("sync-server authoritative events", () => {
+  it("returns authoritative workbook events from the zero sync service", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      zeroSyncService: {
+        enabled: true,
+        async initialize() {},
+        async close() {},
+        async handleQuery() {
+          throw new Error("not used");
+        },
+        async handleMutate() {
+          throw new Error("not used");
+        },
+        async loadAuthoritativeEvents(documentId, afterRevision) {
+          expect(documentId).toBe("doc-1");
+          expect(afterRevision).toBe(4);
+          return {
+            afterRevision,
+            headRevision: 6,
+            calculatedRevision: 6,
+            events: [
+              {
+                revision: 5,
+                clientMutationId: "doc-1:pending:5",
+                payload: {
+                  kind: "setCellValue",
+                  sheetName: "Sheet1",
+                  address: "A1",
+                  value: 42,
+                },
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/events?afterRevision=4",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(response.json()).toEqual({
+        afterRevision: 4,
+        headRevision: 6,
+        calculatedRevision: 6,
+        events: [
+          {
+            revision: 5,
+            clientMutationId: "doc-1:pending:5",
+            payload: {
+              kind: "setCellValue",
+              sheetName: "Sheet1",
+              address: "A1",
+              value: 42,
+            },
+          },
+        ],
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects invalid afterRevision values", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      zeroSyncService: {
+        enabled: true,
+        async initialize() {},
+        async close() {},
+        async handleQuery() {
+          throw new Error("not used");
+        },
+        async handleMutate() {
+          throw new Error("not used");
+        },
+        async loadAuthoritativeEvents() {
+          throw new Error("not used");
+        },
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/events?afterRevision=nope",
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: "INVALID_AFTER_REVISION",
+        message: "afterRevision must be a non-negative integer",
+        retryable: false,
+      });
+    } finally {
+      await app.close();
+    }
+  });
+});

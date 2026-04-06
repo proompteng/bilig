@@ -39,6 +39,11 @@ function createMemoryLocalStoreFactory(seed?: {
         async appendPendingMutation(mutation) {
           currentPendingMutations.push(cloneMutationRecord(mutation));
         },
+        async updatePendingMutation(mutation) {
+          currentPendingMutations = currentPendingMutations.map((entry) =>
+            entry.id === mutation.id ? cloneMutationRecord(mutation) : entry,
+          );
+        },
         async removePendingMutation(id) {
           currentPendingMutations = currentPendingMutations.filter(
             (mutation) => mutation.id !== id,
@@ -239,6 +244,66 @@ describe("WorkbookWorkerRuntime", () => {
     expect(afterAck.listPendingMutations()).toEqual([]);
   });
 
+  it("absorbs submitted pending mutations when authoritative events arrive", async () => {
+    const localStoreFactory = createMemoryLocalStoreFactory();
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "authoritative-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const pending = await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+    await runtime.markPendingMutationSubmitted(pending.id);
+
+    expect(runtime.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        submittedAtUnixMs: expect.any(Number),
+        status: "submitted",
+      },
+    ]);
+
+    await runtime.applyAuthoritativeEvents(
+      [
+        {
+          revision: 1,
+          clientMutationId: pending.id,
+          payload: {
+            kind: "setCellValue",
+            sheetName: "Sheet1",
+            address: "A1",
+            value: 17,
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(runtime.listPendingMutations()).toEqual([]);
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
+    await reloaded.bootstrap({
+      documentId: "authoritative-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.listPendingMutations()).toEqual([]);
+    expect(reloaded.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+  });
+
   it("replays journaled mutations that were not yet captured in the persisted snapshot", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "journal-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");
@@ -259,6 +324,7 @@ describe("WorkbookWorkerRuntime", () => {
           method: "setCellValue",
           args: ["Sheet1", "A1", 17],
           enqueuedAtUnixMs: 1,
+          submittedAtUnixMs: null,
           status: "pending",
         },
       ],
@@ -501,8 +567,7 @@ describe("WorkbookWorkerRuntime", () => {
     expect(impacts.get("Sheet1")?.positions).toEqual([{ address: "A1", row: 0, col: 0 }]);
   });
 
-  it("coalesces persistence saves across edit bursts", async () => {
-    vi.useFakeTimers();
+  it("does not rewrite authoritative persistence for projected-only edit bursts", async () => {
     const saveState = vi.fn(async () => {});
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory({
@@ -523,10 +588,6 @@ describe("WorkbookWorkerRuntime", () => {
     runtime.setCellValue("Sheet1", "A3", 3);
 
     expect(saveState).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(120);
-
-    expect(saveState).toHaveBeenCalledTimes(2);
   });
 
   it("reuses exported snapshots until the workbook changes", async () => {

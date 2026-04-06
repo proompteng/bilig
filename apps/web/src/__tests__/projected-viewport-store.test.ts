@@ -273,16 +273,11 @@ describe("ProjectedViewportStore", () => {
     expect(cache.peekCell("Sheet1", "D5")).toBeUndefined();
   });
 
-  it("keeps a pending local column width across matching patches until the mutation is acked", () => {
+  it("clears a pending local column width once the authoritative patch matches it", () => {
     const cache = new ProjectedViewportStore();
 
     cache.setColumnWidth("Sheet1", 0, 68);
     cache.applyViewportPatch(createColumnPatch(68));
-    cache.applyViewportPatch(createColumnPatch(93));
-
-    expect(cache.getColumnWidths("Sheet1")[0]).toBe(68);
-
-    cache.ackColumnWidth("Sheet1", 0, 68);
     cache.applyViewportPatch(createColumnPatch(93));
 
     expect(cache.getColumnWidths("Sheet1")[0]).toBe(93);

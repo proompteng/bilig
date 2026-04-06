@@ -454,6 +454,9 @@ importers:
 
   packages/zero-sync:
     dependencies:
+      '@bilig/core':
+        specifier: workspace:*
+        version: link:../core
       '@bilig/formula':
         specifier: workspace:*
         version: link:../formula

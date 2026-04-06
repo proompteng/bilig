@@ -131,6 +131,7 @@ const engineOpBatchSchema = z.object({
 
 const baseMutationArgsSchema = z.object({
   documentId: z.string().min(1),
+  clientMutationId: z.string().min(1).optional(),
 });
 
 export const applyBatchArgsSchema = baseMutationArgsSchema.extend({

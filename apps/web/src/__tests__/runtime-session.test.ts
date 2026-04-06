@@ -38,6 +38,11 @@ function createMemoryLocalStoreFactory(seed?: {
         async appendPendingMutation(mutation) {
           currentPendingMutations.push(cloneMutationRecord(mutation));
         },
+        async updatePendingMutation(mutation) {
+          currentPendingMutations = currentPendingMutations.map((entry) =>
+            entry.id === mutation.id ? cloneMutationRecord(mutation) : entry,
+          );
+        },
         async removePendingMutation(id) {
           currentPendingMutations = currentPendingMutations.filter(
             (mutation) => mutation.id !== id,
@@ -278,17 +283,41 @@ describe("createWorkerRuntimeSessionController", () => {
       rebasedSelectedRowMetadataView,
       rebasedSelectedColumnMetadataView,
     );
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null, { status: 404 }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(createSnapshot([{ address: "A1", value: 5 }])), {
-          status: 200,
-          headers: {
-            "content-type": "application/vnd.bilig.workbook+json",
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/snapshot/latest")) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes("/events?afterRevision=0")) {
+        return new Response(
+          JSON.stringify({
+            afterRevision: 0,
+            headRevision: 2,
+            calculatedRevision: 2,
+            events: [
+              {
+                revision: 2,
+                clientMutationId: null,
+                payload: {
+                  kind: "setCellValue",
+                  sheetName: "Sheet1",
+                  address: "A1",
+                  value: 5,
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
           },
-        }),
-      );
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     const controller = await createWorkerRuntimeSessionController(
       {
@@ -309,7 +338,6 @@ describe("createWorkerRuntimeSessionController", () => {
       },
     );
 
-    await controller.invoke("setCellValue", "Sheet1", "A1", 17);
     await controller.invoke("enqueuePendingMutation", {
       method: "setCellValue",
       args: ["Sheet1", "A1", 17],

@@ -1,7 +1,7 @@
 import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag } from "@bilig/protocol";
 import { describe, expect, it } from "vitest";
-import { applyWorkbookEvent, deriveDirtyRegions } from "../events.js";
+import { applyWorkbookEvent, deriveDirtyRegions } from "@bilig/zero-sync";
 
 describe("workbook events", () => {
   it("replays workbook mutations onto a warm engine", async () => {

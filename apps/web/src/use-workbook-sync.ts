@@ -13,6 +13,7 @@ import {
   isCellStylePatchValue,
   isCommitOps,
   isLiteralInput,
+  isPendingWorkbookMutation,
   isPendingWorkbookMutationList,
   type PendingWorkbookMutation,
   type PendingWorkbookMutationInput,
@@ -22,7 +23,6 @@ import {
   assert,
   canAttemptRemoteSync,
   isMutationErrorResult,
-  parseColumnWidthMutationArgs,
   toErrorMessage,
   type ZeroConnectionState,
 } from "./worker-workbook-app-model.js";
@@ -97,33 +97,20 @@ export function useWorkbookSync(input: {
   }, [runtimeController]);
 
   const enqueuePendingMutation = useCallback(
-    async (mutation: PendingWorkbookMutationInput): Promise<void> => {
+    async (mutation: PendingWorkbookMutationInput): Promise<PendingWorkbookMutation> => {
       if (!runtimeController) {
         throw new Error("Workbook runtime is not ready");
       }
-      await runtimeController.invoke("enqueuePendingMutation", mutation);
+      const value = await runtimeController.invoke("enqueuePendingMutation", mutation);
+      assert(isPendingWorkbookMutation(value), "Worker returned an invalid pending mutation");
+      return value;
     },
     [runtimeController],
   );
 
-  const ackPendingColumnWidth = useCallback(
-    (mutation: PendingWorkbookMutationInput | PendingWorkbookMutation): void => {
-      const parsed = parseColumnWidthMutationArgs(mutation);
-      if (!parsed) {
-        return;
-      }
-      workerHandleRef.current?.viewportStore.ackColumnWidth(
-        parsed.sheetName,
-        parsed.columnIndex,
-        parsed.width,
-      );
-    },
-    [workerHandleRef],
-  );
-
   const runZeroMutation = useCallback(
     async (
-      mutation: PendingWorkbookMutationInput,
+      mutation: PendingWorkbookMutation,
     ): Promise<{ ok: true } | { ok: false; retryable: boolean; error: Error }> => {
       try {
         const result = zeroRef.current.mutate(buildZeroWorkbookMutation(documentId, mutation));
@@ -171,6 +158,11 @@ export function useWorkbookSync(input: {
         return;
       }
 
+      if (mutation.status === "submitted") {
+        await drainBatch(pendingMutations, index + 1);
+        return;
+      }
+
       const remoteResult = await runZeroMutation(mutation);
       if (!remoteResult.ok) {
         if (!remoteResult.retryable) {
@@ -179,19 +171,12 @@ export function useWorkbookSync(input: {
         return;
       }
 
-      await runtimeController.invoke("ackPendingMutation", mutation.id);
-      ackPendingColumnWidth(mutation);
+      await runtimeController.invoke("markPendingMutationSubmitted", mutation.id);
       await drainBatch(pendingMutations, index + 1);
     };
 
     await drainBatch(await listPendingMutations());
-  }, [
-    ackPendingColumnWidth,
-    connectionStateRef,
-    listPendingMutations,
-    runZeroMutation,
-    runtimeController,
-  ]);
+  }, [connectionStateRef, listPendingMutations, runZeroMutation, runtimeController]);
 
   const drainPendingMutations = useCallback(async (): Promise<void> => {
     try {
@@ -306,41 +291,19 @@ export function useWorkbookSync(input: {
           throw new Error("Unsupported workbook mutation");
       }
 
-      await runSerializedLocalMutationTask(() =>
-        runtimeController.invoke(mutation.method, ...mutation.args),
-      );
+      await runSerializedLocalMutationTask(() => enqueuePendingMutation(mutation));
       await runSerializedSyncTask(async () => {
-        const pendingMutations = await listPendingMutations();
-        const hasPendingBacklog = pendingMutations.length > 0;
-        if (!canAttemptRemoteSync(connectionStateRef.current) || hasPendingBacklog) {
-          await enqueuePendingMutation(mutation);
-          if (canAttemptRemoteSync(connectionStateRef.current) && hasPendingBacklog) {
-            await drainPendingMutationsLocked();
-          }
-          return;
+        if (canAttemptRemoteSync(connectionStateRef.current)) {
+          await drainPendingMutationsLocked();
         }
-
-        const remoteResult = await runZeroMutation(mutation);
-        if (remoteResult.ok) {
-          ackPendingColumnWidth(mutation);
-          return;
-        }
-        if (remoteResult.retryable) {
-          await enqueuePendingMutation(mutation);
-          return;
-        }
-        throw remoteResult.error;
       });
     },
     [
-      ackPendingColumnWidth,
       connectionStateRef,
       drainPendingMutationsLocked,
       enqueuePendingMutation,
-      listPendingMutations,
       runSerializedLocalMutationTask,
       runSerializedSyncTask,
-      runZeroMutation,
       runtimeController,
     ],
   );

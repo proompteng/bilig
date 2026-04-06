@@ -34,7 +34,8 @@ export interface PendingWorkbookMutation extends PendingWorkbookMutationInput {
   readonly localSeq: number;
   readonly baseRevision: number;
   readonly enqueuedAtUnixMs: number;
-  readonly status: "pending";
+  readonly submittedAtUnixMs: number | null;
+  readonly status: "pending" | "submitted";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -108,7 +109,8 @@ export function isPendingWorkbookMutation(value: unknown): value is PendingWorkb
     typeof value["localSeq"] === "number" &&
     typeof value["baseRevision"] === "number" &&
     typeof value["enqueuedAtUnixMs"] === "number" &&
-    value["status"] === "pending" &&
+    (value["submittedAtUnixMs"] === null || typeof value["submittedAtUnixMs"] === "number") &&
+    (value["status"] === "pending" || value["status"] === "submitted") &&
     isPendingWorkbookMutationInput(value)
   );
 }
@@ -121,16 +123,23 @@ export function isPendingWorkbookMutationList(
 
 export function buildZeroWorkbookMutation(
   documentId: string,
-  mutation: PendingWorkbookMutationInput,
+  mutation: PendingWorkbookMutationInput | PendingWorkbookMutation,
 ): Parameters<Zero["mutate"]>[0] {
   const { method, args } = mutation;
+  const clientMutationId = "id" in mutation ? mutation.id : undefined;
   switch (method) {
     case "setCellValue": {
       const [sheetName, address, value] = args;
       if (typeof sheetName !== "string" || typeof address !== "string" || !isLiteralInput(value)) {
         throw new Error("Invalid setCellValue args");
       }
-      return mutators.workbook.setCellValue({ documentId, sheetName, address, value });
+      return mutators.workbook.setCellValue({
+        documentId,
+        clientMutationId,
+        sheetName,
+        address,
+        value,
+      });
     }
     case "setCellFormula": {
       const [sheetName, address, formula] = args;
@@ -141,28 +150,34 @@ export function buildZeroWorkbookMutation(
       ) {
         throw new Error("Invalid setCellFormula args");
       }
-      return mutators.workbook.setCellFormula({ documentId, sheetName, address, formula });
+      return mutators.workbook.setCellFormula({
+        documentId,
+        clientMutationId,
+        sheetName,
+        address,
+        formula,
+      });
     }
     case "clearCell": {
       const [sheetName, address] = args;
       if (typeof sheetName !== "string" || typeof address !== "string") {
         throw new Error("Invalid clearCell args");
       }
-      return mutators.workbook.clearCell({ documentId, sheetName, address });
+      return mutators.workbook.clearCell({ documentId, clientMutationId, sheetName, address });
     }
     case "clearRange": {
       const [range] = args;
       if (!isCellRangeRef(range)) {
         throw new Error("Invalid clearRange args");
       }
-      return mutators.workbook.clearRange({ documentId, range });
+      return mutators.workbook.clearRange({ documentId, clientMutationId, range });
     }
     case "renderCommit": {
       const [ops] = args;
       if (!isCommitOps(ops)) {
         throw new Error("Invalid renderCommit args");
       }
-      return mutators.workbook.renderCommit({ documentId, ops });
+      return mutators.workbook.renderCommit({ documentId, clientMutationId, ops });
     }
     case "fillRange":
     case "copyRange":
@@ -171,7 +186,7 @@ export function buildZeroWorkbookMutation(
       if (!isCellRangeRef(source) || !isCellRangeRef(target)) {
         throw new Error(`Invalid ${method} args`);
       }
-      return mutators.workbook[method]({ documentId, source, target });
+      return mutators.workbook[method]({ documentId, clientMutationId, source, target });
     }
     case "updateColumnWidth": {
       const [sheetName, columnIndex, width] = args;
@@ -184,6 +199,7 @@ export function buildZeroWorkbookMutation(
       }
       return mutators.workbook.updateColumnWidth({
         documentId,
+        clientMutationId,
         sheetName,
         columnIndex,
         width,
@@ -194,28 +210,33 @@ export function buildZeroWorkbookMutation(
       if (!isCellRangeRef(range) || !isCellStylePatchValue(patch)) {
         throw new Error("Invalid setRangeStyle args");
       }
-      return mutators.workbook.setRangeStyle({ documentId, range, patch });
+      return mutators.workbook.setRangeStyle({ documentId, clientMutationId, range, patch });
     }
     case "clearRangeStyle": {
       const [range, fields] = args;
       if (!isCellRangeRef(range) || (fields !== undefined && !isCellStyleFieldList(fields))) {
         throw new Error("Invalid clearRangeStyle args");
       }
-      return mutators.workbook.clearRangeStyle({ documentId, range, fields });
+      return mutators.workbook.clearRangeStyle({ documentId, clientMutationId, range, fields });
     }
     case "setRangeNumberFormat": {
       const [range, format] = args;
       if (!isCellRangeRef(range) || !isCellNumberFormatInputValue(format)) {
         throw new Error("Invalid setRangeNumberFormat args");
       }
-      return mutators.workbook.setRangeNumberFormat({ documentId, range, format });
+      return mutators.workbook.setRangeNumberFormat({
+        documentId,
+        clientMutationId,
+        range,
+        format,
+      });
     }
     case "clearRangeNumberFormat": {
       const [range] = args;
       if (!isCellRangeRef(range)) {
         throw new Error("Invalid clearRangeNumberFormat args");
       }
-      return mutators.workbook.clearRangeNumberFormat({ documentId, range });
+      return mutators.workbook.clearRangeNumberFormat({ documentId, clientMutationId, range });
     }
   }
 }

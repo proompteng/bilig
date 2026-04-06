@@ -22,11 +22,11 @@ import {
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
   updateColumnWidthArgsSchema,
+  type WorkbookEventPayload,
 } from "@bilig/zero-sync";
 import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
-import type { WorkbookEventPayload } from "./events.js";
 import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
 
 interface ServerTransactionLike {
@@ -212,6 +212,7 @@ async function commitWorkbookMutation(
   eventPayload: WorkbookEventPayload,
   runtimeManager: WorkbookRuntimeManager,
   mutate: (engine: SpreadsheetEngine) => void,
+  clientMutationId?: string,
   session?: SessionIdentity,
   updatedBy = session?.userID ?? "system",
 ) {
@@ -228,6 +229,7 @@ async function commitWorkbookMutation(
         updatedBy,
         ownerUserId,
         eventPayload,
+        ...(clientMutationId !== undefined ? { clientMutationId } : {}),
       });
       runtimeManager.commitMutation(documentId, {
         projectionCommit: result.projectionCommit,
@@ -270,6 +272,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.applyRemoteBatch(parsed.batch);
         },
+        parsed.clientMutationId,
         session,
         session?.userID ??
           (isRecord(parsed.batch) && typeof parsed.batch["replicaId"] === "string"
@@ -294,6 +297,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.setCellValue(parsed.sheetName, parsed.address, parsed.value);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -314,6 +318,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.setCellFormula(parsed.sheetName, parsed.address, parsed.formula);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -333,6 +338,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.clearCell(parsed.sheetName, parsed.address);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -351,6 +357,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.clearRange(parsed.range);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -369,6 +376,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.renderCommit(parsed.ops);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -388,6 +396,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.fillRange(parsed.source, parsed.target);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -407,6 +416,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.copyRange(parsed.source, parsed.target);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -426,6 +436,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.moveRange(parsed.source, parsed.target);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -446,6 +457,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -466,6 +478,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.setRangeStyle(parsed.range, patch);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -492,6 +505,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.clearRangeStyle(parsed.range, parsed.fields);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -512,6 +526,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.setRangeNumberFormat(parsed.range, format);
         },
+        parsed.clientMutationId,
         session,
       );
       return;
@@ -530,6 +545,7 @@ export async function handleServerMutator(
         (engine) => {
           engine.clearRangeNumberFormat(parsed.range);
         },
+        parsed.clientMutationId,
         session,
       );
       return;

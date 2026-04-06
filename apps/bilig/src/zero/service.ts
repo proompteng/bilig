@@ -1,6 +1,7 @@
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { schema } from "@bilig/zero-sync";
 import {
+  type AuthoritativeWorkbookEventBatch,
   queries,
   workbookCellArgsSchema,
   workbookColumnTileArgsSchema,
@@ -18,6 +19,8 @@ import {
   backfillAuthoritativeCellEval,
   dropLegacyZeroSyncSchemaObjects,
   ensureZeroSyncSchema,
+  loadWorkbookEventRecordsAfter,
+  loadWorkbookRuntimeMetadata,
 } from "./store.js";
 
 export interface ZeroSyncService {
@@ -26,6 +29,10 @@ export interface ZeroSyncService {
   close(): Promise<void>;
   handleQuery(request: FastifyRequest): Promise<unknown>;
   handleMutate(request: FastifyRequest): Promise<unknown>;
+  loadAuthoritativeEvents(
+    documentId: string,
+    afterRevision: number,
+  ): Promise<AuthoritativeWorkbookEventBatch>;
 }
 
 function fastifyRequestToWebRequest(request: FastifyRequest): Request {
@@ -71,6 +78,10 @@ class DisabledZeroSyncService implements ZeroSyncService {
   }
 
   async handleMutate(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async loadAuthoritativeEvents(_documentId: string, _afterRevision: number): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
 }
@@ -179,6 +190,23 @@ class EnabledZeroSyncService implements ZeroSyncService {
         }),
       fastifyRequestToWebRequest(request),
     );
+  }
+
+  async loadAuthoritativeEvents(
+    documentId: string,
+    afterRevision: number,
+  ): Promise<AuthoritativeWorkbookEventBatch> {
+    const metadata = await loadWorkbookRuntimeMetadata(this.pool, documentId);
+    const events =
+      metadata.headRevision > afterRevision
+        ? await loadWorkbookEventRecordsAfter(this.pool, documentId, afterRevision)
+        : [];
+    return {
+      afterRevision,
+      headRevision: metadata.headRevision,
+      calculatedRevision: metadata.calculatedRevision,
+      events,
+    };
   }
 }
 

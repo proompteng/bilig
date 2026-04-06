@@ -194,6 +194,41 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
+  app.get(
+    "/v2/documents/:documentId/events",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string };
+        Querystring: { afterRevision?: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!zeroSyncService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "ZERO_SYNC_DISABLED",
+          "Authoritative workbook events require Zero sync",
+          true,
+        );
+      }
+      const rawAfterRevision = request.query.afterRevision?.trim() ?? "0";
+      const afterRevision = Number.parseInt(rawAfterRevision, 10);
+      if (!Number.isFinite(afterRevision) || afterRevision < 0) {
+        reply.code(400);
+        return createErrorEnvelope(
+          "INVALID_AFTER_REVISION",
+          "afterRevision must be a non-negative integer",
+          false,
+        );
+      }
+      reply.header("cache-control", "no-store");
+      return await zeroSyncService.loadAuthoritativeEvents(
+        request.params.documentId,
+        afterRevision,
+      );
+    },
+  );
+
   app.post(
     "/v2/documents/:documentId/frames",
     async (

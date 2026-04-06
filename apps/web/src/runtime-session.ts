@@ -1,6 +1,10 @@
 import type { Zero } from "@rocicorp/zero";
 import { createWorkerEngineClient, type MessagePortLike } from "@bilig/worker-transport";
 import { parseCellAddress } from "@bilig/formula";
+import {
+  isAuthoritativeWorkbookEventBatch,
+  type AuthoritativeWorkbookEventBatch,
+} from "@bilig/zero-sync";
 import type { CellSnapshot, RecalcMetrics, Viewport, WorkbookSnapshot } from "@bilig/protocol";
 import { ValueTag } from "@bilig/protocol";
 import type {
@@ -122,12 +126,37 @@ function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorke
   return (
     isRecord(value) &&
     typeof value["restoredFromPersistence"] === "boolean" &&
+    typeof value["requiresAuthoritativeHydrate"] === "boolean" &&
     isWorkbookWorkerStateSnapshot(value["runtimeState"])
   );
 }
 
 function isNumber(value: unknown): value is number {
   return typeof value === "number";
+}
+
+async function loadAuthoritativeEventBatch(
+  documentId: string,
+  afterRevision: number,
+  fetchImpl: typeof fetch,
+): Promise<AuthoritativeWorkbookEventBatch> {
+  const response = await fetchImpl(
+    `/v2/documents/${encodeURIComponent(documentId)}/events?afterRevision=${String(afterRevision)}`,
+    {
+      headers: {
+        accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to load authoritative events (${response.status})`);
+  }
+  const parsed: unknown = JSON.parse(await response.text());
+  if (!isAuthoritativeWorkbookEventBatch(parsed)) {
+    throw new Error("Authoritative event payload does not match the expected schema");
+  }
+  return parsed;
 }
 
 async function invokeWorkerMethod<T>(
@@ -324,10 +353,31 @@ export async function createWorkerRuntimeSessionController(
     if (targetRevision <= currentAuthoritativeRevision) {
       return;
     }
+    const eventBatch = await loadAuthoritativeEventBatch(
+      input.documentId,
+      currentAuthoritativeRevision,
+      fetchImpl,
+    );
+    if (
+      eventBatch.events.length > 0 &&
+      eventBatch.headRevision >= targetRevision &&
+      eventBatch.headRevision > currentAuthoritativeRevision
+    ) {
+      const runtimeState = await invokeWorkerMethod(
+        client,
+        "applyAuthoritativeEvents",
+        isWorkbookWorkerStateSnapshot,
+        eventBatch.events,
+        eventBatch.headRevision,
+      );
+      currentAuthoritativeRevision = eventBatch.headRevision;
+      publishRuntimeState(runtimeState);
+      await applySelection(reconcileSelection(currentSelection, runtimeState.sheetNames));
+      return runAuthoritativeRebase();
+    }
     const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
     if (!snapshot) {
-      currentAuthoritativeRevision = targetRevision;
-      return runAuthoritativeRebase();
+      throw new Error("Authoritative workbook snapshot was not available for rebase");
     }
     const runtimeState = await invokeWorkerMethod(
       client,
@@ -387,7 +437,7 @@ export async function createWorkerRuntimeSessionController(
     );
     requestedAuthoritativeRevision = currentAuthoritativeRevision;
 
-    if (!bootstrap.restoredFromPersistence) {
+    if (!bootstrap.restoredFromPersistence || bootstrap.requiresAuthoritativeHydrate) {
       const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
       if (snapshot) {
         const hydratedState = await invokeWorkerMethod(

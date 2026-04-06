@@ -340,6 +340,9 @@ export class ProjectedViewportStore implements GridEngineLike {
         if (pending !== undefined && pending !== column.size) {
           return;
         }
+        if (pending === column.size) {
+          delete pendingWidths[column.index];
+        }
         widths[column.index] = column.size;
         axisChanged = true;
       });

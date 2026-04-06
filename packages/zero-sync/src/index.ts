@@ -31,3 +31,15 @@ export {
 } from "./runtime-config.js";
 export { schema } from "./schema.js";
 export { createEmptyWorkbookSnapshot, projectWorkbookToSnapshot } from "./snapshot.js";
+export {
+  applyWorkbookEvent,
+  deriveDirtyRegions,
+  isAuthoritativeWorkbookEventBatch,
+  isAuthoritativeWorkbookEventRecord,
+  isWorkbookEventPayload,
+  type AuthoritativeWorkbookEventBatch,
+  type AuthoritativeWorkbookEventRecord,
+  type DirtyRegion,
+  type WorkbookEventPayload,
+  type WorkbookEventRecord,
+} from "./workbook-events.js";

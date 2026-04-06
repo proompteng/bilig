@@ -13,12 +13,13 @@ import {
 } from "@bilig/protocol";
 import {
   applyWorkbookEvent,
+  type AuthoritativeWorkbookEventRecord,
   deriveDirtyRegions,
   isWorkbookEventPayload,
   type DirtyRegion,
   type WorkbookEventPayload,
   type WorkbookEventRecord,
-} from "./events.js";
+} from "@bilig/zero-sync";
 import {
   buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine,
@@ -521,17 +522,18 @@ async function loadLatestWorkbookCheckpoint(
   };
 }
 
-async function loadWorkbookEventsAfter(
+export async function loadWorkbookEventRecordsAfter(
   db: Queryable,
   documentId: string,
   revision: number,
-): Promise<readonly WorkbookEventPayload[]> {
+): Promise<readonly AuthoritativeWorkbookEventRecord[]> {
   const result = await db.query<{
     revision: number | string | null;
+    client_mutation_id: string | null;
     txn_json: unknown;
   }>(
     `
-      SELECT revision, txn_json
+      SELECT revision, client_mutation_id, txn_json
       FROM workbook_event
       WHERE workbook_id = $1
         AND revision > $2
@@ -541,7 +543,13 @@ async function loadWorkbookEventsAfter(
   );
   return result.rows.flatMap((row) =>
     parseInteger(row.revision) > revision && isWorkbookEventPayload(row.txn_json)
-      ? [row.txn_json]
+      ? [
+          {
+            revision: parseInteger(row.revision),
+            clientMutationId: row.client_mutation_id,
+            payload: row.txn_json,
+          } satisfies AuthoritativeWorkbookEventRecord,
+        ]
       : [],
   );
 }
@@ -1933,9 +1941,9 @@ export async function loadWorkbookState(
   if (baseReplicaState) {
     engine.importReplicaSnapshot(baseReplicaState);
   }
-  const events = await loadWorkbookEventsAfter(db, documentId, baseRevision);
-  for (const payload of events) {
-    applyWorkbookEvent(engine, payload);
+  const events = await loadWorkbookEventRecordsAfter(db, documentId, baseRevision);
+  for (const event of events) {
+    applyWorkbookEvent(engine, event.payload);
   }
 
   return {

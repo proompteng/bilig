@@ -34,7 +34,7 @@ The repo already has the right backbone.
 The browser-side product architecture is still the weak link.
 
 - The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. That closes the old browser JSON/cache path, but the runtime is still only partway through the intended migration because the local DB is still snapshot + journal shaped rather than normalized base/overlay tables.
-- Offline/local-first credibility is better than it was because writes are no longer gated by Zero connection state and the worker now has a crash-safe pending-op journal, but the product is still not truly local-first until the browser has normalized local base/overlay tables and authoritative downstream delta ingest.
+- Offline/local-first credibility is materially better now because writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until the authoritative revision feed absorbs them, and reconnect now prefers authoritative event ingest before snapshot fallback. The product is still not fully local-first because the browser DB is not yet normalized into base/overlay tables.
 - Browser durability is materially better now because accepted local state and pending ops live in SQLite/OPFS rather than IndexedDB/localStorage JSON. The remaining weakness is the data model inside that DB, not the browser persistence substrate.
 - The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
   - `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
@@ -570,12 +570,13 @@ Use a split-direction model.
 - worker outbox drains `pending_op` in order
 - bundles go to a monolith command-apply endpoint
 - each bundle carries `base_revision` and idempotency key
+- successful submit marks the local op as `submitted`; it is removed from the journal only when the authoritative revision feed absorbs that client mutation
 
 **Downstream**
 
-- authoritative revision ack returns immediately to the submitter
+- authoritative revision/event feed is the thing that clears submitted local ops
 - Zero carries authoritative row deltas, change bundles, presence, and views back to all clients
-- worker ingests those authoritative deltas into local base tables
+- worker ingests authoritative revision events first and falls back to full snapshot hydrate only when the event feed cannot close the gap
 
 The browser does **not** sync SQLite contents into Zero.
 It syncs semantic intent upward and consumes authoritative deltas downward.
@@ -728,7 +729,7 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 **Still not completed**
 
-- local base/overlay tables and authoritative downstream delta ingest
+- local base/overlay tables and fully normalized authoritative projection ingest
 - a fully worker-owned tile store backed by normalized local DB tables
 - stable `sheet_id` across browser/server/local layers
 - collaboration/product layers in Phases 2 through 4
@@ -744,7 +745,7 @@ Network becomes shared truth plumbing, not the source of immediacy.
 | Priority | Initiative                                                  | Why now                                                            |
 | -------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
 | 1        | Introduce local base/overlay tables inside the browser DB   | The local store is real now; the data model is not done            |
-| 2        | Build authoritative downstream delta ingest + tile rebuild  | Reconnect is still snapshot-based instead of delta-first           |
+| 2        | Build authoritative tile/base-table ingest + tile rebuild   | Revision ingest exists now, but local tables are still not normalized |
 | 3        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later                   |
 | 4        | Move projected tiles fully behind worker-owned local tables | Giant-data warm-start and ingest still depend on in-memory patches |
 | 5        | Harden warm-start and authoritative reconnect/rebase        | Makes the product feel native immediately                          |
@@ -817,7 +818,7 @@ Make `bilig` genuinely local-first.
 
 - OPFS SQLite local DB
 - local base/overlay tables
-- pending-op journal
+- pending-op journal with submitted-state durability
 - reconnect/rebase path
 - authoritative ingest into local base tables
 

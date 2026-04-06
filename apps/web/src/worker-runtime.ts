@@ -9,6 +9,11 @@ import {
   type WorkbookStoredState,
 } from "@bilig/storage-browser";
 import {
+  applyWorkbookEvent,
+  isAuthoritativeWorkbookEventRecord,
+  type AuthoritativeWorkbookEventRecord,
+} from "@bilig/zero-sync";
+import {
   type CellRangeRef,
   type CellNumberFormatInput,
   type CellStyleField,
@@ -55,7 +60,6 @@ const MAX_COLUMN_WIDTH = 480;
 const AUTOFIT_PADDING = 28;
 const AUTOFIT_CHAR_WIDTH = 8;
 const DEFAULT_STYLE_ID = "style-0";
-const PERSIST_DEBOUNCE_MS = 120;
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
@@ -73,6 +77,7 @@ export interface WorkbookWorkerStateSnapshot {
 export interface WorkbookWorkerBootstrapResult {
   runtimeState: WorkbookWorkerStateSnapshot;
   restoredFromPersistence: boolean;
+  requiresAuthoritativeHydrate: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,6 +108,7 @@ export class WorkbookWorkerRuntime {
   private readonly localStoreFactory: WorkbookLocalStoreFactory;
   private localStore: WorkbookLocalStore | null = null;
   private engine: WorkerEngine | null = null;
+  private authoritativeEngine: SpreadsheetEngine | null = null;
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
   private externalSyncState: SyncState | null = null;
@@ -115,7 +121,10 @@ export class WorkbookWorkerRuntime {
   private nextFormatId = 1;
   private snapshotCache: WorkbookSnapshot | null = null;
   private snapshotDirty = true;
-  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private authoritativeSnapshotCache: WorkbookSnapshot | null = null;
+  private authoritativeSnapshotDirty = true;
+  private authoritativeReplicaCache: EngineReplicaSnapshot | null = null;
+  private authoritativeReplicaDirty = true;
   private persistInFlight: Promise<void> | null = null;
   private persistQueued = false;
   private pendingMutations: PendingWorkbookMutation[] = [];
@@ -145,6 +154,7 @@ export class WorkbookWorkerRuntime {
     this.nextPendingMutationSeq = 1;
     this.appliedPendingLocalSeq = 0;
     let restoredFromPersistence = false;
+    let requiresAuthoritativeHydrate = false;
     let restoredState: WorkbookStoredState | null = null;
     if (options.persistState) {
       this.localStore = await this.localStoreFactory.open(options.documentId);
@@ -179,17 +189,33 @@ export class WorkbookWorkerRuntime {
         : this.pendingMutations.filter(
             (mutation) => mutation.localSeq > this.appliedPendingLocalSeq,
           );
-    const engine = await this.createEngineFromState({
+    if (restoredState && restoredState.appliedPendingLocalSeq > 0) {
+      requiresAuthoritativeHydrate = true;
+    }
+
+    const authoritativeEngine = await this.createEngineFromState({
       snapshot: restoredSnapshot,
       replica: restoredReplica,
-      pendingMutationsToReplay,
+      pendingMutationsToReplay: [],
     });
+    this.installAuthoritativeEngine(authoritativeEngine, restoredSnapshot, restoredReplica);
+    const engine =
+      requiresAuthoritativeHydrate && restoredState !== null
+        ? await this.createEngineFromState({
+            snapshot: restoredSnapshot,
+            replica: restoredReplica,
+            pendingMutationsToReplay,
+          })
+        : await this.rebuildProjectionEngine();
     this.installEngine(engine);
-    await this.persistStateNow();
+    if (!requiresAuthoritativeHydrate) {
+      await this.persistStateNow();
+    }
 
     return {
       runtimeState: this.getRuntimeState(),
       restoredFromPersistence,
+      requiresAuthoritativeHydrate,
     };
   }
 
@@ -211,14 +237,16 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot,
     authoritativeRevision = this.authoritativeRevision,
   ): Promise<WorkbookWorkerStateSnapshot> {
-    const engine = await this.createEngineFromState({
+    const authoritativeEngine = await this.createEngineFromState({
       snapshot,
       replica: null,
       pendingMutationsToReplay: [],
     });
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
+    this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
+    const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
-    this.storeCachedSnapshot(snapshot);
+    this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
@@ -228,12 +256,51 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot,
     authoritativeRevision: number,
   ): Promise<WorkbookWorkerStateSnapshot> {
-    const engine = await this.createEngineFromState({
+    const authoritativeEngine = await this.createEngineFromState({
       snapshot,
       replica: null,
-      pendingMutationsToReplay: this.pendingMutations,
+      pendingMutationsToReplay: [],
     });
     this.authoritativeRevision = authoritativeRevision;
+    this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
+    const engine = await this.rebuildProjectionEngine();
+    this.installEngine(engine);
+    this.invalidateSnapshotCache();
+    await this.persistStateNow();
+    this.broadcastViewportPatches(null, engine.getLastMetrics());
+    return this.getRuntimeState();
+  }
+
+  async applyAuthoritativeEvents(
+    events: readonly AuthoritativeWorkbookEventRecord[],
+    authoritativeRevision: number,
+  ): Promise<WorkbookWorkerStateSnapshot> {
+    if (!events.every((event) => isAuthoritativeWorkbookEventRecord(event))) {
+      throw new Error("Invalid authoritative workbook event batch");
+    }
+    const authoritativeEngine = this.requireAuthoritativeEngine();
+    const absorbedMutationIds = new Set(
+      events.flatMap((event) =>
+        typeof event.clientMutationId === "string" ? [event.clientMutationId] : [],
+      ),
+    );
+    events.forEach((event) => {
+      applyWorkbookEvent(authoritativeEngine, event.payload);
+    });
+    if (absorbedMutationIds.size > 0) {
+      this.pendingMutations = this.pendingMutations.filter((mutation) => {
+        return !absorbedMutationIds.has(mutation.id);
+      });
+      const localStore = this.bootstrapOptions?.persistState ? this.localStore : null;
+      if (localStore) {
+        await Promise.all(
+          [...absorbedMutationIds].map((id) => localStore.removePendingMutation(id)),
+        );
+      }
+    }
+    this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
+    this.invalidateAuthoritativeStateCache();
+    const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
     this.invalidateSnapshotCache();
     await this.persistStateNow();
@@ -272,6 +339,7 @@ export class WorkbookWorkerRuntime {
       method: input.method,
       args: [...input.args],
       enqueuedAtUnixMs: Date.now(),
+      submittedAtUnixMs: null,
       status: "pending",
     };
     this.pendingMutations.push(nextMutation);
@@ -282,11 +350,31 @@ export class WorkbookWorkerRuntime {
         args: [...nextMutation.args],
       });
     }
+    applyPendingWorkbookMutationToEngine(this.requireEngine(), nextMutation);
     await this.persistStateNow();
     return {
       ...nextMutation,
       args: [...nextMutation.args],
     };
+  }
+
+  async markPendingMutationSubmitted(id: string): Promise<void> {
+    const pendingMutation = this.pendingMutations.find((mutation) => mutation.id === id);
+    if (!pendingMutation || pendingMutation.status === "submitted") {
+      return;
+    }
+    const submittedMutation: PendingWorkbookMutation = {
+      ...pendingMutation,
+      args: [...pendingMutation.args],
+      submittedAtUnixMs: Date.now(),
+      status: "submitted",
+    };
+    this.pendingMutations = this.pendingMutations.map((mutation) =>
+      mutation.id === id ? submittedMutation : mutation,
+    );
+    if (this.bootstrapOptions?.persistState && this.localStore) {
+      await this.localStore.updatePendingMutation(submittedMutation);
+    }
   }
 
   async ackPendingMutation(id: string): Promise<void> {
@@ -415,10 +503,6 @@ export class WorkbookWorkerRuntime {
   private cleanup(): void {
     this.engineSubscription?.();
     this.engineSubscription = null;
-    if (this.persistTimer !== null) {
-      clearTimeout(this.persistTimer);
-      this.persistTimer = null;
-    }
     this.persistQueued = false;
     this.viewportSubscriptions.clear();
     this.viewportSubscriptionsBySheet.clear();
@@ -426,12 +510,17 @@ export class WorkbookWorkerRuntime {
     this.styles.set(DEFAULT_STYLE_ID, { id: DEFAULT_STYLE_ID });
     this.snapshotCache = null;
     this.snapshotDirty = true;
+    this.authoritativeSnapshotCache = null;
+    this.authoritativeSnapshotDirty = true;
+    this.authoritativeReplicaCache = null;
+    this.authoritativeReplicaDirty = true;
     this.pendingMutations = [];
     this.nextPendingMutationSeq = 1;
     this.appliedPendingLocalSeq = 0;
     this.authoritativeRevision = 0;
     this.localStore?.close();
     this.localStore = null;
+    this.authoritativeEngine = null;
     this.engine = null;
   }
 
@@ -449,6 +538,13 @@ export class WorkbookWorkerRuntime {
     return this.engine;
   }
 
+  private requireAuthoritativeEngine(): SpreadsheetEngine {
+    if (!this.authoritativeEngine) {
+      throw new Error("Workbook worker runtime has no authoritative base state");
+    }
+    return this.authoritativeEngine;
+  }
+
   private listSheetNames(): string[] {
     return [...this.requireEngine().workbook.sheetsByName.values()]
       .toSorted((left, right) => left.order - right.order)
@@ -459,7 +555,7 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot | null;
     replica: EngineReplicaSnapshot | null;
     pendingMutationsToReplay: readonly PendingWorkbookMutation[];
-  }): Promise<WorkerEngine> {
+  }): Promise<SpreadsheetEngine> {
     const options = this.requireBootstrapOptions();
     const engine = new SpreadsheetEngine({
       workbookName: options.documentId,
@@ -481,41 +577,40 @@ export class WorkbookWorkerRuntime {
     return engine;
   }
 
+  private installAuthoritativeEngine(
+    engine: SpreadsheetEngine,
+    snapshot: WorkbookSnapshot | null,
+    replica: EngineReplicaSnapshot | null,
+  ): void {
+    this.authoritativeEngine = engine;
+    this.storeCachedAuthoritativeSnapshot(snapshot ?? engine.exportSnapshot());
+    this.storeCachedAuthoritativeReplica(replica ?? engine.exportReplicaSnapshot());
+  }
+
+  private async rebuildProjectionEngine(): Promise<SpreadsheetEngine> {
+    return await this.createEngineFromState({
+      snapshot: this.getAuthoritativeSnapshot(),
+      replica: this.getAuthoritativeReplica(),
+      pendingMutationsToReplay: this.pendingMutations,
+    });
+  }
+
   private installEngine(engine: WorkerEngine): void {
     this.engineSubscription?.();
     this.engine = engine;
     this.engineSubscription = engine.subscribe((event) => {
       this.invalidateSnapshotCache();
-      this.schedulePersistState();
       this.broadcastViewportPatches(event);
     });
   }
 
-  private schedulePersistState(): void {
-    if (!this.bootstrapOptions?.persistState) {
-      return;
-    }
-    this.persistQueued = true;
-    if (this.persistTimer !== null) {
-      return;
-    }
-    this.persistTimer = setTimeout(() => {
-      this.persistTimer = null;
-      void this.flushPersistState();
-    }, PERSIST_DEBOUNCE_MS);
-  }
-
   private async persistStateNow(): Promise<void> {
-    if (this.persistTimer !== null) {
-      clearTimeout(this.persistTimer);
-      this.persistTimer = null;
-    }
     this.persistQueued = true;
     await this.flushPersistState();
   }
 
   private async flushPersistState(): Promise<void> {
-    if (!this.persistQueued || !this.bootstrapOptions?.persistState || !this.engine) {
+    if (!this.persistQueued || !this.bootstrapOptions?.persistState || !this.authoritativeEngine) {
       return;
     }
     if (this.persistInFlight) {
@@ -527,10 +622,10 @@ export class WorkbookWorkerRuntime {
     }
 
     const persisted: WorkbookStoredState = {
-      snapshot: this.getCachedSnapshot(),
-      replica: this.engine.exportReplicaSnapshot(),
+      snapshot: this.getAuthoritativeSnapshot(),
+      replica: this.getAuthoritativeReplica(),
       authoritativeRevision: this.authoritativeRevision,
-      appliedPendingLocalSeq: this.appliedPendingLocalSeq,
+      appliedPendingLocalSeq: 0,
     };
     this.persistQueued = false;
     const savePromise =
@@ -852,5 +947,40 @@ export class WorkbookWorkerRuntime {
       return this.snapshotCache;
     }
     return this.storeCachedSnapshot(this.requireEngine().exportSnapshot());
+  }
+
+  private invalidateAuthoritativeStateCache(): void {
+    this.authoritativeSnapshotDirty = true;
+    this.authoritativeReplicaDirty = true;
+  }
+
+  private storeCachedAuthoritativeSnapshot(snapshot: WorkbookSnapshot): WorkbookSnapshot {
+    this.authoritativeSnapshotCache = snapshot;
+    this.authoritativeSnapshotDirty = false;
+    return snapshot;
+  }
+
+  private getAuthoritativeSnapshot(): WorkbookSnapshot {
+    if (this.authoritativeSnapshotCache && !this.authoritativeSnapshotDirty) {
+      return this.authoritativeSnapshotCache;
+    }
+    return this.storeCachedAuthoritativeSnapshot(
+      this.requireAuthoritativeEngine().exportSnapshot(),
+    );
+  }
+
+  private storeCachedAuthoritativeReplica(replica: EngineReplicaSnapshot): EngineReplicaSnapshot {
+    this.authoritativeReplicaCache = replica;
+    this.authoritativeReplicaDirty = false;
+    return replica;
+  }
+
+  private getAuthoritativeReplica(): EngineReplicaSnapshot {
+    if (this.authoritativeReplicaCache && !this.authoritativeReplicaDirty) {
+      return this.authoritativeReplicaCache;
+    }
+    return this.storeCachedAuthoritativeReplica(
+      this.requireAuthoritativeEngine().exportReplicaSnapshot(),
+    );
   }
 }

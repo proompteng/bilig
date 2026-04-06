@@ -25,7 +25,8 @@ export interface WorkbookLocalMutationRecord {
   readonly method: string;
   readonly args: unknown[];
   readonly enqueuedAtUnixMs: number;
-  readonly status: "pending";
+  readonly submittedAtUnixMs: number | null;
+  readonly status: "pending" | "submitted";
 }
 
 export interface WorkbookLocalStore {
@@ -33,6 +34,7 @@ export interface WorkbookLocalStore {
   saveState(state: WorkbookStoredState): Promise<void>;
   listPendingMutations(): Promise<WorkbookLocalMutationRecord[]>;
   appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
+  updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
   removePendingMutation(id: string): Promise<void>;
   close(): void;
 }
@@ -93,7 +95,8 @@ function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutation
     typeof value["method"] !== "string" ||
     !Array.isArray(value["args"]) ||
     typeof value["enqueuedAtUnixMs"] !== "number" ||
-    value["status"] !== "pending"
+    (value["submittedAtUnixMs"] !== null && typeof value["submittedAtUnixMs"] !== "number") ||
+    (value["status"] !== "pending" && value["status"] !== "submitted")
   ) {
     return null;
   }
@@ -104,7 +107,8 @@ function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutation
     method: value["method"],
     args: [...value["args"]],
     enqueuedAtUnixMs: value["enqueuedAtUnixMs"],
-    status: "pending",
+    submittedAtUnixMs: value["submittedAtUnixMs"] ?? null,
+    status: value["status"],
   };
 }
 
@@ -150,7 +154,8 @@ function initializeSchema(db: Database): void {
       method TEXT NOT NULL,
       args_json TEXT NOT NULL,
       enqueued_at_ms INTEGER NOT NULL,
-      status TEXT NOT NULL CHECK (status = 'pending')
+      submitted_at_ms INTEGER,
+      status TEXT NOT NULL CHECK (status IN ('pending', 'submitted'))
     );
 
     CREATE INDEX IF NOT EXISTS pending_op_local_seq_idx
@@ -168,6 +173,20 @@ function initializeSchema(db: Database): void {
     db.exec(`
       ALTER TABLE runtime_state
       ADD COLUMN applied_pending_local_seq INTEGER NOT NULL DEFAULT 0
+    `);
+  }
+  const submittedAtColumn = readSingleObjectRow(
+    db,
+    `
+      SELECT 1 AS present
+        FROM pragma_table_info('pending_op')
+       WHERE name = 'submitted_at_ms'
+    `,
+  );
+  if (!submittedAtColumn) {
+    db.exec(`
+      ALTER TABLE pending_op
+      ADD COLUMN submitted_at_ms INTEGER
     `);
   }
 }
@@ -277,6 +296,7 @@ class OpfsWorkbookLocalStore implements WorkbookLocalStore {
                method,
                args_json AS argsJson,
                enqueued_at_ms AS enqueuedAtUnixMs,
+               submitted_at_ms AS submittedAtUnixMs,
                status
           FROM pending_op
          ORDER BY local_seq ASC
@@ -317,9 +337,10 @@ class OpfsWorkbookLocalStore implements WorkbookLocalStore {
             method,
             args_json,
             enqueued_at_ms,
+            submitted_at_ms,
             status
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `,
         {
           bind: [
@@ -329,11 +350,38 @@ class OpfsWorkbookLocalStore implements WorkbookLocalStore {
             mutation.method,
             JSON.stringify(mutation.args),
             mutation.enqueuedAtUnixMs,
+            mutation.submittedAtUnixMs,
             mutation.status,
           ],
         },
       );
     });
+  }
+
+  async updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void> {
+    this.db.exec(
+      `
+        UPDATE pending_op
+           SET base_revision = ?,
+               method = ?,
+               args_json = ?,
+               enqueued_at_ms = ?,
+               submitted_at_ms = ?,
+               status = ?
+         WHERE op_id = ?
+      `,
+      {
+        bind: [
+          mutation.baseRevision,
+          mutation.method,
+          JSON.stringify(mutation.args),
+          mutation.enqueuedAtUnixMs,
+          mutation.submittedAtUnixMs,
+          mutation.status,
+          mutation.id,
+        ],
+      },
+    );
   }
 
   async removePendingMutation(id: string): Promise<void> {

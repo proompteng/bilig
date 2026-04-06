@@ -5,9 +5,9 @@ import type {
   CellStylePatch,
   LiteralInput,
 } from "@bilig/protocol";
-import { applyBatchArgsSchema } from "@bilig/zero-sync";
-import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
 import { parseCellAddress } from "@bilig/formula";
+import { applyBatchArgsSchema } from "./mutators.js";
+import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
 import { z } from "zod";
 
 type EngineOpBatch = z.infer<typeof applyBatchArgsSchema>["batch"];
@@ -100,6 +100,19 @@ export interface WorkbookEventRecord {
   createdAt: string;
 }
 
+export interface AuthoritativeWorkbookEventRecord {
+  revision: number;
+  clientMutationId: string | null;
+  payload: WorkbookEventPayload;
+}
+
+export interface AuthoritativeWorkbookEventBatch {
+  afterRevision: number;
+  headRevision: number;
+  calculatedRevision: number;
+  events: readonly AuthoritativeWorkbookEventRecord[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -171,6 +184,30 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
     default:
       return false;
   }
+}
+
+export function isAuthoritativeWorkbookEventRecord(
+  value: unknown,
+): value is AuthoritativeWorkbookEventRecord {
+  return (
+    isRecord(value) &&
+    typeof value["revision"] === "number" &&
+    (typeof value["clientMutationId"] === "string" || value["clientMutationId"] === null) &&
+    isWorkbookEventPayload(value["payload"])
+  );
+}
+
+export function isAuthoritativeWorkbookEventBatch(
+  value: unknown,
+): value is AuthoritativeWorkbookEventBatch {
+  return (
+    isRecord(value) &&
+    typeof value["afterRevision"] === "number" &&
+    typeof value["headRevision"] === "number" &&
+    typeof value["calculatedRevision"] === "number" &&
+    Array.isArray(value["events"]) &&
+    value["events"].every((event) => isAuthoritativeWorkbookEventRecord(event))
+  );
 }
 
 function singleCellRegion(sheetName: string, address: string): DirtyRegion {
