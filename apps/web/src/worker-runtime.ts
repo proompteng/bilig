@@ -1,8 +1,13 @@
-import type { CommitOp } from "@bilig/core";
+import type { CommitOp, EngineReplicaSnapshot } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
 import { formatAddress, indexToColumn } from "@bilig/formula";
-import { createBrowserPersistence, type BrowserPersistence } from "@bilig/storage-browser";
+import {
+  createOpfsWorkbookLocalStoreFactory,
+  type WorkbookLocalStore,
+  type WorkbookLocalStoreFactory,
+  type WorkbookStoredState,
+} from "@bilig/storage-browser";
 import {
   type CellRangeRef,
   type CellNumberFormatInput,
@@ -24,22 +29,20 @@ import {
   type ViewportPatchSubscription,
 } from "@bilig/worker-transport";
 import {
+  isPendingWorkbookMutation,
   isPendingWorkbookMutationInput,
   type PendingWorkbookMutation,
   type PendingWorkbookMutationInput,
 } from "./workbook-sync.js";
+import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
 import {
   buildAxisPatches,
   collectSheetViewportImpacts,
   collectViewportCells,
   indexAxisEntries,
   normalizeViewport,
-  parsePersistedPendingMutationState,
-  parsePersistedWorkbookState,
   styleSignature,
   viewportPatchMayBeImpacted,
-  type PersistedPendingMutationState,
-  type PersistedWorkbookState,
   type SheetViewportImpact,
   type ViewportSubscriptionState,
   type WorkerEngine,
@@ -72,9 +75,33 @@ export interface WorkbookWorkerBootstrapResult {
   restoredFromPersistence: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isWorkbookSnapshotValue(value: unknown): value is WorkbookSnapshot {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"])
+  );
+}
+
+function isEngineReplicaSnapshotValue(value: unknown): value is EngineReplicaSnapshot {
+  return (
+    isRecord(value) &&
+    isRecord(value["replica"]) &&
+    Array.isArray(value["entityVersions"]) &&
+    Array.isArray(value["sheetDeleteVersions"])
+  );
+}
+
 export class WorkbookWorkerRuntime {
   [method: string]: unknown;
-  private readonly persistence: BrowserPersistence;
+  private readonly localStoreFactory: WorkbookLocalStoreFactory;
+  private localStore: WorkbookLocalStore | null = null;
   private engine: WorkerEngine | null = null;
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null;
   private engineSubscription: (() => void) | null = null;
@@ -93,13 +120,15 @@ export class WorkbookWorkerRuntime {
   private persistQueued = false;
   private pendingMutations: PendingWorkbookMutation[] = [];
   private nextPendingMutationSeq = 1;
+  private appliedPendingLocalSeq = 0;
+  private authoritativeRevision = 0;
 
   constructor(
     options: {
-      persistence?: BrowserPersistence;
+      localStoreFactory?: WorkbookLocalStoreFactory;
     } = {},
   ) {
-    this.persistence = options.persistence ?? createBrowserPersistence();
+    this.localStoreFactory = options.localStoreFactory ?? createOpfsWorkbookLocalStoreFactory();
   }
 
   async ready(): Promise<void> {
@@ -114,46 +143,48 @@ export class WorkbookWorkerRuntime {
     this.snapshotDirty = true;
     this.pendingMutations = [];
     this.nextPendingMutationSeq = 1;
-    const engine = new SpreadsheetEngine({
-      workbookName: options.documentId,
-      replicaId: options.replicaId,
-    });
-    this.engine = engine;
-    await engine.ready();
-
+    this.appliedPendingLocalSeq = 0;
     let restoredFromPersistence = false;
+    let restoredState: WorkbookStoredState | null = null;
     if (options.persistState) {
-      const persisted = await this.persistence.loadJson(
-        this.persistenceKey(options.documentId),
-        parsePersistedWorkbookState,
-      );
-      if (persisted) {
-        engine.importSnapshot(persisted.snapshot);
-        engine.importReplicaSnapshot(persisted.replica);
+      this.localStore = await this.localStoreFactory.open(options.documentId);
+      restoredState = await this.localStore.loadState();
+      if (restoredState) {
         restoredFromPersistence = true;
+        this.authoritativeRevision = restoredState.authoritativeRevision;
+        this.appliedPendingLocalSeq = restoredState.appliedPendingLocalSeq;
       }
-      const persistedPendingMutations = await this.persistence.loadJson(
-        this.pendingMutationsKey(options.documentId),
-        parsePersistedPendingMutationState,
-      );
-      if (persistedPendingMutations) {
-        this.pendingMutations = persistedPendingMutations.pendingMutations;
-        this.nextPendingMutationSeq =
-          persistedPendingMutations.pendingMutations.reduce((max, mutation) => {
-            const suffix = Number(mutation.id.split(":").at(-1));
-            return Number.isFinite(suffix) ? Math.max(max, suffix) : max;
-          }, 0) + 1;
+      const persistedPendingMutations = await this.localStore.listPendingMutations();
+      if (persistedPendingMutations.length > 0) {
+        this.pendingMutations = persistedPendingMutations.flatMap((mutation) =>
+          isPendingWorkbookMutation(mutation) ? [mutation] : [],
+        );
       }
-    }
-    if (engine.workbook.sheetsByName.size === 0) {
-      engine.createSheet("Sheet1");
+      this.nextPendingMutationSeq =
+        Math.max(
+          this.appliedPendingLocalSeq,
+          persistedPendingMutations.reduce((max, mutation) => Math.max(max, mutation.localSeq), 0),
+        ) + 1;
     }
 
-    this.engineSubscription = engine.subscribe((event) => {
-      this.invalidateSnapshotCache();
-      this.schedulePersistState();
-      this.broadcastViewportPatches(event);
+    const restoredSnapshot = isWorkbookSnapshotValue(restoredState?.snapshot)
+      ? restoredState.snapshot
+      : null;
+    const restoredReplica = isEngineReplicaSnapshotValue(restoredState?.replica)
+      ? restoredState.replica
+      : null;
+    const pendingMutationsToReplay =
+      restoredState === null
+        ? this.pendingMutations
+        : this.pendingMutations.filter(
+            (mutation) => mutation.localSeq > this.appliedPendingLocalSeq,
+          );
+    const engine = await this.createEngineFromState({
+      snapshot: restoredSnapshot,
+      replica: restoredReplica,
+      pendingMutationsToReplay,
     });
+    this.installEngine(engine);
     await this.persistStateNow();
 
     return {
@@ -172,10 +203,39 @@ export class WorkbookWorkerRuntime {
     };
   }
 
-  async replaceSnapshot(snapshot: WorkbookSnapshot): Promise<WorkbookWorkerStateSnapshot> {
-    const engine = this.requireEngine();
-    engine.importSnapshot(snapshot);
+  getAuthoritativeRevision(): number {
+    return this.authoritativeRevision;
+  }
+
+  async replaceSnapshot(
+    snapshot: WorkbookSnapshot,
+    authoritativeRevision = this.authoritativeRevision,
+  ): Promise<WorkbookWorkerStateSnapshot> {
+    const engine = await this.createEngineFromState({
+      snapshot,
+      replica: null,
+      pendingMutationsToReplay: [],
+    });
+    this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
+    this.installEngine(engine);
     this.storeCachedSnapshot(snapshot);
+    await this.persistStateNow();
+    this.broadcastViewportPatches(null, engine.getLastMetrics());
+    return this.getRuntimeState();
+  }
+
+  async rebaseToSnapshot(
+    snapshot: WorkbookSnapshot,
+    authoritativeRevision: number,
+  ): Promise<WorkbookWorkerStateSnapshot> {
+    const engine = await this.createEngineFromState({
+      snapshot,
+      replica: null,
+      pendingMutationsToReplay: this.pendingMutations,
+    });
+    this.authoritativeRevision = authoritativeRevision;
+    this.installEngine(engine);
+    this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
@@ -204,15 +264,25 @@ export class WorkbookWorkerRuntime {
       throw new Error("Invalid pending workbook mutation");
     }
     const documentId = this.requireBootstrapOptions().documentId;
+    const localSeq = this.nextPendingMutationSeq++;
     const nextMutation: PendingWorkbookMutation = {
-      id: `${documentId}:pending:${this.nextPendingMutationSeq++}`,
+      id: `${documentId}:pending:${localSeq}`,
+      localSeq,
+      baseRevision: this.authoritativeRevision,
       method: input.method,
       args: [...input.args],
       enqueuedAtUnixMs: Date.now(),
+      status: "pending",
     };
     this.pendingMutations.push(nextMutation);
+    this.appliedPendingLocalSeq = localSeq;
+    if (this.bootstrapOptions?.persistState && this.localStore) {
+      await this.localStore.appendPendingMutation({
+        ...nextMutation,
+        args: [...nextMutation.args],
+      });
+    }
     await this.persistStateNow();
-    await this.persistPendingMutationsNow();
     return {
       ...nextMutation,
       args: [...nextMutation.args],
@@ -225,7 +295,9 @@ export class WorkbookWorkerRuntime {
       return;
     }
     this.pendingMutations = nextMutations;
-    await this.persistPendingMutationsNow();
+    if (this.bootstrapOptions?.persistState && this.localStore) {
+      await this.localStore.removePendingMutation(id);
+    }
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
@@ -356,6 +428,10 @@ export class WorkbookWorkerRuntime {
     this.snapshotDirty = true;
     this.pendingMutations = [];
     this.nextPendingMutationSeq = 1;
+    this.appliedPendingLocalSeq = 0;
+    this.authoritativeRevision = 0;
+    this.localStore?.close();
+    this.localStore = null;
     this.engine = null;
   }
 
@@ -379,12 +455,40 @@ export class WorkbookWorkerRuntime {
       .map((sheet) => sheet.name);
   }
 
-  private persistenceKey(documentId: string): string {
-    return `bilig:web:${documentId}:runtime`;
+  private async createEngineFromState(input: {
+    snapshot: WorkbookSnapshot | null;
+    replica: EngineReplicaSnapshot | null;
+    pendingMutationsToReplay: readonly PendingWorkbookMutation[];
+  }): Promise<WorkerEngine> {
+    const options = this.requireBootstrapOptions();
+    const engine = new SpreadsheetEngine({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
+    });
+    await engine.ready();
+    if (input.snapshot) {
+      engine.importSnapshot(input.snapshot);
+    }
+    if (input.replica) {
+      engine.importReplicaSnapshot(input.replica);
+    }
+    if (engine.workbook.sheetsByName.size === 0) {
+      engine.createSheet("Sheet1");
+    }
+    for (const mutation of input.pendingMutationsToReplay) {
+      applyPendingWorkbookMutationToEngine(engine, mutation);
+    }
+    return engine;
   }
 
-  private pendingMutationsKey(documentId: string): string {
-    return `bilig:web:${documentId}:pending-mutations`;
+  private installEngine(engine: WorkerEngine): void {
+    this.engineSubscription?.();
+    this.engine = engine;
+    this.engineSubscription = engine.subscribe((event) => {
+      this.invalidateSnapshotCache();
+      this.schedulePersistState();
+      this.broadcastViewportPatches(event);
+    });
   }
 
   private schedulePersistState(): void {
@@ -422,13 +526,16 @@ export class WorkbookWorkerRuntime {
       return;
     }
 
-    const documentId = this.bootstrapOptions.documentId;
-    const persisted: PersistedWorkbookState = {
+    const persisted: WorkbookStoredState = {
       snapshot: this.getCachedSnapshot(),
       replica: this.engine.exportReplicaSnapshot(),
+      authoritativeRevision: this.authoritativeRevision,
+      appliedPendingLocalSeq: this.appliedPendingLocalSeq,
     };
     this.persistQueued = false;
-    const savePromise = this.persistence.saveJson(this.persistenceKey(documentId), persisted);
+    const savePromise =
+      this.localStore?.saveState(persisted) ??
+      Promise.reject(new Error("Workbook local store is not available"));
     this.persistInFlight = savePromise;
     try {
       await savePromise;
@@ -440,20 +547,6 @@ export class WorkbookWorkerRuntime {
     if (this.persistQueued) {
       await this.flushPersistState();
     }
-  }
-
-  private async persistPendingMutationsNow(): Promise<void> {
-    if (!this.bootstrapOptions?.persistState) {
-      return;
-    }
-    const documentId = this.bootstrapOptions.documentId;
-    if (this.pendingMutations.length === 0) {
-      await this.persistence.remove(this.pendingMutationsKey(documentId));
-      return;
-    }
-    await this.persistence.saveJson(this.pendingMutationsKey(documentId), {
-      pendingMutations: this.pendingMutations,
-    } satisfies PersistedPendingMutationState);
   }
 
   private broadcastViewportPatches(

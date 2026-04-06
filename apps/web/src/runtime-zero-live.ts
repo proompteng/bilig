@@ -11,7 +11,7 @@ import {
   type Viewport,
 } from "@bilig/protocol";
 import type { ViewportPatch } from "@bilig/worker-transport";
-import type { WorkerViewportCache } from "./viewport-cache.js";
+import type { ProjectedViewportStore } from "./projected-viewport-store.js";
 
 interface ZeroWorkbookSyncSourceLike {
   materialize(query: unknown): unknown;
@@ -56,7 +56,7 @@ interface ViewportProjectionState {
   lastRowSignatures: Map<number, string>;
 }
 
-interface WorkbookRevisionState {
+export interface WorkbookRevisionState {
   headRevision: number;
   calculatedRevision: number;
 }
@@ -640,8 +640,9 @@ export class ZeroWorkbookLiveSync {
     private readonly input: {
       zero: ZeroWorkbookSyncSourceLike;
       documentId: string;
-      cache: WorkerViewportCache;
+      viewportStore: ProjectedViewportStore;
       onError: (message: string) => void;
+      onRevisionState?: (revisionState: WorkbookRevisionState | null) => void;
     },
   ) {
     this.workbookView = assertLiveView<unknown>(
@@ -667,6 +668,7 @@ export class ZeroWorkbookLiveSync {
     };
     const refreshWorkbookRevisionState = (value: unknown) => {
       this.workbookRevisionState = normalizeWorkbookRevisionState(value);
+      this.input.onRevisionState?.(this.workbookRevisionState);
       this.refreshAll(true);
     };
 
@@ -779,7 +781,8 @@ export class ZeroWorkbookLiveSync {
           stylesById: this.stylesById,
           numberFormatsById: this.numberFormatsById,
           workbookRevisionState: this.workbookRevisionState,
-          existingSnapshotAtAddress: (address) => this.input.cache.peekCell(sheetName, address),
+          existingSnapshotAtAddress: (address) =>
+            this.input.viewportStore.peekCell(sheetName, address),
         });
         if (
           !full &&
@@ -790,7 +793,7 @@ export class ZeroWorkbookLiveSync {
         ) {
           return;
         }
-        const damage = this.input.cache.applyViewportPatch(patch);
+        const damage = this.input.viewportStore.applyViewportPatch(patch);
         listener(damage);
       } catch (error) {
         if (!this.disposed) {
@@ -852,7 +855,7 @@ export class ZeroWorkbookLiveSync {
           numberFormatsById: this.numberFormatsById,
           workbookRevisionState: this.workbookRevisionState,
           existingSnapshotAtAddress: (address) =>
-            this.input.cache.peekCell(subscription.sheetName, address),
+            this.input.viewportStore.peekCell(subscription.sheetName, address),
         });
         if (
           !full &&
@@ -863,7 +866,7 @@ export class ZeroWorkbookLiveSync {
         ) {
           return;
         }
-        const damage = this.input.cache.applyViewportPatch(patch);
+        const damage = this.input.viewportStore.applyViewportPatch(patch);
         subscription.listener(damage);
       } catch (error) {
         this.input.onError(toErrorMessage(error));

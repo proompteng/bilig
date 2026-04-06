@@ -31,7 +31,10 @@ export interface PendingWorkbookMutationInput {
 
 export interface PendingWorkbookMutation extends PendingWorkbookMutationInput {
   readonly id: string;
+  readonly localSeq: number;
+  readonly baseRevision: number;
   readonly enqueuedAtUnixMs: number;
+  readonly status: "pending";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,7 +105,10 @@ export function isPendingWorkbookMutation(value: unknown): value is PendingWorkb
   return (
     isRecord(value) &&
     typeof value["id"] === "string" &&
+    typeof value["localSeq"] === "number" &&
+    typeof value["baseRevision"] === "number" &&
     typeof value["enqueuedAtUnixMs"] === "number" &&
+    value["status"] === "pending" &&
     isPendingWorkbookMutationInput(value)
   );
 }

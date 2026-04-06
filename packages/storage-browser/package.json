@@ -40,6 +40,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "3.51.2-build8"
+  },
   "engines": {
     "node": ">=24.0.0"
   }

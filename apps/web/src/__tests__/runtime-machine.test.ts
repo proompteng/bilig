@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createActor } from "xstate";
 import { createWorkerRuntimeMachine } from "../runtime-machine.js";
-import { WorkerViewportCache } from "../viewport-cache.js";
+import { ProjectedViewportStore } from "../projected-viewport-store.js";
 import type {
   CreateWorkerRuntimeSessionInput,
   WorkerHandle,
@@ -11,7 +11,7 @@ import type {
 
 function createWorkerHandle(): WorkerHandle {
   return {
-    cache: new WorkerViewportCache(),
+    viewportStore: new ProjectedViewportStore(),
   };
 }
 

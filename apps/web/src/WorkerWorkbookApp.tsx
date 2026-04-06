@@ -61,7 +61,7 @@ function WorkerWorkbookAppInner({
               ribbon={app.ribbon}
               editorValue={app.visibleEditorValue}
               editorSelectionBehavior={app.editorSelectionBehavior}
-              engine={app.workerHandle.cache}
+              engine={app.workerHandle.viewportStore}
               isEditing={Boolean(app.writesAllowed && app.isEditing)}
               isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
               onAddressCommit={(input) => {

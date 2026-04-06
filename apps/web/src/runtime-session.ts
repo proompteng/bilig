@@ -7,11 +7,11 @@ import type {
   WorkbookWorkerBootstrapResult,
   WorkbookWorkerStateSnapshot,
 } from "./worker-runtime.js";
-import { WorkerViewportCache } from "./viewport-cache.js";
-import { ZeroWorkbookLiveSync } from "./runtime-zero-live.js";
+import { ProjectedViewportStore } from "./projected-viewport-store.js";
+import { ZeroWorkbookLiveSync, type WorkbookRevisionState } from "./runtime-zero-live.js";
 
 export interface WorkerHandle {
-  readonly cache: WorkerViewportCache;
+  readonly viewportStore: ProjectedViewportStore;
 }
 
 export interface WorkerRuntimeSelection {
@@ -126,6 +126,10 @@ function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorke
   );
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
 async function invokeWorkerMethod<T>(
   client: ReturnType<typeof createWorkerEngineClient>,
   method: string,
@@ -221,18 +225,29 @@ export async function createWorkerRuntimeSessionController(
 ): Promise<WorkerRuntimeSessionController> {
   const workerPort = (input.createWorker ?? createWorkbookWorker)();
   const client = createWorkerEngineClient({ port: workerPort });
-  const cache = new WorkerViewportCache(client);
-  const handle: WorkerHandle = { cache };
+  const viewportStore = new ProjectedViewportStore(client);
+  const handle: WorkerHandle = { viewportStore };
   const fetchImpl = input.fetchImpl ?? fetch;
   let currentSelection = input.initialSelection;
   let currentRuntimeState = createInitialRuntimeState(input.documentId);
   let disposed = false;
+  let bootstrapped = false;
+  let currentAuthoritativeRevision = 0;
+  let requestedAuthoritativeRevision = 0;
+  let pendingRevisionState: WorkbookRevisionState | null = null;
+  let rebaseQueue = Promise.resolve();
   let selectionViewportCleanup = EMPTY_UNSUBSCRIBE;
   const liveSync = input.zero
     ? new ZeroWorkbookLiveSync({
         zero: input.zero,
         documentId: input.documentId,
-        cache,
+        viewportStore,
+        onRevisionState(revisionState) {
+          pendingRevisionState = revisionState;
+          if (bootstrapped) {
+            queueAuthoritativeRebase(revisionState);
+          }
+        },
         onError(message) {
           if (!disposed) {
             callbacks.onError(message);
@@ -243,7 +258,7 @@ export async function createWorkerRuntimeSessionController(
 
   const publishRuntimeState = (runtimeState: WorkbookWorkerStateSnapshot) => {
     currentRuntimeState = runtimeState;
-    cache.setKnownSheets(runtimeState.sheetNames);
+    viewportStore.setKnownSheets(runtimeState.sheetNames);
     callbacks.onRuntimeState(runtimeState);
   };
 
@@ -252,7 +267,7 @@ export async function createWorkerRuntimeSessionController(
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
   ): (() => void) => {
-    const unsubscribeWorker = cache.subscribeViewport(sheetName, viewport, listener);
+    const unsubscribeWorker = viewportStore.subscribeViewport(sheetName, viewport, listener);
     const unsubscribeLive =
       liveSync?.subscribeViewport(sheetName, viewport, listener) ?? EMPTY_UNSUBSCRIBE;
     return () => {
@@ -280,7 +295,7 @@ export async function createWorkerRuntimeSessionController(
       selection.sheetName,
       selection.address,
     );
-    cache.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection));
+    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection));
     updateSelectionViewport(selection);
     return snapshot ?? emptyCellSnapshot(selection);
   };
@@ -301,6 +316,55 @@ export async function createWorkerRuntimeSessionController(
     }
   };
 
+  const runAuthoritativeRebase = async (): Promise<void> => {
+    if (disposed) {
+      return;
+    }
+    const targetRevision = requestedAuthoritativeRevision;
+    if (targetRevision <= currentAuthoritativeRevision) {
+      return;
+    }
+    const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
+    if (!snapshot) {
+      currentAuthoritativeRevision = targetRevision;
+      return runAuthoritativeRebase();
+    }
+    const runtimeState = await invokeWorkerMethod(
+      client,
+      "rebaseToSnapshot",
+      isWorkbookWorkerStateSnapshot,
+      snapshot,
+      targetRevision,
+    );
+    currentAuthoritativeRevision = targetRevision;
+    publishRuntimeState(runtimeState);
+    await applySelection(reconcileSelection(currentSelection, runtimeState.sheetNames));
+    return runAuthoritativeRebase();
+  };
+
+  const queueAuthoritativeRebase = (revisionState: WorkbookRevisionState | null): void => {
+    if (
+      revisionState === null ||
+      revisionState.calculatedRevision < revisionState.headRevision ||
+      revisionState.headRevision <= currentAuthoritativeRevision
+    ) {
+      return;
+    }
+    requestedAuthoritativeRevision = Math.max(
+      requestedAuthoritativeRevision,
+      revisionState.headRevision,
+    );
+    rebaseQueue = rebaseQueue
+      .catch(() => undefined)
+      .then(() => runAuthoritativeRebase())
+      .catch((error) => {
+        if (!disposed) {
+          callbacks.onError(toErrorMessage(error));
+        }
+        return undefined;
+      });
+  };
+
   callbacks.onRuntimeState(currentRuntimeState);
   callbacks.onSelection(currentSelection);
 
@@ -316,6 +380,12 @@ export async function createWorkerRuntimeSessionController(
       },
     );
     publishRuntimeState(bootstrap.runtimeState);
+    currentAuthoritativeRevision = await invokeWorkerMethod(
+      client,
+      "getAuthoritativeRevision",
+      isNumber,
+    );
+    requestedAuthoritativeRevision = currentAuthoritativeRevision;
 
     if (!bootstrap.restoredFromPersistence) {
       const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl);
@@ -325,11 +395,16 @@ export async function createWorkerRuntimeSessionController(
           "replaceSnapshot",
           isWorkbookWorkerStateSnapshot,
           snapshot,
+          currentAuthoritativeRevision,
         );
         publishRuntimeState(hydratedState);
       }
     }
 
+    bootstrapped = true;
+    if (pendingRevisionState) {
+      queueAuthoritativeRebase(pendingRevisionState);
+    }
     await applySelection(reconcileSelection(currentSelection, currentRuntimeState.sheetNames));
   } catch (error) {
     liveSync?.dispose();

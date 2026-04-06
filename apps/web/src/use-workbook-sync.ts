@@ -112,7 +112,7 @@ export function useWorkbookSync(input: {
       if (!parsed) {
         return;
       }
-      workerHandleRef.current?.cache.ackColumnWidth(
+      workerHandleRef.current?.viewportStore.ackColumnWidth(
         parsed.sheetName,
         parsed.columnIndex,
         parsed.width,
@@ -352,11 +352,11 @@ export function useWorkbookSync(input: {
       width: number,
       options?: { flush?: boolean },
     ): Promise<void> => {
-      const cache = workerHandleRef.current?.cache;
-      const previousWidth = cache?.getColumnWidths(sheetName)[columnIndex];
-      if (cache) {
+      const viewportStore = workerHandleRef.current?.viewportStore;
+      const previousWidth = viewportStore?.getColumnWidths(sheetName)[columnIndex];
+      if (viewportStore) {
         const applyOptimisticWidth = () => {
-          cache.setColumnWidth(sheetName, columnIndex, width);
+          viewportStore.setColumnWidth(sheetName, columnIndex, width);
         };
         if (options?.flush) {
           flushSync(applyOptimisticWidth);
@@ -367,8 +367,8 @@ export function useWorkbookSync(input: {
       try {
         await invokeMutation("updateColumnWidth", sheetName, columnIndex, width);
       } catch (error) {
-        if (cache && cache.getColumnWidths(sheetName)[columnIndex] === width) {
-          cache.rollbackColumnWidth(sheetName, columnIndex, previousWidth);
+        if (viewportStore && viewportStore.getColumnWidths(sheetName)[columnIndex] === width) {
+          viewportStore.rollbackColumnWidth(sheetName, columnIndex, previousWidth);
         }
         throw error;
       }

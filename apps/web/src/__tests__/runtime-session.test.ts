@@ -1,29 +1,50 @@
 import { MessageChannel } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkerEngineHost } from "@bilig/worker-transport";
-import type { BrowserPersistence } from "@bilig/storage-browser";
+import type {
+  WorkbookLocalMutationRecord,
+  WorkbookLocalStoreFactory,
+  WorkbookStoredState,
+} from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
 import { WorkbookWorkerRuntime } from "../worker-runtime.js";
 import { createWorkerRuntimeSessionController } from "../runtime-session.js";
 
-function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPersistence {
-  const store = new Map<string, string>(
-    Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]),
-  );
+function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLocalMutationRecord {
+  const nextMutation = structuredClone(mutation);
+  nextMutation.args = [...mutation.args];
+  return nextMutation;
+}
+
+function createMemoryLocalStoreFactory(seed?: {
+  state?: WorkbookStoredState | null;
+  pendingMutations?: readonly WorkbookLocalMutationRecord[];
+}): WorkbookLocalStoreFactory {
+  let currentState = seed?.state ? structuredClone(seed.state) : null;
+  let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
   return {
-    async loadJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
-      const raw = store.get(key);
-      if (!raw) {
-        return null;
-      }
-      return parser(JSON.parse(raw) as unknown);
-    },
-    async saveJson(key: string, value: unknown): Promise<void> {
-      store.set(key, JSON.stringify(value));
-    },
-    async remove(key: string): Promise<void> {
-      store.delete(key);
+    async open() {
+      return {
+        async loadState() {
+          return currentState ? structuredClone(currentState) : null;
+        },
+        async saveState(state) {
+          currentState = structuredClone(state);
+        },
+        async listPendingMutations() {
+          return currentPendingMutations.map(cloneMutationRecord);
+        },
+        async appendPendingMutation(mutation) {
+          currentPendingMutations.push(cloneMutationRecord(mutation));
+        },
+        async removePendingMutation(id) {
+          currentPendingMutations = currentPendingMutations.filter(
+            (mutation) => mutation.id !== id,
+          );
+        },
+        close() {},
+      };
     },
   };
 }
@@ -130,7 +151,9 @@ describe("createWorkerRuntimeSessionController", () => {
   });
 
   it("hydrates the mounted worker session from the latest authoritative snapshot", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     const runtimeStates: string[] = [];
     const selections: string[] = [];
 
@@ -165,7 +188,7 @@ describe("createWorkerRuntimeSessionController", () => {
 
     expect(runtimeStates.at(-1)).toBe("phase0-doc");
     expect(selections.at(-1)).toBe("Sheet1!B2");
-    expect(controller.handle.cache.getCell("Sheet1", "B2").value).toEqual({
+    expect(controller.handle.viewportStore.getCell("Sheet1", "B2").value).toEqual({
       tag: ValueTag.Number,
       value: 41,
     });
@@ -179,10 +202,12 @@ describe("createWorkerRuntimeSessionController", () => {
     seedEngine.setCellValue("Sheet1", "A1", 99);
 
     const runtime = new WorkbookWorkerRuntime({
-      persistence: createMemoryPersistence({
-        "bilig:web:phase0-doc:runtime": {
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
           snapshot: seedEngine.exportSnapshot(),
           replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
         },
       }),
     });
@@ -214,7 +239,7 @@ describe("createWorkerRuntimeSessionController", () => {
     );
 
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(controller.handle.cache.getCell("Sheet1", "A1").value).toEqual({
+    expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
       tag: ValueTag.Number,
       value: 99,
     });
@@ -222,8 +247,94 @@ describe("createWorkerRuntimeSessionController", () => {
     controller.dispose();
   });
 
+  it("rebases authoritative revisions through the worker and replays pending local mutations", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const workbookView = createMockZeroView<unknown>({
+      headRevision: 0,
+      calculatedRevision: 0,
+    });
+    const stylesView = createMockZeroView<readonly unknown[]>([]);
+    const formatsView = createMockZeroView<readonly unknown[]>([]);
+    const selectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedRowMetadataView = createMockZeroView<readonly unknown[]>([]);
+    const selectedColumnMetadataView = createMockZeroView<readonly unknown[]>([]);
+    const rebasedSelectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
+    const rebasedSelectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
+    const rebasedSelectedRowMetadataView = createMockZeroView<readonly unknown[]>([]);
+    const rebasedSelectedColumnMetadataView = createMockZeroView<readonly unknown[]>([]);
+    const zero = createSequencedZeroViews(
+      workbookView,
+      stylesView,
+      formatsView,
+      selectedSourceTileView,
+      selectedEvalTileView,
+      selectedRowMetadataView,
+      selectedColumnMetadataView,
+      rebasedSelectedSourceTileView,
+      rebasedSelectedEvalTileView,
+      rebasedSelectedRowMetadataView,
+      rebasedSelectedColumnMetadataView,
+    );
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(createSnapshot([{ address: "A1", value: 5 }])), {
+          status: 200,
+          headers: {
+            "content-type": "application/vnd.bilig.workbook+json",
+          },
+        }),
+      );
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: true,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        zero: zero.zero,
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    await controller.invoke("setCellValue", "Sheet1", "A1", 17);
+    await controller.invoke("enqueuePendingMutation", {
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+
+    workbookView.emit({
+      headRevision: 2,
+      calculatedRevision: 2,
+    });
+
+    await vi.waitFor(() => {
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+        tag: ValueTag.Number,
+        value: 17,
+      });
+    });
+
+    controller.dispose();
+  });
+
   it("applies local mutations through worker viewport patches", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     const controller = await createWorkerRuntimeSessionController(
       {
         documentId: "phase0-doc",
@@ -251,7 +362,7 @@ describe("createWorkerRuntimeSessionController", () => {
     await controller.invoke("setCellValue", "Sheet1", "A1", 123);
 
     await vi.waitFor(() => {
-      expect(controller.handle.cache.getCell("Sheet1", "A1").value).toEqual({
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
         tag: ValueTag.Number,
         value: 123,
       });
@@ -262,7 +373,9 @@ describe("createWorkerRuntimeSessionController", () => {
   });
 
   it("projects live Zero cell and style updates into the mounted cache", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     const workbookView = createMockZeroView<unknown>({
       headRevision: 0,
       calculatedRevision: 0,
@@ -330,7 +443,7 @@ describe("createWorkerRuntimeSessionController", () => {
     ]);
 
     await vi.waitFor(() => {
-      expect(controller.handle.cache.getCell("Sheet1", "A1").value).toEqual({
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
         tag: ValueTag.Number,
         value: 5,
       });
@@ -362,11 +475,11 @@ describe("createWorkerRuntimeSessionController", () => {
     ]);
 
     await vi.waitFor(() => {
-      expect(controller.handle.cache.getCell("Sheet1", "A1").value).toEqual({
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
         tag: ValueTag.Number,
         value: 8,
       });
-      expect(controller.handle.cache.getCellStyle("style-live")).toMatchObject({
+      expect(controller.handle.viewportStore.getCellStyle("style-live")).toMatchObject({
         fill: { backgroundColor: "#c9daf8" },
       });
     });
@@ -376,7 +489,9 @@ describe("createWorkerRuntimeSessionController", () => {
   });
 
   it("does not let stale remote cell_eval overwrite a newer local formula result", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     const workbookView = createMockZeroView<unknown>({
       headRevision: 2,
       calculatedRevision: 1,
@@ -432,7 +547,7 @@ describe("createWorkerRuntimeSessionController", () => {
     ).resolves.toBeUndefined();
 
     await vi.waitFor(() => {
-      expect(controller.handle.cache.getCell("Sheet1", "A2").value).toEqual({
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A2").value).toEqual({
         tag: ValueTag.Boolean,
         value: true,
       });
@@ -455,7 +570,7 @@ describe("createWorkerRuntimeSessionController", () => {
       },
     ]);
 
-    expect(controller.handle.cache.getCell("Sheet1", "A2").value).toEqual({
+    expect(controller.handle.viewportStore.getCell("Sheet1", "A2").value).toEqual({
       tag: ValueTag.Boolean,
       value: true,
     });
@@ -475,7 +590,7 @@ describe("createWorkerRuntimeSessionController", () => {
     });
 
     await vi.waitFor(() => {
-      expect(controller.handle.cache.getCell("Sheet1", "A2").value).toEqual({
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A2").value).toEqual({
         tag: ValueTag.Boolean,
         value: true,
       });

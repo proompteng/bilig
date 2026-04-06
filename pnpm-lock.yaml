@@ -403,7 +403,11 @@ importers:
         specifier: 3.21.0
         version: 3.21.0
 
-  packages/storage-browser: {}
+  packages/storage-browser:
+    dependencies:
+      '@sqlite.org/sqlite-wasm':
+        specifier: 3.51.2-build8
+        version: 3.51.2-build8
 
   packages/storage-server:
     dependencies:
@@ -1998,6 +2002,10 @@ packages:
 
   '@rolldown/pluginutils@1.0.0-rc.7':
     resolution: {integrity: sha512-qujRfC8sFVInYSPPMLQByRh7zhwkGFS4+tyMQ83srV1qrxL4g8E2tyxVVyxd0+8QeBM1mIk9KbWxkegRr76XzA==}
+
+  '@sqlite.org/sqlite-wasm@3.51.2-build8':
+    resolution: {integrity: sha512-NvWLTgbqGu1XOLKxePE5Jvc5bzy6QACAQLURQnumSFm0hQms09r2rjMp5i1rvh1DXCe5Rx1FEGcEeQ9BnBB2+Q==}
+    engines: {node: '>=22'}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -5394,6 +5402,8 @@ snapshots:
   '@rolldown/pluginutils@1.0.0-rc.12': {}
 
   '@rolldown/pluginutils@1.0.0-rc.7': {}
+
+  '@sqlite.org/sqlite-wasm@3.51.2-build8': {}
 
   '@standard-schema/spec@1.1.0': {}
 

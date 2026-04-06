@@ -1,6 +1,6 @@
 ## 1. Executive Summary
 
-`bilig` today is a promising server-authoritative spreadsheet with a native grid, a warm server runtime, typed workbook operations, and a clear architectural direction around worker-first UI, narrow Zero sync, and projected viewport patches. It is **not** yet a real local-first workbook system: the mounted browser path still revolves around `ZeroWorkbookBridge` plus an in-memory viewport cache, offline writes are gated by connection state, and browser durability is still JSON snapshot persistence rather than a real local database. The attached repo brief and docs point in the right direction, but the hot path is not there yet. 
+`bilig` today is a promising server-authoritative spreadsheet with a native grid, a warm server runtime, typed workbook operations, and a clear architectural direction around worker-first UI, narrow Zero sync, and projected viewport patches. It is **not** yet a real local-first workbook system: the mounted browser path still revolves around `ZeroWorkbookBridge` plus an in-memory viewport cache, offline writes are gated by connection state, and browser durability is still JSON snapshot persistence rather than a real local database. The attached repo brief and docs point in the right direction, but the hot path is not there yet.
 
 The right next move is **not** “more spreadsheet features.” It is to turn `bilig` into a **local-first workbook operating system**: a browser-resident workbook runtime that opens instantly, writes locally first, stays durable offline, reconciles cleanly with a server-authoritative model, and keeps giant workbooks fluid. The product should feel native because the visible state comes from a worker-owned local database and local projection engine, not from network round-trips or React-held sheet arrays.
 
@@ -22,26 +22,26 @@ The next major plan should do five things in order:
 
 The repo already has the right backbone.
 
-* The architecture direction is solid: worker-first browser shell, server-authoritative ordering, Zero as narrow relational sync, projected viewport patches rather than raw engine state, and Postgres as the durable shared store. The repo docs are aligned on that, which matters.
-* The product owns a native grid/runtime instead of hiding behind Glide. That is the only path that can produce spreadsheet-grade interaction quality at scale. The renderer docs explicitly treat the native path as the active one now. 
-* `packages/workbook-domain` is a real semantic operation layer, not UI event soup. That is exactly what a local op journal, replay, preview/apply AI, and authoritative reconciliation need.
-* `apps/bilig` already has a warm runtime manager and authoritative mutation path. That is a major advantage: you do not need to invent the server model from scratch.
-* `packages/zero-sync` is already tile/range-shaped enough to be useful. The current repo direction to keep Zero narrow and reduce projection churn is correct. 
-* The formula plan is disciplined: Excel semantics as canonical baseline, JS first, WASM later after parity gates. That sequencing is right. 
+- The architecture direction is solid: worker-first browser shell, server-authoritative ordering, Zero as narrow relational sync, projected viewport patches rather than raw engine state, and Postgres as the durable shared store. The repo docs are aligned on that, which matters.
+- The product owns a native grid/runtime instead of hiding behind Glide. That is the only path that can produce spreadsheet-grade interaction quality at scale. The renderer docs explicitly treat the native path as the active one now.
+- `packages/workbook-domain` is a real semantic operation layer, not UI event soup. That is exactly what a local op journal, replay, preview/apply AI, and authoritative reconciliation need.
+- `apps/bilig` already has a warm runtime manager and authoritative mutation path. That is a major advantage: you do not need to invent the server model from scratch.
+- `packages/zero-sync` is already tile/range-shaped enough to be useful. The current repo direction to keep Zero narrow and reduce projection churn is correct.
+- The formula plan is disciplined: Excel semantics as canonical baseline, JS first, WASM later after parity gates. That sequencing is right.
 
 ### What is structurally weak
 
 The browser-side product architecture is still the weak link.
 
-* The mounted runtime path is now worker-owned, but the worker still persists whole JSON snapshots through `@bilig/storage-browser` and still relies on `viewport-cache` as the grid-facing projection surface. That means the product is only partway through the intended browser-runtime migration.
-* Offline/local-first credibility is better than it was because writes are no longer gated by Zero connection state, but the product is still not truly local-first until the browser has a durable relational store, a pending-op journal, and a reconnect/rebase model.
-* Browser durability is the wrong shape. The existing worker runtime persists whole JSON snapshots through `@bilig/storage-browser`, which uses IndexedDB/localStorage JSON, not a relational local database.
-* The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
-  * `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
-  * `apps/web/src/WorkerWorkbookApp.tsx` is now 119 lines with state/sync/toolbar logic extracted.
-  * `apps/web/src/worker-runtime.ts` is now 776 lines with persistence and viewport support split out.
-* The selected-cell synthetic live-sync path is gone. Selected-cell state now comes through the same viewport/tile subscription path as the rest of the grid, which removes a stale-path class that used to exist.
-* The grid still uses DOM text rendering and browser text measurement for autofit. The repo docs already call that out. It limits both polish and giant-workbook consistency. 
+- The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. That closes the old browser JSON/cache path, but the runtime is still only partway through the intended migration because the local DB is still snapshot + journal shaped rather than normalized base/overlay tables.
+- Offline/local-first credibility is better than it was because writes are no longer gated by Zero connection state and the worker now has a crash-safe pending-op journal, but the product is still not truly local-first until the browser has normalized local base/overlay tables and authoritative downstream delta ingest.
+- Browser durability is materially better now because accepted local state and pending ops live in SQLite/OPFS rather than IndexedDB/localStorage JSON. The remaining weakness is the data model inside that DB, not the browser persistence substrate.
+- The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
+  - `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
+  - `apps/web/src/WorkerWorkbookApp.tsx` is now 119 lines with state/sync/toolbar logic extracted.
+  - `apps/web/src/worker-runtime.ts` is now 776 lines with persistence and viewport support split out.
+- The selected-cell synthetic live-sync path is gone. Selected-cell state now comes through the same viewport/tile subscription path as the rest of the grid, which removes a stale-path class that used to exist.
+- The grid still uses DOM text rendering and browser text measurement for autofit. The repo docs already call that out. It limits both polish and giant-workbook consistency.
 
 ### What most affects UX quality
 
@@ -58,32 +58,32 @@ Three things are doing the most damage:
 
 ### What most affects speed
 
-* no worker-owned local database
-* no local op journal
-* no local projection tables
-* in-memory cache budget that is too small and too arbitrary for giant workbooks
-* per-feature optimistic cache mutation from `WorkerWorkbookApp.tsx`
-* bridge patterns that still rebuild or reproject too much state
+- no worker-owned local database
+- no local op journal
+- no local projection tables
+- in-memory cache budget that is too small and too arbitrary for giant workbooks
+- per-feature optimistic cache mutation from `WorkerWorkbookApp.tsx`
+- bridge patterns that still rebuild or reproject too much state
 
 ### What most affects local-first credibility
 
 Right now the product cannot honestly claim local-first because:
 
-* accepted local edits are not durably written to a real local store first
-* offline writes are blocked
-* reconnect semantics are not built around a durable local outbox
-* conflict handling is not built around rebase/replay on top of authoritative revisions
-* startup does not come from a proper local workbook database
+- accepted local edits are not durably written to a real local store first
+- offline writes are blocked
+- reconnect semantics are not built around a durable local outbox
+- conflict handling is not built around rebase/replay on top of authoritative revisions
+- startup does not come from a proper local workbook database
 
 ### What most affects long-term architecture quality
 
 The biggest architectural issue is that the repo already contains the pieces of a better browser runtime, but the product is still not using them as the primary state model. That causes a bad middle state:
 
-* a real worker runtime exists
-* the UI still behaves like a bridge-and-cache app
-* the browser persistence layer is snapshot-oriented
-* the selection path still has special handling
-* the grid shell still owns too much behavior
+- a real worker runtime exists
+- the UI still behaves like a bridge-and-cache app
+- the browser persistence layer is snapshot-oriented
+- the selection path still has special handling
+- the grid shell still owns too much behavior
 
 Bluntly: `bilig` is a **good server-authoritative spreadsheet core** with a **browser runtime that still needs to grow up**.
 
@@ -95,67 +95,67 @@ Google Sheets already sets a strong baseline for online collaboration, comments,
 
 ### Product definition by dimension
 
-* **Input latency**
+- **Input latency**
   Baseline: web spreadsheets are good enough for ordinary edits but still feel network-shaped under stress.
   `bilig`: the UI commits locally before the network matters.
   Success: local visible response p95 `<16ms`; selection paint p95 `<8ms`.
 
-* **Visual smoothness**
+- **Visual smoothness**
   Baseline: smooth enough on normal sheets; frame pacing degrades on huge or collaboration-heavy sheets.
   `bilig`: 60fps-feeling pan/scroll/select on active viewports, even while sync is happening.
   Success: steady 60fps on modern laptop for active viewport operations; no visible hitch on same-sheet collaborator updates in viewport.
 
-* **Edit responsiveness**
+- **Edit responsiveness**
   Baseline: edits are fast when network and workbook are friendly.
   `bilig`: local edit is instant, authoritative confirm is a second step, not the first visible one.
   Success: single-cell local apply `<16ms`; single-cell authoritative ack p95 `<60ms`; 100-cell paste first local paint `<40ms`; first authoritative diff p95 `<100ms`.
 
-* **Offline durability**
+- **Offline durability**
   Baseline: some offline behavior exists in incumbent tools, but the experience is not the center of the product.
   `bilig`: once a local edit is accepted, it survives refresh, crash, tab recycle, and offline periods.
   Success: 100% locally accepted ops survive reload/crash; warm-start last workbook p95 `<500ms`.
 
-* **Sync behavior**
+- **Sync behavior**
   Baseline: continuous sync exists, but network hiccups still leak into perceived product quality.
   `bilig`: sync is background plumbing; the sheet stays usable.
   Success: reconnect after 5 minutes offline with 100 pending ops catches up p95 `<2s`; no pending-op loss.
 
-* **Conflict handling**
+- **Conflict handling**
   Baseline: same-cell and same-view conflicts are still frustrating.
   `bilig`: local draft never disappears, remote authority reconciles cleanly, and the user sees what happened.
   Success: zero lost in-progress editor drafts; explicit conflict UI for same-cell divergence; rebase failure rate `<0.5%`.
 
-* **Collaboration ergonomics**
+- **Collaboration ergonomics**
   Baseline: Sheets is strong at basic collaboration; filter/view isolation and change review still leave room.
   `bilig`: collaborators can work in parallel without stepping on each other’s view state or destroying someone’s flow.
   Success: private views + named views + presence + changes pane live; >50% of shared workbooks use at least one of those features.
 
-* **Formula experience**
+- **Formula experience**
   Baseline: Excel still owns user trust on semantics; Copilot/Gemini help, but trust comes from the engine.
   `bilig`: formula entry, autocomplete, arg help, precedents/dependents, and parity are all fast and dependable.
   Success: formula parse/preview `<50ms` for single-cell edits; targeted parity suite green on committed surface; JS/WASM mismatch rate `<0.1%` on proven subset.
 
-* **Workbook comprehension**
+- **Workbook comprehension**
   Baseline: users still spend too much time figuring out what a workbook is doing.
   `bilig`: users can ask “what changed, what drives this, what depends on this, what is broken” and get immediate answers.
   Success: click-to-dependents/precedents; recent changes indexed; broken-formula scan for active workbook `<1s` on warm runtime.
 
-* **Workflow execution**
+- **Workflow execution**
   Baseline: spreadsheets are still flexible but messy execution tools.
   `bilig`: recurring workbook work becomes guided and reviewable without losing grid flexibility.
   Success: private views, saved views, change bundles, import-cleanup flows, and review-ready undo bundles.
 
-* **AI-assisted building/editing**
+- **AI-assisted building/editing**
   Baseline: Gemini and Copilot can help create formulas, tables, pivots, charts, and analyses.
   `bilig`: AI should plan over workbook operations, preview locally, and apply as undoable bundles.
   Success: first plan token p95 `<700ms`; first preview highlight p95 `<1000ms`; first visible accepted mutation p95 `<1500ms`. ([Google Help][3])
 
-* **Extensibility**
+- **Extensibility**
   Baseline: incumbents support scripting/add-ins, but the execution model is often inconsistent or brittle.
   `bilig`: the extension surface is semantic command APIs and typed workbook tools, not DOM automation.
   Success: >95% of supported automations use semantic ops; zero production DOM-driven automations.
 
-* **Large-workbook scale**
+- **Large-workbook scale**
   Baseline: incumbents can open large workbooks, but tail latency and UI feel degrade fast.
   `bilig`: giant workbooks are a normal use case.
   Success: warm-start first useful paint: 100k workbook `<250ms`, 250k workbook `<700ms`; 5k-cell paste first visible authoritative diff `<250ms`; sort/filter on 100k rows remains interactive.
@@ -191,35 +191,35 @@ Sheets wins on casual collaboration. Excel wins on semantics. Airtable and Smart
 
 Start with users whose work is workbook-heavy, collaboration-heavy, and too large or too repetitive for a “just share a sheet” model:
 
-* finance and ops teams living in giant imported workbooks
-* analysts and data-heavy PM/ops teams doing recurring reporting
-* support/revenue/people/program teams running structured trackers with formulas and views
-* anyone doing repeated CSV/XLSX cleanup, merge, summarize, and review work
+- finance and ops teams living in giant imported workbooks
+- analysts and data-heavy PM/ops teams doing recurring reporting
+- support/revenue/people/program teams running structured trackers with formulas and views
+- anyone doing repeated CSV/XLSX cleanup, merge, summarize, and review work
 
 ### What use cases it should dominate first
 
-* giant CSV/XLSX import and cleanup
-* collaborative operational trackers with private views
-* monthly/weekly reporting workbooks
-* formula-heavy review and repair
-* workbook restructuring and summary building
-* large-sheet editing under shaky network conditions
+- giant CSV/XLSX import and cleanup
+- collaborative operational trackers with private views
+- monthly/weekly reporting workbooks
+- formula-heavy review and repair
+- workbook restructuring and summary building
+- large-sheet editing under shaky network conditions
 
 ### What it should not try to dominate first
 
-* consumer note-taking spreadsheets
-* presentation/dashboard-first BI
-* full peer-to-peer CRDT offline collaboration
-* open plugin marketplace
-* generic project management with a grid skin
-* Python-notebook replacement
+- consumer note-taking spreadsheets
+- presentation/dashboard-first BI
+- full peer-to-peer CRDT offline collaboration
+- open plugin marketplace
+- generic project management with a grid skin
+- Python-notebook replacement
 
 ### Incumbent weakness it exploits
 
-* Sheets is collaborative, but its product center of gravity is still online-first.
-* Excel is deep, but the web product does not feel like a browser-native local runtime.
-* Copilot/Gemini help at the side; they do not fundamentally change the execution model.
-* Airtable/Smartsheet add workflow and trust layers, but they are not trying to win on giant-data spreadsheet feel. ([Google Help][3])
+- Sheets is collaborative, but its product center of gravity is still online-first.
+- Excel is deep, but the web product does not feel like a browser-native local runtime.
+- Copilot/Gemini help at the side; they do not fundamentally change the execution model.
+- Airtable/Smartsheet add workflow and trust layers, but they are not trying to win on giant-data spreadsheet feel. ([Google Help][3])
 
 ---
 
@@ -235,13 +235,13 @@ The worker must become the real browser runtime, not an optional side path.
 
 It should own:
 
-* local SQLite database
-* local workbook engine / preview engine
-* local pending-op journal
-* local overlay state
-* local tile cache and damage tracking
-* selection/editor draft model
-* warm-start/checkpoint restore
+- local SQLite database
+- local workbook engine / preview engine
+- local pending-op journal
+- local overlay state
+- local tile cache and damage tracking
+- selection/editor draft model
+- warm-start/checkpoint restore
 
 The UI thread should become a thin shell: input, chrome, accessible focus plumbing, and rendering commands.
 
@@ -249,12 +249,12 @@ The UI thread should become a thin shell: input, chrome, accessible focus plumbi
 
 The grid needs a strict split:
 
-* **scene layer**: GPU visuals only
-* **text layer**: text layout model, render backend abstracted
-* **interaction layer**: pointer/keyboard/fill/drag/resize
-* **editor layer**: in-cell edit, formula bar integration
-* **a11y layer**: ARIA grid semantics, announcements, focus behavior
-* **presentation layer**: metrics, density, tokens
+- **scene layer**: GPU visuals only
+- **text layer**: text layout model, render backend abstracted
+- **interaction layer**: pointer/keyboard/fill/drag/resize
+- **editor layer**: in-cell edit, formula bar integration
+- **a11y layer**: ARIA grid semantics, announcements, focus behavior
+- **presentation layer**: metrics, density, tokens
 
 WAI’s grid pattern explicitly includes spreadsheet-style applications, and MDN’s pointer capture and ResizeObserver guidance match the current direction for robust drag and precise sizing. `bilig` should keep using those primitives, then move the grid internals to cleaner boundaries. ([W3C][4])
 
@@ -262,25 +262,25 @@ WAI’s grid pattern explicitly includes spreadsheet-style applications, and MDN
 
 Refine the proposed architecture this way:
 
-* **Primary local DB**: SQLite/WASM on **OPFS** in a worker
-* **Fallback/bootstrap**: IndexedDB for manifest, recent-workbook list, tiny settings, and fallback when OPFS path is unavailable
-* **Not allowed**: syncing raw SQLite pages/files through Zero
+- **Primary local DB**: SQLite/WASM on **OPFS** in a worker
+- **Fallback/bootstrap**: IndexedDB for manifest, recent-workbook list, tiny settings, and fallback when OPFS path is unavailable
+- **Not allowed**: syncing raw SQLite pages/files through Zero
 
 Why:
 
-* OPFS is optimized for persistent file-like writes and worker access. ([MDN Web Docs][1])
-* The official SQLite WASM path has a first-class OPFS-backed database object, while its lighter browser storage mode targets local/session storage. ([SQLite][5])
-* A giant workbook engine needs file-style durability and fast local transactions, not JSON blobs or ad hoc browser object stores.
+- OPFS is optimized for persistent file-like writes and worker access. ([MDN Web Docs][1])
+- The official SQLite WASM path has a first-class OPFS-backed database object, while its lighter browser storage mode targets local/session storage. ([SQLite][5])
+- A giant workbook engine needs file-style durability and fast local transactions, not JSON blobs or ad hoc browser object stores.
 
 ### IndexedDB persistence model
 
 IndexedDB stays, but it becomes supporting infrastructure:
 
-* bootstrap manifest
-* recent workbook registry
-* feature flags / session settings
-* fallback persistence on non-OPFS path
-* small crash-recovery breadcrumbs
+- bootstrap manifest
+- recent workbook registry
+- feature flags / session settings
+- fallback persistence on non-OPFS path
+- small crash-recovery breadcrumbs
 
 It stops being the main runtime database.
 
@@ -288,8 +288,8 @@ It stops being the main runtime database.
 
 Use **two runtimes** with different jobs:
 
-* **Browser worker runtime**: local preview, local apply, local formula help, local warm-start, local overlay
-* **Monolith warm runtime**: shared authoritative apply, revision ordering, heavy recalc, cross-user coordination, import/export finalization
+- **Browser worker runtime**: local preview, local apply, local formula help, local warm-start, local overlay
+- **Monolith warm runtime**: shared authoritative apply, revision ordering, heavy recalc, cross-user coordination, import/export finalization
 
 That is the correct split. Browser speed and server trust stop fighting each other.
 
@@ -297,11 +297,11 @@ That is the correct split. Browser speed and server trust stop fighting each oth
 
 Replace the current model with:
 
-* **authoritative base tables** in local SQLite
-* **pending overlay tables** in local SQLite
-* **hot tile cache** in worker memory
-* **damage tracker** in worker memory
-* **renderer patch emitter** from worker to UI
+- **authoritative base tables** in local SQLite
+- **pending overlay tables** in local SQLite
+- **hot tile cache** in worker memory
+- **damage tracker** in worker memory
+- **renderer patch emitter** from worker to UI
 
 The grid never reads raw Zero rows directly.
 The grid never reads React-held sheet arrays.
@@ -313,16 +313,16 @@ Keep Zero. Narrow it further.
 
 Zero becomes:
 
-* authoritative downstream sync for `cell_render`, `cell_input`, rows/cols, styles, views, presence, change feed
-* collaborative metadata fan-out
-* resumable catch-up feed
+- authoritative downstream sync for `cell_render`, `cell_input`, rows/cols, styles, views, presence, change feed
+- collaborative metadata fan-out
+- resumable catch-up feed
 
 Zero is **not**:
 
-* the browser’s primary local database
-* the browser’s outbox
-* the place where you replicate SQLite internals
-* a second UI state model
+- the browser’s primary local database
+- the browser’s outbox
+- the place where you replicate SQLite internals
+- a second UI state model
 
 ### Monolith role
 
@@ -330,58 +330,58 @@ Keep the monolith as the authoritative coordinator.
 
 It owns:
 
-* command validation
-* authoritative ordering and revision assignment
-* warm shared runtime
-* heavy recalc scheduling
-* import/export finalization
-* change bundles
-* sync cursors
-* AI apply/approval path
-* durability guarantees
+- command validation
+- authoritative ordering and revision assignment
+- warm shared runtime
+- heavy recalc scheduling
+- import/export finalization
+- change bundles
+- sync cursors
+- AI apply/approval path
+- durability guarantees
 
 ### Postgres role
 
 Postgres stays the shared durable system of record for:
 
-* workbook source rows
-* authoritative render rows
-* workbook events / revisions
-* change bundles
-* collaboration metadata
-* checkpoints
+- workbook source rows
+- authoritative render rows
+- workbook events / revisions
+- change bundles
+- collaboration metadata
+- checkpoints
 
 ### Formula runtime / WASM role
 
 Respect the repo’s current rule:
 
-* JS remains the oracle first
-* WASM follows behind parity gates
-* production authoritative flip happens only after parity closes 
+- JS remains the oracle first
+- WASM follows behind parity gates
+- production authoritative flip happens only after parity closes
 
 Refinement for local-first UX:
 
-* browser worker uses the same JS oracle path first
-* WASM is introduced as an acceleration engine only for verified-equal workloads
-* browser and server must share the same command semantics and formula validation rules
+- browser worker uses the same JS oracle path first
+- WASM is introduced as an acceleration engine only for verified-equal workloads
+- browser and server must share the same command semantics and formula validation rules
 
 ### Collaboration model
 
 Make collaboration **server-authoritative, locally buffered**.
 
-* local user sees immediate local result
-* server assigns authoritative revision order
-* remote diffs arrive through Zero
-* local pending ops rebase over new authoritative base
-* private views isolate filter/sort state
-* selected-cell editor draft is protected from unrelated remote edits
+- local user sees immediate local result
+- server assigns authoritative revision order
+- remote diffs arrive through Zero
+- local pending ops rebase over new authoritative base
+- private views isolate filter/sort state
+- selected-cell editor draft is protected from unrelated remote edits
 
 ### Operation log / event model
 
 Use two logs:
 
-* **local `pending_op` journal** in browser SQLite
-* **authoritative revision log** on server
+- **local `pending_op` journal** in browser SQLite
+- **authoritative revision log** on server
 
 Upstream sync format should be **semantic command bundles**, not raw row diffs and never SQLite pages.
 
@@ -391,10 +391,10 @@ That is the right asymmetry.
 
 ### Import/export model
 
-* **Local import staging** for CSV/XLSX: parse locally, preview locally, map locally
-* **Authoritative finalize** on server: persist canonical source/render, produce change bundle
-* **Export** from authoritative server state with compatibility reporting
-* For giant local files, parsing should happen in worker threads or dedicated browser workers before server finalization
+- **Local import staging** for CSV/XLSX: parse locally, preview locally, map locally
+- **Authoritative finalize** on server: persist canonical source/render, produce change bundle
+- **Export** from authoritative server state with compatibility reporting
+- For giant local files, parsing should happen in worker threads or dedicated browser workers before server finalization
 
 ### Observability model
 
@@ -402,23 +402,23 @@ Add both local and server observability.
 
 Local:
 
-* startup source (`warm-local`, `cold-local`, `network-hydrate`)
-* tile hit/miss
-* local DB query time
-* pending-op queue depth
-* rebase count
-* conflict count
-* patch size
-* renderer frame cost
+- startup source (`warm-local`, `cold-local`, `network-hydrate`)
+- tile hit/miss
+- local DB query time
+- pending-op queue depth
+- rebase count
+- conflict count
+- patch size
+- renderer frame cost
 
 Server:
 
-* authoritative apply latency
-* recalc latency by class
-* diff size
-* Zero publish latency
-* reconnect catch-up latency
-* import/export throughput
+- authoritative apply latency
+- recalc latency by class
+- diff size
+- Zero publish latency
+- reconnect catch-up latency
+- import/export throughput
 
 ### Rollout model
 
@@ -426,67 +426,67 @@ Roll out by **session mode**, not by mixed paths inside one session.
 
 Bad rollout:
 
-* some interactions use local DB
-* some interactions still mutate the old cache path
+- some interactions use local DB
+- some interactions still mutate the old cache path
 
 Good rollout:
 
-* at workbook-open, choose `legacy-session` or `local-runtime-session`
-* keep one visible-state pipeline per session
-* migrate feature by feature inside the new session architecture, not across parallel browser truths
+- at workbook-open, choose `legacy-session` or `local-runtime-session`
+- keep one visible-state pipeline per session
+- migrate feature by feature inside the new session architecture, not across parallel browser truths
 
 ### What remains
 
-* monolith
-* Postgres
-* Zero
-* typed workbook ops
-* native grid
-* worker-first direction
-* projected rendering model
+- monolith
+- Postgres
+- Zero
+- typed workbook ops
+- native grid
+- worker-first direction
+- projected rendering model
 
 ### What gets refactored
 
-* `runtime-session.ts`
-* `runtime-machine.ts`
-* `WorkerWorkbookApp.tsx`
-* `viewport-cache.ts`
-* `ZeroWorkbookBridge.ts`
-* `WorkbookGridSurface.tsx`
-* selected-cell/edit model
-* browser persistence strategy
+- `runtime-session.ts`
+- `runtime-machine.ts`
+- `WorkerWorkbookApp.tsx`
+- `viewport-cache.ts`
+- `ZeroWorkbookBridge.ts`
+- `WorkbookGridSurface.tsx`
+- selected-cell/edit model
+- browser persistence strategy
 
 ### What gets removed
 
-* offline-write gating tied to connection state
-* JSON snapshot persistence as the primary browser runtime store
-* selected-cell synthetic reproject path
-* UI-thread optimistic mutation as the main state mechanism
-* any path where the grid renders from something other than the worker-owned projected state
+- offline-write gating tied to connection state
+- JSON snapshot persistence as the primary browser runtime store
+- selected-cell synthetic reproject path
+- UI-thread optimistic mutation as the main state mechanism
+- any path where the grid renders from something other than the worker-owned projected state
 
 ### Explicit tradeoffs
 
-* **Server-authoritative local-first**, not CRDT-native peer merge
+- **Server-authoritative local-first**, not CRDT-native peer merge
   Better trust and replay, less magical offline merge.
 
-* **OPFS primary, IndexedDB secondary**
+- **OPFS primary, IndexedDB secondary**
   Better giant-data performance, slightly more browser-path complexity.
 
-* **Command sync upward, relational diffs downward**
+- **Command sync upward, relational diffs downward**
   Cleaner reconciliation, less opaque write amplification.
 
-* **One session mode at a time**
+- **One session mode at a time**
   Slower migration, fewer impossible bugs.
 
-* **Incremental renderer cleanup before full GPU text rewrite**
+- **Incremental renderer cleanup before full GPU text rewrite**
   Faster delivery, less all-or-nothing rewrite risk.
 
 ### Assumptions and uncertainties
 
-* **Assumption:** target browsers support OPFS worker path on the serious supported matrix.
-* **Uncertainty:** Zero client compatibility inside workers may force a main-thread sync bridge in the first cut.
-* **Uncertainty:** local engine checkpoint memory cost on 250k+ workbooks needs bench validation.
-* **Uncertainty:** multi-tab write coordination should start with one active writer per workbook/profile until the lock model is hardened.
+- **Assumption:** target browsers support OPFS worker path on the serious supported matrix.
+- **Uncertainty:** Zero client compatibility inside workers may force a main-thread sync bridge in the first cut.
+- **Uncertainty:** local engine checkpoint memory cost on 250k+ workbooks needs bench validation.
+- **Uncertainty:** multi-tab write coordination should start with one active writer per workbook/profile until the lock model is hardened.
 
 ---
 
@@ -496,32 +496,32 @@ Good rollout:
 
 Use:
 
-* `catalog.sqlite`
+- `catalog.sqlite`
   recent workbooks, last-open viewport, sync cursors, settings, feature flags
 
-* `workbook_<id>.sqlite`
+- `workbook_<id>.sqlite`
   actual workbook-local state
 
 Suggested local tables:
 
-* `sheet`
-* `sheet_row`
-* `sheet_col`
-* `cell_input_base`
-* `cell_render_base`
-* `cell_input_overlay`
-* `cell_render_overlay`
-* `cell_style`
-* `number_format`
-* `defined_name`
-* `table_def`
-* `pivot_def`
-* `spill_owner`
-* `pending_op`
-* `pending_op_effect`
-* `sync_cursor`
-* `checkpoint`
-* `local_change_bundle`
+- `sheet`
+- `sheet_row`
+- `sheet_col`
+- `cell_input_base`
+- `cell_render_base`
+- `cell_input_overlay`
+- `cell_render_overlay`
+- `cell_style`
+- `number_format`
+- `defined_name`
+- `table_def`
+- `pivot_def`
+- `spill_owner`
+- `pending_op`
+- `pending_op_effect`
+- `sync_cursor`
+- `checkpoint`
+- `local_change_bundle`
 
 Keep `sheet_id` stable in local and server schemas.
 
@@ -535,10 +535,10 @@ Keep `sheet_id` stable in local and server schemas.
 
 Selected cell works the same way:
 
-* grid render reads local `cell_render`
-* formula bar reads local `cell_input`
-* editor draft overlays that local state
-* no selected-cell query is allowed to bypass the worker-owned local model for rendering
+- grid render reads local `cell_render`
+- formula bar reads local `cell_input`
+- editor draft overlays that local state
+- no selected-cell query is allowed to bypass the worker-owned local model for rendering
 
 That eliminates the current special-case selected-cell bridge problem.
 
@@ -547,14 +547,14 @@ That eliminates the current special-case selected-cell bridge problem.
 1. User action becomes a **semantic command bundle**.
 2. Worker opens a local SQLite transaction.
 3. Bundle is appended to `pending_op` with:
+   - `op_id`
+   - `client_id`
+   - `local_seq`
+   - `base_revision`
+   - `scope`
+   - `payload`
+   - `status`
 
-   * `op_id`
-   * `client_id`
-   * `local_seq`
-   * `base_revision`
-   * `scope`
-   * `payload`
-   * `status`
 4. Worker applies the bundle locally through the local engine / deterministic op executor.
 5. Worker writes overlay rows and emits damage to the renderer immediately.
 6. UI shows the result now, not after network.
@@ -567,15 +567,15 @@ Use a split-direction model.
 
 **Upstream**
 
-* worker outbox drains `pending_op` in order
-* bundles go to a monolith command-apply endpoint
-* each bundle carries `base_revision` and idempotency key
+- worker outbox drains `pending_op` in order
+- bundles go to a monolith command-apply endpoint
+- each bundle carries `base_revision` and idempotency key
 
 **Downstream**
 
-* authoritative revision ack returns immediately to the submitter
-* Zero carries authoritative row deltas, change bundles, presence, and views back to all clients
-* worker ingests those authoritative deltas into local base tables
+- authoritative revision ack returns immediately to the submitter
+- Zero carries authoritative row deltas, change bundles, presence, and views back to all clients
+- worker ingests those authoritative deltas into local base tables
 
 The browser does **not** sync SQLite contents into Zero.
 It syncs semantic intent upward and consumes authoritative deltas downward.
@@ -588,38 +588,36 @@ The local read model is:
 
 Where:
 
-* **authoritative_base** = last confirmed server state in local SQLite
-* **pending_overlay** = local accepted but not yet authoritative ops
-* **editor_draft_overlay** = text currently being typed and not yet committed
+- **authoritative_base** = last confirmed server state in local SQLite
+- **pending_overlay** = local accepted but not yet authoritative ops
+- **editor_draft_overlay** = text currently being typed and not yet committed
 
 That gives the product three things incumbents still struggle with:
 
-* no lost typing
-* instant local visibility
-* clean authoritative reconciliation
+- no lost typing
+- instant local visibility
+- clean authoritative reconciliation
 
 ### Operation ordering
 
-* local order: `local_seq`
-* shared order: `revision`
-* a pending op is always tied to the `base_revision` it was created against
-* when authoritative revisions arrive, pending ops are replayed or rebased on top of the new base
+- local order: `local_seq`
+- shared order: `revision`
+- a pending op is always tied to the `base_revision` it was created against
+- when authoritative revisions arrive, pending ops are replayed or rebased on top of the new base
 
 ### Conflict handling
 
 Start with a simple, strict model.
 
-* **Non-overlapping edits**: apply authoritative delta, replay pending local ops, no drama.
-* **Remote edit to visible cell outside active editor**: apply authoritative delta, subtle reconcile animation.
-* **Remote edit to same cell while user is typing**: keep draft local; show remote-change badge; do not clobber the editor.
-* **User submits a draft on stale base revision**:
-
-  * attempt trivial rebase first
-  * if non-trivial, show compare affordance with explicit choice:
-
-    * apply my value/formula
-    * keep authoritative
-    * duplicate mine elsewhere / copy to formula bar buffer
+- **Non-overlapping edits**: apply authoritative delta, replay pending local ops, no drama.
+- **Remote edit to visible cell outside active editor**: apply authoritative delta, subtle reconcile animation.
+- **Remote edit to same cell while user is typing**: keep draft local; show remote-change badge; do not clobber the editor.
+- **User submits a draft on stale base revision**:
+  - attempt trivial rebase first
+  - if non-trivial, show compare affordance with explicit choice:
+    - apply my value/formula
+    - keep authoritative
+    - duplicate mine elsewhere / copy to formula bar buffer
 
 First version should optimize for zero lost work, not magical merge heroics.
 
@@ -635,21 +633,20 @@ On reconnect:
 
 Target outcome:
 
-* same viewport
-* same draft
-* same local pending changes
-* no full-sheet flash
+- same viewport
+- same draft
+- same local pending changes
+- no full-sheet flash
 
 ### Durability model
 
-* pending ops are written to SQLite before the UI considers them committed locally
-* checkpoints are written periodically for warm-start
-* crash recovery loads:
-
-  * last authoritative base
-  * pending op journal
-  * optional engine checkpoint
-  * last viewport/selection
+- pending ops are written to SQLite before the UI considers them committed locally
+- checkpoints are written periodically for warm-start
+- crash recovery loads:
+  - last authoritative base
+  - pending op journal
+  - optional engine checkpoint
+  - last viewport/selection
 
 This is the difference between “optimistic UI” and “local-first product.”
 
@@ -660,13 +657,13 @@ The repo already uses `128 x 32`; that is a sane starting point.
 
 Rules:
 
-* tile-shaped local queries only
-* hot tile LRU in worker memory
-* authoritative full workbook lives on disk, not in React memory
-* neighbor preload ring of 1 tile
-* last-view heat-based retention
-* row/column metadata separate from cell tables
-* style ids/materials cached separately
+- tile-shaped local queries only
+- hot tile LRU in worker memory
+- authoritative full workbook lives on disk, not in React memory
+- neighbor preload ring of 1 tile
+- last-view heat-based retention
+- row/column metadata separate from cell tables
+- style ids/materials cached separately
 
 Do **not** keep full sheet render arrays in React state.
 
@@ -686,12 +683,12 @@ That gives instant feel even with weak network.
 
 Because every critical user loop becomes local:
 
-* selection is local
-* scrolling is local
-* typing is local
-* visible cell projection is local
-* draft durability is local
-* startup is local
+- selection is local
+- scrolling is local
+- typing is local
+- visible cell projection is local
+- draft durability is local
+- startup is local
 
 Network becomes shared truth plumbing, not the source of immediacy.
 
@@ -716,50 +713,51 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 ## 8. Execution Roadmap
 
-### Status as of 2026-04-05
+### Status as of 2026-04-06
 
 **Completed from the original roadmap**
 
-* the worker runtime is the mounted browser session path
-* writes are no longer gated on simple Zero connection state
-* the selected-cell special reproject path has been deleted
-* `WorkerWorkbookApp.tsx`, `WorkbookGridSurface.tsx`, and `worker-runtime.ts` have been split below the hot-path ceiling
-* the worker has a persisted pending-mutation queue for degraded/offline sync
+- the worker runtime is the mounted browser session path
+- writes are no longer gated on simple Zero connection state
+- the selected-cell special reproject path has been deleted
+- `WorkerWorkbookApp.tsx`, `WorkbookGridSurface.tsx`, and `worker-runtime.ts` have been split below the hot-path ceiling
+- OPFS SQLite is now the primary browser workbook store
+- warm-start now comes from the local SQLite state path rather than JSON persistence
+- the worker has a persisted pending-mutation queue with crash-safe journal replay
+- `viewport-cache.ts` has been deleted and replaced with `projected-viewport-store.ts`
 
 **Still not completed**
 
-* OPFS SQLite as the primary browser store
-* local base/overlay tables and authoritative reconnect/rebase
-* worker-owned tile store replacing `viewport-cache`
-* stable `sheet_id` across browser/server/local layers
-* warm-start from a real local DB rather than JSON snapshots
-* collaboration/product layers in Phases 2 through 4
+- local base/overlay tables and authoritative downstream delta ingest
+- a fully worker-owned tile store backed by normalized local DB tables
+- stable `sheet_id` across browser/server/local layers
+- collaboration/product layers in Phases 2 through 4
 
 **What this roadmap now needs to do**
 
-* focus only on the still-missing production work
-* treat worker cutover and hot-path file splits as done
-* stop referring to deleted bridge behavior as active architecture
+- focus only on the still-missing production work
+- treat worker cutover and hot-path file splits as done
+- stop referring to deleted bridge behavior as active architecture
 
 ### Prioritized initiative table
 
-| Priority | Initiative                                                  | Why now                                           |
-| -------- | ----------------------------------------------------------- | ------------------------------------------------- |
-| 1        | Add OPFS SQLite local DB as the primary browser store       | Local-first without a real DB is still fake       |
-| 2        | Replace `viewport-cache` with a worker-owned tile store     | Giant-data performance still depends on it        |
-| 3        | Introduce local base/overlay tables and op journal          | Required for offline durability and reconcile     |
-| 4        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later  |
-| 5        | Launch local warm-start and authoritative reconnect/rebase  | Makes the product feel native immediately         |
-| 6        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation           |
-| 7        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core  |
+| Priority | Initiative                                                  | Why now                                                            |
+| -------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| 1        | Introduce local base/overlay tables inside the browser DB   | The local store is real now; the data model is not done            |
+| 2        | Build authoritative downstream delta ingest + tile rebuild  | Reconnect is still snapshot-based instead of delta-first           |
+| 3        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later                   |
+| 4        | Move projected tiles fully behind worker-owned local tables | Giant-data warm-start and ingest still depend on in-memory patches |
+| 5        | Harden warm-start and authoritative reconnect/rebase        | Makes the product feel native immediately                          |
+| 6        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation                            |
+| 7        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core                   |
 
 ### Dependency list
 
-* real worker runtime → local SQLite → op journal → rebase/reconnect
-* stable `sheet_id` → views, change bundles, anchored metadata
-* local projection model → selected-cell cleanup → reliable editor model
-* worker tile store → giant workbook warm-start → smooth collaboration ingest
-* typed command bundles → preview/apply AI → undo bundles → changes pane
+- real worker runtime → local SQLite → op journal → delta ingest / rebase
+- stable `sheet_id` → views, change bundles, anchored metadata
+- local projection model → selected-cell cleanup → reliable editor model
+- normalized local tile/base tables → giant workbook warm-start → smooth collaboration ingest
+- typed command bundles → preview/apply AI → undo bundles → changes pane
 
 ### Phase 0: architecture hardening
 
@@ -768,41 +766,41 @@ Stop fighting the current browser architecture.
 
 **User-visible outcomes**
 
-* cleaner editing behavior
-* fewer selection/editor glitches
-* lower interaction jank
+- cleaner editing behavior
+- fewer selection/editor glitches
+- lower interaction jank
 
 **Engineering outcomes**
 
-* actual worker runtime mounted
-* hot-path files carved apart
-* selected-cell side path isolated for deletion
-* storage benchmark harness in place
+- actual worker runtime mounted
+- hot-path files carved apart
+- selected-cell side path isolated for deletion
+- storage benchmark harness in place
 
 **Key epics**
 
-* wire `workbook.worker.ts` / `worker-runtime.ts` into `runtime-session.ts`
-* split `WorkerWorkbookApp.tsx`
-* split `WorkbookGridSurface.tsx`
-* add `sheet_id`
-* add storage harness comparing current JSON persistence vs OPFS SQLite
-* remove write gating from simple connection state
+- wire `workbook.worker.ts` / `worker-runtime.ts` into `runtime-session.ts`
+- split `WorkerWorkbookApp.tsx`
+- split `WorkbookGridSurface.tsx`
+- add `sheet_id`
+- add storage harness comparing current JSON persistence vs OPFS SQLite
+- remove write gating from simple connection state
 
 **Dependencies**
 
-* none
+- none
 
 **Risks**
 
-* migration regressions in selection/editing
-* worker transport edges
+- migration regressions in selection/editing
+- worker transport edges
 
 **Exit criteria**
 
-* worker runtime is the active session path
-* no hot-path file over ~900 LoC
-* selected-cell render no longer depends on synthetic one-cell patching
-* offline-safe Class A edits work on the new path in test mode
+- worker runtime is the active session path
+- no hot-path file over ~900 LoC
+- selected-cell render no longer depends on synthetic one-cell patching
+- offline-safe Class A edits work on the new path in test mode
 
 ### Phase 1: local-first foundation
 
@@ -811,45 +809,45 @@ Make `bilig` genuinely local-first.
 
 **User-visible outcomes**
 
-* local durable edits
-* instant reopen of recent workbooks
-* usable workbook interaction under poor network or offline
+- local durable edits
+- instant reopen of recent workbooks
+- usable workbook interaction under poor network or offline
 
 **Engineering outcomes**
 
-* OPFS SQLite local DB
-* local base/overlay tables
-* pending-op journal
-* reconnect/rebase path
-* authoritative ingest into local base tables
+- OPFS SQLite local DB
+- local base/overlay tables
+- pending-op journal
+- reconnect/rebase path
+- authoritative ingest into local base tables
 
 **Key epics**
 
-* implement local SQLite storage layer
-* add worker tile store + damage tracker
-* implement `pending_op` journal
-* build upstream command sync
-* build downstream authoritative delta ingest
-* warm-start from local DB and checkpoint
+- implement local SQLite storage layer
+- add worker tile store + damage tracker
+- implement `pending_op` journal
+- build upstream command sync
+- build downstream authoritative delta ingest
+- warm-start from local DB and checkpoint
 
 **Dependencies**
 
-* Phase 0 worker path
-* stable `sheet_id`
+- Phase 0 worker path
+- stable `sheet_id`
 
 **Risks**
 
-* browser storage edge cases
-* local/server divergence bugs
-* checkpoint size
+- browser storage edge cases
+- local/server divergence bugs
+- checkpoint size
 
 **Exit criteria**
 
-* 100% locally accepted ops survive refresh/crash
-* warm-start last workbook p95 `<500ms`
-* local visible input p95 `<16ms`
-* reconnect with 100 pending ops p95 `<2s`
-* no pending-op loss in failure harness
+- 100% locally accepted ops survive refresh/crash
+- warm-start last workbook p95 `<500ms`
+- local visible input p95 `<16ms`
+- reconnect with 100 pending ops p95 `<2s`
+- no pending-op loss in failure harness
 
 ### Phase 2: collaboration and workflow superiority
 
@@ -858,43 +856,43 @@ Make shared workbook work smoother than Sheets for serious day-to-day use.
 
 **User-visible outcomes**
 
-* private views
-* named views
-* presence and jump-to-collaborator
-* show changes
-* conflict UX that preserves drafts
+- private views
+- named views
+- presence and jump-to-collaborator
+- show changes
+- conflict UX that preserves drafts
 
 **Engineering outcomes**
 
-* change bundle model
-* presence feed
-* view model
-* editor/remote reconcile guarantees
+- change bundle model
+- presence feed
+- view model
+- editor/remote reconcile guarantees
 
 **Key epics**
 
-* `workbook_change` UI and pipeline
-* private/saved view state
-* collaborator presence and location jump
-* same-cell conflict compare flow
-* named versions / undo bundles
+- `workbook_change` UI and pipeline
+- private/saved view state
+- collaborator presence and location jump
+- same-cell conflict compare flow
+- named versions / undo bundles
 
 **Dependencies**
 
-* Phase 1 local rebase model
-* stable sheet/object anchors
+- Phase 1 local rebase model
+- stable sheet/object anchors
 
 **Risks**
 
-* collaboration UI bloat
-* reconcile edge cases
+- collaboration UI bloat
+- reconcile edge cases
 
 **Exit criteria**
 
-* no lost typing during remote edits
-* private views do not disturb others
-* change bundle jump/revert works
-* > 50% of shared pilot workbooks use views, changes, or collaborator jump
+- no lost typing during remote edits
+- private views do not disturb others
+- change bundle jump/revert works
+- > 50% of shared pilot workbooks use views, changes, or collaborator jump
 
 ### Phase 3: agent-native workbook platform
 
@@ -903,44 +901,44 @@ Turn AI into a real workbook execution tool.
 
 **User-visible outcomes**
 
-* plan → preview → apply
-* formula repair and workbook cleanup
-* structured workbook edits with undo bundles
-* local preview before commit
+- plan → preview → apply
+- formula repair and workbook cleanup
+- structured workbook edits with undo bundles
+- local preview before commit
 
 **Engineering outcomes**
 
-* preview engine
-* AI tool surface over workbook ops
-* approval plumbing
-* replayable agent execution records
+- preview engine
+- AI tool surface over workbook ops
+- approval plumbing
+- replayable agent execution records
 
 **Key epics**
 
-* command preview/diff
-* MCP/internal tool layer
-* AI pane with scope control
-* approval models by risk class
-* undoable command bundles
+- command preview/diff
+- MCP/internal tool layer
+- AI pane with scope control
+- approval models by risk class
+- undoable command bundles
 
 **Dependencies**
 
-* local projection model
-* typed ops
-* change bundles
+- local projection model
+- typed ops
+- change bundles
 
 **Risks**
 
-* model quality disappointment
-* preview/apply mismatch
-* scope creep into generic chat product
+- model quality disappointment
+- preview/apply mismatch
+- scope creep into generic chat product
 
 **Exit criteria**
 
-* first plan token p95 `<700ms`
-* first preview highlight p95 `<1000ms`
-* first accepted mutation p95 `<1500ms`
-* 100% agent writes use semantic command bundles
+- first plan token p95 `<700ms`
+- first preview highlight p95 `<1000ms`
+- first accepted mutation p95 `<1500ms`
+- 100% agent writes use semantic command bundles
 
 ### Phase 4: category-defining capabilities
 
@@ -949,40 +947,40 @@ Make giant-data workbook work obviously better than incumbents.
 
 **User-visible outcomes**
 
-* near-instant local staging of large imports
-* workbook comprehension tools
-* scenario/scratchpad flows for heavy analysis
-* high-confidence large-model cleanup and restructure
+- near-instant local staging of large imports
+- workbook comprehension tools
+- scenario/scratchpad flows for heavy analysis
+- high-confidence large-model cleanup and restructure
 
 **Engineering outcomes**
 
-* local import staging engine
-* workbook semantic index
-* scenario/checkpoint tools
-* larger-scale runtime budgets
+- local import staging engine
+- workbook semantic index
+- scenario/checkpoint tools
+- larger-scale runtime budgets
 
 **Key epics**
 
-* local CSV/XLSX staging + preview
-* broken-formula and dependency inspector
-* semantic workbook search/index
-* scenario scratchpads / temporary branches
-* giant-workbook benchmark corpus
+- local CSV/XLSX staging + preview
+- broken-formula and dependency inspector
+- semantic workbook search/index
+- scenario scratchpads / temporary branches
+- giant-workbook benchmark corpus
 
 **Dependencies**
 
-* all prior phases
+- all prior phases
 
 **Risks**
 
-* performance budget overruns
-* product sprawl
+- performance budget overruns
+- product sprawl
 
 **Exit criteria**
 
-* 250k workbook warm-start first useful paint `<700ms`
-* staged import preview for large files in seconds, not minutes
-* workbook comprehension actions return near-instant on warm runtime
+- 250k workbook warm-start first useful paint `<700ms`
+- staged import preview for large files in seconds, not minutes
+- workbook comprehension actions return near-instant on warm runtime
 
 ### Risk matrix
 
@@ -1001,35 +999,35 @@ Make giant-data workbook work obviously better than incumbents.
 
 Postpone these until the local-first core is solid:
 
-* **full GPU text atlas rewrite**
+- **full GPU text atlas rewrite**
   Do the scene/text interface cleanup now, but land the full text backend after the worker runtime and local DB are stable.
 
-* **long-tail Excel parity**
+- **long-tail Excel parity**
   Keep parity discipline on the targeted worksheet surface. Avoid spending months on obscure function tails while the product still lacks a great local runtime.
 
-* **large chart/dashboard push**
+- **large chart/dashboard push**
   Core grid, import, formula, views, and changes matter more than beautiful secondary visualization.
 
-* **plugin marketplace**
+- **plugin marketplace**
   Build semantic internal tool surfaces first. External platformization can wait.
 
-* **Python-in-grid / arbitrary code cells**
+- **Python-in-grid / arbitrary code cells**
   That is the wrong complexity class for the next 12 months.
 
-* **peer-to-peer merge or CRDT-native shared editing**
+- **peer-to-peer merge or CRDT-native shared editing**
   The right model here is server-authoritative local-first, not distributed merge-first.
 
-* **multi-tab concurrent writers for the same workbook**
+- **multi-tab concurrent writers for the same workbook**
   Start with one active writer per workbook/profile and harden the coordination model before expanding.
 
-* **generic AI chat breadth**
+- **generic AI chat breadth**
   Q&A is fine. The priority is semantic plan/preview/apply over workbook ops.
 
-* **heavy comments/tasks bureaucracy**
+- **heavy comments/tasks bureaucracy**
   Views, changes, presence, and conflict-safe editing add more value earlier.
 
-* **visual novelty work**
-  Quiet dense tool-like UI is the right design language for this product. The repo’s own UI rules are right about that. 
+- **visual novelty work**
+  Quiet dense tool-like UI is the right design language for this product. The repo’s own UI rules are right about that.
 
 ---
 
@@ -1046,36 +1044,36 @@ The server authoritatively applies.
 
 ### What agents should do
 
-* create formulas
-* repair broken formulas
-* clean imported data
-* restructure sheets and tables
-* create pivots/charts/views
-* batch-format and relabel
-* explain workbook logic
-* generate summary sheets
-* convert messy data into structured workbook flows
+- create formulas
+- repair broken formulas
+- clean imported data
+- restructure sheets and tables
+- create pivots/charts/views
+- batch-format and relabel
+- explain workbook logic
+- generate summary sheets
+- convert messy data into structured workbook flows
 
 ### What agents should not do
 
-* drive the DOM
-* mutate unseen workbook scope silently
-* bypass parser/binder/validator
-* rewrite large workbook areas without preview
-* overwrite in-progress user drafts
-* create external side effects without explicit approval
+- drive the DOM
+- mutate unseen workbook scope silently
+- bypass parser/binder/validator
+- rewrite large workbook areas without preview
+- overwrite in-progress user drafts
+- create external side effects without explicit approval
 
 ### Execution model
 
 Every mutating AI action is a **command bundle**:
 
-* scope
-* requested intent
-* concrete workbook ops
-* affected sheets/ranges
-* estimated cost
-* local preview diff
-* undo bundle
+- scope
+- requested intent
+- concrete workbook ops
+- affected sheets/ranges
+- estimated cost
+- local preview diff
+- undo bundle
 
 ### Verification loop
 
@@ -1093,27 +1091,27 @@ Every mutating AI action is a **command bundle**:
 
 Use risk classes.
 
-* **low-risk**: local formatting inside current selection
+- **low-risk**: local formatting inside current selection
   can allow one-click auto-apply inside strict scope
 
-* **medium-risk**: formula generation in selected table, cleanup transforms
+- **medium-risk**: formula generation in selected table, cleanup transforms
   preview required
 
-* **high-risk**: sheet structure changes, workbook-wide transforms, external system actions
+- **high-risk**: sheet structure changes, workbook-wide transforms, external system actions
   explicit approval required
 
 ### Replayability
 
 Persist:
 
-* goal text
-* workbook context references
-* plan
-* preview
-* accepted scope
-* applied revision
-* undo bundle id
-* result summary
+- goal text
+- workbook context references
+- plan
+- preview
+- accepted scope
+- applied revision
+- undo bundle id
+- result summary
 
 That turns AI from “chat transcript” into “replayable workbook operation.”
 
@@ -1121,15 +1119,15 @@ That turns AI from “chat transcript” into “replayable workbook operation.�
 
 These stay deterministic:
 
-* formula parsing
-* reference binding
-* validation
-* local preview
-* apply
-* undo
-* rebase
-* export
-* sync reconciliation
+- formula parsing
+- reference binding
+- validation
+- local preview
+- apply
+- undo
+- rebase
+- export
+- sync reconciliation
 
 The model never becomes execution truth.
 
@@ -1149,21 +1147,21 @@ Current problem: it owns too much.
 
 Change it into:
 
-* `WorkbookShell.tsx`
-* `useWorkbookSession.ts`
-* `useWorkbookCommands.ts`
-* `useWorkbookEditor.ts`
-* `useWorkbookSelection.ts`
-* `useWorkbookViews.ts`
-* `useWorkbookChangesRail.ts`
-* `useWorkbookAiRail.ts`
+- `WorkbookShell.tsx`
+- `useWorkbookSession.ts`
+- `useWorkbookCommands.ts`
+- `useWorkbookEditor.ts`
+- `useWorkbookSelection.ts`
+- `useWorkbookViews.ts`
+- `useWorkbookChangesRail.ts`
+- `useWorkbookAiRail.ts`
 
 Remove from the component:
 
-* direct optimistic cache mutation
-* selection-to-data lookup logic
-* bridge-specific state wiring
-* editing/reconcile rules
+- direct optimistic cache mutation
+- selection-to-data lookup logic
+- bridge-specific state wiring
+- editing/reconcile rules
 
 The component becomes composition only.
 
@@ -1173,42 +1171,42 @@ Make this the composition root for the **real worker runtime**.
 
 New responsibilities:
 
-* boot worker runtime
-* mount local DB session
-* bridge UI ↔ worker
-* bridge sync feed ↔ worker
-* own bootstrap mode (`legacy` or `local-runtime`)
+- boot worker runtime
+- mount local DB session
+- bridge UI ↔ worker
+- bridge sync feed ↔ worker
+- own bootstrap mode (`legacy` or `local-runtime`)
 
-It should stop constructing only `WorkerViewportCache` plus `ZeroWorkbookBridge` as the session substrate.
+It should stop constructing only a thin projected viewport store plus live Zero subscriptions as the session substrate.
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/runtime-machine.ts`
 
 Expand the state machine to reflect the real lifecycle:
 
-* `booting`
-* `hydratingLocal`
-* `localReady`
-* `syncing`
-* `live`
-* `offline`
-* `reconciling`
-* `recovering`
-* `failed`
+- `booting`
+- `hydratingLocal`
+- `localReady`
+- `syncing`
+- `live`
+- `offline`
+- `reconciling`
+- `recovering`
+- `failed`
 
 That gives the shell correct save/sync/status behavior.
 
-#### `/Users/gregkonush/github.com/bilig/apps/web/src/viewport-cache.ts`
+#### `/Users/gregkonush/github.com/bilig/apps/web/src/projected-viewport-store.ts`
 
-This file should stop being the main browser truth store.
+The old `viewport-cache.ts` file is now deleted. The replacement projected store should stay narrow and temporary rather than quietly becoming the next browser truth store.
 
 Split/replace it with:
 
-* `ViewportTileStore` (worker-side)
-* `OverlayStore` (worker-side)
-* `DamageTracker`
-* `RendererPatchEmitter`
+- `ViewportTileStore` (worker-side)
+- `OverlayStore` (worker-side)
+- `DamageTracker`
+- `RendererPatchEmitter`
 
-The current `MAX_CACHED_CELLS_PER_SHEET = 6000` model should disappear.
+The current `MAX_CACHED_CELLS_PER_SHEET = 6000` model is still only a stopgap.
 Hot visible cells belong in worker memory; full authoritative state belongs in local SQLite.
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/zero/ZeroWorkbookBridge.ts`
@@ -1217,20 +1215,20 @@ Refactor into an **AuthoritativeSyncBridge**.
 
 Keep:
 
-* tile subscriptions
-* workbook chrome metadata subscriptions
-* presence / change feed subscriptions
+- tile subscriptions
+- workbook chrome metadata subscriptions
+- presence / change feed subscriptions
 
 Delete:
 
-* selected-cell synthetic reproject path
-* any render-path reliance on special selected-cell queries
+- selected-cell synthetic reproject path
+- any render-path reliance on special selected-cell queries
 
 New behavior:
 
-* ingest authoritative deltas into worker local DB
-* notify worker of damaged tiles
-* keep grid render fully local
+- ingest authoritative deltas into worker local DB
+- notify worker of damaged tiles
+- keep grid render fully local
 
 #### `apps/web/src/workbook.worker.ts` and `apps/web/src/worker-runtime.ts`
 
@@ -1238,16 +1236,16 @@ These become the center of gravity.
 
 Add:
 
-* SQLite/WASM bootstrap
-* OPFS-backed persistence
-* `pending_op` journal
-* checkpointing
-* local preview/apply
-* overlay/base table composition
-* warm-start logic
-* tile query APIs for UI
-* selected cell/formula bar APIs
-* rebase/reconnect APIs
+- SQLite/WASM bootstrap
+- OPFS-backed persistence
+- `pending_op` journal
+- checkpointing
+- local preview/apply
+- overlay/base table composition
+- warm-start logic
+- tile query APIs for UI
+- selected cell/formula bar APIs
+- rebase/reconnect APIs
 
 Demote current JSON snapshot persistence to fallback/bootstrap use only.
 
@@ -1259,33 +1257,33 @@ Turn it into a composition root only.
 
 Carve out:
 
-* `GridViewportController`
-* `GridSelectionController`
-* `GridEditorOverlay`
-* `GridFillHandleController`
-* `GridResizeController`
-* `GridA11yLayer`
-* `GridAutofitService`
+- `GridViewportController`
+- `GridSelectionController`
+- `GridEditorOverlay`
+- `GridFillHandleController`
+- `GridResizeController`
+- `GridA11yLayer`
+- `GridAutofitService`
 
 #### `/Users/gregkonush/github.com/bilig/packages/grid/src/WorkbookView.tsx`
 
 Keep as shell composition seam.
 Add explicit rails/slots for:
 
-* changes
-* views
-* collaborator jump
-* AI preview highlights
+- changes
+- views
+- collaborator jump
+- AI preview highlights
 
 #### `/Users/gregkonush/github.com/bilig/packages/grid/src/gridGpuScene.ts`
 
 Keep visuals only:
 
-* fills
-* borders
-* selection
-* frozen lines
-* diff/highlight overlays
+- fills
+- borders
+- selection
+- frozen lines
+- diff/highlight overlays
 
 No workbook business logic.
 
@@ -1294,8 +1292,8 @@ No workbook business logic.
 Convert this into a pure text layout model.
 It should output layout objects that can be rendered by:
 
-* current DOM text overlay
-* later GPU text backend
+- current DOM text overlay
+- later GPU text backend
 
 #### DOM text path
 
@@ -1312,7 +1310,7 @@ Keep pointer capture semantics; that part is aligned with platform guidance alre
 #### `/Users/gregkonush/github.com/bilig/packages/grid/src/gridMetrics.ts`
 
 Move hardcoded values into tokenized density/metrics contracts.
-The repo’s UI philosophy is right here: state, behavior, and rendering should stay separate. 
+The repo’s UI philosophy is right here: state, behavior, and rendering should stay separate.
 
 ### `packages/core`
 
@@ -1320,12 +1318,12 @@ Use `packages/core` for deterministic local/server workbook mechanics.
 
 Add:
 
-* local checkpoint import/export helpers
-* preview/apply effects summary
-* rebase helpers for pending ops
-* deterministic diff generation
-* selected-cell formula/value resolution helpers
-* verified JS/WASM comparison hooks
+- local checkpoint import/export helpers
+- preview/apply effects summary
+- rebase helpers for pending ops
+- deterministic diff generation
+- selected-cell formula/value resolution helpers
+- verified JS/WASM comparison hooks
 
 The browser and server need the same deterministic workbook semantics.
 
@@ -1335,17 +1333,17 @@ Keep it narrow and tile-first.
 
 Add / change:
 
-* stable `sheet_id`
-* tile queries that stay stable under scroll
-* `workbook_change`
-* `presence_coarse`
-* `sheet_view`
+- stable `sheet_id`
+- tile queries that stay stable under scroll
+- `workbook_change`
+- `presence_coarse`
+- `sheet_view`
 
 Remove client dependence on:
 
-* whole-sheet aggregation in React state
-* selected-cell render special casing
-* anything that assumes the client render model is Zero-first instead of local-first
+- whole-sheet aggregation in React state
+- selected-cell render special casing
+- anything that assumes the client render model is Zero-first instead of local-first
 
 ### `apps/bilig`
 
@@ -1353,58 +1351,58 @@ Keep the monolith and strengthen it.
 
 Add:
 
-* command-apply endpoint for browser outbox
-* revision ack + authoritative diff response
-* preview endpoint for AI and heavy local/server compare
-* change bundle builder
-* better checkpoint APIs
-* import finalize pipeline
-* rebase-aware apply errors
-* stable `sheet_id` persistence
+- command-apply endpoint for browser outbox
+- revision ack + authoritative diff response
+- preview endpoint for AI and heavy local/server compare
+- change bundle builder
+- better checkpoint APIs
+- import finalize pipeline
+- rebase-aware apply errors
+- stable `sheet_id` persistence
 
 Strengthen `workbook-runtime/runtime-manager.ts` with:
 
-* preview sessions
-* lightweight checkpoint export for browser warm-start
-* explicit diff payload helpers
-* memory budgeting by workbook size class
+- preview sessions
+- lightweight checkpoint export for browser warm-start
+- explicit diff payload helpers
+- memory budgeting by workbook size class
 
 ### Docs / RFCs
 
 Rewrite or add:
 
-* `docs/architecture.md`
-* new `docs/local-first-runtime.md`
-* new `docs/browser-sqlite-opfs-rfc.md`
-* new `docs/command-journal-rebase-rfc.md`
-* new `docs/grid-renderer-v3.md`
-* update `docs/excel-parity-program.md` with browser/server shared execution plan
-* update `docs/react-spectrum-ui-philosophy.md` with grid-specific a11y/runtime rules
-* new `docs/session-rollout-mode-rfc.md`
+- `docs/architecture.md`
+- new `docs/local-first-runtime.md`
+- new `docs/browser-sqlite-opfs-rfc.md`
+- new `docs/command-journal-rebase-rfc.md`
+- new `docs/grid-renderer-v3.md`
+- update `docs/excel-parity-program.md` with browser/server shared execution plan
+- update `docs/react-spectrum-ui-philosophy.md` with grid-specific a11y/runtime rules
+- new `docs/session-rollout-mode-rfc.md`
 
 ### Tests / benchmarks / acceptance gates
 
 Add:
 
-* worker runtime boot/recover tests
-* local DB crash/reload durability tests
-* offline edit + reconnect + rebase tests
-* same-cell conflict/editor-draft tests
-* multi-user authoritative ordering tests
-* giant workbook warm-start benchmarks
-* storage-path matrix tests (`OPFS`, fallback)
-* JS vs WASM differential tests
-* tile-cache hit/miss benchmarks
-* change bundle correctness tests
-* AI preview/apply/undo consistency tests
+- worker runtime boot/recover tests
+- local DB crash/reload durability tests
+- offline edit + reconnect + rebase tests
+- same-cell conflict/editor-draft tests
+- multi-user authoritative ordering tests
+- giant workbook warm-start benchmarks
+- storage-path matrix tests (`OPFS`, fallback)
+- JS vs WASM differential tests
+- tile-cache hit/miss benchmarks
+- change bundle correctness tests
+- AI preview/apply/undo consistency tests
 
 Acceptance gates:
 
-* no hot-path browser state path outside worker runtime for local-runtime sessions
-* no selected-cell synthetic render patch path
-* no whole-sheet arrays in React state
-* warm-start and input SLOs enforced in CI perf harness
-* feature rollout only by session mode, never mixed in-session state paths
+- no hot-path browser state path outside worker runtime for local-runtime sessions
+- no selected-cell synthetic render patch path
+- no whole-sheet arrays in React state
+- warm-start and input SLOs enforced in CI perf harness
+- feature rollout only by session mode, never mixed in-session state paths
 
 ---
 

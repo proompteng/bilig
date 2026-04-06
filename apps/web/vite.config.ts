@@ -84,7 +84,7 @@ const codeSplittingGroups = [
         "/packages/worker-transport/",
         "/packages/workbook-domain/",
         "/apps/web/src/WorkerWorkbookApp.tsx",
-        "/apps/web/src/viewport-cache.ts",
+        "/apps/web/src/projected-viewport-store.ts",
         "/apps/web/src/worker-runtime.ts",
         "/apps/web/src/zero/",
       ]);
@@ -94,6 +94,9 @@ const codeSplittingGroups = [
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    exclude: ["@sqlite.org/sqlite-wasm"],
+  },
   build: {
     rolldownOptions: {
       output: {

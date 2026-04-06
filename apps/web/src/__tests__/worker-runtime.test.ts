@@ -1,28 +1,51 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
-import type { BrowserPersistence } from "@bilig/storage-browser";
+import type {
+  WorkbookLocalMutationRecord,
+  WorkbookLocalStoreFactory,
+  WorkbookStoredState,
+} from "@bilig/storage-browser";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
 import { collectChangedCellsBySheet, collectViewportCells } from "../worker-runtime-support.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime";
 
-function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPersistence {
-  const store = new Map<string, string>(
-    Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]),
-  );
+function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLocalMutationRecord {
+  const nextMutation = structuredClone(mutation);
+  nextMutation.args = [...mutation.args];
+  return nextMutation;
+}
+
+function createMemoryLocalStoreFactory(seed?: {
+  state?: WorkbookStoredState | null;
+  pendingMutations?: readonly WorkbookLocalMutationRecord[];
+  onSaveState?: (state: WorkbookStoredState) => Promise<void> | void;
+}): WorkbookLocalStoreFactory {
+  let currentState = seed?.state ? structuredClone(seed.state) : null;
+  let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
   return {
-    async loadJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
-      const raw = store.get(key);
-      if (!raw) {
-        return null;
-      }
-      return parser(JSON.parse(raw) as unknown);
-    },
-    async saveJson(key: string, value: unknown): Promise<void> {
-      store.set(key, JSON.stringify(value));
-    },
-    async remove(key: string): Promise<void> {
-      store.delete(key);
+    async open() {
+      return {
+        async loadState() {
+          return currentState ? structuredClone(currentState) : null;
+        },
+        async saveState(state) {
+          currentState = structuredClone(state);
+          await seed?.onSaveState?.(state);
+        },
+        async listPendingMutations() {
+          return currentPendingMutations.map(cloneMutationRecord);
+        },
+        async appendPendingMutation(mutation) {
+          currentPendingMutations.push(cloneMutationRecord(mutation));
+        },
+        async removePendingMutation(id) {
+          currentPendingMutations = currentPendingMutations.filter(
+            (mutation) => mutation.id !== id,
+          );
+        },
+        close() {},
+      };
     },
   };
 }
@@ -37,14 +60,16 @@ describe("WorkbookWorkerRuntime", () => {
     seedEngine.createSheet("Sheet1");
     seedEngine.setCellValue("Sheet1", "A1", 7);
 
-    const persistence = createMemoryPersistence({
-      "bilig:web:phase3-doc:runtime": {
+    const localStoreFactory = createMemoryLocalStoreFactory({
+      state: {
         snapshot: seedEngine.exportSnapshot(),
         replica: seedEngine.exportReplicaSnapshot(),
+        authoritativeRevision: 0,
+        appliedPendingLocalSeq: 0,
       },
     });
 
-    const runtime = new WorkbookWorkerRuntime({ persistence });
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
     await runtime.bootstrap({
       documentId: "phase3-doc",
       replicaId: "browser:test",
@@ -85,14 +110,16 @@ describe("WorkbookWorkerRuntime", () => {
     seedEngine.createSheet("Sheet1");
     seedEngine.setCellValue("Sheet1", "A1", 99);
 
-    const persistence = createMemoryPersistence({
-      "bilig:web:phase3-doc:runtime": {
+    const localStoreFactory = createMemoryLocalStoreFactory({
+      state: {
         snapshot: seedEngine.exportSnapshot(),
         replica: seedEngine.exportReplicaSnapshot(),
+        authoritativeRevision: 0,
+        appliedPendingLocalSeq: 0,
       },
     });
 
-    const runtime = new WorkbookWorkerRuntime({ persistence });
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
     await runtime.bootstrap({
       documentId: "phase3-doc",
       replicaId: "browser:test",
@@ -103,7 +130,9 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("publishes viewport style dictionaries and stable style ids", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "style-doc",
       replicaId: "browser:test",
@@ -140,7 +169,9 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("patches only affected axis entries for column metadata edits", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "axis-doc",
       replicaId: "browser:test",
@@ -171,8 +202,8 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("persists pending workbook mutations across bootstraps and removes them on ack", async () => {
-    const persistence = createMemoryPersistence();
-    const runtime = new WorkbookWorkerRuntime({ persistence });
+    const localStoreFactory = createMemoryLocalStoreFactory();
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
     await runtime.bootstrap({
       documentId: "pending-doc",
       replicaId: "browser:test",
@@ -186,7 +217,7 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(runtime.listPendingMutations()).toEqual([pending]);
 
-    const reloaded = new WorkbookWorkerRuntime({ persistence });
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
     await reloaded.bootstrap({
       documentId: "pending-doc",
       replicaId: "browser:reloaded",
@@ -198,7 +229,7 @@ describe("WorkbookWorkerRuntime", () => {
     await reloaded.ackPendingMutation(pending.id);
     expect(reloaded.listPendingMutations()).toEqual([]);
 
-    const afterAck = new WorkbookWorkerRuntime({ persistence });
+    const afterAck = new WorkbookWorkerRuntime({ localStoreFactory });
     await afterAck.bootstrap({
       documentId: "pending-doc",
       replicaId: "browser:after-ack",
@@ -208,8 +239,88 @@ describe("WorkbookWorkerRuntime", () => {
     expect(afterAck.listPendingMutations()).toEqual([]);
   });
 
+  it("replays journaled mutations that were not yet captured in the persisted snapshot", async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: "journal-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 5);
+
+    const localStoreFactory = createMemoryLocalStoreFactory({
+      state: {
+        snapshot: seedEngine.exportSnapshot(),
+        replica: seedEngine.exportReplicaSnapshot(),
+        authoritativeRevision: 0,
+        appliedPendingLocalSeq: 0,
+      },
+      pendingMutations: [
+        {
+          id: "journal-doc:pending:1",
+          localSeq: 1,
+          baseRevision: 0,
+          method: "setCellValue",
+          args: ["Sheet1", "A1", 17],
+          enqueuedAtUnixMs: 1,
+          status: "pending",
+        },
+      ],
+    });
+
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "journal-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+    expect(runtime.listPendingMutations()).toHaveLength(1);
+  });
+
+  it("rebases authoritative snapshots by replaying pending local mutations", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    await runtime.bootstrap({
+      documentId: "rebase-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    runtime.setCellValue("Sheet1", "A1", 17);
+    await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+
+    await runtime.rebaseToSnapshot(
+      {
+        version: 1,
+        workbook: { name: "rebase-doc" },
+        sheets: [
+          {
+            name: "Sheet1",
+            order: 0,
+            cells: [{ address: "A1", value: 5 }],
+          },
+        ],
+      },
+      3,
+    );
+
+    expect(runtime.getAuthoritativeRevision()).toBe(3);
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+    expect(runtime.listPendingMutations()).toHaveLength(1);
+  });
+
   it("skips unrelated viewport subscriptions when an edit is outside their sheet or region", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "fanout-doc",
       replicaId: "browser:test",
@@ -274,7 +385,9 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("builds viewport patches only for subscriptions on impacted sheets", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "sheet-index-doc",
       replicaId: "browser:test",
@@ -332,7 +445,9 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("dedupes changed viewport cells against invalidated range expansion", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "range-dedupe-doc",
       replicaId: "browser:test",
@@ -361,7 +476,9 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("collects changed cells without qualified address string round-trips", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "cell-store-impact-doc",
       replicaId: "browser:test",
@@ -386,15 +503,11 @@ describe("WorkbookWorkerRuntime", () => {
 
   it("coalesces persistence saves across edit bursts", async () => {
     vi.useFakeTimers();
-    const saveJson = vi.fn(async () => {});
+    const saveState = vi.fn(async () => {});
     const runtime = new WorkbookWorkerRuntime({
-      persistence: {
-        async loadJson() {
-          return null;
-        },
-        saveJson,
-        async remove() {},
-      },
+      localStoreFactory: createMemoryLocalStoreFactory({
+        onSaveState: saveState,
+      }),
     });
 
     await runtime.bootstrap({
@@ -403,21 +516,23 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: true,
     });
 
-    expect(saveJson).toHaveBeenCalledTimes(1);
+    expect(saveState).toHaveBeenCalledTimes(1);
 
     runtime.setCellValue("Sheet1", "A1", 1);
     runtime.setCellValue("Sheet1", "A2", 2);
     runtime.setCellValue("Sheet1", "A3", 3);
 
-    expect(saveJson).toHaveBeenCalledTimes(1);
+    expect(saveState).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(120);
 
-    expect(saveJson).toHaveBeenCalledTimes(2);
+    expect(saveState).toHaveBeenCalledTimes(2);
   });
 
   it("reuses exported snapshots until the workbook changes", async () => {
-    const runtime = new WorkbookWorkerRuntime({ persistence: createMemoryPersistence() });
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
     await runtime.bootstrap({
       documentId: "snapshot-cache-doc",
       replicaId: "browser:test",

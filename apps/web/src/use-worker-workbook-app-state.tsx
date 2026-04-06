@@ -8,7 +8,7 @@ import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
 import { loadPersistedSelection, persistSelection } from "./selection-persistence.js";
-import { WorkerViewportCache } from "./viewport-cache.js";
+import { ProjectedViewportStore } from "./projected-viewport-store.js";
 import {
   type EditingMode,
   type ParsedEditorInput,
@@ -147,19 +147,21 @@ export function useWorkerWorkbookAppState(input: {
 
   const columnWidths = useSyncExternalStore(
     useCallback(
-      (listener: () => void) => workerHandle?.cache.subscribe(listener) ?? (() => {}),
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => workerHandle?.cache.getColumnWidths(selection.sheetName),
-    () => workerHandle?.cache.getColumnWidths(selection.sheetName),
+    () => workerHandle?.viewportStore.getColumnWidths(selection.sheetName),
+    () => workerHandle?.viewportStore.getColumnWidths(selection.sheetName),
   );
 
   const selectedCell = useSyncExternalStore(
     useCallback(
-      (listener: () => void) => workerHandle?.cache.subscribe(listener) ?? (() => {}),
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => workerHandle?.cache.peekCell(selection.sheetName, selection.address) ?? emptySelectedCell,
+    () =>
+      workerHandle?.viewportStore.peekCell(selection.sheetName, selection.address) ??
+      emptySelectedCell,
     () => emptySelectedCell,
   );
 
@@ -188,7 +190,7 @@ export function useWorkerWorkbookAppState(input: {
       if (!active) {
         return selectedCell;
       }
-      return active.cache.getCell(nextSelection.sheetName, nextSelection.address);
+      return active.viewportStore.getCell(nextSelection.sheetName, nextSelection.address);
     },
     [selectedCell],
   );
@@ -483,14 +485,14 @@ export function useWorkerWorkbookAppState(input: {
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
   );
-  const selectedStyle = workerHandle?.cache.getCellStyle(selectedCell.styleId);
+  const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
   const subscribeViewport = useCallback(
     (
       sheetName: string,
-      viewport: Parameters<WorkerViewportCache["subscribeViewport"]>[1],
-      listener: Parameters<WorkerViewportCache["subscribeViewport"]>[2],
+      viewport: Parameters<ProjectedViewportStore["subscribeViewport"]>[1],
+      listener: Parameters<ProjectedViewportStore["subscribeViewport"]>[2],
     ) => {
       if (!runtimeController) {
         return () => {};
