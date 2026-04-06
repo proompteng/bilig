@@ -231,6 +231,7 @@ export function WorkbookGridSurface({
   const pendingTypeSeedRef = useRef<string | null>(null);
   const fillPreviewRangeRef = useRef<Rectangle | null>(null);
   const fillHandleCleanupRef = useRef<(() => void) | null>(null);
+  const fillHandlePointerIdRef = useRef<number | null>(null);
   const rangeMoveCleanupRef = useRef<(() => void) | null>(null);
   const rangeMoveSourceRangeRef = useRef<Rectangle | null>(null);
   const rangeMovePreviewRangeRef = useRef<Rectangle | null>(null);
@@ -254,6 +255,7 @@ export function WorkbookGridSurface({
   );
   const [sceneRevision, setSceneRevision] = useState(0);
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null);
+  const [isFillHandleDragging, setIsFillHandleDragging] = useState(false);
   const [isRangeMoveDragging, setIsRangeMoveDragging] = useState(false);
   const [hoverState, setHoverState] = useState<GridHoverState>({
     cell: null,
@@ -859,8 +861,13 @@ export function WorkbookGridSurface({
     selectionRange &&
     gridSelection.columns.length === 0 &&
     gridSelection.rows.length === 0 &&
-    !fillPreviewRange,
+    !fillPreviewRange &&
+    !isFillHandleDragging,
   );
+
+  const isFillHandleTarget = useCallback((target: EventTarget | null): boolean => {
+    return target instanceof Element && target.closest("[data-grid-fill-handle='true']") !== null;
+  }, []);
 
   const applyClipboardValues = useCallback(
     (target: Item, values: readonly (readonly string[])[]) => {
@@ -996,14 +1003,29 @@ export function WorkbookGridSurface({
 
   const handleFillHandlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!selectionRange) {
+      if (!selectionRange || event.button !== 0) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       focusGrid();
+      const handleElement = event.currentTarget;
+      fillHandleCleanupRef.current?.();
+      fillPreviewRangeRef.current = null;
+      setFillPreviewRange(null);
+      fillHandlePointerIdRef.current = event.pointerId;
+      setIsFillHandleDragging(true);
+      setHoverState((current) =>
+        sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+          ? current
+          : { cell: null, header: null, cursor: "default" },
+      );
+      handleElement.setPointerCapture(event.pointerId);
 
       const move = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
         const pointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
         const nextPreviewRange = pointerCell
           ? resolveFillHandlePreviewRange(selectionRange, pointerCell)
@@ -1013,9 +1035,25 @@ export function WorkbookGridSurface({
       };
 
       const cleanup = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up, true);
+        if (fillHandleCleanupRef.current !== cleanup) {
+          return;
+        }
         fillHandleCleanupRef.current = null;
+        handleElement.removeEventListener("pointermove", move);
+        handleElement.removeEventListener("pointerup", up);
+        handleElement.removeEventListener("pointercancel", cancel);
+        handleElement.removeEventListener("lostpointercapture", lostPointerCapture);
+        const pointerId = fillHandlePointerIdRef.current;
+        fillHandlePointerIdRef.current = null;
+        setIsFillHandleDragging(false);
+        if (pointerId !== null && handleElement.hasPointerCapture(pointerId)) {
+          handleElement.releasePointerCapture(pointerId);
+        }
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
       };
 
       const finish = () => {
@@ -1040,20 +1078,50 @@ export function WorkbookGridSurface({
         cleanup();
       };
 
-      const up = () => {
+      const up = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
         finish();
       };
 
-      fillHandleCleanupRef.current?.();
+      const cancel = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
+        fillPreviewRangeRef.current = null;
+        setFillPreviewRange(null);
+        cleanup();
+      };
+
+      const lostPointerCapture = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
+        fillPreviewRangeRef.current = null;
+        setFillPreviewRange(null);
+        cleanup();
+      };
+
       fillHandleCleanupRef.current = cleanup;
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up, true);
+      handleElement.addEventListener("pointermove", move);
+      handleElement.addEventListener("pointerup", up);
+      handleElement.addEventListener("pointercancel", cancel);
+      handleElement.addEventListener("lostpointercapture", lostPointerCapture);
     },
     [focusGrid, onFillRange, resolvePointerCell, selectionRange],
   );
 
   const refreshHoverState = useCallback(
     (clientX: number, clientY: number, buttons: number) => {
+      if (isFillHandleDragging) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
       if (isRangeMoveDragging) {
         setHoverState((current) =>
           sameGridHoverState(current, { cell: null, header: null, cursor: "grabbing" })
@@ -1112,6 +1180,7 @@ export function WorkbookGridSurface({
       gridMetrics,
       gridSelection.columns.length,
       gridSelection.rows.length,
+      isFillHandleDragging,
       isRangeMoveDragging,
       resolvePointerGeometry,
       allowsRangeMove,
@@ -1399,6 +1468,9 @@ export function WorkbookGridSurface({
           });
         }}
         onPointerMoveCapture={(event) => {
+          if (isFillHandleDragging || isFillHandleTarget(event.target)) {
+            return;
+          }
           handleGridPointerMove({
             dragAnchorCell: dragAnchorCellRef.current,
             dragGeometry: dragGeometryRef.current,
@@ -1419,7 +1491,7 @@ export function WorkbookGridSurface({
           refreshHoverState(event.clientX, event.clientY, event.buttons);
         }}
         onPointerLeave={() => {
-          if (activeResizeColumn !== null || isRangeMoveDragging) {
+          if (activeResizeColumn !== null || isFillHandleDragging || isRangeMoveDragging) {
             return;
           }
           setHoverState((current) =>
@@ -1429,6 +1501,9 @@ export function WorkbookGridSurface({
           );
         }}
         onPointerDownCapture={(event) => {
+          if (isFillHandleTarget(event.target)) {
+            return;
+          }
           const pointerGeometry = resolvePointerGeometry(visibleRegion);
           const resizeTarget =
             pointerGeometry === null
@@ -1595,11 +1670,17 @@ export function WorkbookGridSurface({
         {fillHandleBounds ? (
           <button
             aria-label="Fill handle"
-            className="absolute z-30 cursor-crosshair rounded-full border border-white bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)]"
+            className="absolute z-30 cursor-crosshair rounded-full border-0 bg-[#1f7a43] shadow-[0_0_0_1px_rgba(31,122,67,0.45)] outline-none"
+            data-grid-fill-handle="true"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
             onPointerDown={handleFillHandlePointerDown}
             style={{
               height: fillHandleBounds.height,
               left: fillHandleBounds.x,
+              touchAction: "none",
               top: fillHandleBounds.y,
               width: fillHandleBounds.width,
             }}

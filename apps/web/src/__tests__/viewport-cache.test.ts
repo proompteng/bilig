@@ -137,4 +137,57 @@ describe("WorkerViewportCache", () => {
     });
     expect(style?.fill).toBeUndefined();
   });
+
+  it("clears cached cell contents optimistically without dropping formatting", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.applyViewportPatch({
+      ...createPatch("style-filled"),
+      styles: [
+        {
+          id: "style-filled",
+          fill: { backgroundColor: "#c9daf8" },
+          font: { bold: true, color: "#111827" },
+        },
+      ],
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: "Sheet1",
+            address: "D5",
+            value: { tag: ValueTag.String, value: "hello", stringId: 1 },
+            input: "hello",
+            formula: 'UPPER("hello")',
+            flags: 0,
+            version: 3,
+            styleId: "style-filled",
+            format: "0.00",
+          },
+          displayText: "HELLO",
+          copyText: "HELLO",
+          editorText: '=UPPER("hello")',
+          formatId: 0,
+          styleId: "style-filled",
+        },
+      ],
+    });
+
+    cache.applyOptimisticClearRange({ sheetName: "Sheet1", startAddress: "D5", endAddress: "D5" });
+
+    const snapshot = cache.getCell("Sheet1", "D5");
+    const style = cache.getCellStyle(snapshot.styleId);
+
+    expect(snapshot.value).toEqual({ tag: ValueTag.Empty });
+    expect(snapshot.input).toBeUndefined();
+    expect(snapshot.formula).toBeUndefined();
+    expect(snapshot.styleId).toBe("style-filled");
+    expect(snapshot.format).toBe("0.00");
+    expect(snapshot.version).toBe(4);
+    expect(style).toMatchObject({
+      fill: { backgroundColor: "#c9daf8" },
+      font: { bold: true, color: "#111827" },
+    });
+  });
 });

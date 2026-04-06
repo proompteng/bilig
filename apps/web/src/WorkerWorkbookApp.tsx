@@ -391,6 +391,14 @@ function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   };
 }
 
+function matchesSelectionCell(
+  cell: CellSnapshot | null | undefined,
+  sheetName: string,
+  address: string,
+): cell is CellSnapshot {
+  return cell?.sheetName === sheetName && cell.address === address;
+}
+
 function isTextEntryTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
@@ -458,8 +466,10 @@ function WorkerWorkbookAppInner({
   );
   const runtimeReady = !loading && Boolean(workerHandle);
   const workbookReady = runtimeReady;
-  const selectedCell =
-    runtimeSelectedCell ?? emptyCellSnapshot(selection.sheetName, selection.address);
+  const emptySelectedCell = useMemo(
+    () => emptyCellSnapshot(selection.sheetName, selection.address),
+    [selection.address, selection.sheetName],
+  );
   const [selectionLabel, setSelectionLabel] = useState("A1");
   const [recentFillColors, setRecentFillColors] = useState<readonly string[]>([]);
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([]);
@@ -544,6 +554,23 @@ function WorkerWorkbookAppInner({
     ),
     () => workerHandle?.cache.getColumnWidths(selection.sheetName),
     () => workerHandle?.cache.getColumnWidths(selection.sheetName),
+  );
+
+  const selectedCell = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.cache.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => {
+      const cacheSnapshot = workerHandle?.cache.peekCell(selection.sheetName, selection.address);
+      if (cacheSnapshot) {
+        return cacheSnapshot;
+      }
+      return matchesSelectionCell(runtimeSelectedCell, selection.sheetName, selection.address)
+        ? runtimeSelectedCell
+        : emptySelectedCell;
+    },
+    () => emptySelectedCell,
   );
 
   const reportRuntimeError = useCallback(
@@ -853,6 +880,7 @@ function WorkerWorkbookAppInner({
       return;
     }
     const targetRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
+    workerHandleRef.current?.cache.applyOptimisticClearRange(targetRange);
     editorValueRef.current = "";
     setEditorValue("");
     editorTargetRef.current = selectionRef.current;

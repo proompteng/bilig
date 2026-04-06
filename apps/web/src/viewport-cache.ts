@@ -158,6 +158,24 @@ export class WorkerViewportCache implements GridEngineLike {
     this.updateCachedRangeStyles(range, (style) => applyStylePatch(style, normalizedPatch));
   }
 
+  applyOptimisticClearRange(range: CellRangeRef): void {
+    const changedKeys = new Set<string>();
+    this.forEachCachedCellInRange(range, (key, snapshot) => {
+      const nextSnapshot = clearCellContents(snapshot);
+      if (cellSnapshotSignature(snapshot) === cellSnapshotSignature(nextSnapshot)) {
+        return;
+      }
+      this.cellSnapshots.set(key, nextSnapshot);
+      changedKeys.add(key);
+    });
+
+    if (changedKeys.size === 0) {
+      return;
+    }
+    this.notifyCellSubscriptions(changedKeys);
+    this.listeners.forEach((listener) => listener());
+  }
+
   clearOptimisticRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
     this.updateCachedRangeStyles(range, (style) => clearStyleFields(style, fields));
   }
@@ -430,6 +448,28 @@ export class WorkerViewportCache implements GridEngineLike {
     transformStyle: (style: Omit<CellStyleRecord, "id">) => Omit<CellStyleRecord, "id">,
   ): void {
     const changedKeys = new Set<string>();
+    this.forEachCachedCellInRange(range, (key, snapshot) => {
+      const baseStyle = cloneStyleWithoutId(this.getCellStyle(snapshot.styleId));
+      const nextStyle = transformStyle(baseStyle);
+      const nextStyleId = this.internStyleRecord(nextStyle);
+      if ((snapshot.styleId ?? undefined) === nextStyleId) {
+        return;
+      }
+      this.cellSnapshots.set(key, assignSnapshotStyleId(snapshot, nextStyleId));
+      changedKeys.add(key);
+    });
+
+    if (changedKeys.size === 0) {
+      return;
+    }
+    this.notifyCellSubscriptions(changedKeys);
+    this.listeners.forEach((listener) => listener());
+  }
+
+  private forEachCachedCellInRange(
+    range: CellRangeRef,
+    visitor: (key: string, snapshot: CellSnapshot) => void,
+  ): void {
     const start = parseCellAddress(range.startAddress, range.sheetName);
     const end = parseCellAddress(range.endAddress, range.sheetName);
     const minRow = Math.min(start.row, end.row);
@@ -455,22 +495,8 @@ export class WorkerViewportCache implements GridEngineLike {
       ) {
         continue;
       }
-
-      const baseStyle = cloneStyleWithoutId(this.getCellStyle(snapshot.styleId));
-      const nextStyle = transformStyle(baseStyle);
-      const nextStyleId = this.internStyleRecord(nextStyle);
-      if ((snapshot.styleId ?? undefined) === nextStyleId) {
-        continue;
-      }
-      this.cellSnapshots.set(key, assignSnapshotStyleId(snapshot, nextStyleId));
-      changedKeys.add(key);
+      visitor(key, snapshot);
     }
-
-    if (changedKeys.size === 0) {
-      return;
-    }
-    this.notifyCellSubscriptions(changedKeys);
-    this.listeners.forEach((listener) => listener());
   }
 
   private internStyleRecord(style: Omit<CellStyleRecord, "id">): string | undefined {
@@ -700,6 +726,17 @@ function assignSnapshotStyleId(snapshot: CellSnapshot, styleId: string | undefin
   } else {
     delete nextSnapshot.styleId;
   }
+  return nextSnapshot;
+}
+
+function clearCellContents(snapshot: CellSnapshot): CellSnapshot {
+  const nextSnapshot: CellSnapshot = {
+    ...snapshot,
+    value: { tag: ValueTag.Empty },
+    version: snapshot.version + 1,
+  };
+  delete nextSnapshot.formula;
+  delete nextSnapshot.input;
   return nextSnapshot;
 }
 
