@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { workbookAgentSkillDescriptors } from "@bilig/agent-api";
+import { describeWorkbookAgentCommand, workbookAgentSkillDescriptors } from "@bilig/agent-api";
 import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentPreviewChangeKind,
@@ -466,23 +466,32 @@ function PreviewRangeList(props: {
 function PendingBundleCard(props: {
   readonly bundle: WorkbookAgentCommandBundle;
   readonly preview: WorkbookAgentPreviewSummary | null;
+  readonly selectedCommandIndexes: readonly number[];
   readonly isApplyingBundle: boolean;
   readonly onApply: () => void;
   readonly onDismiss: () => void;
+  readonly onSelectAll: () => void;
+  readonly onToggleCommand: (commandIndex: number) => void;
 }) {
-  const canApply = props.preview !== null && !props.isApplyingBundle;
+  const selectedCount = props.selectedCommandIndexes.length;
+  const hasFullSelection = selectedCount === props.bundle.commands.length;
+  const canApply = props.preview !== null && !props.isApplyingBundle && selectedCount > 0;
   const applyLabel =
-    props.bundle.approvalMode === "explicit"
+    selectedCount > 0 && !hasFullSelection
       ? props.isApplyingBundle
-        ? "Approving..."
-        : "Approve and Apply"
-      : props.bundle.approvalMode === "auto"
+        ? "Applying Selected..."
+        : "Apply Selected"
+      : props.bundle.approvalMode === "explicit"
         ? props.isApplyingBundle
-          ? "Auto-Applying..."
-          : "Apply Now"
-        : props.isApplyingBundle
-          ? "Applying..."
-          : "Apply Preview";
+          ? "Approving..."
+          : "Approve and Apply"
+        : props.bundle.approvalMode === "auto"
+          ? props.isApplyingBundle
+            ? "Auto-Applying..."
+            : "Apply Now"
+          : props.isApplyingBundle
+            ? "Applying..."
+            : "Apply Preview";
   return (
     <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-surface)] px-3 py-3 shadow-[var(--wb-shadow-sm)]">
       <div className="flex items-start justify-between gap-3">
@@ -514,6 +523,58 @@ function PendingBundleCard(props: {
             ? "explicit approval required"
             : "preview required before apply"}
       </div>
+      <div className="mt-3 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+            Selected {String(selectedCount)} of {String(props.bundle.commands.length)} changes
+          </div>
+          {!hasFullSelection ? (
+            <button
+              className="text-[11px] font-medium text-[var(--wb-accent)] transition-colors hover:brightness-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+              type="button"
+              onClick={props.onSelectAll}
+            >
+              Select all
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {props.bundle.commands.map((command, index) => {
+            const checked = props.selectedCommandIndexes.includes(index);
+            const commandLabel = describeWorkbookAgentCommand(command);
+            return (
+              <div
+                key={`${props.bundle.id}:${JSON.stringify(command)}`}
+                className={cn(
+                  "flex items-start gap-3 rounded-[var(--wb-radius-control)] border px-3 py-2 transition-colors",
+                  checked
+                    ? "border-[var(--wb-accent-ring)] bg-[var(--wb-surface)]"
+                    : "border-[var(--wb-border)] bg-[var(--wb-surface)]",
+                )}
+              >
+                <input
+                  aria-label={`Toggle staged workbook change ${String(index + 1)}: ${commandLabel}`}
+                  checked={checked}
+                  className="mt-0.5 h-4 w-4 rounded border-[var(--wb-border)] text-[var(--wb-accent)] focus:ring-[var(--wb-accent-ring)]"
+                  data-testid={`workbook-agent-command-toggle-${String(index)}`}
+                  type="checkbox"
+                  onChange={() => {
+                    props.onToggleCommand(index);
+                  }}
+                />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">
+                    Change {String(index + 1)}
+                  </div>
+                  <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                    {commandLabel}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       {props.preview ? (
         <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
           Preview effects: {String(props.preview.effectSummary.displayedCellDiffCount)} sampled cell
@@ -523,6 +584,10 @@ function PendingBundleCard(props: {
           {String(props.preview.effectSummary.styleChangeCount)} styles ·{" "}
           {String(props.preview.effectSummary.numberFormatChangeCount)} number formats
           {props.preview.effectSummary.truncatedCellDiffs ? " · diff list truncated" : ""}
+        </div>
+      ) : selectedCount === 0 ? (
+        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+          Select at least one change to preview and apply.
         </div>
       ) : null}
       <PreviewRangeList ranges={props.preview?.ranges ?? props.bundle.affectedRanges} />
@@ -576,6 +641,7 @@ function PendingBundleCard(props: {
         </button>
         <button
           className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 text-[12px] font-semibold text-[var(--wb-accent)] shadow-[var(--wb-shadow-sm)] transition-colors hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="workbook-agent-apply-pending"
           disabled={!canApply}
           type="button"
           onClick={props.onApply}
@@ -601,7 +667,7 @@ function ExecutionRecordRow(props: {
           <div className="text-[11px] text-[var(--wb-text-subtle)]">
             {props.record.appliedBy === "auto" ? "Auto-applied" : "Applied"} at r
             {String(props.record.appliedRevision)} · {props.record.riskClass} risk ·{" "}
-            {props.record.approvalMode}
+            {props.record.approvalMode} · {props.record.acceptedScope}
           </div>
         </div>
         <span className="rounded-full bg-[var(--wb-surface-subtle)] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
@@ -640,6 +706,7 @@ export function WorkbookAgentPanel(props: {
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
+  readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly draft: string;
   readonly error: string | null;
@@ -651,6 +718,8 @@ export function WorkbookAgentPanel(props: {
   readonly onDraftChange: (value: string) => void;
   readonly onDismissPendingBundle: () => void;
   readonly onInterrupt: () => void;
+  readonly onSelectAllPendingCommands: () => void;
+  readonly onTogglePendingCommand: (commandIndex: number) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onSubmit: () => void;
   readonly onUseSkillPrompt: (prompt: string) => void;
@@ -700,9 +769,12 @@ export function WorkbookAgentPanel(props: {
             <PendingBundleCard
               bundle={props.pendingBundle}
               preview={props.preview}
+              selectedCommandIndexes={props.selectedCommandIndexes}
               isApplyingBundle={props.isApplyingBundle}
               onApply={props.onApplyPendingBundle}
               onDismiss={props.onDismissPendingBundle}
+              onSelectAll={props.onSelectAllPendingCommands}
+              onToggleCommand={props.onTogglePendingCommand}
             />
           </div>
         ) : null}

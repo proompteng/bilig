@@ -431,18 +431,26 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         Params: { documentId: string; sessionId: string; bundleId: string };
         Body: {
           appliedBy?: "user" | "auto";
+          commandIndexes?: number[];
           preview?: unknown;
         };
       }>,
       reply: FastifyReply,
     ) => {
       return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const commandIndexes =
+          request.body &&
+          typeof request.body === "object" &&
+          Array.isArray(request.body.commandIndexes)
+            ? request.body.commandIndexes
+            : undefined;
         return await service.applyPendingBundle({
           documentId: request.params.documentId,
           sessionId: request.params.sessionId,
           bundleId: request.params.bundleId,
           session,
           appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
+          ...(commandIndexes ? { commandIndexes } : {}),
           preview:
             request.body && typeof request.body === "object" && "preview" in request.body
               ? (request.body.preview ?? null)

@@ -2,23 +2,26 @@ import type {
   WorkbookAgentSessionSnapshot,
   WorkbookAgentStreamEvent,
   WorkbookAgentTimelineEntry,
+  WorkbookAgentUiContext,
 } from "@bilig/contracts";
 import type {
   CodexServerNotification,
   WorkbookAgentAppliedBy,
   WorkbookAgentCommandBundle,
+  WorkbookAgentContextRef,
   WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
-import { decodeWorkbookAgentPreviewSummary } from "@bilig/agent-api";
+import {
+  appendWorkbookAgentCommandToBundle,
+  buildWorkbookAgentExecutionRecord,
+  createWorkbookAgentCommandBundle,
+  decodeWorkbookAgentPreviewSummary,
+  describeWorkbookAgentBundle,
+  splitWorkbookAgentCommandBundle,
+} from "@bilig/agent-api";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
-import {
-  appendWorkbookAgentBundleCommand,
-  buildWorkbookAgentExecutionRecord,
-  createWorkbookAgentBundle,
-  describeWorkbookAgentBundle,
-} from "./workbook-agent-bundle-model.js";
 import {
   CodexAppServerClient,
   type CodexAppServerTransport,
@@ -84,6 +87,18 @@ interface WorkbookAgentSessionState {
   lastAccessedAt: number;
 }
 
+function toContextRef(context: WorkbookAgentUiContext | null): WorkbookAgentContextRef | null {
+  return context
+    ? {
+        selection: {
+          sheetName: context.selection.sheetName,
+          address: context.selection.address,
+        },
+        viewport: { ...context.viewport },
+      }
+    : null;
+}
+
 export interface WorkbookAgentService {
   readonly enabled: boolean;
   createSession(input: {
@@ -114,6 +129,7 @@ export interface WorkbookAgentService {
     bundleId: string;
     session: SessionIdentity;
     appliedBy: WorkbookAgentAppliedBy;
+    commandIndexes?: readonly number[] | null;
     preview: unknown;
   }): Promise<WorkbookAgentSessionSnapshot>;
   dismissPendingBundle(input: {
@@ -365,6 +381,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     bundleId: string;
     session: SessionIdentity;
     appliedBy: WorkbookAgentAppliedBy;
+    commandIndexes?: readonly number[] | null;
     preview: unknown;
   }): Promise<WorkbookAgentSessionSnapshot> {
     const sessionState = this.getOwnedSession(
@@ -398,19 +415,40 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
+    const selection = splitWorkbookAgentCommandBundle({
+      bundle: pendingBundle,
+      acceptedCommandIndexes: input.commandIndexes,
+    });
+    if (!selection.acceptedBundle || !selection.acceptedScope) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_COMMAND_SELECTION_REQUIRED",
+        message: "Select at least one staged workbook change before apply",
+        statusCode: 400,
+        retryable: false,
+      });
+    }
+    if (input.appliedBy === "auto" && selection.acceptedScope !== "full") {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
+        message: "Partial workbook agent apply requires manual approval",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     const result = await this.zeroSyncService.applyAgentCommandBundle(
       input.documentId,
-      pendingBundle,
+      selection.acceptedBundle,
       preview,
       input.session,
     );
     const executionRecord = buildWorkbookAgentExecutionRecord({
-      bundle: pendingBundle,
+      bundle: selection.acceptedBundle,
       actorUserId: input.session.userID,
       planText: this.collectPlanTextForTurn(sessionState, pendingBundle.turnId),
       preview: result.preview,
       appliedRevision: result.revision,
       appliedBy: input.appliedBy,
+      acceptedScope: selection.acceptedScope,
       now: this.now(),
     });
     await this.zeroSyncService.appendWorkbookAgentRun(executionRecord);
@@ -420,13 +458,27 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         (record) => record.id !== executionRecord.id,
       ),
     ];
-    sessionState.snapshot.pendingBundle = null;
+    sessionState.snapshot.pendingBundle =
+      selection.remainingBundle === null
+        ? null
+        : createWorkbookAgentCommandBundle({
+            documentId: selection.remainingBundle.documentId,
+            threadId: selection.remainingBundle.threadId,
+            turnId: selection.remainingBundle.turnId,
+            goalText: selection.remainingBundle.goalText,
+            baseRevision: result.revision,
+            context: selection.remainingBundle.context,
+            commands: selection.remainingBundle.commands,
+            now: this.now(),
+          });
     sessionState.snapshot.entries = upsertEntry(
       sessionState.snapshot.entries,
       createSystemEntry(
         `system-apply:${executionRecord.id}`,
         pendingBundle.turnId,
-        `${input.appliedBy === "auto" ? "Auto-applied" : "Applied"} preview bundle at revision r${String(result.revision)}: ${pendingBundle.summary}`,
+        `${input.appliedBy === "auto" ? "Auto-applied" : "Applied"} ${
+          selection.acceptedScope === "partial" ? "selected " : ""
+        }preview bundle at revision r${String(result.revision)}: ${selection.acceptedBundle.summary}`,
       ),
     );
     this.touch(sessionState);
@@ -481,23 +533,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       throw new Error("Workbook agent execution record not found");
     }
     const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(input.documentId);
-    const replayedBundle = createWorkbookAgentBundle({
+    const replayedBundle = createWorkbookAgentCommandBundle({
       documentId: input.documentId,
       threadId: sessionState.threadId,
       turnId: `replay:${record.id}:${String(this.now())}`,
       goalText: record.goalText,
       baseRevision,
-      context:
-        sessionState.snapshot.context ??
-        (record.context
-          ? {
-              selection: {
-                sheetName: record.context.selection.sheetName,
-                address: record.context.selection.address,
-              },
-              viewport: { ...record.context.viewport },
-            }
-          : null),
+      context: toContextRef(sessionState.snapshot.context) ?? record.context,
       commands: record.commands,
       now: this.now(),
     });
@@ -582,7 +624,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                 const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(
                   sessionState.documentId,
                 );
-                const bundle = appendWorkbookAgentBundleCommand({
+                const bundle = appendWorkbookAgentCommandToBundle({
                   previousBundle: sessionState.snapshot.pendingBundle,
                   documentId: sessionState.documentId,
                   threadId: sessionState.threadId,
@@ -591,7 +633,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                     sessionState.promptByTurn.get(request.turnId) ??
                     "Update workbook from assistant request",
                   baseRevision,
-                  context: sessionState.snapshot.context,
+                  context: toContextRef(sessionState.snapshot.context),
                   command,
                   now: this.now(),
                 });

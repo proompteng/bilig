@@ -79,7 +79,7 @@ export type WorkbookAgentRiskClass = "low" | "medium" | "high";
 export type WorkbookAgentBundleScope = "selection" | "sheet" | "workbook";
 export type WorkbookAgentApprovalMode = "auto" | "preview" | "explicit";
 export type WorkbookAgentAppliedBy = "user" | "auto";
-export type WorkbookAgentAcceptedScope = "full";
+export type WorkbookAgentAcceptedScope = "full" | "partial";
 export type WorkbookAgentPreviewRangeRole = "target" | "source";
 export type WorkbookAgentPreviewChangeKind = "input" | "formula" | "style" | "numberFormat";
 
@@ -202,7 +202,7 @@ function isAppliedBy(value: unknown): value is WorkbookAgentAppliedBy {
 }
 
 function isAcceptedScope(value: unknown): value is WorkbookAgentAcceptedScope {
-  return value === "full";
+  return value === "full" || value === "partial";
 }
 
 function isPreviewChangeKind(value: unknown): value is WorkbookAgentPreviewChangeKind {
@@ -430,6 +430,376 @@ export function areWorkbookAgentPreviewSummariesEqual(
     left.effectSummary.numberFormatChangeCount === right.effectSummary.numberFormatChangeCount &&
     left.effectSummary.structuralChangeCount === right.effectSummary.structuralChangeCount
   );
+}
+
+function rangeLabel(range: WorkbookAgentPreviewRange): string {
+  return range.startAddress === range.endAddress
+    ? `${range.sheetName}!${range.startAddress}`
+    : `${range.sheetName}!${range.startAddress}:${range.endAddress}`;
+}
+
+export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): string {
+  switch (command.kind) {
+    case "writeRange": {
+      const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
+      return ranges[0] ? `Write cells in ${rangeLabel(ranges[0])}` : "Write cells";
+    }
+    case "clearRange":
+      return `Clear ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
+    case "formatRange":
+      return `Format ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[0]!)}`;
+    case "fillRange":
+      return `Fill ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`;
+    case "copyRange":
+      return `Copy into ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`;
+    case "moveRange":
+      return `Move cells to ${rangeLabel(deriveWorkbookAgentCommandPreviewRanges(command)[1]!)}`;
+    case "createSheet":
+      return `Create sheet ${command.name}`;
+    case "renameSheet":
+      return `Rename sheet ${command.currentName} to ${command.nextName}`;
+    default: {
+      const exhaustive: never = command;
+      return String(exhaustive);
+    }
+  }
+}
+
+function dedupePreviewRanges(
+  ranges: readonly WorkbookAgentPreviewRange[],
+): WorkbookAgentPreviewRange[] {
+  const nextRanges: WorkbookAgentPreviewRange[] = [];
+  ranges.forEach((range) => {
+    if (!nextRanges.some((existing) => samePreviewRange(existing, range))) {
+      nextRanges.push(range);
+    }
+  });
+  return nextRanges;
+}
+
+function summarizeCommands(commands: readonly WorkbookAgentCommand[]): string {
+  if (commands.length === 0) {
+    return "No workbook changes staged";
+  }
+  if (commands.length === 1) {
+    return describeWorkbookAgentCommand(commands[0]!);
+  }
+  const firstSummary = describeWorkbookAgentCommand(commands[0]!);
+  return `${firstSummary} and ${String(commands.length - 1)} more change${
+    commands.length === 2 ? "" : "s"
+  }`;
+}
+
+function isSelectionOnlyCommand(
+  command: WorkbookAgentCommand,
+  context: WorkbookAgentContextRef | null,
+): boolean {
+  if (!context) {
+    return false;
+  }
+  const selectionSheet = context.selection.sheetName;
+  const selectionAddress = context.selection.address;
+  const ranges = deriveWorkbookAgentCommandPreviewRanges(command);
+  if (ranges.length !== 1) {
+    return false;
+  }
+  const range = ranges[0];
+  if (!range) {
+    return false;
+  }
+  return (
+    range.role === "target" &&
+    range.sheetName === selectionSheet &&
+    range.startAddress === selectionAddress &&
+    range.endAddress === selectionAddress
+  );
+}
+
+function deriveWorkbookAgentRiskClass(
+  commands: readonly WorkbookAgentCommand[],
+  context: WorkbookAgentContextRef | null,
+): WorkbookAgentRiskClass {
+  if (
+    commands.some((command) => command.kind === "createSheet" || command.kind === "renameSheet")
+  ) {
+    return "high";
+  }
+  if (
+    commands.every(
+      (command) => command.kind === "formatRange" && isSelectionOnlyCommand(command, context),
+    )
+  ) {
+    return "low";
+  }
+  return "medium";
+}
+
+function deriveWorkbookAgentBundleScope(
+  commands: readonly WorkbookAgentCommand[],
+  context: WorkbookAgentContextRef | null,
+): WorkbookAgentBundleScope {
+  if (
+    commands.some((command) => command.kind === "createSheet" || command.kind === "renameSheet")
+  ) {
+    return "workbook";
+  }
+
+  const ranges = commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command));
+  if (ranges.length === 0) {
+    return "sheet";
+  }
+
+  const distinctSheets = new Set(ranges.map((range) => range.sheetName));
+  if (distinctSheets.size > 1) {
+    return "workbook";
+  }
+
+  if (context && commands.every((command) => isSelectionOnlyCommand(command, context))) {
+    return "selection";
+  }
+
+  return "sheet";
+}
+
+function deriveWorkbookAgentApprovalMode(
+  riskClass: WorkbookAgentRiskClass,
+  scope: WorkbookAgentBundleScope,
+): WorkbookAgentApprovalMode {
+  if (riskClass === "low" && scope === "selection") {
+    return "auto";
+  }
+  if (riskClass === "high") {
+    return "explicit";
+  }
+  return "preview";
+}
+
+function estimateWorkbookAgentAffectedCells(
+  commands: readonly WorkbookAgentCommand[],
+): number | null {
+  let total = 0;
+  let sawCount = false;
+  commands.forEach((command) => {
+    const next = estimateWorkbookAgentCommandAffectedCells(command);
+    if (next !== null) {
+      total += next;
+      sawCount = true;
+    }
+  });
+  return sawCount ? total : null;
+}
+
+export function createWorkbookAgentCommandBundle(input: {
+  bundleId?: string;
+  documentId: string;
+  threadId: string;
+  turnId: string;
+  goalText: string;
+  baseRevision: number;
+  context: WorkbookAgentContextRef | null;
+  commands: readonly WorkbookAgentCommand[];
+  now: number;
+}): WorkbookAgentCommandBundle {
+  const commands = [...input.commands];
+  const scope = deriveWorkbookAgentBundleScope(commands, input.context);
+  const riskClass = deriveWorkbookAgentRiskClass(commands, input.context);
+  return {
+    id: input.bundleId ?? crypto.randomUUID(),
+    documentId: input.documentId,
+    threadId: input.threadId,
+    turnId: input.turnId,
+    goalText: input.goalText,
+    summary: summarizeCommands(commands),
+    scope,
+    riskClass,
+    approvalMode: deriveWorkbookAgentApprovalMode(riskClass, scope),
+    baseRevision: input.baseRevision,
+    createdAtUnixMs: input.now,
+    context: input.context ? structuredClone(input.context) : null,
+    commands: commands.map((command) => structuredClone(command)),
+    affectedRanges: dedupePreviewRanges(
+      commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command)),
+    ),
+    estimatedAffectedCells: estimateWorkbookAgentAffectedCells(commands),
+  };
+}
+
+export function appendWorkbookAgentCommandToBundle(input: {
+  previousBundle: WorkbookAgentCommandBundle | null;
+  documentId: string;
+  threadId: string;
+  turnId: string;
+  goalText: string;
+  baseRevision: number;
+  context: WorkbookAgentContextRef | null;
+  command: WorkbookAgentCommand;
+  now: number;
+}): WorkbookAgentCommandBundle {
+  const previousBundle =
+    input.previousBundle &&
+    input.previousBundle.threadId === input.threadId &&
+    input.previousBundle.turnId === input.turnId
+      ? input.previousBundle
+      : null;
+  return createWorkbookAgentCommandBundle({
+    ...(previousBundle ? { bundleId: previousBundle.id } : {}),
+    documentId: input.documentId,
+    threadId: input.threadId,
+    turnId: input.turnId,
+    goalText: input.goalText,
+    baseRevision: input.baseRevision,
+    context: input.context,
+    commands: [...(previousBundle?.commands ?? []), input.command],
+    now: previousBundle ? previousBundle.createdAtUnixMs : input.now,
+  });
+}
+
+export function describeWorkbookAgentBundle(bundle: WorkbookAgentCommandBundle): string {
+  const affectedCells =
+    bundle.estimatedAffectedCells === null
+      ? "unknown affected cell count"
+      : `${String(bundle.estimatedAffectedCells)} affected cell${
+          bundle.estimatedAffectedCells === 1 ? "" : "s"
+        }`;
+  return [
+    `Staged preview bundle: ${bundle.summary}.`,
+    `Risk: ${bundle.riskClass}. Scope: ${bundle.scope}.`,
+    `Preview target: ${affectedCells}.`,
+  ].join(" ");
+}
+
+export function normalizeWorkbookAgentCommandIndexes(
+  bundle: Pick<WorkbookAgentCommandBundle, "commands">,
+  commandIndexes: readonly number[] | null | undefined,
+): number[] {
+  if (commandIndexes === null || commandIndexes === undefined) {
+    return bundle.commands.map((_command, index) => index);
+  }
+  const requested = new Set<number>();
+  commandIndexes.forEach((index) => {
+    if (Number.isInteger(index) && index >= 0 && index < bundle.commands.length) {
+      requested.add(index);
+    }
+  });
+  return bundle.commands.flatMap((_command, index) => (requested.has(index) ? [index] : []));
+}
+
+export function isFullWorkbookAgentCommandSelection(input: {
+  bundle: Pick<WorkbookAgentCommandBundle, "commands">;
+  commandIndexes: readonly number[] | null | undefined;
+}): boolean {
+  return (
+    normalizeWorkbookAgentCommandIndexes(input.bundle, input.commandIndexes).length ===
+    input.bundle.commands.length
+  );
+}
+
+export function projectWorkbookAgentBundle(input: {
+  bundle: WorkbookAgentCommandBundle;
+  commandIndexes: readonly number[] | null | undefined;
+  bundleId?: string;
+  baseRevision?: number;
+  now?: number;
+}): WorkbookAgentCommandBundle | null {
+  const selectedIndexes = normalizeWorkbookAgentCommandIndexes(input.bundle, input.commandIndexes);
+  if (selectedIndexes.length === 0) {
+    return null;
+  }
+  return createWorkbookAgentCommandBundle({
+    ...(input.bundleId ? { bundleId: input.bundleId } : {}),
+    documentId: input.bundle.documentId,
+    threadId: input.bundle.threadId,
+    turnId: input.bundle.turnId,
+    goalText: input.bundle.goalText,
+    baseRevision: input.baseRevision ?? input.bundle.baseRevision,
+    context: input.bundle.context,
+    commands: selectedIndexes.map((index) => input.bundle.commands[index]!),
+    now: input.now ?? input.bundle.createdAtUnixMs,
+  });
+}
+
+export function splitWorkbookAgentCommandBundle(input: {
+  bundle: WorkbookAgentCommandBundle;
+  acceptedCommandIndexes: readonly number[] | null | undefined;
+  remainingBaseRevision?: number;
+  remainingBundleId?: string;
+  now?: number;
+}): {
+  acceptedBundle: WorkbookAgentCommandBundle | null;
+  remainingBundle: WorkbookAgentCommandBundle | null;
+  acceptedScope: WorkbookAgentAcceptedScope | null;
+  acceptedCommandIndexes: number[];
+} {
+  const acceptedCommandIndexes = normalizeWorkbookAgentCommandIndexes(
+    input.bundle,
+    input.acceptedCommandIndexes,
+  );
+  if (acceptedCommandIndexes.length === 0) {
+    return {
+      acceptedBundle: null,
+      remainingBundle: structuredClone(input.bundle),
+      acceptedScope: null,
+      acceptedCommandIndexes,
+    };
+  }
+  const acceptedSet = new Set(acceptedCommandIndexes);
+  const remainingCommandIndexes = input.bundle.commands.flatMap((_command, index) =>
+    acceptedSet.has(index) ? [] : [index],
+  );
+  return {
+    acceptedBundle: projectWorkbookAgentBundle({
+      bundle: input.bundle,
+      commandIndexes: acceptedCommandIndexes,
+      bundleId: input.bundle.id,
+    }),
+    remainingBundle: projectWorkbookAgentBundle({
+      bundle: input.bundle,
+      commandIndexes: remainingCommandIndexes,
+      ...(input.remainingBundleId ? { bundleId: input.remainingBundleId } : {}),
+      ...(input.remainingBaseRevision !== undefined
+        ? { baseRevision: input.remainingBaseRevision }
+        : {}),
+      ...(input.now !== undefined ? { now: input.now } : {}),
+    }),
+    acceptedScope:
+      acceptedCommandIndexes.length === input.bundle.commands.length ? "full" : "partial",
+    acceptedCommandIndexes,
+  };
+}
+
+export function buildWorkbookAgentExecutionRecord(input: {
+  bundle: WorkbookAgentCommandBundle;
+  actorUserId: string;
+  planText: string | null;
+  preview: WorkbookAgentExecutionRecord["preview"];
+  appliedRevision: number;
+  appliedBy: WorkbookAgentAppliedBy;
+  acceptedScope: WorkbookAgentAcceptedScope;
+  now: number;
+}): WorkbookAgentExecutionRecord {
+  return {
+    id: crypto.randomUUID(),
+    bundleId: input.bundle.id,
+    documentId: input.bundle.documentId,
+    threadId: input.bundle.threadId,
+    turnId: input.bundle.turnId,
+    actorUserId: input.actorUserId,
+    goalText: input.bundle.goalText,
+    planText: input.planText,
+    summary: input.bundle.summary,
+    scope: input.bundle.scope,
+    riskClass: input.bundle.riskClass,
+    approvalMode: input.bundle.approvalMode,
+    acceptedScope: input.acceptedScope,
+    appliedBy: input.appliedBy,
+    baseRevision: input.bundle.baseRevision,
+    appliedRevision: input.appliedRevision,
+    createdAtUnixMs: input.bundle.createdAtUnixMs,
+    appliedAtUnixMs: input.now,
+    context: input.bundle.context ? structuredClone(input.bundle.context) : null,
+    commands: input.bundle.commands.map((command) => structuredClone(command)),
+    preview: input.preview ? structuredClone(input.preview) : null,
+  };
 }
 
 export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCommand {

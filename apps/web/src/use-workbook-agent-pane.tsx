@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  isFullWorkbookAgentCommandSelection,
   isWorkbookAgentCommandBundle,
   isWorkbookAgentExecutionRecord,
+  normalizeWorkbookAgentCommandIndexes,
+  projectWorkbookAgentBundle,
   type WorkbookAgentCommandBundle,
   type WorkbookAgentExecutionRecord,
   type WorkbookAgentPreviewSummary,
@@ -104,6 +107,7 @@ export function useWorkbookAgentPane(input: {
   const [isOpen, setIsOpen] = useState(true);
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
+  const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
   const autoApplyBundleIdRef = useRef<string | null>(null);
   const sessionRef = useRef<StoredWorkbookAgentSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -119,6 +123,27 @@ export function useWorkbookAgentPane(input: {
     const candidate = snapshot?.pendingBundle;
     return candidate && isWorkbookAgentCommandBundle(candidate) ? candidate : null;
   }, [snapshot?.pendingBundle]);
+  const pendingCommandCount = pendingBundle?.commands.length ?? 0;
+
+  const normalizedCommandIndexes = useMemo(
+    () =>
+      pendingBundle
+        ? normalizeWorkbookAgentCommandIndexes(pendingBundle, selectedCommandIndexes)
+        : [],
+    [pendingBundle, selectedCommandIndexes],
+  );
+
+  const selectedPendingBundle = useMemo<WorkbookAgentCommandBundle | null>(
+    () =>
+      pendingBundle
+        ? projectWorkbookAgentBundle({
+            bundle: pendingBundle,
+            commandIndexes: normalizedCommandIndexes,
+            bundleId: pendingBundle.id,
+          })
+        : null,
+    [normalizedCommandIndexes, pendingBundle],
+  );
 
   const executionRecords = useMemo<WorkbookAgentExecutionRecord[]>(() => {
     const candidates = snapshot?.executionRecords ?? [];
@@ -235,14 +260,20 @@ export function useWorkbookAgentPane(input: {
   }, [pendingBundle?.id]);
 
   useEffect(() => {
-    if (!enabled || pendingBundle === null) {
+    setSelectedCommandIndexes(
+      Array.from({ length: pendingCommandCount }, (_unused, index) => index),
+    );
+  }, [pendingBundle?.id, pendingCommandCount]);
+
+  useEffect(() => {
+    if (!enabled || selectedPendingBundle === null) {
       setPreview(null);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
-        const nextPreview = await previewBundle(pendingBundle);
+        const nextPreview = await previewBundle(selectedPendingBundle);
         if (!cancelled) {
           setPreview(nextPreview);
         }
@@ -256,12 +287,12 @@ export function useWorkbookAgentPane(input: {
     return () => {
       cancelled = true;
     };
-  }, [enabled, pendingBundle, previewBundle]);
+  }, [enabled, previewBundle, selectedPendingBundle]);
 
   const applyPendingBundle = useCallback(
     async (appliedBy: "user" | "auto" = "user") => {
       const activeSession = sessionRef.current;
-      if (!activeSession || !pendingBundle || !preview) {
+      if (!activeSession || !pendingBundle || !selectedPendingBundle || !preview) {
         return;
       }
       try {
@@ -275,6 +306,7 @@ export function useWorkbookAgentPane(input: {
             },
             body: JSON.stringify({
               appliedBy,
+              commandIndexes: normalizedCommandIndexes,
               preview,
             }),
           },
@@ -296,15 +328,27 @@ export function useWorkbookAgentPane(input: {
         setIsApplyingBundle(false);
       }
     },
-    [documentId, pendingBundle, persistSessionSnapshot, preview],
+    [
+      documentId,
+      normalizedCommandIndexes,
+      pendingBundle,
+      persistSessionSnapshot,
+      preview,
+      selectedPendingBundle,
+    ],
   );
 
   useEffect(() => {
     if (
       !enabled ||
       !pendingBundle ||
+      !selectedPendingBundle ||
       !preview ||
       pendingBundle.approvalMode !== "auto" ||
+      !isFullWorkbookAgentCommandSelection({
+        bundle: pendingBundle,
+        commandIndexes: normalizedCommandIndexes,
+      }) ||
       isApplyingBundle ||
       autoApplyBundleIdRef.current === pendingBundle.id
     ) {
@@ -312,7 +356,41 @@ export function useWorkbookAgentPane(input: {
     }
     autoApplyBundleIdRef.current = pendingBundle.id;
     void applyPendingBundle("auto");
-  }, [applyPendingBundle, enabled, isApplyingBundle, pendingBundle, preview]);
+  }, [
+    applyPendingBundle,
+    enabled,
+    isApplyingBundle,
+    normalizedCommandIndexes,
+    pendingBundle,
+    preview,
+    selectedPendingBundle,
+  ]);
+
+  const togglePendingCommand = useCallback(
+    (commandIndex: number) => {
+      setSelectedCommandIndexes((current) => {
+        if (!pendingBundle || commandIndex < 0 || commandIndex >= pendingBundle.commands.length) {
+          return current;
+        }
+        const selected = new Set(normalizeWorkbookAgentCommandIndexes(pendingBundle, current));
+        if (selected.has(commandIndex)) {
+          selected.delete(commandIndex);
+        } else {
+          selected.add(commandIndex);
+        }
+        return pendingBundle.commands.flatMap((_command, index) =>
+          selected.has(index) ? [index] : [],
+        );
+      });
+    },
+    [pendingBundle],
+  );
+
+  const selectAllPendingCommands = useCallback(() => {
+    setSelectedCommandIndexes(
+      pendingBundle ? pendingBundle.commands.map((_command, index) => index) : [],
+    );
+  }, [pendingBundle]);
 
   useEffect(() => {
     if (!enabled) {
@@ -555,6 +633,7 @@ export function useWorkbookAgentPane(input: {
         isOpen={isOpen}
         pendingBundle={pendingBundle}
         preview={preview}
+        selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
         onApplyPendingBundle={() => {
           void applyPendingBundle("user");
@@ -569,6 +648,8 @@ export function useWorkbookAgentPane(input: {
         onInterrupt={() => {
           void interrupt();
         }}
+        onSelectAllPendingCommands={selectAllPendingCommands}
+        onTogglePendingCommand={togglePendingCommand}
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
         }}
@@ -591,11 +672,14 @@ export function useWorkbookAgentPane(input: {
       isApplyingBundle,
       isLoading,
       isOpen,
+      normalizedCommandIndexes,
       pendingBundle,
       preview,
       replayExecutionRecord,
       sendPrompt,
       snapshot,
+      selectAllPendingCommands,
+      togglePendingCommand,
     ],
   );
 

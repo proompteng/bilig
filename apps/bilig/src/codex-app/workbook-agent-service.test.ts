@@ -520,4 +520,208 @@ describe("workbook agent service", () => {
       await service.close();
     }
   });
+
+  it("applies a selected command subset and re-stages the remaining plan", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 7,
+      preview: createPreviewSummary({
+        cellDiffs: [
+          {
+            sheetName: "Sheet1",
+            address: "C3",
+            beforeInput: null,
+            beforeFormula: null,
+            afterInput: 2,
+            afterFormula: null,
+            changeKinds: ["input"],
+          },
+        ],
+        effectSummary: {
+          displayedCellDiffCount: 1,
+          truncatedCellDiffs: false,
+          inputChangeCount: 1,
+          formulaChangeCount: 0,
+          styleChangeCount: 0,
+          numberFormatChangeCount: 0,
+          structuralChangeCount: 0,
+        },
+      }),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-1",
+        tool: "bilig.write_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[1]],
+        },
+      });
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-2",
+        tool: "bilig.write_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "C3",
+          values: [[2]],
+        },
+      });
+
+      const pending = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      }).pendingBundle;
+      if (!isWorkbookAgentCommandBundle(pending)) {
+        throw new Error("Expected a staged pending bundle");
+      }
+
+      const applied = await service.applyPendingBundle({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        bundleId: pending.id,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        appliedBy: "user",
+        commandIndexes: [1],
+        preview: createPreviewSummary({
+          cellDiffs: [
+            {
+              sheetName: "Sheet1",
+              address: "C3",
+              beforeInput: null,
+              beforeFormula: null,
+              afterInput: 2,
+              afterFormula: null,
+              changeKinds: ["input"],
+            },
+          ],
+          effectSummary: {
+            displayedCellDiffCount: 1,
+            truncatedCellDiffs: false,
+            inputChangeCount: 1,
+            formulaChangeCount: 0,
+            styleChangeCount: 0,
+            numberFormatChangeCount: 0,
+            structuralChangeCount: 0,
+          },
+        }),
+      });
+
+      expect(applyAgentCommandBundle).toHaveBeenCalledWith(
+        "doc-1",
+        expect.objectContaining({
+          id: pending.id,
+          summary: "Write cells in Sheet1!C3",
+          commands: [
+            {
+              kind: "writeRange",
+              sheetName: "Sheet1",
+              startAddress: "C3",
+              values: [[2]],
+            },
+          ],
+        }),
+        expect.objectContaining({
+          cellDiffs: [
+            expect.objectContaining({
+              address: "C3",
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          userID: "alex@example.com",
+        }),
+      );
+      expect(applied.executionRecords[0]).toEqual(
+        expect.objectContaining({
+          bundleId: pending.id,
+          acceptedScope: "partial",
+          summary: "Write cells in Sheet1!C3",
+          commands: [
+            {
+              kind: "writeRange",
+              sheetName: "Sheet1",
+              startAddress: "C3",
+              values: [[2]],
+            },
+          ],
+        }),
+      );
+      expect(applied.pendingBundle).toEqual(
+        expect.objectContaining({
+          baseRevision: 7,
+          summary: "Write cells in Sheet1!B2",
+          commands: [
+            {
+              kind: "writeRange",
+              sheetName: "Sheet1",
+              startAddress: "B2",
+              values: [[1]],
+            },
+          ],
+        }),
+      );
+      if (!isWorkbookAgentCommandBundle(applied.pendingBundle)) {
+        throw new Error("Expected the remaining staged bundle to stay pending");
+      }
+      expect(applied.pendingBundle.id).not.toBe(pending.id);
+      expect(appendWorkbookAgentRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          acceptedScope: "partial",
+          summary: "Write cells in Sheet1!C3",
+        }),
+      );
+    } finally {
+      await service.close();
+    }
+  });
 });

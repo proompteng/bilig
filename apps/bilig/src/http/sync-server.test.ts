@@ -397,6 +397,7 @@ describe("sync-server workbook agent", () => {
         method: "POST",
         url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
         payload: {
+          commandIndexes: [1],
           preview: createPreviewSummary(),
         },
       });
@@ -408,6 +409,7 @@ describe("sync-server workbook agent", () => {
           sessionId: "agent-session-1",
           bundleId: "bundle-1",
           appliedBy: "user",
+          commandIndexes: [1],
           preview: createPreviewSummary(),
         }),
       );

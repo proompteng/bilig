@@ -70,7 +70,7 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
     (row.approvalMode !== "auto" &&
       row.approvalMode !== "preview" &&
       row.approvalMode !== "explicit") ||
-    row.acceptedScope !== "full" ||
+    (row.acceptedScope !== "full" && row.acceptedScope !== "partial") ||
     (row.appliedBy !== "user" && row.appliedBy !== "auto") ||
     baseRevision === null ||
     appliedRevision === null ||

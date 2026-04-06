@@ -903,9 +903,10 @@ Implemented.
 - the monolith now exposes workbook-agent session, turn, interrupt, context, and SSE event routes under `/v2/documents/:documentId/agent/*`
 - the agent already has local semantic workbook tools for read/edit/write work, including workbook summary, selection read, visible-range read, cell inspection with dependency tracing, range read, range write, clear, format, fill, copy, move, create-sheet, and rename-sheet operations
 - all mutating agent work now stages semantic preview bundles, previews locally in the browser worker, and applies authoritatively through the monolith only after the server re-computes the preview against the locked authoritative head revision
+- pending agent plans can now be accepted as the whole bundle or as a command-scoped subset from the right rail, and partial acceptance re-stages the unapplied remainder as a fresh preview bundle on the new authoritative head revision
 - risk-based approval modes now exist: low-risk selection formatting can auto-apply after preview, medium-risk bundles require preview, and high-risk bundles require explicit approval
 - stale or mismatched local previews now fail as explicit preview contract violations instead of silently applying, and persisted execution records store the authoritative server-verified preview summary rather than trusting client-posted diff metadata
-- applied runs are now persisted as replayable plan/preview/apply records with authoritative revisions, approval mode, applied-by metadata, and authoritative preview effects, and can be replayed from the assistant rail as fresh preview bundles
+- applied runs are now persisted as replayable plan/preview/apply records with authoritative revisions, approval mode, accepted scope, applied-by metadata, and authoritative preview effects, and can be replayed from the assistant rail as fresh preview bundles
 - the right rail now exposes those local spreadsheet skills directly as quick actions instead of hiding the tool surface behind free-form prompting
 
 **User-visible outcomes**
@@ -1198,7 +1199,7 @@ Current state:
 
 - this split is mostly done for the mounted workbook shell
 - the agent rail now exists as `use-workbook-agent-pane.tsx` plus `WorkbookAgentPanel.tsx`
-- the remaining AI work is preview/apply execution discipline, not “add a chat box”
+- the remaining AI work is domain capability depth and workflow polish, not preview/apply execution discipline or “add a chat box”
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/runtime-session.ts`
 
