@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
+import type { WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import { buildWorkbookSourceProjectionFromEngine } from "../zero/projection.js";
 import type { ZeroSyncService } from "../zero/service.js";
 import type { WorkbookRuntime } from "../workbook-runtime/runtime-manager.js";
@@ -18,7 +19,6 @@ async function createEngine(): Promise<SpreadsheetEngine> {
 }
 
 function createZeroSyncHarness(engine: SpreadsheetEngine) {
-  const applyServerMutator = vi.fn(async () => undefined);
   const zeroSyncService: ZeroSyncService = {
     enabled: true,
     async initialize() {},
@@ -46,14 +46,47 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
       };
       return await task(runtime);
     },
-    applyServerMutator,
+    async applyServerMutator() {
+      throw new Error("not used");
+    },
+    async applyAgentCommandBundle() {
+      throw new Error("not used");
+    },
+    async listWorkbookAgentRuns() {
+      return [];
+    },
+    async appendWorkbookAgentRun() {
+      throw new Error("not used");
+    },
+    async getWorkbookHeadRevision() {
+      return 1;
+    },
     async loadAuthoritativeEvents() {
       throw new Error("not used");
     },
   };
+  return { zeroSyncService };
+}
+
+function createBundle(
+  command: WorkbookAgentCommandBundle["commands"][number],
+): WorkbookAgentCommandBundle {
   return {
-    zeroSyncService,
-    applyServerMutator,
+    id: "bundle-1",
+    documentId: "doc-1",
+    threadId: "thr-1",
+    turnId: "turn-1",
+    goalText: "Update cells",
+    summary: "Stage workbook changes",
+    scope: "selection",
+    riskClass: "low",
+    approvalMode: "auto",
+    baseRevision: 1,
+    createdAtUnixMs: 1,
+    context: null,
+    commands: [command],
+    affectedRanges: [],
+    estimatedAffectedCells: 2,
   };
 }
 
@@ -82,6 +115,7 @@ describe("workbook agent tools", () => {
           },
         },
         zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
       },
       {
         threadId: "thr-1",
@@ -108,7 +142,10 @@ describe("workbook agent tools", () => {
 
   it("writes rectangular ranges through renderCommit with normalized formulas", async () => {
     const engine = await createEngine();
-    const { zeroSyncService, applyServerMutator } = createZeroSyncHarness(engine);
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
 
     const response = await handleWorkbookAgentToolCall(
       {
@@ -119,6 +156,7 @@ describe("workbook agent tools", () => {
         },
         uiContext: null,
         zeroSyncService,
+        stageCommand,
       },
       {
         threadId: "thr-1",
@@ -134,28 +172,78 @@ describe("workbook agent tools", () => {
     );
 
     expect(response.success).toBe(true);
-    expect(applyServerMutator).toHaveBeenCalledWith(
-      "workbook.renderCommit",
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "writeRange",
+      sheetName: "Sheet1",
+      startAddress: "C3",
+      values: [[1, { formula: "=SUM(A1:A1)" }]],
+    });
+    expect(response.contentItems).toEqual([
       expect.objectContaining({
-        documentId: "doc-1",
-        ops: [
-          {
-            kind: "setCellValue",
-            sheetName: "Sheet1",
-            address: "C3",
-            value: 1,
-          },
-          {
-            kind: "setCellFormula",
-            sheetName: "Sheet1",
-            address: "D3",
-            formula: "SUM(A1:A1)",
-          },
-        ],
+        type: "inputText",
+        text: expect.stringContaining('"staged": true'),
       }),
-      expect.objectContaining({
-        userID: "alex@example.com",
-      }),
+    ]);
+    expect(
+      response.contentItems[0] && "text" in response.contentItems[0]
+        ? response.contentItems[0].text
+        : "",
+    ).toContain('"bundleId": "bundle-1"');
+  });
+
+  it("stages format commands with normalized number format presets", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
     );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-3",
+        tool: "bilig.format_range",
+        arguments: {
+          range: {
+            sheetName: "Sheet1",
+            startAddress: "A1",
+            endAddress: "A2",
+          },
+          numberFormat: {
+            kind: "currency",
+            currency: "USD",
+          },
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "formatRange",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A2",
+      },
+      numberFormat: {
+        kind: "currency",
+        currency: "USD",
+        decimals: 2,
+        useGrouping: true,
+        negativeStyle: "minus",
+        zeroStyle: "zero",
+      },
+    });
   });
 });

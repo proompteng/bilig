@@ -98,6 +98,7 @@ function WorkerWorkbookAppInner({
               onFillRange={app.fillSelectionRange}
               onMoveRange={app.moveSelectionRange}
               onPaste={app.pasteIntoSelection}
+              previewRanges={app.previewRanges}
               onToggleBooleanCell={app.toggleBooleanCell}
               onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
               onSelectionLabelChange={app.setSelectionLabel}

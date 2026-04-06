@@ -1,6 +1,14 @@
 import { formatAddress, parseCellAddress } from "@bilig/formula";
-import { formatErrorCode, ValueTag, type CellRangeRef, type LiteralInput } from "@bilig/protocol";
-import type { EngineOp } from "@bilig/workbook-domain";
+import {
+  formatErrorCode,
+  ValueTag,
+  type CellRangeRef,
+  type CellNumberFormatInput,
+  type CellNumberFormatPreset,
+  type CellStylePatch,
+  normalizeCellNumberFormatPreset,
+} from "@bilig/protocol";
+import type { WorkbookAgentCommand, WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import {
   clearRangeArgsSchema,
   rangeMutationArgsSchema,
@@ -69,6 +77,11 @@ const formatRangeToolArgsSchema = z
     message: "patch or numberFormat is required",
   });
 
+type FormatRangePatchInput = NonNullable<z.infer<typeof setRangeStyleArgsSchema.shape.patch>>;
+type FormatRangeNumberFormatInput = NonNullable<
+  z.infer<typeof setRangeNumberFormatArgsSchema.shape.format>
+>;
+
 function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
   return {
     success,
@@ -87,6 +100,124 @@ function stringifyJson(value: unknown): string {
 
 function normalizeFormula(formula: string): string {
   return formula.startsWith("=") ? formula.slice(1) : formula;
+}
+
+function normalizeStylePatch(patch: FormatRangePatchInput): CellStylePatch {
+  const normalized: CellStylePatch = {};
+  if (patch.fill === null) {
+    normalized.fill = null;
+  } else if (patch.fill !== undefined) {
+    const fill: NonNullable<CellStylePatch["fill"]> = {};
+    if (patch.fill.backgroundColor !== undefined) {
+      fill.backgroundColor = patch.fill.backgroundColor;
+    }
+    normalized.fill = fill;
+  }
+  if (patch.font === null) {
+    normalized.font = null;
+  } else if (patch.font !== undefined) {
+    const font: NonNullable<CellStylePatch["font"]> = {};
+    if (patch.font.family !== undefined) {
+      font.family = patch.font.family;
+    }
+    if (patch.font.size !== undefined) {
+      font.size = patch.font.size;
+    }
+    if (patch.font.bold !== undefined) {
+      font.bold = patch.font.bold;
+    }
+    if (patch.font.italic !== undefined) {
+      font.italic = patch.font.italic;
+    }
+    if (patch.font.underline !== undefined) {
+      font.underline = patch.font.underline;
+    }
+    if (patch.font.color !== undefined) {
+      font.color = patch.font.color;
+    }
+    normalized.font = font;
+  }
+  if (patch.alignment === null) {
+    normalized.alignment = null;
+  } else if (patch.alignment !== undefined) {
+    const alignment: NonNullable<CellStylePatch["alignment"]> = {};
+    if (patch.alignment.horizontal !== undefined) {
+      alignment.horizontal = patch.alignment.horizontal;
+    }
+    if (patch.alignment.vertical !== undefined) {
+      alignment.vertical = patch.alignment.vertical;
+    }
+    if (patch.alignment.wrap !== undefined) {
+      alignment.wrap = patch.alignment.wrap;
+    }
+    if (patch.alignment.indent !== undefined) {
+      alignment.indent = patch.alignment.indent;
+    }
+    normalized.alignment = alignment;
+  }
+  if (patch.borders === null) {
+    normalized.borders = null;
+  } else if (patch.borders !== undefined) {
+    const borders: NonNullable<CellStylePatch["borders"]> = {};
+    const sides = [
+      ["top", patch.borders.top],
+      ["right", patch.borders.right],
+      ["bottom", patch.borders.bottom],
+      ["left", patch.borders.left],
+    ] as const;
+    for (const [sideName, sideValue] of sides) {
+      if (sideValue === undefined) {
+        continue;
+      }
+      if (sideValue === null) {
+        borders[sideName] = null;
+        continue;
+      }
+      const side: NonNullable<NonNullable<CellStylePatch["borders"]>[typeof sideName]> = {};
+      if (sideValue.style !== undefined) {
+        side.style = sideValue.style;
+      }
+      if (sideValue.weight !== undefined) {
+        side.weight = sideValue.weight;
+      }
+      if (sideValue.color !== undefined) {
+        side.color = sideValue.color;
+      }
+      borders[sideName] = side;
+    }
+    normalized.borders = borders;
+  }
+  return normalized;
+}
+
+function normalizeNumberFormatInput(input: FormatRangeNumberFormatInput): CellNumberFormatInput {
+  if (typeof input === "string") {
+    return input;
+  }
+
+  const preset: CellNumberFormatPreset = {
+    kind: input.kind,
+  };
+  if (typeof input.currency === "string") {
+    preset.currency = input.currency;
+  }
+  if (typeof input.decimals === "number") {
+    preset.decimals = input.decimals;
+  }
+  if (typeof input.useGrouping === "boolean") {
+    preset.useGrouping = input.useGrouping;
+  }
+  if (input.negativeStyle === "minus" || input.negativeStyle === "parentheses") {
+    preset.negativeStyle = input.negativeStyle;
+  }
+  if (input.zeroStyle === "zero" || input.zeroStyle === "dash") {
+    preset.zeroStyle = input.zeroStyle;
+  }
+  if (input.dateStyle === "short" || input.dateStyle === "iso") {
+    preset.dateStyle = input.dateStyle;
+  }
+
+  return normalizeCellNumberFormatPreset(preset);
 }
 
 function normalizeRange(range: CellRangeRef): CellRangeRef & {
@@ -173,6 +304,7 @@ export interface WorkbookAgentToolContext {
   readonly session: SessionIdentity;
   readonly uiContext: WorkbookAgentUiContext | null;
   readonly zeroSyncService: ZeroSyncService;
+  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle>;
 }
 
 function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
@@ -433,14 +565,22 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
 
 export const workbookAgentDynamicToolSpecs = createDynamicToolSpecs();
 
-async function applyMutator(
+async function stageCommandResult(
   context: WorkbookAgentToolContext,
-  name: string,
-  args: unknown,
-  summary: Record<string, JsonValue>,
+  command: WorkbookAgentCommand,
 ): Promise<CodexDynamicToolCallResult> {
-  await context.zeroSyncService.applyServerMutator(name, args, context.session);
-  return textToolResult(stringifyJson(summary));
+  const bundle = await context.stageCommand(command);
+  return textToolResult(
+    stringifyJson({
+      staged: true,
+      bundleId: bundle.id,
+      summary: bundle.summary,
+      scope: bundle.scope,
+      riskClass: bundle.riskClass,
+      estimatedAffectedCells: bundle.estimatedAffectedCells,
+      affectedRanges: bundle.affectedRanges,
+    }),
+  );
 }
 
 export async function handleWorkbookAgentToolCall(
@@ -532,50 +672,10 @@ export async function handleWorkbookAgentToolCall(
       case "bilig.write_range": {
         const args = writeRangeToolArgsSchema.parse(request.arguments);
         const start = parseCellAddress(args.startAddress, args.sheetName);
-        let maxWidth = 0;
-        const ops: EngineOp[] = [];
-        args.values.forEach((rowValues, rowOffset) => {
-          maxWidth = Math.max(maxWidth, rowValues.length);
-          rowValues.forEach((cellInput, colOffset) => {
-            const address = formatAddress(start.row + rowOffset, start.col + colOffset);
-            if (cellInput === null) {
-              ops.push({
-                kind: "clearCell",
-                sheetName: args.sheetName,
-                address,
-              });
-              return;
-            }
-            if (
-              typeof cellInput === "string" ||
-              typeof cellInput === "number" ||
-              typeof cellInput === "boolean"
-            ) {
-              ops.push({
-                kind: "setCellValue",
-                sheetName: args.sheetName,
-                address,
-                value: cellInput satisfies LiteralInput,
-              });
-              return;
-            }
-            if ("formula" in cellInput) {
-              ops.push({
-                kind: "setCellFormula",
-                sheetName: args.sheetName,
-                address,
-                formula: normalizeFormula(cellInput.formula),
-              });
-              return;
-            }
-            ops.push({
-              kind: "setCellValue",
-              sheetName: args.sheetName,
-              address,
-              value: cellInput.value,
-            });
-          });
-        });
+        const maxWidth = args.values.reduce(
+          (width, rowValues) => Math.max(width, rowValues.length),
+          0,
+        );
         const endAddress = formatAddress(
           start.row + args.values.length - 1,
           start.col + maxWidth - 1,
@@ -585,177 +685,99 @@ export async function handleWorkbookAgentToolCall(
           startAddress: args.startAddress,
           endAddress,
         });
-        return await applyMutator(
-          context,
-          "workbook.renderCommit",
-          {
-            documentId: context.documentId,
-            ops,
-          },
-          {
-            kind: "writeRange",
-            sheetName: args.sheetName,
-            startAddress: args.startAddress,
-            endAddress,
-            opCount: ops.length,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "writeRange",
+          sheetName: args.sheetName,
+          startAddress: args.startAddress,
+          values: args.values.map((rowValues) =>
+            rowValues.map((cellInput) => {
+              if (
+                cellInput === null ||
+                typeof cellInput === "string" ||
+                typeof cellInput === "number" ||
+                typeof cellInput === "boolean"
+              ) {
+                return cellInput;
+              }
+              if ("formula" in cellInput) {
+                return {
+                  formula: `=${normalizeFormula(cellInput.formula)}`,
+                };
+              }
+              return {
+                value: cellInput.value,
+              };
+            }),
+          ),
+        });
       }
       case "bilig.clear_range": {
         const args = clearRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.range);
-        return await applyMutator(
-          context,
-          "workbook.clearRange",
-          {
-            documentId: context.documentId,
-            range: args.range,
-          },
-          {
-            kind: "clearRange",
-            ...args.range,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "clearRange",
+          range: args.range,
+        });
       }
       case "bilig.format_range": {
         const args = formatRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.range);
+        const formatCommand: Extract<WorkbookAgentCommand, { kind: "formatRange" }> = {
+          kind: "formatRange",
+          range: args.range,
+        };
         if (args.patch !== undefined) {
-          await context.zeroSyncService.applyServerMutator(
-            "workbook.setRangeStyle",
-            {
-              documentId: context.documentId,
-              range: args.range,
-              patch: args.patch,
-            },
-            context.session,
-          );
+          formatCommand.patch = normalizeStylePatch(args.patch);
         }
         if (args.numberFormat !== undefined) {
-          await context.zeroSyncService.applyServerMutator(
-            "workbook.setRangeNumberFormat",
-            {
-              documentId: context.documentId,
-              range: args.range,
-              format: args.numberFormat,
-            },
-            context.session,
-          );
+          formatCommand.numberFormat = normalizeNumberFormatInput(args.numberFormat);
         }
-        return textToolResult(
-          stringifyJson({
-            kind: "formatRange",
-            range: args.range,
-            appliedStylePatch: args.patch ?? null,
-            appliedNumberFormat: args.numberFormat ?? null,
-          }),
-        );
+        return await stageCommandResult(context, formatCommand);
       }
       case "bilig.fill_range": {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.source);
         ensureRangeLimit(args.target);
-        return await applyMutator(
-          context,
-          "workbook.fillRange",
-          {
-            documentId: context.documentId,
-            source: args.source,
-            target: args.target,
-          },
-          {
-            kind: "fillRange",
-            source: args.source,
-            target: args.target,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "fillRange",
+          source: args.source,
+          target: args.target,
+        });
       }
       case "bilig.copy_range": {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.source);
         ensureRangeLimit(args.target);
-        return await applyMutator(
-          context,
-          "workbook.copyRange",
-          {
-            documentId: context.documentId,
-            source: args.source,
-            target: args.target,
-          },
-          {
-            kind: "copyRange",
-            source: args.source,
-            target: args.target,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "copyRange",
+          source: args.source,
+          target: args.target,
+        });
       }
       case "bilig.move_range": {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.source);
         ensureRangeLimit(args.target);
-        return await applyMutator(
-          context,
-          "workbook.moveRange",
-          {
-            documentId: context.documentId,
-            source: args.source,
-            target: args.target,
-          },
-          {
-            kind: "moveRange",
-            source: args.source,
-            target: args.target,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "moveRange",
+          source: args.source,
+          target: args.target,
+        });
       }
       case "bilig.create_sheet": {
         const args = sheetMutationToolArgsSchema.parse(request.arguments);
-        const order = await context.zeroSyncService.inspectWorkbook(
-          context.documentId,
-          (runtime) => {
-            return runtime.engine.exportSnapshot().sheets.length;
-          },
-        );
-        return await applyMutator(
-          context,
-          "workbook.renderCommit",
-          {
-            documentId: context.documentId,
-            ops: [
-              {
-                kind: "upsertSheet",
-                name: args.name,
-                order,
-              } satisfies EngineOp,
-            ],
-          },
-          {
-            kind: "createSheet",
-            name: args.name,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "createSheet",
+          name: args.name,
+        });
       }
       case "bilig.rename_sheet": {
         const args = renameSheetToolArgsSchema.parse(request.arguments);
-        return await applyMutator(
-          context,
-          "workbook.renderCommit",
-          {
-            documentId: context.documentId,
-            ops: [
-              {
-                kind: "renameSheet",
-                oldName: args.currentName,
-                newName: args.nextName,
-              } satisfies EngineOp,
-            ],
-          },
-          {
-            kind: "renameSheet",
-            currentName: args.currentName,
-            nextName: args.nextName,
-          },
-        );
+        return await stageCommandResult(context, {
+          kind: "renameSheet",
+          currentName: args.currentName,
+          nextName: args.nextName,
+        });
       }
       default:
         return textToolResult(`Unknown bilig tool: ${request.tool}`, false);

@@ -1,4 +1,5 @@
 import { SpreadsheetEngine } from "@bilig/core";
+import { applyWorkbookAgentCommandBundle } from "@bilig/agent-api";
 import type { EngineOp } from "@bilig/workbook-domain";
 import type {
   CellBorderSidePatch,
@@ -12,6 +13,7 @@ import type {
 } from "@bilig/protocol";
 import {
   applyBatchArgsSchema,
+  applyAgentCommandBundleArgsSchema,
   clearRangeArgsSchema,
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
@@ -339,6 +341,27 @@ export async function handleServerMutator(
           (isRecord(parsed.batch) && typeof parsed.batch["replicaId"] === "string"
             ? parsed.batch["replicaId"]
             : "system"),
+      );
+      return;
+    }
+
+    case "workbook.applyAgentCommandBundle": {
+      const parsed = applyAgentCommandBundleArgsSchema.parse(args);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "applyAgentCommandBundle",
+          bundle: parsed.bundle,
+        },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            applyWorkbookAgentCommandBundle(draft, parsed.bundle);
+          });
+        },
+        parsed.clientMutationId,
+        session,
       );
       return;
     }

@@ -9,6 +9,13 @@ export type SheetGridViewportSubscription = (
   listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
 ) => () => void;
 
+export interface WorkbookGridPreviewRange {
+  sheetName: string;
+  startAddress: string;
+  endAddress: string;
+  role: "target" | "source";
+}
+
 export interface WorkbookGridSurfaceProps {
   engine: GridEngineLike;
   sheetName: string;
@@ -62,6 +69,7 @@ export interface WorkbookGridSurfaceProps {
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
+  previewRanges?: readonly WorkbookGridPreviewRange[] | undefined;
   restoreViewportTarget?:
     | {
         readonly token: number;

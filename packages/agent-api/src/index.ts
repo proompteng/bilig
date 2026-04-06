@@ -284,3 +284,5 @@ export function decodeStdioMessages(buffer: Uint8Array): {
     remainder: buffer.subarray(offset),
   };
 }
+
+export * from "./workbook-agent-bundles.js";

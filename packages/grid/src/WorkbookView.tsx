@@ -7,6 +7,7 @@ import {
   WorkbookGridSurface,
   type EditMovement,
   type EditSelectionBehavior,
+  type WorkbookGridPreviewRange,
   type SheetGridViewportSubscription,
 } from "./WorkbookGridSurface.js";
 
@@ -74,6 +75,7 @@ interface WorkbookViewProps {
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
+  previewRanges?: readonly WorkbookGridPreviewRange[] | undefined;
   restoreViewportTarget?:
     | {
         readonly token: number;
@@ -119,6 +121,7 @@ export function WorkbookView({
   onColumnWidthChange,
   onAutofitColumn,
   onVisibleViewportChange,
+  previewRanges,
   restoreViewportTarget,
 }: WorkbookViewProps) {
   return (
@@ -170,6 +173,7 @@ export function WorkbookView({
             onColumnWidthChange={onColumnWidthChange}
             onAutofitColumn={onAutofitColumn}
             onVisibleViewportChange={onVisibleViewportChange}
+            previewRanges={previewRanges}
             restoreViewportTarget={restoreViewportTarget}
             resolvedValue={resolvedValue}
             selectedAddr={selectedAddr}

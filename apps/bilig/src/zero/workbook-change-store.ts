@@ -157,6 +157,7 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
   const eventKind = row.eventKind;
   if (
     eventKind !== "applyBatch" &&
+    eventKind !== "applyAgentCommandBundle" &&
     eventKind !== "setCellValue" &&
     eventKind !== "setCellFormula" &&
     eventKind !== "clearCell" &&
@@ -352,6 +353,27 @@ export function buildWorkbookChangeDescriptor(
   payload: WorkbookEventPayload,
 ): WorkbookChangeDescriptor {
   switch (payload.kind) {
+    case "applyAgentCommandBundle": {
+      const firstTargetRange = payload.bundle.affectedRanges.find(
+        (range) => range.role === "target",
+      );
+      return {
+        eventKind: payload.kind,
+        summary: payload.bundle.summary,
+        sheetName:
+          firstTargetRange?.sheetName ?? payload.bundle.context?.selection.sheetName ?? null,
+        anchorAddress:
+          firstTargetRange?.startAddress ?? payload.bundle.context?.selection.address ?? null,
+        range:
+          firstTargetRange === undefined
+            ? null
+            : {
+                sheetName: firstTargetRange.sheetName,
+                startAddress: firstTargetRange.startAddress,
+                endAddress: firstTargetRange.endAddress,
+              },
+      };
+    }
     case "setCellValue":
       return {
         eventKind: payload.kind,

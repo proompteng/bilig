@@ -3,287 +3,43 @@ import type {
   WorkbookAgentStreamEvent,
   WorkbookAgentTimelineEntry,
 } from "@bilig/contracts";
-import { z } from "zod";
+import type {
+  WorkbookAgentAppliedBy,
+  WorkbookAgentCommandBundle,
+  WorkbookAgentExecutionRecord,
+} from "@bilig/agent-api";
+import { isWorkbookAgentPreviewSummary } from "@bilig/agent-api";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
+import {
+  appendWorkbookAgentBundleCommand,
+  buildWorkbookAgentExecutionRecord,
+  createWorkbookAgentBundle,
+  describeWorkbookAgentBundle,
+} from "./workbook-agent-bundle-model.js";
 import {
   CodexAppServerClient,
   type CodexAppServerTransport,
   type CodexAppServerClientOptions,
 } from "./codex-app-server-client.js";
-import type {
-  CodexServerNotification,
-  CodexThread,
-  CodexThreadItem,
-} from "./codex-app-server-types.js";
+import type { CodexServerNotification } from "./codex-app-server-types.js";
 import {
   handleWorkbookAgentToolCall,
   workbookAgentDynamicToolSpecs,
 } from "./workbook-agent-tools.js";
+import {
+  buildEntriesFromThread,
+  cloneSnapshot,
+  createSessionBodySchema,
+  createSystemEntry,
+  createWorkbookAgentBaseInstructions,
+  createWorkbookAgentDeveloperInstructions,
+  mapThreadItemToEntry,
+  startTurnBodySchema,
+  updateContextBodySchema,
+} from "./workbook-agent-session-model.js";
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
-
-const createSessionBodySchema = z.object({
-  sessionId: z.string().min(1).optional(),
-  threadId: z.string().min(1).optional(),
-  context: z
-    .object({
-      selection: z.object({
-        sheetName: z.string().min(1),
-        address: z.string().min(1),
-      }),
-      viewport: z.object({
-        rowStart: z.number().int().nonnegative(),
-        rowEnd: z.number().int().nonnegative(),
-        colStart: z.number().int().nonnegative(),
-        colEnd: z.number().int().nonnegative(),
-      }),
-    })
-    .optional(),
-});
-
-const updateContextBodySchema = z.object({
-  context: z.object({
-    selection: z.object({
-      sheetName: z.string().min(1),
-      address: z.string().min(1),
-    }),
-    viewport: z.object({
-      rowStart: z.number().int().nonnegative(),
-      rowEnd: z.number().int().nonnegative(),
-      colStart: z.number().int().nonnegative(),
-      colEnd: z.number().int().nonnegative(),
-    }),
-  }),
-});
-
-const startTurnBodySchema = z.object({
-  prompt: z.string().trim().min(1),
-  context: z
-    .object({
-      selection: z.object({
-        sheetName: z.string().min(1),
-        address: z.string().min(1),
-      }),
-      viewport: z.object({
-        rowStart: z.number().int().nonnegative(),
-        rowEnd: z.number().int().nonnegative(),
-        colStart: z.number().int().nonnegative(),
-        colEnd: z.number().int().nonnegative(),
-      }),
-    })
-    .optional(),
-});
-
-function createWorkbookAgentBaseInstructions(): string {
-  return [
-    "You are the bilig workbook assistant embedded inside a spreadsheet product.",
-    "Stay narrowly focused on inspecting and editing the active workbook.",
-    "Use the provided bilig.* dynamic tools for workbook work.",
-    "Do not use filesystem, shell, web, connector, or unrelated tools.",
-  ].join(" ");
-}
-
-function createWorkbookAgentDeveloperInstructions(): string {
-  return [
-    "Before changing cells you have not inspected, read the relevant workbook range first.",
-    "When the user refers to the current cell, selection, or visible area, call bilig.get_context.",
-    "For clear workbook edit requests, make the edit directly and then summarize what changed.",
-    "Prefer one structured workbook tool call over many tiny calls when the edit is rectangular or atomic.",
-    "If the requested action is outside the available bilig.* tools, say exactly which workbook capability is missing instead of improvising.",
-  ].join(" ");
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
-
-function formatToolContentItems(
-  contentItems:
-    | Array<
-        | {
-            type: "inputText";
-            text: string;
-          }
-        | {
-            type: "inputImage";
-            imageUrl: string;
-          }
-      >
-    | null
-    | undefined,
-): string | null {
-  if (!contentItems || contentItems.length === 0) {
-    return null;
-  }
-  return contentItems
-    .map((item) => (item.type === "inputText" ? item.text : `[image] ${item.imageUrl}`))
-    .join("\n");
-}
-
-function textFromUserContent(
-  content: readonly {
-    type: "text";
-    text: string;
-  }[],
-): string {
-  return content.map((item) => item.text).join("\n");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isUserTextContentItem(value: unknown): value is { type: "text"; text: string } {
-  return isRecord(value) && value["type"] === "text" && typeof value["text"] === "string";
-}
-
-function isUserMessageItem(
-  item: CodexThreadItem,
-): item is Extract<CodexThreadItem, { type: "userMessage" }> {
-  return (
-    item.type === "userMessage" &&
-    Array.isArray(item.content) &&
-    item.content.every((entry) => isUserTextContentItem(entry))
-  );
-}
-
-function isAgentMessageItem(
-  item: CodexThreadItem,
-): item is Extract<CodexThreadItem, { type: "agentMessage" }> {
-  return (
-    item.type === "agentMessage" &&
-    typeof item.text === "string" &&
-    (item.phase === null || typeof item.phase === "string")
-  );
-}
-
-function isPlanItem(item: CodexThreadItem): item is Extract<CodexThreadItem, { type: "plan" }> {
-  return item.type === "plan" && typeof item.text === "string";
-}
-
-function isToolContentItem(item: unknown): item is
-  | {
-      type: "inputText";
-      text: string;
-    }
-  | {
-      type: "inputImage";
-      imageUrl: string;
-    } {
-  return (
-    typeof item === "object" &&
-    item !== null &&
-    (("type" in item &&
-      item.type === "inputText" &&
-      "text" in item &&
-      typeof item.text === "string") ||
-      ("type" in item &&
-        item.type === "inputImage" &&
-        "imageUrl" in item &&
-        typeof item.imageUrl === "string"))
-  );
-}
-
-function isDynamicToolCallItem(
-  item: CodexThreadItem,
-): item is Extract<CodexThreadItem, { type: "dynamicToolCall" }> {
-  return (
-    item.type === "dynamicToolCall" &&
-    typeof item.tool === "string" &&
-    (item.status === "inProgress" || item.status === "completed" || item.status === "failed") &&
-    (item.contentItems === null ||
-      (Array.isArray(item.contentItems) &&
-        item.contentItems.every((entry) => isToolContentItem(entry)))) &&
-    (item.success === null || typeof item.success === "boolean")
-  );
-}
-
-function createSystemEntry(
-  id: string,
-  turnId: string | null,
-  text: string,
-): WorkbookAgentTimelineEntry {
-  return {
-    id,
-    kind: "system",
-    turnId,
-    text,
-    phase: null,
-    toolName: null,
-    toolStatus: null,
-    argumentsText: null,
-    outputText: null,
-    success: null,
-  };
-}
-
-function mapThreadItemToEntry(
-  item: CodexThreadItem,
-  turnId: string | null,
-): WorkbookAgentTimelineEntry {
-  if (isUserMessageItem(item)) {
-    return {
-      id: item.id,
-      kind: "user",
-      turnId,
-      text: textFromUserContent(item.content),
-      phase: null,
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-    };
-  }
-
-  if (isAgentMessageItem(item)) {
-    return {
-      id: item.id,
-      kind: "assistant",
-      turnId,
-      text: item.text,
-      phase: item.phase,
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-    };
-  }
-
-  if (isPlanItem(item)) {
-    return {
-      id: item.id,
-      kind: "plan",
-      turnId,
-      text: item.text,
-      phase: null,
-      toolName: null,
-      toolStatus: null,
-      argumentsText: null,
-      outputText: null,
-      success: null,
-    };
-  }
-
-  if (isDynamicToolCallItem(item)) {
-    return {
-      id: item.id,
-      kind: "tool",
-      turnId,
-      text: null,
-      phase: null,
-      toolName: item.tool,
-      toolStatus: item.status,
-      argumentsText: stringifyJson(item.arguments),
-      outputText: formatToolContentItems(item.contentItems),
-      success: item.success,
-    };
-  }
-
-  return createSystemEntry(item.id, turnId, `Codex emitted ${item.type}.`);
-}
 
 function upsertEntry(
   entries: readonly WorkbookAgentTimelineEntry[],
@@ -306,30 +62,15 @@ function removeEntry(
 }
 
 type MutableWorkbookAgentSessionSnapshot = {
-  -readonly [Key in keyof WorkbookAgentSessionSnapshot]: Key extends "entries"
-    ? WorkbookAgentTimelineEntry[]
-    : WorkbookAgentSessionSnapshot[Key];
+  -readonly [Key in Exclude<
+    keyof WorkbookAgentSessionSnapshot,
+    "entries" | "pendingBundle" | "executionRecords"
+  >]: WorkbookAgentSessionSnapshot[Key];
+} & {
+  entries: WorkbookAgentTimelineEntry[];
+  pendingBundle: WorkbookAgentCommandBundle | null;
+  executionRecords: WorkbookAgentExecutionRecord[];
 };
-
-function cloneSnapshot(
-  snapshot: MutableWorkbookAgentSessionSnapshot,
-): WorkbookAgentSessionSnapshot {
-  return {
-    ...snapshot,
-    entries: snapshot.entries.map((entry) => ({ ...entry })),
-    ...(snapshot.context ? { context: structuredClone(snapshot.context) } : { context: null }),
-  };
-}
-
-function buildEntriesFromThread(thread: CodexThread): WorkbookAgentTimelineEntry[] {
-  const entries: WorkbookAgentTimelineEntry[] = [];
-  for (const turn of thread.turns) {
-    for (const item of turn.items) {
-      entries.push(mapThreadItemToEntry(item, turn.id));
-    }
-  }
-  return entries;
-}
 
 interface WorkbookAgentSessionState {
   readonly sessionId: string;
@@ -338,6 +79,7 @@ interface WorkbookAgentSessionState {
   threadId: string;
   snapshot: MutableWorkbookAgentSessionSnapshot;
   optimisticUserEntryIdByTurn: Map<string, string>;
+  promptByTurn: Map<string, string>;
   lastAccessedAt: number;
 }
 
@@ -365,6 +107,26 @@ export interface WorkbookAgentService {
     sessionId: string;
     session: SessionIdentity;
   }): Promise<WorkbookAgentSessionSnapshot>;
+  applyPendingBundle(input: {
+    documentId: string;
+    sessionId: string;
+    bundleId: string;
+    session: SessionIdentity;
+    appliedBy: WorkbookAgentAppliedBy;
+    preview: unknown;
+  }): Promise<WorkbookAgentSessionSnapshot>;
+  dismissPendingBundle(input: {
+    documentId: string;
+    sessionId: string;
+    bundleId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentSessionSnapshot>;
+  replayExecutionRecord(input: {
+    documentId: string;
+    sessionId: string;
+    recordId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentSessionSnapshot>;
   getSnapshot(input: {
     documentId: string;
     sessionId: string;
@@ -390,6 +152,18 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   async interruptTurn(): Promise<never> {
+    throw new Error("Workbook agent service is not configured");
+  }
+
+  async applyPendingBundle(): Promise<never> {
+    throw new Error("Workbook agent service is not configured");
+  }
+
+  async dismissPendingBundle(): Promise<never> {
+    throw new Error("Workbook agent service is not configured");
+  }
+
+  async replayExecutionRecord(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
@@ -456,6 +230,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
 
     const codexClient = await this.getCodexClient();
+    const executionRecords = await this.zeroSyncService.listWorkbookAgentRuns(
+      input.documentId,
+      input.session.userID,
+    );
     const thread =
       parsed.threadId === undefined
         ? await codexClient.threadStart({
@@ -485,6 +263,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       lastError: thread.turns.findLast((turn) => turn.error?.message)?.error?.message ?? null,
       context: parsed.context ?? null,
       entries: buildEntriesFromThread(thread),
+      pendingBundle: null,
+      executionRecords,
     };
     const sessionState: WorkbookAgentSessionState = {
       sessionId,
@@ -493,6 +273,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       threadId: thread.id,
       snapshot,
       optimisticUserEntryIdByTurn: new Map(),
+      promptByTurn: new Map(),
       lastAccessedAt: this.now(),
     };
     this.sessions.set(sessionId, sessionState);
@@ -553,6 +334,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       success: null,
     });
     sessionState.optimisticUserEntryIdByTurn.set(turn.id, optimisticEntryId);
+    sessionState.promptByTurn.set(turn.id, parsed.prompt);
     sessionState.snapshot.activeTurnId = turn.id;
     sessionState.snapshot.status = "inProgress";
     sessionState.snapshot.lastError = null;
@@ -573,6 +355,145 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     const codexClient = await this.getCodexClient();
     await codexClient.turnInterrupt(sessionState.threadId);
+    return cloneSnapshot(sessionState.snapshot);
+  }
+
+  async applyPendingBundle(input: {
+    documentId: string;
+    sessionId: string;
+    bundleId: string;
+    session: SessionIdentity;
+    appliedBy: WorkbookAgentAppliedBy;
+    preview: unknown;
+  }): Promise<WorkbookAgentSessionSnapshot> {
+    const sessionState = this.getOwnedSession(
+      input.documentId,
+      input.sessionId,
+      input.session.userID,
+    );
+    const pendingBundle = sessionState.snapshot.pendingBundle;
+    if (!pendingBundle || pendingBundle.id !== input.bundleId) {
+      throw new Error("Workbook agent preview bundle not found");
+    }
+    if (!isWorkbookAgentPreviewSummary(input.preview)) {
+      throw new Error("Workbook agent preview summary is required before apply");
+    }
+    if (input.appliedBy === "auto" && pendingBundle.approvalMode !== "auto") {
+      throw new Error("Workbook agent bundle requires manual approval");
+    }
+    const result = await this.zeroSyncService.applyAgentCommandBundle(
+      input.documentId,
+      pendingBundle,
+      input.session,
+    );
+    const executionRecord = buildWorkbookAgentExecutionRecord({
+      bundle: pendingBundle,
+      actorUserId: input.session.userID,
+      planText: this.collectPlanTextForTurn(sessionState, pendingBundle.turnId),
+      preview: input.preview,
+      appliedRevision: result.revision,
+      appliedBy: input.appliedBy,
+      now: this.now(),
+    });
+    await this.zeroSyncService.appendWorkbookAgentRun(executionRecord);
+    sessionState.snapshot.executionRecords = [
+      executionRecord,
+      ...sessionState.snapshot.executionRecords.filter(
+        (record) => record.id !== executionRecord.id,
+      ),
+    ];
+    sessionState.snapshot.pendingBundle = null;
+    sessionState.snapshot.entries = upsertEntry(
+      sessionState.snapshot.entries,
+      createSystemEntry(
+        `system-apply:${executionRecord.id}`,
+        pendingBundle.turnId,
+        `${input.appliedBy === "auto" ? "Auto-applied" : "Applied"} preview bundle at revision r${String(result.revision)}: ${pendingBundle.summary}`,
+      ),
+    );
+    this.touch(sessionState);
+    this.emitSnapshot(sessionState.sessionId);
+    return cloneSnapshot(sessionState.snapshot);
+  }
+
+  async dismissPendingBundle(input: {
+    documentId: string;
+    sessionId: string;
+    bundleId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentSessionSnapshot> {
+    const sessionState = this.getOwnedSession(
+      input.documentId,
+      input.sessionId,
+      input.session.userID,
+    );
+    const pendingBundle = sessionState.snapshot.pendingBundle;
+    if (!pendingBundle || pendingBundle.id !== input.bundleId) {
+      throw new Error("Workbook agent preview bundle not found");
+    }
+    sessionState.snapshot.pendingBundle = null;
+    sessionState.snapshot.entries = upsertEntry(
+      sessionState.snapshot.entries,
+      createSystemEntry(
+        `system-dismiss:${pendingBundle.id}:${this.now()}`,
+        pendingBundle.turnId,
+        `Dismissed preview bundle: ${pendingBundle.summary}`,
+      ),
+    );
+    this.touch(sessionState);
+    this.emitSnapshot(sessionState.sessionId);
+    return cloneSnapshot(sessionState.snapshot);
+  }
+
+  async replayExecutionRecord(input: {
+    documentId: string;
+    sessionId: string;
+    recordId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentSessionSnapshot> {
+    const sessionState = this.getOwnedSession(
+      input.documentId,
+      input.sessionId,
+      input.session.userID,
+    );
+    const record = sessionState.snapshot.executionRecords.find(
+      (entry) => entry.id === input.recordId,
+    );
+    if (!record) {
+      throw new Error("Workbook agent execution record not found");
+    }
+    const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(input.documentId);
+    const replayedBundle = createWorkbookAgentBundle({
+      documentId: input.documentId,
+      threadId: sessionState.threadId,
+      turnId: `replay:${record.id}:${String(this.now())}`,
+      goalText: record.goalText,
+      baseRevision,
+      context:
+        sessionState.snapshot.context ??
+        (record.context
+          ? {
+              selection: {
+                sheetName: record.context.selection.sheetName,
+                address: record.context.selection.address,
+              },
+              viewport: { ...record.context.viewport },
+            }
+          : null),
+      commands: record.commands,
+      now: this.now(),
+    });
+    sessionState.snapshot.pendingBundle = replayedBundle;
+    sessionState.snapshot.entries = upsertEntry(
+      sessionState.snapshot.entries,
+      createSystemEntry(
+        `system-replay:${record.id}:${String(this.now())}`,
+        replayedBundle.turnId,
+        `Replayed prior agent plan as preview bundle: ${replayedBundle.summary}`,
+      ),
+    );
+    this.touch(sessionState);
+    this.emitSnapshot(sessionState.sessionId);
     return cloneSnapshot(sessionState.snapshot);
   }
 
@@ -639,6 +560,35 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
               },
               uiContext: sessionState.snapshot.context,
               zeroSyncService: this.zeroSyncService,
+              stageCommand: async (command) => {
+                const baseRevision = await this.zeroSyncService.getWorkbookHeadRevision(
+                  sessionState.documentId,
+                );
+                const bundle = appendWorkbookAgentBundleCommand({
+                  previousBundle: sessionState.snapshot.pendingBundle,
+                  documentId: sessionState.documentId,
+                  threadId: sessionState.threadId,
+                  turnId: request.turnId,
+                  goalText:
+                    sessionState.promptByTurn.get(request.turnId) ??
+                    "Update workbook from assistant request",
+                  baseRevision,
+                  context: sessionState.snapshot.context,
+                  command,
+                  now: this.now(),
+                });
+                sessionState.snapshot.pendingBundle = bundle;
+                sessionState.snapshot.entries = upsertEntry(
+                  sessionState.snapshot.entries,
+                  createSystemEntry(
+                    `system-preview:${bundle.id}`,
+                    request.turnId,
+                    describeWorkbookAgentBundle(bundle),
+                  ),
+                );
+                this.emitSnapshot(sessionState.sessionId);
+                return bundle;
+              },
             },
             request,
           );
@@ -782,6 +732,18 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         });
       }
     }
+  }
+
+  private collectPlanTextForTurn(
+    sessionState: WorkbookAgentSessionState,
+    turnId: string,
+  ): string | null {
+    const planText = sessionState.snapshot.entries
+      .filter((entry) => entry.turnId === turnId && entry.kind === "plan" && entry.text)
+      .map((entry) => entry.text?.trim() ?? "")
+      .filter((text) => text.length > 0)
+      .join("\n\n");
+    return planText.length > 0 ? planText : null;
   }
 
   private getOwnedSession(

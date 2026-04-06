@@ -905,7 +905,7 @@ Implemented.
 Turn AI into a real workbook execution tool.
 
 **Status**
-Partially implemented.
+Implemented.
 
 **Already implemented**
 
@@ -913,6 +913,9 @@ Partially implemented.
 - the agent runtime now lives inside `apps/bilig` and speaks the Codex app-server stdio protocol rather than a custom worksheet-chat transport
 - the monolith now exposes workbook-agent session, turn, interrupt, context, and SSE event routes under `/v2/documents/:documentId/agent/*`
 - the agent already has local semantic workbook tools for read/edit/write work, including workbook summary, range read, range write, clear, format, fill, copy, move, create-sheet, and rename-sheet operations
+- all mutating agent work now stages semantic preview bundles, previews locally in the browser worker, and applies authoritatively through the monolith
+- risk-based approval modes now exist: low-risk selection formatting can auto-apply after preview, medium-risk bundles require preview, and high-risk bundles require explicit approval
+- applied runs are now persisted as replayable plan/preview/apply records with authoritative revisions, approval mode, and applied-by metadata, and can be replayed from the assistant rail as fresh preview bundles
 
 **User-visible outcomes**
 

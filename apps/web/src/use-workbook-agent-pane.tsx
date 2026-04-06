@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  isWorkbookAgentCommandBundle,
+  isWorkbookAgentExecutionRecord,
+  type WorkbookAgentCommandBundle,
+  type WorkbookAgentExecutionRecord,
+  type WorkbookAgentPreviewSummary,
+} from "@bilig/agent-api";
+import {
   WorkbookAgentSessionSnapshotSchema,
   WorkbookAgentStreamEventSchema,
   decodeUnknownSync,
@@ -85,13 +92,19 @@ export function useWorkbookAgentPane(input: {
   readonly documentId: string;
   readonly enabled: boolean;
   readonly getContext: () => WorkbookAgentUiContext;
+  readonly previewBundle: (
+    bundle: WorkbookAgentCommandBundle,
+  ) => Promise<WorkbookAgentPreviewSummary>;
 }) {
-  const { documentId, enabled, getContext } = input;
+  const { documentId, enabled, getContext, previewBundle } = input;
   const [snapshot, setSnapshot] = useState<WorkbookAgentSessionSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
+  const [isApplyingBundle, setIsApplyingBundle] = useState(false);
+  const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
+  const autoApplyBundleIdRef = useRef<string | null>(null);
   const sessionRef = useRef<StoredWorkbookAgentSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const lastContextKeyRef = useRef<string>("");
@@ -101,6 +114,16 @@ export function useWorkbookAgentPane(input: {
   useEffect(() => {
     getContextRef.current = getContext;
   }, [getContext]);
+
+  const pendingBundle = useMemo<WorkbookAgentCommandBundle | null>(() => {
+    const candidate = snapshot?.pendingBundle;
+    return candidate && isWorkbookAgentCommandBundle(candidate) ? candidate : null;
+  }, [snapshot?.pendingBundle]);
+
+  const executionRecords = useMemo<WorkbookAgentExecutionRecord[]>(() => {
+    const candidates = snapshot?.executionRecords ?? [];
+    return candidates.flatMap((entry) => (isWorkbookAgentExecutionRecord(entry) ? [entry] : []));
+  }, [snapshot?.executionRecords]);
 
   const closeStream = useCallback(() => {
     eventSourceRef.current?.close();
@@ -206,6 +229,90 @@ export function useWorkbookAgentPane(input: {
       setIsLoading(false);
     }
   }, [connectStream, createOrResumeSession, persistSessionSnapshot]);
+
+  useEffect(() => {
+    autoApplyBundleIdRef.current = null;
+  }, [pendingBundle?.id]);
+
+  useEffect(() => {
+    if (!enabled || pendingBundle === null) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const nextPreview = await previewBundle(pendingBundle);
+        if (!cancelled) {
+          setPreview(nextPreview);
+        }
+      } catch (nextError: unknown) {
+        if (!cancelled) {
+          setPreview(null);
+          setError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, pendingBundle, previewBundle]);
+
+  const applyPendingBundle = useCallback(
+    async (appliedBy: "user" | "auto" = "user") => {
+      const activeSession = sessionRef.current;
+      if (!activeSession || !pendingBundle || !preview) {
+        return;
+      }
+      try {
+        setIsApplyingBundle(true);
+        const response = await fetch(
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/bundles/${encodeURIComponent(pendingBundle.id)}/apply`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              appliedBy,
+              preview,
+            }),
+          },
+        );
+        const payload = (await response.json()) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            resolvePayloadMessage(
+              payload,
+              `Workbook agent request failed with status ${response.status}`,
+            ),
+          );
+        }
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        setError(null);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      } finally {
+        setIsApplyingBundle(false);
+      }
+    },
+    [documentId, pendingBundle, persistSessionSnapshot, preview],
+  );
+
+  useEffect(() => {
+    if (
+      !enabled ||
+      !pendingBundle ||
+      !preview ||
+      pendingBundle.approvalMode !== "auto" ||
+      isApplyingBundle ||
+      autoApplyBundleIdRef.current === pendingBundle.id
+    ) {
+      return;
+    }
+    autoApplyBundleIdRef.current = pendingBundle.id;
+    void applyPendingBundle("auto");
+  }, [applyPendingBundle, enabled, isApplyingBundle, pendingBundle, preview]);
 
   useEffect(() => {
     if (!enabled) {
@@ -357,6 +464,66 @@ export function useWorkbookAgentPane(input: {
     }
   }, [documentId]);
 
+  const dismissPendingBundle = useCallback(async () => {
+    const activeSession = sessionRef.current;
+    if (!activeSession || !pendingBundle) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/bundles/${encodeURIComponent(pendingBundle.id)}/dismiss`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      );
+      const payload = (await response.json()) as unknown;
+      if (!response.ok) {
+        throw new Error(
+          resolvePayloadMessage(
+            payload,
+            `Workbook agent request failed with status ${response.status}`,
+          ),
+        );
+      }
+      persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }, [documentId, pendingBundle, persistSessionSnapshot]);
+
+  const replayExecutionRecord = useCallback(
+    async (recordId: string) => {
+      const activeSession = await ensureSession();
+      try {
+        const response = await fetch(
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/runs/${encodeURIComponent(recordId)}/replay`,
+          {
+            method: "POST",
+          },
+        );
+        const payload = (await response.json()) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            resolvePayloadMessage(
+              payload,
+              `Workbook agent request failed with status ${response.status}`,
+            ),
+          );
+        }
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        setError(null);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      }
+    },
+    [documentId, ensureSession, persistSessionSnapshot],
+  );
+
   const agentToggle = useMemo(
     () => (
       <button
@@ -381,27 +548,57 @@ export function useWorkbookAgentPane(input: {
       <WorkbookAgentPanel
         currentContext={currentContext}
         draft={draft}
+        executionRecords={executionRecords}
         error={error}
+        isApplyingBundle={isApplyingBundle}
         isLoading={isLoading}
         isOpen={isOpen}
+        pendingBundle={pendingBundle}
+        preview={preview}
         snapshot={snapshot}
+        onApplyPendingBundle={() => {
+          void applyPendingBundle("user");
+        }}
         onClose={() => {
           setIsOpen(false);
         }}
         onDraftChange={setDraft}
+        onDismissPendingBundle={() => {
+          void dismissPendingBundle();
+        }}
         onInterrupt={() => {
           void interrupt();
+        }}
+        onReplayExecutionRecord={(recordId) => {
+          void replayExecutionRecord(recordId);
         }}
         onSubmit={() => {
           void sendPrompt();
         }}
       />
     ),
-    [currentContext, draft, error, interrupt, isLoading, isOpen, sendPrompt, snapshot],
+    [
+      applyPendingBundle,
+      currentContext,
+      dismissPendingBundle,
+      draft,
+      error,
+      executionRecords,
+      interrupt,
+      isApplyingBundle,
+      isLoading,
+      isOpen,
+      pendingBundle,
+      preview,
+      replayExecutionRecord,
+      sendPrompt,
+      snapshot,
+    ],
   );
 
   return {
     agentPanel,
     agentToggle,
+    previewRanges: preview?.ranges ?? pendingBundle?.affectedRanges ?? [],
   };
 }

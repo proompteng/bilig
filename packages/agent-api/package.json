@@ -42,6 +42,8 @@
   },
   "dependencies": {
     "@bilig/binary-protocol": "workspace:*",
+    "@bilig/core": "workspace:*",
+    "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*"
   },
   "engines": {

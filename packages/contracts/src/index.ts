@@ -99,6 +99,8 @@ export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   lastError: Schema.Union(Schema.String, Schema.Null),
   context: Schema.Union(WorkbookAgentUiContextSchema, Schema.Null),
   entries: Schema.Array(WorkbookAgentTimelineEntrySchema),
+  pendingBundle: Schema.Union(Schema.Unknown, Schema.Null),
+  executionRecords: Schema.Array(Schema.Unknown),
 });
 export type WorkbookAgentSessionSnapshot = Schema.Schema.Type<
   typeof WorkbookAgentSessionSnapshotSchema

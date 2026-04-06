@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { WorkbookAgentSessionSnapshot } from "@bilig/contracts";
+import type { ZeroSyncService } from "../zero/service.js";
 import { createSyncServer } from "./sync-server.js";
 
 type TestServer = Awaited<ReturnType<typeof startHttpServer>>;
@@ -39,6 +41,71 @@ afterEach(async () => {
   delete process.env["BILIG_ZERO_PROXY_UPSTREAM"];
   await Promise.all(upstreamServers.splice(0).map((server) => server.close()));
 });
+
+function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncService {
+  return {
+    enabled: true,
+    async initialize() {},
+    async close() {},
+    async handleQuery() {
+      throw new Error("not used");
+    },
+    async handleMutate() {
+      throw new Error("not used");
+    },
+    async inspectWorkbook() {
+      throw new Error("not used");
+    },
+    async applyServerMutator() {
+      throw new Error("not used");
+    },
+    async applyAgentCommandBundle() {
+      throw new Error("not used");
+    },
+    async listWorkbookAgentRuns() {
+      return [];
+    },
+    async appendWorkbookAgentRun() {
+      throw new Error("not used");
+    },
+    async getWorkbookHeadRevision() {
+      return 1;
+    },
+    async loadAuthoritativeEvents() {
+      throw new Error("not used");
+    },
+    ...overrides,
+  };
+}
+
+function createAgentSessionSnapshot(
+  overrides: Partial<WorkbookAgentSessionSnapshot> = {},
+): WorkbookAgentSessionSnapshot {
+  return {
+    sessionId: "agent-session-1",
+    documentId: "doc-1",
+    threadId: "thr-1",
+    status: "idle",
+    activeTurnId: null,
+    lastError: null,
+    context: {
+      selection: {
+        sheetName: "Sheet1",
+        address: "A1",
+      },
+      viewport: {
+        rowStart: 0,
+        rowEnd: 10,
+        colStart: 0,
+        colEnd: 5,
+      },
+    },
+    entries: [],
+    pendingBundle: null,
+    executionRecords: [],
+    ...overrides,
+  };
+}
 
 describe("sync-server zero keepalive", () => {
   it("proxies a healthy keepalive response without using the generic zero proxy route", async () => {
@@ -98,22 +165,7 @@ describe("sync-server authoritative events", () => {
   it("returns authoritative workbook events from the zero sync service", async () => {
     const { app } = createSyncServer({
       logger: false,
-      zeroSyncService: {
-        enabled: true,
-        async initialize() {},
-        async close() {},
-        async handleQuery() {
-          throw new Error("not used");
-        },
-        async handleMutate() {
-          throw new Error("not used");
-        },
-        async inspectWorkbook() {
-          throw new Error("not used");
-        },
-        async applyServerMutator() {
-          throw new Error("not used");
-        },
+      zeroSyncService: createZeroSyncStub({
         async loadAuthoritativeEvents(documentId, afterRevision) {
           expect(documentId).toBe("doc-1");
           expect(afterRevision).toBe(4);
@@ -135,7 +187,7 @@ describe("sync-server authoritative events", () => {
             ],
           };
         },
-      },
+      }),
     });
 
     try {
@@ -171,26 +223,11 @@ describe("sync-server authoritative events", () => {
   it("rejects invalid afterRevision values", async () => {
     const { app } = createSyncServer({
       logger: false,
-      zeroSyncService: {
-        enabled: true,
-        async initialize() {},
-        async close() {},
-        async handleQuery() {
-          throw new Error("not used");
-        },
-        async handleMutate() {
-          throw new Error("not used");
-        },
-        async inspectWorkbook() {
-          throw new Error("not used");
-        },
-        async applyServerMutator() {
-          throw new Error("not used");
-        },
+      zeroSyncService: createZeroSyncStub({
         async loadAuthoritativeEvents() {
           throw new Error("not used");
         },
-      },
+      }),
     });
 
     try {
@@ -213,27 +250,7 @@ describe("sync-server authoritative events", () => {
 
 describe("sync-server workbook agent", () => {
   it("creates workbook agent sessions through the monolith route", async () => {
-    const createSession = vi.fn(async () => ({
-      sessionId: "agent-session-1",
-      documentId: "doc-1",
-      threadId: "thr-1",
-      status: "idle" as const,
-      activeTurnId: null,
-      lastError: null,
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
-      entries: [],
-    }));
+    const createSession = vi.fn(async () => createAgentSessionSnapshot());
 
     const { app } = createSyncServer({
       logger: false,
@@ -247,6 +264,15 @@ describe("sync-server workbook agent", () => {
           throw new Error("not used");
         },
         async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
           throw new Error("not used");
         },
         getSnapshot() {
@@ -294,6 +320,247 @@ describe("sync-server workbook agent", () => {
         expect.objectContaining({
           sessionId: "agent-session-1",
           threadId: "thr-1",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("applies staged workbook bundles through the monolith route", async () => {
+    const applyPendingBundle = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        pendingBundle: null,
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        async createSession() {
+          throw new Error("not used");
+        },
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        applyPendingBundle,
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
+        payload: {
+          preview: {
+            ranges: [],
+            structuralChanges: [],
+            cellDiffs: [],
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(applyPendingBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          bundleId: "bundle-1",
+          appliedBy: "user",
+          preview: {
+            ranges: [],
+            structuralChanges: [],
+            cellDiffs: [],
+          },
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("dismisses staged workbook bundles through the monolith route", async () => {
+    const dismissPendingBundle = vi.fn(async () => createAgentSessionSnapshot());
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        async createSession() {
+          throw new Error("not used");
+        },
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        dismissPendingBundle,
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/dismiss",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(dismissPendingBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          bundleId: "bundle-1",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("replays prior execution records through the monolith route", async () => {
+    const replayExecutionRecord = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        pendingBundle: {
+          id: "bundle-replay-1",
+          documentId: "doc-1",
+          threadId: "thr-1",
+          turnId: "replay:run-1:10",
+          goalText: "Reapply formatting",
+          summary: "Format Sheet1!A1",
+          scope: "selection",
+          riskClass: "low",
+          approvalMode: "auto",
+          baseRevision: 4,
+          createdAtUnixMs: 10,
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+          commands: [
+            {
+              kind: "formatRange",
+              range: {
+                sheetName: "Sheet1",
+                startAddress: "A1",
+                endAddress: "A1",
+              },
+              patch: {
+                font: {
+                  bold: true,
+                },
+              },
+            },
+          ],
+          affectedRanges: [
+            {
+              sheetName: "Sheet1",
+              startAddress: "A1",
+              endAddress: "A1",
+              role: "target",
+            },
+          ],
+          estimatedAffectedCells: 1,
+        },
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        async createSession() {
+          throw new Error("not used");
+        },
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        replayExecutionRecord,
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/runs/run-1/replay",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(replayExecutionRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          recordId: "run-1",
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          pendingBundle: expect.objectContaining({
+            id: "bundle-replay-1",
+          }),
         }),
       );
     } finally {

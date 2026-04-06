@@ -6,6 +6,7 @@
     "types": ["vite/client"],
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
     "paths": {
+      "@bilig/agent-api": ["../../packages/agent-api/src/index.ts"],
       "@bilig/actors": ["../../packages/actors/src/index.ts"],
       "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"],
       "@bilig/contracts": ["../../packages/contracts/src/index.ts"],
@@ -15,6 +16,7 @@
     }
   },
   "references": [
+    { "path": "../../packages/agent-api" },
     { "path": "../../packages/actors" },
     { "path": "../../packages/binary-protocol" },
     { "path": "../../packages/contracts" },

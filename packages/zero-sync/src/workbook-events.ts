@@ -7,6 +7,11 @@ import type {
   WorkbookSnapshot,
 } from "@bilig/protocol";
 import { parseCellAddress } from "@bilig/formula";
+import {
+  applyWorkbookAgentCommandBundle,
+  isWorkbookAgentCommandBundle,
+  type WorkbookAgentCommandBundle,
+} from "@bilig/agent-api";
 import { applyBatchArgsSchema } from "./mutators.js";
 import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
 import type { EngineOp } from "@bilig/workbook-domain";
@@ -36,6 +41,10 @@ export type WorkbookEventPayload =
   | {
       kind: "applyBatch";
       batch: EngineOpBatch;
+    }
+  | {
+      kind: "applyAgentCommandBundle";
+      bundle: WorkbookAgentCommandBundle;
     }
   | {
       kind: "setCellValue";
@@ -191,6 +200,8 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
   switch (value["kind"]) {
     case "applyBatch":
       return Array.isArray(value["batch"]);
+    case "applyAgentCommandBundle":
+      return isWorkbookAgentCommandBundle(value["bundle"]);
     case "setCellValue":
       return (
         typeof value["sheetName"] === "string" &&
@@ -321,6 +332,7 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "clearRangeNumberFormat":
       return [rangeRegion(payload.range)];
     case "applyBatch":
+    case "applyAgentCommandBundle":
     case "renderCommit":
     case "updateColumnWidth":
     case "restoreVersion":
@@ -337,6 +349,9 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
   switch (payload.kind) {
     case "applyBatch":
       engine.applyRemoteBatch(payload.batch);
+      return;
+    case "applyAgentCommandBundle":
+      applyWorkbookAgentCommandBundle(engine, payload.bundle);
       return;
     case "setCellValue":
       engine.setCellValue(payload.sheetName, payload.address, payload.value);

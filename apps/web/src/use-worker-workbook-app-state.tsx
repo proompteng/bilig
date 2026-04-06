@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useActorRef, useSelector } from "@xstate/react";
+import {
+  isWorkbookAgentCommandBundle,
+  isWorkbookAgentPreviewSummary,
+  type WorkbookAgentCommandBundle,
+} from "@bilig/agent-api";
 import type { CommitOp } from "@bilig/core";
 import type { EditMovement, EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
@@ -787,13 +792,23 @@ export function useWorkerWorkbookAppState(input: {
     enabled: runtimeReady,
     getCurrentViewport: () => visibleViewportRef.current,
   });
-  const { agentPanel, agentToggle } = useWorkbookAgentPane({
+  const { agentPanel, agentToggle, previewRanges } = useWorkbookAgentPane({
     documentId,
     enabled: runtimeReady,
     getContext: () => ({
       selection: selectionRef.current,
       viewport: visibleViewportRef.current,
     }),
+    previewBundle: async (bundle: WorkbookAgentCommandBundle) => {
+      if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
+        throw new Error("Workbook runtime is not ready for agent preview");
+      }
+      const value = await runtimeController.invoke("previewAgentCommandBundle", bundle);
+      if (!isWorkbookAgentPreviewSummary(value)) {
+        throw new Error("Worker returned an invalid workbook agent preview");
+      }
+      return value;
+    },
   });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
@@ -928,6 +943,7 @@ export function useWorkerWorkbookAppState(input: {
     isEditingCell,
     moveSelectionRange,
     pasteIntoSelection,
+    previewRanges,
     remoteSyncAvailable,
     renameSheet,
     reportRuntimeError,

@@ -1,5 +1,6 @@
 export { mutators } from "./mutators.js";
 export {
+  applyAgentCommandBundleArgsSchema,
   applyBatchArgsSchema,
   clearRangeNumberFormatArgsSchema,
   clearRangeArgsSchema,

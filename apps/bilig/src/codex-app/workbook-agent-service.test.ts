@@ -77,6 +77,16 @@ function createZeroSyncStub(): ZeroSyncService {
       throw new Error("not used");
     },
     async applyServerMutator() {},
+    async applyAgentCommandBundle() {
+      return { revision: 2 };
+    },
+    async listWorkbookAgentRuns() {
+      return [];
+    },
+    async appendWorkbookAgentRun() {},
+    async getWorkbookHeadRevision() {
+      return 1;
+    },
     async loadAuthoritativeEvents() {
       throw new Error("not used");
     },
@@ -104,6 +114,8 @@ describe("workbook agent service", () => {
       });
 
       expect(snapshot.threadId).toBe("thr-test");
+      expect(snapshot.pendingBundle).toBeNull();
+      expect(snapshot.executionRecords).toEqual([]);
 
       const events: unknown[] = [];
       const unsubscribe = service.subscribe("agent-session-1", (event) => {

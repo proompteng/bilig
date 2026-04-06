@@ -2,9 +2,19 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "@bilig/agent-api": ["../agent-api/src/index.ts"],
+      "@bilig/core": ["../core/src/index.ts"],
+      "@bilig/formula": ["../formula/src/index.ts"],
+      "@bilig/protocol": ["../protocol/src/index.ts"],
+      "@bilig/workbook-domain": ["../workbook-domain/src/index.ts"]
+    }
   },
   "references": [
+    {
+      "path": "../agent-api"
+    },
     {
       "path": "../core"
     },

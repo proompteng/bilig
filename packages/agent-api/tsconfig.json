@@ -2,11 +2,22 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "@bilig/core": ["../core/src/index.ts"],
+      "@bilig/formula": ["../formula/src/index.ts"],
+      "@bilig/protocol": ["../protocol/src/index.ts"]
+    }
   },
   "references": [
     {
       "path": "../binary-protocol"
+    },
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../formula"
     }
   ],
   "include": ["src/**/*"],

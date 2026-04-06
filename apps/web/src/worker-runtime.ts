@@ -1,5 +1,10 @@
 import type { CommitOp, EngineReplicaSnapshot } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
+import {
+  isWorkbookAgentCommandBundle,
+  type WorkbookAgentCommandBundle,
+  type WorkbookAgentPreviewSummary,
+} from "@bilig/agent-api";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
 import { formatAddress, indexToColumn } from "@bilig/formula";
 import {
@@ -67,6 +72,7 @@ import {
   type ProjectionOverlayScope,
 } from "./worker-local-overlay.js";
 import { WorkerViewportTileStore } from "./worker-viewport-tile-store.js";
+import { buildWorkbookAgentPreview } from "./workbook-agent-preview.js";
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
@@ -380,6 +386,19 @@ export class WorkbookWorkerRuntime {
 
   exportSnapshot(): WorkbookSnapshot {
     return this.getCachedSnapshot();
+  }
+
+  async previewAgentCommandBundle(
+    bundle: WorkbookAgentCommandBundle,
+  ): Promise<WorkbookAgentPreviewSummary> {
+    if (!isWorkbookAgentCommandBundle(bundle)) {
+      throw new Error("Invalid workbook agent preview bundle");
+    }
+    return await buildWorkbookAgentPreview({
+      snapshot: this.exportSnapshot(),
+      replicaId: this.requireBootstrapOptions().replicaId,
+      bundle,
+    });
   }
 
   listPendingMutations(): PendingWorkbookMutation[] {

@@ -1,4 +1,5 @@
 import { defineMutator, defineMutatorsWithType } from "@rocicorp/zero";
+import { isWorkbookAgentCommandBundle, type WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import { z } from "zod";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
 import type { CellRangeRef, LiteralInput } from "@bilig/protocol";
@@ -256,6 +257,13 @@ export const restoreWorkbookVersionArgsSchema = baseMutationArgsSchema.extend({
 
 export const revertWorkbookChangeArgsSchema = baseMutationArgsSchema.extend({
   revision: z.number().int().positive(),
+});
+
+export const applyAgentCommandBundleArgsSchema = baseMutationArgsSchema.extend({
+  bundle: z.custom<WorkbookAgentCommandBundle>(
+    isWorkbookAgentCommandBundle,
+    "Invalid workbook agent command bundle",
+  ),
 });
 
 async function noop(): Promise<void> {}

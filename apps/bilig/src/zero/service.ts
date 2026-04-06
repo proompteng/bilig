@@ -28,8 +28,14 @@ import {
 } from "./store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";
+import {
+  appendWorkbookAgentRun,
+  ensureWorkbookAgentRunSchema,
+  listWorkbookAgentRuns,
+} from "./workbook-agent-run-store.js";
 import { ensureWorkbookSheetViewSchema } from "./sheet-view-store.js";
 import { ensureWorkbookVersionSchema } from "./workbook-version-store.js";
+import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -42,6 +48,18 @@ export interface ZeroSyncService {
     task: (runtime: WorkbookRuntime) => Promise<T> | T,
   ): Promise<T>;
   applyServerMutator(name: string, args: unknown, session?: SessionIdentity): Promise<void>;
+  applyAgentCommandBundle(
+    documentId: string,
+    bundle: WorkbookAgentCommandBundle,
+    session?: SessionIdentity,
+  ): Promise<{ revision: number }>;
+  listWorkbookAgentRuns(
+    documentId: string,
+    actorUserId: string,
+    limit?: number,
+  ): Promise<WorkbookAgentExecutionRecord[]>;
+  appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void>;
+  getWorkbookHeadRevision(documentId: string): Promise<number>;
   loadAuthoritativeEvents(
     documentId: string,
     afterRevision: number,
@@ -109,6 +127,22 @@ class DisabledZeroSyncService implements ZeroSyncService {
     throw new Error("Zero sync is not configured");
   }
 
+  async applyAgentCommandBundle(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async listWorkbookAgentRuns(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async appendWorkbookAgentRun(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async getWorkbookHeadRevision(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
   async loadAuthoritativeEvents(_documentId: string, _afterRevision: number): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
@@ -134,6 +168,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await ensureWorkbookSheetViewSchema(this.pool);
     await ensureWorkbookVersionSchema(this.pool);
     await ensureWorkbookChangeSchema(this.pool);
+    await ensureWorkbookAgentRunSchema(this.pool);
     await backfillAuthoritativeCellEval(this.pool);
     await backfillWorkbookChanges(this.pool);
     await dropLegacyZeroSyncSchemaObjects(this.pool);
@@ -289,6 +324,62 @@ class EnabledZeroSyncService implements ZeroSyncService {
     } finally {
       client.release();
     }
+  }
+
+  async applyAgentCommandBundle(
+    documentId: string,
+    bundle: WorkbookAgentCommandBundle,
+    session?: SessionIdentity,
+  ): Promise<{ revision: number }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await handleServerMutator(
+        {
+          dbTransaction: {
+            wrappedTransaction: client,
+          },
+        },
+        "workbook.applyAgentCommandBundle",
+        {
+          documentId,
+          bundle,
+        },
+        this.runtimeManager,
+        session,
+      );
+      const metadata = await loadWorkbookRuntimeMetadata(client, documentId);
+      await client.query("COMMIT");
+      return {
+        revision: metadata.headRevision,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listWorkbookAgentRuns(
+    documentId: string,
+    actorUserId: string,
+    limit = 20,
+  ): Promise<WorkbookAgentExecutionRecord[]> {
+    return await listWorkbookAgentRuns(this.pool, {
+      documentId,
+      actorUserId,
+      limit,
+    });
+  }
+
+  async appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void> {
+    await appendWorkbookAgentRun(this.pool, record);
+  }
+
+  async getWorkbookHeadRevision(documentId: string): Promise<number> {
+    const metadata = await loadWorkbookRuntimeMetadata(this.pool, documentId);
+    return metadata.headRevision;
   }
 
   async loadAuthoritativeEvents(

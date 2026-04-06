@@ -43,6 +43,10 @@ function requiresFullAuthoritativeReplace(
     payloads.some(
       (payload) =>
         payload.kind === "applyBatch" ||
+        (payload.kind === "applyAgentCommandBundle" &&
+          payload.bundle.commands.some(
+            (command) => command.kind === "createSheet" || command.kind === "renameSheet",
+          )) ||
         payload.kind === "renderCommit" ||
         payload.kind === "restoreVersion",
     ) || engineEvents.some((event) => event.invalidation === "full")
