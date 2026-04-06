@@ -118,6 +118,12 @@ export function buildWorkbookLocalProjectionOverlay(input: {
   const overlayStyleIds = new Set<string>();
 
   for (const sheetName of listOrderedSheetNames(authoritativeEngine, projectionEngine)) {
+    const sheet =
+      projectionEngine.workbook.getSheet(sheetName) ??
+      authoritativeEngine.workbook.getSheet(sheetName);
+    if (!sheet) {
+      continue;
+    }
     for (const address of listUnionMaterializedAddresses(
       authoritativeEngine,
       projectionEngine,
@@ -130,6 +136,7 @@ export function buildWorkbookLocalProjectionOverlay(input: {
       }
       const parsed = parseCellAddress(address, sheetName);
       cells.push({
+        sheetId: sheet.id,
         sheetName,
         address,
         rowNum: parsed.row,
@@ -163,6 +170,7 @@ export function buildWorkbookLocalProjectionOverlay(input: {
         continue;
       }
       rowAxisEntries.push({
+        sheetId: sheet.id,
         sheetName,
         entry: {
           id: projectionEntry?.id ?? authoritativeEntry?.id ?? `${sheetName}:row:${String(index)}`,
@@ -191,6 +199,7 @@ export function buildWorkbookLocalProjectionOverlay(input: {
         continue;
       }
       columnAxisEntries.push({
+        sheetId: sheet.id,
         sheetName,
         entry: {
           id:

@@ -623,9 +623,15 @@ async function applySheetDiff(
   const workbookId = nextRows[0]?.workbookId ?? previousRows[0]?.workbookId;
   const tasks: Promise<unknown>[] = [];
   for (const key of diff.deletes) {
-    const [, name] = parseJsonKey(key);
+    const [, sheetId] = parseJsonKey(key);
+    if (typeof sheetId !== "number") {
+      continue;
+    }
     tasks.push(
-      db.query(`DELETE FROM sheets WHERE workbook_id = $1 AND name = $2`, [workbookId, name]),
+      db.query(`DELETE FROM sheets WHERE workbook_id = $1 AND sheet_id = $2`, [
+        workbookId,
+        sheetId,
+      ]),
     );
   }
   for (const row of diff.upserts) {
@@ -634,21 +640,31 @@ async function applySheetDiff(
         `
         INSERT INTO sheets (
           workbook_id,
+          sheet_id,
           name,
           sort_order,
           freeze_rows,
           freeze_cols,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::timestamptz)
-        ON CONFLICT (workbook_id, name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz)
+        ON CONFLICT (workbook_id, sheet_id)
         DO UPDATE SET
+          name = EXCLUDED.name,
           sort_order = EXCLUDED.sort_order,
           freeze_rows = EXCLUDED.freeze_rows,
           freeze_cols = EXCLUDED.freeze_cols,
           updated_at = EXCLUDED.updated_at
       `,
-        [row.workbookId, row.name, row.sortOrder, row.freezeRows, row.freezeCols, row.updatedAt],
+        [
+          row.workbookId,
+          row.sheetId,
+          row.name,
+          row.sortOrder,
+          row.freezeRows,
+          row.freezeCols,
+          row.updatedAt,
+        ],
       ),
     );
   }
@@ -1429,11 +1445,13 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS sheets (
       workbook_id TEXT NOT NULL REFERENCES workbooks(id) ON DELETE CASCADE,
+      sheet_id INTEGER,
       name TEXT NOT NULL,
       sort_order INTEGER NOT NULL,
       PRIMARY KEY (workbook_id, name)
     );
   `);
+  await db.query(`ALTER TABLE sheets ADD COLUMN IF NOT EXISTS sheet_id INTEGER;`);
   await db.query(
     `ALTER TABLE sheets ADD COLUMN IF NOT EXISTS freeze_rows INTEGER NOT NULL DEFAULT 0;`,
   );
@@ -1620,6 +1638,10 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   await db.query(
     `CREATE INDEX IF NOT EXISTS sheets_workbook_sort_order_idx ON sheets(workbook_id, sort_order);`,
   );
+  await db.query(`UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL;`);
+  await db.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS sheets_workbook_sheet_id_idx ON sheets(workbook_id, sheet_id);`,
+  );
   await db.query(
     `CREATE INDEX IF NOT EXISTS cells_workbook_sheet_idx ON cells(workbook_id, sheet_name);`,
   );
@@ -1716,6 +1738,7 @@ export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapsho
     },
     sheets: [
       {
+        id: 1,
         name: "Sheet1",
         order: 0,
         cells: [],

@@ -22,6 +22,7 @@ export interface WorkbookSourceRow {
 
 export interface SheetSourceRow {
   workbookId: string;
+  sheetId: number;
   name: string;
   sortOrder: number;
   freezeRows: number;
@@ -742,6 +743,7 @@ export function buildWorkbookSourceProjection(
   for (const sheet of snapshot.sheets) {
     sheets.push({
       workbookId: documentId,
+      sheetId: sheet.id ?? sheet.order + 1,
       name: sheet.name,
       sortOrder: sheet.order,
       freezeRows: sheet.metadata?.freezePane?.rows ?? 0,
@@ -839,6 +841,7 @@ export function buildWorkbookSourceProjectionFromEngine(
     const freezePane = engine.getFreezePane(sheet.name);
     sheets.push({
       workbookId: documentId,
+      sheetId: sheet.id,
       name: sheet.name,
       sortOrder: sheet.order,
       freezeRows: freezePane?.rows ?? 0,
@@ -971,7 +974,7 @@ export function materializeCellEvalProjection(
 }
 
 export const sourceProjectionKeys = {
-  sheet: (row: SheetSourceRow) => JSON.stringify([row.workbookId, row.name]),
+  sheet: (row: SheetSourceRow) => JSON.stringify([row.workbookId, row.sheetId]),
   cell: (row: CellSourceRow) => JSON.stringify([row.workbookId, row.sheetName, row.address]),
   axisMetadata: (row: AxisMetadataSourceRow) =>
     JSON.stringify([row.workbookId, row.sheetName, row.startIndex]),

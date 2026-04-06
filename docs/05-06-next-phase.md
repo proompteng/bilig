@@ -33,8 +33,8 @@ The repo already has the right backbone.
 
 The browser-side product architecture is still the weak link.
 
-- The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. The browser DB now has normalized authoritative base tables plus normalized projection overlay tables for cells, axis metadata, and styles, and the worker can serve full viewport patches from merged local base+overlay reads. Narrow authoritative event batches now ingest directly into those normalized local tables instead of forcing a full base repersist. The runtime is still only partway through the intended migration because stable `sheet_id` and a fully worker-owned tile store are not built yet.
-- Offline/local-first credibility is materially better now because writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until the authoritative revision feed absorbs them, reconnect now prefers authoritative event ingest before snapshot fallback, restored pending overlays survive reload, restored local sessions no longer block on a cold snapshot fetch before showing accepted local state, and absorbed authoritative events now update the local DB through a direct delta path. The product is still not fully local-first because stable `sheet_id` and the worker-owned tile store are not done.
+- The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. The browser DB now has normalized authoritative base tables plus normalized projection overlay tables for cells, axis metadata, and styles, and the worker can serve full viewport patches from merged local base+overlay reads. Narrow authoritative event batches now ingest directly into those normalized local tables instead of forcing a full base repersist. Stable `sheet_id` now survives workbook snapshots, browser local tables, and the server sheet projection path. The runtime is still only partway through the intended migration because the fully worker-owned tile store is not built yet.
+- Offline/local-first credibility is materially better now because writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until the authoritative revision feed absorbs them, reconnect now prefers authoritative event ingest before snapshot fallback, restored pending overlays survive reload, restored local sessions no longer block on a cold snapshot fetch before showing accepted local state, absorbed authoritative events now update the local DB through a direct delta path, and sheet rename/reconcile no longer depends on sheet name as the browser-local storage key. The product is still not fully local-first because the worker-owned tile store is not done.
 - Browser durability is materially better now because accepted local state and pending ops live in SQLite/OPFS rather than IndexedDB/localStorage JSON. The remaining weakness is the data model inside that DB, not the browser persistence substrate.
 - The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
   - `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
@@ -727,10 +727,10 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - the worker has a persisted pending-mutation queue with crash-safe journal replay
 - `viewport-cache.ts` has been deleted and replaced with `projected-viewport-store.ts`
 - `runtime-machine.ts` now models the real worker session lifecycle with local hydrate, steady-state sync, offline, reconcile, and recovery phases
+- stable `sheet_id` now survives engine snapshots, browser local SQLite tables, and the server sheet projection diff path
 
 **Still not completed**
 
-- stable `sheet_id` across browser/server/local layers
 - a fully worker-owned tile store backed by normalized local DB tables for both base and overlay reads
 - collaboration/product layers in Phases 2 through 4
 
@@ -744,11 +744,10 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 | Priority | Initiative                                                  | Why now                                                            |
 | -------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later                   |
-| 2        | Move projected tiles fully behind worker-owned local tables | Giant-data warm-start and ingest still depend on in-memory patches |
-| 3        | Add storage and reconnect failure harnesses                 | The local-first path now exists; it needs production-grade failure proofing |
-| 4        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation                            |
-| 5        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core                   |
+| 1        | Move projected tiles fully behind worker-owned local tables | Giant-data warm-start and ingest still depend on in-memory patches |
+| 2        | Add storage and reconnect failure harnesses                 | The local-first path now exists; it needs production-grade failure proofing |
+| 3        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation                            |
+| 4        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core                   |
 
 ### Dependency list
 
@@ -832,7 +831,6 @@ Make `bilig` genuinely local-first.
 **Dependencies**
 
 - Phase 0 worker path
-- stable `sheet_id`
 
 **Risks**
 

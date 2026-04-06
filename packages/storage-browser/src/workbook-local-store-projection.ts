@@ -211,16 +211,18 @@ function replaceAuthoritativeStyles(db: Database, styles: readonly CellStyleReco
 function insertWorkbookAuthoritativeBaseRows(
   db: Database,
   base: WorkbookLocalAuthoritativeBase,
+  includeSheets = true,
 ): void {
   const insertSheet = db.prepare(
     `
-      INSERT INTO authoritative_sheet (name, sort_order, freeze_rows, freeze_cols)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO authoritative_sheet (sheet_id, name, sort_order, freeze_rows, freeze_cols)
+      VALUES (?, ?, ?, ?, ?)
     `,
   );
   const insertInput = db.prepare(
     `
       INSERT INTO authoritative_cell_input (
+        sheet_id,
         sheet_name,
         address,
         row_num,
@@ -229,12 +231,13 @@ function insertWorkbookAuthoritativeBaseRows(
         formula,
         format
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
   );
   const insertRender = db.prepare(
     `
       INSERT INTO authoritative_cell_render (
+        sheet_id,
         sheet_name,
         address,
         row_num,
@@ -245,32 +248,42 @@ function insertWorkbookAuthoritativeBaseRows(
         style_id,
         number_format_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   );
   const insertAxis = (tableName: "authoritative_row_axis" | "authoritative_column_axis") =>
     db.prepare(
       `
         INSERT INTO ${tableName} (
+          sheet_id,
           sheet_name,
           axis_index,
           axis_id,
           size,
           hidden
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
       `,
     );
   const insertRowAxis = insertAxis("authoritative_row_axis");
   const insertColumnAxis = insertAxis("authoritative_column_axis");
   try {
-    for (const sheet of base.sheets) {
-      insertSheet.bind([sheet.name, sheet.sortOrder, sheet.freezeRows, sheet.freezeCols]);
-      insertSheet.step();
-      insertSheet.reset();
+    if (includeSheets) {
+      for (const sheet of base.sheets) {
+        insertSheet.bind([
+          sheet.sheetId,
+          sheet.name,
+          sheet.sortOrder,
+          sheet.freezeRows,
+          sheet.freezeCols,
+        ]);
+        insertSheet.step();
+        insertSheet.reset();
+      }
     }
     for (const cell of base.cellInputs) {
       insertInput.bind([
+        cell.sheetId,
         cell.sheetName,
         cell.address,
         cell.rowNum,
@@ -284,6 +297,7 @@ function insertWorkbookAuthoritativeBaseRows(
     }
     for (const cell of base.cellRenders) {
       insertRender.bind([
+        cell.sheetId,
         cell.sheetName,
         cell.address,
         cell.rowNum,
@@ -299,6 +313,7 @@ function insertWorkbookAuthoritativeBaseRows(
     }
     for (const axis of base.rowAxisEntries) {
       insertRowAxis.bind([
+        axis.sheetId,
         axis.sheetName,
         axis.entry.index,
         axis.entry.id,
@@ -310,6 +325,7 @@ function insertWorkbookAuthoritativeBaseRows(
     }
     for (const axis of base.columnAxisEntries) {
       insertColumnAxis.bind([
+        axis.sheetId,
         axis.sheetName,
         axis.entry.index,
         axis.entry.id,
@@ -328,14 +344,98 @@ function insertWorkbookAuthoritativeBaseRows(
   }
 }
 
-function deleteAuthoritativeSheets(db: Database, sheetNames: readonly string[]): void {
-  if (sheetNames.length === 0) {
+function upsertAuthoritativeSheets(
+  db: Database,
+  sheets: WorkbookLocalAuthoritativeBase["sheets"],
+): void {
+  if (sheets.length === 0) {
     return;
   }
-  const statement = db.prepare("DELETE FROM authoritative_sheet WHERE name = ?");
+  const updateSheet = db.prepare(
+    `
+      UPDATE authoritative_sheet
+         SET name = ?,
+             sort_order = ?,
+             freeze_rows = ?,
+             freeze_cols = ?
+       WHERE sheet_id = ?
+    `,
+  );
+  const insertSheet = db.prepare(
+    `
+      INSERT INTO authoritative_sheet (sheet_id, name, sort_order, freeze_rows, freeze_cols)
+      VALUES (?, ?, ?, ?, ?)
+    `,
+  );
   try {
-    for (const sheetName of sheetNames) {
-      statement.bind([sheetName]);
+    for (const sheet of sheets) {
+      updateSheet.bind([
+        sheet.name,
+        sheet.sortOrder,
+        sheet.freezeRows,
+        sheet.freezeCols,
+        sheet.sheetId,
+      ]);
+      updateSheet.step();
+      const updated = db.changes(true, false) > 0;
+      updateSheet.reset();
+      if (updated) {
+        continue;
+      }
+      insertSheet.bind([
+        sheet.sheetId,
+        sheet.name,
+        sheet.sortOrder,
+        sheet.freezeRows,
+        sheet.freezeCols,
+      ]);
+      insertSheet.step();
+      insertSheet.reset();
+    }
+  } finally {
+    updateSheet.finalize();
+    insertSheet.finalize();
+  }
+}
+
+function deleteAuthoritativeSheetData(db: Database, sheetIds: readonly number[]): void {
+  if (sheetIds.length === 0) {
+    return;
+  }
+  const deleteFrom = (
+    tableName:
+      | "authoritative_cell_input"
+      | "authoritative_cell_render"
+      | "authoritative_row_axis"
+      | "authoritative_column_axis",
+  ) => db.prepare(`DELETE FROM ${tableName} WHERE sheet_id = ?`);
+  const statements = [
+    deleteFrom("authoritative_cell_input"),
+    deleteFrom("authoritative_cell_render"),
+    deleteFrom("authoritative_row_axis"),
+    deleteFrom("authoritative_column_axis"),
+  ];
+  try {
+    for (const sheetId of sheetIds) {
+      statements.forEach((statement) => {
+        statement.bind([sheetId]);
+        statement.step();
+        statement.reset();
+      });
+    }
+  } finally {
+    statements.forEach((statement) => statement.finalize());
+  }
+}
+
+function deleteAuthoritativeSheets(db: Database, sheetIds: readonly number[]): void {
+  if (sheetIds.length === 0) {
+    return;
+  }
+  const statement = db.prepare("DELETE FROM authoritative_sheet WHERE sheet_id = ?");
+  try {
+    for (const sheetId of sheetIds) {
+      statement.bind([sheetId]);
       statement.step();
       statement.reset();
     }
@@ -366,8 +466,14 @@ export function writeWorkbookAuthoritativeDelta(
     writeWorkbookAuthoritativeBase(db, delta.base);
     return;
   }
-  deleteAuthoritativeSheets(db, delta.replacedSheetNames);
-  insertWorkbookAuthoritativeBaseRows(db, delta.base);
+  deleteAuthoritativeSheetData(db, delta.replacedSheetIds);
+  upsertAuthoritativeSheets(db, delta.base.sheets);
+  insertWorkbookAuthoritativeBaseRows(db, delta.base, false);
+  const persistedSheetIds = new Set(delta.base.sheets.map((sheet) => sheet.sheetId));
+  deleteAuthoritativeSheets(
+    db,
+    delta.replacedSheetIds.filter((sheetId) => !persistedSheetIds.has(sheetId)),
+  );
   replaceAuthoritativeStyles(db, delta.base.styles);
 }
 
@@ -380,6 +486,7 @@ export function writeWorkbookProjectionOverlay(
   const insertCell = db.prepare(
     `
       INSERT INTO projection_overlay_cell (
+        sheet_id,
         sheet_name,
         address,
         row_num,
@@ -393,7 +500,7 @@ export function writeWorkbookProjectionOverlay(
         style_id,
         number_format_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   );
   const insertAxis = (
@@ -402,13 +509,14 @@ export function writeWorkbookProjectionOverlay(
     db.prepare(
       `
         INSERT INTO ${tableName} (
+          sheet_id,
           sheet_name,
           axis_index,
           axis_id,
           size,
           hidden
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
       `,
     );
   const insertStyle = db.prepare(
@@ -422,6 +530,7 @@ export function writeWorkbookProjectionOverlay(
   try {
     for (const cell of overlay.cells) {
       insertCell.bind([
+        cell.sheetId,
         cell.sheetName,
         cell.address,
         cell.rowNum,
@@ -440,6 +549,7 @@ export function writeWorkbookProjectionOverlay(
     }
     for (const axis of overlay.rowAxisEntries) {
       insertRowAxis.bind([
+        axis.sheetId,
         axis.sheetName,
         axis.entry.index,
         axis.entry.id,
@@ -451,6 +561,7 @@ export function writeWorkbookProjectionOverlay(
     }
     for (const axis of overlay.columnAxisEntries) {
       insertColumnAxis.bind([
+        axis.sheetId,
         axis.sheetName,
         axis.entry.index,
         axis.entry.id,
@@ -501,7 +612,7 @@ function readAxisEntries(
     | "authoritative_column_axis"
     | "projection_overlay_row_axis"
     | "projection_overlay_column_axis",
-  sheetName: string,
+  sheetId: number,
   start: number,
   end: number,
 ): WorkbookAxisEntrySnapshot[] {
@@ -513,14 +624,14 @@ function readAxisEntries(
              size,
              hidden
         FROM ${tableName}
-       WHERE sheet_name = ?
+       WHERE sheet_id = ?
          AND axis_index >= ?
          AND axis_index <= ?
        ORDER BY axis_index ASC
     `,
   );
   try {
-    statement.bind([sheetName, start, end]);
+    statement.bind([sheetId, start, end]);
     while (statement.step()) {
       const entry = parseAxisEntrySnapshot(statement.get({}));
       if (entry) {
@@ -622,6 +733,7 @@ function mergeViewportBaseAndOverlay(input: {
   }
 
   return {
+    sheetId: input.base.sheetId,
     sheetName: input.base.sheetName,
     cells: sortViewportCells(cells.values()),
     rowAxisEntries: sortAxisEntries(rowAxisEntries.values()),
@@ -638,13 +750,18 @@ function readWorkbookViewportBase(
   const sheetRecord = readSingleObjectRow(
     db,
     `
-      SELECT name
+      SELECT name,
+             sheet_id AS sheetId
         FROM authoritative_sheet
        WHERE name = ?
     `,
     [sheetName],
   );
   if (!sheetRecord) {
+    return null;
+  }
+  const sheetId = sheetRecord["sheetId"];
+  if (typeof sheetId !== "number") {
     return null;
   }
 
@@ -665,16 +782,16 @@ function readWorkbookViewportBase(
              input.format AS format
         FROM authoritative_cell_render AS render
         LEFT JOIN authoritative_cell_input AS input
-          ON input.sheet_name = render.sheet_name
+          ON input.sheet_id = render.sheet_id
          AND input.address = render.address
-       WHERE render.sheet_name = ?
+       WHERE render.sheet_id = ?
          AND render.row_num >= ?
          AND render.row_num <= ?
          AND render.col_num >= ?
          AND render.col_num <= ?
        ORDER BY render.row_num ASC, render.col_num ASC
     `,
-    [sheetName, viewport.rowStart, viewport.rowEnd, viewport.colStart, viewport.colEnd],
+    [sheetId, viewport.rowStart, viewport.rowEnd, viewport.colStart, viewport.colEnd],
   );
   const styleIds = new Set<string>(["style-0"]);
   cells.forEach((cell) => {
@@ -684,19 +801,20 @@ function readWorkbookViewportBase(
   });
 
   return {
+    sheetId,
     sheetName,
     cells,
     rowAxisEntries: readAxisEntries(
       db,
       "authoritative_row_axis",
-      sheetName,
+      sheetId,
       viewport.rowStart,
       viewport.rowEnd,
     ),
     columnAxisEntries: readAxisEntries(
       db,
       "authoritative_column_axis",
-      sheetName,
+      sheetId,
       viewport.colStart,
       viewport.colEnd,
     ),
@@ -713,6 +831,7 @@ export function readWorkbookViewportProjection(
   if (!base) {
     return null;
   }
+  const sheetId = base.sheetId;
 
   const overlayCells = readViewportCells(
     db,
@@ -730,14 +849,14 @@ export function readWorkbookViewportProjection(
              style_id AS styleId,
              number_format_id AS numberFormatId
         FROM projection_overlay_cell
-       WHERE sheet_name = ?
+       WHERE sheet_id = ?
          AND row_num >= ?
          AND row_num <= ?
          AND col_num >= ?
          AND col_num <= ?
        ORDER BY row_num ASC, col_num ASC
     `,
-    [sheetName, viewport.rowStart, viewport.rowEnd, viewport.colStart, viewport.colEnd],
+    [sheetId, viewport.rowStart, viewport.rowEnd, viewport.colStart, viewport.colEnd],
   );
   const overlayStyleIds = new Set<string>();
   overlayCells.forEach((cell) => {
@@ -752,14 +871,14 @@ export function readWorkbookViewportProjection(
     overlayRowAxisEntries: readAxisEntries(
       db,
       "projection_overlay_row_axis",
-      sheetName,
+      sheetId,
       viewport.rowStart,
       viewport.rowEnd,
     ),
     overlayColumnAxisEntries: readAxisEntries(
       db,
       "projection_overlay_column_axis",
-      sheetName,
+      sheetId,
       viewport.colStart,
       viewport.colEnd,
     ),

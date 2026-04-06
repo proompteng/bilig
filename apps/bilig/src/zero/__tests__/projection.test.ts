@@ -55,6 +55,30 @@ describe("projection helpers", () => {
     expect(diff.deletes).toHaveLength(0);
   });
 
+  it("keys sheet projection rows by stable sheet id instead of the mutable name", () => {
+    expect(
+      sourceProjectionKeys.sheet({
+        workbookId: "doc-1",
+        sheetId: 7,
+        name: "Sheet1",
+        sortOrder: 0,
+        freezeRows: 0,
+        freezeCols: 0,
+        updatedAt: "2026-04-06T10:00:00.000Z",
+      }),
+    ).toBe(
+      sourceProjectionKeys.sheet({
+        workbookId: "doc-1",
+        sheetId: 7,
+        name: "Revenue",
+        sortOrder: 0,
+        freezeRows: 0,
+        freezeCols: 0,
+        updatedAt: "2026-04-06T10:01:00.000Z",
+      }),
+    );
+  });
+
   it("materializes authoritative cell_eval rows from the workbook engine, including styled blanks", async () => {
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",

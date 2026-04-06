@@ -111,11 +111,12 @@ describe("createWorkbookRendererRoot", () => {
       </Workbook>,
     );
 
-    expect(engine.exportSnapshot()).toEqual({
+    expect(engine.exportSnapshot()).toMatchObject({
       version: 1,
       workbook: { name: "book-renamed" },
       sheets: [
         {
+          id: expect.any(Number),
           name: "Renamed",
           order: 0,
           cells: [{ address: "B2", value: 21 }],
@@ -146,11 +147,12 @@ describe("createWorkbookRendererRoot", () => {
       ),
     ).rejects.toThrow("Workbook DSL does not support text nodes.");
 
-    expect(engine.exportSnapshot()).toEqual({
+    expect(engine.exportSnapshot()).toMatchObject({
       version: 1,
       workbook: { name: "valid" },
       sheets: [
         {
+          id: expect.any(Number),
           name: "Sheet1",
           order: 0,
           cells: [{ address: "A1", value: 10 }],
@@ -268,11 +270,12 @@ describe("createWorkbookRendererRoot", () => {
       ),
     );
 
-    expect(engine.exportSnapshot()).toEqual({
+    expect(engine.exportSnapshot()).toMatchObject({
       version: 1,
       workbook: { name: "string-book" },
       sheets: [
         {
+          id: expect.any(Number),
           name: "Sheet1",
           order: 0,
           cells: [{ address: "A1", value: 9 }],

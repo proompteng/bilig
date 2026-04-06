@@ -1,6 +1,7 @@
 import type { CellSnapshot, CellStyleRecord, WorkbookAxisEntrySnapshot } from "@bilig/protocol";
 
 export interface WorkbookLocalBaseSheetRecord {
+  readonly sheetId: number;
   readonly name: string;
   readonly sortOrder: number;
   readonly freezeRows: number;
@@ -8,6 +9,7 @@ export interface WorkbookLocalBaseSheetRecord {
 }
 
 export interface WorkbookLocalBaseCellInputRecord {
+  readonly sheetId: number;
   readonly sheetName: string;
   readonly address: string;
   readonly rowNum: number;
@@ -18,6 +20,7 @@ export interface WorkbookLocalBaseCellInputRecord {
 }
 
 export interface WorkbookLocalBaseCellRenderRecord {
+  readonly sheetId: number;
   readonly sheetName: string;
   readonly address: string;
   readonly rowNum: number;
@@ -34,10 +37,12 @@ export interface WorkbookLocalAuthoritativeBase {
   readonly cellInputs: readonly WorkbookLocalBaseCellInputRecord[];
   readonly cellRenders: readonly WorkbookLocalBaseCellRenderRecord[];
   readonly rowAxisEntries: readonly {
+    sheetId: number;
     sheetName: string;
     entry: WorkbookAxisEntrySnapshot;
   }[];
   readonly columnAxisEntries: readonly {
+    sheetId: number;
     sheetName: string;
     entry: WorkbookAxisEntrySnapshot;
   }[];
@@ -45,6 +50,7 @@ export interface WorkbookLocalAuthoritativeBase {
 }
 
 export interface WorkbookLocalProjectionOverlayCellRecord {
+  readonly sheetId: number;
   readonly sheetName: string;
   readonly address: string;
   readonly rowNum: number;
@@ -62,10 +68,12 @@ export interface WorkbookLocalProjectionOverlayCellRecord {
 export interface WorkbookLocalProjectionOverlay {
   readonly cells: readonly WorkbookLocalProjectionOverlayCellRecord[];
   readonly rowAxisEntries: readonly {
+    sheetId: number;
     sheetName: string;
     entry: WorkbookAxisEntrySnapshot;
   }[];
   readonly columnAxisEntries: readonly {
+    sheetId: number;
     sheetName: string;
     entry: WorkbookAxisEntrySnapshot;
   }[];
@@ -74,7 +82,7 @@ export interface WorkbookLocalProjectionOverlay {
 
 export interface WorkbookLocalAuthoritativeDelta {
   readonly replaceAll: boolean;
-  readonly replacedSheetNames: readonly string[];
+  readonly replacedSheetIds: readonly number[];
   readonly base: WorkbookLocalAuthoritativeBase;
 }
 
@@ -85,6 +93,7 @@ export interface WorkbookLocalViewportCell {
 }
 
 export interface WorkbookLocalViewportBase {
+  readonly sheetId: number;
   readonly sheetName: string;
   readonly cells: readonly WorkbookLocalViewportCell[];
   readonly rowAxisEntries: readonly WorkbookAxisEntrySnapshot[];

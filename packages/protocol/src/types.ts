@@ -431,6 +431,7 @@ export interface WorkbookSnapshot {
     metadata?: WorkbookMetadataSnapshot;
   };
   sheets: Array<{
+    id?: number;
     name: string;
     order: number;
     metadata?: SheetMetadataSnapshot;

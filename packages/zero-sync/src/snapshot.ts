@@ -71,6 +71,7 @@ export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapsho
     },
     sheets: [
       {
+        id: 1,
         name: "Sheet1",
         order: 0,
         cells: [],
@@ -426,9 +427,14 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
         fallbackSheet?.metadata,
       );
 
-      return metadata
+      const id = asNumber(sheetEntry["id"]) ?? fallbackSheet?.id;
+      const nextSheet: WorkbookSnapshot["sheets"][number] = metadata
         ? { name: sheetName, order: sortOrder, metadata, cells }
         : { name: sheetName, order: sortOrder, cells };
+      if (id !== undefined) {
+        nextSheet.id = id;
+      }
+      return nextSheet;
     })
     .filter((entry): entry is WorkbookSnapshot["sheets"][number] => entry !== null);
 

@@ -166,6 +166,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) {
       return {
+        id: order + 1,
         name: sheetName,
         order,
         cells: [],
@@ -217,6 +218,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
         : undefined;
 
     return {
+      id: order + 1,
       name: sheetName,
       order,
       ...(metadata ? { metadata } : {}),

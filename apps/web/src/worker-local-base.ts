@@ -16,6 +16,7 @@ function buildWorkbookLocalSheetRecords(
       const freezePane = engine.getFreezePane(sheet.name);
       return [
         {
+          sheetId: sheet.id,
           name: sheet.name,
           sortOrder: sheet.order,
           freezeRows: freezePane?.rows ?? 0,
@@ -41,6 +42,7 @@ export function buildWorkbookLocalAuthoritativeBaseForSheets(
       const parsed = parseCellAddress(address, sheet.name);
       const snapshot = engine.getCell(sheet.name, address);
       cellRenders.push({
+        sheetId: sheet.sheetId,
         sheetName: sheet.name,
         address,
         rowNum: parsed.row,
@@ -57,6 +59,7 @@ export function buildWorkbookLocalAuthoritativeBaseForSheets(
         snapshot.format !== undefined
       ) {
         cellInputs.push({
+          sheetId: sheet.sheetId,
           sheetName: sheet.name,
           address,
           rowNum: parsed.row,
@@ -69,10 +72,10 @@ export function buildWorkbookLocalAuthoritativeBaseForSheets(
     }
 
     engine.getRowAxisEntries(sheet.name).forEach((entry) => {
-      rowAxisEntries.push({ sheetName: sheet.name, entry });
+      rowAxisEntries.push({ sheetId: sheet.sheetId, sheetName: sheet.name, entry });
     });
     engine.getColumnAxisEntries(sheet.name).forEach((entry) => {
-      columnAxisEntries.push({ sheetName: sheet.name, entry });
+      columnAxisEntries.push({ sheetId: sheet.sheetId, sheetName: sheet.name, entry });
     });
   }
 

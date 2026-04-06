@@ -185,14 +185,20 @@ export class WorkbookStore {
     this.ensureDefaultNumberFormat();
   }
 
-  createSheet(name: string, order = this.sheetsByName.size): SheetRecord {
+  createSheet(name: string, order = this.sheetsByName.size, id?: number): SheetRecord {
     const existing = this.sheetsByName.get(name);
     if (existing) {
       existing.order = order;
+      if (id !== undefined && existing.id !== id) {
+        this.sheetsById.delete(existing.id);
+        existing.id = id;
+        this.sheetsById.set(existing.id, existing);
+        this.bumpSheetId(id);
+      }
       return existing;
     }
     const sheet: SheetRecord = {
-      id: this.nextSheetId++,
+      id: id ?? this.nextSheetId++,
       name,
       order,
       grid: new SheetGrid(),
@@ -201,6 +207,9 @@ export class WorkbookStore {
       styleRanges: [],
       formatRanges: [],
     };
+    if (id !== undefined) {
+      this.bumpSheetId(id);
+    }
     this.sheetsByName.set(name, sheet);
     this.sheetsById.set(sheet.id, sheet);
     return sheet;
@@ -1024,6 +1033,12 @@ export class WorkbookStore {
     const numericId = Number.parseInt(match[1]!, 10);
     if (Number.isFinite(numericId)) {
       this.nextStyleId = Math.max(this.nextStyleId, numericId + 1);
+    }
+  }
+
+  private bumpSheetId(id: number): void {
+    if (Number.isInteger(id) && id >= this.nextSheetId) {
+      this.nextSheetId = id + 1;
     }
   }
 

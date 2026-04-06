@@ -44,7 +44,7 @@ export type WorkbookOp =
   | { kind: "setWorkbookMetadata"; key: string; value: LiteralInput }
   | { kind: "setCalculationSettings"; settings: WorkbookCalculationSettingsSnapshot }
   | { kind: "setVolatileContext"; context: WorkbookVolatileContextSnapshot }
-  | { kind: "upsertSheet"; name: string; order: number }
+  | { kind: "upsertSheet"; name: string; order: number; id?: number }
   | { kind: "renameSheet"; oldName: string; newName: string }
   | { kind: "deleteSheet"; name: string }
   | {

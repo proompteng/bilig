@@ -284,7 +284,10 @@ export class WorkbookWorkerRuntime {
       throw new Error("Invalid authoritative workbook event batch");
     }
     const authoritativeEngine = this.requireAuthoritativeEngine();
-    const previousSheetNames = [...authoritativeEngine.workbook.sheetsByName.keys()];
+    const previousSheets = [...authoritativeEngine.workbook.sheetsByName.values()].map((sheet) => ({
+      sheetId: sheet.id,
+      name: sheet.name,
+    }));
     const authoritativeEngineEvents: EngineEvent[] = [];
     const unsubscribe = authoritativeEngine.subscribe((event) => {
       authoritativeEngineEvents.push(event);
@@ -325,7 +328,7 @@ export class WorkbookWorkerRuntime {
           engine: authoritativeEngine,
           payloads: events.map((event) => event.payload),
           engineEvents: authoritativeEngineEvents,
-          previousSheetNames,
+          previousSheets,
         }),
         projectionOverlay: buildWorkbookLocalProjectionOverlay({
           authoritativeEngine,

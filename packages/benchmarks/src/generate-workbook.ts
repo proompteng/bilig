@@ -18,6 +18,7 @@ export function buildWorkbookSnapshot(materializedCells = 1000): WorkbookSnapsho
     workbook: { name: "benchmark-load" },
     sheets: [
       {
+        id: 1,
         name: "Sheet1",
         order: 0,
         cells: [
@@ -45,6 +46,7 @@ export function buildDownstreamSnapshot(downstreamCount = 1000): WorkbookSnapsho
     workbook: { name: "benchmark-edit" },
     sheets: [
       {
+        id: 1,
         name: "Sheet1",
         order: 0,
         cells: [
@@ -89,6 +91,7 @@ export function buildRangeAggregateSnapshot(
     workbook: { name: "benchmark-range-aggregates" },
     sheets: [
       {
+        id: 1,
         name: "Sheet1",
         order: 0,
         cells: [
@@ -129,6 +132,7 @@ export function buildTopologyEditSnapshot(chainLength = 10_000): WorkbookSnapsho
     workbook: { name: "benchmark-topology-edit" },
     sheets: [
       {
+        id: 1,
         name: "Sheet1",
         order: 0,
         cells,

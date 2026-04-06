@@ -8,10 +8,16 @@ import {
 } from "./worker-local-base.js";
 import { collectChangedCellsBySheet } from "./worker-runtime-support.js";
 
-function compareSheetNames(
-  left: string,
-  right: string,
-  currentSheetOrder: ReadonlyMap<string, number>,
+interface SheetIdentity {
+  readonly sheetId: number;
+  readonly name: string;
+}
+
+function compareSheetIds(
+  left: number,
+  right: number,
+  currentSheetOrder: ReadonlyMap<number, number>,
+  currentSheetName: ReadonlyMap<number, string>,
 ): number {
   const leftOrder = currentSheetOrder.get(left);
   const rightOrder = currentSheetOrder.get(right);
@@ -24,7 +30,9 @@ function compareSheetNames(
   if (rightOrder !== undefined) {
     return 1;
   }
-  return left.localeCompare(right);
+  return (currentSheetName.get(left) ?? String(left)).localeCompare(
+    currentSheetName.get(right) ?? String(right),
+  );
 }
 
 function requiresFullAuthoritativeReplace(
@@ -37,104 +45,134 @@ function requiresFullAuthoritativeReplace(
   );
 }
 
-function collectImpactedSheetNamesFromPayloads(
+function collectImpactedSheetIdsFromPayloads(
+  engine: SpreadsheetEngine,
   payloads: readonly WorkbookEventPayload[],
-): Set<string> {
-  const sheetNames = new Set<string>();
+): Set<number> {
+  const sheetIds = new Set<number>();
   payloads.forEach((payload) => {
     if (payload.kind === "updateColumnWidth") {
-      sheetNames.add(payload.sheetName);
+      const sheetId = engine.workbook.getSheet(payload.sheetName)?.id;
+      if (sheetId !== undefined) {
+        sheetIds.add(sheetId);
+      }
       return;
     }
     deriveDirtyRegions(payload)?.forEach((region) => {
-      sheetNames.add(region.sheetName);
+      const sheetId = engine.workbook.getSheet(region.sheetName)?.id;
+      if (sheetId !== undefined) {
+        sheetIds.add(sheetId);
+      }
     });
   });
-  return sheetNames;
+  return sheetIds;
 }
 
-function collectImpactedSheetNamesFromEngineEvents(
+function collectImpactedSheetIdsFromEngineEvents(
   engine: SpreadsheetEngine,
   engineEvents: readonly EngineEvent[],
-): Set<string> {
-  const sheetNames = new Set<string>();
+): Set<number> {
+  const sheetIds = new Set<number>();
   engineEvents.forEach((event) => {
     if (event.invalidation !== "full") {
       collectChangedCellsBySheet(engine, event.changedCellIndices).forEach((_cells, sheetName) => {
-        sheetNames.add(sheetName);
+        const sheetId = engine.workbook.getSheet(sheetName)?.id;
+        if (sheetId !== undefined) {
+          sheetIds.add(sheetId);
+        }
       });
     }
     event.invalidatedRanges.forEach((range) => {
-      sheetNames.add(range.sheetName);
+      const sheetId = engine.workbook.getSheet(range.sheetName)?.id;
+      if (sheetId !== undefined) {
+        sheetIds.add(sheetId);
+      }
     });
     event.invalidatedRows.forEach((entry) => {
-      sheetNames.add(entry.sheetName);
+      const sheetId = engine.workbook.getSheet(entry.sheetName)?.id;
+      if (sheetId !== undefined) {
+        sheetIds.add(sheetId);
+      }
     });
     event.invalidatedColumns.forEach((entry) => {
-      sheetNames.add(entry.sheetName);
+      const sheetId = engine.workbook.getSheet(entry.sheetName)?.id;
+      if (sheetId !== undefined) {
+        sheetIds.add(sheetId);
+      }
     });
   });
-  return sheetNames;
+  return sheetIds;
 }
 
 export function buildWorkbookLocalAuthoritativeDelta(input: {
   engine: SpreadsheetEngine;
   payloads: readonly WorkbookEventPayload[];
   engineEvents: readonly EngineEvent[];
-  previousSheetNames: readonly string[];
+  previousSheets: readonly SheetIdentity[];
 }): WorkbookLocalAuthoritativeDelta {
-  const { engine, payloads, engineEvents, previousSheetNames } = input;
-  const currentSheetNames = [...engine.workbook.sheetsByName.values()]
+  const { engine, payloads, engineEvents, previousSheets } = input;
+  const currentSheets = [...engine.workbook.sheetsByName.values()]
     .toSorted((left, right) => left.order - right.order)
-    .map((sheet) => sheet.name);
+    .map((sheet) => ({ sheetId: sheet.id, name: sheet.name }));
   const currentSheetOrder = new Map(
-    [...engine.workbook.sheetsByName.values()].map((sheet) => [sheet.name, sheet.order]),
+    [...engine.workbook.sheetsByName.values()].map((sheet) => [sheet.id, sheet.order]),
   );
+  const currentSheetName = new Map(currentSheets.map((sheet) => [sheet.sheetId, sheet.name]));
 
   if (requiresFullAuthoritativeReplace(payloads, engineEvents)) {
+    const replacedSheetIds = [
+      ...new Set([
+        ...previousSheets.map((sheet) => sheet.sheetId),
+        ...currentSheets.map((sheet) => sheet.sheetId),
+      ]),
+    ].toSorted((left, right) => compareSheetIds(left, right, currentSheetOrder, currentSheetName));
     return {
       replaceAll: true,
-      replacedSheetNames: [...new Set([...previousSheetNames, ...currentSheetNames])].toSorted(
-        (left, right) => compareSheetNames(left, right, currentSheetOrder),
-      ),
+      replacedSheetIds,
       base: buildWorkbookLocalAuthoritativeBase(engine),
     };
   }
 
-  const replacedSheetNames = new Set<string>();
-  collectImpactedSheetNamesFromPayloads(payloads).forEach((sheetName) => {
-    replacedSheetNames.add(sheetName);
+  const replacedSheetIds = new Set<number>();
+  collectImpactedSheetIdsFromPayloads(engine, payloads).forEach((sheetId) => {
+    replacedSheetIds.add(sheetId);
   });
-  collectImpactedSheetNamesFromEngineEvents(engine, engineEvents).forEach((sheetName) => {
-    replacedSheetNames.add(sheetName);
+  collectImpactedSheetIdsFromEngineEvents(engine, engineEvents).forEach((sheetId) => {
+    replacedSheetIds.add(sheetId);
   });
-  const currentSheetNameSet = new Set(currentSheetNames);
-  previousSheetNames.forEach((sheetName) => {
-    if (!currentSheetNameSet.has(sheetName)) {
-      replacedSheetNames.add(sheetName);
+  const currentSheetIdSet = new Set(currentSheets.map((sheet) => sheet.sheetId));
+  previousSheets.forEach((sheet) => {
+    if (!currentSheetIdSet.has(sheet.sheetId)) {
+      replacedSheetIds.add(sheet.sheetId);
     }
   });
 
-  if (replacedSheetNames.size === 0) {
+  if (replacedSheetIds.size === 0) {
+    const allSheetIds = [
+      ...new Set([
+        ...previousSheets.map((sheet) => sheet.sheetId),
+        ...currentSheets.map((sheet) => sheet.sheetId),
+      ]),
+    ].toSorted((left, right) => compareSheetIds(left, right, currentSheetOrder, currentSheetName));
     return {
       replaceAll: true,
-      replacedSheetNames: [...new Set([...previousSheetNames, ...currentSheetNames])].toSorted(
-        (left, right) => compareSheetNames(left, right, currentSheetOrder),
-      ),
+      replacedSheetIds: allSheetIds,
       base: buildWorkbookLocalAuthoritativeBase(engine),
     };
   }
 
-  const orderedReplacedSheetNames = [...replacedSheetNames].toSorted((left, right) =>
-    compareSheetNames(left, right, currentSheetOrder),
+  const orderedReplacedSheetIds = [...replacedSheetIds].toSorted((left, right) =>
+    compareSheetIds(left, right, currentSheetOrder, currentSheetName),
   );
 
   return {
     replaceAll: false,
-    replacedSheetNames: orderedReplacedSheetNames,
+    replacedSheetIds: orderedReplacedSheetIds,
     base: buildWorkbookLocalAuthoritativeBaseForSheets(
       engine,
-      orderedReplacedSheetNames.filter((sheetName) => currentSheetNameSet.has(sheetName)),
+      orderedReplacedSheetIds
+        .map((sheetId) => currentSheetName.get(sheetId))
+        .filter((sheetName): sheetName is string => sheetName !== undefined),
     ),
   };
 }

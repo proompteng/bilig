@@ -1841,8 +1841,8 @@ export class SpreadsheetEngine {
             cells.push(cell);
           });
           return metadata
-            ? { name: sheet.name, order: sheet.order, metadata, cells }
-            : { name: sheet.name, order: sheet.order, cells };
+            ? { id: sheet.id, name: sheet.name, order: sheet.order, metadata, cells }
+            : { id: sheet.id, name: sheet.name, order: sheet.order, cells };
         }),
     };
   }
@@ -1875,7 +1875,12 @@ export class SpreadsheetEngine {
       ops.push({ kind: "upsertCellNumberFormat", format: { ...format } });
     });
     snapshot.sheets.forEach((sheet) => {
-      ops.push({ kind: "upsertSheet", name: sheet.name, order: sheet.order });
+      ops.push({
+        kind: "upsertSheet",
+        name: sheet.name,
+        order: sheet.order,
+        ...(typeof sheet.id === "number" ? { id: sheet.id } : {}),
+      });
     });
     snapshot.sheets.forEach((sheet) => {
       sheet.metadata?.rows?.forEach(({ index, id, size, hidden }) => {
@@ -3562,7 +3567,7 @@ export class SpreadsheetEngine {
             this.entityVersions.set(this.entityKeyForOp(op), order);
             break;
           case "upsertSheet":
-            this.workbook.createSheet(op.name, op.order);
+            this.workbook.createSheet(op.name, op.order, op.id);
             this.entityVersions.set(this.entityKeyForOp(op), order);
             const tombstone = this.sheetDeleteVersions.get(op.name);
             if (!tombstone || compareOpOrder(order, tombstone) > 0) {
