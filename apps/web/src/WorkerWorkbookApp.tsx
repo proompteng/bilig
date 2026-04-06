@@ -113,6 +113,7 @@ function WorkerWorkbookAppInner({
             />
           ) : null}
         </div>
+        {app.changesPanel}
       </div>
     </div>
   );

@@ -121,6 +121,13 @@ const presenceCoarseByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
   zql.presence_coarse.where("workbookId", documentId).orderBy("updatedAt", "desc"),
 );
 
+const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.workbook_change
+    .where("workbookId", documentId)
+    .orderBy("createdAt", "desc")
+    .orderBy("revision", "desc"),
+);
+
 export const queries = defineQueries({
   workbook: {
     get: workbookGet,
@@ -173,5 +180,11 @@ export const queries = defineQueries({
   },
   presence: {
     byWorkbook: presenceCoarseByWorkbook,
+  },
+  workbookChange: {
+    byWorkbook: workbookChangeByWorkbook,
+  },
+  workbookChanges: {
+    byWorkbook: workbookChangeByWorkbook,
   },
 });

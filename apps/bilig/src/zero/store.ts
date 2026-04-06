@@ -20,6 +20,7 @@ import {
   type WorkbookEventPayload,
   type WorkbookEventRecord,
 } from "@bilig/zero-sync";
+import { appendWorkbookChange } from "./workbook-change-store.js";
 import {
   buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine,
@@ -2175,6 +2176,14 @@ export async function persistWorkbookMutation(
     clientMutationId: options.clientMutationId ?? null,
     payload: options.eventPayload,
     createdAt: updatedAt,
+  });
+  await appendWorkbookChange(db, {
+    documentId,
+    revision,
+    actorUserId: options.updatedBy,
+    clientMutationId: options.clientMutationId ?? null,
+    payload: options.eventPayload,
+    createdAtUnixMs: Date.parse(updatedAt),
   });
 
   await supersedePendingRecalcJobs(db, documentId, revision);

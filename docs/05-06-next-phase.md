@@ -738,11 +738,12 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - `bench:contracts` now enforces both worker local visible edit p95 and worker `100k` warm-start p95
 - `bench:contracts` now also enforces worker reconnect catch-up with `100` pending ops p95 `<2s` on the real SQLite-backed worker runtime path for a `10k` active workbook, including authoritative drift, local rebase, submission drain, and authoritative absorption
 - Zero-backed coarse collaborator presence is now live in the mounted workbook header, with session-scoped location heartbeats and click-to-jump on active collaborator cells
+- authoritative `workbook_change` rows now persist beside workbook revisions, sync through Zero, and render in a mounted changes pane with jump-to-change targets in the browser shell
 
 **Still not completed**
 
 - private and named views
-- change bundles, changes pane, and undoable version flows
+- change bundle revert/undo flows and named versions
 - same-cell conflict compare UX beyond the existing draft-preservation guarantees
 - Phase 3 and Phase 4 agent/import/comprehension layers
 

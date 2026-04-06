@@ -1,9 +1,8 @@
 import type { Queryable } from "./store.js";
-
-export interface WorkbookPresenceSheetRef {
-  readonly sheetId: number | null;
-  readonly sheetName: string | null;
-}
+import {
+  resolveWorkbookSheetRef,
+  type WorkbookSheetRef as WorkbookPresenceSheetRef,
+} from "./workbook-sheet-ref.js";
 
 export interface UpsertWorkbookPresenceInput {
   readonly documentId: string;
@@ -13,22 +12,6 @@ export interface UpsertWorkbookPresenceInput {
   readonly sheetName?: string | null;
   readonly address?: string | null;
   readonly selection?: unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function parseSheetRefRow(value: unknown): WorkbookPresenceSheetRef | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const sheetId = value["sheetId"];
-  const sheetName = value["sheetName"];
-  return {
-    sheetId: typeof sheetId === "number" ? sheetId : null,
-    sheetName: typeof sheetName === "string" ? sheetName : null,
-  };
 }
 
 export async function ensureWorkbookPresenceSchema(db: Queryable): Promise<void> {
@@ -57,31 +40,7 @@ export async function resolveWorkbookPresenceSheetRef(
   db: Queryable,
   input: Pick<UpsertWorkbookPresenceInput, "documentId" | "sheetId" | "sheetName">,
 ): Promise<WorkbookPresenceSheetRef> {
-  const fallback = {
-    sheetId: input.sheetId ?? null,
-    sheetName: input.sheetName ?? null,
-  } satisfies WorkbookPresenceSheetRef;
-
-  if (input.sheetId == null && !input.sheetName) {
-    return fallback;
-  }
-
-  const rows = await db.query<{ sheetId?: unknown; sheetName?: unknown }>(
-    `
-      SELECT sheet_id AS "sheetId",
-             name AS "sheetName"
-        FROM sheets
-       WHERE workbook_id = $1
-         AND (
-           ($2::INTEGER IS NOT NULL AND sheet_id = $2)
-           OR ($3::TEXT IS NOT NULL AND name = $3)
-         )
-       ORDER BY sort_order ASC
-       LIMIT 1
-    `,
-    [input.documentId, input.sheetId ?? null, input.sheetName ?? null],
-  );
-  return parseSheetRefRow(rows.rows[0]) ?? fallback;
+  return await resolveWorkbookSheetRef(db, input);
 }
 
 export async function upsertWorkbookPresence(

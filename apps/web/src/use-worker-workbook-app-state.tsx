@@ -27,6 +27,7 @@ import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
+import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -500,6 +501,15 @@ export function useWorkerWorkbookAppState(input: {
     zero,
     enabled: runtimeReady && remoteSyncAvailable,
   });
+  const { changesPanel, changesToggle } = useWorkbookChangesPane({
+    documentId,
+    sheetNames,
+    zero,
+    enabled: runtimeReady,
+    onJump: (sheetName, address) => {
+      selectAddress(sheetName, address);
+    },
+  });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
@@ -585,21 +595,21 @@ export function useWorkerWorkbookAppState(input: {
   );
 
   const headerStatus = useMemo(() => {
-    if (collaborators.length === 0) {
-      return toolbarHeaderStatus;
-    }
     return (
       <>
         {toolbarHeaderStatus}
-        <WorkbookPresenceBar
-          collaborators={collaborators}
-          onJump={(sheetName, address) => {
-            selectAddress(sheetName, address);
-          }}
-        />
+        {changesToggle}
+        {collaborators.length > 0 ? (
+          <WorkbookPresenceBar
+            collaborators={collaborators}
+            onJump={(sheetName, address) => {
+              selectAddress(sheetName, address);
+            }}
+          />
+        ) : null}
       </>
     );
-  }, [collaborators, selectAddress, toolbarHeaderStatus]);
+  }, [changesToggle, collaborators, selectAddress, toolbarHeaderStatus]);
 
   return {
     beginEditing,
@@ -609,6 +619,7 @@ export function useWorkerWorkbookAppState(input: {
     commitEditor,
     copySelectionRange,
     createSheet,
+    changesPanel,
     editorSelectionBehavior,
     fillSelectionRange,
     handleEditorChange,

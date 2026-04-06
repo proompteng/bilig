@@ -131,6 +131,22 @@ const presenceCoarse = table("presence_coarse")
   })
   .primaryKey("workbookId", "sessionId");
 
+const workbookChange = table("workbook_change")
+  .columns({
+    workbookId: string().from("workbook_id"),
+    revision: number(),
+    actorUserId: string().from("actor_user_id"),
+    clientMutationId: string().from("client_mutation_id").optional(),
+    eventKind: string().from("event_kind"),
+    summary: string(),
+    sheetId: number().from("sheet_id").optional(),
+    sheetName: string().from("sheet_name").optional(),
+    anchorAddress: string().from("anchor_address").optional(),
+    rangeJson: json().from("range_json").optional(),
+    createdAt: number().from("created_at"),
+  })
+  .primaryKey("workbookId", "revision");
+
 export const schema = createSchema({
   tables: [
     workbooks,
@@ -143,6 +159,7 @@ export const schema = createSchema({
     cellEval,
     definedNames,
     presenceCoarse,
+    workbookChange,
   ],
   relationships: [],
 });
