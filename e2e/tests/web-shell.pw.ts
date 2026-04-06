@@ -1877,6 +1877,7 @@ test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
   await page.goto("/");
   await waitForWorkbookReady(page);
 
+  await clickProductCell(page, 0, 0);
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
 
