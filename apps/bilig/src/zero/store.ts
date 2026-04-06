@@ -73,6 +73,16 @@ export interface WorkbookRuntimeMetadata {
   ownerUserId: string;
 }
 
+export interface ReplaceWorkbookDocumentInput {
+  readonly documentId: string;
+  readonly snapshot: WorkbookSnapshot;
+  readonly ownerUserId: string;
+  readonly revision: number;
+  readonly calculatedRevision: number;
+  readonly updatedBy: string;
+  readonly updatedAt?: string;
+}
+
 export interface WorkbookProjectionState {
   projection: WorkbookSourceProjection;
   headRevision: number;
@@ -1792,6 +1802,34 @@ async function replaceCellEvalForMigration(
   if (rows.length > 0) {
     await persistCellEvalRows(db, documentId, [], rows);
   }
+}
+
+export async function replaceWorkbookDocument(
+  db: Queryable,
+  input: ReplaceWorkbookDocumentInput,
+): Promise<void> {
+  const updatedAt = input.updatedAt ?? nowIso();
+  const projection = buildWorkbookSourceProjection(input.documentId, input.snapshot, {
+    revision: input.revision,
+    calculatedRevision: input.calculatedRevision,
+    ownerUserId: input.ownerUserId,
+    updatedBy: input.updatedBy,
+    updatedAt,
+  });
+  await db.query(`DELETE FROM workbooks WHERE id = $1`, [input.documentId]);
+  await upsertWorkbookHeader(db, input.documentId, projection.workbook, input.snapshot, null);
+  await replaceWorkbookSourceProjectionForMigration(db, projection);
+  const engine = new SpreadsheetEngine({
+    workbookName: input.documentId,
+    replicaId: `replace-document:${input.documentId}:${input.revision}`,
+  });
+  await engine.ready();
+  engine.importSnapshot(input.snapshot);
+  await replaceCellEvalForMigration(
+    db,
+    input.documentId,
+    materializeCellEvalProjection(engine, input.documentId, input.calculatedRevision, updatedAt),
+  );
 }
 
 export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void> {

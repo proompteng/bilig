@@ -116,9 +116,35 @@ describe("selection persistence", () => {
 
     expect(replaceState).toHaveBeenCalledTimes(1);
     const [, , nextUrl] = replaceState.mock.calls[0];
-    expect(String(nextUrl)).toBe("https://bilig.test/?sheet=Sheet7");
+    expect(String(nextUrl)).toBe("https://bilig.test/?sheet=Sheet7&cell=B12");
     expect(storage.get("bilig:selection:book-1")).toBe(
       JSON.stringify({ sheetName: "Sheet7", address: "B12" }),
     );
+  });
+
+  it("restores a URL-backed cell selection when both sheet and cell are present", () => {
+    vi.stubGlobal("window", {
+      history: {
+        replaceState,
+        state: { from: "test" },
+      },
+      localStorage: {
+        getItem(key: string) {
+          return storage.get(key) ?? null;
+        },
+        setItem(key: string, value: string) {
+          storage.set(key, value);
+        },
+        clear() {
+          storage.clear();
+        },
+      },
+      location: new URL("https://bilig.test/?sheet=Sheet9&cell=d14"),
+    });
+
+    expect(loadPersistedSelection("book-1")).toEqual({
+      sheetName: "Sheet9",
+      address: "D14",
+    });
   });
 });

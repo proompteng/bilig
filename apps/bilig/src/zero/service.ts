@@ -20,11 +20,13 @@ import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
 import {
+  acquireWorkbookMutationLock,
   backfillAuthoritativeCellEval,
   dropLegacyZeroSyncSchemaObjects,
   ensureZeroSyncSchema,
   loadWorkbookEventRecordsAfter,
   loadWorkbookRuntimeMetadata,
+  replaceWorkbookDocument,
 } from "./store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";
@@ -36,6 +38,14 @@ import {
 import { ensureWorkbookSheetViewSchema } from "./sheet-view-store.js";
 import { ensureWorkbookVersionSchema } from "./workbook-version-store.js";
 import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
+import {
+  createWorkbookScenario,
+  deleteWorkbookScenario,
+  ensureWorkbookScenarioSchema,
+  loadWorkbookScenarioByDocument,
+  type CreateWorkbookScenarioInput,
+} from "./workbook-scenario-store.js";
+import type { WorkbookScenarioResponse } from "@bilig/zero-sync";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -64,6 +74,17 @@ export interface ZeroSyncService {
     documentId: string,
     afterRevision: number,
   ): Promise<AuthoritativeWorkbookEventBatch>;
+  createWorkbookScenario(
+    input: Omit<CreateWorkbookScenarioInput, "documentId" | "ownerUserId" | "baseRevision">,
+    session?: SessionIdentity,
+  ): Promise<WorkbookScenarioResponse>;
+  deleteWorkbookScenario(
+    input: {
+      workbookId: string;
+      documentId: string;
+    },
+    session?: SessionIdentity,
+  ): Promise<void>;
 }
 
 function fastifyRequestToWebRequest(request: FastifyRequest): Request {
@@ -146,6 +167,14 @@ class DisabledZeroSyncService implements ZeroSyncService {
   async loadAuthoritativeEvents(_documentId: string, _afterRevision: number): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
+
+  async createWorkbookScenario(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async deleteWorkbookScenario(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
 }
 
 class EnabledZeroSyncService implements ZeroSyncService {
@@ -167,6 +196,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await ensureWorkbookPresenceSchema(this.pool);
     await ensureWorkbookSheetViewSchema(this.pool);
     await ensureWorkbookVersionSchema(this.pool);
+    await ensureWorkbookScenarioSchema(this.pool);
     await ensureWorkbookChangeSchema(this.pool);
     await ensureWorkbookAgentRunSchema(this.pool);
     await backfillAuthoritativeCellEval(this.pool);
@@ -258,6 +288,22 @@ class EnabledZeroSyncService implements ZeroSyncService {
       },
       "workbookVersions.byWorkbook": {
         query: queries.workbookVersions.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbookScenario.byWorkbook": {
+        query: queries.workbookScenario.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbookScenarios.byWorkbook": {
+        query: queries.workbookScenarios.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbookScenario.byDocument": {
+        query: queries.workbookScenario.byDocument,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbookScenarios.byDocument": {
+        query: queries.workbookScenarios.byDocument,
         schema: workbookQueryArgsSchema,
       },
     } as const;
@@ -397,6 +443,96 @@ class EnabledZeroSyncService implements ZeroSyncService {
       calculatedRevision: metadata.calculatedRevision,
       events,
     };
+  }
+
+  async createWorkbookScenario(
+    input: Omit<CreateWorkbookScenarioInput, "documentId" | "ownerUserId" | "baseRevision">,
+    session?: SessionIdentity,
+  ): Promise<WorkbookScenarioResponse> {
+    const ownerUserId = session?.userID ?? "system";
+    return await this.runtimeManager.runExclusive(input.workbookId, async () => {
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        await acquireWorkbookMutationLock(client, input.workbookId);
+        const state = await this.runtimeManager.loadRuntime(client, input.workbookId);
+        const documentId =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? `scenario:${crypto.randomUUID()}`
+            : `scenario:${Math.random().toString(36).slice(2)}`;
+        const snapshot = structuredClone(state.engine.exportSnapshot());
+        snapshot.workbook.name = input.name;
+        const timestamp = Date.now();
+        await replaceWorkbookDocument(client, {
+          documentId,
+          snapshot,
+          ownerUserId,
+          revision: 0,
+          calculatedRevision: 0,
+          updatedBy: ownerUserId,
+        });
+        await createWorkbookScenario(client, {
+          workbookId: input.workbookId,
+          documentId,
+          ownerUserId,
+          name: input.name,
+          baseRevision: state.headRevision,
+          ...(input.sheetId !== undefined ? { sheetId: input.sheetId } : {}),
+          ...(input.sheetName !== undefined ? { sheetName: input.sheetName } : {}),
+          ...(input.address !== undefined ? { address: input.address } : {}),
+          ...(input.viewport !== undefined ? { viewport: input.viewport } : {}),
+        });
+        const created = await loadWorkbookScenarioByDocument(client, documentId);
+        await client.query("COMMIT");
+        return (
+          created ?? {
+            documentId,
+            workbookId: input.workbookId,
+            ownerUserId,
+            name: input.name,
+            baseRevision: state.headRevision,
+            sheetId: input.sheetId ?? null,
+            sheetName: input.sheetName ?? null,
+            address: input.address ?? null,
+            viewport: input.viewport ?? null,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          }
+        );
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    });
+  }
+
+  async deleteWorkbookScenario(
+    input: {
+      workbookId: string;
+      documentId: string;
+    },
+    session?: SessionIdentity,
+  ): Promise<void> {
+    const ownerUserId = session?.userID ?? "system";
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await deleteWorkbookScenario(client, {
+        workbookId: input.workbookId,
+        documentId: input.documentId,
+        ownerUserId,
+      });
+      await client.query(`DELETE FROM workbooks WHERE id = $1`, [input.documentId]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+      this.runtimeManager.invalidate(input.documentId);
+    }
   }
 }
 

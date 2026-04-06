@@ -156,6 +156,26 @@ const workbookVersionByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: 
     .orderBy("name", "asc"),
 );
 
+const workbookScenarioByWorkbook = defineQuery(
+  workbookQueryArgsSchema,
+  ({ args: { documentId }, ctx }) =>
+    zql.workbook_scenario
+      .where("workbookId", documentId)
+      .where("ownerUserId", resolveQueryUserId(ctx))
+      .orderBy("updatedAt", "desc")
+      .orderBy("createdAt", "desc")
+      .orderBy("name", "asc"),
+);
+
+const workbookScenarioByDocument = defineQuery(
+  workbookQueryArgsSchema,
+  ({ args: { documentId }, ctx }) =>
+    zql.workbook_scenario
+      .where("documentId", documentId)
+      .where("ownerUserId", resolveQueryUserId(ctx))
+      .one(),
+);
+
 export const queries = defineQueries({
   workbook: {
     get: workbookGet,
@@ -226,5 +246,13 @@ export const queries = defineQueries({
   },
   workbookVersions: {
     byWorkbook: workbookVersionByWorkbook,
+  },
+  workbookScenario: {
+    byWorkbook: workbookScenarioByWorkbook,
+    byDocument: workbookScenarioByDocument,
+  },
+  workbookScenarios: {
+    byWorkbook: workbookScenarioByWorkbook,
+    byDocument: workbookScenarioByDocument,
   },
 });

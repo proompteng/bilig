@@ -35,6 +35,15 @@ export {
   type BiligRuntimeConfig,
 } from "./runtime-config.js";
 export { schema } from "./schema.js";
+export {
+  workbookScenarioCreateRequestSchema,
+  workbookScenarioDeleteResponseSchema,
+  workbookScenarioResponseSchema,
+  workbookScenarioViewportSchema,
+  type WorkbookScenarioCreateRequest,
+  type WorkbookScenarioDeleteResponse,
+  type WorkbookScenarioResponse,
+} from "./workbook-scenarios.js";
 export { createEmptyWorkbookSnapshot, projectWorkbookToSnapshot } from "./snapshot.js";
 export {
   applyWorkbookEvent,

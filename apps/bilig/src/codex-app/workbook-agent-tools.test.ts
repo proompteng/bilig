@@ -24,6 +24,24 @@ async function createEngine(): Promise<SpreadsheetEngine> {
 }
 
 function createZeroSyncHarness(engine: SpreadsheetEngine) {
+  const createWorkbookScenario = vi.fn(async () => ({
+    documentId: "scenario:test",
+    workbookId: "doc-1",
+    ownerUserId: "alex@example.com",
+    name: "Scenario branch",
+    baseRevision: 1,
+    sheetId: 1,
+    sheetName: "Sheet1",
+    address: "A1",
+    viewport: {
+      rowStart: 0,
+      rowEnd: 5,
+      colStart: 0,
+      colEnd: 5,
+    },
+    createdAt: 1,
+    updatedAt: 1,
+  }));
   const zeroSyncService: ZeroSyncService = {
     enabled: true,
     async initialize() {},
@@ -69,8 +87,12 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
     async loadAuthoritativeEvents() {
       throw new Error("not used");
     },
+    createWorkbookScenario,
+    async deleteWorkbookScenario() {
+      throw new Error("not used");
+    },
   };
-  return { zeroSyncService };
+  return { zeroSyncService, createWorkbookScenario };
 }
 
 function createBundle(
@@ -315,6 +337,69 @@ describe("workbook agent tools", () => {
     expect(text).toContain('"query": "gross margin"');
     expect(text).toContain('"address": "A2"');
     expect(text).toContain('"snippet": "Gross Margin"');
+  });
+
+  it("creates a scratchpad scenario branch from the attached workbook context", async () => {
+    const engine = await createEngine();
+    const { createWorkbookScenario, zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-scenario",
+        tool: "bilig.create_scenario",
+        arguments: {
+          name: "Scenario branch",
+        },
+      },
+    );
+
+    expect(createWorkbookScenario).toHaveBeenCalledWith(
+      {
+        workbookId: "doc-1",
+        name: "Scenario branch",
+        sheetName: "Sheet1",
+        address: "B1",
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+      {
+        userID: "alex@example.com",
+        roles: ["editor"],
+      },
+    );
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"created": true');
+    expect(text).toContain('"documentId": "scenario:test"');
   });
 
   it("traces multi-hop workbook dependencies from the attached selection", async () => {

@@ -128,6 +128,7 @@ function WorkerWorkbookAppInner({
             />
           ) : null}
         </div>
+        {app.scenariosPanel}
         {app.versionsPanel}
         {app.viewsPanel}
         {app.changesPanel}

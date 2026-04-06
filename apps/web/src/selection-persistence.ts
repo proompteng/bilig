@@ -6,6 +6,7 @@ const DEFAULT_SELECTION: WorkerRuntimeSelection = {
   address: "A1",
 };
 const SHEET_QUERY_PARAM = "sheet";
+const CELL_QUERY_PARAM = "cell";
 
 function storageKey(documentId: string): string {
   return `bilig:selection:${documentId}`;
@@ -46,6 +47,22 @@ function readSheetSelectionFromUrl(): string | null {
   return sheetName ? normalizeSheetName(sheetName) : null;
 }
 
+function readCellSelectionFromUrl(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const searchParams = new URLSearchParams(window.location.search);
+  const address = searchParams.get(CELL_QUERY_PARAM);
+  if (!address) {
+    return null;
+  }
+  try {
+    return normalizeSelection("Sheet1", address)?.address ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function readStoredSelection(documentId: string): WorkerRuntimeSelection | null {
   if (typeof window === "undefined") {
     return null;
@@ -74,13 +91,15 @@ function readStoredSelection(documentId: string): WorkerRuntimeSelection | null 
 export function loadPersistedSelection(documentId: string): WorkerRuntimeSelection {
   const storedSelection = readStoredSelection(documentId);
   const urlSheetSelection = readSheetSelectionFromUrl();
+  const urlCellSelection = readCellSelectionFromUrl();
   if (urlSheetSelection) {
     return {
       sheetName: urlSheetSelection,
       address:
-        storedSelection?.sheetName === urlSheetSelection
+        urlCellSelection ??
+        (storedSelection?.sheetName === urlSheetSelection
           ? storedSelection.address
-          : DEFAULT_SELECTION.address,
+          : DEFAULT_SELECTION.address),
     };
   }
   if (typeof window === "undefined") {
@@ -92,11 +111,12 @@ export function loadPersistedSelection(documentId: string): WorkerRuntimeSelecti
 function persistSelectionToUrl(selection: WorkerRuntimeSelection): void {
   const currentUrl = new URL(window.location.href);
   const currentSheet = currentUrl.searchParams.get(SHEET_QUERY_PARAM);
-  if (currentSheet === selection.sheetName && !currentUrl.searchParams.has("cell")) {
+  const currentCell = currentUrl.searchParams.get(CELL_QUERY_PARAM);
+  if (currentSheet === selection.sheetName && currentCell === selection.address) {
     return;
   }
   currentUrl.searchParams.set(SHEET_QUERY_PARAM, selection.sheetName);
-  currentUrl.searchParams.delete("cell");
+  currentUrl.searchParams.set(CELL_QUERY_PARAM, selection.address);
   window.history.replaceState(window.history.state, "", currentUrl);
 }
 

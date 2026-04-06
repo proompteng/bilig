@@ -40,6 +40,7 @@ import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
+import { useWorkbookScenariosPane } from "./use-workbook-scenarios-pane.js";
 import { useWorkbookViewsPane } from "./use-workbook-views-pane.js";
 import { useWorkbookVersionsPane } from "./use-workbook-versions-pane.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
@@ -764,6 +765,14 @@ export function useWorkerWorkbookAppState(input: {
       selectAddress(sheetName, address);
     },
   });
+  const { scenarioStatus, scenariosPanel, scenariosToggle } = useWorkbookScenariosPane({
+    documentId,
+    currentUserId: runtimeConfig.currentUserId,
+    selection,
+    zero,
+    enabled: runtimeReady,
+    getCurrentViewport: () => visibleViewportRef.current,
+  });
   const { viewsPanel, viewsToggle } = useWorkbookViewsPane({
     documentId,
     currentUserId: runtimeConfig.currentUserId,
@@ -898,6 +907,8 @@ export function useWorkerWorkbookAppState(input: {
     return (
       <>
         {toolbarHeaderStatus}
+        {scenarioStatus}
+        {scenariosToggle}
         {versionsToggle}
         {viewsToggle}
         {changesToggle}
@@ -916,6 +927,8 @@ export function useWorkerWorkbookAppState(input: {
     changesToggle,
     collaborators,
     agentToggle,
+    scenarioStatus,
+    scenariosToggle,
     selectAddress,
     toolbarHeaderStatus,
     versionsToggle,
@@ -951,6 +964,7 @@ export function useWorkerWorkbookAppState(input: {
     ribbon,
     runtimeError,
     runtimeReady,
+    scenariosPanel,
     selectAddress,
     selectedCell,
     selection,

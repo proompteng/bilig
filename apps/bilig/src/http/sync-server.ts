@@ -16,7 +16,7 @@ import {
   resolveServerRuntimeConfig,
   runPromise,
 } from "@bilig/runtime-kernel";
-import type { BiligRuntimeConfig } from "@bilig/zero-sync";
+import { workbookScenarioCreateRequestSchema, type BiligRuntimeConfig } from "@bilig/zero-sync";
 
 import { DocumentSessionManager } from "../workbook-runtime/document-session-manager.js";
 import { SyncDocumentSupervisor } from "../workbook-runtime/sync-document-supervisor.js";
@@ -240,6 +240,60 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         request.params.documentId,
         afterRevision,
       );
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/scenarios",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!zeroSyncService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      }
+      const session = resolveSessionIdentity(request, reply);
+      reply.header("cache-control", "no-store");
+      const parsed = workbookScenarioCreateRequestSchema.parse(request.body ?? {});
+      return await zeroSyncService.createWorkbookScenario(
+        {
+          workbookId: request.params.documentId,
+          name: parsed.name,
+          ...(parsed.sheetName ? { sheetName: parsed.sheetName } : {}),
+          ...(parsed.address ? { address: parsed.address } : {}),
+          ...(parsed.viewport ? { viewport: parsed.viewport } : {}),
+        },
+        session,
+      );
+    },
+  );
+
+  app.delete(
+    "/v2/documents/:documentId/scenarios/:scenarioDocumentId",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; scenarioDocumentId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!zeroSyncService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope("ZERO_SYNC_DISABLED", "Zero sync is not configured", true);
+      }
+      const session = resolveSessionIdentity(request, reply);
+      reply.header("cache-control", "no-store");
+      await zeroSyncService.deleteWorkbookScenario(
+        {
+          workbookId: request.params.documentId,
+          documentId: request.params.scenarioDocumentId,
+        },
+        session,
+      );
+      return { ok: true as const };
     },
   );
 

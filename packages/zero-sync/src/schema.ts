@@ -181,6 +181,22 @@ const workbookVersion = table("workbook_version")
   })
   .primaryKey("workbookId", "id");
 
+const workbookScenario = table("workbook_scenario")
+  .columns({
+    documentId: string().from("document_id"),
+    workbookId: string().from("workbook_id"),
+    ownerUserId: string().from("owner_user_id"),
+    name: string(),
+    baseRevision: number().from("base_revision"),
+    sheetId: number().from("sheet_id").optional(),
+    sheetName: string().from("sheet_name").optional(),
+    address: string().optional(),
+    viewportJson: json().from("viewport_json").optional(),
+    createdAt: number().from("created_at"),
+    updatedAt: number().from("updated_at"),
+  })
+  .primaryKey("documentId");
+
 export const schema = createSchema({
   tables: [
     workbooks,
@@ -196,6 +212,7 @@ export const schema = createSchema({
     sheetView,
     workbookChange,
     workbookVersion,
+    workbookScenario,
   ],
   relationships: [],
 });

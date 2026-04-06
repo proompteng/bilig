@@ -973,10 +973,13 @@ Partially implemented.
 - the workbook shell now has a real local import staging dialog for CSV/XLSX instead of only raw runtime load plumbing
 - staged import preview now parses locally in a dedicated browser worker and shows workbook/sheet shape, warnings, and sample cells before finalize
 - import finalize now goes through the authoritative runtime frame path for both CSV and XLSX, including replace-current and create-new workbook flows
+- the workbook shell now has authoritative scratchpad branching: creating a scenario produces a real child workbook document with its own revisions instead of a fake overlay mode
+- scratchpad navigation now preserves sheet and cell context through URL-backed document switches, and scenario metadata is live through Zero queries rather than local-only UI state
 - the right-rail assistant now has workbook-comprehension quick actions instead of only generic prompts
 - the monolith agent runtime now exposes warm local workbook search across sheet names, addresses, formulas, inputs, and displayed values
 - the monolith agent runtime now exposes workbook-wide formula issue scans for broken formulas, cycles, and JS-only fallback formulas
 - the monolith agent runtime now exposes multi-hop dependency tracing for the active selection or any addressed cell
+- the monolith agent runtime now exposes scratchpad creation as a first-class app-server tool, so the assistant can branch a workbook into a what-if document without leaving the spreadsheet
 - the right rail now renders those comprehension results as structured insight cards instead of raw JSON blobs
 
 **User-visible outcomes**
@@ -997,7 +1000,6 @@ Partially implemented.
 
 - broken-formula and dependency inspector
 - semantic workbook search/index
-- scenario scratchpads / temporary branches
 - giant-workbook benchmark corpus
 
 **Dependencies**

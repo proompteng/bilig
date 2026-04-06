@@ -1,0 +1,25 @@
+export interface WorkbookNavigationTarget {
+  readonly documentId: string;
+  readonly sheetName?: string | null;
+  readonly address?: string | null;
+}
+
+export function resolveWorkbookNavigationUrl(input: WorkbookNavigationTarget): string {
+  const url = new URL(window.location.href);
+  url.searchParams.set("document", input.documentId);
+  if (input.sheetName) {
+    url.searchParams.set("sheet", input.sheetName);
+  } else {
+    url.searchParams.delete("sheet");
+  }
+  if (input.address) {
+    url.searchParams.set("cell", input.address.toUpperCase());
+  } else {
+    url.searchParams.delete("cell");
+  }
+  return url.toString();
+}
+
+export function navigateToWorkbook(input: WorkbookNavigationTarget): void {
+  window.location.assign(resolveWorkbookNavigationUrl(input));
+}
