@@ -3,6 +3,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import type { BrowserPersistence } from "@bilig/storage-browser";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
+import { collectChangedCellsBySheet, collectViewportCells } from "../worker-runtime-support.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime";
 
 function createMemoryPersistence(seed: Record<string, unknown> = {}): BrowserPersistence {
@@ -338,12 +339,7 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: false,
     });
 
-    const collectViewportCells = runtime["collectViewportCells"];
-    if (typeof collectViewportCells !== "function") {
-      throw new Error("Expected collectViewportCells method");
-    }
-
-    const cells = Reflect.apply(collectViewportCells, runtime, [
+    const cells = collectViewportCells(
       {
         sheetName: "Sheet1",
         rowStart: 0,
@@ -356,7 +352,7 @@ describe("WorkbookWorkerRuntime", () => {
         positions: [{ address: "A1", row: 0, col: 0 }],
       },
       [{ rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 1 }],
-    ]) as Array<{ address: string; row: number; col: number }>;
+    );
 
     expect(cells).toEqual([
       { address: "A1", row: 0, col: 0 },
@@ -383,15 +379,7 @@ describe("WorkbookWorkerRuntime", () => {
       throw new Error("collectChangedCellsBySheet should not use getQualifiedAddress");
     };
 
-    const collectChangedCellsBySheet = runtime["collectChangedCellsBySheet"];
-    if (typeof collectChangedCellsBySheet !== "function") {
-      throw new Error("Expected collectChangedCellsBySheet method");
-    }
-
-    const impacts = Reflect.apply(collectChangedCellsBySheet, runtime, [[0]]) as Map<
-      string,
-      { positions: Array<{ address: string; row: number; col: number }> }
-    >;
+    const impacts = collectChangedCellsBySheet(engine, [0]);
 
     expect(impacts.get("Sheet1")?.positions).toEqual([{ address: "A1", row: 0, col: 0 }]);
   });

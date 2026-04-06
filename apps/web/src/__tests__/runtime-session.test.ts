@@ -1,6 +1,6 @@
 import { MessageChannel } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkerEngineHost, type MessagePortLike } from "@bilig/worker-transport";
+import { createWorkerEngineHost } from "@bilig/worker-transport";
 import type { BrowserPersistence } from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
@@ -45,9 +45,7 @@ function createSnapshot(cells: readonly { address: string; value: number }[]): W
   };
 }
 
-function createMockWorkerPort(
-  runtime: WorkbookWorkerRuntime,
-): MessagePortLike & { terminate(): void } {
+function createMockWorkerPort(runtime: WorkbookWorkerRuntime) {
   const channel = new MessageChannel();
   const host = createWorkerEngineHost(runtime, channel.port1);
   return {
@@ -271,8 +269,10 @@ describe("createWorkerRuntimeSessionController", () => {
     });
     const stylesView = createMockZeroView<readonly unknown[]>([]);
     const formatsView = createMockZeroView<readonly unknown[]>([]);
-    const selectedSourceView = createMockZeroView<unknown>(undefined);
-    const selectedEvalView = createMockZeroView<unknown>(undefined);
+    const selectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedRowMetadataView = createMockZeroView<readonly unknown[]>([]);
+    const selectedColumnMetadataView = createMockZeroView<readonly unknown[]>([]);
     const viewportSourceView = createMockZeroView<readonly unknown[]>([]);
     const viewportEvalView = createMockZeroView<readonly unknown[]>([]);
     const rowMetadataView = createMockZeroView<readonly unknown[]>([]);
@@ -281,8 +281,10 @@ describe("createWorkerRuntimeSessionController", () => {
       workbookView,
       stylesView,
       formatsView,
-      selectedSourceView,
-      selectedEvalView,
+      selectedSourceTileView,
+      selectedEvalTileView,
+      selectedRowMetadataView,
+      selectedColumnMetadataView,
       viewportSourceView,
       viewportEvalView,
       rowMetadataView,
@@ -308,20 +310,24 @@ describe("createWorkerRuntimeSessionController", () => {
       },
     );
 
-    selectedSourceView.emit({
-      sheetName: "Sheet1",
-      address: "A1",
-      inputValue: 5,
-      styleId: "style-live",
-    });
-    selectedEvalView.emit({
-      sheetName: "Sheet1",
-      address: "A1",
-      value: { tag: ValueTag.Number, value: 5 },
-      flags: 0,
-      version: 1,
-      styleId: "style-live",
-    });
+    selectedSourceTileView.emit([
+      {
+        sheetName: "Sheet1",
+        address: "A1",
+        inputValue: 5,
+        styleId: "style-live",
+      },
+    ]);
+    selectedEvalTileView.emit([
+      {
+        sheetName: "Sheet1",
+        address: "A1",
+        value: { tag: ValueTag.Number, value: 5 },
+        flags: 0,
+        version: 1,
+        styleId: "style-live",
+      },
+    ]);
 
     await vi.waitFor(() => {
       expect(controller.handle.cache.getCell("Sheet1", "A1").value).toEqual({
@@ -377,18 +383,26 @@ describe("createWorkerRuntimeSessionController", () => {
     });
     const stylesView = createMockZeroView<readonly unknown[]>([]);
     const formatsView = createMockZeroView<readonly unknown[]>([]);
-    const initialSelectedSourceView = createMockZeroView<unknown>(undefined);
-    const initialSelectedEvalView = createMockZeroView<unknown>(undefined);
-    const selectedSourceView = createMockZeroView<unknown>(undefined);
-    const selectedEvalView = createMockZeroView<unknown>(undefined);
+    const initialSelectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
+    const initialSelectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
+    const initialSelectedRowTileView = createMockZeroView<readonly unknown[]>([]);
+    const initialSelectedColumnTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedRowTileView = createMockZeroView<readonly unknown[]>([]);
+    const selectedColumnTileView = createMockZeroView<readonly unknown[]>([]);
     const zero = createSequencedZeroViews(
       workbookView,
       stylesView,
       formatsView,
-      initialSelectedSourceView,
-      initialSelectedEvalView,
-      selectedSourceView,
-      selectedEvalView,
+      initialSelectedSourceTileView,
+      initialSelectedEvalTileView,
+      initialSelectedRowTileView,
+      initialSelectedColumnTileView,
+      selectedSourceTileView,
+      selectedEvalTileView,
+      selectedRowTileView,
+      selectedColumnTileView,
     );
 
     const controller = await createWorkerRuntimeSessionController(
@@ -424,31 +438,37 @@ describe("createWorkerRuntimeSessionController", () => {
       });
     });
 
-    selectedSourceView.emit({
-      sheetName: "Sheet1",
-      address: "A2",
-      formula: 'A1="HELLO"',
-    });
-    selectedEvalView.emit({
-      sheetName: "Sheet1",
-      address: "A2",
-      value: { tag: ValueTag.Boolean, value: false },
-      flags: 0,
-      version: 1,
-    });
+    selectedSourceTileView.emit([
+      {
+        sheetName: "Sheet1",
+        address: "A2",
+        formula: 'A1="HELLO"',
+      },
+    ]);
+    selectedEvalTileView.emit([
+      {
+        sheetName: "Sheet1",
+        address: "A2",
+        value: { tag: ValueTag.Boolean, value: false },
+        flags: 0,
+        version: 1,
+      },
+    ]);
 
     expect(controller.handle.cache.getCell("Sheet1", "A2").value).toEqual({
       tag: ValueTag.Boolean,
       value: true,
     });
 
-    selectedEvalView.emit({
-      sheetName: "Sheet1",
-      address: "A2",
-      value: { tag: ValueTag.Boolean, value: true },
-      flags: 0,
-      version: 2,
-    });
+    selectedEvalTileView.emit([
+      {
+        sheetName: "Sheet1",
+        address: "A2",
+        value: { tag: ValueTag.Boolean, value: true },
+        flags: 0,
+        version: 2,
+      },
+    ]);
     workbookView.emit({
       headRevision: 2,
       calculatedRevision: 2,

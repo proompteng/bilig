@@ -1,0 +1,900 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ClipboardEvent as ReactClipboardEvent,
+  type FocusEvent as ReactFocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { formatAddress } from "@bilig/formula";
+import { ValueTag } from "@bilig/protocol";
+import {
+  createRectangleSelectionFromRange,
+  createGridSelection,
+  createSheetSelection,
+  rectangleToAddresses,
+} from "./gridSelection.js";
+import {
+  resolveFillHandlePreviewRange,
+  resolveFillHandleSelectionRange,
+} from "./gridFillHandle.js";
+import {
+  resolveMovedRange,
+  resolveSelectionMoveAnchorCell,
+  sameRectangle,
+} from "./gridRangeMove.js";
+import {
+  resolveColumnResizeTarget,
+  type HeaderSelection,
+  type PointerGeometry,
+  type VisibleRegionState,
+} from "./gridPointer.js";
+import { resolveGridHoverState, sameGridHoverState } from "./gridHover.js";
+import { cellToEditorSeed } from "./gridCells.js";
+import { isHandledGridKey } from "./gridKeyboard.js";
+import type { InternalClipboardRange } from "./gridInternalClipboard.js";
+import {
+  finishGridResize,
+  handleGridBodyDoubleClick,
+  handleGridPointerDown,
+  handleGridPointerMove,
+  handleGridPointerUp,
+  startGridResize,
+} from "./gridInteractionController.js";
+import {
+  clearGridPendingPointerActivation,
+  resetGridPointerInteraction,
+} from "./gridInteractionState.js";
+import {
+  applyGridClipboardValues,
+  captureGridClipboardSelection,
+  getNormalizedGridKeyboardKey,
+  handleGridCopyCapture,
+  handleGridPasteCapture,
+} from "./gridClipboardKeyboardController.js";
+import type { Item } from "./gridTypes.js";
+import type { Rectangle } from "./gridTypes.js";
+import type {
+  EditSelectionBehavior,
+  WorkbookGridSurfaceProps,
+} from "./workbookGridSurfaceTypes.js";
+import { useWorkbookGridKeyboardHandler } from "./useWorkbookGridKeyboardHandler.js";
+import { useWorkbookGridRenderState } from "./useWorkbookGridRenderState.js";
+import { useWorkbookGridPointerResolvers } from "./useWorkbookGridPointerResolvers.js";
+import { useWorkbookGridSelectionSummary } from "./useWorkbookGridSelectionSummary.js";
+
+export function useWorkbookGridInteractions(
+  input: Pick<
+    WorkbookGridSurfaceProps,
+    | "editorValue"
+    | "isEditingCell"
+    | "onAutofitColumn"
+    | "onBeginEdit"
+    | "onCancelEdit"
+    | "onClearCell"
+    | "onColumnWidthChange"
+    | "onCommitEdit"
+    | "onCopyRange"
+    | "onEditorChange"
+    | "onFillRange"
+    | "onMoveRange"
+    | "onPaste"
+    | "onSelect"
+    | "onSelectionLabelChange"
+    | "onToggleBooleanCell"
+  > & {
+    engine: WorkbookGridSurfaceProps["engine"];
+    sheetName: string;
+    selectedAddr: string;
+    renderState: ReturnType<typeof useWorkbookGridRenderState>;
+  },
+) {
+  const {
+    editorValue,
+    engine,
+    isEditingCell,
+    onAutofitColumn,
+    onBeginEdit,
+    onCancelEdit,
+    onClearCell,
+    onCommitEdit,
+    onCopyRange,
+    onEditorChange,
+    onFillRange,
+    onMoveRange,
+    onPaste,
+    onSelect,
+    onSelectionLabelChange,
+    onToggleBooleanCell,
+    sheetName,
+    selectedAddr,
+    renderState,
+  } = input;
+  const {
+    activeResizeColumn,
+    clearColumnResizePreview,
+    columnWidths,
+    commitColumnWidth,
+    computeAutofitColumnWidth,
+    fillPreviewRange,
+    focusGrid,
+    getCellScreenBounds,
+    getPreviewColumnWidth,
+    gridMetrics,
+    gridSelection,
+    hostRef,
+    isFillHandleDragging,
+    isRangeMoveDragging,
+    previewColumnWidth,
+    selectedCell,
+    selectionRange,
+    setActiveHeaderDrag,
+    setActiveResizeColumn,
+    setFillPreviewRange,
+    setGridSelection,
+    setHoverState,
+    setIsFillHandleDragging,
+    setIsRangeMoveDragging,
+    visibleRegion,
+  } = renderState;
+  const wasEditingOverlayRef = useRef(false);
+  const ignoreNextPointerSelectionRef = useRef(false);
+  const pendingPointerCellRef = useRef<Item | null>(null);
+  const dragAnchorCellRef = useRef<Item | null>(null);
+  const dragPointerCellRef = useRef<Item | null>(null);
+  const dragHeaderSelectionRef = useRef<HeaderSelection | null>(null);
+  const dragViewportRef = useRef<VisibleRegionState | null>(null);
+  const dragGeometryRef = useRef<PointerGeometry | null>(null);
+  const dragDidMoveRef = useRef(false);
+  const postDragSelectionExpiryRef = useRef<number>(0);
+  const columnResizeActiveRef = useRef(false);
+  const lastBodyClickCellRef = useRef<Item | null>(null);
+  const internalClipboardRef = useRef<InternalClipboardRange | null>(null);
+  const pendingKeyboardPasteSequenceRef = useRef(0);
+  const suppressNextNativePasteRef = useRef(false);
+  const pendingTypeSeedRef = useRef<string | null>(null);
+  const fillPreviewRangeRef = useRef(fillPreviewRange);
+  const fillHandleCleanupRef = useRef<(() => void) | null>(null);
+  const fillHandlePointerIdRef = useRef<number | null>(null);
+  const rangeMoveCleanupRef = useRef<(() => void) | null>(null);
+  const rangeMoveSourceRangeRef = useRef<Rectangle | null>(null);
+  const rangeMovePreviewRangeRef = useRef<Rectangle | null>(null);
+  const rangeMoveAnchorOffsetRef = useRef<Item | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const activeSheetRef = useRef(sheetName);
+  const interactionState = useMemo(
+    () => ({
+      ignoreNextPointerSelectionRef,
+      pendingPointerCellRef,
+      dragAnchorCellRef,
+      dragPointerCellRef,
+      dragHeaderSelectionRef,
+      dragViewportRef,
+      dragGeometryRef,
+      dragDidMoveRef,
+      postDragSelectionExpiryRef,
+      columnResizeActiveRef,
+    }),
+    [columnResizeActiveRef],
+  );
+  const {
+    resolveHeaderSelectionAtPointer,
+    resolveHeaderSelectionForPointerDrag,
+    resolvePointerCell,
+    resolvePointerGeometry,
+  } = useWorkbookGridPointerResolvers({
+    hostRef,
+    visibleRegion,
+    columnWidths,
+    gridMetrics,
+    selectedCell,
+    gridSelection,
+    getCellScreenBounds,
+  });
+  useEffect(() => {
+    fillPreviewRangeRef.current = fillPreviewRange;
+  }, [fillPreviewRange]);
+  useEffect(() => {
+    return () => {
+      fillHandleCleanupRef.current?.();
+      rangeMoveCleanupRef.current?.();
+      resizeCleanupRef.current?.();
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const sheetChanged = activeSheetRef.current !== sheetName;
+    activeSheetRef.current = sheetName;
+    setGridSelection((current) => {
+      const currentCell = current.current?.cell;
+      if (
+        !sheetChanged &&
+        currentCell &&
+        currentCell[0] === selectedCell.col &&
+        currentCell[1] === selectedCell.row
+      ) {
+        return current;
+      }
+      clearGridPendingPointerActivation(interactionState);
+      dragGeometryRef.current = null;
+      return createGridSelection(selectedCell.col, selectedCell.row);
+    });
+  }, [interactionState, selectedCell.col, selectedCell.row, setGridSelection, sheetName]);
+  useEffect(() => {
+    if (wasEditingOverlayRef.current && !isEditingCell) {
+      window.requestAnimationFrame(() => {
+        focusGrid();
+      });
+    }
+    if (isEditingCell) {
+      pendingTypeSeedRef.current = null;
+    }
+    wasEditingOverlayRef.current = isEditingCell;
+  }, [focusGrid, isEditingCell]);
+  const beginSelectedEdit = useCallback(
+    (seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
+      onBeginEdit(
+        seed ?? cellToEditorSeed(engine.getCell(sheetName, selectedAddr)),
+        selectionBehavior,
+      );
+    },
+    [engine, onBeginEdit, selectedAddr, sheetName],
+  );
+  const beginEditAt = useCallback(
+    (addr: string, seed?: string, selectionBehavior: EditSelectionBehavior = "caret-end") => {
+      onBeginEdit(seed ?? cellToEditorSeed(engine.getCell(sheetName, addr)), selectionBehavior);
+    },
+    [engine, onBeginEdit, sheetName],
+  );
+  const toggleBooleanCellAt = useCallback(
+    (col: number, row: number): boolean => {
+      if (!onToggleBooleanCell) {
+        return false;
+      }
+      const address = formatAddress(row, col);
+      const snapshot = engine.getCell(sheetName, address);
+      if (snapshot.value.tag !== ValueTag.Boolean) {
+        return false;
+      }
+      onToggleBooleanCell(sheetName, address, !snapshot.value.value);
+      return true;
+    },
+    [engine, onToggleBooleanCell, sheetName],
+  );
+  useWorkbookGridSelectionSummary({ gridSelection, selectedAddr, onSelectionLabelChange });
+  const allowsRangeMove = Boolean(
+    selectionRange &&
+    gridSelection.columns.length === 0 &&
+    gridSelection.rows.length === 0 &&
+    !fillPreviewRange &&
+    !isFillHandleDragging,
+  );
+  const isFillHandleTarget = useCallback((target: EventTarget | null): boolean => {
+    return target instanceof Element && target.closest("[data-grid-fill-handle='true']") !== null;
+  }, []);
+  const applyClipboardValues = useCallback(
+    (target: Item, values: readonly (readonly string[])[]) => {
+      applyGridClipboardValues({
+        internalClipboardRef,
+        onCopyRange,
+        onPaste,
+        sheetName,
+        target,
+        values,
+      });
+    },
+    [onCopyRange, onPaste, sheetName],
+  );
+  const captureInternalClipboardSelection = useCallback(() => {
+    return captureGridClipboardSelection({
+      engine,
+      gridSelection,
+      internalClipboardRef,
+      sheetName,
+    });
+  }, [engine, gridSelection, sheetName]);
+  const { handleGridKey } = useWorkbookGridKeyboardHandler({
+    applyClipboardValues,
+    beginSelectedEdit,
+    captureInternalClipboardSelection,
+    editorValue,
+    engine,
+    gridSelection,
+    hostRef,
+    isEditingCell,
+    onCancelEdit,
+    onClearCell,
+    onCommitEdit,
+    onEditorChange,
+    onSelect,
+    pendingKeyboardPasteSequenceRef,
+    pendingTypeSeedRef,
+    selectedCell,
+    setGridSelection,
+    sheetName,
+    suppressNextNativePasteRef,
+    toggleSelectedBooleanCell: () => {
+      toggleBooleanCellAt(selectedCell.col, selectedCell.row);
+    },
+  });
+
+  const handleFillHandlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!selectionRange || event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      focusGrid();
+      fillHandleCleanupRef.current?.();
+      fillPreviewRangeRef.current = null;
+      setFillPreviewRange(null);
+      fillHandlePointerIdRef.current = event.pointerId;
+      setIsFillHandleDragging(true);
+      setHoverState((current) =>
+        sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+          ? current
+          : { cell: null, header: null, cursor: "default" },
+      );
+
+      const move = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
+        const pointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
+        const nextPreviewRange = pointerCell
+          ? resolveFillHandlePreviewRange(selectionRange, pointerCell)
+          : null;
+        fillPreviewRangeRef.current = nextPreviewRange;
+        setFillPreviewRange(nextPreviewRange);
+      };
+
+      const cleanup = () => {
+        if (fillHandleCleanupRef.current !== cleanup) {
+          return;
+        }
+        fillHandleCleanupRef.current = null;
+        window.removeEventListener("pointermove", move, true);
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", cancel, true);
+        fillHandlePointerIdRef.current = null;
+        setIsFillHandleDragging(false);
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+      };
+
+      const finish = () => {
+        const previewRange = fillPreviewRangeRef.current;
+        if (previewRange) {
+          const source = rectangleToAddresses(selectionRange);
+          const target = rectangleToAddresses(previewRange);
+          const nextSelectionRange = resolveFillHandleSelectionRange(selectionRange, previewRange);
+          const nextSelection = createRectangleSelectionFromRange(nextSelectionRange);
+          if (gridSelection.current?.cell && nextSelection.current) {
+            nextSelection.current = {
+              ...nextSelection.current,
+              cell: gridSelection.current.cell,
+            };
+          }
+          setGridSelection(nextSelection);
+          if (
+            source.startAddress !== target.startAddress ||
+            source.endAddress !== target.endAddress
+          ) {
+            onFillRange(
+              source.startAddress,
+              source.endAddress,
+              target.startAddress,
+              target.endAddress,
+            );
+          }
+        }
+        fillPreviewRangeRef.current = null;
+        setFillPreviewRange(null);
+        cleanup();
+      };
+
+      const up = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
+        finish();
+      };
+
+      const cancel = (nativeEvent: PointerEvent) => {
+        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
+          return;
+        }
+        fillPreviewRangeRef.current = null;
+        setFillPreviewRange(null);
+        cleanup();
+      };
+
+      fillHandleCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", move, true);
+      window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", cancel, true);
+    },
+    [
+      focusGrid,
+      gridSelection,
+      onFillRange,
+      resolvePointerCell,
+      selectionRange,
+      setFillPreviewRange,
+      setGridSelection,
+      setHoverState,
+      setIsFillHandleDragging,
+    ],
+  );
+
+  const refreshHoverState = useCallback(
+    (clientX: number, clientY: number, buttons: number) => {
+      if (isFillHandleDragging) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
+      if (isRangeMoveDragging) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "grabbing" })
+            ? current
+            : { cell: null, header: null, cursor: "grabbing" },
+        );
+        return;
+      }
+      if (buttons !== 0 || fillPreviewRangeRef.current) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
+      const geometry = resolvePointerGeometry(visibleRegion);
+      if (!geometry) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+            ? current
+            : { cell: null, header: null, cursor: "default" },
+        );
+        return;
+      }
+      const rangeMoveAnchorCell = allowsRangeMove
+        ? resolveSelectionMoveAnchorCell(clientX, clientY, selectionRange, getCellScreenBounds)
+        : null;
+      if (rangeMoveAnchorCell) {
+        setHoverState((current) =>
+          sameGridHoverState(current, { cell: null, header: null, cursor: "grab" })
+            ? current
+            : { cell: null, header: null, cursor: "grab" },
+        );
+        return;
+      }
+      const next = resolveGridHoverState({
+        clientX,
+        clientY,
+        region: visibleRegion,
+        geometry,
+        columnWidths,
+        defaultColumnWidth: gridMetrics.columnWidth,
+        gridMetrics,
+        selectedCell: [selectedCell.col, selectedCell.row],
+        selectedCellBounds: getCellScreenBounds(selectedCell.col, selectedCell.row) ?? null,
+        selectionRange,
+        hasColumnSelection: gridSelection.columns.length > 0,
+        hasRowSelection: gridSelection.rows.length > 0,
+      });
+      setHoverState((current) => (sameGridHoverState(current, next) ? current : next));
+    },
+    [
+      allowsRangeMove,
+      columnWidths,
+      getCellScreenBounds,
+      gridMetrics,
+      gridSelection.columns.length,
+      gridSelection.rows.length,
+      isFillHandleDragging,
+      isRangeMoveDragging,
+      resolvePointerGeometry,
+      selectedCell.col,
+      selectedCell.row,
+      selectionRange,
+      setHoverState,
+      visibleRegion,
+    ],
+  );
+
+  const beginRangeMove = useCallback(
+    (pointerCell: Item) => {
+      if (!selectionRange) {
+        return;
+      }
+      const sourceRange = selectionRange;
+      const anchorOffset: Item = [pointerCell[0] - sourceRange.x, pointerCell[1] - sourceRange.y];
+      rangeMoveCleanupRef.current?.();
+      rangeMoveSourceRangeRef.current = sourceRange;
+      rangeMovePreviewRangeRef.current = sourceRange;
+      rangeMoveAnchorOffsetRef.current = anchorOffset;
+      setIsRangeMoveDragging(true);
+      setHoverState({ cell: null, header: null, cursor: "grabbing" });
+      if (isEditingCell) {
+        onCommitEdit();
+      }
+      focusGrid();
+
+      const move = (nativeEvent: PointerEvent) => {
+        const nextPointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY);
+        if (!nextPointerCell) {
+          return;
+        }
+        const nextRange = resolveMovedRange(sourceRange, nextPointerCell, anchorOffset);
+        if (sameRectangle(rangeMovePreviewRangeRef.current, nextRange)) {
+          return;
+        }
+        rangeMovePreviewRangeRef.current = nextRange;
+        setGridSelection(createRectangleSelectionFromRange(nextRange));
+      };
+
+      const cleanup = (clientX?: number, clientY?: number) => {
+        window.removeEventListener("pointermove", move, true);
+        window.removeEventListener("pointerup", up, true);
+        rangeMoveCleanupRef.current = null;
+        rangeMoveSourceRangeRef.current = null;
+        rangeMovePreviewRangeRef.current = null;
+        rangeMoveAnchorOffsetRef.current = null;
+        setIsRangeMoveDragging(false);
+        if (clientX !== undefined && clientY !== undefined) {
+          refreshHoverState(clientX, clientY, 0);
+        }
+      };
+
+      const up = (nativeEvent: PointerEvent) => {
+        const resolvedSourceRange = rangeMoveSourceRangeRef.current ?? sourceRange;
+        const resolvedTargetRange = rangeMovePreviewRangeRef.current ?? resolvedSourceRange;
+        cleanup(nativeEvent.clientX, nativeEvent.clientY);
+        setGridSelection(createRectangleSelectionFromRange(resolvedTargetRange));
+        onSelect(formatAddress(resolvedTargetRange.y, resolvedTargetRange.x));
+        if (sameRectangle(resolvedSourceRange, resolvedTargetRange)) {
+          return;
+        }
+        const sourceAddresses = rectangleToAddresses(resolvedSourceRange);
+        const targetAddresses = rectangleToAddresses(resolvedTargetRange);
+        onMoveRange(
+          sourceAddresses.startAddress,
+          sourceAddresses.endAddress,
+          targetAddresses.startAddress,
+          targetAddresses.endAddress,
+        );
+      };
+
+      rangeMoveCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", move, true);
+      window.addEventListener("pointerup", up, true);
+    },
+    [
+      focusGrid,
+      isEditingCell,
+      onCommitEdit,
+      onMoveRange,
+      onSelect,
+      refreshHoverState,
+      resolvePointerCell,
+      selectionRange,
+      setGridSelection,
+      setHoverState,
+      setIsRangeMoveDragging,
+    ],
+  );
+
+  const beginColumnResize = useCallback(
+    (columnIndex: number, startClientX: number) => {
+      resizeCleanupRef.current?.();
+      startGridResize(interactionState);
+      setActiveResizeColumn(columnIndex);
+      const startWidth = columnWidths[columnIndex] ?? gridMetrics.columnWidth;
+
+      const handlePointerMove = (nativeEvent: PointerEvent) => {
+        previewColumnWidth(columnIndex, startWidth + (nativeEvent.clientX - startClientX));
+      };
+
+      const cleanup = (nativeEvent?: PointerEvent) => {
+        window.removeEventListener("pointermove", handlePointerMove, true);
+        window.removeEventListener("pointerup", handlePointerUp, true);
+        resizeCleanupRef.current = null;
+        setActiveResizeColumn(null);
+        finishGridResize(interactionState);
+        if (nativeEvent) {
+          refreshHoverState(nativeEvent.clientX, nativeEvent.clientY, 0);
+        }
+      };
+
+      const handlePointerUp = (nativeEvent: PointerEvent) => {
+        const finalWidth = getPreviewColumnWidth(columnIndex) ?? startWidth;
+        if (finalWidth === startWidth) {
+          clearColumnResizePreview(columnIndex);
+        } else {
+          commitColumnWidth(columnIndex, finalWidth);
+        }
+        cleanup(nativeEvent);
+      };
+
+      resizeCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", handlePointerMove, true);
+      window.addEventListener("pointerup", handlePointerUp, true);
+    },
+    [
+      clearColumnResizePreview,
+      columnWidths,
+      commitColumnWidth,
+      getPreviewColumnWidth,
+      gridMetrics.columnWidth,
+      interactionState,
+      previewColumnWidth,
+      refreshHoverState,
+      setActiveResizeColumn,
+    ],
+  );
+
+  const handleSelectEntireSheet = useCallback(() => {
+    if (isEditingCell) {
+      onCommitEdit();
+    }
+    setGridSelection(createSheetSelection());
+    onSelect(formatAddress(0, 0));
+    focusGrid();
+  }, [focusGrid, isEditingCell, onCommitEdit, onSelect, setGridSelection]);
+
+  return {
+    handleFillHandlePointerDown,
+    handleGridKey,
+    handleHostKeyDownCapture: (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code);
+      resetGridPointerInteraction(interactionState, {
+        clearIgnoreNextPointerSelection: true,
+      });
+
+      if (
+        !isHandledGridKey({
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          key: normalizedKey,
+          metaKey: event.metaKey,
+        })
+      ) {
+        return;
+      }
+
+      handleGridKey({
+        altKey: event.altKey,
+        cancel: () => event.stopPropagation(),
+        ctrlKey: event.ctrlKey,
+        key: normalizedKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        preventDefault: () => event.preventDefault(),
+      });
+      if (event.defaultPrevented) {
+        event.stopPropagation();
+      }
+    },
+    handleHostCopyCapture: (event: ReactClipboardEvent<HTMLDivElement>) => {
+      handleGridCopyCapture({
+        captureInternalClipboardSelection,
+        event,
+        internalClipboardRef,
+      });
+    },
+    handleHostDoubleClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
+      handleGridBodyDoubleClick({
+        event,
+        applyColumnWidth: commitColumnWidth,
+        beginEditAt,
+        columnWidths,
+        computeAutofitColumnWidth,
+        defaultColumnWidth: gridMetrics.columnWidth,
+        interactionState,
+        isEditingCell,
+        lastBodyClickCell: lastBodyClickCellRef.current,
+        onAutofitColumn,
+        onCommitEdit: () => onCommitEdit(),
+        onSelect,
+        resolvePointerCell,
+        resolvePointerGeometry,
+        selectedCell: [selectedCell.col, selectedCell.row],
+        setGridSelection,
+        visibleRegion,
+      });
+    },
+    handleHostFocus: (event: ReactFocusEvent<HTMLDivElement>) => {
+      if (event.target === event.currentTarget) {
+        focusGrid();
+      }
+    },
+    handleHostKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      handleGridKey(event);
+    },
+    handleHostPasteCapture: (event: ReactClipboardEvent<HTMLDivElement>) => {
+      handleGridPasteCapture({
+        applyClipboardValues,
+        event,
+        gridSelection,
+        pendingKeyboardPasteSequenceRef,
+        selectedCell,
+        suppressNextNativePasteRef,
+      });
+    },
+    handleHostPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (isFillHandleTarget(event.target)) {
+        return;
+      }
+      const pointerGeometry = resolvePointerGeometry(visibleRegion);
+      const resizeTarget =
+        pointerGeometry === null
+          ? null
+          : resolveColumnResizeTarget(
+              event.clientX,
+              event.clientY,
+              visibleRegion,
+              pointerGeometry,
+              columnWidths,
+              gridMetrics.columnWidth,
+            );
+      if (resizeTarget !== null) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isEditingCell) {
+          onCommitEdit();
+        }
+        focusGrid();
+        setActiveHeaderDrag(null);
+        setHoverState((current) =>
+          sameGridHoverState(current, {
+            cell: null,
+            header: { kind: "column", index: resizeTarget },
+            cursor: "col-resize",
+          })
+            ? current
+            : {
+                cell: null,
+                header: { kind: "column", index: resizeTarget },
+                cursor: "col-resize",
+              },
+        );
+        beginColumnResize(resizeTarget, event.clientX);
+        return;
+      }
+
+      if (allowsRangeMove) {
+        const rangeMoveAnchorCell = resolveSelectionMoveAnchorCell(
+          event.clientX,
+          event.clientY,
+          selectionRange,
+          getCellScreenBounds,
+        );
+        if (rangeMoveAnchorCell) {
+          event.preventDefault();
+          event.stopPropagation();
+          resetGridPointerInteraction(interactionState, {
+            clearIgnoreNextPointerSelection: true,
+          });
+          setActiveResizeColumn(null);
+          setActiveHeaderDrag(null);
+          beginRangeMove(rangeMoveAnchorCell);
+          return;
+        }
+      }
+
+      const headerSelection =
+        pointerGeometry === null
+          ? null
+          : resolveHeaderSelectionAtPointer(
+              event.clientX,
+              event.clientY,
+              visibleRegion,
+              pointerGeometry,
+            );
+      setActiveResizeColumn(null);
+      setActiveHeaderDrag(headerSelection);
+      setHoverState((current) =>
+        sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+          ? current
+          : { cell: null, header: null, cursor: "default" },
+      );
+      handleGridPointerDown({
+        columnWidths,
+        defaultColumnWidth: gridMetrics.columnWidth,
+        event,
+        focusGrid,
+        interactionState,
+        isEditingCell,
+        onCommitEdit: () => onCommitEdit(),
+        onSelect,
+        resolveColumnResizeTargetAtPointer: resolveColumnResizeTarget,
+        resolveHeaderSelectionAtPointer,
+        resolvePointerCell,
+        resolvePointerGeometry,
+        selectedCell: [selectedCell.col, selectedCell.row],
+        setGridSelection,
+        visibleRegion,
+      });
+    },
+    handleHostPointerLeave: () => {
+      if (activeResizeColumn !== null || isFillHandleDragging || isRangeMoveDragging) {
+        return;
+      }
+      setHoverState((current) =>
+        sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
+          ? current
+          : { cell: null, header: null, cursor: "default" },
+      );
+    },
+    handleHostPointerMoveCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (isFillHandleDragging || isFillHandleTarget(event.target)) {
+        return;
+      }
+      handleGridPointerMove({
+        dragAnchorCell: dragAnchorCellRef.current,
+        dragGeometry: dragGeometryRef.current,
+        dragHeaderSelection: dragHeaderSelectionRef.current,
+        dragPointerCell: dragPointerCellRef.current,
+        dragViewport: dragViewportRef.current,
+        event,
+        interactionState,
+        isEditingCell,
+        onCommitEdit: () => onCommitEdit(),
+        onSelect,
+        resolveHeaderSelectionForPointerDrag,
+        resolvePointerCell,
+        selectedCell: [selectedCell.col, selectedCell.row],
+        setGridSelection,
+        visibleRegion,
+      });
+      refreshHoverState(event.clientX, event.clientY, event.buttons);
+    },
+    handleHostPointerUpCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (isRangeMoveDragging) {
+        return;
+      }
+      const clickedCell =
+        dragDidMoveRef.current || dragHeaderSelectionRef.current
+          ? null
+          : resolvePointerCell(event.clientX, event.clientY);
+      handleGridPointerUp({
+        dragAnchorCell: dragAnchorCellRef.current,
+        dragDidMove: dragDidMoveRef.current,
+        dragGeometry: dragGeometryRef.current,
+        dragHeaderSelection: dragHeaderSelectionRef.current,
+        dragPointerCell: dragPointerCellRef.current,
+        dragViewport: dragViewportRef.current,
+        event,
+        interactionState,
+        isEditingCell,
+        lastBodyClickCellRef,
+        onCommitEdit: () => onCommitEdit(),
+        onSelect,
+        postDragSelectionExpiryRef,
+        resolveHeaderSelectionForPointerDrag,
+        resolvePointerCell,
+        selectedCell: [selectedCell.col, selectedCell.row],
+        setGridSelection,
+        visibleRegion,
+      });
+      if (clickedCell) {
+        toggleBooleanCellAt(clickedCell[0], clickedCell[1]);
+      }
+      setActiveHeaderDrag(null);
+      refreshHoverState(event.clientX, event.clientY, 0);
+    },
+    handleSelectEntireSheet,
+  };
+}

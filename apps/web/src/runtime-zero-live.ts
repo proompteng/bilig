@@ -1,4 +1,4 @@
-import { formatAddress, parseCellAddress } from "@bilig/formula";
+import { formatAddress } from "@bilig/formula";
 import { queries } from "@bilig/zero-sync";
 import {
   ValueTag,
@@ -12,11 +12,6 @@ import {
 } from "@bilig/protocol";
 import type { ViewportPatch } from "@bilig/worker-transport";
 import type { WorkerViewportCache } from "./viewport-cache.js";
-
-interface WorkbookRuntimeSelectionLike {
-  readonly sheetName: string;
-  readonly address: string;
-}
 
 interface ZeroWorkbookSyncSourceLike {
   materialize(query: unknown): unknown;
@@ -639,11 +634,6 @@ export class ZeroWorkbookLiveSync {
   ]);
   private numberFormatsById = new Map<string, string>();
   private workbookRevisionState: WorkbookRevisionState | null = null;
-  private selection: WorkbookRuntimeSelectionLike | null = null;
-  private selectionSourceView: LiveView<unknown> | null = null;
-  private selectionEvalView: LiveView<unknown> | null = null;
-  private selectionCleanup: (() => void) | null = null;
-  private selectionPatchVersion = 1;
   private disposed = false;
 
   constructor(
@@ -699,62 +689,6 @@ export class ZeroWorkbookLiveSync {
         refreshNumberFormats(value);
       }),
     );
-  }
-
-  setSelection(selection: WorkbookRuntimeSelectionLike): void {
-    if (this.disposed) {
-      return;
-    }
-    this.selection = selection;
-    this.selectionCleanup?.();
-    this.selectionCleanup = null;
-    this.selectionSourceView?.destroy();
-    this.selectionEvalView?.destroy();
-    this.selectionSourceView = assertLiveView(
-      this.input.zero.materialize(
-        queries.cellInput.one({
-          documentId: this.input.documentId,
-          sheetName: selection.sheetName,
-          address: selection.address,
-        }),
-      ),
-      "selected cell source",
-    );
-    this.selectionEvalView = assertLiveView(
-      this.input.zero.materialize(
-        queries.cellEval.one({
-          documentId: this.input.documentId,
-          sheetName: selection.sheetName,
-          address: selection.address,
-        }),
-      ),
-      "selected cell eval",
-    );
-    const publish = () => {
-      try {
-        this.publishSelectedCell(selection);
-      } catch (error) {
-        if (!this.disposed) {
-          this.input.onError(toErrorMessage(error));
-        }
-      }
-    };
-    const unsubscribes = [
-      this.selectionSourceView.addListener(() => {
-        publish();
-      }),
-      this.selectionEvalView.addListener(() => {
-        publish();
-      }),
-    ];
-    this.selectionCleanup = () => {
-      unsubscribes.forEach((unsubscribe) => unsubscribe());
-      this.selectionSourceView?.destroy();
-      this.selectionEvalView?.destroy();
-      this.selectionSourceView = null;
-      this.selectionEvalView = null;
-    };
-    publish();
   }
 
   subscribeViewport(
@@ -888,8 +822,6 @@ export class ZeroWorkbookLiveSync {
       return;
     }
     this.disposed = true;
-    this.selectionCleanup?.();
-    this.selectionCleanup = null;
     this.cleanup.forEach((cleanup) => cleanup());
     this.cleanup.clear();
     this.workbookView.destroy();
@@ -937,74 +869,5 @@ export class ZeroWorkbookLiveSync {
         this.input.onError(toErrorMessage(error));
       }
     });
-    if (this.selection) {
-      try {
-        this.publishSelectedCell(this.selection);
-      } catch (error) {
-        this.input.onError(toErrorMessage(error));
-      }
-    }
-  }
-
-  private publishSelectedCell(selection: WorkbookRuntimeSelectionLike): void {
-    if (
-      this.disposed ||
-      !this.selectionSourceView ||
-      !this.selectionEvalView ||
-      this.selection?.sheetName !== selection.sheetName ||
-      this.selection?.address !== selection.address
-    ) {
-      return;
-    }
-    const sourceRow = normalizeCellSourceRow(this.selectionSourceView.data) ?? undefined;
-    if (
-      shouldDeferFormulaProjection(
-        this.input.cache.peekCell(selection.sheetName, selection.address),
-        sourceRow,
-        this.workbookRevisionState,
-      )
-    ) {
-      return;
-    }
-    const evalRow = normalizeCellEvalRow(this.selectionEvalView.data) ?? undefined;
-    const snapshot = buildCellSnapshot(
-      selection.sheetName,
-      selection.address,
-      evalRow,
-      sourceRow,
-      this.numberFormatsById,
-    );
-    const parsed = parseCellAddress(selection.address, selection.sheetName);
-    const styleId = snapshot.styleId ?? DEFAULT_STYLE_ID;
-    const patch: ViewportPatch = {
-      version: this.selectionPatchVersion++,
-      full: false,
-      viewport: {
-        sheetName: selection.sheetName,
-        rowStart: parsed.row,
-        rowEnd: parsed.row,
-        colStart: parsed.col,
-        colEnd: parsed.col,
-      },
-      metrics: EMPTY_METRICS,
-      styles: [this.stylesById.get(styleId) ?? { id: DEFAULT_STYLE_ID }],
-      cells: [
-        {
-          row: parsed.row,
-          col: parsed.col,
-          snapshot,
-          displayText: formatCellDisplayValue(snapshot.value, snapshot.format),
-          copyText: snapshot.formula
-            ? toEditorText(snapshot)
-            : formatCellDisplayValue(snapshot.value, snapshot.format),
-          editorText: toEditorText(snapshot),
-          formatId: 0,
-          styleId,
-        },
-      ],
-      columns: [],
-      rows: [],
-    };
-    this.input.cache.applyViewportPatch(patch);
   }
 }

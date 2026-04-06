@@ -33,16 +33,14 @@ The repo already has the right backbone.
 
 The browser-side product architecture is still the weak link.
 
-* The mounted runtime path is not actually a browser-owned workbook runtime. `apps/web/src/runtime-session.ts` constructs `WorkerViewportCache` plus `ZeroWorkbookBridge`; it does **not** mount the existing `workbook.worker.ts` / `worker-runtime.ts` as the hot state path.
-* Offline/local-first credibility is currently weak. `WorkerWorkbookApp.tsx` gates writes on connection state, so the product is still “optimistic online spreadsheet,” not “local-first workbook.”
+* The mounted runtime path is now worker-owned, but the worker still persists whole JSON snapshots through `@bilig/storage-browser` and still relies on `viewport-cache` as the grid-facing projection surface. That means the product is only partway through the intended browser-runtime migration.
+* Offline/local-first credibility is better than it was because writes are no longer gated by Zero connection state, but the product is still not truly local-first until the browser has a durable relational store, a pending-op journal, and a reconnect/rebase model.
 * Browser durability is the wrong shape. The existing worker runtime persists whole JSON snapshots through `@bilig/storage-browser`, which uses IndexedDB/localStorage JSON, not a relational local database.
-* The hottest files are too large:
-
-  * `packages/grid/src/WorkbookGridSurface.tsx` ≈ 1839 lines
-  * `apps/web/src/WorkerWorkbookApp.tsx` ≈ 1648 lines
-  * `apps/web/src/viewport-cache.ts` ≈ 810 lines
-    These are not style problems. They are velocity and correctness risks in the most sensitive product path.
-* `ZeroWorkbookBridge` still carries a selected-cell special path and synthetic one-cell reproject behavior. That is exactly the class of stale-path bug the repo says it wants to remove. 
+* The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
+  * `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
+  * `apps/web/src/WorkerWorkbookApp.tsx` is now 119 lines with state/sync/toolbar logic extracted.
+  * `apps/web/src/worker-runtime.ts` is now 776 lines with persistence and viewport support split out.
+* The selected-cell synthetic live-sync path is gone. Selected-cell state now comes through the same viewport/tile subscription path as the rest of the grid, which removes a stale-path class that used to exist.
 * The grid still uses DOM text rendering and browser text measurement for autofit. The repo docs already call that out. It limits both polish and giant-workbook consistency. 
 
 ### What most affects UX quality
@@ -718,20 +716,42 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 ## 8. Execution Roadmap
 
+### Status as of 2026-04-05
+
+**Completed from the original roadmap**
+
+* the worker runtime is the mounted browser session path
+* writes are no longer gated on simple Zero connection state
+* the selected-cell special reproject path has been deleted
+* `WorkerWorkbookApp.tsx`, `WorkbookGridSurface.tsx`, and `worker-runtime.ts` have been split below the hot-path ceiling
+* the worker has a persisted pending-mutation queue for degraded/offline sync
+
+**Still not completed**
+
+* OPFS SQLite as the primary browser store
+* local base/overlay tables and authoritative reconnect/rebase
+* worker-owned tile store replacing `viewport-cache`
+* stable `sheet_id` across browser/server/local layers
+* warm-start from a real local DB rather than JSON snapshots
+* collaboration/product layers in Phases 2 through 4
+
+**What this roadmap now needs to do**
+
+* focus only on the still-missing production work
+* treat worker cutover and hot-path file splits as done
+* stop referring to deleted bridge behavior as active architecture
+
 ### Prioritized initiative table
 
 | Priority | Initiative                                                  | Why now                                           |
 | -------- | ----------------------------------------------------------- | ------------------------------------------------- |
-| 1        | Wire the real runtime worker into the mounted session path  | Everything else depends on a real browser runtime |
-| 2        | Add OPFS SQLite local DB with fallback manifest path        | Local-first without a real DB is fake             |
-| 3        | Introduce pending-op journal and local overlay model        | Required for offline durability and reconcile     |
-| 4        | Remove selected-cell special reproject path                 | Prevents stale-path bugs in the new model         |
-| 5        | Split `WorkbookGridSurface.tsx` and `WorkerWorkbookApp.tsx` | Hot-path maintainability is already a problem     |
-| 6        | Replace `viewport-cache` with worker-owned tile store       | Giant-data performance depends on it              |
-| 7        | Add stable `sheet_id` across local/server layers            | Needed for views, changes, comments, tasks later  |
-| 8        | Launch local warm-start and reconnect recovery              | Makes the product feel native immediately         |
-| 9        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation           |
-| 10       | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core  |
+| 1        | Add OPFS SQLite local DB as the primary browser store       | Local-first without a real DB is still fake       |
+| 2        | Replace `viewport-cache` with a worker-owned tile store     | Giant-data performance still depends on it        |
+| 3        | Introduce local base/overlay tables and op journal          | Required for offline durability and reconcile     |
+| 4        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later  |
+| 5        | Launch local warm-start and authoritative reconnect/rebase  | Makes the product feel native immediately         |
+| 6        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation           |
+| 7        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core  |
 
 ### Dependency list
 
@@ -779,9 +799,9 @@ Stop fighting the current browser architecture.
 
 **Exit criteria**
 
-* worker runtime is the active session path behind a feature flag
+* worker runtime is the active session path
 * no hot-path file over ~900 LoC
-* selected-cell render no longer depends on bridge-side synthetic patching
+* selected-cell render no longer depends on synthetic one-cell patching
 * offline-safe Class A edits work on the new path in test mode
 
 ### Phase 1: local-first foundation

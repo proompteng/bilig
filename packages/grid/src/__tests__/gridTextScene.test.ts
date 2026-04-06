@@ -1,13 +1,16 @@
 import { describe, expect, test } from "vitest";
-import { ValueTag, type CellSnapshot, type CellStyleRecord } from "@bilig/protocol";
+import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
 import { buildGridTextScene } from "../gridTextScene.js";
 import type { GridEngineLike } from "../grid-engine.js";
 import { getGridMetrics } from "../gridMetrics.js";
 
+type TestCellSnapshot = ReturnType<GridEngineLike["getCell"]>;
+type TestCellValue = TestCellSnapshot["value"];
+
 function createCellSnapshot(
-  value: CellSnapshot["value"],
+  value: TestCellValue,
   styleId: string | undefined = "style-1",
-): CellSnapshot {
+): TestCellSnapshot {
   return {
     sheetName: "Sheet1",
     address: "A1",
@@ -21,7 +24,7 @@ function createCellSnapshot(
 
 function makeEngine(
   styles: Record<string, CellStyleRecord>,
-  snapshots: CellSnapshot | Record<string, CellSnapshot> = createCellSnapshot({
+  snapshots: TestCellSnapshot | Record<string, TestCellSnapshot> = createCellSnapshot({
     tag: ValueTag.String,
     value: "hello",
   }),

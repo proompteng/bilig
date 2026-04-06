@@ -1,5 +1,6 @@
 import type { Zero } from "@rocicorp/zero";
 import { createWorkerEngineClient, type MessagePortLike } from "@bilig/worker-transport";
+import { parseCellAddress } from "@bilig/formula";
 import type { CellSnapshot, RecalcMetrics, Viewport, WorkbookSnapshot } from "@bilig/protocol";
 import { ValueTag } from "@bilig/protocol";
 import type {
@@ -148,6 +149,16 @@ function emptyCellSnapshot(selection: WorkerRuntimeSelection): CellSnapshot {
   };
 }
 
+function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
+  const parsed = parseCellAddress(selection.address, selection.sheetName);
+  return {
+    rowStart: parsed.row,
+    rowEnd: parsed.row,
+    colStart: parsed.col,
+    colEnd: parsed.col,
+  };
+}
+
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -216,6 +227,7 @@ export async function createWorkerRuntimeSessionController(
   let currentSelection = input.initialSelection;
   let currentRuntimeState = createInitialRuntimeState(input.documentId);
   let disposed = false;
+  let selectionViewportCleanup = EMPTY_UNSUBSCRIBE;
   const liveSync = input.zero
     ? new ZeroWorkbookLiveSync({
         zero: input.zero,
@@ -235,6 +247,29 @@ export async function createWorkerRuntimeSessionController(
     callbacks.onRuntimeState(runtimeState);
   };
 
+  const subscribeProjectedViewport = (
+    sheetName: string,
+    viewport: Viewport,
+    listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+  ): (() => void) => {
+    const unsubscribeWorker = cache.subscribeViewport(sheetName, viewport, listener);
+    const unsubscribeLive =
+      liveSync?.subscribeViewport(sheetName, viewport, listener) ?? EMPTY_UNSUBSCRIBE;
+    return () => {
+      unsubscribeLive();
+      unsubscribeWorker();
+    };
+  };
+
+  const updateSelectionViewport = (selection: WorkerRuntimeSelection): void => {
+    selectionViewportCleanup();
+    selectionViewportCleanup = subscribeProjectedViewport(
+      selection.sheetName,
+      selectionViewport(selection),
+      () => {},
+    );
+  };
+
   const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {
     currentSelection = selection;
     callbacks.onSelection(selection);
@@ -246,7 +281,7 @@ export async function createWorkerRuntimeSessionController(
       selection.address,
     );
     cache.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection));
-    liveSync?.setSelection(selection);
+    updateSelectionViewport(selection);
     return snapshot ?? emptyCellSnapshot(selection);
   };
 
@@ -341,19 +376,15 @@ export async function createWorkerRuntimeSessionController(
       }
     },
     subscribeViewport(sheetName, viewport, listener) {
-      const unsubscribeWorker = cache.subscribeViewport(sheetName, viewport, listener);
-      const unsubscribeLive =
-        liveSync?.subscribeViewport(sheetName, viewport, listener) ?? EMPTY_UNSUBSCRIBE;
-      return () => {
-        unsubscribeLive();
-        unsubscribeWorker();
-      };
+      return subscribeProjectedViewport(sheetName, viewport, listener);
     },
     dispose() {
       if (disposed) {
         return;
       }
       disposed = true;
+      selectionViewportCleanup();
+      selectionViewportCleanup = EMPTY_UNSUBSCRIBE;
       liveSync?.dispose();
       client.dispose();
       workerPort.terminate?.();
