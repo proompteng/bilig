@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
+import { formatAddress } from "@bilig/formula";
 import type {
   WorkbookLocalAuthoritativeDelta,
   WorkbookLocalAuthoritativeBase,
@@ -32,6 +33,10 @@ function buildViewportFromAuthoritativeBase(input: {
   };
 }) {
   const { authoritativeBase, sheetName, viewport } = input;
+  const sheet = authoritativeBase.sheets.find((entry) => entry.name === sheetName);
+  if (!sheet) {
+    throw new Error(`Missing authoritative sheet ${sheetName}`);
+  }
   const styles = authoritativeBase.styles.filter((style) => {
     return (
       style.id === "style-0" ||
@@ -48,6 +53,7 @@ function buildViewportFromAuthoritativeBase(input: {
     );
   });
   return {
+    sheetId: sheet.sheetId,
     sheetName,
     cells: authoritativeBase.cellRenders
       .filter((cell) => {
@@ -181,26 +187,26 @@ function mergeAuthoritativeBaseDelta(input: {
     return structuredClone(authoritativeDelta.base);
   }
 
-  const replacedSheetNames = new Set(authoritativeDelta.replacedSheetNames);
+  const replacedSheetIds = new Set(authoritativeDelta.replacedSheetIds);
   return {
     sheets: [
-      ...currentBase.sheets.filter((sheet) => !replacedSheetNames.has(sheet.name)),
+      ...currentBase.sheets.filter((sheet) => !replacedSheetIds.has(sheet.sheetId)),
       ...structuredClone(authoritativeDelta.base.sheets),
     ].toSorted((left, right) => left.sortOrder - right.sortOrder),
     cellInputs: [
-      ...currentBase.cellInputs.filter((cell) => !replacedSheetNames.has(cell.sheetName)),
+      ...currentBase.cellInputs.filter((cell) => !replacedSheetIds.has(cell.sheetId)),
       ...structuredClone(authoritativeDelta.base.cellInputs),
     ],
     cellRenders: [
-      ...currentBase.cellRenders.filter((cell) => !replacedSheetNames.has(cell.sheetName)),
+      ...currentBase.cellRenders.filter((cell) => !replacedSheetIds.has(cell.sheetId)),
       ...structuredClone(authoritativeDelta.base.cellRenders),
     ],
     rowAxisEntries: [
-      ...currentBase.rowAxisEntries.filter((entry) => !replacedSheetNames.has(entry.sheetName)),
+      ...currentBase.rowAxisEntries.filter((entry) => !replacedSheetIds.has(entry.sheetId)),
       ...structuredClone(authoritativeDelta.base.rowAxisEntries),
     ],
     columnAxisEntries: [
-      ...currentBase.columnAxisEntries.filter((entry) => !replacedSheetNames.has(entry.sheetName)),
+      ...currentBase.columnAxisEntries.filter((entry) => !replacedSheetIds.has(entry.sheetId)),
       ...structuredClone(authoritativeDelta.base.columnAxisEntries),
     ],
     styles: structuredClone(authoritativeDelta.base.styles),
@@ -215,7 +221,15 @@ function createMemoryLocalStoreFactory(seed?: {
     state: WorkbookStoredState,
     delta: WorkbookLocalAuthoritativeDelta,
   ) => Promise<void> | void;
-  onReadViewportProjection?: () => void;
+  onReadViewportProjection?: (
+    sheetName: string,
+    viewport: {
+      rowStart: number;
+      rowEnd: number;
+      colStart: number;
+      colEnd: number;
+    },
+  ) => void;
   authoritativeBase?: WorkbookLocalAuthoritativeBase | null;
   projectionOverlay?: WorkbookLocalProjectionOverlay | null;
 }): WorkbookLocalStoreFactory {
@@ -275,7 +289,7 @@ function createMemoryLocalStoreFactory(seed?: {
           if (!authoritativeBase) {
             return null;
           }
-          seed?.onReadViewportProjection?.();
+          seed?.onReadViewportProjection?.(sheetName, viewport);
           return mergeViewportWithProjectionOverlay({
             baseViewport: buildViewportFromAuthoritativeBase({
               authoritativeBase,
@@ -507,6 +521,69 @@ describe("WorkbookWorkerRuntime", () => {
     expect(received[0]?.cells[0]?.displayText).toBe("42");
   });
 
+  it("reads initial local full patches through 128x32 worker tiles instead of a single wide viewport query", async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: "tile-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 1);
+    seedEngine.setCellValue("Sheet1", formatAddress(0, 128), 2);
+    seedEngine.setCellValue("Sheet1", formatAddress(32, 0), 3);
+    seedEngine.setCellValue("Sheet1", formatAddress(32, 128), 4);
+
+    const viewportReads: Array<{
+      rowStart: number;
+      rowEnd: number;
+      colStart: number;
+      colEnd: number;
+    }> = [];
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+        authoritativeBase: buildWorkbookLocalAuthoritativeBase(seedEngine),
+        onReadViewportProjection(_sheetName, viewport) {
+          viewportReads.push({ ...viewport });
+        },
+      }),
+    });
+
+    await runtime.bootstrap({
+      documentId: "tile-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 40,
+        colStart: 0,
+        colEnd: 140,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    expect(viewportReads).toEqual([
+      { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
+      { rowStart: 0, rowEnd: 31, colStart: 128, colEnd: 255 },
+      { rowStart: 32, rowEnd: 63, colStart: 0, colEnd: 127 },
+      { rowStart: 32, rowEnd: 63, colStart: 128, colEnd: 255 },
+    ]);
+    expect(received[0]?.cells.map((cell) => cell.displayText).toSorted()).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+    ]);
+  });
+
   it("restores pending local projection overlays from persistence across bootstrap", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "overlay-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");
@@ -540,6 +617,7 @@ describe("WorkbookWorkerRuntime", () => {
         projectionOverlay: {
           cells: [
             {
+              sheetId: 1,
               sheetName: "Sheet1",
               address: "A1",
               rowNum: 0,

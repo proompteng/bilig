@@ -60,6 +60,7 @@ import {
 import { buildWorkbookLocalAuthoritativeBase } from "./worker-local-base.js";
 import { buildWorkbookLocalAuthoritativeDelta } from "./worker-local-authoritative-delta.js";
 import { buildWorkbookLocalProjectionOverlay } from "./worker-local-overlay.js";
+import { WorkerViewportTileStore } from "./worker-viewport-tile-store.js";
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;
@@ -132,6 +133,7 @@ export class WorkbookWorkerRuntime {
   private appliedPendingLocalSeq = 0;
   private authoritativeRevision = 0;
   private projectionMatchesLocalStore = false;
+  private readonly viewportTileStore = new WorkerViewportTileStore();
 
   constructor(
     options: {
@@ -250,6 +252,7 @@ export class WorkbookWorkerRuntime {
     const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
     this.projectionMatchesLocalStore = false;
+    this.viewportTileStore.reset();
     this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
@@ -270,6 +273,7 @@ export class WorkbookWorkerRuntime {
     const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
     this.projectionMatchesLocalStore = false;
+    this.viewportTileStore.reset();
     this.invalidateSnapshotCache();
     await this.persistStateNow();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
@@ -316,6 +320,12 @@ export class WorkbookWorkerRuntime {
     this.invalidateSnapshotCache();
     const localStore = this.bootstrapOptions?.persistState ? this.localStore : null;
     if (localStore) {
+      const authoritativeDelta = buildWorkbookLocalAuthoritativeDelta({
+        engine: authoritativeEngine,
+        payloads: events.map((event) => event.payload),
+        engineEvents: authoritativeEngineEvents,
+        previousSheets,
+      });
       const persisted: WorkbookStoredState = {
         snapshot: this.getAuthoritativeSnapshot(),
         replica: this.getAuthoritativeReplica(),
@@ -324,12 +334,7 @@ export class WorkbookWorkerRuntime {
       };
       await localStore.ingestAuthoritativeDelta({
         state: persisted,
-        authoritativeDelta: buildWorkbookLocalAuthoritativeDelta({
-          engine: authoritativeEngine,
-          payloads: events.map((event) => event.payload),
-          engineEvents: authoritativeEngineEvents,
-          previousSheets,
-        }),
+        authoritativeDelta,
         projectionOverlay: buildWorkbookLocalProjectionOverlay({
           authoritativeEngine,
           projectionEngine: engine,
@@ -337,8 +342,16 @@ export class WorkbookWorkerRuntime {
         removePendingMutationIds: [...absorbedMutationIds],
       });
       this.projectionMatchesLocalStore = true;
+      if (authoritativeDelta.replaceAll) {
+        this.viewportTileStore.reset();
+      } else {
+        authoritativeDelta.replacedSheetIds.forEach((sheetId) => {
+          this.viewportTileStore.invalidateSheet(sheetId);
+        });
+      }
     } else {
       this.projectionMatchesLocalStore = false;
+      this.viewportTileStore.reset();
     }
     this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
@@ -571,6 +584,7 @@ export class WorkbookWorkerRuntime {
     this.appliedPendingLocalSeq = 0;
     this.authoritativeRevision = 0;
     this.projectionMatchesLocalStore = false;
+    this.viewportTileStore.reset();
     this.localStore?.close();
     this.localStore = null;
     this.authoritativeEngine = null;
@@ -608,6 +622,7 @@ export class WorkbookWorkerRuntime {
 
   private markProjectionDivergedFromLocalStore(): void {
     this.projectionMatchesLocalStore = false;
+    this.viewportTileStore.reset();
   }
 
   private listSheetNames(): string[] {
@@ -790,10 +805,14 @@ export class WorkbookWorkerRuntime {
       (event === null || event.invalidation === "full") &&
       this.canReadLocalProjectionForViewport()
     ) {
-      const localBase = this.localStore?.readViewportProjection(
-        state.subscription.sheetName,
-        state.subscription,
-      );
+      const localBase =
+        this.localStore === null
+          ? null
+          : this.viewportTileStore.readViewport({
+              localStore: this.localStore,
+              sheetName: state.subscription.sheetName,
+              viewport: state.subscription,
+            });
       if (localBase) {
         return buildViewportPatchFromLocalBase({
           state,
