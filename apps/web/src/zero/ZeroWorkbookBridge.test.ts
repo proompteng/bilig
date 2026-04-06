@@ -269,7 +269,7 @@ describe("ZeroWorkbookBridge", () => {
     bridge.dispose();
   });
 
-  it("hydrates authoritative selected-cell data even when cache already has a stale cell", () => {
+  it("reprojects authoritative selected-cell data into the cache when the cache is stale", () => {
     const workbookView = createTypedView({
       id: "bilig-demo",
       name: "bilig-demo",
@@ -310,6 +310,7 @@ describe("ZeroWorkbookBridge", () => {
       },
     } as unknown as Zero;
 
+    const applyViewportPatch = vi.fn(() => []);
     const cache = {
       setKnownSheets: vi.fn(),
       peekCell: vi.fn(() => ({
@@ -321,13 +322,11 @@ describe("ZeroWorkbookBridge", () => {
         version: 1,
       })),
       subscribeCells: vi.fn(() => () => {}),
-      applyViewportPatch: vi.fn(() => []),
+      applyViewportPatch,
     } as unknown as WorkerViewportCache;
 
     const bridge = new ZeroWorkbookBridge(zero, "bilig-demo", cache, () => {});
     bridge.setSelection("Sheet1", "G7");
-    const listener = vi.fn();
-    const unsubscribe = bridge.subscribeSelectedCell(listener);
 
     selectionSourceView.emit({
       workbookId: "bilig-demo",
@@ -350,16 +349,28 @@ describe("ZeroWorkbookBridge", () => {
       version: 2,
     });
 
-    expect(listener).toHaveBeenLastCalledWith(
+    expect(applyViewportPatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        address: "G7",
-        formula: "F7*2",
-        input: "=F7*2",
-        value: { tag: ValueTag.Number, value: 8 },
+        viewport: expect.objectContaining({
+          sheetName: "Sheet1",
+          rowStart: 6,
+          rowEnd: 6,
+          colStart: 6,
+          colEnd: 6,
+        }),
+        cells: [
+          expect.objectContaining({
+            snapshot: expect.objectContaining({
+              address: "G7",
+              formula: "F7*2",
+              input: "=F7*2",
+              value: { tag: ValueTag.Number, value: 8 },
+            }),
+          }),
+        ],
       }),
     );
 
-    unsubscribe();
     bridge.dispose();
   });
 });

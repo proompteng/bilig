@@ -15,7 +15,6 @@ export interface WorkerRuntimeSelection {
 
 export interface WorkerRuntimeSessionCallbacks {
   readonly onRuntimeState: (runtimeState: WorkbookWorkerStateSnapshot) => void;
-  readonly onSelectedCell: (cell: CellSnapshot) => void;
   readonly onBridgeState: (bridgeState: ZeroWorkbookBridgeState | null) => void;
   readonly onSelection: (selection: WorkerRuntimeSelection) => void;
   readonly onError: (message: string) => void;
@@ -34,7 +33,6 @@ export interface CreateWorkerRuntimeSessionInput {
 export interface WorkerRuntimeSessionController {
   readonly handle: WorkerHandle;
   readonly runtimeState: WorkbookWorkerStateSnapshot;
-  readonly selectedCell: CellSnapshot;
   readonly bridgeState: ZeroWorkbookBridgeState | null;
   readonly selection: WorkerRuntimeSelection;
   readonly setSelection: (selection: WorkerRuntimeSelection) => Promise<void>;
@@ -114,7 +112,6 @@ export async function createWorkerRuntimeSessionController(
   let currentRuntimeState = createRuntimeState(input.documentId, null);
   let disposed = false;
   let unsubscribeBridgeWorkbook: () => void = noop;
-  let unsubscribeBridgeSelection: () => void = noop;
 
   const reportError = (error: unknown) => {
     if (disposed) {
@@ -129,15 +126,11 @@ export async function createWorkerRuntimeSessionController(
     currentSelection = selection;
     callbacks.onSelection(selection);
     zeroBridge.setSelection(selection.sheetName, selection.address);
-    const next =
-      cache.peekCell(selection.sheetName, selection.address) ?? emptyCellSnapshot(selection);
-    callbacks.onSelectedCell(next);
-    return next;
+    return cache.peekCell(selection.sheetName, selection.address) ?? emptyCellSnapshot(selection);
   };
 
   callbacks.onRuntimeState(currentRuntimeState);
   callbacks.onSelection(currentSelection);
-  callbacks.onSelectedCell(emptyCellSnapshot(currentSelection));
 
   unsubscribeBridgeWorkbook = zeroBridge.subscribeWorkbookState((state) => {
     currentBridgeState = state;
@@ -156,16 +149,9 @@ export async function createWorkerRuntimeSessionController(
     }
   });
 
-  unsubscribeBridgeSelection = zeroBridge.subscribeSelectedCell((cell) => {
-    callbacks.onSelectedCell(cell ?? emptyCellSnapshot(currentSelection));
-  });
-
   return {
     handle,
     runtimeState: currentRuntimeState,
-    selectedCell:
-      cache.peekCell(currentSelection.sheetName, currentSelection.address) ??
-      emptyCellSnapshot(currentSelection),
     bridgeState: currentBridgeState,
     selection: currentSelection,
     async setSelection(selection) {
@@ -180,7 +166,6 @@ export async function createWorkerRuntimeSessionController(
       }
       disposed = true;
       unsubscribeBridgeWorkbook();
-      unsubscribeBridgeSelection();
       zeroBridge.dispose();
     },
   };

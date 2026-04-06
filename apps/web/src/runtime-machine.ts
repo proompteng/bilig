@@ -1,4 +1,3 @@
-import type { CellSnapshot } from "@bilig/protocol";
 import { assign, fromCallback, sendTo, setup } from "xstate";
 import type { WorkbookWorkerStateSnapshot } from "./worker-runtime.js";
 import {
@@ -17,7 +16,6 @@ interface WorkerRuntimeMachineContext {
   readonly runtimeState: WorkbookWorkerStateSnapshot | null;
   readonly bridgeState: ZeroWorkbookBridgeState | null;
   readonly selection: WorkerRuntimeSelection;
-  readonly selectedCell: CellSnapshot | null;
   readonly error: string | null;
 }
 
@@ -31,7 +29,6 @@ type WorkerRuntimeMachineEvent =
   | { type: "session.runtime"; runtimeState: WorkbookWorkerStateSnapshot }
   | { type: "session.bridge"; bridgeState: ZeroWorkbookBridgeState | null }
   | { type: "session.selection"; selection: WorkerRuntimeSelection }
-  | { type: "session.cell"; cell: CellSnapshot }
   | { type: "session.error"; message: string }
   | { type: "session.failed"; message: string };
 
@@ -84,9 +81,6 @@ export function createWorkerRuntimeMachine() {
         {
           onRuntimeState(runtimeState) {
             sendBack({ type: "session.runtime", runtimeState });
-          },
-          onSelectedCell(cell) {
-            sendBack({ type: "session.cell", cell });
           },
           onBridgeState(bridgeState) {
             sendBack({ type: "session.bridge", bridgeState });
@@ -165,7 +159,6 @@ export function createWorkerRuntimeMachine() {
       runtimeState: null,
       bridgeState: null,
       selection: input.initialSelection,
-      selectedCell: null,
       error: null,
     }),
     states: {
@@ -202,11 +195,6 @@ export function createWorkerRuntimeMachine() {
               selection: ({ event }) => event.selection,
             }),
           },
-          "session.cell": {
-            actions: assign({
-              selectedCell: ({ event }) => event.cell,
-            }),
-          },
           "session.error": {
             actions: assign({
               error: ({ event }) => event.message,
@@ -220,7 +208,6 @@ export function createWorkerRuntimeMachine() {
               handle: () => null,
               runtimeState: () => null,
               bridgeState: () => null,
-              selectedCell: () => null,
             }),
           },
         },
@@ -235,7 +222,6 @@ export function createWorkerRuntimeMachine() {
                   controller: ({ event }) => event.controller,
                   runtimeState: ({ event }) => event.controller.runtimeState,
                   bridgeState: ({ event }) => event.controller.bridgeState,
-                  selectedCell: ({ event }) => event.controller.selectedCell,
                   selection: ({ event }) => event.controller.selection,
                   error: () => null,
                 }),
@@ -254,7 +240,6 @@ export function createWorkerRuntimeMachine() {
               controller: () => null,
               runtimeState: () => null,
               bridgeState: () => null,
-              selectedCell: () => null,
               error: () => null,
             }),
           },

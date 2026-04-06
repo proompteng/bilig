@@ -29,7 +29,6 @@ export interface ZeroWorkbookBridgeState {
 }
 
 type WorkbookListener = (state: ZeroWorkbookBridgeState) => void;
-type SelectionListener = (cell: CellSnapshot | null) => void;
 
 interface ViewportSubscriptionHandle {
   attachment: TileViewportAttachment;
@@ -87,7 +86,6 @@ function mergeSelectedCellEval(
 export class ZeroWorkbookBridge {
   private readonly tileManager: TileSubscriptionManager;
   private readonly workbookListeners = new Set<WorkbookListener>();
-  private readonly selectionListeners = new Set<SelectionListener>();
   private readonly viewportSubscriptions = new Set<ViewportSubscriptionHandle>();
   private readonly destroyers: Array<() => void> = [];
   private readonly stylesById = new Map<string, CellStyleRecord>();
@@ -178,18 +176,6 @@ export class ZeroWorkbookBridge {
 
   subscribeWorkbookState(listener: WorkbookListener): () => void {
     return this.subscribeWorkbook(listener);
-  }
-
-  subscribeSelection(listener: SelectionListener): () => void {
-    this.selectionListeners.add(listener);
-    listener(this.currentSelectedCell());
-    return () => {
-      this.selectionListeners.delete(listener);
-    };
-  }
-
-  subscribeSelectedCell(listener: SelectionListener): () => void {
-    return this.subscribeSelection(listener);
   }
 
   setSelection(sheetName: string, address: string): void {
@@ -342,16 +328,6 @@ export class ZeroWorkbookBridge {
     }
   }
 
-  private emitSelection(cell: CellSnapshot | null): void {
-    for (const listener of this.selectionListeners) {
-      try {
-        listener(cell);
-      } catch (error) {
-        this.onError(error);
-      }
-    }
-  }
-
   private currentWorkbookState(): ZeroWorkbookBridgeState {
     return {
       workbookName: this.workbookRow?.name ?? this.documentId,
@@ -459,7 +435,6 @@ export class ZeroWorkbookBridge {
         }
       }
     }
-    this.emitSelection(snapshot);
   }
 
   private notifyViewportSubscriptions(full: boolean): void {

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createActor } from "xstate";
 import { Zero } from "@rocicorp/zero";
-import { ValueTag } from "@bilig/protocol";
 import { createWorkerRuntimeMachine } from "../runtime-machine.js";
 import { WorkerViewportCache } from "../viewport-cache.js";
 import type {
@@ -39,13 +38,6 @@ function createController(
       },
       syncState: "local-only",
     },
-    selectedCell: {
-      sheetName: selection.sheetName,
-      address: selection.address,
-      value: { tag: ValueTag.Empty },
-      flags: 0,
-      version: 0,
-    },
     bridgeState: null,
     selection,
     setSelection: vi.fn(async () => undefined),
@@ -63,7 +55,6 @@ describe("worker runtime machine", () => {
         callbacks: WorkerRuntimeSessionCallbacks,
       ): Promise<WorkerRuntimeSessionController> => {
         callbacks.onRuntimeState(controller.runtimeState);
-        callbacks.onSelectedCell(controller.selectedCell);
         return controller;
       },
     );

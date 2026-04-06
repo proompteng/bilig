@@ -391,14 +391,6 @@ function emptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   };
 }
 
-function matchesSelectionCell(
-  cell: CellSnapshot | null | undefined,
-  sheetName: string,
-  address: string,
-): cell is CellSnapshot {
-  return cell?.sheetName === sheetName && cell.address === address;
-}
-
 function isTextEntryTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
@@ -456,10 +448,6 @@ function WorkerWorkbookAppInner({
   const workerHandle = useSelector(runtimeActorRef, (snapshot) => snapshot.context.handle);
   const bridgeState = useSelector(runtimeActorRef, (snapshot) => snapshot.context.bridgeState);
   const selection = useSelector(runtimeActorRef, (snapshot) => snapshot.context.selection);
-  const runtimeSelectedCell = useSelector(
-    runtimeActorRef,
-    (snapshot) => snapshot.context.selectedCell,
-  );
   const runtimeError = useSelector(runtimeActorRef, (snapshot) => snapshot.context.error);
   const loading = useSelector(runtimeActorRef, (snapshot) =>
     snapshot.matches({ active: "booting" }),
@@ -561,15 +549,7 @@ function WorkerWorkbookAppInner({
       (listener: () => void) => workerHandle?.cache.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => {
-      const cacheSnapshot = workerHandle?.cache.peekCell(selection.sheetName, selection.address);
-      if (cacheSnapshot) {
-        return cacheSnapshot;
-      }
-      return matchesSelectionCell(runtimeSelectedCell, selection.sheetName, selection.address)
-        ? runtimeSelectedCell
-        : emptySelectedCell;
-    },
+    () => workerHandle?.cache.peekCell(selection.sheetName, selection.address) ?? emptySelectedCell,
     () => emptySelectedCell,
   );
 
