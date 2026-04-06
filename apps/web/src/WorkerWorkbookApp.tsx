@@ -88,6 +88,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function parseColumnWidthMutationArgs(
+  mutation: PendingWorkbookMutationInput | PendingWorkbookMutation,
+): { sheetName: string; columnIndex: number; width: number } | null {
+  if (mutation.method !== "updateColumnWidth") {
+    return null;
+  }
+  const [sheetName, columnIndex, width] = mutation.args;
+  if (
+    typeof sheetName !== "string" ||
+    typeof columnIndex !== "number" ||
+    typeof width !== "number"
+  ) {
+    return null;
+  }
+  return { sheetName, columnIndex, width };
+}
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
@@ -388,6 +405,7 @@ function WorkerWorkbookAppInner({
   const editorTargetRef = useRef(selection);
   const zeroRef = useRef<ZeroClient>(zero);
   const connectionStateRef = useRef(connectionState.name);
+  const localMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const syncQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
@@ -506,6 +524,23 @@ function WorkerWorkbookAppInner({
     [],
   );
 
+  const runSerializedLocalMutationTask = useCallback(
+    async (task: () => Promise<unknown>): Promise<unknown> => {
+      const previousTask = localMutationQueueRef.current;
+      let releaseQueue = () => {};
+      localMutationQueueRef.current = new Promise<void>((resolve) => {
+        releaseQueue = resolve;
+      });
+      await previousTask.catch(() => {});
+      try {
+        return await task();
+      } finally {
+        releaseQueue();
+      }
+    },
+    [],
+  );
+
   const listPendingMutations = useCallback(async (): Promise<
     readonly PendingWorkbookMutation[]
   > => {
@@ -528,6 +563,21 @@ function WorkerWorkbookAppInner({
       await runtimeController.invoke("enqueuePendingMutation", mutation);
     },
     [runtimeController],
+  );
+
+  const ackPendingColumnWidth = useCallback(
+    (mutation: PendingWorkbookMutationInput | PendingWorkbookMutation): void => {
+      const parsed = parseColumnWidthMutationArgs(mutation);
+      if (!parsed) {
+        return;
+      }
+      workerHandleRef.current?.cache.ackColumnWidth(
+        parsed.sheetName,
+        parsed.columnIndex,
+        parsed.width,
+      );
+    },
+    [],
   );
 
   const runZeroMutation = useCallback(
@@ -592,11 +642,12 @@ function WorkerWorkbookAppInner({
       }
 
       await runtimeController.invoke("ackPendingMutation", mutation.id);
+      ackPendingColumnWidth(mutation);
       await drainBatch(pendingMutations, index + 1);
     };
 
     await drainBatch(await listPendingMutations());
-  }, [listPendingMutations, runZeroMutation, runtimeController]);
+  }, [ackPendingColumnWidth, listPendingMutations, runZeroMutation, runtimeController]);
 
   const drainPendingMutations = useCallback(async (): Promise<void> => {
     try {
@@ -721,7 +772,9 @@ function WorkerWorkbookAppInner({
           throw new Error("Unsupported workbook mutation");
       }
 
-      await runtimeController.invoke(mutation.method, ...mutation.args);
+      await runSerializedLocalMutationTask(() =>
+        runtimeController.invoke(mutation.method, ...mutation.args),
+      );
       await runSerializedSyncTask(async () => {
         const pendingMutations = await listPendingMutations();
         const hasPendingBacklog = pendingMutations.length > 0;
@@ -735,6 +788,7 @@ function WorkerWorkbookAppInner({
 
         const remoteResult = await runZeroMutation(mutation);
         if (remoteResult.ok) {
+          ackPendingColumnWidth(mutation);
           return;
         }
         if (remoteResult.retryable) {
@@ -748,6 +802,8 @@ function WorkerWorkbookAppInner({
       drainPendingMutationsLocked,
       enqueuePendingMutation,
       listPendingMutations,
+      ackPendingColumnWidth,
+      runSerializedLocalMutationTask,
       runSerializedSyncTask,
       runZeroMutation,
       runtimeController,
@@ -776,12 +832,8 @@ function WorkerWorkbookAppInner({
       try {
         await invokeMutation("updateColumnWidth", sheetName, columnIndex, width);
       } catch (error) {
-        if (
-          cache &&
-          previousWidth !== undefined &&
-          cache.getColumnWidths(sheetName)[columnIndex] === width
-        ) {
-          cache.setColumnWidth(sheetName, columnIndex, previousWidth);
+        if (cache && cache.getColumnWidths(sheetName)[columnIndex] === width) {
+          cache.rollbackColumnWidth(sheetName, columnIndex, previousWidth);
         }
         throw error;
       }

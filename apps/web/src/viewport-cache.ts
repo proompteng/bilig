@@ -224,6 +224,43 @@ export class WorkerViewportCache implements GridEngineLike {
     this.listeners.forEach((listener) => listener());
   }
 
+  ackColumnWidth(sheetName: string, columnIndex: number, width: number): void {
+    const pendingWidths = this.pendingColumnWidthsBySheet.get(sheetName);
+    if (!pendingWidths || pendingWidths[columnIndex] !== width) {
+      return;
+    }
+    const nextPendingWidths = { ...pendingWidths };
+    delete nextPendingWidths[columnIndex];
+    if (Object.keys(nextPendingWidths).length === 0) {
+      this.pendingColumnWidthsBySheet.delete(sheetName);
+    } else {
+      this.pendingColumnWidthsBySheet.set(sheetName, nextPendingWidths);
+    }
+  }
+
+  rollbackColumnWidth(sheetName: string, columnIndex: number, width: number | undefined): void {
+    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
+    if (width === undefined) {
+      delete widths[columnIndex];
+    } else {
+      widths[columnIndex] = width;
+    }
+    if (Object.keys(widths).length === 0) {
+      this.columnWidthsBySheet.delete(sheetName);
+    } else {
+      this.columnWidthsBySheet.set(sheetName, widths);
+    }
+
+    const pendingWidths = { ...this.pendingColumnWidthsBySheet.get(sheetName) };
+    delete pendingWidths[columnIndex];
+    if (Object.keys(pendingWidths).length === 0) {
+      this.pendingColumnWidthsBySheet.delete(sheetName);
+    } else {
+      this.pendingColumnWidthsBySheet.set(sheetName, pendingWidths);
+    }
+    this.listeners.forEach((listener) => listener());
+  }
+
   setKnownSheets(sheetNames: readonly string[]): void {
     if (
       sheetNames.length === this.knownSheets.size &&
@@ -344,9 +381,6 @@ export class WorkerViewportCache implements GridEngineLike {
           return;
         }
         widths[column.index] = column.size;
-        if (pending === column.size) {
-          delete pendingWidths[column.index];
-        }
         axisChanged = true;
       });
       this.columnWidthsBySheet.set(patch.viewport.sheetName, widths);

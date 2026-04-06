@@ -51,6 +51,14 @@ function createPatch(styleId?: string): ViewportPatch {
   };
 }
 
+function createColumnPatch(size: number): ViewportPatch {
+  return {
+    ...createPatch(),
+    cells: [],
+    columns: [{ index: 0, size, hidden: false }],
+  };
+}
+
 describe("WorkerViewportCache", () => {
   it("accepts equal-version empty snapshots that clear stale styling", () => {
     const cache = new WorkerViewportCache();
@@ -360,5 +368,30 @@ describe("WorkerViewportCache", () => {
       fill: { backgroundColor: "#c9daf8" },
       font: { bold: true, color: "#111827" },
     });
+  });
+
+  it("keeps a pending local column width across matching patches until the mutation is acked", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.setColumnWidth("Sheet1", 0, 68);
+    cache.applyViewportPatch(createColumnPatch(68));
+    cache.applyViewportPatch(createColumnPatch(93));
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(68);
+
+    cache.ackColumnWidth("Sheet1", 0, 68);
+    cache.applyViewportPatch(createColumnPatch(93));
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(93);
+  });
+
+  it("rolls back a failed local column width mutation without leaving a pending width behind", () => {
+    const cache = new WorkerViewportCache();
+
+    cache.setColumnWidth("Sheet1", 0, 68);
+    cache.rollbackColumnWidth("Sheet1", 0, undefined);
+    cache.applyViewportPatch(createColumnPatch(104));
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(104);
   });
 });

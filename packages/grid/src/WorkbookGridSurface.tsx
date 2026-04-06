@@ -237,6 +237,11 @@ export function WorkbookGridSurface({
   const rangeMovePreviewRangeRef = useRef<Rectangle | null>(null);
   const rangeMoveAnchorOffsetRef = useRef<Item | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const columnResizePreviewRef = useRef<{
+    sheetName: string;
+    columnIndex: number;
+    width: number;
+  } | null>(null);
   const scrollSyncFrameRef = useRef<number | null>(null);
   const interactionState = useMemo(
     () => ({
@@ -275,6 +280,11 @@ export function WorkbookGridSurface({
   const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<
     Record<string, Record<number, number>>
   >({});
+  const [columnResizePreview, setColumnResizePreview] = useState<{
+    sheetName: string;
+    columnIndex: number;
+    width: number;
+  } | null>(null);
   const selectedCell = useMemo(
     () => parseCellAddress(selectedAddr, sheetName),
     [selectedAddr, sheetName],
@@ -284,8 +294,20 @@ export function WorkbookGridSurface({
   );
   const gridMetrics = useMemo(() => getGridMetrics(), []);
   const gridTheme = useMemo(() => getGridTheme(), []);
-  const columnWidths =
+  const baseColumnWidths =
     controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
+  const columnWidths = useMemo(() => {
+    if (!columnResizePreview || columnResizePreview.sheetName !== sheetName) {
+      return baseColumnWidths;
+    }
+    if (baseColumnWidths[columnResizePreview.columnIndex] === columnResizePreview.width) {
+      return baseColumnWidths;
+    }
+    return {
+      ...baseColumnWidths,
+      [columnResizePreview.columnIndex]: columnResizePreview.width,
+    };
+  }, [baseColumnWidths, columnResizePreview, sheetName]);
   const sortedColumnWidthOverrides = useMemo(
     () =>
       Object.entries(columnWidths)
@@ -435,6 +457,24 @@ export function WorkbookGridSurface({
       resizeCleanupRef.current?.();
     };
   }, []);
+
+  useEffect(() => {
+    const preview = columnResizePreviewRef.current;
+    if (!preview || preview.sheetName !== sheetName) {
+      return;
+    }
+    if (baseColumnWidths[preview.columnIndex] !== preview.width) {
+      return;
+    }
+    columnResizePreviewRef.current = null;
+    setColumnResizePreview((current) =>
+      current?.sheetName === preview.sheetName &&
+      current.columnIndex === preview.columnIndex &&
+      current.width === preview.width
+        ? null
+        : current,
+    );
+  }, [baseColumnWidths, sheetName]);
 
   useEffect(() => {
     onVisibleViewportChange?.(viewport);
@@ -1253,7 +1293,7 @@ export function WorkbookGridSurface({
     ],
   );
 
-  const applyColumnWidth = useCallback(
+  const commitColumnWidth = useCallback(
     (columnIndex: number, newSize: number) => {
       const clampedSize = Math.max(
         MIN_COLUMN_WIDTH,
@@ -1278,6 +1318,26 @@ export function WorkbookGridSurface({
       });
     },
     [onColumnWidthChange, sheetName],
+  );
+
+  const previewColumnWidth = useCallback(
+    (columnIndex: number, newSize: number): number => {
+      const clampedSize = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)),
+      );
+      const nextPreview = { sheetName, columnIndex, width: clampedSize };
+      columnResizePreviewRef.current = nextPreview;
+      setColumnResizePreview((current) =>
+        current?.sheetName === nextPreview.sheetName &&
+        current.columnIndex === nextPreview.columnIndex &&
+        current.width === nextPreview.width
+          ? current
+          : nextPreview,
+      );
+      return clampedSize;
+    },
+    [sheetName],
   );
 
   const computeAutofitColumnWidth = useCallback(
@@ -1328,7 +1388,7 @@ export function WorkbookGridSurface({
       const startWidth = getResolvedColumnWidth(columnWidths, columnIndex, gridMetrics.columnWidth);
 
       const handlePointerMove = (nativeEvent: PointerEvent) => {
-        applyColumnWidth(columnIndex, startWidth + (nativeEvent.clientX - startClientX));
+        previewColumnWidth(columnIndex, startWidth + (nativeEvent.clientX - startClientX));
       };
 
       const cleanup = (nativeEvent?: PointerEvent) => {
@@ -1343,6 +1403,21 @@ export function WorkbookGridSurface({
       };
 
       const handlePointerUp = (nativeEvent: PointerEvent) => {
+        const preview = columnResizePreviewRef.current;
+        const finalWidth =
+          preview?.sheetName === sheetName && preview.columnIndex === columnIndex
+            ? preview.width
+            : startWidth;
+        if (finalWidth === startWidth) {
+          columnResizePreviewRef.current = null;
+          setColumnResizePreview((current) =>
+            current?.sheetName === sheetName && current.columnIndex === columnIndex
+              ? null
+              : current,
+          );
+        } else {
+          commitColumnWidth(columnIndex, finalWidth);
+        }
         cleanup(nativeEvent);
       };
 
@@ -1350,7 +1425,15 @@ export function WorkbookGridSurface({
       window.addEventListener("pointermove", handlePointerMove, true);
       window.addEventListener("pointerup", handlePointerUp, true);
     },
-    [applyColumnWidth, columnWidths, gridMetrics.columnWidth, interactionState, refreshHoverState],
+    [
+      columnWidths,
+      commitColumnWidth,
+      gridMetrics.columnWidth,
+      interactionState,
+      previewColumnWidth,
+      refreshHoverState,
+      sheetName,
+    ],
   );
 
   const handleHostRef = useCallback((node: HTMLDivElement | null) => {
@@ -1432,7 +1515,7 @@ export function WorkbookGridSurface({
         onDoubleClickCapture={(event) => {
           handleGridBodyDoubleClick({
             event,
-            applyColumnWidth,
+            applyColumnWidth: commitColumnWidth,
             beginEditAt,
             columnWidths,
             computeAutofitColumnWidth,
