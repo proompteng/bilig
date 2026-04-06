@@ -294,4 +294,5 @@ export function decodeStdioMessages(buffer: Uint8Array): {
 
 export * from "./workbook-agent-bundles.js";
 export * from "./codex-app-server-protocol.js";
+export * from "./workbook-agent-preview.js";
 export * from "./workbook-agent-skills.js";

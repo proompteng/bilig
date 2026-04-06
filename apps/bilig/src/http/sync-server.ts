@@ -25,6 +25,7 @@ import type { WorksheetExecutor } from "../workbook-runtime/worksheet-executor.j
 import type { ZeroSyncService } from "../zero/service.js";
 import type { WorkbookAgentService } from "../codex-app/workbook-agent-service.js";
 import type { WorkbookAgentStreamEvent } from "@bilig/contracts";
+import { isWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 
 const SPA_FALLBACK_PREFIXES = [
   "/api/",
@@ -111,6 +112,34 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   const zeroSyncService = options.zeroSyncService;
   const workbookAgentService = options.workbookAgentService;
   const app = Fastify({ logger: options.logger ?? true });
+  const handleWorkbookAgentRequest = async <T>(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    task: (
+      service: WorkbookAgentService,
+      session: ReturnType<typeof resolveSessionIdentity>,
+    ) => Promise<T>,
+  ): Promise<T | ReturnType<typeof createErrorEnvelope>> => {
+    if (!workbookAgentService?.enabled) {
+      reply.code(503);
+      return createErrorEnvelope(
+        "WORKBOOK_AGENT_DISABLED",
+        "Workbook agent service is not configured",
+        true,
+      );
+    }
+    const session = resolveSessionIdentity(request, reply);
+    reply.header("cache-control", "no-store");
+    try {
+      return await task(workbookAgentService, session);
+    } catch (error) {
+      if (isWorkbookAgentServiceError(error)) {
+        reply.code(error.statusCode);
+        return createErrorEnvelope(error.code, error.message, error.retryable);
+      }
+      throw error;
+    }
+  };
 
   app.addHook("onClose", async () => {
     await workbookAgentService?.close().catch(() => undefined);
@@ -327,20 +356,12 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.createSession({
-        documentId: request.params.documentId,
-        session,
-        body: request.body ?? {},
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: request.body ?? {},
+        });
       });
     },
   );
@@ -354,21 +375,13 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.updateContext({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        session,
-        body: request.body ?? {},
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.updateContext({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          session,
+          body: request.body ?? {},
+        });
       });
     },
   );
@@ -382,21 +395,13 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.startTurn({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        session,
-        body: request.body ?? {},
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.startTurn({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          session,
+          body: request.body ?? {},
+        });
       });
     },
   );
@@ -409,20 +414,12 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.interruptTurn({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        session,
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.interruptTurn({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          session,
+        });
       });
     },
   );
@@ -439,26 +436,18 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.applyPendingBundle({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        bundleId: request.params.bundleId,
-        session,
-        appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
-        preview:
-          request.body && typeof request.body === "object" && "preview" in request.body
-            ? (request.body.preview ?? null)
-            : null,
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.applyPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+          appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
+          preview:
+            request.body && typeof request.body === "object" && "preview" in request.body
+              ? (request.body.preview ?? null)
+              : null,
+        });
       });
     },
   );
@@ -471,21 +460,13 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.dismissPendingBundle({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        bundleId: request.params.bundleId,
-        session,
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.dismissPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+        });
       });
     },
   );
@@ -498,21 +479,13 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       }>,
       reply: FastifyReply,
     ) => {
-      if (!workbookAgentService?.enabled) {
-        reply.code(503);
-        return createErrorEnvelope(
-          "WORKBOOK_AGENT_DISABLED",
-          "Workbook agent service is not configured",
-          true,
-        );
-      }
-      const session = resolveSessionIdentity(request, reply);
-      reply.header("cache-control", "no-store");
-      return await workbookAgentService.replayExecutionRecord({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        recordId: request.params.recordId,
-        session,
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.replayExecutionRecord({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          recordId: request.params.recordId,
+          session,
+        });
       });
     },
   );

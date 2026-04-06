@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { workbookAgentSkillDescriptors } from "@bilig/agent-api";
 import type {
   WorkbookAgentCommandBundle,
+  WorkbookAgentPreviewChangeKind,
   WorkbookAgentExecutionRecord,
   WorkbookAgentPreviewSummary,
   WorkbookAgentSkillFocus,
@@ -139,6 +140,19 @@ function renderReasonLabel(reason: string): string {
       return "value";
     default:
       return reason;
+  }
+}
+
+function renderPreviewChangeKind(kind: WorkbookAgentPreviewChangeKind): string {
+  switch (kind) {
+    case "input":
+      return "value";
+    case "formula":
+      return "formula";
+    case "style":
+      return "style";
+    case "numberFormat":
+      return "number format";
   }
 }
 
@@ -500,6 +514,17 @@ function PendingBundleCard(props: {
             ? "explicit approval required"
             : "preview required before apply"}
       </div>
+      {props.preview ? (
+        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+          Preview effects: {String(props.preview.effectSummary.displayedCellDiffCount)} sampled cell
+          diff{props.preview.effectSummary.displayedCellDiffCount === 1 ? "" : "s"} ·{" "}
+          {String(props.preview.effectSummary.formulaChangeCount)} formulas ·{" "}
+          {String(props.preview.effectSummary.inputChangeCount)} values ·{" "}
+          {String(props.preview.effectSummary.styleChangeCount)} styles ·{" "}
+          {String(props.preview.effectSummary.numberFormatChangeCount)} number formats
+          {props.preview.effectSummary.truncatedCellDiffs ? " · diff list truncated" : ""}
+        </div>
+      ) : null}
       <PreviewRangeList ranges={props.preview?.ranges ?? props.bundle.affectedRanges} />
       {props.preview?.structuralChanges?.length ? (
         <div className="mt-2 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
@@ -519,6 +544,16 @@ function PendingBundleCard(props: {
               >
                 <div className="col-span-2 font-medium text-[var(--wb-text)]">
                   {diff.sheetName}!{diff.address}
+                </div>
+                <div className="col-span-2 mt-1 flex flex-wrap gap-1">
+                  {diff.changeKinds.map((kind) => (
+                    <span
+                      key={kind}
+                      className="rounded-full bg-[var(--wb-surface-subtle)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]"
+                    >
+                      {renderPreviewChangeKind(kind)}
+                    </span>
+                  ))}
                 </div>
                 <div className="text-[var(--wb-text-subtle)]">
                   Before: {(diff.beforeFormula ?? String(diff.beforeInput ?? "")) || "(empty)"}
@@ -576,6 +611,14 @@ function ExecutionRecordRow(props: {
       {(props.record.planText ?? props.record.goalText).trim().length > 0 ? (
         <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
           {props.record.planText ?? props.record.goalText}
+        </div>
+      ) : null}
+      {props.record.preview ? (
+        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+          Preview effects: {String(props.record.preview.effectSummary.displayedCellDiffCount)}{" "}
+          sampled cell diff
+          {props.record.preview.effectSummary.displayedCellDiffCount === 1 ? "" : "s"} ·{" "}
+          {String(props.record.preview.effectSummary.structuralChangeCount)} structural changes
         </div>
       ) : null}
       <PreviewRangeList ranges={props.record.preview?.ranges ?? []} />

@@ -1,6 +1,7 @@
 import type { CommitOp, EngineReplicaSnapshot } from "@bilig/core";
 import { SpreadsheetEngine } from "@bilig/core";
 import {
+  buildWorkbookAgentPreview,
   isWorkbookAgentCommandBundle,
   type WorkbookAgentCommandBundle,
   type WorkbookAgentPreviewSummary,
@@ -72,7 +73,6 @@ import {
   type ProjectionOverlayScope,
 } from "./worker-local-overlay.js";
 import { WorkerViewportTileStore } from "./worker-viewport-tile-store.js";
-import { buildWorkbookAgentPreview } from "./workbook-agent-preview.js";
 
 export interface WorkbookWorkerBootstrapOptions {
   documentId: string;

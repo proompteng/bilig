@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkbookAgentSessionSnapshot } from "@bilig/contracts";
 import type { ZeroSyncService } from "../zero/service.js";
+import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 import { createSyncServer } from "./sync-server.js";
 
 type TestServer = Awaited<ReturnType<typeof startHttpServer>>;
@@ -109,6 +110,24 @@ function createAgentSessionSnapshot(
     entries: [],
     pendingBundle: null,
     executionRecords: [],
+    ...overrides,
+  };
+}
+
+function createPreviewSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    ranges: [],
+    structuralChanges: [],
+    cellDiffs: [],
+    effectSummary: {
+      displayedCellDiffCount: 0,
+      truncatedCellDiffs: false,
+      inputChangeCount: 0,
+      formulaChangeCount: 0,
+      styleChangeCount: 0,
+      numberFormatChangeCount: 0,
+      structuralChangeCount: 0,
+    },
     ...overrides,
   };
 }
@@ -378,11 +397,7 @@ describe("sync-server workbook agent", () => {
         method: "POST",
         url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
         payload: {
-          preview: {
-            ranges: [],
-            structuralChanges: [],
-            cellDiffs: [],
-          },
+          preview: createPreviewSummary(),
         },
       });
 
@@ -393,11 +408,73 @@ describe("sync-server workbook agent", () => {
           sessionId: "agent-session-1",
           bundleId: "bundle-1",
           appliedBy: "user",
-          preview: {
-            ranges: [],
-            structuralChanges: [],
-            cellDiffs: [],
-          },
+          preview: createPreviewSummary(),
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns a structured conflict envelope when agent apply rejects a stale preview", async () => {
+    const applyPendingBundle = vi.fn(async () => {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_PREVIEW_STALE",
+        message: "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+        statusCode: 409,
+        retryable: true,
+      });
+    });
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        async createSession() {
+          throw new Error("not used");
+        },
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        applyPendingBundle,
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/bundles/bundle-1/apply",
+        payload: {
+          preview: createPreviewSummary(),
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          error: "WORKBOOK_AGENT_PREVIEW_STALE",
+          message:
+            "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+          retryable: true,
         }),
       );
     } finally {

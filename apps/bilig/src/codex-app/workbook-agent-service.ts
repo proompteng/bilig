@@ -9,9 +9,10 @@ import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
-import { isWorkbookAgentPreviewSummary } from "@bilig/agent-api";
+import { decodeWorkbookAgentPreviewSummary } from "@bilig/agent-api";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
+import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 import {
   appendWorkbookAgentBundleCommand,
   buildWorkbookAgentExecutionRecord,
@@ -373,24 +374,41 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     const pendingBundle = sessionState.snapshot.pendingBundle;
     if (!pendingBundle || pendingBundle.id !== input.bundleId) {
-      throw new Error("Workbook agent preview bundle not found");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_BUNDLE_NOT_FOUND",
+        message: "Workbook agent preview bundle not found",
+        statusCode: 404,
+        retryable: false,
+      });
     }
-    if (!isWorkbookAgentPreviewSummary(input.preview)) {
-      throw new Error("Workbook agent preview summary is required before apply");
+    const preview = decodeWorkbookAgentPreviewSummary(input.preview);
+    if (!preview) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_PREVIEW_REQUIRED",
+        message: "Workbook agent preview summary is required before apply",
+        statusCode: 400,
+        retryable: false,
+      });
     }
     if (input.appliedBy === "auto" && pendingBundle.approvalMode !== "auto") {
-      throw new Error("Workbook agent bundle requires manual approval");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_MANUAL_APPROVAL_REQUIRED",
+        message: "Workbook agent bundle requires manual approval",
+        statusCode: 409,
+        retryable: false,
+      });
     }
     const result = await this.zeroSyncService.applyAgentCommandBundle(
       input.documentId,
       pendingBundle,
+      preview,
       input.session,
     );
     const executionRecord = buildWorkbookAgentExecutionRecord({
       bundle: pendingBundle,
       actorUserId: input.session.userID,
       planText: this.collectPlanTextForTurn(sessionState, pendingBundle.turnId),
-      preview: input.preview,
+      preview: result.preview,
       appliedRevision: result.revision,
       appliedBy: input.appliedBy,
       now: this.now(),

@@ -1,7 +1,7 @@
 import {
+  decodeWorkbookAgentPreviewSummary,
   isWorkbookAgentContextRef,
   isWorkbookAgentCommand,
-  isWorkbookAgentPreviewSummary,
   type WorkbookAgentCommand,
   type WorkbookAgentExecutionRecord,
 } from "@bilig/agent-api";
@@ -89,9 +89,7 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
   const preview =
     row.previewJson === null || row.previewJson === undefined
       ? null
-      : isWorkbookAgentPreviewSummary(row.previewJson)
-        ? row.previewJson
-        : null;
+      : decodeWorkbookAgentPreviewSummary(row.previewJson);
   return {
     id: row.id,
     bundleId: row.bundleId,

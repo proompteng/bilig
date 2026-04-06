@@ -94,6 +94,24 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createPreviewSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    ranges: [],
+    structuralChanges: [],
+    cellDiffs: [],
+    effectSummary: {
+      displayedCellDiffCount: 0,
+      truncatedCellDiffs: false,
+      inputChangeCount: 0,
+      formulaChangeCount: 0,
+      styleChangeCount: 0,
+      numberFormatChangeCount: 0,
+      structuralChangeCount: 0,
+    },
+    ...overrides,
+  };
+}
+
 function AgentHarness(props: {
   readonly previewBundle?: Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"];
 }) {
@@ -112,13 +130,7 @@ function AgentHarness(props: {
         colEnd: 5,
       },
     }),
-    previewBundle:
-      props.previewBundle ??
-      vi.fn(async () => ({
-        ranges: [],
-        structuralChanges: [],
-        cellDiffs: [],
-      })),
+    previewBundle: props.previewBundle ?? vi.fn(async () => createPreviewSummary()),
   });
 
   return (
@@ -362,7 +374,7 @@ describe("workbook agent pane", () => {
         threadId: "thr-1",
       }),
     );
-    const preview = {
+    const preview = createPreviewSummary({
       ranges: [
         {
           sheetName: "Sheet1",
@@ -371,7 +383,6 @@ describe("workbook agent pane", () => {
           role: "target" as const,
         },
       ],
-      structuralChanges: [],
       cellDiffs: [
         {
           sheetName: "Sheet1",
@@ -380,9 +391,19 @@ describe("workbook agent pane", () => {
           beforeFormula: null,
           afterInput: 1,
           afterFormula: null,
+          changeKinds: ["style"],
         },
       ],
-    };
+      effectSummary: {
+        displayedCellDiffCount: 1,
+        truncatedCellDiffs: false,
+        inputChangeCount: 0,
+        formulaChangeCount: 0,
+        styleChangeCount: 1,
+        numberFormatChangeCount: 0,
+        structuralChangeCount: 0,
+      },
+    });
     const previewBundle = vi.fn(async () => preview);
     const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
       const url = requestUrl(input);

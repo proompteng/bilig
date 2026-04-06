@@ -1,6 +1,8 @@
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
+import type { SpreadsheetEngine } from "@bilig/core";
 import { schema } from "@bilig/zero-sync";
 import {
+  type WorkbookChangeUndoBundle,
   type AuthoritativeWorkbookEventBatch,
   queries,
   workbookCellArgsSchema,
@@ -9,6 +11,13 @@ import {
   workbookRowTileArgsSchema,
   workbookTileArgsSchema,
 } from "@bilig/zero-sync";
+import {
+  applyWorkbookAgentCommandBundle,
+  areWorkbookAgentPreviewSummariesEqual,
+  buildWorkbookAgentPreview,
+  type WorkbookAgentPreviewSummary,
+} from "@bilig/agent-api";
+import type { EngineOp } from "@bilig/workbook-domain";
 import type { FastifyRequest } from "fastify";
 import type { SessionIdentity } from "../http/session.js";
 import { resolveSessionIdentity } from "../http/session.js";
@@ -26,6 +35,7 @@ import {
   ensureZeroSyncSchema,
   loadWorkbookEventRecordsAfter,
   loadWorkbookRuntimeMetadata,
+  persistWorkbookMutation,
   replaceWorkbookDocument,
 } from "./store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
@@ -46,6 +56,7 @@ import {
   type CreateWorkbookScenarioInput,
 } from "./workbook-scenario-store.js";
 import type { WorkbookScenarioResponse } from "@bilig/zero-sync";
+import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -61,8 +72,9 @@ export interface ZeroSyncService {
   applyAgentCommandBundle(
     documentId: string,
     bundle: WorkbookAgentCommandBundle,
+    preview: WorkbookAgentPreviewSummary,
     session?: SessionIdentity,
-  ): Promise<{ revision: number }>;
+  ): Promise<{ revision: number; preview: WorkbookAgentPreviewSummary }>;
   listWorkbookAgentRuns(
     documentId: string,
     actorUserId: string,
@@ -375,33 +387,69 @@ class EnabledZeroSyncService implements ZeroSyncService {
   async applyAgentCommandBundle(
     documentId: string,
     bundle: WorkbookAgentCommandBundle,
+    preview: WorkbookAgentPreviewSummary,
     session?: SessionIdentity,
-  ): Promise<{ revision: number }> {
+  ): Promise<{ revision: number; preview: WorkbookAgentPreviewSummary }> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
-      await handleServerMutator(
-        {
-          dbTransaction: {
-            wrappedTransaction: client,
-          },
-        },
-        "workbook.applyAgentCommandBundle",
-        {
-          documentId,
-          bundle,
-        },
-        this.runtimeManager,
-        session,
-      );
-      const metadata = await loadWorkbookRuntimeMetadata(client, documentId);
-      await client.query("COMMIT");
-      return {
-        revision: metadata.headRevision,
-      };
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
+      return await this.runtimeManager.runExclusive(documentId, async () => {
+        await client.query("BEGIN");
+        try {
+          await acquireWorkbookMutationLock(client, documentId);
+          const state = await this.runtimeManager.loadRuntime(client, documentId);
+          if (state.headRevision !== bundle.baseRevision) {
+            throw createWorkbookAgentServiceError({
+              code: "WORKBOOK_AGENT_PREVIEW_STALE",
+              message:
+                "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+              statusCode: 409,
+              retryable: true,
+            });
+          }
+          const authoritativePreview = await buildWorkbookAgentPreview({
+            snapshot: state.engine.exportSnapshot(),
+            replicaId: `server:${documentId}:agent-preview:r${String(state.headRevision)}`,
+            bundle,
+          });
+          if (!areWorkbookAgentPreviewSummariesEqual(preview, authoritativePreview)) {
+            throw createWorkbookAgentServiceError({
+              code: "WORKBOOK_AGENT_PREVIEW_MISMATCH",
+              message:
+                "Local preview no longer matches the authoritative workbook state. Replay the plan to refresh the preview.",
+              statusCode: 409,
+              retryable: true,
+            });
+          }
+          const undoBundle = captureAgentUndoBundle(state.engine, bundle);
+          const ownerUserId = resolveOwnerUserId(state, session);
+          const result = await persistWorkbookMutation(client, documentId, {
+            previousState: state,
+            nextEngine: state.engine,
+            updatedBy: session?.userID ?? "system",
+            ownerUserId,
+            eventPayload: {
+              kind: "applyAgentCommandBundle",
+              bundle,
+            },
+            undoBundle,
+          });
+          this.runtimeManager.commitMutation(documentId, {
+            projectionCommit: result.projectionCommit,
+            headRevision: result.revision,
+            calculatedRevision: result.calculatedRevision,
+            ownerUserId,
+          });
+          await client.query("COMMIT");
+          return {
+            revision: result.revision,
+            preview: authoritativePreview,
+          };
+        } catch (error) {
+          this.runtimeManager.invalidate(documentId);
+          await client.query("ROLLBACK").catch(() => undefined);
+          throw error;
+        }
+      });
     } finally {
       client.release();
     }
@@ -534,6 +582,34 @@ class EnabledZeroSyncService implements ZeroSyncService {
       this.runtimeManager.invalidate(input.documentId);
     }
   }
+}
+
+function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIdentity): string {
+  if (state.ownerUserId !== "system" || !session?.userID) {
+    return state.ownerUserId;
+  }
+  return session.userID;
+}
+
+function toEngineUndoBundle(undoOps: readonly EngineOp[] | null): WorkbookChangeUndoBundle | null {
+  if (!undoOps || undoOps.length === 0) {
+    return null;
+  }
+  return {
+    kind: "engineOps",
+    ops: structuredClone([...undoOps]),
+  };
+}
+
+function captureAgentUndoBundle(
+  engine: SpreadsheetEngine,
+  bundle: WorkbookAgentCommandBundle,
+): WorkbookChangeUndoBundle | null {
+  return toEngineUndoBundle(
+    engine.captureUndoOps(() => {
+      applyWorkbookAgentCommandBundle(engine, bundle);
+    }).undoOps,
+  );
 }
 
 function hasOwn<ObjectType extends object>(

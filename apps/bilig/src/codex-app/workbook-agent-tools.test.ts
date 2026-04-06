@@ -73,7 +73,23 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
       throw new Error("not used");
     },
     async applyAgentCommandBundle() {
-      throw new Error("not used");
+      return {
+        revision: 1,
+        preview: {
+          ranges: [],
+          structuralChanges: [],
+          cellDiffs: [],
+          effectSummary: {
+            displayedCellDiffCount: 0,
+            truncatedCellDiffs: false,
+            inputChangeCount: 0,
+            formulaChangeCount: 0,
+            styleChangeCount: 0,
+            numberFormatChangeCount: 0,
+            structuralChangeCount: 0,
+          },
+        },
+      };
     },
     async listWorkbookAgentRuns() {
       return [];

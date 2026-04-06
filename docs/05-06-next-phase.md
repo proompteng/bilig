@@ -902,9 +902,10 @@ Implemented.
 - the agent runtime now lives inside `apps/bilig` and speaks the Codex app-server stdio protocol rather than a custom worksheet-chat transport
 - the monolith now exposes workbook-agent session, turn, interrupt, context, and SSE event routes under `/v2/documents/:documentId/agent/*`
 - the agent already has local semantic workbook tools for read/edit/write work, including workbook summary, selection read, visible-range read, cell inspection with dependency tracing, range read, range write, clear, format, fill, copy, move, create-sheet, and rename-sheet operations
-- all mutating agent work now stages semantic preview bundles, previews locally in the browser worker, and applies authoritatively through the monolith
+- all mutating agent work now stages semantic preview bundles, previews locally in the browser worker, and applies authoritatively through the monolith only after the server re-computes the preview against the locked authoritative head revision
 - risk-based approval modes now exist: low-risk selection formatting can auto-apply after preview, medium-risk bundles require preview, and high-risk bundles require explicit approval
-- applied runs are now persisted as replayable plan/preview/apply records with authoritative revisions, approval mode, and applied-by metadata, and can be replayed from the assistant rail as fresh preview bundles
+- stale or mismatched local previews now fail as explicit preview contract violations instead of silently applying, and persisted execution records store the authoritative server-verified preview summary rather than trusting client-posted diff metadata
+- applied runs are now persisted as replayable plan/preview/apply records with authoritative revisions, approval mode, applied-by metadata, and authoritative preview effects, and can be replayed from the assistant rail as fresh preview bundles
 - the right rail now exposes those local spreadsheet skills directly as quick actions instead of hiding the tool surface behind free-form prompting
 
 **User-visible outcomes**

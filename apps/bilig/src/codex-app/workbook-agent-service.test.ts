@@ -1,11 +1,17 @@
-import type { CodexServerNotification, CodexTurn } from "@bilig/agent-api";
-import { describe, expect, it } from "vitest";
+import {
+  isWorkbookAgentCommandBundle,
+  isWorkbookAgentExecutionRecord,
+  type CodexServerNotification,
+  type CodexTurn,
+} from "@bilig/agent-api";
+import { describe, expect, it, vi } from "vitest";
 import type { ZeroSyncService } from "../zero/service.js";
 import type {
   CodexAppServerClientOptions,
   CodexAppServerTransport,
 } from "./codex-app-server-client.js";
 import { createWorkbookAgentService } from "./workbook-agent-service.js";
+import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 
 class FakeCodexTransport implements CodexAppServerTransport {
   private readonly listeners = new Set<(notification: CodexServerNotification) => void>();
@@ -64,7 +70,25 @@ class FakeCodexTransport implements CodexAppServerTransport {
   }
 }
 
-function createZeroSyncStub(): ZeroSyncService {
+function createPreviewSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    ranges: [],
+    structuralChanges: [],
+    cellDiffs: [],
+    effectSummary: {
+      displayedCellDiffCount: 0,
+      truncatedCellDiffs: false,
+      inputChangeCount: 0,
+      formulaChangeCount: 0,
+      styleChangeCount: 0,
+      numberFormatChangeCount: 0,
+      structuralChangeCount: 0,
+    },
+    ...overrides,
+  };
+}
+
+function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncService {
   return {
     enabled: true,
     async initialize() {},
@@ -80,7 +104,7 @@ function createZeroSyncStub(): ZeroSyncService {
     },
     async applyServerMutator() {},
     async applyAgentCommandBundle() {
-      return { revision: 2 };
+      return { revision: 2, preview: createPreviewSummary() };
     },
     async listWorkbookAgentRuns() {
       return [];
@@ -98,6 +122,7 @@ function createZeroSyncStub(): ZeroSyncService {
     async deleteWorkbookScenario() {
       throw new Error("not used");
     },
+    ...overrides,
   };
 }
 
@@ -254,6 +279,243 @@ describe("workbook agent service", () => {
       });
 
       unsubscribe();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("persists the authoritative preview returned by apply and not the caller payload", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 7,
+      preview: createPreviewSummary({
+        cellDiffs: [
+          {
+            sheetName: "Sheet1",
+            address: "B2",
+            beforeInput: null,
+            beforeFormula: null,
+            afterInput: 42,
+            afterFormula: null,
+            changeKinds: ["input"],
+          },
+        ],
+        effectSummary: {
+          displayedCellDiffCount: 1,
+          truncatedCellDiffs: false,
+          inputChangeCount: 1,
+          formulaChangeCount: 0,
+          styleChangeCount: 0,
+          numberFormatChangeCount: 0,
+          structuralChangeCount: 0,
+        },
+      }),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-1",
+        tool: "bilig.write_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[42]],
+        },
+      });
+
+      const pending = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      }).pendingBundle;
+
+      if (!isWorkbookAgentCommandBundle(pending)) {
+        throw new Error("Expected a staged pending bundle");
+      }
+
+      const applied = await service.applyPendingBundle({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        bundleId: pending.id,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        appliedBy: "user",
+        preview: createPreviewSummary(),
+      });
+
+      const record = applied.executionRecords[0];
+      if (!isWorkbookAgentExecutionRecord(record)) {
+        throw new Error("Expected an execution record after apply");
+      }
+      expect(applyAgentCommandBundle).toHaveBeenCalled();
+      expect(record.preview).toEqual(
+        expect.objectContaining({
+          cellDiffs: [
+            expect.objectContaining({
+              sheetName: "Sheet1",
+              address: "B2",
+            }),
+          ],
+        }),
+      );
+      expect(appendWorkbookAgentRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preview: expect.objectContaining({
+            effectSummary: expect.objectContaining({
+              displayedCellDiffCount: 1,
+              inputChangeCount: 1,
+            }),
+          }),
+        }),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("keeps the pending bundle when authoritative apply rejects a stale preview", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle: vi.fn(async () => {
+          throw createWorkbookAgentServiceError({
+            code: "WORKBOOK_AGENT_PREVIEW_STALE",
+            message:
+              "Workbook changed after preview. Replay the plan to stage a fresh preview bundle.",
+            statusCode: 409,
+            retryable: true,
+          });
+        }),
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-1",
+        tool: "bilig.write_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[42]],
+        },
+      });
+
+      const pending = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      }).pendingBundle;
+      if (!isWorkbookAgentCommandBundle(pending)) {
+        throw new Error("Expected a staged pending bundle");
+      }
+
+      await expect(
+        service.applyPendingBundle({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          bundleId: pending.id,
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          appliedBy: "user",
+          preview: createPreviewSummary(),
+        }),
+      ).rejects.toThrow("Replay the plan to stage a fresh preview bundle.");
+
+      const afterFailure = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+      expect(isWorkbookAgentCommandBundle(afterFailure.pendingBundle)).toBe(true);
+      if (!isWorkbookAgentCommandBundle(afterFailure.pendingBundle)) {
+        throw new Error("Expected the pending bundle to remain staged");
+      }
+      expect(afterFailure.pendingBundle.id).toBe(pending.id);
+      expect(afterFailure.executionRecords).toEqual([]);
     } finally {
       await service.close();
     }
