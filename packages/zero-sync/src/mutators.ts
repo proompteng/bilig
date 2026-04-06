@@ -195,7 +195,8 @@ export const clearRangeArgsSchema = baseMutationArgsSchema.extend({
 
 export const updatePresenceArgsSchema = baseMutationArgsSchema.extend({
   sessionId: z.string().min(1),
-  sheetId: z.string().optional(),
+  sheetId: z.number().int().positive().optional(),
+  sheetName: z.string().min(1).optional(),
   address: z.string().optional(),
   selection: z.any().optional(),
 });

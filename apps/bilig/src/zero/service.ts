@@ -22,6 +22,7 @@ import {
   loadWorkbookEventRecordsAfter,
   loadWorkbookRuntimeMetadata,
 } from "./store.js";
+import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -102,6 +103,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async initialize(): Promise<void> {
     await ensureZeroSyncSchema(this.pool);
+    await ensureWorkbookPresenceSchema(this.pool);
     await backfillAuthoritativeCellEval(this.pool);
     await dropLegacyZeroSyncSchemaObjects(this.pool);
     this.recalcWorker.start();
@@ -158,6 +160,14 @@ class EnabledZeroSyncService implements ZeroSyncService {
       },
       "numberFormat.byWorkbook": {
         query: queries.numberFormat.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "presenceCoarse.byWorkbook": {
+        query: queries.presenceCoarse.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "presence.byWorkbook": {
+        query: queries.presence.byWorkbook,
         schema: workbookQueryArgsSchema,
       },
     } as const;

@@ -25,6 +25,8 @@ import {
 } from "./worker-workbook-app-model.js";
 import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
+import { useWorkbookPresence } from "./use-workbook-presence.js";
+import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -490,6 +492,14 @@ export function useWorkerWorkbookAppState(input: {
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
   );
+  const collaborators = useWorkbookPresence({
+    documentId,
+    sessionId: `${documentId}:${replicaId}`,
+    selection,
+    sheetNames,
+    zero,
+    enabled: runtimeReady && remoteSyncAvailable,
+  });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
@@ -507,7 +517,12 @@ export function useWorkerWorkbookAppState(input: {
     [runtimeController],
   );
 
-  const { headerStatus, ribbon, selectionStatus, statusModeLabel } = useWorkbookToolbar({
+  const {
+    headerStatus: toolbarHeaderStatus,
+    ribbon,
+    selectionStatus,
+    statusModeLabel,
+  } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
     remoteSyncAvailable,
@@ -568,6 +583,23 @@ export function useWorkerWorkbookAppState(input: {
     },
     [invokeMutation, reportRuntimeError, selectAddress, sheetNames],
   );
+
+  const headerStatus = useMemo(() => {
+    if (collaborators.length === 0) {
+      return toolbarHeaderStatus;
+    }
+    return (
+      <>
+        {toolbarHeaderStatus}
+        <WorkbookPresenceBar
+          collaborators={collaborators}
+          onJump={(sheetName, address) => {
+            selectAddress(sheetName, address);
+          }}
+        />
+      </>
+    );
+  }, [collaborators, selectAddress, toolbarHeaderStatus]);
 
   return {
     beginEditing,

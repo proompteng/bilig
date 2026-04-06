@@ -21,6 +21,7 @@ import {
   setCellValueArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
   type WorkbookEventPayload,
 } from "@bilig/zero-sync";
@@ -28,6 +29,7 @@ import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
+import { upsertWorkbookPresence } from "./presence-store.js";
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -548,6 +550,20 @@ export async function handleServerMutator(
         parsed.clientMutationId,
         session,
       );
+      return;
+    }
+
+    case "workbook.updatePresence": {
+      const parsed = updatePresenceArgsSchema.parse(args);
+      await upsertWorkbookPresence(serverTx.dbTransaction.wrappedTransaction, {
+        documentId: parsed.documentId,
+        sessionId: parsed.sessionId,
+        userId: session?.userID ?? "system",
+        sheetId: parsed.sheetId ?? null,
+        sheetName: parsed.sheetName ?? null,
+        address: parsed.address ?? null,
+        selection: parsed.selection,
+      });
       return;
     }
 

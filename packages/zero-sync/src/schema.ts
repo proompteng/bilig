@@ -118,6 +118,19 @@ const definedNames = table("defined_names")
   })
   .primaryKey("workbookId", "name");
 
+const presenceCoarse = table("presence_coarse")
+  .columns({
+    workbookId: string().from("workbook_id"),
+    sessionId: string().from("session_id"),
+    userId: string().from("user_id"),
+    sheetId: number().from("sheet_id").optional(),
+    sheetName: string().from("sheet_name").optional(),
+    address: string().optional(),
+    selectionJson: json().from("selection_json").optional(),
+    updatedAt: number().from("updated_at"),
+  })
+  .primaryKey("workbookId", "sessionId");
+
 export const schema = createSchema({
   tables: [
     workbooks,
@@ -129,6 +142,7 @@ export const schema = createSchema({
     columnMetadata,
     cellEval,
     definedNames,
+    presenceCoarse,
   ],
   relationships: [],
 });

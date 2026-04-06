@@ -117,6 +117,10 @@ const numberFormatByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { d
   zql.cell_number_formats.where("workbookId", documentId).orderBy("formatId", "asc"),
 );
 
+const presenceCoarseByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.presence_coarse.where("workbookId", documentId).orderBy("updatedAt", "desc"),
+);
+
 export const queries = defineQueries({
   workbook: {
     get: workbookGet,
@@ -163,5 +167,11 @@ export const queries = defineQueries({
   },
   numberFormat: {
     byWorkbook: numberFormatByWorkbook,
+  },
+  presenceCoarse: {
+    byWorkbook: presenceCoarseByWorkbook,
+  },
+  presence: {
+    byWorkbook: presenceCoarseByWorkbook,
   },
 });
