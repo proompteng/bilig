@@ -283,12 +283,16 @@ async function clickProductCell(
 
 async function clickSelectionFuzzCell(
   page: Parameters<typeof test>[0]["page"],
-  grid: { x: number; y: number; width: number; height: number },
   columnIndex: number,
   rowIndex: number,
   shift = false,
 ) {
   const gridLocator = page.getByTestId("sheet-grid");
+  await expect(gridLocator).toBeVisible();
+  const grid = await gridLocator.boundingBox();
+  if (!grid) {
+    throw new Error("sheet grid is not visible");
+  }
   const columnLeft = await getProductColumnLeft(page, columnIndex);
   const columnWidth = await getProductColumnWidth(page, columnIndex);
   const scrollLeft = await gridLocator.evaluate(
@@ -311,7 +315,7 @@ async function clickSelectionFuzzCell(
     },
   );
   const point = {
-    x: grid.x + PRODUCT_ROW_MARKER_WIDTH + columnLeft - scrollLeft + columnWidth / 2,
+    x: grid.x + columnLeft - scrollLeft + columnWidth / 2,
     y: grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + PRODUCT_ROW_HEIGHT / 2,
   };
   if (shift) {
@@ -330,7 +334,6 @@ async function runSelectionFuzzActions(
   page: Parameters<typeof test>[0]["page"],
   grid: Locator,
   actions: readonly BrowserSelectionAction[],
-  gridBox: { x: number; y: number; width: number; height: number },
   index = 0,
 ): Promise<void> {
   const action = actions[index];
@@ -339,9 +342,9 @@ async function runSelectionFuzzActions(
   }
 
   if (action.kind === "click") {
-    await clickSelectionFuzzCell(page, gridBox, action.col, action.row);
+    await clickSelectionFuzzCell(page, action.col, action.row);
   } else if (action.kind === "shiftClick") {
-    await clickSelectionFuzzCell(page, gridBox, action.col, action.row, true);
+    await clickSelectionFuzzCell(page, action.col, action.row, true);
   } else {
     await grid.press(action.shift ? `Shift+${action.key}` : action.key);
   }
@@ -361,7 +364,7 @@ async function runSelectionFuzzActions(
   });
   expect(focusInsideShell).toBe(true);
 
-  await runSelectionFuzzActions(page, grid, actions, gridBox, index + 1);
+  await runSelectionFuzzActions(page, grid, actions, index + 1);
 }
 
 async function clickProductCellUpperHalf(
@@ -2179,10 +2182,6 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
   await waitForWorkbookReady(page);
   const grid = page.getByTestId("sheet-grid");
   await expect(grid).toBeVisible({ timeout: 15_000 });
-  const gridBox = await grid.boundingBox();
-  if (!gridBox) {
-    throw new Error("sheet grid is not visible");
-  }
 
   await runProperty({
     suite: "browser/grid-selection-focus",
@@ -2211,9 +2210,9 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
       interruptAfterTimeLimit: 20_000,
     },
     predicate: async (actions) => {
-      await clickSelectionFuzzCell(page, gridBox, 2, 4);
+      await clickSelectionFuzzCell(page, 2, 4);
       await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
-      await runSelectionFuzzActions(page, grid, actions, gridBox);
+      await runSelectionFuzzActions(page, grid, actions);
     },
   });
 });
