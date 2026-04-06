@@ -2181,6 +2181,7 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
   await page.goto("/");
   await waitForWorkbookReady(page);
   const grid = page.getByTestId("sheet-grid");
+  const nameBox = page.getByTestId("name-box");
   await expect(grid).toBeVisible({ timeout: 15_000 });
 
   await runProperty({
@@ -2210,7 +2211,8 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
       interruptAfterTimeLimit: 20_000,
     },
     predicate: async (actions) => {
-      await clickSelectionFuzzCell(page, 2, 4);
+      await nameBox.fill("C5");
+      await nameBox.press("Enter");
       await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
       await runSelectionFuzzActions(page, grid, actions);
     },
