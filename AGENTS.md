@@ -67,6 +67,8 @@ Use Conventional Commits: `type(scope): summary`, for example `feat(grid): add f
 
 Multiple agents may be working in the current checkout at the same time. Do not stop just because the worktree already has changes. Treat a dirty worktree as normal, avoid overwriting or reverting edits you did not make, and continue unless another agent's changes directly conflict with the files you need to modify.
 
+If more local code reading can answer the question or unblock the work, keep reading and resolve it yourself. Do not stop to ask for confirmation when the answer is in the repo or can be derived from the code. Do not hand back “next things to do” when the current task can be completed directly; complete it end to end.
+
 If a source file gets close to or passes roughly `1000` lines, refactor instead of making it bigger. Use TDD: add or tighten focused tests first, then split the file into smaller modules, hooks, or helpers while keeping the tests green.
 
 For large work, do not leave giant diffs uncommitted. When the working diff grows beyond roughly `1000` lines of source changes, commit the current state to `main` before the final verification pass, then run `pnpm run ci` on that committed tree so the clean-diff gate verifies the actual commit rather than an oversized dirty worktree.
