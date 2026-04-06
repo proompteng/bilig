@@ -170,6 +170,9 @@ importers:
       '@bilig/actors':
         specifier: workspace:*
         version: link:../../packages/actors
+      '@bilig/agent-api':
+        specifier: workspace:*
+        version: link:../../packages/agent-api
       '@bilig/benchmarks':
         specifier: workspace:*
         version: link:../../packages/benchmarks
@@ -267,6 +270,12 @@ importers:
       '@bilig/binary-protocol':
         specifier: workspace:*
         version: link:../binary-protocol
+      '@bilig/core':
+        specifier: workspace:*
+        version: link:../core
+      '@bilig/formula':
+        specifier: workspace:*
+        version: link:../formula
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -457,6 +466,9 @@ importers:
 
   packages/zero-sync:
     dependencies:
+      '@bilig/agent-api':
+        specifier: workspace:*
+        version: link:../agent-api
       '@bilig/core':
         specifier: workspace:*
         version: link:../core
