@@ -987,6 +987,65 @@ describe("WorkbookWorkerRuntime", () => {
     });
   });
 
+  it("applies restoreVersion authoritative events as full workbook replaces", async () => {
+    const persistProjectionState = vi.fn(async () => {});
+    const ingestAuthoritativeDelta = vi.fn(async () => {});
+    const localStoreFactory = createMemoryLocalStoreFactory({
+      onPersistProjectionState: persistProjectionState,
+      onIngestAuthoritativeDelta: ingestAuthoritativeDelta,
+    });
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "authoritative-version-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    await runtime.applyAuthoritativeEvents(
+      [
+        {
+          revision: 1,
+          clientMutationId: null,
+          payload: {
+            kind: "restoreVersion",
+            versionId: "version-1",
+            versionName: "Month close",
+            sheetName: "Sheet1",
+            address: "D5",
+            snapshot: {
+              version: 1,
+              workbook: { name: "authoritative-version-doc" },
+              sheets: [
+                {
+                  id: 1,
+                  name: "Sheet1",
+                  order: 0,
+                  cells: [{ address: "D5", value: "restored" }],
+                },
+              ],
+            },
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(ingestAuthoritativeDelta).toHaveBeenCalledTimes(1);
+
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
+    await reloaded.bootstrap({
+      documentId: "authoritative-version-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.getCell("Sheet1", "D5").value).toEqual({
+      tag: ValueTag.String,
+      value: "restored",
+      stringId: expect.any(Number),
+    });
+  });
+
   it("replays journaled mutations that were not yet captured in the persisted snapshot", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "journal-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");

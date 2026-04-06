@@ -20,6 +20,7 @@ describe("zero sync schema", () => {
     expect("row_metadata" in schema.tables).toBe(true);
     expect("column_metadata" in schema.tables).toBe(true);
     expect("defined_names" in schema.tables).toBe(true);
+    expect("workbook_version" in schema.tables).toBe(true);
     expect("workbook_metadata" in schema.tables).toBe(false);
     expect("calculation_settings" in schema.tables).toBe(false);
   });

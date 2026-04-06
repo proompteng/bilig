@@ -369,6 +369,21 @@ export function buildWorkbookChangeDescriptor(
     }
     case "renderCommit":
       return summarizeRenderCommit(payload);
+    case "restoreVersion":
+      return {
+        eventKind: payload.kind,
+        summary: `Restored version ${payload.versionName}`,
+        sheetName: payload.sheetName ?? null,
+        anchorAddress: payload.address ?? null,
+        range:
+          payload.sheetName && payload.address
+            ? {
+                sheetName: payload.sheetName,
+                startAddress: payload.address,
+                endAddress: payload.address,
+              }
+            : null,
+      };
     case "applyBatch":
       return {
         eventKind: payload.kind,

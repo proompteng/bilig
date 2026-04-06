@@ -740,10 +740,11 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - Zero-backed coarse collaborator presence is now live in the mounted workbook header, with session-scoped location heartbeats and click-to-jump on active collaborator cells
 - authoritative `workbook_change` rows now persist beside workbook revisions, sync through Zero, and render in a mounted changes pane with jump-to-change targets in the browser shell
 - authoritative `sheet_view` rows now persist beside workbook metadata, sync through Zero with owner-aware visibility rules, and render as private/shared named views with exact viewport restore in the browser shell
+- authoritative `workbook_version` rows now persist named workbook checkpoints beside workbook revisions, sync through Zero as version metadata, render in a mounted versions pane, and restore through the same authoritative mutation/rebase path as any other workbook change
 
 **Still not completed**
 
-- change bundle revert/undo flows and named versions
+- change bundle revert/undo flows
 - same-cell conflict compare UX beyond the existing draft-preservation guarantees
 - Phase 3 and Phase 4 agent/import/comprehension layers
 
@@ -877,7 +878,7 @@ Make shared workbook work smoother than Sheets for serious day-to-day use.
 **Key epics**
 
 - same-cell conflict compare flow
-- named versions / undo bundles
+- undo bundles
 - revertable change bundle execution
 
 **Dependencies**

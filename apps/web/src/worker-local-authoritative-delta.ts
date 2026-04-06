@@ -40,8 +40,12 @@ function requiresFullAuthoritativeReplace(
   engineEvents: readonly EngineEvent[],
 ): boolean {
   return (
-    payloads.some((payload) => payload.kind === "applyBatch" || payload.kind === "renderCommit") ||
-    engineEvents.some((event) => event.invalidation === "full")
+    payloads.some(
+      (payload) =>
+        payload.kind === "applyBatch" ||
+        payload.kind === "renderCommit" ||
+        payload.kind === "restoreVersion",
+    ) || engineEvents.some((event) => event.invalidation === "full")
   );
 }
 

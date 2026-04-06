@@ -169,4 +169,33 @@ describe("workbook-change-store", () => {
       987_654,
     ]);
   });
+
+  it("summarizes restoreVersion events as named workbook restores", () => {
+    expect(
+      buildWorkbookChangeDescriptor({
+        kind: "restoreVersion",
+        versionId: "version-1",
+        versionName: "Month close",
+        sheetName: "Sheet1",
+        address: "D5",
+        snapshot: {
+          version: 1,
+          workbook: {
+            name: "doc-1",
+          },
+          sheets: [],
+        },
+      }),
+    ).toEqual({
+      eventKind: "restoreVersion",
+      summary: "Restored version Month close",
+      sheetName: "Sheet1",
+      anchorAddress: "D5",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "D5",
+        endAddress: "D5",
+      },
+    });
+  });
 });

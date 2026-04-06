@@ -15,9 +15,11 @@ import {
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
+  deleteWorkbookVersionArgsSchema,
   deleteSheetViewArgsSchema,
   rangeMutationArgsSchema,
   renderCommitArgsSchema,
+  restoreWorkbookVersionArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
   setRangeNumberFormatArgsSchema,
@@ -25,6 +27,7 @@ import {
   sheetViewArgsSchema,
   updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
+  workbookVersionArgsSchema,
   type WorkbookEventPayload,
 } from "@bilig/zero-sync";
 import { z } from "zod";
@@ -33,6 +36,11 @@ import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
 import { deleteWorkbookSheetView, upsertWorkbookSheetView } from "./sheet-view-store.js";
+import {
+  createWorkbookVersion,
+  deleteWorkbookVersion,
+  loadWorkbookVersion,
+} from "./workbook-version-store.js";
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -593,6 +601,69 @@ export async function handleServerMutator(
         id: parsed.id,
         ownerUserId: session?.userID ?? "system",
       });
+      return;
+    }
+
+    case "workbook.createVersion": {
+      const parsed = workbookVersionArgsSchema.parse(args);
+      await runtimeManager.runExclusive(parsed.documentId, async () => {
+        const db = serverTx.dbTransaction.wrappedTransaction;
+        await acquireWorkbookMutationLock(db, parsed.documentId);
+        const state = await runtimeManager.loadRuntime(db, parsed.documentId);
+        await createWorkbookVersion(db, {
+          documentId: parsed.documentId,
+          id: parsed.id,
+          ownerUserId: session?.userID ?? "system",
+          name: parsed.name,
+          revision: state.headRevision,
+          snapshot: state.engine.exportSnapshot(),
+          ...(parsed.sheetId !== undefined ? { sheetId: parsed.sheetId } : {}),
+          ...(parsed.sheetName !== undefined ? { sheetName: parsed.sheetName } : {}),
+          ...(parsed.address !== undefined ? { address: parsed.address } : {}),
+          ...(parsed.viewport !== undefined ? { viewport: parsed.viewport } : {}),
+        });
+      });
+      return;
+    }
+
+    case "workbook.deleteVersion": {
+      const parsed = deleteWorkbookVersionArgsSchema.parse(args);
+      await deleteWorkbookVersion(serverTx.dbTransaction.wrappedTransaction, {
+        documentId: parsed.documentId,
+        id: parsed.id,
+        ownerUserId: session?.userID ?? "system",
+      });
+      return;
+    }
+
+    case "workbook.restoreVersion": {
+      const parsed = restoreWorkbookVersionArgsSchema.parse(args);
+      const version = await loadWorkbookVersion(
+        serverTx.dbTransaction.wrappedTransaction,
+        parsed.documentId,
+        parsed.id,
+      );
+      if (!version) {
+        throw new Error("Workbook version was not found");
+      }
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "restoreVersion",
+          versionId: version.id,
+          versionName: version.name,
+          ...(version.sheetName ? { sheetName: version.sheetName } : {}),
+          ...(version.address ? { address: version.address } : {}),
+          snapshot: version.snapshot,
+        },
+        runtimeManager,
+        (engine) => {
+          engine.importSnapshot(version.snapshot);
+        },
+        parsed.clientMutationId,
+        session,
+      );
       return;
     }
 

@@ -4,6 +4,7 @@ import type {
   CellStyleField,
   CellStylePatch,
   LiteralInput,
+  WorkbookSnapshot,
 } from "@bilig/protocol";
 import { parseCellAddress } from "@bilig/formula";
 import { applyBatchArgsSchema } from "./mutators.js";
@@ -89,6 +90,14 @@ export type WorkbookEventPayload =
   | {
       kind: "clearRangeNumberFormat";
       range: CellRangeRef;
+    }
+  | {
+      kind: "restoreVersion";
+      versionId: string;
+      versionName: string;
+      sheetName?: string;
+      address?: string;
+      snapshot: WorkbookSnapshot;
     };
 
 export interface WorkbookEventRecord {
@@ -127,6 +136,16 @@ function isCellRangeRef(value: unknown): value is CellRangeRef {
     typeof value["sheetName"] === "string" &&
     typeof value["startAddress"] === "string" &&
     typeof value["endAddress"] === "string"
+  );
+}
+
+function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
+  return (
+    isRecord(value) &&
+    value["version"] === 1 &&
+    isRecord(value["workbook"]) &&
+    typeof value["workbook"]["name"] === "string" &&
+    Array.isArray(value["sheets"])
   );
 }
 
@@ -181,6 +200,14 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
       );
     case "clearRangeNumberFormat":
       return isCellRangeRef(value["range"]);
+    case "restoreVersion":
+      return (
+        typeof value["versionId"] === "string" &&
+        typeof value["versionName"] === "string" &&
+        (value["sheetName"] === undefined || typeof value["sheetName"] === "string") &&
+        (value["address"] === undefined || typeof value["address"] === "string") &&
+        isWorkbookSnapshot(value["snapshot"])
+      );
     default:
       return false;
   }
@@ -253,6 +280,7 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "applyBatch":
     case "renderCommit":
     case "updateColumnWidth":
+    case "restoreVersion":
       return null;
     default: {
       const exhaustive: never = payload;
@@ -304,6 +332,9 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return;
     case "clearRangeNumberFormat":
       engine.clearRangeNumberFormat(payload.range);
+      return;
+    case "restoreVersion":
+      engine.importSnapshot(payload.snapshot);
       return;
     default: {
       const exhaustive: never = payload;

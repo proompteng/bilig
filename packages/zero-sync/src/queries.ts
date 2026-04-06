@@ -148,6 +148,14 @@ const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
     .orderBy("revision", "desc"),
 );
 
+const workbookVersionByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
+  zql.workbook_version
+    .where("workbookId", documentId)
+    .orderBy("updatedAt", "desc")
+    .orderBy("createdAt", "desc")
+    .orderBy("name", "asc"),
+);
+
 export const queries = defineQueries({
   workbook: {
     get: workbookGet,
@@ -212,5 +220,11 @@ export const queries = defineQueries({
   },
   workbookChanges: {
     byWorkbook: workbookChangeByWorkbook,
+  },
+  workbookVersion: {
+    byWorkbook: workbookVersionByWorkbook,
+  },
+  workbookVersions: {
+    byWorkbook: workbookVersionByWorkbook,
   },
 });

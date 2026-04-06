@@ -115,6 +115,7 @@ function WorkerWorkbookAppInner({
             />
           ) : null}
         </div>
+        {app.versionsPanel}
         {app.viewsPanel}
         {app.changesPanel}
       </div>

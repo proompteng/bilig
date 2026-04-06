@@ -162,6 +162,22 @@ const workbookChange = table("workbook_change")
   })
   .primaryKey("workbookId", "revision");
 
+const workbookVersion = table("workbook_version")
+  .columns({
+    workbookId: string().from("workbook_id"),
+    id: string(),
+    ownerUserId: string().from("owner_user_id"),
+    name: string(),
+    revision: number(),
+    sheetId: number().from("sheet_id").optional(),
+    sheetName: string().from("sheet_name").optional(),
+    address: string().optional(),
+    viewportJson: json().from("viewport_json").optional(),
+    createdAt: number().from("created_at"),
+    updatedAt: number().from("updated_at"),
+  })
+  .primaryKey("workbookId", "id");
+
 export const schema = createSchema({
   tables: [
     workbooks,
@@ -176,6 +192,7 @@ export const schema = createSchema({
     presenceCoarse,
     sheetView,
     workbookChange,
+    workbookVersion,
   ],
   relationships: [],
 });

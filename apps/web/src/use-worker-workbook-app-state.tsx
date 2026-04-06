@@ -30,6 +30,7 @@ import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookViewsPane } from "./use-workbook-views-pane.js";
+import { useWorkbookVersionsPane } from "./use-workbook-versions-pane.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -558,6 +559,14 @@ export function useWorkerWorkbookAppState(input: {
       selectAddress(view.sheetName, view.address);
     },
   });
+  const { versionsPanel, versionsToggle } = useWorkbookVersionsPane({
+    documentId,
+    currentUserId: runtimeConfig.currentUserId,
+    selection,
+    zero,
+    enabled: runtimeReady,
+    getCurrentViewport: () => visibleViewportRef.current,
+  });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
@@ -646,6 +655,7 @@ export function useWorkerWorkbookAppState(input: {
     return (
       <>
         {toolbarHeaderStatus}
+        {versionsToggle}
         {viewsToggle}
         {changesToggle}
         {collaborators.length > 0 ? (
@@ -658,7 +668,14 @@ export function useWorkerWorkbookAppState(input: {
         ) : null}
       </>
     );
-  }, [changesToggle, collaborators, selectAddress, toolbarHeaderStatus, viewsToggle]);
+  }, [
+    changesToggle,
+    collaborators,
+    selectAddress,
+    toolbarHeaderStatus,
+    versionsToggle,
+    viewsToggle,
+  ]);
 
   return {
     beginEditing,
@@ -697,6 +714,7 @@ export function useWorkerWorkbookAppState(input: {
     toggleBooleanCell,
     visibleEditorValue,
     viewsPanel,
+    versionsPanel,
     workbookReady,
     workerHandle,
     writesAllowed,

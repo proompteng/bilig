@@ -18,6 +18,7 @@ const CHANGE_EVENT_TONE_CLASS_NAMES: Record<string, string> = {
   setRangeNumberFormat: "bg-[#fef3c7] text-[#92400e]",
   clearRangeNumberFormat: "bg-[#fef3c7] text-[#92400e]",
   renderCommit: "bg-[#e2e8f0] text-[#334155]",
+  restoreVersion: "bg-[#dbeafe] text-[#1d4ed8]",
   applyBatch: "bg-[#e2e8f0] text-[#334155]",
 };
 
@@ -41,6 +42,8 @@ function formatEventLabel(eventKind: string): string {
       return "Format";
     case "renderCommit":
       return "Batch";
+    case "restoreVersion":
+      return "Version";
     case "applyBatch":
       return "Sync";
     default:

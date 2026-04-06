@@ -233,6 +233,27 @@ export const deleteSheetViewArgsSchema = baseMutationArgsSchema.extend({
   id: z.string().min(1),
 });
 
+export const workbookVersionArgsSchema = baseMutationArgsSchema
+  .extend({
+    id: z.string().min(1),
+    name: z.string().trim().min(1),
+    sheetId: z.number().int().positive().optional(),
+    sheetName: z.string().trim().min(1).optional(),
+    address: z.string().min(1),
+    viewport: workbookViewportSchema.optional(),
+  })
+  .refine((args) => args.sheetId !== undefined || args.sheetName !== undefined, {
+    message: "sheetId or sheetName is required",
+  });
+
+export const deleteWorkbookVersionArgsSchema = baseMutationArgsSchema.extend({
+  id: z.string().min(1),
+});
+
+export const restoreWorkbookVersionArgsSchema = baseMutationArgsSchema.extend({
+  id: z.string().min(1),
+});
+
 async function noop(): Promise<void> {}
 
 export const mutators = defineMutators({
@@ -254,6 +275,9 @@ export const mutators = defineMutators({
     updatePresence: defineMutator(updatePresenceArgsSchema, noop),
     upsertSheetView: defineMutator(sheetViewArgsSchema, noop),
     deleteSheetView: defineMutator(deleteSheetViewArgsSchema, noop),
+    createVersion: defineMutator(workbookVersionArgsSchema, noop),
+    deleteVersion: defineMutator(deleteWorkbookVersionArgsSchema, noop),
+    restoreVersion: defineMutator(restoreWorkbookVersionArgsSchema, noop),
   },
 });
 

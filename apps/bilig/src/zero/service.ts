@@ -25,6 +25,7 @@ import {
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";
 import { ensureWorkbookSheetViewSchema } from "./sheet-view-store.js";
+import { ensureWorkbookVersionSchema } from "./workbook-version-store.js";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -107,6 +108,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await ensureZeroSyncSchema(this.pool);
     await ensureWorkbookPresenceSchema(this.pool);
     await ensureWorkbookSheetViewSchema(this.pool);
+    await ensureWorkbookVersionSchema(this.pool);
     await ensureWorkbookChangeSchema(this.pool);
     await backfillAuthoritativeCellEval(this.pool);
     await backfillWorkbookChanges(this.pool);
@@ -189,6 +191,14 @@ class EnabledZeroSyncService implements ZeroSyncService {
       },
       "workbookChanges.byWorkbook": {
         query: queries.workbookChanges.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbookVersion.byWorkbook": {
+        query: queries.workbookVersion.byWorkbook,
+        schema: workbookQueryArgsSchema,
+      },
+      "workbookVersions.byWorkbook": {
+        query: queries.workbookVersions.byWorkbook,
         schema: workbookQueryArgsSchema,
       },
     } as const;
