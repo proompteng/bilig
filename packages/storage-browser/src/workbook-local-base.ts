@@ -44,6 +44,34 @@ export interface WorkbookLocalAuthoritativeBase {
   readonly styles: readonly CellStyleRecord[];
 }
 
+export interface WorkbookLocalProjectionOverlayCellRecord {
+  readonly sheetName: string;
+  readonly address: string;
+  readonly rowNum: number;
+  readonly colNum: number;
+  readonly value: CellSnapshot["value"];
+  readonly flags: number;
+  readonly version: number;
+  readonly input: CellSnapshot["input"];
+  readonly formula: CellSnapshot["formula"];
+  readonly format: CellSnapshot["format"];
+  readonly styleId: CellSnapshot["styleId"];
+  readonly numberFormatId: CellSnapshot["numberFormatId"];
+}
+
+export interface WorkbookLocalProjectionOverlay {
+  readonly cells: readonly WorkbookLocalProjectionOverlayCellRecord[];
+  readonly rowAxisEntries: readonly {
+    sheetName: string;
+    entry: WorkbookAxisEntrySnapshot;
+  }[];
+  readonly columnAxisEntries: readonly {
+    sheetName: string;
+    entry: WorkbookAxisEntrySnapshot;
+  }[];
+  readonly styles: readonly CellStyleRecord[];
+}
+
 export interface WorkbookLocalViewportCell {
   readonly row: number;
   readonly col: number;

@@ -11,6 +11,8 @@ export type {
   WorkbookLocalBaseCellInputRecord,
   WorkbookLocalBaseCellRenderRecord,
   WorkbookLocalBaseSheetRecord,
+  WorkbookLocalProjectionOverlay,
+  WorkbookLocalProjectionOverlayCellRecord,
   WorkbookLocalViewportBase,
   WorkbookLocalViewportCell,
 } from "./workbook-local-base.js";

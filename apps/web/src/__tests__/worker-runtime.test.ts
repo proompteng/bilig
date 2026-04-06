@@ -3,12 +3,14 @@ import { SpreadsheetEngine } from "@bilig/core";
 import type {
   WorkbookLocalAuthoritativeBase,
   WorkbookLocalMutationRecord,
+  WorkbookLocalProjectionOverlay,
   WorkbookLocalStoreFactory,
   WorkbookStoredState,
 } from "@bilig/storage-browser";
 import { WorkbookLocalStoreLockedError } from "@bilig/storage-browser";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
+import { buildWorkbookLocalAuthoritativeBase } from "../worker-local-base.js";
 import { collectChangedCellsBySheet, collectViewportCells } from "../worker-runtime-support.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime";
 
@@ -18,16 +20,172 @@ function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLoc
   return nextMutation;
 }
 
+function buildViewportFromAuthoritativeBase(input: {
+  authoritativeBase: WorkbookLocalAuthoritativeBase;
+  sheetName: string;
+  viewport: {
+    rowStart: number;
+    rowEnd: number;
+    colStart: number;
+    colEnd: number;
+  };
+}) {
+  const { authoritativeBase, sheetName, viewport } = input;
+  const styles = authoritativeBase.styles.filter((style) => {
+    return (
+      style.id === "style-0" ||
+      authoritativeBase.cellRenders.some((cell) => {
+        return (
+          cell.sheetName === sheetName &&
+          cell.styleId === style.id &&
+          cell.rowNum >= viewport.rowStart &&
+          cell.rowNum <= viewport.rowEnd &&
+          cell.colNum >= viewport.colStart &&
+          cell.colNum <= viewport.colEnd
+        );
+      })
+    );
+  });
+  return {
+    sheetName,
+    cells: authoritativeBase.cellRenders
+      .filter((cell) => {
+        return (
+          cell.sheetName === sheetName &&
+          cell.rowNum >= viewport.rowStart &&
+          cell.rowNum <= viewport.rowEnd &&
+          cell.colNum >= viewport.colStart &&
+          cell.colNum <= viewport.colEnd
+        );
+      })
+      .map((cell) => {
+        const inputRecord = authoritativeBase.cellInputs.find(
+          (entry) => entry.sheetName === cell.sheetName && entry.address === cell.address,
+        );
+        return {
+          row: cell.rowNum,
+          col: cell.colNum,
+          snapshot: {
+            sheetName: cell.sheetName,
+            address: cell.address,
+            value: structuredClone(cell.value),
+            flags: cell.flags,
+            version: cell.version,
+            styleId: cell.styleId,
+            numberFormatId: cell.numberFormatId,
+            input: inputRecord?.input,
+            formula: inputRecord?.formula,
+            format: inputRecord?.format,
+          },
+        };
+      }),
+    rowAxisEntries: authoritativeBase.rowAxisEntries
+      .filter((entry) => entry.sheetName === sheetName)
+      .map((entry) => structuredClone(entry.entry)),
+    columnAxisEntries: authoritativeBase.columnAxisEntries
+      .filter((entry) => entry.sheetName === sheetName)
+      .map((entry) => structuredClone(entry.entry)),
+    styles: structuredClone(styles),
+  };
+}
+
+function mergeViewportWithProjectionOverlay(input: {
+  baseViewport: ReturnType<typeof buildViewportFromAuthoritativeBase>;
+  projectionOverlay: WorkbookLocalProjectionOverlay | null;
+  sheetName: string;
+  viewport: {
+    rowStart: number;
+    rowEnd: number;
+    colStart: number;
+    colEnd: number;
+  };
+}) {
+  const { baseViewport, projectionOverlay, sheetName, viewport } = input;
+  if (!projectionOverlay) {
+    return baseViewport;
+  }
+
+  const cells = new Map(baseViewport.cells.map((cell) => [cell.snapshot.address, cell]));
+  projectionOverlay.cells
+    .filter((cell) => {
+      return (
+        cell.sheetName === sheetName &&
+        cell.rowNum >= viewport.rowStart &&
+        cell.rowNum <= viewport.rowEnd &&
+        cell.colNum >= viewport.colStart &&
+        cell.colNum <= viewport.colEnd
+      );
+    })
+    .forEach((cell) => {
+      cells.set(cell.address, {
+        row: cell.rowNum,
+        col: cell.colNum,
+        snapshot: {
+          sheetName: cell.sheetName,
+          address: cell.address,
+          value: structuredClone(cell.value),
+          flags: cell.flags,
+          version: cell.version,
+          input: cell.input,
+          formula: cell.formula,
+          format: cell.format,
+          styleId: cell.styleId,
+          numberFormatId: cell.numberFormatId,
+        },
+      });
+    });
+
+  const rowAxisEntries = new Map(baseViewport.rowAxisEntries.map((entry) => [entry.index, entry]));
+  projectionOverlay.rowAxisEntries
+    .filter((entry) => entry.sheetName === sheetName)
+    .forEach((entry) => {
+      rowAxisEntries.set(entry.entry.index, structuredClone(entry.entry));
+    });
+
+  const columnAxisEntries = new Map(
+    baseViewport.columnAxisEntries.map((entry) => [entry.index, entry]),
+  );
+  projectionOverlay.columnAxisEntries
+    .filter((entry) => entry.sheetName === sheetName)
+    .forEach((entry) => {
+      columnAxisEntries.set(entry.entry.index, structuredClone(entry.entry));
+    });
+
+  const styles = new Map(baseViewport.styles.map((style) => [style.id, style]));
+  projectionOverlay.styles.forEach((style) => {
+    styles.set(style.id, structuredClone(style));
+  });
+
+  return {
+    ...baseViewport,
+    cells: [...cells.values()].toSorted(
+      (left, right) => left.row - right.row || left.col - right.col,
+    ),
+    rowAxisEntries: [...rowAxisEntries.values()].toSorted(
+      (left, right) => left.index - right.index,
+    ),
+    columnAxisEntries: [...columnAxisEntries.values()].toSorted(
+      (left, right) => left.index - right.index,
+    ),
+    styles: [...styles.values()],
+  };
+}
+
 function createMemoryLocalStoreFactory(seed?: {
   state?: WorkbookStoredState | null;
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
-  onSaveState?: (state: WorkbookStoredState) => Promise<void> | void;
+  onPersistProjectionState?: (state: WorkbookStoredState) => Promise<void> | void;
+  onReadViewportProjection?: () => void;
   authoritativeBase?: WorkbookLocalAuthoritativeBase | null;
+  projectionOverlay?: WorkbookLocalProjectionOverlay | null;
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
   let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
   let currentAuthoritativeBase = seed?.authoritativeBase
     ? structuredClone(seed.authoritativeBase)
+    : null;
+  let currentProjectionOverlay = seed?.projectionOverlay
+    ? structuredClone(seed.projectionOverlay)
     : null;
   return {
     async open() {
@@ -35,9 +193,11 @@ function createMemoryLocalStoreFactory(seed?: {
         async loadState() {
           return currentState ? structuredClone(currentState) : null;
         },
-        async saveState(state) {
-          currentState = structuredClone(state);
-          await seed?.onSaveState?.(state);
+        async persistProjectionState(input) {
+          currentState = structuredClone(input.state);
+          currentAuthoritativeBase = structuredClone(input.authoritativeBase);
+          currentProjectionOverlay = structuredClone(input.projectionOverlay);
+          await seed?.onPersistProjectionState?.(input.state);
         },
         async listPendingMutations() {
           return currentPendingMutations.map(cloneMutationRecord);
@@ -55,70 +215,22 @@ function createMemoryLocalStoreFactory(seed?: {
             (mutation) => mutation.id !== id,
           );
         },
-        replaceAuthoritativeBase(base) {
-          currentAuthoritativeBase = structuredClone(base);
-        },
-        readViewportBase(sheetName, viewport) {
+        readViewportProjection(sheetName, viewport) {
           const authoritativeBase = currentAuthoritativeBase;
           if (!authoritativeBase) {
             return null;
           }
-          const styles = authoritativeBase.styles.filter((style) => {
-            return (
-              style.id === "style-0" ||
-              authoritativeBase.cellRenders.some((cell) => {
-                return (
-                  cell.sheetName === sheetName &&
-                  cell.styleId === style.id &&
-                  cell.rowNum >= viewport.rowStart &&
-                  cell.rowNum <= viewport.rowEnd &&
-                  cell.colNum >= viewport.colStart &&
-                  cell.colNum <= viewport.colEnd
-                );
-              })
-            );
-          });
-          return {
+          seed?.onReadViewportProjection?.();
+          return mergeViewportWithProjectionOverlay({
+            baseViewport: buildViewportFromAuthoritativeBase({
+              authoritativeBase,
+              sheetName,
+              viewport,
+            }),
+            projectionOverlay: currentProjectionOverlay,
             sheetName,
-            cells: authoritativeBase.cellRenders
-              .filter((cell) => {
-                return (
-                  cell.sheetName === sheetName &&
-                  cell.rowNum >= viewport.rowStart &&
-                  cell.rowNum <= viewport.rowEnd &&
-                  cell.colNum >= viewport.colStart &&
-                  cell.colNum <= viewport.colEnd
-                );
-              })
-              .map((cell) => {
-                const input = authoritativeBase.cellInputs.find(
-                  (entry) => entry.sheetName === cell.sheetName && entry.address === cell.address,
-                );
-                return {
-                  row: cell.rowNum,
-                  col: cell.colNum,
-                  snapshot: {
-                    sheetName: cell.sheetName,
-                    address: cell.address,
-                    value: structuredClone(cell.value),
-                    flags: cell.flags,
-                    version: cell.version,
-                    styleId: cell.styleId,
-                    numberFormatId: cell.numberFormatId,
-                    input: input?.input,
-                    formula: input?.formula,
-                    format: input?.format,
-                  },
-                };
-              }),
-            rowAxisEntries: authoritativeBase.rowAxisEntries
-              .filter((entry) => entry.sheetName === sheetName)
-              .map((entry) => structuredClone(entry.entry)),
-            columnAxisEntries: authoritativeBase.columnAxisEntries
-              .filter((entry) => entry.sheetName === sheetName)
-              .map((entry) => structuredClone(entry.entry)),
-            styles: structuredClone(styles),
-          };
+            viewport,
+          });
         },
         close() {},
       };
@@ -264,7 +376,7 @@ describe("WorkbookWorkerRuntime", () => {
     expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id);
   });
 
-  it("builds the initial full viewport patch from the local authoritative base when it matches the projection", async () => {
+  it("builds the initial full viewport patch from the local projection store when it matches the worker projection", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "base-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");
     let viewportReadCount = 0;
@@ -280,15 +392,14 @@ describe("WorkbookWorkerRuntime", () => {
                 appliedPendingLocalSeq: 0,
               };
             },
-            async saveState() {},
+            async persistProjectionState() {},
             async listPendingMutations() {
               return [];
             },
             async appendPendingMutation() {},
             async updatePendingMutation() {},
             async removePendingMutation() {},
-            replaceAuthoritativeBase() {},
-            readViewportBase() {
+            readViewportProjection() {
               viewportReadCount += 1;
               return {
                 sheetName: "Sheet1",
@@ -338,6 +449,91 @@ describe("WorkbookWorkerRuntime", () => {
 
     expect(viewportReadCount).toBe(1);
     expect(received[0]?.cells[0]?.displayText).toBe("42");
+  });
+
+  it("restores pending local projection overlays from persistence across bootstrap", async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: "overlay-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 5);
+    let viewportReadCount = 0;
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 1,
+        },
+        pendingMutations: [
+          {
+            id: "overlay-doc:pending:1",
+            localSeq: 1,
+            baseRevision: 0,
+            method: "setCellValue",
+            args: ["Sheet1", "A1", 17],
+            enqueuedAtUnixMs: 1,
+            submittedAtUnixMs: null,
+            status: "pending",
+          },
+        ],
+        onReadViewportProjection() {
+          viewportReadCount += 1;
+        },
+        authoritativeBase: buildWorkbookLocalAuthoritativeBase(seedEngine),
+        projectionOverlay: {
+          cells: [
+            {
+              sheetName: "Sheet1",
+              address: "A1",
+              rowNum: 0,
+              colNum: 0,
+              value: { tag: ValueTag.Number, value: 17 },
+              flags: 0,
+              version: 2,
+              input: 17,
+              formula: undefined,
+              format: undefined,
+              styleId: undefined,
+              numberFormatId: undefined,
+            },
+          ],
+          rowAxisEntries: [],
+          columnAxisEntries: [],
+          styles: [],
+        },
+      }),
+    });
+
+    const bootstrap = await runtime.bootstrap({
+      documentId: "overlay-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(bootstrap.restoredFromPersistence).toBe(true);
+    expect(bootstrap.requiresAuthoritativeHydrate).toBe(false);
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    expect(viewportReadCount).toBe(1);
+    expect(received[0]?.cells[0]?.displayText).toBe("17");
   });
 
   it("patches only affected axis entries for column metadata edits", async () => {
@@ -735,10 +931,10 @@ describe("WorkbookWorkerRuntime", () => {
   });
 
   it("does not rewrite authoritative persistence for projected-only edit bursts", async () => {
-    const saveState = vi.fn(async () => {});
+    const persistProjectionState = vi.fn(async () => {});
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory({
-        onSaveState: saveState,
+        onPersistProjectionState: persistProjectionState,
       }),
     });
 
@@ -748,13 +944,13 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: true,
     });
 
-    expect(saveState).toHaveBeenCalledTimes(1);
+    expect(persistProjectionState).toHaveBeenCalledTimes(1);
 
     runtime.setCellValue("Sheet1", "A1", 1);
     runtime.setCellValue("Sheet1", "A2", 2);
     runtime.setCellValue("Sheet1", "A3", 3);
 
-    expect(saveState).toHaveBeenCalledTimes(1);
+    expect(persistProjectionState).toHaveBeenCalledTimes(1);
   });
 
   it("reuses exported snapshots until the workbook changes", async () => {

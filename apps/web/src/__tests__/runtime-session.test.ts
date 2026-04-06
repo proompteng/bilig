@@ -29,8 +29,8 @@ function createMemoryLocalStoreFactory(seed?: {
         async loadState() {
           return currentState ? structuredClone(currentState) : null;
         },
-        async saveState(state) {
-          currentState = structuredClone(state);
+        async persistProjectionState(input) {
+          currentState = structuredClone(input.state);
         },
         async listPendingMutations() {
           return currentPendingMutations.map(cloneMutationRecord);
@@ -48,8 +48,7 @@ function createMemoryLocalStoreFactory(seed?: {
             (mutation) => mutation.id !== id,
           );
         },
-        replaceAuthoritativeBase() {},
-        readViewportBase() {
+        readViewportProjection() {
           return null;
         },
         close() {},
@@ -251,6 +250,69 @@ describe("createWorkerRuntimeSessionController", () => {
     expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
       tag: ValueTag.Number,
       value: 99,
+    });
+
+    controller.dispose();
+  });
+
+  it("keeps restored local pending projection state instead of blocking on snapshot hydrate", async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: "phase0-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 5);
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 7,
+          appliedPendingLocalSeq: 1,
+        },
+        pendingMutations: [
+          {
+            id: "phase0-doc:pending:1",
+            localSeq: 1,
+            baseRevision: 7,
+            method: "setCellValue",
+            args: ["Sheet1", "A1", 17],
+            enqueuedAtUnixMs: 1,
+            submittedAtUnixMs: null,
+            status: "pending",
+          },
+        ],
+      }),
+    });
+    const fetchImpl = vi.fn(async () => {
+      return new Response(JSON.stringify(createSnapshot([{ address: "A1", value: 1 }])), {
+        status: 200,
+        headers: {
+          "content-type": "application/vnd.bilig.workbook+json",
+        },
+      });
+    });
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: true,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
     });
 
     controller.dispose();

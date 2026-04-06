@@ -33,8 +33,8 @@ The repo already has the right backbone.
 
 The browser-side product architecture is still the weak link.
 
-- The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. The browser DB now has normalized authoritative base tables for sheets, cell input/render state, styles, and row/column axis metadata, and the worker can serve full viewport patches from those local base tables. The runtime is still only partway through the intended migration because local overlay tables and authoritative rebase/replay are not built yet.
-- Offline/local-first credibility is materially better now because writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until the authoritative revision feed absorbs them, reconnect now prefers authoritative event ingest before snapshot fallback, and warm full-viewport reads can come from the local authoritative base instead of rebuilding from the in-memory engine first. The product is still not fully local-first because pending overlay tables, rebase/replay, and stable `sheet_id` are not done.
+- The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. The browser DB now has normalized authoritative base tables plus normalized projection overlay tables for cells, axis metadata, and styles, and the worker can serve full viewport patches from merged local base+overlay reads. The runtime is still only partway through the intended migration because stable `sheet_id`, direct authoritative delta ingest into those tables, and a fully worker-owned tile store are not built yet.
+- Offline/local-first credibility is materially better now because writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until the authoritative revision feed absorbs them, reconnect now prefers authoritative event ingest before snapshot fallback, restored pending overlays survive reload, and restored local sessions no longer block on a cold snapshot fetch before showing accepted local state. The product is still not fully local-first because stable `sheet_id`, direct authoritative delta ingest, and the worker-owned tile store are not done.
 - Browser durability is materially better now because accepted local state and pending ops live in SQLite/OPFS rather than IndexedDB/localStorage JSON. The remaining weakness is the data model inside that DB, not the browser persistence substrate.
 - The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
   - `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
@@ -729,9 +729,9 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 **Still not completed**
 
-- local overlay tables and authoritative rebase/replay on top of the normalized local base
-- a fully worker-owned tile store backed by normalized local DB tables for both base and overlay reads
 - stable `sheet_id` across browser/server/local layers
+- a fully worker-owned tile store backed by normalized local DB tables for both base and overlay reads
+- direct authoritative delta ingest into normalized local tables instead of full repersist after rebase
 - collaboration/product layers in Phases 2 through 4
 
 **What this roadmap now needs to do**
@@ -744,13 +744,12 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 | Priority | Initiative                                                  | Why now                                                            |
 | -------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1        | Introduce local overlay tables inside the browser DB        | The authoritative local base exists now; optimistic state still does not |
-| 2        | Build authoritative rebase/replay on normalized local state | Revision ingest exists now, but local replay still rebuilds from snapshots |
-| 3        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later                   |
-| 4        | Move projected tiles fully behind worker-owned local tables | Giant-data warm-start and ingest still depend on in-memory patches |
-| 5        | Harden warm-start and authoritative reconnect/rebase        | Makes the product feel native immediately                          |
-| 6        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation                            |
-| 7        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core                   |
+| 1        | Add stable `sheet_id` across local/server/browser layers    | Needed for views, changes, comments, tasks later                   |
+| 2        | Move projected tiles fully behind worker-owned local tables | Giant-data warm-start and ingest still depend on in-memory patches |
+| 3        | Ingest authoritative deltas directly into normalized tables | Avoids full repersist after each rebase and keeps local DB truly authoritative |
+| 4        | Add storage and reconnect failure harnesses                 | The local-first path now exists; it needs production-grade failure proofing |
+| 5        | Add private views, changes pane, collaborator jump          | Best near-term workflow differentiation                            |
+| 6        | Build plan/preview/apply AI on semantic bundles             | Biggest differentiated UX after local-first core                   |
 
 ### Dependency list
 
