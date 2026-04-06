@@ -557,6 +557,40 @@ describe("WorkbookWorkerRuntime", () => {
     expect(received[0]?.cells[0]?.displayText).toBe("42");
   });
 
+  it("does not rewrite normalized sqlite state on a clean persisted restore", async () => {
+    const seedEngine = new SpreadsheetEngine({
+      workbookName: "restored-no-rewrite-doc",
+      replicaId: "seed",
+    });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 7);
+
+    const persistProjectionState = vi.fn(async () => {});
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+        onPersistProjectionState: persistProjectionState,
+      }),
+    });
+
+    await runtime.bootstrap({
+      documentId: "restored-no-rewrite-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(persistProjectionState).toHaveBeenCalledTimes(0);
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 7,
+    });
+  });
+
   it("reads initial local full patches through 128x32 worker tiles instead of a single wide viewport query", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "tile-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");

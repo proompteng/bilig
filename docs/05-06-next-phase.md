@@ -734,11 +734,12 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - submitted pending ops now have a crash/reopen durability harness on the real normalized SQLite path before authoritative absorption
 - browser-path coverage now exercises the real OPFS reload path and the same-document single-writer fallback path in live browser tests
 - a browser same-cell editor-draft harness now verifies a remote write does not clobber an in-progress local draft and that cancelling reveals the authoritative remote value
-- `bench:contracts` now enforces worker local visible edit p95 and reports the real `100k` worker warm-start path
+- removing the redundant bootstrap repersist and lazily materializing the authoritative engine dropped the real `100k` worker warm-start p95 to roughly `0.30s`
+- `bench:contracts` now enforces both worker local visible edit p95 and worker `100k` warm-start p95
 
 **Still not completed**
 
-- warm-start p95 is still well above the roadmap target, so the worker warm-start SLO is measured but not yet a passing CI gate
+- reconnect after offline drift with `100` pending ops does not yet have a dedicated CI performance contract
 - collaboration/product layers in Phases 2 through 4
 
 **What this roadmap now needs to do**

@@ -205,19 +205,21 @@ export class WorkbookWorkerRuntime {
       requiresAuthoritativeHydrate = true;
     }
 
-    const authoritativeEngine = await this.createEngineFromState({
+    if (restoredSnapshot || restoredReplica) {
+      this.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica);
+    }
+    const engine = await this.createEngineFromState({
       snapshot: restoredSnapshot,
       replica: restoredReplica,
-      pendingMutationsToReplay: [],
+      pendingMutationsToReplay: this.pendingMutations,
     });
-    this.installAuthoritativeEngine(authoritativeEngine, restoredSnapshot, restoredReplica);
-    const engine = await this.rebuildProjectionEngine();
     this.installEngine(engine);
-    this.projectionMatchesLocalStore =
+    const projectionMatchesRestoredLocalStore =
       Boolean(this.localStore) &&
       restoredState !== null &&
       restoredState.appliedPendingLocalSeq === highestPendingLocalSeq;
-    if (!requiresAuthoritativeHydrate) {
+    this.projectionMatchesLocalStore = projectionMatchesRestoredLocalStore;
+    if (!requiresAuthoritativeHydrate && !projectionMatchesRestoredLocalStore) {
       await this.persistStateNow();
     }
 
@@ -291,7 +293,7 @@ export class WorkbookWorkerRuntime {
     if (!events.every((event) => isAuthoritativeWorkbookEventRecord(event))) {
       throw new Error("Invalid authoritative workbook event batch");
     }
-    const authoritativeEngine = this.requireAuthoritativeEngine();
+    const authoritativeEngine = await this.getAuthoritativeEngine();
     const previousSheets = [...authoritativeEngine.workbook.sheetsByName.values()].map((sheet) => ({
       sheetId: sheet.id,
       name: sheet.name,
@@ -671,6 +673,40 @@ export class WorkbookWorkerRuntime {
     this.storeCachedAuthoritativeReplica(replica ?? engine.exportReplicaSnapshot());
   }
 
+  private installRestoredAuthoritativeState(
+    snapshot: WorkbookSnapshot | null,
+    replica: EngineReplicaSnapshot | null,
+  ): void {
+    this.authoritativeEngine = null;
+    this.authoritativeSnapshotCache = snapshot;
+    this.authoritativeSnapshotDirty = snapshot === null;
+    this.authoritativeReplicaCache = replica;
+    this.authoritativeReplicaDirty = replica === null;
+  }
+
+  private async getAuthoritativeEngine(): Promise<SpreadsheetEngine> {
+    if (this.authoritativeEngine) {
+      return this.authoritativeEngine;
+    }
+    const engine = await this.createEngineFromState({
+      snapshot: this.authoritativeSnapshotCache,
+      replica: this.authoritativeReplicaCache,
+      pendingMutationsToReplay: [],
+    });
+    this.authoritativeEngine = engine;
+    if (this.authoritativeSnapshotCache) {
+      this.authoritativeSnapshotDirty = false;
+    } else {
+      this.storeCachedAuthoritativeSnapshot(engine.exportSnapshot());
+    }
+    if (this.authoritativeReplicaCache) {
+      this.authoritativeReplicaDirty = false;
+    } else {
+      this.storeCachedAuthoritativeReplica(engine.exportReplicaSnapshot());
+    }
+    return engine;
+  }
+
   private async rebuildProjectionEngine(): Promise<SpreadsheetEngine> {
     return await this.createEngineFromState({
       snapshot: this.getAuthoritativeSnapshot(),
@@ -697,7 +733,7 @@ export class WorkbookWorkerRuntime {
   }
 
   private async flushPersistState(): Promise<void> {
-    if (!this.persistQueued || !this.canPersistState() || !this.authoritativeEngine) {
+    if (!this.persistQueued || !this.canPersistState()) {
       return;
     }
     if (this.persistInFlight) {
@@ -708,6 +744,7 @@ export class WorkbookWorkerRuntime {
       return;
     }
 
+    const authoritativeEngine = await this.getAuthoritativeEngine();
     const persisted: WorkbookStoredState = {
       snapshot: this.getAuthoritativeSnapshot(),
       replica: this.getAuthoritativeReplica(),
@@ -721,9 +758,9 @@ export class WorkbookWorkerRuntime {
     }
     const savePromise = localStore.persistProjectionState({
       state: persisted,
-      authoritativeBase: buildWorkbookLocalAuthoritativeBase(this.requireAuthoritativeEngine()),
+      authoritativeBase: buildWorkbookLocalAuthoritativeBase(authoritativeEngine),
       projectionOverlay: buildWorkbookLocalProjectionOverlay({
-        authoritativeEngine: this.requireAuthoritativeEngine(),
+        authoritativeEngine,
         projectionEngine: this.requireEngine(),
       }),
     });
@@ -906,6 +943,9 @@ export class WorkbookWorkerRuntime {
     if (this.authoritativeSnapshotCache && !this.authoritativeSnapshotDirty) {
       return this.authoritativeSnapshotCache;
     }
+    if (!this.authoritativeEngine && this.pendingMutations.length === 0 && this.engine) {
+      return this.storeCachedAuthoritativeSnapshot(this.engine.exportSnapshot());
+    }
     return this.storeCachedAuthoritativeSnapshot(
       this.requireAuthoritativeEngine().exportSnapshot(),
     );
@@ -920,6 +960,9 @@ export class WorkbookWorkerRuntime {
   private getAuthoritativeReplica(): EngineReplicaSnapshot {
     if (this.authoritativeReplicaCache && !this.authoritativeReplicaDirty) {
       return this.authoritativeReplicaCache;
+    }
+    if (!this.authoritativeEngine && this.pendingMutations.length === 0 && this.engine) {
+      return this.storeCachedAuthoritativeReplica(this.engine.exportReplicaSnapshot());
     }
     return this.storeCachedAuthoritativeReplica(
       this.requireAuthoritativeEngine().exportReplicaSnapshot(),

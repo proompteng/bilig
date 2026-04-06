@@ -20,6 +20,7 @@ const baseBudgets = {
   topologyEdit10kElapsedP95Ms: 80,
   topologyEdit10kRecalcP95Ms: 80,
   renderCommit10kP95Ms: 50,
+  workerWarmStart100kP95Ms: 500,
   workerVisibleEdit10kP95Ms: 16,
 };
 const toleranceMultiplier = Number.parseFloat(
@@ -185,6 +186,11 @@ assertBudget(
 assertBudget("10k topology edit p95", topologyElapsed.p95, budgets.topologyEdit10kElapsedP95Ms);
 assertBudget("10k topology recalc p95", topologyRecalc.p95, budgets.topologyEdit10kRecalcP95Ms);
 assertBudget("10k render commit p95", renderElapsed.p95, budgets.renderCommit10kP95Ms);
+assertBudget(
+  "100k worker warm-start p95",
+  workerWarmStartElapsed.p95,
+  budgets.workerWarmStart100kP95Ms,
+);
 assertBudget(
   "10k worker local visible edit p95",
   workerVisibleEditElapsed.p95,
