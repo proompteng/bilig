@@ -2178,12 +2178,6 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
     "browser fuzz runs only in fuzz mode",
   );
 
-  await page.goto("/");
-  await waitForWorkbookReady(page);
-  const grid = page.getByTestId("sheet-grid");
-  const nameBox = page.getByTestId("name-box");
-  await expect(grid).toBeVisible({ timeout: 15_000 });
-
   await runProperty({
     suite: "browser/grid-selection-focus",
     kind: "browser",
@@ -2208,9 +2202,14 @@ test("@fuzz-browser web app preserves valid selection geometry and focus under g
       { minLength: 6, maxLength: 10 },
     ),
     parameters: {
-      interruptAfterTimeLimit: 20_000,
+      interruptAfterTimeLimit: 40_000,
     },
     predicate: async (actions) => {
+      await page.goto("/");
+      await waitForWorkbookReady(page);
+      const grid = page.getByTestId("sheet-grid");
+      const nameBox = page.getByTestId("name-box");
+      await expect(grid).toBeVisible({ timeout: 15_000 });
       await nameBox.fill("C5");
       await nameBox.press("Enter");
       await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!C5");
