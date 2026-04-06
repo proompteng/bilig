@@ -165,6 +165,8 @@ describe("workbook agent pane", () => {
     });
 
     expect(host.textContent).toContain("Local Skills");
+    expect(host.textContent).toContain("Find Formula Issues");
+    expect(host.textContent).toContain("Trace Dependencies");
     const inspectSkill = [...host.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("Inspect Selection"),
     );
@@ -179,6 +181,108 @@ describe("workbook agent pane", () => {
     expect(input instanceof HTMLTextAreaElement ? input.value : "").toContain(
       "Inspect the current cell selection",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders structured workbook comprehension tool results in the rail", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              createSnapshot({
+                entries: [
+                  {
+                    id: "tool-search",
+                    kind: "tool",
+                    turnId: "turn-1",
+                    text: null,
+                    phase: null,
+                    toolName: "bilig.search_workbook",
+                    toolStatus: "completed",
+                    argumentsText: '{"query":"gross margin"}',
+                    outputText: JSON.stringify({
+                      query: "gross margin",
+                      summary: { matchCount: 1, truncated: false },
+                      matches: [
+                        {
+                          kind: "cell",
+                          sheetName: "Sheet1",
+                          address: "A2",
+                          snippet: "Gross Margin",
+                          reasons: ["value"],
+                          score: 65,
+                        },
+                      ],
+                    }),
+                    success: true,
+                  },
+                  {
+                    id: "tool-issues",
+                    kind: "tool",
+                    turnId: "turn-1",
+                    text: null,
+                    phase: null,
+                    toolName: "bilig.find_formula_issues",
+                    toolStatus: "completed",
+                    argumentsText: "{}",
+                    outputText: JSON.stringify({
+                      summary: {
+                        issueCount: 1,
+                        scannedFormulaCells: 3,
+                        errorCount: 1,
+                        cycleCount: 0,
+                        unsupportedCount: 0,
+                      },
+                      issues: [
+                        {
+                          sheetName: "Sheet1",
+                          address: "C1",
+                          formula: "=1/0",
+                          valueText: "#DIV/0!",
+                          issueKinds: ["error"],
+                        },
+                      ],
+                    }),
+                    success: true,
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Search Matches");
+    expect(host.textContent).toContain("Gross Margin");
+    expect(host.textContent).toContain("Formula Issues");
+    expect(host.textContent).toContain("C1");
 
     await act(async () => {
       root.unmount();

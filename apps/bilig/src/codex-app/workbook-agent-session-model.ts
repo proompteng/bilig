@@ -70,6 +70,7 @@ export function createWorkbookAgentDeveloperInstructions(): string {
     "Before changing cells you have not inspected, read the relevant workbook range first.",
     "When the user refers to the current cell, selection, or visible area, call bilig.get_context.",
     "Prefer bilig.read_selection, bilig.read_visible_range, and bilig.inspect_cell for context-native workbook analysis.",
+    "Use bilig.find_formula_issues, bilig.search_workbook, and bilig.trace_dependencies for warm-runtime workbook comprehension instead of broad guesswork.",
     "All workbook writes must stage semantic preview bundles instead of applying immediately.",
     "Use the bundle-staging workbook tools to assemble one coherent preview per turn when the task is related.",
     "After staging workbook changes, summarize the preview and tell the user to review and apply it from the rail.",

@@ -94,6 +94,265 @@ function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["to
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function safeParseToolOutput(outputText: string | null): unknown {
+  if (!outputText) {
+    return null;
+  }
+  try {
+    return JSON.parse(outputText) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function supportsStructuredToolOutput(toolName: string | null): boolean {
+  return (
+    toolName === "bilig.find_formula_issues" ||
+    toolName === "bilig.search_workbook" ||
+    toolName === "bilig.trace_dependencies"
+  );
+}
+
+function renderReasonLabel(reason: string): string {
+  switch (reason) {
+    case "sheet":
+      return "sheet";
+    case "address":
+      return "address";
+    case "formula":
+      return "formula";
+    case "input":
+      return "input";
+    case "value":
+      return "value";
+    default:
+      return reason;
+  }
+}
+
+function StructuredToolOutput(props: {
+  readonly toolName: string | null;
+  readonly outputText: string | null;
+}) {
+  const parsed = safeParseToolOutput(props.outputText);
+  if (!props.toolName || !isRecord(parsed)) {
+    return null;
+  }
+
+  if (props.toolName === "bilig.find_formula_issues" && Array.isArray(parsed["issues"])) {
+    const summary = isRecord(parsed["summary"]) ? parsed["summary"] : null;
+    const issues = parsed["issues"].flatMap((issue) => (isRecord(issue) ? [issue] : []));
+    return (
+      <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+              Formula Issues
+            </div>
+            <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
+              {readNumber(summary?.["issueCount"], issues.length)} issues across{" "}
+              {readNumber(summary?.["scannedFormulaCells"])} formulas
+            </div>
+          </div>
+          <div className="text-right text-[10px] text-[var(--wb-text-subtle)]">
+            {readNumber(summary?.["errorCount"])} errors · {readNumber(summary?.["cycleCount"])}{" "}
+            cycles · {readNumber(summary?.["unsupportedCount"])} JS-only
+          </div>
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {issues.slice(0, 8).map((issue) => (
+            <div
+              key={`${readString(issue["sheetName"])}:${readString(issue["address"])}`}
+              className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold text-[var(--wb-text)]">
+                    {readString(issue["sheetName"])}!{readString(issue["address"])}
+                  </div>
+                  <div className="mt-1 break-all text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                    {readString(issue["formula"])}
+                  </div>
+                </div>
+                <div className="text-right text-[10px] text-[var(--wb-text-subtle)]">
+                  {readString(issue["valueText"]) || "(empty)"}
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {Array.isArray(issue["issueKinds"])
+                  ? issue["issueKinds"].map((kind) => (
+                      <span
+                        key={readString(kind)}
+                        className="rounded-full bg-[#fee2e2] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#991b1b]"
+                      >
+                        {readString(kind)}
+                      </span>
+                    ))
+                  : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (props.toolName === "bilig.search_workbook" && Array.isArray(parsed["matches"])) {
+    const matches = parsed["matches"].flatMap((match) => (isRecord(match) ? [match] : []));
+    return (
+      <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+              Search Matches
+            </div>
+            <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
+              Query: “{readString(parsed["query"])}”
+            </div>
+          </div>
+          <div className="text-[10px] text-[var(--wb-text-subtle)]">
+            {readNumber(
+              isRecord(parsed["summary"]) ? parsed["summary"]["matchCount"] : undefined,
+              matches.length,
+            )}{" "}
+            matches
+          </div>
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {matches.slice(0, 8).map((match) => (
+            <div
+              key={`${readString(match["kind"])}:${readString(match["sheetName"])}:${readString(match["address"])}`}
+              className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold text-[var(--wb-text)]">
+                    {readString(match["kind"]) === "sheet"
+                      ? `Sheet ${readString(match["sheetName"])}`
+                      : `${readString(match["sheetName"])}!${readString(match["address"])}`}
+                  </div>
+                  <div className="mt-1 break-all text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                    {readString(match["snippet"])}
+                  </div>
+                </div>
+                <div className="text-[10px] text-[var(--wb-text-subtle)]">
+                  score {readNumber(match["score"])}
+                </div>
+              </div>
+              {Array.isArray(match["reasons"]) ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {match["reasons"].map((reason) => (
+                    <span
+                      key={readString(reason)}
+                      className="rounded-full bg-[#e0f2fe] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[#075985]"
+                    >
+                      {renderReasonLabel(readString(reason))}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (props.toolName === "bilig.trace_dependencies" && Array.isArray(parsed["layers"])) {
+    const root = isRecord(parsed["root"]) ? parsed["root"] : null;
+    const layers = parsed["layers"].flatMap((layer) => (isRecord(layer) ? [layer] : []));
+    return (
+      <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+              Dependency Trace
+            </div>
+            <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
+              {readString(root?.["sheetName"])}!{readString(root?.["address"])}
+            </div>
+          </div>
+          <div className="text-[10px] text-[var(--wb-text-subtle)]">
+            {readString(parsed["direction"], "both")} · {readNumber(parsed["depth"])} hops
+          </div>
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {layers.map((layer) => (
+            <div
+              key={`trace-layer-${readNumber(layer["depth"])}`}
+              className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                Hop {readNumber(layer["depth"])}
+              </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <div>
+                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">Precedents</div>
+                  <div className="mt-1 flex flex-col gap-1">
+                    {Array.isArray(layer["precedents"]) && layer["precedents"].length > 0 ? (
+                      layer["precedents"]
+                        .flatMap((node) => (isRecord(node) ? [node] : []))
+                        .map((node) => (
+                          <div
+                            key={`precedent:${readString(node["sheetName"])}:${readString(node["address"])}`}
+                            className="text-[11px] leading-5 text-[var(--wb-text-subtle)]"
+                          >
+                            {readString(node["sheetName"])}!{readString(node["address"])}{" "}
+                            <span className="text-[var(--wb-text-muted)]">
+                              {readString(node["formula"]) || readString(node["valueText"])}
+                            </span>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-[11px] text-[var(--wb-text-subtle)]">None</div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">Dependents</div>
+                  <div className="mt-1 flex flex-col gap-1">
+                    {Array.isArray(layer["dependents"]) && layer["dependents"].length > 0 ? (
+                      layer["dependents"]
+                        .flatMap((node) => (isRecord(node) ? [node] : []))
+                        .map((node) => (
+                          <div
+                            key={`dependent:${readString(node["sheetName"])}:${readString(node["address"])}`}
+                            className="text-[11px] leading-5 text-[var(--wb-text-subtle)]"
+                          >
+                            {readString(node["sheetName"])}!{readString(node["address"])}{" "}
+                            <span className="text-[var(--wb-text-muted)]">
+                              {readString(node["formula"]) || readString(node["valueText"])}
+                            </span>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-[11px] text-[var(--wb-text-subtle)]">None</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEntry }) {
   const { entry } = props;
   if (entry.kind === "user") {
@@ -142,7 +401,10 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
             {entry.argumentsText}
           </pre>
         ) : null}
-        {entry.outputText ? (
+        <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
+        {entry.outputText &&
+        (!supportsStructuredToolOutput(entry.toolName) ||
+          safeParseToolOutput(entry.outputText) === null) ? (
           <pre className="mt-2 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
             {entry.outputText}
           </pre>

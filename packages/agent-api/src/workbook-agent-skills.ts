@@ -29,6 +29,33 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     toolNames: ["bilig.get_context", "bilig.read_selection", "bilig.inspect_cell"],
   },
   {
+    id: "find-formula-issues",
+    label: "Find Formula Issues",
+    focus: "analyze",
+    description: "Scan the workbook for broken formulas, cycles, and JS-only fallback formulas.",
+    prompt:
+      "Scan this workbook for broken formulas, cycles, and JS-only fallback formulas, then summarize the highest-risk issues first.",
+    toolNames: ["bilig.read_workbook", "bilig.find_formula_issues"],
+  },
+  {
+    id: "search-workbook",
+    label: "Search Workbook",
+    focus: "analyze",
+    description: "Search workbook structure, formulas, inputs, and visible values for a concept.",
+    prompt:
+      "Search this workbook for the concept I mention, use workbook search before broader explanation, and cite the strongest matching cells or sheets.",
+    toolNames: ["bilig.search_workbook", "bilig.inspect_cell"],
+  },
+  {
+    id: "trace-dependencies",
+    label: "Trace Dependencies",
+    focus: "analyze",
+    description: "Trace upstream and downstream workbook links from the current selection.",
+    prompt:
+      "Trace the dependency graph around the current selection for multiple hops, then explain the most important upstream and downstream cells.",
+    toolNames: ["bilig.get_context", "bilig.inspect_cell", "bilig.trace_dependencies"],
+  },
+  {
     id: "review-visible-range",
     label: "Review Visible Range",
     focus: "read",

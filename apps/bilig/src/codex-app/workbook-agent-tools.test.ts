@@ -14,7 +14,12 @@ async function createEngine(): Promise<SpreadsheetEngine> {
   await engine.ready();
   engine.createSheet("Sheet1");
   engine.setCellValue("Sheet1", "A1", 42);
+  engine.setCellValue("Sheet1", "A2", "Gross Margin");
   engine.setCellFormula("Sheet1", "B1", "SUM(A1:A1)");
+  engine.setCellFormula("Sheet1", "C1", "1/0");
+  engine.setCellFormula("Sheet1", "D1", "LEN(A1:A2)");
+  engine.createSheet("Ops Search");
+  engine.setCellValue("Ops Search", "A1", "Northwind Import");
   return engine;
 }
 
@@ -218,6 +223,148 @@ describe("workbook agent tools", () => {
     expect(text).toContain('"formula": "=SUM(A1:A1)"');
     expect(text).toContain('"directPrecedents": [');
     expect(text).toContain("Sheet1!A1");
+  });
+
+  it("scans formula issues through the warm local runtime", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-formula-issues",
+        tool: "bilig.find_formula_issues",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"issueCount": 2');
+    expect(text).toContain('"address": "C1"');
+    expect(text).toContain('"errorText": "#DIV/0!"');
+    expect(text).toContain('"address": "D1"');
+    expect(text).toContain('"unsupported"');
+  });
+
+  it("searches workbook sheets, cells, formulas, and values", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-search",
+        tool: "bilig.search_workbook",
+        arguments: {
+          query: "gross margin",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"query": "gross margin"');
+    expect(text).toContain('"address": "A2"');
+    expect(text).toContain('"snippet": "Gross Margin"');
+  });
+
+  it("traces multi-hop workbook dependencies from the attached selection", async () => {
+    const engine = await createEngine();
+    engine.setCellFormula("Sheet1", "E1", "B1*2");
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-trace",
+        tool: "bilig.trace_dependencies",
+        arguments: {
+          direction: "both",
+          depth: 2,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"address": "B1"');
+    expect(text).toContain('"precedentCount": 1');
+    expect(text).toContain('"dependentCount": 1');
+    expect(text).toContain('"address": "A1"');
+    expect(text).toContain('"address": "E1"');
   });
 
   it("reads workbook ranges through the authoritative runtime", async () => {

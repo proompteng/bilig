@@ -965,6 +965,17 @@ Implemented.
 **Objective**
 Make giant-data workbook work obviously better than incumbents.
 
+**Status**
+Partially implemented.
+
+**Already implemented**
+
+- the right-rail assistant now has workbook-comprehension quick actions instead of only generic prompts
+- the monolith agent runtime now exposes warm local workbook search across sheet names, addresses, formulas, inputs, and displayed values
+- the monolith agent runtime now exposes workbook-wide formula issue scans for broken formulas, cycles, and JS-only fallback formulas
+- the monolith agent runtime now exposes multi-hop dependency tracing for the active selection or any addressed cell
+- the right rail now renders those comprehension results as structured insight cards instead of raw JSON blobs
+
 **User-visible outcomes**
 
 - near-instant local staging of large imports

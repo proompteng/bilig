@@ -126,13 +126,16 @@ describe("workbook agent service", () => {
           "bilig.read_selection",
           "bilig.read_visible_range",
           "bilig.inspect_cell",
+          "bilig.find_formula_issues",
+          "bilig.search_workbook",
+          "bilig.trace_dependencies",
           "bilig.read_range",
           "bilig.write_range",
         ]),
       );
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("local workbook skills");
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
-        "bilig.read_selection",
+        "bilig.search_workbook",
       );
     } finally {
       await service.close();

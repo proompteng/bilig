@@ -25,6 +25,11 @@ import type {
   CodexDynamicToolSpec,
   JsonValue,
 } from "./codex-app-server-types.js";
+import {
+  findWorkbookFormulaIssues,
+  searchWorkbook,
+  traceWorkbookDependencies,
+} from "./workbook-agent-comprehension.js";
 
 const MAX_MUTATION_RANGE_CELLS = 400;
 const MAX_READ_RANGE_CELLS = 4000;
@@ -34,12 +39,8 @@ const writeCellInputSchema = z.union([
   z.number(),
   z.boolean(),
   z.null(),
-  z.object({
-    value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
-  }),
-  z.object({
-    formula: z.string().min(1),
-  }),
+  z.object({ value: z.union([z.string(), z.number(), z.boolean(), z.null()]) }),
+  z.object({ formula: z.string().min(1) }),
 ]);
 
 const readRangeToolArgsSchema = z.object({
@@ -51,6 +52,21 @@ const readRangeToolArgsSchema = z.object({
 const inspectCellToolArgsSchema = z.object({
   sheetName: z.string().min(1).optional(),
   address: z.string().min(1).optional(),
+});
+const formulaIssueToolArgsSchema = z.object({
+  sheetName: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+const searchWorkbookToolArgsSchema = z.object({
+  query: z.string().trim().min(1),
+  sheetName: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(50).optional(),
+});
+const traceDependenciesToolArgsSchema = z.object({
+  sheetName: z.string().min(1).optional(),
+  address: z.string().min(1).optional(),
+  direction: z.enum(["precedents", "dependents", "both"]).optional(),
+  depth: z.number().int().positive().max(4).optional(),
 });
 
 const writeRangeToolArgsSchema = z.object({
@@ -69,10 +85,7 @@ const renameSheetToolArgsSchema = z.object({
 });
 
 const clearRangeToolArgsSchema = clearRangeArgsSchema.pick({ range: true });
-const transferRangeToolArgsSchema = rangeMutationArgsSchema.pick({
-  source: true,
-  target: true,
-});
+const transferRangeToolArgsSchema = rangeMutationArgsSchema.pick({ source: true, target: true });
 const formatRangeToolArgsSchema = z
   .object({
     range: clearRangeToolArgsSchema.shape.range,
@@ -479,6 +492,52 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
+      name: "bilig.find_formula_issues",
+      description:
+        "Scan the workbook for broken formulas, error cells, cycles, and formulas still running through the JS fallback path.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sheetName: { type: "string" },
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
+      name: "bilig.search_workbook",
+      description:
+        "Search workbook sheet names, addresses, formulas, inputs, and displayed values through the warm local runtime.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["query"],
+        properties: {
+          query: { type: "string" },
+          sheetName: { type: "string" },
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
+      name: "bilig.trace_dependencies",
+      description:
+        "Trace workbook precedents and dependents from one cell for multiple hops. Defaults to the current selection when no address is provided.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sheetName: { type: "string" },
+          address: { type: "string" },
+          direction: {
+            type: "string",
+            enum: ["precedents", "dependents", "both"],
+          },
+          depth: { type: "number" },
+        },
+      },
+    },
+    {
       name: "bilig.write_range",
       description:
         "Write a rectangular matrix of spreadsheet inputs starting at a top-left address. Use primitives for literals, {formula} for formulas, and null to clear a cell.",
@@ -783,6 +842,46 @@ export async function handleWorkbookAgentToolCall(
       case "bilig.inspect_cell": {
         const args = inspectCellToolArgsSchema.parse(request.arguments);
         return await inspectWorkbookCell(context, resolveInspectionTarget(context.uiContext, args));
+      }
+      case "bilig.find_formula_issues": {
+        const args = formulaIssueToolArgsSchema.parse(request.arguments);
+        const report = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            findWorkbookFormulaIssues(runtime, {
+              ...(args.sheetName ? { sheetName: args.sheetName } : {}),
+              ...(args.limit !== undefined ? { limit: args.limit } : {}),
+            }),
+        );
+        return textToolResult(stringifyJson(report));
+      }
+      case "bilig.search_workbook": {
+        const args = searchWorkbookToolArgsSchema.parse(request.arguments);
+        const report = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            searchWorkbook(runtime, {
+              query: args.query,
+              ...(args.sheetName ? { sheetName: args.sheetName } : {}),
+              ...(args.limit !== undefined ? { limit: args.limit } : {}),
+            }),
+        );
+        return textToolResult(stringifyJson(report));
+      }
+      case "bilig.trace_dependencies": {
+        const args = traceDependenciesToolArgsSchema.parse(request.arguments);
+        const target = resolveInspectionTarget(context.uiContext, args);
+        const report = await context.zeroSyncService.inspectWorkbook(
+          context.documentId,
+          (runtime) =>
+            traceWorkbookDependencies(runtime, {
+              sheetName: target.sheetName,
+              address: target.address,
+              ...(args.direction ? { direction: args.direction } : {}),
+              ...(args.depth !== undefined ? { depth: args.depth } : {}),
+            }),
+        );
+        return textToolResult(stringifyJson(report));
       }
       case "bilig.write_range": {
         const args = writeRangeToolArgsSchema.parse(request.arguments);
