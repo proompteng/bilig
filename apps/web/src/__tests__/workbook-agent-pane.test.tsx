@@ -58,7 +58,6 @@ function AgentHarness() {
   const { agentPanel, agentToggle } = useWorkbookAgentPane({
     documentId: "doc-1",
     enabled: true,
-    contextKey: "Sheet1:A1",
     getContext: () => ({
       selection: {
         sheetName: "Sheet1",
@@ -83,10 +82,12 @@ function AgentHarness() {
 
 beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
+  window.sessionStorage.clear();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.sessionStorage.clear();
   document.body.innerHTML = "";
 });
 
@@ -95,6 +96,13 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {

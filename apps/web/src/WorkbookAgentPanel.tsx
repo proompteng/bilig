@@ -97,6 +97,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
 }
 
 export function WorkbookAgentPanel(props: {
+  readonly currentContext: WorkbookAgentUiContext | null;
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
   readonly draft: string;
   readonly error: string | null;
@@ -133,7 +134,7 @@ export function WorkbookAgentPanel(props: {
         <div className="min-w-0">
           <h2 className="text-[13px] font-semibold text-[var(--wb-text)]">Assistant</h2>
           <p className="text-[11px] text-[var(--wb-text-subtle)]">
-            {contextLabel(props.snapshot?.context ?? null)}
+            {contextLabel(props.snapshot?.context ?? props.currentContext)}
           </p>
         </div>
         <button

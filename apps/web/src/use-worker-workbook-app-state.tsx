@@ -790,7 +790,6 @@ export function useWorkerWorkbookAppState(input: {
   const { agentPanel, agentToggle } = useWorkbookAgentPane({
     documentId,
     enabled: runtimeReady,
-    contextKey: `${selection.sheetName}:${selection.address}`,
     getContext: () => ({
       selection: selectionRef.current,
       viewport: visibleViewportRef.current,

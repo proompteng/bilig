@@ -84,14 +84,13 @@ function updateSnapshotFromDelta(
 export function useWorkbookAgentPane(input: {
   readonly documentId: string;
   readonly enabled: boolean;
-  readonly contextKey: string;
   readonly getContext: () => WorkbookAgentUiContext;
 }) {
-  const { contextKey, documentId, enabled, getContext } = input;
+  const { documentId, enabled, getContext } = input;
   const [snapshot, setSnapshot] = useState<WorkbookAgentSessionSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const sessionRef = useRef<StoredWorkbookAgentSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -108,6 +107,21 @@ export function useWorkbookAgentPane(input: {
     eventSourceRef.current = null;
   }, []);
 
+  const persistSessionSnapshot = useCallback(
+    (nextSnapshot: WorkbookAgentSessionSnapshot) => {
+      setSnapshot(nextSnapshot);
+      persistStoredSession(documentId, {
+        sessionId: nextSnapshot.sessionId,
+        threadId: nextSnapshot.threadId,
+      });
+      sessionRef.current = {
+        sessionId: nextSnapshot.sessionId,
+        threadId: nextSnapshot.threadId,
+      };
+    },
+    [documentId],
+  );
+
   const connectStream = useCallback(
     (sessionId: string) => {
       closeStream();
@@ -122,15 +136,7 @@ export function useWorkbookAgentPane(input: {
           }
           const event = decodeUnknownSync(WorkbookAgentStreamEventSchema, JSON.parse(payloadText));
           if (event.type === "snapshot") {
-            setSnapshot(event.snapshot);
-            persistStoredSession(documentId, {
-              sessionId: event.snapshot.sessionId,
-              threadId: event.snapshot.threadId,
-            });
-            sessionRef.current = {
-              sessionId: event.snapshot.sessionId,
-              threadId: event.snapshot.threadId,
-            };
+            persistSessionSnapshot(event.snapshot);
             setError(null);
             return;
           }
@@ -146,56 +152,89 @@ export function useWorkbookAgentPane(input: {
       });
       eventSourceRef.current = source;
     },
-    [closeStream, documentId],
+    [closeStream, documentId, persistSessionSnapshot],
   );
+
+  const createOrResumeSession = useCallback(
+    async (
+      storedSession: StoredWorkbookAgentSession | null,
+      context: WorkbookAgentUiContext,
+    ): Promise<WorkbookAgentSessionSnapshot> => {
+      const response = await fetch(
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            ...storedSession,
+            context,
+          }),
+        },
+      );
+      const payload = (await response.json()) as unknown;
+      if (!response.ok) {
+        throw new Error(
+          resolvePayloadMessage(
+            payload,
+            `Workbook agent request failed with status ${response.status}`,
+          ),
+        );
+      }
+      return decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+    },
+    [documentId],
+  );
+
+  const ensureSession = useCallback(async (): Promise<StoredWorkbookAgentSession> => {
+    const activeSession = sessionRef.current;
+    if (activeSession) {
+      return activeSession;
+    }
+    setIsLoading(true);
+    try {
+      const nextSnapshot = await createOrResumeSession(null, getContextRef.current());
+      persistSessionSnapshot(nextSnapshot);
+      connectStream(nextSnapshot.sessionId);
+      setError(null);
+      return {
+        sessionId: nextSnapshot.sessionId,
+        threadId: nextSnapshot.threadId,
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [connectStream, createOrResumeSession, persistSessionSnapshot]);
 
   useEffect(() => {
     if (!enabled) {
+      closeStream();
+      sessionRef.current = null;
+      setSnapshot(null);
       setIsLoading(false);
       return;
     }
     let cancelled = false;
-    const context = getContextRef.current();
-    const bootstrap = async () => {
+    lastContextKeyRef.current = "";
+    const storedSession = loadStoredSession(documentId);
+    sessionRef.current = storedSession;
+    if (!storedSession) {
+      setIsLoading(false);
+      return () => {
+        cancelled = true;
+        closeStream();
+      };
+    }
+
+    const bootstrapStoredSession = async () => {
       try {
         setIsLoading(true);
-        const storedSession = loadStoredSession(documentId);
-        sessionRef.current = storedSession;
-        const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              ...storedSession,
-              context,
-            }),
-          },
-        );
-        const payload = (await response.json()) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            resolvePayloadMessage(
-              payload,
-              `Workbook agent request failed with status ${response.status}`,
-            ),
-          );
-        }
-        const nextSnapshot = decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+        const nextSnapshot = await createOrResumeSession(storedSession, getContextRef.current());
         if (cancelled) {
           return;
         }
-        setSnapshot(nextSnapshot);
-        persistStoredSession(documentId, {
-          sessionId: nextSnapshot.sessionId,
-          threadId: nextSnapshot.threadId,
-        });
-        sessionRef.current = {
-          sessionId: nextSnapshot.sessionId,
-          threadId: nextSnapshot.threadId,
-        };
+        persistSessionSnapshot(nextSnapshot);
         connectStream(nextSnapshot.sessionId);
         setError(null);
       } catch (nextError) {
@@ -208,12 +247,19 @@ export function useWorkbookAgentPane(input: {
         }
       }
     };
-    void bootstrap();
+    void bootstrapStoredSession();
     return () => {
       cancelled = true;
       closeStream();
     };
-  }, [closeStream, connectStream, documentId, enabled, contextKey]);
+  }, [
+    closeStream,
+    connectStream,
+    createOrResumeSession,
+    documentId,
+    enabled,
+    persistSessionSnapshot,
+  ]);
 
   useEffect(() => {
     if (!enabled || !snapshot) {
@@ -249,12 +295,12 @@ export function useWorkbookAgentPane(input: {
 
   const sendPrompt = useCallback(async () => {
     const prompt = draft.trim();
-    const activeSession = sessionRef.current;
-    if (!activeSession || prompt.length === 0) {
+    if (prompt.length === 0) {
       return;
     }
     try {
       setError(null);
+      const activeSession = await ensureSession();
       const response = await fetch(
         `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/turns`,
         {
@@ -277,12 +323,12 @@ export function useWorkbookAgentPane(input: {
           ),
         );
       }
-      setSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
       setDraft("");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
-  }, [documentId, draft]);
+  }, [documentId, draft, ensureSession, persistSessionSnapshot]);
 
   const interrupt = useCallback(async () => {
     const activeSession = sessionRef.current;
@@ -333,6 +379,7 @@ export function useWorkbookAgentPane(input: {
   const agentPanel = useMemo(
     () => (
       <WorkbookAgentPanel
+        currentContext={currentContext}
         draft={draft}
         error={error}
         isLoading={isLoading}
@@ -350,7 +397,7 @@ export function useWorkbookAgentPane(input: {
         }}
       />
     ),
-    [draft, error, interrupt, isLoading, isOpen, sendPrompt, snapshot],
+    [currentContext, draft, error, interrupt, isLoading, isOpen, sendPrompt, snapshot],
   );
 
   return {
