@@ -11,6 +11,10 @@ const WORKBOOK_VFS_INITIAL_CAPACITY = 12;
 
 let sqliteRuntimePromise: Promise<{ sqlite3: Sqlite3Static; poolUtil: SAHPoolUtil }> | null = null;
 
+export class WorkbookLocalStoreLockedError extends Error {
+  override readonly name = "WorkbookLocalStoreLockedError";
+}
+
 export interface WorkbookStoredState {
   readonly snapshot: unknown;
   readonly replica: unknown;
@@ -66,6 +70,14 @@ function supportsWorkerOpfs(): boolean {
 
 function sanitizeDocumentId(documentId: string): string {
   return encodeURIComponent(documentId).replaceAll("%", "_");
+}
+
+function isAccessHandleConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes("createSyncAccessHandle") &&
+    error.message.includes("Access Handles cannot be created")
+  );
 }
 
 function parseWorkbookStoredState(value: unknown): WorkbookStoredState | null {
@@ -199,13 +211,18 @@ async function getSqliteRuntime(
   }
   if (!sqliteRuntimePromise) {
     sqliteRuntimePromise = (async () => {
-      const sqlite3 = await sqlite3InitModule();
-      const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
-        name: options.vfsName,
-        directory: options.directory,
-        initialCapacity: options.initialCapacity,
-      });
-      return { sqlite3, poolUtil };
+      try {
+        const sqlite3 = await sqlite3InitModule();
+        const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
+          name: options.vfsName,
+          directory: options.directory,
+          initialCapacity: options.initialCapacity,
+        });
+        return { sqlite3, poolUtil };
+      } catch (error) {
+        sqliteRuntimePromise = null;
+        throw error;
+      }
     })();
   }
   return await sqliteRuntimePromise;
@@ -406,11 +423,20 @@ export function createOpfsWorkbookLocalStoreFactory(
 
   return {
     async open(documentId: string): Promise<WorkbookLocalStore> {
-      const { poolUtil } = await getSqliteRuntime(resolvedOptions);
-      const path = `/workbooks/${sanitizeDocumentId(documentId)}.sqlite`;
-      const db = new poolUtil.OpfsSAHPoolDb(path);
-      initializeSchema(db);
-      return new OpfsWorkbookLocalStore(db);
+      try {
+        const { poolUtil } = await getSqliteRuntime(resolvedOptions);
+        const path = `/workbooks/${sanitizeDocumentId(documentId)}.sqlite`;
+        const db = new poolUtil.OpfsSAHPoolDb(path);
+        initializeSchema(db);
+        return new OpfsWorkbookLocalStore(db);
+      } catch (error) {
+        if (isAccessHandleConflict(error)) {
+          throw new WorkbookLocalStoreLockedError(
+            `Workbook local store is locked by another tab for ${documentId}`,
+          );
+        }
+        throw error;
+      }
     },
   };
 }

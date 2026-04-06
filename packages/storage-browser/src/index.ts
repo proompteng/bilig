@@ -8,6 +8,7 @@ export {
 } from "./browser-metadata-store.js";
 export {
   createOpfsWorkbookLocalStoreFactory,
+  WorkbookLocalStoreLockedError,
   type OpfsWorkbookLocalStoreFactoryOptions,
   type WorkbookLocalMutationRecord,
   type WorkbookLocalStore,

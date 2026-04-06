@@ -5,6 +5,7 @@ import type {
   WorkbookLocalStoreFactory,
   WorkbookStoredState,
 } from "@bilig/storage-browser";
+import { WorkbookLocalStoreLockedError } from "@bilig/storage-browser";
 import { ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
 import { collectChangedCellsBySheet, collectViewportCells } from "../worker-runtime-support.js";
@@ -131,6 +132,26 @@ describe("WorkbookWorkerRuntime", () => {
       persistState: false,
     });
 
+    expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Empty });
+  });
+
+  it("falls back to ephemeral runtime state when the local sqlite store is locked by another tab", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: {
+        async open() {
+          throw new WorkbookLocalStoreLockedError("locked");
+        },
+      },
+    });
+
+    const bootstrap = await runtime.bootstrap({
+      documentId: "locked-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    expect(bootstrap.restoredFromPersistence).toBe(false);
+    expect(bootstrap.requiresAuthoritativeHydrate).toBe(false);
     expect(runtime.getCell("Sheet1", "A1").value).toEqual({ tag: ValueTag.Empty });
   });
 

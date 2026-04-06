@@ -260,29 +260,7 @@ describe("createWorkerRuntimeSessionController", () => {
       headRevision: 0,
       calculatedRevision: 0,
     });
-    const stylesView = createMockZeroView<readonly unknown[]>([]);
-    const formatsView = createMockZeroView<readonly unknown[]>([]);
-    const selectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedRowMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const selectedColumnMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const rebasedSelectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
-    const rebasedSelectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
-    const rebasedSelectedRowMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const rebasedSelectedColumnMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const zero = createSequencedZeroViews(
-      workbookView,
-      stylesView,
-      formatsView,
-      selectedSourceTileView,
-      selectedEvalTileView,
-      selectedRowMetadataView,
-      selectedColumnMetadataView,
-      rebasedSelectedSourceTileView,
-      rebasedSelectedEvalTileView,
-      rebasedSelectedRowMetadataView,
-      rebasedSelectedColumnMetadataView,
-    );
+    const zero = createSequencedZeroViews(workbookView);
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -400,7 +378,7 @@ describe("createWorkerRuntimeSessionController", () => {
     controller.dispose();
   });
 
-  it("projects live Zero cell and style updates into the mounted cache", async () => {
+  it("applies remote cell and style changes through authoritative event rebases", async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),
     });
@@ -408,29 +386,57 @@ describe("createWorkerRuntimeSessionController", () => {
       headRevision: 0,
       calculatedRevision: 0,
     });
-    const stylesView = createMockZeroView<readonly unknown[]>([]);
-    const formatsView = createMockZeroView<readonly unknown[]>([]);
-    const selectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedRowMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const selectedColumnMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const viewportSourceView = createMockZeroView<readonly unknown[]>([]);
-    const viewportEvalView = createMockZeroView<readonly unknown[]>([]);
-    const rowMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const columnMetadataView = createMockZeroView<readonly unknown[]>([]);
-    const zero = createSequencedZeroViews(
-      workbookView,
-      stylesView,
-      formatsView,
-      selectedSourceTileView,
-      selectedEvalTileView,
-      selectedRowMetadataView,
-      selectedColumnMetadataView,
-      viewportSourceView,
-      viewportEvalView,
-      rowMetadataView,
-      columnMetadataView,
-    );
+    const zero = createSequencedZeroViews(workbookView);
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/snapshot/latest")) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes("/events?afterRevision=0")) {
+        return new Response(
+          JSON.stringify({
+            afterRevision: 0,
+            headRevision: 2,
+            calculatedRevision: 2,
+            events: [
+              {
+                revision: 1,
+                clientMutationId: null,
+                payload: {
+                  kind: "setCellValue",
+                  sheetName: "Sheet1",
+                  address: "A1",
+                  value: 8,
+                },
+              },
+              {
+                revision: 2,
+                clientMutationId: null,
+                payload: {
+                  kind: "setRangeStyle",
+                  range: {
+                    sheetName: "Sheet1",
+                    startAddress: "A1",
+                    endAddress: "A1",
+                  },
+                  patch: {
+                    fill: { backgroundColor: "#c9daf8" },
+                  },
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     const controller = await createWorkerRuntimeSessionController(
       {
@@ -440,7 +446,7 @@ describe("createWorkerRuntimeSessionController", () => {
         initialSelection: { sheetName: "Sheet1", address: "A1" },
         createWorker: () => createMockWorkerPort(runtime),
         zero: zero.zero,
-        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+        fetchImpl,
       },
       {
         onRuntimeState() {},
@@ -451,63 +457,24 @@ describe("createWorkerRuntimeSessionController", () => {
       },
     );
 
-    selectedSourceTileView.emit([
-      {
-        sheetName: "Sheet1",
-        address: "A1",
-        inputValue: 5,
-        styleId: "style-live",
-      },
-    ]);
-    selectedEvalTileView.emit([
-      {
-        sheetName: "Sheet1",
-        address: "A1",
-        value: { tag: ValueTag.Number, value: 5 },
-        flags: 0,
-        version: 1,
-        styleId: "style-live",
-      },
-    ]);
-
-    await vi.waitFor(() => {
-      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
-        tag: ValueTag.Number,
-        value: 5,
-      });
-    });
-
     const unsubscribe = controller.subscribeViewport(
       "Sheet1",
       { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
       () => {},
     );
 
-    viewportEvalView.emit([
-      {
-        sheetName: "Sheet1",
-        address: "A1",
-        value: { tag: ValueTag.Number, value: 8 },
-        flags: 0,
-        version: 2,
-        styleId: "style-live",
-      },
-    ]);
-    stylesView.emit([
-      {
-        styleId: "style-live",
-        styleJson: {
-          fill: { backgroundColor: "#c9daf8" },
-        },
-      },
-    ]);
+    workbookView.emit({
+      headRevision: 2,
+      calculatedRevision: 2,
+    });
 
     await vi.waitFor(() => {
-      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+      const snapshot = controller.handle.viewportStore.getCell("Sheet1", "A1");
+      expect(snapshot.value).toEqual({
         tag: ValueTag.Number,
         value: 8,
       });
-      expect(controller.handle.viewportStore.getCellStyle("style-live")).toMatchObject({
+      expect(controller.handle.viewportStore.getCellStyle(snapshot.styleId)).toMatchObject({
         fill: { backgroundColor: "#c9daf8" },
       });
     });
@@ -516,37 +483,24 @@ describe("createWorkerRuntimeSessionController", () => {
     controller.dispose();
   });
 
-  it("does not let stale remote cell_eval overwrite a newer local formula result", async () => {
+  it("does not subscribe render viewports directly to Zero tile queries", async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),
     });
     const workbookView = createMockZeroView<unknown>({
-      headRevision: 2,
-      calculatedRevision: 1,
+      headRevision: 0,
+      calculatedRevision: 0,
     });
-    const stylesView = createMockZeroView<readonly unknown[]>([]);
-    const formatsView = createMockZeroView<readonly unknown[]>([]);
-    const initialSelectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
-    const initialSelectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
-    const initialSelectedRowTileView = createMockZeroView<readonly unknown[]>([]);
-    const initialSelectedColumnTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedSourceTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedEvalTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedRowTileView = createMockZeroView<readonly unknown[]>([]);
-    const selectedColumnTileView = createMockZeroView<readonly unknown[]>([]);
-    const zero = createSequencedZeroViews(
-      workbookView,
-      stylesView,
-      formatsView,
-      initialSelectedSourceTileView,
-      initialSelectedEvalTileView,
-      initialSelectedRowTileView,
-      initialSelectedColumnTileView,
-      selectedSourceTileView,
-      selectedEvalTileView,
-      selectedRowTileView,
-      selectedColumnTileView,
-    );
+    let materializeCount = 0;
+    const zero = {
+      materialize() {
+        materializeCount += 1;
+        if (materializeCount > 1) {
+          throw new Error("Unexpected Zero tile materialize call");
+        }
+        return workbookView.zero.materialize();
+      },
+    };
 
     const controller = await createWorkerRuntimeSessionController(
       {
@@ -555,7 +509,7 @@ describe("createWorkerRuntimeSessionController", () => {
         persistState: false,
         initialSelection: { sheetName: "Sheet1", address: "A1" },
         createWorker: () => createMockWorkerPort(runtime),
-        zero: zero.zero,
+        zero,
         fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
       },
       {
@@ -567,63 +521,26 @@ describe("createWorkerRuntimeSessionController", () => {
       },
     );
 
-    await controller.invoke("setCellValue", "Sheet1", "A1", "hello");
-    await controller.invoke("setCellFormula", "Sheet1", "A2", 'A1="HELLO"');
-    await controller.setSelection({ sheetName: "Sheet1", address: "A2" });
-    await expect(
-      controller.setSelection({ sheetName: "Sheet1", address: "A2" }),
-    ).resolves.toBeUndefined();
+    expect(materializeCount).toBe(1);
+
+    const unsubscribe = controller.subscribeViewport(
+      "Sheet1",
+      { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
+      () => {},
+    );
+
+    await controller.invoke("setCellValue", "Sheet1", "A1", 12);
 
     await vi.waitFor(() => {
-      expect(controller.handle.viewportStore.getCell("Sheet1", "A2").value).toEqual({
-        tag: ValueTag.Boolean,
-        value: true,
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+        tag: ValueTag.Number,
+        value: 12,
       });
     });
 
-    selectedSourceTileView.emit([
-      {
-        sheetName: "Sheet1",
-        address: "A2",
-        formula: 'A1="HELLO"',
-      },
-    ]);
-    selectedEvalTileView.emit([
-      {
-        sheetName: "Sheet1",
-        address: "A2",
-        value: { tag: ValueTag.Boolean, value: false },
-        flags: 0,
-        version: 1,
-      },
-    ]);
+    expect(materializeCount).toBe(1);
 
-    expect(controller.handle.viewportStore.getCell("Sheet1", "A2").value).toEqual({
-      tag: ValueTag.Boolean,
-      value: true,
-    });
-
-    selectedEvalTileView.emit([
-      {
-        sheetName: "Sheet1",
-        address: "A2",
-        value: { tag: ValueTag.Boolean, value: true },
-        flags: 0,
-        version: 2,
-      },
-    ]);
-    workbookView.emit({
-      headRevision: 2,
-      calculatedRevision: 2,
-    });
-
-    await vi.waitFor(() => {
-      expect(controller.handle.viewportStore.getCell("Sheet1", "A2").value).toEqual({
-        tag: ValueTag.Boolean,
-        value: true,
-      });
-    });
-
+    unsubscribe();
     controller.dispose();
   });
 });

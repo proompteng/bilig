@@ -6,6 +6,7 @@ import {
   createOpfsWorkbookLocalStoreFactory,
   type WorkbookLocalStore,
   type WorkbookLocalStoreFactory,
+  WorkbookLocalStoreLockedError,
   type WorkbookStoredState,
 } from "@bilig/storage-browser";
 import {
@@ -157,14 +158,23 @@ export class WorkbookWorkerRuntime {
     let requiresAuthoritativeHydrate = false;
     let restoredState: WorkbookStoredState | null = null;
     if (options.persistState) {
-      this.localStore = await this.localStoreFactory.open(options.documentId);
-      restoredState = await this.localStore.loadState();
-      if (restoredState) {
-        restoredFromPersistence = true;
-        this.authoritativeRevision = restoredState.authoritativeRevision;
-        this.appliedPendingLocalSeq = restoredState.appliedPendingLocalSeq;
+      try {
+        this.localStore = await this.localStoreFactory.open(options.documentId);
+        restoredState = await this.localStore.loadState();
+        if (restoredState) {
+          restoredFromPersistence = true;
+          this.authoritativeRevision = restoredState.authoritativeRevision;
+          this.appliedPendingLocalSeq = restoredState.appliedPendingLocalSeq;
+        }
+      } catch (error) {
+        if (!(error instanceof WorkbookLocalStoreLockedError)) {
+          throw error;
+        }
+        this.localStore = null;
       }
-      const persistedPendingMutations = await this.localStore.listPendingMutations();
+      const persistedPendingMutations = this.localStore
+        ? await this.localStore.listPendingMutations()
+        : [];
       if (persistedPendingMutations.length > 0) {
         this.pendingMutations = persistedPendingMutations.flatMap((mutation) =>
           isPendingWorkbookMutation(mutation) ? [mutation] : [],
@@ -545,6 +555,10 @@ export class WorkbookWorkerRuntime {
     return this.authoritativeEngine;
   }
 
+  private canPersistState(): boolean {
+    return Boolean(this.bootstrapOptions?.persistState && this.localStore);
+  }
+
   private listSheetNames(): string[] {
     return [...this.requireEngine().workbook.sheetsByName.values()]
       .toSorted((left, right) => left.order - right.order)
@@ -605,12 +619,15 @@ export class WorkbookWorkerRuntime {
   }
 
   private async persistStateNow(): Promise<void> {
+    if (!this.canPersistState()) {
+      return;
+    }
     this.persistQueued = true;
     await this.flushPersistState();
   }
 
   private async flushPersistState(): Promise<void> {
-    if (!this.persistQueued || !this.bootstrapOptions?.persistState || !this.authoritativeEngine) {
+    if (!this.persistQueued || !this.canPersistState() || !this.authoritativeEngine) {
       return;
     }
     if (this.persistInFlight) {
@@ -628,9 +645,11 @@ export class WorkbookWorkerRuntime {
       appliedPendingLocalSeq: 0,
     };
     this.persistQueued = false;
-    const savePromise =
-      this.localStore?.saveState(persisted) ??
-      Promise.reject(new Error("Workbook local store is not available"));
+    const localStore = this.localStore;
+    if (!localStore) {
+      return;
+    }
+    const savePromise = localStore.saveState(persisted);
     this.persistInFlight = savePromise;
     try {
       await savePromise;

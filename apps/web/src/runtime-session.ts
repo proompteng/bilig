@@ -12,7 +12,10 @@ import type {
   WorkbookWorkerStateSnapshot,
 } from "./worker-runtime.js";
 import { ProjectedViewportStore } from "./projected-viewport-store.js";
-import { ZeroWorkbookLiveSync, type WorkbookRevisionState } from "./runtime-zero-live.js";
+import {
+  ZeroWorkbookRevisionSync,
+  type WorkbookRevisionState,
+} from "./runtime-zero-revision-sync.js";
 
 export interface WorkerHandle {
   readonly viewportStore: ProjectedViewportStore;
@@ -267,19 +270,13 @@ export async function createWorkerRuntimeSessionController(
   let rebaseQueue = Promise.resolve();
   let selectionViewportCleanup = EMPTY_UNSUBSCRIBE;
   const liveSync = input.zero
-    ? new ZeroWorkbookLiveSync({
+    ? new ZeroWorkbookRevisionSync({
         zero: input.zero,
         documentId: input.documentId,
-        viewportStore,
         onRevisionState(revisionState) {
           pendingRevisionState = revisionState;
           if (bootstrapped) {
             queueAuthoritativeRebase(revisionState);
-          }
-        },
-        onError(message) {
-          if (!disposed) {
-            callbacks.onError(message);
           }
         },
       })
@@ -296,13 +293,7 @@ export async function createWorkerRuntimeSessionController(
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
   ): (() => void) => {
-    const unsubscribeWorker = viewportStore.subscribeViewport(sheetName, viewport, listener);
-    const unsubscribeLive =
-      liveSync?.subscribeViewport(sheetName, viewport, listener) ?? EMPTY_UNSUBSCRIBE;
-    return () => {
-      unsubscribeLive();
-      unsubscribeWorker();
-    };
+    return viewportStore.subscribeViewport(sheetName, viewport, listener);
   };
 
   const updateSelectionViewport = (selection: WorkerRuntimeSelection): void => {
