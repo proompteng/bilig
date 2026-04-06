@@ -41,6 +41,8 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@bilig/agent-api": "workspace:*",
+    "@bilig/core": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "xlsx": "^0.18.5"
   },

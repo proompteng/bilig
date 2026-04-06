@@ -17,6 +17,7 @@
     "@bilig/binary-protocol": "workspace:*",
     "@bilig/contracts": "workspace:*",
     "@bilig/core": "workspace:*",
+    "@bilig/excel-import": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/grid": "workspace:*",
     "@bilig/protocol": "workspace:*",

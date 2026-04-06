@@ -6,6 +6,12 @@
   },
   "references": [
     {
+      "path": "../agent-api"
+    },
+    {
+      "path": "../core"
+    },
+    {
       "path": "../protocol"
     }
   ],

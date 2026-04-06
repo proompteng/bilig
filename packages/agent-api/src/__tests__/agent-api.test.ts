@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CSV_CONTENT_TYPE,
   decodeAgentFrame,
   decodeStdioMessages,
   encodeAgentFrame,
@@ -62,6 +63,21 @@ describe("agent api", () => {
       },
     };
     expect(decodeAgentFrame(encodeAgentFrame(requestFrame))).toEqual(requestFrame);
+
+    const csvRequestFrame = {
+      kind: "request" as const,
+      request: {
+        kind: "loadWorkbookFile" as const,
+        id: "upload-2",
+        replicaId: "agent-local",
+        openMode: "replace" as const,
+        documentId: "doc-1",
+        fileName: "report.csv",
+        contentType: CSV_CONTENT_TYPE,
+        bytesBase64: "QUJD",
+      },
+    };
+    expect(decodeAgentFrame(encodeAgentFrame(csvRequestFrame))).toEqual(csvRequestFrame);
 
     const responseFrame = {
       kind: "response" as const,

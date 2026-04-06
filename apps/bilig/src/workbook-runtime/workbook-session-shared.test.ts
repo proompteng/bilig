@@ -1,6 +1,6 @@
 import type { AgentFrame } from "@bilig/agent-api";
 import { describe, expect, it, vi } from "vitest";
-import { XLSX_CONTENT_TYPE } from "@bilig/agent-api";
+import { CSV_CONTENT_TYPE, XLSX_CONTENT_TYPE } from "@bilig/agent-api";
 import * as XLSX from "xlsx";
 import {
   createWorkbookLoadOptions,
@@ -68,6 +68,49 @@ describe("workbook-session-shared", () => {
         sessionId: expect.stringContaining(":replica-1"),
         serverUrl: "http://127.0.0.1:4321",
       }),
+    );
+  });
+
+  it("supports csv imports through the shared workbook load path", async () => {
+    const publishImportedSnapshot = vi.fn();
+
+    const response = await loadWorkbookIntoRuntime(
+      {
+        kind: "loadWorkbookFile",
+        id: "load-csv-1",
+        replicaId: "replica-1",
+        fileName: "tiny.csv",
+        contentType: CSV_CONTENT_TYPE,
+        openMode: "create",
+        bytesBase64: Buffer.from("Label,Value\nalpha,12").toString("base64"),
+      },
+      {
+        serverUrl: "http://127.0.0.1:4321",
+      },
+      {
+        registerPreparedSession: vi.fn(),
+        publishImportedSnapshot,
+      },
+    );
+
+    expect(response).toEqual(
+      expect.objectContaining({
+        kind: "workbookLoaded",
+        id: "load-csv-1",
+        documentId: expect.stringMatching(/^csv:/),
+        sheetNames: ["tiny"],
+      }),
+    );
+    expect(publishImportedSnapshot).toHaveBeenCalledWith(
+      expect.stringMatching(/^csv:/),
+      expect.objectContaining({
+        sheets: [
+          expect.objectContaining({
+            name: "tiny",
+          }),
+        ],
+      }),
+      expect.any(Object),
     );
   });
 

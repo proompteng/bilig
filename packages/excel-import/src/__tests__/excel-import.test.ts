@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 
-import { importXlsx } from "../index.js";
+import { importCsv, importWorkbookFile, importXlsx } from "../index.js";
+import { CSV_CONTENT_TYPE } from "@bilig/agent-api";
 
 function buildWorkbook(): Uint8Array {
   const workbook = XLSX.utils.book_new();
@@ -74,5 +75,67 @@ describe("excel import", () => {
       "Merged cells on Sheet1 were ignored during XLSX import.",
       "Cell comments were ignored during XLSX import.",
     ]);
+    expect(imported.preview.workbookName).toBe("Quarterly Report");
+    expect(imported.preview.sheetCount).toBe(2);
+    expect(imported.preview.sheets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Sheet1",
+          rowCount: 2,
+          columnCount: 3,
+          nonEmptyCellCount: 4,
+          previewRows: [
+            ["1", "2", "=A1+B1"],
+            ["3", "", ""],
+          ],
+        }),
+      ]),
+    );
+  });
+
+  it("imports csv files into a single-sheet workbook preview", () => {
+    const imported = importCsv("Name,Value\nalpha,12\nbeta,=A2", "metrics.csv");
+
+    expect(imported.workbookName).toBe("metrics");
+    expect(imported.sheetNames).toEqual(["metrics"]);
+    expect(imported.snapshot.sheets[0]).toMatchObject({
+      name: "metrics",
+      cells: [
+        { address: "A1", value: "Name" },
+        { address: "B1", value: "Value" },
+        { address: "A2", value: "alpha" },
+        { address: "B2", value: 12 },
+        { address: "A3", value: "beta" },
+        { address: "B3", formula: "A2" },
+      ],
+    });
+    expect(imported.preview).toMatchObject({
+      workbookName: "metrics",
+      sheetCount: 1,
+      sheets: [
+        {
+          name: "metrics",
+          rowCount: 3,
+          columnCount: 2,
+          nonEmptyCellCount: 6,
+          previewRows: [
+            ["Name", "Value"],
+            ["alpha", "12"],
+            ["beta", "=A2"],
+          ],
+        },
+      ],
+    });
+  });
+
+  it("dispatches workbook import by content type", () => {
+    const imported = importWorkbookFile(
+      new TextEncoder().encode("A,B\n1,2"),
+      "dispatch.csv",
+      CSV_CONTENT_TYPE,
+    );
+
+    expect(imported.workbookName).toBe("dispatch");
+    expect(imported.sheetNames).toEqual(["dispatch"]);
   });
 });

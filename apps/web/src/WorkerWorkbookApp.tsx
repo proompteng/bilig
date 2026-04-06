@@ -4,6 +4,7 @@ import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
 import { parseSelectionTarget, type ZeroConnectionState } from "./worker-workbook-app-model.js";
+import { useWorkbookImportPane } from "./use-workbook-import-pane.js";
 import { useWorkerWorkbookAppState } from "./use-worker-workbook-app-state.js";
 
 export function WorkerWorkbookApp(props: {
@@ -37,6 +38,10 @@ function WorkerWorkbookAppInner({
   zero: ZeroClient;
 }) {
   const app = useWorkerWorkbookAppState({ runtimeConfig, connectionState, zero });
+  const { importPanel, importToggle } = useWorkbookImportPane({
+    currentDocumentId: runtimeConfig.documentId,
+    enabled: true,
+  });
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
@@ -110,7 +115,12 @@ function WorkerWorkbookAppInner({
               selectionStatus={app.selectionStatus}
               sheetName={app.selection.sheetName}
               sheetNames={app.sheetNames}
-              headerStatus={app.headerStatus}
+              headerStatus={
+                <>
+                  {importToggle}
+                  {app.headerStatus}
+                </>
+              }
               restoreViewportTarget={app.restoreViewportTarget}
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
@@ -121,6 +131,7 @@ function WorkerWorkbookAppInner({
         {app.versionsPanel}
         {app.viewsPanel}
         {app.changesPanel}
+        {importPanel}
       </div>
     </div>
   );

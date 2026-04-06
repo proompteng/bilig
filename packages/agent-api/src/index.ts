@@ -18,6 +18,9 @@ const textDecoder = new TextDecoder();
 
 export const XLSX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+export const CSV_CONTENT_TYPE = "text/csv";
+export const WORKBOOK_IMPORT_CONTENT_TYPES = [XLSX_CONTENT_TYPE, CSV_CONTENT_TYPE] as const;
+export type WorkbookImportContentType = (typeof WORKBOOK_IMPORT_CONTENT_TYPES)[number];
 export type WorkbookFileOpenMode = "create" | "replace";
 
 export interface LoadWorkbookFileRequest {
@@ -27,7 +30,7 @@ export interface LoadWorkbookFileRequest {
   openMode: WorkbookFileOpenMode;
   documentId?: string;
   fileName: string;
-  contentType: typeof XLSX_CONTENT_TYPE;
+  contentType: WorkbookImportContentType;
   bytesBase64: string;
 }
 
@@ -152,6 +155,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isWorkbookImportContentType(value: unknown): value is WorkbookImportContentType {
+  return value === XLSX_CONTENT_TYPE || value === CSV_CONTENT_TYPE;
+}
+
 function isLoadWorkbookFileRequest(value: unknown): value is LoadWorkbookFileRequest {
   return (
     isRecord(value) &&
@@ -161,7 +168,7 @@ function isLoadWorkbookFileRequest(value: unknown): value is LoadWorkbookFileReq
     (value["openMode"] === "create" || value["openMode"] === "replace") &&
     (value["documentId"] === undefined || typeof value["documentId"] === "string") &&
     typeof value["fileName"] === "string" &&
-    value["contentType"] === XLSX_CONTENT_TYPE &&
+    isWorkbookImportContentType(value["contentType"]) &&
     typeof value["bytesBase64"] === "string"
   );
 }

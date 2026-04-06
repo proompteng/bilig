@@ -970,6 +970,9 @@ Partially implemented.
 
 **Already implemented**
 
+- the workbook shell now has a real local import staging dialog for CSV/XLSX instead of only raw runtime load plumbing
+- staged import preview now parses locally in a dedicated browser worker and shows workbook/sheet shape, warnings, and sample cells before finalize
+- import finalize now goes through the authoritative runtime frame path for both CSV and XLSX, including replace-current and create-new workbook flows
 - the right-rail assistant now has workbook-comprehension quick actions instead of only generic prompts
 - the monolith agent runtime now exposes warm local workbook search across sheet names, addresses, formulas, inputs, and displayed values
 - the monolith agent runtime now exposes workbook-wide formula issue scans for broken formulas, cycles, and JS-only fallback formulas
@@ -992,7 +995,6 @@ Partially implemented.
 
 **Key epics**
 
-- local CSV/XLSX staging + preview
 - broken-formula and dependency inspector
 - semantic workbook search/index
 - scenario scratchpads / temporary branches

@@ -1,0 +1,287 @@
+import { Upload } from "lucide-react";
+import type { WorkbookImportContentType } from "@bilig/agent-api";
+import type { ImportedWorkbookPreview } from "@bilig/excel-import";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatImportType(contentType: WorkbookImportContentType): string {
+  return contentType === "text/csv" ? "CSV" : "XLSX";
+}
+
+function createPreviewRowDescriptors(rows: readonly (readonly string[])[]): readonly {
+  key: string;
+  cells: readonly {
+    key: string;
+    value: string;
+  }[];
+}[] {
+  const rowCounts = new Map<string, number>();
+  return rows.map((row) => {
+    const rowBaseKey = JSON.stringify(row);
+    const rowOccurrence = (rowCounts.get(rowBaseKey) ?? 0) + 1;
+    rowCounts.set(rowBaseKey, rowOccurrence);
+
+    const cellCounts = new Map<string, number>();
+    const cells = row.map((value) => {
+      const cellBaseKey = value || "__blank__";
+      const cellOccurrence = (cellCounts.get(cellBaseKey) ?? 0) + 1;
+      cellCounts.set(cellBaseKey, cellOccurrence);
+      return {
+        key: `${cellBaseKey}:${cellOccurrence}`,
+        value,
+      };
+    });
+
+    return {
+      key: `${rowBaseKey}:${rowOccurrence}`,
+      cells,
+    };
+  });
+}
+
+function WorkbookImportSheetPreview(props: {
+  readonly preview: ImportedWorkbookPreview["sheets"][number];
+}) {
+  const rows = createPreviewRowDescriptors(props.preview.previewRows);
+
+  return (
+    <section className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-4 shadow-[var(--wb-shadow-sm)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-[var(--wb-text)]">
+            {props.preview.name}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--wb-text-subtle)]">
+            {props.preview.rowCount} rows · {props.preview.columnCount} columns ·{" "}
+            {props.preview.nonEmptyCellCount} populated cells
+          </div>
+        </div>
+        <span className="rounded-full bg-[var(--wb-accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
+          Preview
+        </span>
+      </div>
+      {props.preview.previewRows.length > 0 ? (
+        <div className="mt-3 overflow-hidden rounded-[var(--wb-radius-control)] border border-[var(--wb-border)]">
+          <table className="min-w-full border-collapse text-left text-[11px]">
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={`${props.preview.name}:${row.key}`}
+                  className="border-t border-[var(--wb-border)] first:border-t-0"
+                >
+                  {row.cells.map((cell) => (
+                    <td
+                      key={`${props.preview.name}:${row.key}:${cell.key}`}
+                      className="max-w-[10rem] truncate border-l border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2 py-1.5 align-top first:border-l-0"
+                      title={cell.value}
+                    >
+                      {cell.value || <span className="text-[var(--wb-text-subtle)]">(blank)</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-4 text-[12px] text-[var(--wb-text-subtle)]">
+          This sheet is empty.
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function WorkbookImportPanel(props: {
+  readonly isOpen: boolean;
+  readonly enabled: boolean;
+  readonly currentDocumentId: string;
+  readonly stagedPreview: ImportedWorkbookPreview | null;
+  readonly error: string | null;
+  readonly isPreviewing: boolean;
+  readonly isImporting: boolean;
+  readonly onClose: () => void;
+  readonly onFileSelected: (file: File | null) => void;
+  readonly onImportAsNew: () => void;
+  readonly onReplaceCurrent: () => void;
+}) {
+  if (!props.isOpen) {
+    return null;
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(15,23,42,0.18)] p-4"
+      data-testid="workbook-import-panel"
+      id="workbook-import-panel"
+    >
+      <div
+        aria-label="Workbook import staging"
+        aria-modal="true"
+        className="flex max-h-[calc(100vh-3rem)] w-full max-w-[72rem] flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
+        role="dialog"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-[14px] font-semibold text-[var(--wb-text)]">Import workbook</h2>
+            <p className="text-[11px] text-[var(--wb-text-subtle)]">
+              Parse CSV or XLSX locally, inspect the staged result, then finalize through the
+              authoritative runtime.
+            </p>
+          </div>
+          <button
+            aria-label="Close workbook import"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+            type="button"
+            onClick={props.onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[20rem,minmax(0,1fr)]">
+          <div className="flex flex-col gap-4 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-5 lg:border-b-0 lg:border-r">
+            <label className="flex flex-col gap-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--wb-text-subtle)]">
+                Source file
+              </span>
+              <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4 shadow-[var(--wb-shadow-sm)]">
+                <div className="flex items-center gap-3 text-[12px] text-[var(--wb-text-muted)]">
+                  <Upload className="h-4 w-4" />
+                  <span>Select a local `.csv` or `.xlsx` file</span>
+                </div>
+                <input
+                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="mt-3 block w-full text-[12px] text-[var(--wb-text)] file:mr-3 file:rounded-[var(--wb-radius-control)] file:border file:border-[var(--wb-border)] file:bg-[var(--wb-surface-subtle)] file:px-3 file:py-2 file:text-[12px] file:font-medium file:text-[var(--wb-text)]"
+                  data-testid="workbook-import-file"
+                  disabled={!props.enabled || props.isPreviewing || props.isImporting}
+                  type="file"
+                  onChange={(event) => {
+                    props.onFileSelected(event.currentTarget.files?.[0] ?? null);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </div>
+            </label>
+
+            {props.error ? (
+              <div className="rounded-[var(--wb-radius-control)] border border-[#f0c2c2] bg-[#fff7f7] px-3 py-3 text-[12px] text-[#991b1b]">
+                {props.error}
+              </div>
+            ) : null}
+
+            {props.isPreviewing ? (
+              <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-3 text-[12px] text-[var(--wb-accent)]">
+                Staging preview locally…
+              </div>
+            ) : null}
+
+            {props.stagedPreview ? (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4 shadow-[var(--wb-shadow-sm)]">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-[var(--wb-accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
+                      {formatImportType(props.stagedPreview.contentType)}
+                    </span>
+                    <span className="truncate text-[13px] font-semibold text-[var(--wb-text)]">
+                      {props.stagedPreview.fileName}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-[12px] text-[var(--wb-text-muted)]">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                        Workbook
+                      </div>
+                      <div className="mt-1 text-[13px] text-[var(--wb-text)]">
+                        {props.stagedPreview.workbookName}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                        Shape
+                      </div>
+                      <div className="mt-1">
+                        {props.stagedPreview.sheetCount} sheets ·{" "}
+                        {formatFileSize(props.stagedPreview.fileSizeBytes)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                        Target
+                      </div>
+                      <div className="mt-1 truncate">
+                        Current workbook: {props.currentDocumentId}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {props.stagedPreview.warnings.length > 0 ? (
+                  <div className="rounded-[var(--wb-radius-control)] border border-[#f5d38a] bg-[#fff8e8] px-4 py-3 text-[12px] text-[#8a5a00]">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.04em]">
+                      Import notes
+                    </div>
+                    <ul className="mt-2 list-disc space-y-1 pl-4">
+                      {props.stagedPreview.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div className="mt-auto flex flex-col gap-2">
+                  <button
+                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 text-[12px] font-semibold text-[var(--wb-accent)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-accent-soft)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="workbook-import-create"
+                    disabled={props.isImporting}
+                    type="button"
+                    onClick={props.onImportAsNew}
+                  >
+                    {props.isImporting ? "Importing…" : "Import as new workbook"}
+                  </button>
+                  <button
+                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[var(--wb-accent-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="workbook-import-replace"
+                    disabled={props.isImporting}
+                    type="button"
+                    onClick={props.onReplaceCurrent}
+                  >
+                    Replace current workbook
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-5 text-[12px] leading-6 text-[var(--wb-text-subtle)] shadow-[var(--wb-shadow-sm)]">
+                The file stays local for staging and preview first. Finalize only happens when you
+                explicitly import it into the authoritative workbook runtime.
+              </div>
+            )}
+          </div>
+
+          <div className="min-h-0 overflow-y-auto p-5">
+            {props.stagedPreview ? (
+              <div className="flex flex-col gap-4">
+                {props.stagedPreview.sheets.map((sheet) => (
+                  <WorkbookImportSheetPreview key={sheet.name} preview={sheet} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-6 py-10 text-center text-[13px] text-[var(--wb-text-subtle)]">
+                Choose a file to inspect sheet structure, populated cells, and a staged cell preview
+                before importing it.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

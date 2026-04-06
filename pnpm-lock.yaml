@@ -185,6 +185,9 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bilig/excel-import':
+        specifier: workspace:*
+        version: link:../../packages/excel-import
       '@bilig/formula':
         specifier: workspace:*
         version: link:../../packages/formula
@@ -336,6 +339,12 @@ importers:
 
   packages/excel-import:
     dependencies:
+      '@bilig/agent-api':
+        specifier: workspace:*
+        version: link:../agent-api
+      '@bilig/core':
+        specifier: workspace:*
+        version: link:../core
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
