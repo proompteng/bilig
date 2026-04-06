@@ -10,6 +10,7 @@ import type { CodexServerNotification, CodexTurn } from "./codex-app-server-type
 class FakeCodexTransport implements CodexAppServerTransport {
   private readonly listeners = new Set<(notification: CodexServerNotification) => void>();
   private turnCounter = 0;
+  lastThreadStartInput: Parameters<CodexAppServerTransport["threadStart"]>[0] | null = null;
 
   async ensureReady() {
     return {
@@ -27,7 +28,8 @@ class FakeCodexTransport implements CodexAppServerTransport {
     };
   }
 
-  async threadStart() {
+  async threadStart(input: Parameters<CodexAppServerTransport["threadStart"]>[0]) {
+    this.lastThreadStartInput = input;
     return {
       id: "thr-test",
       preview: "",
@@ -94,6 +96,49 @@ function createZeroSyncStub(): ZeroSyncService {
 }
 
 describe("workbook agent service", () => {
+  it("boots the Codex app-server transport with local workbook skills", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: {
+      current: CodexAppServerClientOptions | null;
+    } = { current: null };
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+        capturedOptions.current = options;
+        return fakeCodex;
+      },
+    });
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      expect(capturedOptions.current?.args).toEqual(["app-server"]);
+      expect(fakeCodex.lastThreadStartInput?.dynamicTools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining([
+          "bilig.read_selection",
+          "bilig.read_visible_range",
+          "bilig.inspect_cell",
+          "bilig.read_range",
+          "bilig.write_range",
+        ]),
+      );
+      expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("local workbook skills");
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
+        "bilig.read_selection",
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("streams assistant updates into the session timeline", async () => {
     const fakeCodex = new FakeCodexTransport();
     const service = createWorkbookAgentService(createZeroSyncStub(), {

@@ -91,6 +91,135 @@ function createBundle(
 }
 
 describe("workbook agent tools", () => {
+  it("reads the current browser selection through the attached workbook context", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 5,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-selection",
+        tool: "bilig.read_selection",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"startAddress": "A1"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"endAddress": "A1"');
+  });
+
+  it("reads the visible viewport through the attached browser context", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 1,
+            colStart: 0,
+            colEnd: 1,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-visible",
+        tool: "bilig.read_visible_range",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"startAddress": "A1"');
+    expect(textItem && "text" in textItem ? textItem.text : "").toContain('"endAddress": "B2"');
+  });
+
+  it("inspects one cell with formula lineage and runtime metadata", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "B1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 5,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-inspect",
+        tool: "bilig.inspect_cell",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const text = textItem && "text" in textItem ? textItem.text : "";
+    expect(text).toContain('"address": "B1"');
+    expect(text).toContain('"formula": "=SUM(A1:A1)"');
+    expect(text).toContain('"directPrecedents": [');
+    expect(text).toContain("Sheet1!A1");
+  });
+
   it("reads workbook ranges through the authoritative runtime", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

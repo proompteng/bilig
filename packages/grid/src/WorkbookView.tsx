@@ -190,7 +190,10 @@ export function WorkbookView({
           />
         </div>
         {sideRail ? (
-          <aside className="flex h-full w-[23rem] shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]">
+          <aside
+            className="flex h-full w-[23rem] shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]"
+            data-testid="workbook-side-rail"
+          >
             {sideRail}
           </aside>
         ) : null}

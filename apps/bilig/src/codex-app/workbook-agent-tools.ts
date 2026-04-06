@@ -26,7 +26,8 @@ import type {
   JsonValue,
 } from "./codex-app-server-types.js";
 
-const MAX_TOOL_RANGE_CELLS = 400;
+const MAX_MUTATION_RANGE_CELLS = 400;
+const MAX_READ_RANGE_CELLS = 4000;
 
 const writeCellInputSchema = z.union([
   z.string(),
@@ -45,6 +46,11 @@ const readRangeToolArgsSchema = z.object({
   sheetName: z.string().min(1),
   startAddress: z.string().min(1),
   endAddress: z.string().min(1),
+});
+
+const inspectCellToolArgsSchema = z.object({
+  sheetName: z.string().min(1).optional(),
+  address: z.string().min(1).optional(),
 });
 
 const writeRangeToolArgsSchema = z.object({
@@ -248,13 +254,50 @@ function countRangeCells(range: CellRangeRef): number {
   return (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
 }
 
-function ensureRangeLimit(range: CellRangeRef): void {
+function ensureRangeLimit(range: CellRangeRef, limit: number): void {
   const count = countRangeCells(range);
-  if (count > MAX_TOOL_RANGE_CELLS) {
+  if (count > limit) {
     throw new Error(
-      `Range ${range.sheetName}!${range.startAddress}:${range.endAddress} has ${String(count)} cells; tool limit is ${String(MAX_TOOL_RANGE_CELLS)} cells per call`,
+      `Range ${range.sheetName}!${range.startAddress}:${range.endAddress} has ${String(count)} cells; tool limit is ${String(limit)} cells per call`,
     );
   }
+}
+
+function resolveSelectionRange(context: WorkbookAgentUiContext | null): CellRangeRef {
+  if (!context) {
+    throw new Error("No browser workbook context is attached to this chat session");
+  }
+  return {
+    sheetName: context.selection.sheetName,
+    startAddress: context.selection.address,
+    endAddress: context.selection.address,
+  };
+}
+
+function resolveVisibleRange(context: WorkbookAgentUiContext | null): CellRangeRef {
+  if (!context) {
+    throw new Error("No browser workbook context is attached to this chat session");
+  }
+  return viewportToRange(context.selection.sheetName, context.viewport);
+}
+
+function resolveInspectionTarget(
+  context: WorkbookAgentUiContext | null,
+  args: z.infer<typeof inspectCellToolArgsSchema>,
+): {
+  sheetName: string;
+  address: string;
+} {
+  if (args.sheetName && args.address) {
+    return {
+      sheetName: args.sheetName,
+      address: args.address,
+    };
+  }
+  if (!context) {
+    throw new Error("sheetName and address are required when no browser workbook context exists");
+  }
+  return context.selection;
 }
 
 function viewportToRange(sheetName: string, viewport: WorkbookViewport): CellRangeRef {
@@ -299,6 +342,65 @@ function workbookToolContextText(context: WorkbookAgentUiContext | null): string
   });
 }
 
+async function inspectWorkbookRange(
+  context: WorkbookAgentToolContext,
+  range: CellRangeRef,
+): Promise<CodexDynamicToolCallResult> {
+  const normalizedRange = normalizeRange(range);
+  ensureRangeLimit(normalizedRange, MAX_READ_RANGE_CELLS);
+  const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+    const rows: JsonValue[] = [];
+    for (let row = normalizedRange.startRow; row <= normalizedRange.endRow; row += 1) {
+      const rowEntries: JsonValue[] = [];
+      for (let col = normalizedRange.startCol; col <= normalizedRange.endCol; col += 1) {
+        const cell = runtime.engine.getCell(normalizedRange.sheetName, formatAddress(row, col));
+        rowEntries.push({
+          address: cell.address,
+          value: serializeCellValue(cell.value),
+          ...(cell.formula !== undefined ? { formula: `=${cell.formula}` } : {}),
+          ...(cell.format !== undefined ? { format: cell.format } : {}),
+        });
+      }
+      rows.push(rowEntries);
+    }
+    return {
+      range: {
+        sheetName: normalizedRange.sheetName,
+        startAddress: normalizedRange.startAddress,
+        endAddress: normalizedRange.endAddress,
+      },
+      rows,
+    };
+  });
+  return textToolResult(stringifyJson(result));
+}
+
+async function inspectWorkbookCell(
+  context: WorkbookAgentToolContext,
+  target: {
+    sheetName: string;
+    address: string;
+  },
+): Promise<CodexDynamicToolCallResult> {
+  const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+    const cell = runtime.engine.explainCell(target.sheetName, target.address);
+    return {
+      sheetName: cell.sheetName,
+      address: cell.address,
+      value: serializeCellValue(cell.value),
+      formula: cell.formula !== undefined ? `=${cell.formula}` : null,
+      format: cell.format ?? null,
+      version: cell.version,
+      inCycle: cell.inCycle,
+      mode: cell.mode ?? null,
+      topoRank: cell.topoRank ?? null,
+      directPrecedents: [...cell.directPrecedents],
+      directDependents: [...cell.directDependents],
+    };
+  });
+  return textToolResult(stringifyJson(result));
+}
+
 export interface WorkbookAgentToolContext {
   readonly documentId: string;
   readonly session: SessionIdentity;
@@ -341,6 +443,38 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
           sheetName: { type: "string" },
           startAddress: { type: "string" },
           endAddress: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "bilig.read_selection",
+      description: "Read the currently selected cell from the attached browser workbook context.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+    },
+    {
+      name: "bilig.read_visible_range",
+      description:
+        "Read the currently visible viewport range from the attached browser workbook context.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+    },
+    {
+      name: "bilig.inspect_cell",
+      description:
+        "Explain one cell, including its current value, formula, version, cycle status, and direct precedents/dependents. Defaults to the current selection when no address is provided.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sheetName: { type: "string" },
+          address: { type: "string" },
         },
       },
     },
@@ -634,40 +768,21 @@ export async function handleWorkbookAgentToolCall(
       }
       case "bilig.read_range": {
         const args = readRangeToolArgsSchema.parse(request.arguments);
-        const range = normalizeRange({
+        return await inspectWorkbookRange(context, {
           sheetName: args.sheetName,
           startAddress: args.startAddress,
           endAddress: args.endAddress,
         });
-        ensureRangeLimit(range);
-        const result = await context.zeroSyncService.inspectWorkbook(
-          context.documentId,
-          (runtime) => {
-            const rows: JsonValue[] = [];
-            for (let row = range.startRow; row <= range.endRow; row += 1) {
-              const rowEntries: JsonValue[] = [];
-              for (let col = range.startCol; col <= range.endCol; col += 1) {
-                const cell = runtime.engine.getCell(range.sheetName, formatAddress(row, col));
-                rowEntries.push({
-                  address: cell.address,
-                  value: serializeCellValue(cell.value),
-                  ...(cell.formula !== undefined ? { formula: `=${cell.formula}` } : {}),
-                  ...(cell.format !== undefined ? { format: cell.format } : {}),
-                });
-              }
-              rows.push(rowEntries);
-            }
-            return {
-              range: {
-                sheetName: range.sheetName,
-                startAddress: range.startAddress,
-                endAddress: range.endAddress,
-              },
-              rows,
-            };
-          },
-        );
-        return textToolResult(stringifyJson(result));
+      }
+      case "bilig.read_selection": {
+        return await inspectWorkbookRange(context, resolveSelectionRange(context.uiContext));
+      }
+      case "bilig.read_visible_range": {
+        return await inspectWorkbookRange(context, resolveVisibleRange(context.uiContext));
+      }
+      case "bilig.inspect_cell": {
+        const args = inspectCellToolArgsSchema.parse(request.arguments);
+        return await inspectWorkbookCell(context, resolveInspectionTarget(context.uiContext, args));
       }
       case "bilig.write_range": {
         const args = writeRangeToolArgsSchema.parse(request.arguments);
@@ -680,11 +795,14 @@ export async function handleWorkbookAgentToolCall(
           start.row + args.values.length - 1,
           start.col + maxWidth - 1,
         );
-        ensureRangeLimit({
-          sheetName: args.sheetName,
-          startAddress: args.startAddress,
-          endAddress,
-        });
+        ensureRangeLimit(
+          {
+            sheetName: args.sheetName,
+            startAddress: args.startAddress,
+            endAddress,
+          },
+          MAX_MUTATION_RANGE_CELLS,
+        );
         return await stageCommandResult(context, {
           kind: "writeRange",
           sheetName: args.sheetName,
@@ -713,7 +831,7 @@ export async function handleWorkbookAgentToolCall(
       }
       case "bilig.clear_range": {
         const args = clearRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.range);
+        ensureRangeLimit(args.range, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "clearRange",
           range: args.range,
@@ -721,7 +839,7 @@ export async function handleWorkbookAgentToolCall(
       }
       case "bilig.format_range": {
         const args = formatRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.range);
+        ensureRangeLimit(args.range, MAX_MUTATION_RANGE_CELLS);
         const formatCommand: Extract<WorkbookAgentCommand, { kind: "formatRange" }> = {
           kind: "formatRange",
           range: args.range,
@@ -736,8 +854,8 @@ export async function handleWorkbookAgentToolCall(
       }
       case "bilig.fill_range": {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.source);
-        ensureRangeLimit(args.target);
+        ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
+        ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "fillRange",
           source: args.source,
@@ -746,8 +864,8 @@ export async function handleWorkbookAgentToolCall(
       }
       case "bilig.copy_range": {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.source);
-        ensureRangeLimit(args.target);
+        ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
+        ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "copyRange",
           source: args.source,
@@ -756,8 +874,8 @@ export async function handleWorkbookAgentToolCall(
       }
       case "bilig.move_range": {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
-        ensureRangeLimit(args.source);
-        ensureRangeLimit(args.target);
+        ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
+        ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
           kind: "moveRange",
           source: args.source,

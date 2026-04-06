@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
+import { workbookAgentSkillDescriptors } from "@bilig/agent-api";
 import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
   WorkbookAgentPreviewSummary,
+  WorkbookAgentSkillFocus,
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
@@ -16,6 +18,61 @@ function contextLabel(context: WorkbookAgentUiContext | null): string {
     return "No selection context";
   }
   return `${context.selection.sheetName}!${context.selection.address}`;
+}
+
+function skillFocusClass(focus: WorkbookAgentSkillFocus): string {
+  switch (focus) {
+    case "read":
+      return "bg-[#e0f2fe] text-[#075985]";
+    case "analyze":
+      return "bg-[#ede9fe] text-[#5b21b6]";
+    case "edit":
+      return "bg-[#dcfce7] text-[#166534]";
+  }
+}
+
+function WorkbookAgentSkillStrip(props: { readonly onUseSkillPrompt: (prompt: string) => void }) {
+  return (
+    <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+          Local Skills
+        </div>
+        <div className="text-[10px] text-[var(--wb-text-subtle)]">
+          Monolith app-server + semantic workbook tools
+        </div>
+      </div>
+      <div className="mt-2 grid gap-2">
+        {workbookAgentSkillDescriptors.map((skill) => (
+          <button
+            key={skill.id}
+            className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2 text-left shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[var(--wb-accent-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+            type="button"
+            onClick={() => {
+              props.onUseSkillPrompt(skill.prompt);
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold text-[var(--wb-text)]">{skill.label}</div>
+                <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                  {skill.description}
+                </div>
+              </div>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em]",
+                  skillFocusClass(skill.focus),
+                )}
+              >
+                {skill.focus}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["toolStatus"] }) {
@@ -291,8 +348,10 @@ export function WorkbookAgentPanel(props: {
   readonly onInterrupt: () => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onSubmit: () => void;
+  readonly onUseSkillPrompt: (prompt: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -342,6 +401,16 @@ export function WorkbookAgentPanel(props: {
             />
           </div>
         ) : null}
+        <div className="mb-3">
+          <WorkbookAgentSkillStrip
+            onUseSkillPrompt={(prompt) => {
+              props.onUseSkillPrompt(prompt);
+              window.requestAnimationFrame(() => {
+                textareaRef.current?.focus();
+              });
+            }}
+          />
+        </div>
         {props.isLoading ? (
           <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-5 text-sm text-[var(--wb-text-subtle)]">
             Starting workbook assistant...
@@ -395,6 +464,7 @@ export function WorkbookAgentPanel(props: {
           id="workbook-agent-input"
           className="min-h-24 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
           data-testid="workbook-agent-input"
+          ref={textareaRef}
           placeholder="Ask the assistant to update this workbook..."
           value={props.draft}
           onChange={(event) => {

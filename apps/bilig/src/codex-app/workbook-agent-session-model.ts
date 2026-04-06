@@ -1,3 +1,4 @@
+import { renderWorkbookAgentSkillInstructions } from "@bilig/agent-api";
 import type { WorkbookAgentSessionSnapshot, WorkbookAgentTimelineEntry } from "@bilig/contracts";
 import { z } from "zod";
 import type { CodexThread, CodexThreadItem } from "./codex-app-server-types.js";
@@ -58,8 +59,9 @@ export function createWorkbookAgentBaseInstructions(): string {
   return [
     "You are the bilig workbook assistant embedded inside a spreadsheet product.",
     "Stay narrowly focused on inspecting and editing the active workbook.",
-    "Use the provided bilig.* dynamic tools for workbook work.",
+    "Use the provided bilig.* local workbook skills and dynamic tools for spreadsheet work.",
     "Do not use filesystem, shell, web, connector, or unrelated tools.",
+    renderWorkbookAgentSkillInstructions(),
   ].join(" ");
 }
 
@@ -67,6 +69,7 @@ export function createWorkbookAgentDeveloperInstructions(): string {
   return [
     "Before changing cells you have not inspected, read the relevant workbook range first.",
     "When the user refers to the current cell, selection, or visible area, call bilig.get_context.",
+    "Prefer bilig.read_selection, bilig.read_visible_range, and bilig.inspect_cell for context-native workbook analysis.",
     "All workbook writes must stage semantic preview bundles instead of applying immediately.",
     "Use the bundle-staging workbook tools to assemble one coherent preview per turn when the task is related.",
     "After staging workbook changes, summarize the preview and tell the user to review and apply it from the rail.",

@@ -141,6 +141,50 @@ afterEach(() => {
 });
 
 describe("workbook agent pane", () => {
+  it("shows local spreadsheet skills in the right rail and seeds the composer from a skill", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(createSnapshot()), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Local Skills");
+    const inspectSkill = [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Inspect Selection"),
+    );
+    expect(inspectSkill).toBeDefined();
+
+    await act(async () => {
+      inspectSkill?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    expect(input instanceof HTMLTextAreaElement ? input.value : "").toContain(
+      "Inspect the current cell selection",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("bootstraps the assistant session and streams assistant deltas into the rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
