@@ -41,7 +41,6 @@ interface BuildGridGpuSceneOptions {
   readonly getCellBounds: (col: number, row: number) => Rectangle | undefined;
   readonly gridSelection: GridSelection;
   readonly selectedCell: Item;
-  readonly fillPreviewRange?: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
   readonly selectionRange?: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
   readonly hoveredCell?: Item | null;
   readonly hoveredHeader?: HeaderSelection | null;
@@ -77,7 +76,6 @@ export function buildGridGpuScene({
   getCellBounds,
   gridSelection,
   selectedCell,
-  fillPreviewRange = null,
   selectionRange = null,
   hoveredCell = null,
   hoveredHeader = null,
@@ -187,23 +185,6 @@ export function buildGridGpuScene({
       hoveredCell,
       selectionRange,
       gridSelection,
-    });
-  }
-
-  if (fillPreviewRange) {
-    pushSelectionRects({
-      allowHandle: true,
-      borderRects,
-      fillColor: parseGpuColor("rgba(31, 122, 67, 0.04)"),
-      fillRects,
-      getCellBounds,
-      hostBounds,
-      outlineColor: SELECTION_OUTLINE_COLOR,
-      selectionRange: fillPreviewRange,
-      visibleMaxCol,
-      visibleMaxRow,
-      visibleMinCol,
-      visibleMinRow,
     });
   }
 

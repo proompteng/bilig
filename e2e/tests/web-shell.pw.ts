@@ -171,6 +171,29 @@ async function dragProductFillHandle(
   targetCol: number,
   targetRow: number,
 ) {
+  const { sourceX, sourceY, targetX, targetY } = await getProductFillHandleDragPoints(
+    page,
+    sourceCol,
+    sourceRow,
+    targetCol,
+    targetRow,
+  );
+
+  await page.mouse.move(sourceX, sourceY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, {
+    steps: 10,
+  });
+  await page.mouse.up();
+}
+
+async function getProductFillHandleDragPoints(
+  page: Parameters<typeof test>[0]["page"],
+  sourceCol: number,
+  sourceRow: number,
+  targetCol: number,
+  targetRow: number,
+) {
   const gridLocator = page.getByTestId("sheet-grid");
   await expect(gridLocator).toBeVisible();
   const grid = await gridLocator.boundingBox();
@@ -185,12 +208,12 @@ async function dragProductFillHandle(
   const sourceWidth = await getProductColumnWidth(page, sourceCol);
   const targetWidth = await getProductColumnWidth(page, targetCol);
 
-  await page.mouse.move(sourceLeft + sourceWidth - 3, sourceTop + PRODUCT_ROW_HEIGHT - 3);
-  await page.mouse.down();
-  await page.mouse.move(targetLeft + targetWidth - 3, targetTop + PRODUCT_ROW_HEIGHT - 3, {
-    steps: 10,
-  });
-  await page.mouse.up();
+  return {
+    sourceX: sourceLeft + sourceWidth - 3,
+    sourceY: sourceTop + PRODUCT_ROW_HEIGHT - 3,
+    targetX: targetLeft + targetWidth - 3,
+    targetY: targetTop + PRODUCT_ROW_HEIGHT - 3,
+  };
 }
 
 async function clickProductBodyOffset(
@@ -1603,6 +1626,45 @@ test("web app supports fill-handle propagation", async ({ page }) => {
   await dragProductFillHandle(page, 5, 5, 5, 7);
 
   await nameBox.fill("F8");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("7");
+  await expect(resolvedValue).toHaveText("7");
+});
+
+test("web app previews and fills rightward autofill like Sheets", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkbookReady(page);
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+  const selectionStatus = page.getByTestId("status-selection");
+  const fillPreview = page.locator("[data-grid-fill-preview='true']");
+
+  await nameBox.fill("F6");
+  await nameBox.press("Enter");
+  await formulaInput.fill("7");
+  await formulaInput.press("Enter");
+
+  const { sourceX, sourceY, targetX, targetY } = await getProductFillHandleDragPoints(
+    page,
+    5,
+    5,
+    7,
+    5,
+  );
+  await page.mouse.move(sourceX, sourceY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 10 });
+
+  await expect(fillPreview).toBeVisible();
+  await expect(fillPreview).toHaveCSS("border-top-style", "dashed");
+
+  await page.mouse.up();
+
+  await expect(selectionStatus).toContainText("!F6:H6");
+
+  await nameBox.fill("H6");
   await nameBox.press("Enter");
   await expect(formulaInput).toHaveValue("7");
   await expect(resolvedValue).toHaveText("7");

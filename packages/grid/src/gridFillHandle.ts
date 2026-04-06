@@ -30,16 +30,16 @@ export function resolveFillHandlePreviewRange(
   if (horizontalDelta >= verticalDelta) {
     if (rightDelta > 0) {
       return {
-        x: sourceLeft,
+        x: sourceRight + 1,
         y: sourceTop,
-        width: pointerCell[0] - sourceLeft + 1,
+        width: rightDelta,
         height: sourceRange.height,
       };
     }
     return {
       x: pointerCell[0],
       y: sourceTop,
-      width: sourceRight - pointerCell[0] + 1,
+      width: leftDelta,
       height: sourceRange.height,
     };
   }
@@ -47,16 +47,73 @@ export function resolveFillHandlePreviewRange(
   if (downDelta > 0) {
     return {
       x: sourceLeft,
-      y: sourceTop,
+      y: sourceBottom + 1,
       width: sourceRange.width,
-      height: pointerCell[1] - sourceTop + 1,
+      height: downDelta,
     };
   }
   return {
     x: sourceLeft,
     y: pointerCell[1],
     width: sourceRange.width,
-    height: sourceBottom - pointerCell[1] + 1,
+    height: upDelta,
+  };
+}
+
+export function resolveFillHandleSelectionRange(
+  sourceRange: Rectangle,
+  previewRange: Rectangle,
+): Rectangle {
+  const sourceRight = sourceRange.x + sourceRange.width - 1;
+  const sourceBottom = sourceRange.y + sourceRange.height - 1;
+  const previewRight = previewRange.x + previewRange.width - 1;
+  const previewBottom = previewRange.y + previewRange.height - 1;
+
+  const left = Math.min(sourceRange.x, previewRange.x);
+  const top = Math.min(sourceRange.y, previewRange.y);
+  const right = Math.max(sourceRight, previewRight);
+  const bottom = Math.max(sourceBottom, previewBottom);
+
+  return {
+    x: left,
+    y: top,
+    width: right - left + 1,
+    height: bottom - top + 1,
+  };
+}
+
+export function resolveFillHandlePreviewBounds(options: {
+  previewRange: Rectangle;
+  visibleRange: Pick<Rectangle, "x" | "y" | "width" | "height">;
+  getCellBounds: (col: number, row: number) => Rectangle | undefined;
+  hostBounds: Pick<DOMRect, "left" | "top">;
+}): Rectangle | undefined {
+  const { getCellBounds, hostBounds, previewRange, visibleRange } = options;
+  const startCol = Math.max(previewRange.x, visibleRange.x);
+  const startRow = Math.max(previewRange.y, visibleRange.y);
+  const endCol = Math.min(
+    previewRange.x + previewRange.width - 1,
+    visibleRange.x + visibleRange.width - 1,
+  );
+  const endRow = Math.min(
+    previewRange.y + previewRange.height - 1,
+    visibleRange.y + visibleRange.height - 1,
+  );
+  if (startCol > endCol || startRow > endRow) {
+    return undefined;
+  }
+
+  const startBounds = getCellBounds(startCol, startRow);
+  const endBounds = getCellBounds(endCol, endRow);
+  if (!startBounds || !endBounds) {
+    return undefined;
+  }
+
+  return {
+    x: startBounds.x - hostBounds.left,
+    y: startBounds.y - hostBounds.top,
+    width: endBounds.x + endBounds.width - startBounds.x,
+    height: endBounds.y + endBounds.height - startBounds.y,
   };
 }
 

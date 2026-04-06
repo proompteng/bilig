@@ -34,7 +34,9 @@ import {
 } from "./gridSelection.js";
 import {
   resolveFillHandleOverlayBounds,
+  resolveFillHandlePreviewBounds,
   resolveFillHandlePreviewRange,
+  resolveFillHandleSelectionRange,
   type FillHandleOverlayBounds,
 } from "./gridFillHandle.js";
 import {
@@ -540,7 +542,6 @@ export function WorkbookGridSurface({
     return buildGridGpuScene({
       engine,
       columnWidths,
-      fillPreviewRange,
       gridMetrics,
       gridSelection,
       activeHeaderDrag,
@@ -562,7 +563,6 @@ export function WorkbookGridSurface({
     deferredVisibleRegion,
     emptyGpuScene,
     engine,
-    fillPreviewRange,
     getCellLocalBounds,
     gridMetrics,
     gridSelection,
@@ -647,6 +647,18 @@ export function WorkbookGridSurface({
     isRangeMoveDragging,
     selectionRange,
   ]);
+
+  const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
+    if (!fillPreviewRange) {
+      return undefined;
+    }
+    return resolveFillHandlePreviewBounds({
+      previewRange: fillPreviewRange,
+      visibleRange: visibleRegion.range,
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: getCellLocalBounds,
+    });
+  }, [fillPreviewRange, getCellLocalBounds, visibleRegion.range]);
 
   useLayoutEffect(() => {
     const scrollViewport = scrollViewportRef.current;
@@ -1094,6 +1106,15 @@ export function WorkbookGridSurface({
         if (previewRange) {
           const source = rectangleToAddresses(selectionRange);
           const target = rectangleToAddresses(previewRange);
+          const nextSelectionRange = resolveFillHandleSelectionRange(selectionRange, previewRange);
+          const nextSelection = createRectangleSelectionFromRange(nextSelectionRange);
+          if (gridSelection.current?.cell && nextSelection.current) {
+            nextSelection.current = {
+              ...nextSelection.current,
+              cell: gridSelection.current.cell,
+            };
+          }
+          setGridSelection(nextSelection);
           if (
             source.startAddress !== target.startAddress ||
             source.endAddress !== target.endAddress
@@ -1132,7 +1153,7 @@ export function WorkbookGridSurface({
       window.addEventListener("pointerup", up, true);
       window.addEventListener("pointercancel", cancel, true);
     },
-    [focusGrid, onFillRange, resolvePointerCell, selectionRange],
+    [focusGrid, gridSelection.current, onFillRange, resolvePointerCell, selectionRange],
   );
 
   const refreshHoverState = useCallback(
@@ -1751,6 +1772,20 @@ export function WorkbookGridSurface({
               width: fillHandleBounds.width,
             }}
             type="button"
+          />
+        ) : null}
+        {fillPreviewBounds ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute z-20 box-border border border-dashed"
+            data-grid-fill-preview="true"
+            style={{
+              borderColor: gridTheme.textMedium,
+              height: fillPreviewBounds.height,
+              left: fillPreviewBounds.x,
+              top: fillPreviewBounds.y,
+              width: fillPreviewBounds.width,
+            }}
           />
         ) : null}
         <div className="pointer-events-none absolute inset-0 z-[1]" />
