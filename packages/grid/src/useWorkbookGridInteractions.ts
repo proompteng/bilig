@@ -892,6 +892,7 @@ export function useWorkbookGridInteractions(
       if (clickedCell) {
         toggleBooleanCellAt(clickedCell[0], clickedCell[1]);
       }
+      focusGrid();
       setActiveHeaderDrag(null);
       refreshHoverState(event.clientX, event.clientY, 0);
     },

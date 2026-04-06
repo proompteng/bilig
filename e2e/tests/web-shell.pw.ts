@@ -246,23 +246,6 @@ async function getBox(locator: Locator) {
   return box;
 }
 
-function getProductCellClientPoint(
-  grid: { x: number; y: number; width: number; height: number },
-  columnIndex: number,
-  rowIndex: number,
-  xRatio = 0.5,
-  yRatio = 0.5,
-) {
-  return {
-    x:
-      grid.x +
-      PRODUCT_ROW_MARKER_WIDTH +
-      columnIndex * PRODUCT_COLUMN_WIDTH +
-      PRODUCT_COLUMN_WIDTH * xRatio,
-    y: grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + PRODUCT_ROW_HEIGHT * yRatio,
-  };
-}
-
 async function clickProductCell(
   page: Parameters<typeof test>[0]["page"],
   columnIndex: number,
@@ -305,7 +288,32 @@ async function clickSelectionFuzzCell(
   rowIndex: number,
   shift = false,
 ) {
-  const point = getProductCellClientPoint(grid, columnIndex, rowIndex);
+  const gridLocator = page.getByTestId("sheet-grid");
+  const columnLeft = await getProductColumnLeft(page, columnIndex);
+  const columnWidth = await getProductColumnWidth(page, columnIndex);
+  const scrollLeft = await gridLocator.evaluate(
+    (node, target) => {
+      const scrollViewport = node.querySelector('[aria-hidden="true"]');
+      if (!(scrollViewport instanceof HTMLElement)) {
+        return 0;
+      }
+      const targetCenter = target.columnLeft + target.columnWidth / 2;
+      const visibleStart = scrollViewport.scrollLeft;
+      const visibleEnd = visibleStart + scrollViewport.clientWidth;
+      if (targetCenter < visibleStart || targetCenter > visibleEnd) {
+        scrollViewport.scrollLeft = Math.max(0, targetCenter - scrollViewport.clientWidth / 2);
+      }
+      return scrollViewport.scrollLeft;
+    },
+    {
+      columnLeft,
+      columnWidth,
+    },
+  );
+  const point = {
+    x: grid.x + PRODUCT_ROW_MARKER_WIDTH + columnLeft - scrollLeft + columnWidth / 2,
+    y: grid.y + PRODUCT_HEADER_HEIGHT + rowIndex * PRODUCT_ROW_HEIGHT + PRODUCT_ROW_HEIGHT / 2,
+  };
   if (shift) {
     await page.keyboard.down("Shift");
   }
