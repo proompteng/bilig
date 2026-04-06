@@ -34,6 +34,94 @@ export const SnapshotMetadataSchema = Schema.Struct({
 });
 export type SnapshotMetadata = Schema.Schema.Type<typeof SnapshotMetadataSchema>;
 
+export const WorkbookAgentUiSelectionSchema = Schema.Struct({
+  sheetName: Schema.String,
+  address: Schema.String,
+});
+export type WorkbookAgentUiSelection = Schema.Schema.Type<typeof WorkbookAgentUiSelectionSchema>;
+
+export const WorkbookViewportSchema = Schema.Struct({
+  rowStart: Schema.Number,
+  rowEnd: Schema.Number,
+  colStart: Schema.Number,
+  colEnd: Schema.Number,
+});
+export type WorkbookViewport = Schema.Schema.Type<typeof WorkbookViewportSchema>;
+
+export const WorkbookAgentUiContextSchema = Schema.Struct({
+  selection: WorkbookAgentUiSelectionSchema,
+  viewport: WorkbookViewportSchema,
+});
+export type WorkbookAgentUiContext = Schema.Schema.Type<typeof WorkbookAgentUiContextSchema>;
+
+export const WorkbookAgentEntryKindSchema = Schema.Literal(
+  "user",
+  "assistant",
+  "plan",
+  "tool",
+  "system",
+);
+export type WorkbookAgentEntryKind = Schema.Schema.Type<typeof WorkbookAgentEntryKindSchema>;
+
+export const WorkbookAgentToolStatusSchema = Schema.Union(
+  Schema.Literal("inProgress", "completed", "failed"),
+  Schema.Null,
+);
+export type WorkbookAgentToolStatus = Schema.Schema.Type<typeof WorkbookAgentToolStatusSchema>;
+
+export const WorkbookAgentTimelineEntrySchema = Schema.Struct({
+  id: Schema.String,
+  kind: WorkbookAgentEntryKindSchema,
+  turnId: Schema.Union(Schema.String, Schema.Null),
+  text: Schema.Union(Schema.String, Schema.Null),
+  phase: Schema.Union(Schema.String, Schema.Null),
+  toolName: Schema.Union(Schema.String, Schema.Null),
+  toolStatus: WorkbookAgentToolStatusSchema,
+  argumentsText: Schema.Union(Schema.String, Schema.Null),
+  outputText: Schema.Union(Schema.String, Schema.Null),
+  success: Schema.Union(Schema.Boolean, Schema.Null),
+});
+export type WorkbookAgentTimelineEntry = Schema.Schema.Type<
+  typeof WorkbookAgentTimelineEntrySchema
+>;
+
+export const WorkbookAgentSessionStatusSchema = Schema.Literal("idle", "inProgress", "failed");
+export type WorkbookAgentSessionStatus = Schema.Schema.Type<
+  typeof WorkbookAgentSessionStatusSchema
+>;
+
+export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
+  sessionId: Schema.String,
+  documentId: Schema.String,
+  threadId: Schema.String,
+  status: WorkbookAgentSessionStatusSchema,
+  activeTurnId: Schema.Union(Schema.String, Schema.Null),
+  lastError: Schema.Union(Schema.String, Schema.Null),
+  context: Schema.Union(WorkbookAgentUiContextSchema, Schema.Null),
+  entries: Schema.Array(WorkbookAgentTimelineEntrySchema),
+});
+export type WorkbookAgentSessionSnapshot = Schema.Schema.Type<
+  typeof WorkbookAgentSessionSnapshotSchema
+>;
+
+export const WorkbookAgentStreamEventSchema = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("snapshot"),
+    snapshot: WorkbookAgentSessionSnapshotSchema,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("assistantDelta"),
+    itemId: Schema.String,
+    delta: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("planDelta"),
+    itemId: Schema.String,
+    delta: Schema.String,
+  }),
+);
+export type WorkbookAgentStreamEvent = Schema.Schema.Type<typeof WorkbookAgentStreamEventSchema>;
+
 export function decodeUnknownSync<Decoded, Encoded>(
   schema: Schema.Schema<Decoded, Encoded>,
   input: unknown,

@@ -23,6 +23,8 @@ import { SyncDocumentSupervisor } from "../workbook-runtime/sync-document-superv
 import { resolveRequestSession, resolveSessionIdentity } from "./session.js";
 import type { WorksheetExecutor } from "../workbook-runtime/worksheet-executor.js";
 import type { ZeroSyncService } from "../zero/service.js";
+import type { WorkbookAgentService } from "../codex-app/workbook-agent-service.js";
+import type { WorkbookAgentStreamEvent } from "@bilig/contracts";
 
 const SPA_FALLBACK_PREFIXES = [
   "/api/",
@@ -38,6 +40,7 @@ export interface SyncServerOptions {
   documentService?: DocumentControlService;
   worksheetExecutor?: WorksheetExecutor | null;
   zeroSyncService?: ZeroSyncService;
+  workbookAgentService?: WorkbookAgentService;
   logger?: boolean;
 }
 
@@ -106,7 +109,12 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     new DocumentSessionManager(undefined, undefined, options.worksheetExecutor ?? null);
   const documentService = options.documentService ?? new SyncDocumentSupervisor(sessionManager);
   const zeroSyncService = options.zeroSyncService;
+  const workbookAgentService = options.workbookAgentService;
   const app = Fastify({ logger: options.logger ?? true });
+
+  app.addHook("onClose", async () => {
+    await workbookAgentService?.close().catch(() => undefined);
+  });
 
   app.addContentTypeParser(
     "application/octet-stream",
@@ -253,6 +261,170 @@ export function createSyncServer(options: SyncServerOptions = {}) {
       const response = await runPromise(documentService.handleSyncFrame(frame));
       reply.header("content-type", "application/octet-stream");
       return Buffer.from(encodeFrame(Array.isArray(response) ? (response[0] ?? frame) : response));
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/sessions",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      reply.header("cache-control", "no-store");
+      return await workbookAgentService.createSession({
+        documentId: request.params.documentId,
+        session,
+        body: request.body ?? {},
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/sessions/:sessionId/context",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; sessionId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      reply.header("cache-control", "no-store");
+      return await workbookAgentService.updateContext({
+        documentId: request.params.documentId,
+        sessionId: request.params.sessionId,
+        session,
+        body: request.body ?? {},
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/sessions/:sessionId/turns",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; sessionId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      reply.header("cache-control", "no-store");
+      return await workbookAgentService.startTurn({
+        documentId: request.params.documentId,
+        sessionId: request.params.sessionId,
+        session,
+        body: request.body ?? {},
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/sessions/:sessionId/interrupt",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; sessionId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      reply.header("cache-control", "no-store");
+      return await workbookAgentService.interruptTurn({
+        documentId: request.params.documentId,
+        sessionId: request.params.sessionId,
+        session,
+      });
+    },
+  );
+
+  app.get(
+    "/v2/documents/:documentId/agent/sessions/:sessionId/events",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; sessionId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      const sessionSnapshot = workbookAgentService.getSnapshot({
+        documentId: request.params.documentId,
+        sessionId: request.params.sessionId,
+        session,
+      });
+
+      reply.hijack();
+      const raw = reply.raw;
+      raw.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      });
+
+      const writeEvent = (event: WorkbookAgentStreamEvent) => {
+        raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      writeEvent({
+        type: "snapshot",
+        snapshot: sessionSnapshot,
+      });
+
+      const unsubscribe = workbookAgentService.subscribe(request.params.sessionId, (event) => {
+        writeEvent(event);
+      });
+      const keepalive = setInterval(() => {
+        raw.write(":keepalive\n\n");
+      }, 15_000);
+
+      request.raw.on("close", () => {
+        clearInterval(keepalive);
+        unsubscribe();
+      });
+      return reply;
     },
   );
 

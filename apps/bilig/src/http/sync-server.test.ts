@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSyncServer } from "./sync-server.js";
 
 type TestServer = Awaited<ReturnType<typeof startHttpServer>>;
@@ -108,6 +108,12 @@ describe("sync-server authoritative events", () => {
         async handleMutate() {
           throw new Error("not used");
         },
+        async inspectWorkbook() {
+          throw new Error("not used");
+        },
+        async applyServerMutator() {
+          throw new Error("not used");
+        },
         async loadAuthoritativeEvents(documentId, afterRevision) {
           expect(documentId).toBe("doc-1");
           expect(afterRevision).toBe(4);
@@ -175,6 +181,12 @@ describe("sync-server authoritative events", () => {
         async handleMutate() {
           throw new Error("not used");
         },
+        async inspectWorkbook() {
+          throw new Error("not used");
+        },
+        async applyServerMutator() {
+          throw new Error("not used");
+        },
         async loadAuthoritativeEvents() {
           throw new Error("not used");
         },
@@ -193,6 +205,97 @@ describe("sync-server authoritative events", () => {
         message: "afterRevision must be a non-negative integer",
         retryable: false,
       });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("sync-server workbook agent", () => {
+  it("creates workbook agent sessions through the monolith route", async () => {
+    const createSession = vi.fn(async () => ({
+      sessionId: "agent-session-1",
+      documentId: "doc-1",
+      threadId: "thr-1",
+      status: "idle" as const,
+      activeTurnId: null,
+      lastError: null,
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+      entries: [],
+    }));
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        createSession,
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions",
+        payload: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: expect.objectContaining({
+            sessionId: "agent-session-1",
+          }),
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          sessionId: "agent-session-1",
+          threadId: "thr-1",
+        }),
+      );
     } finally {
       await app.close();
     }

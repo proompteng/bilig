@@ -746,7 +746,7 @@ Network becomes shared truth plumbing, not the source of immediacy.
 
 **Still not completed**
 
-- Phase 3 and Phase 4 agent/import/comprehension layers
+- Phase 3 preview/apply bundle execution and Phase 4 import/comprehension layers
 
 **What this roadmap now needs to do**
 
@@ -904,8 +904,19 @@ Implemented.
 **Objective**
 Turn AI into a real workbook execution tool.
 
+**Status**
+Partially implemented.
+
+**Already implemented**
+
+- the mounted workbook shell now has a persistent right-rail assistant chat
+- the agent runtime now lives inside `apps/bilig` and speaks the Codex app-server stdio protocol rather than a custom worksheet-chat transport
+- the monolith now exposes workbook-agent session, turn, interrupt, context, and SSE event routes under `/v2/documents/:documentId/agent/*`
+- the agent already has local semantic workbook tools for read/edit/write work, including workbook summary, range read, range write, clear, format, fill, copy, move, create-sheet, and rename-sheet operations
+
 **User-visible outcomes**
 
+- right-rail workbook chat bound to the active sheet context
 - plan → preview → apply
 - formula repair and workbook cleanup
 - structured workbook edits with undo bundles
@@ -913,18 +924,18 @@ Turn AI into a real workbook execution tool.
 
 **Engineering outcomes**
 
-- preview engine
+- monolith-hosted Codex app-server runtime
 - AI tool surface over workbook ops
+- preview engine
 - approval plumbing
 - replayable agent execution records
 
 **Key epics**
 
 - command preview/diff
-- MCP/internal tool layer
-- AI pane with scope control
 - approval models by risk class
 - undoable command bundles
+- replayable plan/preview/apply records tied to authoritative revisions
 
 **Dependencies**
 
@@ -1169,6 +1180,12 @@ Remove from the component:
 - editing/reconcile rules
 
 The component becomes composition only.
+
+Current state:
+
+- this split is mostly done for the mounted workbook shell
+- the agent rail now exists as `use-workbook-agent-pane.tsx` plus `WorkbookAgentPanel.tsx`
+- the remaining AI work is preview/apply execution discipline, not “add a chat box”
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/runtime-session.ts`
 

@@ -66,6 +66,7 @@ interface WorkbookViewProps {
   ribbon?: React.ReactNode;
   selectionStatus?: React.ReactNode;
   headerStatus?: React.ReactNode;
+  sideRail?: React.ReactNode;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
@@ -112,6 +113,7 @@ export function WorkbookView({
   ribbon,
   selectionStatus,
   headerStatus,
+  sideRail,
   subscribeViewport,
   columnWidths,
   onColumnWidthChange,
@@ -132,55 +134,62 @@ export function WorkbookView({
           ) : null}
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col bg-[var(--wb-surface)]">
-        <FormulaBar
-          address={selectedAddr}
-          isEditing={isEditing}
-          onBeginEdit={onBeginFormulaEdit}
-          onAddressCommit={onAddressCommit}
-          onCancel={onCancelEdit}
-          onChange={onEditorChange}
-          onCommit={() => onCommitEdit()}
-          resolvedValue={resolvedValue}
-          sheetName={sheetName}
-          value={editorValue}
-        />
-        <WorkbookGridSurface
-          editorValue={editorValue}
-          editorSelectionBehavior={editorSelectionBehavior}
-          engine={engine}
-          isEditingCell={isEditingCell}
-          onBeginEdit={onBeginEdit}
-          onCancelEdit={onCancelEdit}
-          onClearCell={onClearCell}
-          onCommitEdit={onCommitEdit}
-          onCopyRange={onCopyRange}
-          onEditorChange={onEditorChange}
-          onFillRange={onFillRange}
-          onMoveRange={onMoveRange}
-          onPaste={onPaste}
-          onToggleBooleanCell={onToggleBooleanCell}
-          onSelectionLabelChange={onSelectionLabelChange}
-          onSelect={onSelect}
-          subscribeViewport={subscribeViewport}
-          columnWidths={columnWidths}
-          onColumnWidthChange={onColumnWidthChange}
-          onAutofitColumn={onAutofitColumn}
-          onVisibleViewportChange={onVisibleViewportChange}
-          restoreViewportTarget={restoreViewportTarget}
-          resolvedValue={resolvedValue}
-          selectedAddr={selectedAddr}
-          selectedCellSnapshot={selectedCellSnapshot}
-          sheetName={sheetName}
-        />
-        <WorkbookSheetTabs
-          onCreateSheet={onCreateSheet}
-          onRenameSheet={onRenameSheet}
-          onSelectSheet={onSelectSheet}
-          sheetName={sheetName}
-          sheetNames={sheetNames}
-          selectionStatus={selectionStatus}
-        />
+      <div className="flex min-h-0 flex-1 bg-[var(--wb-surface)]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <FormulaBar
+            address={selectedAddr}
+            isEditing={isEditing}
+            onBeginEdit={onBeginFormulaEdit}
+            onAddressCommit={onAddressCommit}
+            onCancel={onCancelEdit}
+            onChange={onEditorChange}
+            onCommit={() => onCommitEdit()}
+            resolvedValue={resolvedValue}
+            sheetName={sheetName}
+            value={editorValue}
+          />
+          <WorkbookGridSurface
+            editorValue={editorValue}
+            editorSelectionBehavior={editorSelectionBehavior}
+            engine={engine}
+            isEditingCell={isEditingCell}
+            onBeginEdit={onBeginEdit}
+            onCancelEdit={onCancelEdit}
+            onClearCell={onClearCell}
+            onCommitEdit={onCommitEdit}
+            onCopyRange={onCopyRange}
+            onEditorChange={onEditorChange}
+            onFillRange={onFillRange}
+            onMoveRange={onMoveRange}
+            onPaste={onPaste}
+            onToggleBooleanCell={onToggleBooleanCell}
+            onSelectionLabelChange={onSelectionLabelChange}
+            onSelect={onSelect}
+            subscribeViewport={subscribeViewport}
+            columnWidths={columnWidths}
+            onColumnWidthChange={onColumnWidthChange}
+            onAutofitColumn={onAutofitColumn}
+            onVisibleViewportChange={onVisibleViewportChange}
+            restoreViewportTarget={restoreViewportTarget}
+            resolvedValue={resolvedValue}
+            selectedAddr={selectedAddr}
+            selectedCellSnapshot={selectedCellSnapshot}
+            sheetName={sheetName}
+          />
+          <WorkbookSheetTabs
+            onCreateSheet={onCreateSheet}
+            onRenameSheet={onRenameSheet}
+            onSelectSheet={onSelectSheet}
+            sheetName={sheetName}
+            sheetNames={sheetNames}
+            selectionStatus={selectionStatus}
+          />
+        </div>
+        {sideRail ? (
+          <aside className="flex h-full w-[23rem] shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]">
+            {sideRail}
+          </aside>
+        ) : null}
       </div>
     </section>
   );

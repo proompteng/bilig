@@ -10,8 +10,12 @@ import {
   workbookTileArgsSchema,
 } from "@bilig/zero-sync";
 import type { FastifyRequest } from "fastify";
+import type { SessionIdentity } from "../http/session.js";
 import { resolveSessionIdentity } from "../http/session.js";
-import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
+import {
+  WorkbookRuntimeManager,
+  type WorkbookRuntime,
+} from "../workbook-runtime/runtime-manager.js";
 import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./db.js";
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
@@ -33,6 +37,11 @@ export interface ZeroSyncService {
   close(): Promise<void>;
   handleQuery(request: FastifyRequest): Promise<unknown>;
   handleMutate(request: FastifyRequest): Promise<unknown>;
+  inspectWorkbook<T>(
+    documentId: string,
+    task: (runtime: WorkbookRuntime) => Promise<T> | T,
+  ): Promise<T>;
+  applyServerMutator(name: string, args: unknown, session?: SessionIdentity): Promise<void>;
   loadAuthoritativeEvents(
     documentId: string,
     afterRevision: number,
@@ -82,6 +91,21 @@ class DisabledZeroSyncService implements ZeroSyncService {
   }
 
   async handleMutate(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async inspectWorkbook<T>(
+    _documentId: string,
+    _task: (runtime: WorkbookRuntime) => Promise<T> | T,
+  ): Promise<T> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async applyServerMutator(
+    _name: string,
+    _args: unknown,
+    _session?: SessionIdentity,
+  ): Promise<void> {
     throw new Error("Zero sync is not configured");
   }
 
@@ -231,6 +255,40 @@ class EnabledZeroSyncService implements ZeroSyncService {
         }),
       fastifyRequestToWebRequest(request),
     );
+  }
+
+  async inspectWorkbook<T>(
+    documentId: string,
+    task: (runtime: WorkbookRuntime) => Promise<T> | T,
+  ): Promise<T> {
+    return await this.runtimeManager.runExclusive(documentId, async () => {
+      const runtime = await this.runtimeManager.loadRuntime(this.pool, documentId);
+      return await task(runtime);
+    });
+  }
+
+  async applyServerMutator(name: string, args: unknown, session?: SessionIdentity): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await handleServerMutator(
+        {
+          dbTransaction: {
+            wrappedTransaction: client,
+          },
+        },
+        name,
+        args,
+        this.runtimeManager,
+        session,
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async loadAuthoritativeEvents(

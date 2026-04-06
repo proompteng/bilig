@@ -37,6 +37,7 @@ import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookViewsPane } from "./use-workbook-views-pane.js";
 import { useWorkbookVersionsPane } from "./use-workbook-versions-pane.js";
+import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -786,6 +787,15 @@ export function useWorkerWorkbookAppState(input: {
     enabled: runtimeReady,
     getCurrentViewport: () => visibleViewportRef.current,
   });
+  const { agentPanel, agentToggle } = useWorkbookAgentPane({
+    documentId,
+    enabled: runtimeReady,
+    contextKey: `${selection.sheetName}:${selection.address}`,
+    getContext: () => ({
+      selection: selectionRef.current,
+      viewport: visibleViewportRef.current,
+    }),
+  });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
@@ -877,6 +887,7 @@ export function useWorkerWorkbookAppState(input: {
         {versionsToggle}
         {viewsToggle}
         {changesToggle}
+        {agentToggle}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -890,6 +901,7 @@ export function useWorkerWorkbookAppState(input: {
   }, [
     changesToggle,
     collaborators,
+    agentToggle,
     selectAddress,
     toolbarHeaderStatus,
     versionsToggle,
@@ -897,6 +909,7 @@ export function useWorkerWorkbookAppState(input: {
   ]);
 
   return {
+    agentPanel,
     beginEditing,
     cancelEditor,
     clearSelectedCell,

@@ -113,6 +113,7 @@ function WorkerWorkbookAppInner({
               restoreViewportTarget={app.restoreViewportTarget}
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
+              sideRail={app.agentPanel}
             />
           ) : null}
         </div>

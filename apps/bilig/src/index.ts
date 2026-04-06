@@ -5,6 +5,7 @@ import { LocalDocumentSupervisor } from "./workbook-runtime/local-document-super
 import { LocalWorkbookSessionManager } from "./workbook-runtime/local-workbook-session-manager.js";
 import { createInProcessWorksheetExecutor } from "./workbook-runtime/worksheet-executor.js";
 import { createZeroSyncService } from "./zero/service.js";
+import { createWorkbookAgentService } from "./codex-app/workbook-agent-service.js";
 
 async function main() {
   const host = process.env["HOST"] ?? "0.0.0.0";
@@ -35,6 +36,7 @@ async function main() {
   );
   const documentService = new SyncDocumentSupervisor(sessionManager);
   const zeroSyncService = createZeroSyncService();
+  const workbookAgentService = createWorkbookAgentService(zeroSyncService);
 
   await zeroSyncService.initialize();
 
@@ -42,12 +44,14 @@ async function main() {
     sessionManager,
     documentService,
     zeroSyncService,
+    workbookAgentService,
   });
 
   try {
     await syncApp.listen({ host, port: appPort });
     syncApp.log.info({ host, appPort, zeroSync: zeroSyncService.enabled }, "bilig app listening");
   } catch (error) {
+    await workbookAgentService.close().catch(() => undefined);
     await zeroSyncService.close().catch(() => undefined);
     console.error(error);
     process.exit(1);
