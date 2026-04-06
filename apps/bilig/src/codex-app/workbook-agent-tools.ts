@@ -8,7 +8,14 @@ import {
   type CellStylePatch,
   normalizeCellNumberFormatPreset,
 } from "@bilig/protocol";
-import type { WorkbookAgentCommand, WorkbookAgentCommandBundle } from "@bilig/agent-api";
+import type {
+  CodexDynamicToolCallRequest,
+  CodexDynamicToolCallResult,
+  CodexDynamicToolSpec,
+  JsonValue,
+  WorkbookAgentCommand,
+  WorkbookAgentCommandBundle,
+} from "@bilig/agent-api";
 import {
   clearRangeArgsSchema,
   rangeMutationArgsSchema,
@@ -19,12 +26,6 @@ import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts"
 import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
-import type {
-  CodexDynamicToolCallRequest,
-  CodexDynamicToolCallResult,
-  CodexDynamicToolSpec,
-  JsonValue,
-} from "./codex-app-server-types.js";
 import {
   findWorkbookFormulaIssues,
   searchWorkbook,

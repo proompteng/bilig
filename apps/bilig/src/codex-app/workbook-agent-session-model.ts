@@ -1,7 +1,7 @@
+import type { CodexThread, CodexThreadItem } from "@bilig/agent-api";
 import { renderWorkbookAgentSkillInstructions } from "@bilig/agent-api";
 import type { WorkbookAgentSessionSnapshot, WorkbookAgentTimelineEntry } from "@bilig/contracts";
 import { z } from "zod";
-import type { CodexThread, CodexThreadItem } from "./codex-app-server-types.js";
 
 export const createSessionBodySchema = z.object({
   sessionId: z.string().min(1).optional(),

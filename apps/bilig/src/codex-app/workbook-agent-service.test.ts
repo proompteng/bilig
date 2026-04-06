@@ -1,3 +1,4 @@
+import type { CodexServerNotification, CodexTurn } from "@bilig/agent-api";
 import { describe, expect, it } from "vitest";
 import type { ZeroSyncService } from "../zero/service.js";
 import type {
@@ -5,7 +6,6 @@ import type {
   CodexAppServerTransport,
 } from "./codex-app-server-client.js";
 import { createWorkbookAgentService } from "./workbook-agent-service.js";
-import type { CodexServerNotification, CodexTurn } from "./codex-app-server-types.js";
 
 class FakeCodexTransport implements CodexAppServerTransport {
   private readonly listeners = new Set<(notification: CodexServerNotification) => void>();

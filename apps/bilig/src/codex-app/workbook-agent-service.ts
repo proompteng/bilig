@@ -4,6 +4,7 @@ import type {
   WorkbookAgentTimelineEntry,
 } from "@bilig/contracts";
 import type {
+  CodexServerNotification,
   WorkbookAgentAppliedBy,
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
@@ -22,7 +23,6 @@ import {
   type CodexAppServerTransport,
   type CodexAppServerClientOptions,
 } from "./codex-app-server-client.js";
-import type { CodexServerNotification } from "./codex-app-server-types.js";
 import {
   handleWorkbookAgentToolCall,
   workbookAgentDynamicToolSpecs,

@@ -3,8 +3,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
   CodexDynamicToolCallRequest,
   CodexDynamicToolCallResult,
-  CodexJsonRpcError,
+  CodexDynamicToolSpec,
   CodexInitializeResponse,
+  CodexJsonRpcError,
   CodexJsonRpcResponse,
   CodexRequestId,
   CodexServerNotification,
@@ -13,8 +14,7 @@ import type {
   CodexTurn,
   CodexTurnStartResponse,
   CodexUserInput,
-  CodexDynamicToolSpec,
-} from "./codex-app-server-types.js";
+} from "@bilig/agent-api";
 
 export interface CodexAppServerClientOptions {
   command?: string;
