@@ -48,17 +48,25 @@ function composeEnv(): NodeJS.ProcessEnv {
   };
 }
 
-function dockerDaemonReady(): boolean {
-  if (!commandExists("docker")) {
-    return false;
+function containerRuntimeReady(): boolean {
+  const runtimeCandidates = [{ command: ["docker", "ps"] }, { command: ["podman", "ps"] }];
+
+  for (const candidate of runtimeCandidates) {
+    if (!commandExists(candidate.command[0])) {
+      continue;
+    }
+    const result = Bun.spawnSync(candidate.command, {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: composeEnv(),
+    });
+    if (result.exitCode === 0) {
+      return true;
+    }
   }
-  const result = Bun.spawnSync(["docker", "ps"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-    env: composeEnv(),
-  });
-  return result.exitCode === 0;
+
+  return false;
 }
 
 function resolveComposeInvocation(): {
@@ -77,6 +85,18 @@ function resolveComposeInvocation(): {
     }
   }
 
+  if (commandExists("podman")) {
+    const podmanCompose = Bun.spawnSync(["podman", "compose", "version"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: composeEnv(),
+    });
+    if (podmanCompose.exitCode === 0) {
+      return { command: ["podman", "compose"], label: "podman compose" };
+    }
+  }
+
   if (commandExists("docker-compose")) {
     const dockerComposeStandalone = Bun.spawnSync(["docker-compose", "version"], {
       stdin: "ignore",
@@ -89,13 +109,25 @@ function resolveComposeInvocation(): {
     }
   }
 
+  if (commandExists("podman-compose")) {
+    const podmanComposeStandalone = Bun.spawnSync(["podman-compose", "version"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: composeEnv(),
+    });
+    if (podmanComposeStandalone.exitCode === 0) {
+      return { command: ["podman-compose"], label: "podman-compose" };
+    }
+  }
+
   return null;
 }
 
 function composeArgs(args: readonly string[]): readonly string[] {
   const invocation = resolveComposeInvocation();
   if (!invocation) {
-    throw new Error("Docker Compose is required for pnpm dev:web-local.");
+    throw new Error("A supported compose command is required for pnpm dev:web-local.");
   }
   return [
     ...invocation.command,
@@ -120,7 +152,7 @@ function runComposeSync(
 ): void {
   const invocation = resolveComposeInvocation();
   if (!invocation) {
-    throw new Error("Docker Compose is required for pnpm dev:web-local.");
+    throw new Error("A supported compose command is required for pnpm dev:web-local.");
   }
 
   const result = Bun.spawnSync(composeArgs(args), {
@@ -187,13 +219,13 @@ async function waitForTcp(host: string, port: number, timeoutMs = 120_000): Prom
   return poll("not started");
 }
 
-async function ensureDockerCompose(): Promise<void> {
+async function ensureComposeRuntime(): Promise<void> {
   if (resolveComposeInvocation()) {
-    if (dockerDaemonReady()) {
+    if (containerRuntimeReady()) {
       return;
     }
 
-    if (process.platform === "darwin" && Bun.which("open")) {
+    if (process.platform === "darwin" && Bun.which("open") && commandExists("docker")) {
       Bun.spawnSync(["open", "-a", "Docker"], {
         stdin: "ignore",
         stdout: "ignore",
@@ -202,21 +234,21 @@ async function ensureDockerCompose(): Promise<void> {
     }
 
     const deadline = Date.now() + 120_000;
-    const waitForDockerDaemon = async (): Promise<void> => {
-      if (dockerDaemonReady()) {
+    const waitForContainerRuntime = async (): Promise<void> => {
+      if (containerRuntimeReady()) {
         return;
       }
       if (Date.now() > deadline) {
-        throw new Error("Docker daemon is required for pnpm dev:web-local.");
+        throw new Error("A running container runtime is required for pnpm dev:web-local.");
       }
       await Bun.sleep(2_000);
-      return waitForDockerDaemon();
+      return waitForContainerRuntime();
     };
 
-    await waitForDockerDaemon();
+    await waitForContainerRuntime();
     return;
   }
-  throw new Error("Docker Compose is required for pnpm dev:web-local.");
+  throw new Error("A supported compose command is required for pnpm dev:web-local.");
 }
 
 function listListeningPids(port: number): string[] {
@@ -452,7 +484,7 @@ function cleanupComposeStack(): void {
 }
 
 console.log("Starting local postgres dependency...");
-await ensureDockerCompose();
+await ensureComposeRuntime();
 cleanupComposeStack();
 await reapStaleRepoListeners(
   Array.from({ length: 10 }, (_, index) => preferredWebPort + index).concat(preferredAppPort),

@@ -237,7 +237,6 @@ jobs:
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_BROWSER_STACK: "compose"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
       BILIG_FUZZ_PROFILE: "main"
       BILIG_FUZZ_CAPTURE: "1"
@@ -297,28 +296,42 @@ jobs:
           set -eu
           pnpm exec playwright install-deps chromium
 
-      - name: Verify Docker Compose environment
+      - name: Ensure container tooling for browser stack
         run: |
           set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
 
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "docker is required on the Forgejo docker runner"
-            exit 1
-          fi
-
-          if docker compose version >/dev/null 2>&1; then
-            docker compose version
-          elif command -v docker-compose >/dev/null 2>&1; then
-            docker-compose version
-          else
+          if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
             apt-get update
-            apt-get install -y --no-install-recommends docker-compose
-            docker-compose version
+            apt-get install -y --no-install-recommends docker.io docker-compose-plugin || \
+              apt-get install -y --no-install-recommends docker.io docker-compose
           fi
 
-          docker --version
-          docker info
+          if command -v docker >/dev/null 2>&1; then
+            docker --version
+            if docker compose version >/dev/null 2>&1; then
+              docker compose version
+            elif command -v docker-compose >/dev/null 2>&1; then
+              docker-compose version
+            fi
+            if docker ps >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+
+          if command -v podman >/dev/null 2>&1; then
+            podman --version
+            if podman compose version >/dev/null 2>&1; then
+              podman compose version
+            elif command -v podman-compose >/dev/null 2>&1; then
+              podman-compose version
+            fi
+            if podman ps >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+
+          echo "No usable container runtime is available for the browser stack."
+          exit 1
 
       - name: Probe browser stack CI
         run: |
@@ -348,7 +361,6 @@ jobs:
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_BROWSER_STACK: "compose"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
       BILIG_FUZZ_PROFILE: "main"
       BILIG_FUZZ_CAPTURE: "1"
@@ -408,28 +420,42 @@ jobs:
           set -eu
           pnpm exec playwright install-deps chromium
 
-      - name: Verify Docker Compose environment
+      - name: Ensure container tooling for browser stack
         run: |
           set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
 
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "docker is required on the Forgejo docker runner"
-            exit 1
-          fi
-
-          if docker compose version >/dev/null 2>&1; then
-            docker compose version
-          elif command -v docker-compose >/dev/null 2>&1; then
-            docker-compose version
-          else
+          if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
             apt-get update
-            apt-get install -y --no-install-recommends docker-compose
-            docker-compose version
+            apt-get install -y --no-install-recommends docker.io docker-compose-plugin || \
+              apt-get install -y --no-install-recommends docker.io docker-compose
           fi
 
-          docker --version
-          docker info
+          if command -v docker >/dev/null 2>&1; then
+            docker --version
+            if docker compose version >/dev/null 2>&1; then
+              docker compose version
+            elif command -v docker-compose >/dev/null 2>&1; then
+              docker-compose version
+            fi
+            if docker ps >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+
+          if command -v podman >/dev/null 2>&1; then
+            podman --version
+            if podman compose version >/dev/null 2>&1; then
+              podman compose version
+            elif command -v podman-compose >/dev/null 2>&1; then
+              podman-compose version
+            fi
+            if podman ps >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+
+          echo "No usable container runtime is available for the browser stack."
+          exit 1
 
       - name: Run browser fuzz CI
         run: |
@@ -585,7 +611,6 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
-      BILIG_BROWSER_STACK: "compose"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
     steps:
       - name: Checkout
@@ -641,28 +666,42 @@ jobs:
           set -eu
           pnpm exec playwright install-deps chromium
 
-      - name: Verify Docker Compose environment
+      - name: Ensure container tooling for browser stack
         run: |
           set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
 
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "docker is required on the Forgejo docker runner"
-            exit 1
-          fi
-
-          if docker compose version >/dev/null 2>&1; then
-            docker compose version
-          elif command -v docker-compose >/dev/null 2>&1; then
-            docker-compose version
-          else
+          if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
             apt-get update
-            apt-get install -y --no-install-recommends docker-compose
-            docker-compose version
+            apt-get install -y --no-install-recommends docker.io docker-compose-plugin || \
+              apt-get install -y --no-install-recommends docker.io docker-compose
           fi
 
-          docker --version
-          docker info
+          if command -v docker >/dev/null 2>&1; then
+            docker --version
+            if docker compose version >/dev/null 2>&1; then
+              docker compose version
+            elif command -v docker-compose >/dev/null 2>&1; then
+              docker-compose version
+            fi
+            if docker ps >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+
+          if command -v podman >/dev/null 2>&1; then
+            podman --version
+            if podman compose version >/dev/null 2>&1; then
+              podman compose version
+            elif command -v podman-compose >/dev/null 2>&1; then
+              podman-compose version
+            fi
+            if podman ps >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+
+          echo "No usable container runtime is available for the browser stack."
+          exit 1
 
       - name: Run browser CI
         run: |

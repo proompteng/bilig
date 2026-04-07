@@ -32,12 +32,14 @@ function commandExists(command: string): boolean {
 }
 
 function probeComposeInvocation(): ComposeInvocation | null {
-  const dockerComposeCandidates = [
+  const composeCandidates = [
     { label: "docker compose", command: ["docker", "compose"] },
+    { label: "podman compose", command: ["podman", "compose"] },
     { label: "docker-compose", command: ["docker-compose"] },
+    { label: "podman-compose", command: ["podman-compose"] },
   ];
 
-  for (const candidate of dockerComposeCandidates) {
+  for (const candidate of composeCandidates) {
     if (!commandExists(candidate.command[0])) {
       continue;
     }
@@ -78,7 +80,7 @@ function requireComposeInvocation(required: boolean): ComposeInvocation | null {
 
   if (!invocation && required) {
     throw new Error(
-      "docker compose is required for BILIG_BROWSER_STACK=compose, but neither `docker compose` nor `docker-compose` is available.",
+      "container compose is required for BILIG_BROWSER_STACK=compose, but none of `docker compose`, `podman compose`, `docker-compose`, or `podman-compose` is available.",
     );
   }
 
@@ -101,12 +103,13 @@ if (normalizedBrowserStack === "compose" && compose) {
 
 if (normalizedBrowserStack === "compose" && !compose && isCi) {
   throw new Error(
-    "BILIG_BROWSER_STACK=compose is required in CI, but neither `docker compose` nor `docker-compose` is available.",
+    "BILIG_BROWSER_STACK=compose is required in CI, but no supported compose command is available.",
   );
 }
 
 if (normalizedBrowserStack === "compose" && !compose && !isCi) {
-  const fallbackCommand = "`docker compose` or `docker-compose`";
+  const fallbackCommand =
+    "`docker compose`, `podman compose`, `docker-compose`, or `podman-compose`";
   console.warn(
     `compose unavailable in this environment, falling back to local Playwright server for browser tests (requested compose command: ${fallbackCommand})`,
   );
