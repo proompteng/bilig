@@ -30,6 +30,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "4848:4848"
+      - "${BILIG_DEV_ZERO_PORT:-4848}:4848"
     volumes:
       - zero-replica-data:/data

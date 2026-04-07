@@ -16,8 +16,17 @@ const preferredAppPort = Number.parseInt(
 );
 const postgresPort = process.env["BILIG_DEV_POSTGRES_PORT"] ?? "55432";
 const preferredWebPort = Number.parseInt(process.env["BILIG_WEB_DEV_PORT"] ?? "5173", 10);
-const zeroProxyUpstream = process.env["BILIG_ZERO_PROXY_UPSTREAM"] ?? "http://127.0.0.1:4848";
+const configuredZeroProxyUpstream = process.env["BILIG_ZERO_PROXY_UPSTREAM"];
+const preferredZeroPort = Number.parseInt(
+  process.env["BILIG_DEV_ZERO_PORT"] ??
+    (configuredZeroProxyUpstream ? new URL(configuredZeroProxyUpstream).port : "4848") ??
+    "4848",
+  10,
+);
+const zeroProxyUpstream =
+  configuredZeroProxyUpstream ?? `http://127.0.0.1:${String(preferredZeroPort)}`;
 const zeroHealthUrl = `${zeroProxyUpstream}/keepalive`;
+const cleanupCompose = process.env["BILIG_DEV_CLEANUP_COMPOSE"] === "true";
 let resolvedAppPort = String(preferredAppPort);
 
 interface DevChildProcess {
@@ -30,6 +39,7 @@ function composeEnv(): NodeJS.ProcessEnv {
     ...process.env,
     BILIG_E2E_POSTGRES_PORT: postgresPort,
     BILIG_DEV_APP_PORT: resolvedAppPort,
+    BILIG_DEV_ZERO_PORT: String(preferredZeroPort),
   };
 }
 
@@ -315,8 +325,16 @@ function killIfRunning(process: DevChildProcess | null | undefined, signal: Node
   } catch {}
 }
 
+function cleanupComposeStack(): void {
+  if (!cleanupCompose) {
+    return;
+  }
+  runComposeSync(["down", "-v", "--remove-orphans"], { allowFailure: true });
+}
+
 console.log("Starting local postgres dependency...");
 await ensureDockerCompose();
+cleanupComposeStack();
 await reapStaleRepoListeners(
   Array.from({ length: 10 }, (_, index) => preferredWebPort + index).concat(preferredAppPort),
 );
@@ -343,6 +361,7 @@ function forwardSignal(signal: NodeJS.Signals): void {
   shuttingDown = true;
   killIfRunning(appChild, signal);
   killIfRunning(webChild, signal);
+  cleanupComposeStack();
 }
 
 process.on("SIGINT", () => forwardSignal("SIGINT"));
