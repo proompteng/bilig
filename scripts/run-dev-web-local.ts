@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readlinkSync } from "node:fs";
+import { existsSync, readFileSync, readlinkSync } from "node:fs";
 import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,8 +24,9 @@ const preferredZeroPort = Number.parseInt(
     "4848",
   10,
 );
+const composePublishedHost = resolveComposePublishedHost();
 const zeroProxyUpstream =
-  configuredZeroProxyUpstream ?? `http://127.0.0.1:${String(preferredZeroPort)}`;
+  configuredZeroProxyUpstream ?? `http://${composePublishedHost}:${String(preferredZeroPort)}`;
 const zeroHealthUrl = `${zeroProxyUpstream}/keepalive`;
 const cleanupCompose = process.env["BILIG_DEV_CLEANUP_COMPOSE"] === "true";
 let resolvedAppPort = String(preferredAppPort);
@@ -46,6 +47,46 @@ function composeEnv(): NodeJS.ProcessEnv {
     BILIG_DEV_APP_PORT: resolvedAppPort,
     BILIG_DEV_ZERO_PORT: String(preferredZeroPort),
   };
+}
+
+function parseProcRouteGateway(hexValue: string): string | null {
+  if (!/^[0-9a-fA-F]{8}$/.test(hexValue)) {
+    return null;
+  }
+  const octets = hexValue
+    .match(/../g)
+    ?.map((chunk) => Number.parseInt(chunk, 16))
+    .toReversed();
+  if (!octets || octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) {
+    return null;
+  }
+  return octets.join(".");
+}
+
+function resolveComposePublishedHost(): string {
+  const explicitHost = process.env["BILIG_DOCKER_PUBLISHED_HOST"]?.trim();
+  if (explicitHost) {
+    return explicitHost;
+  }
+
+  if (process.platform !== "linux" || !existsSync("/.dockerenv")) {
+    return "127.0.0.1";
+  }
+
+  try {
+    const routes = readFileSync("/proc/net/route", "utf8").trim().split("\n").slice(1);
+    for (const route of routes) {
+      const fields = route.trim().split(/\s+/);
+      const destination = fields[1] ?? "";
+      const gateway = fields[2] ?? "";
+      if (destination !== "00000000") {
+        continue;
+      }
+      return parseProcRouteGateway(gateway) ?? "127.0.0.1";
+    }
+  } catch {}
+
+  return "127.0.0.1";
 }
 
 function containerRuntimeReady(): boolean {
@@ -483,7 +524,7 @@ function cleanupComposeStack(): void {
   runComposeSync(["down", "-v", "--remove-orphans"], { allowFailure: true });
 }
 
-console.log("Starting local postgres dependency...");
+console.log("Starting local compose dependencies...");
 await ensureComposeRuntime();
 cleanupComposeStack();
 await reapStaleRepoListeners(
@@ -492,15 +533,16 @@ await reapStaleRepoListeners(
 const appPort = await resolveAppPort(preferredAppPort);
 resolvedAppPort = String(appPort);
 const postgresUrl =
-  process.env["DATABASE_URL"] ?? `postgresql://bilig:bilig@127.0.0.1:${postgresPort}/bilig`;
+  process.env["DATABASE_URL"] ??
+  `postgresql://bilig:bilig@${composePublishedHost}:${postgresPort}/bilig`;
 const publicServerUrl = process.env["BILIG_PUBLIC_SERVER_URL"] ?? `http://127.0.0.1:${appPort}`;
 const appHealthUrl = `${publicServerUrl}/healthz`;
 if (composeSupportsWait()) {
-  runComposeSync(["up", "-d", "--wait", postgresService]);
+  runComposeSync(["up", "-d", postgresService, zeroCacheService]);
 } else {
-  runComposeSync(["up", "-d", postgresService]);
+  runComposeSync(["up", "-d", postgresService, zeroCacheService]);
 }
-await waitForTcp("127.0.0.1", Number(postgresPort));
+await waitForTcp(composePublishedHost, Number(postgresPort));
 const webPort = await resolveWebPort(preferredWebPort);
 const webAppBaseUrl = process.env["BILIG_WEB_APP_BASE_URL"] ?? `http://localhost:${webPort}`;
 
@@ -527,8 +569,7 @@ try {
   await waitForHttp(appHealthUrl);
   console.log(`Starting local web dev server (web=${webAppBaseUrl})...`);
   webChild = spawnWebDev(webPort, publicServerUrl);
-  console.log("App is healthy, starting local zero-cache...");
-  runComposeSync(["up", "-d", zeroCacheService]);
+  console.log("App is healthy.");
   await waitForHttp(zeroHealthUrl);
   await waitForHttp(webAppBaseUrl);
   console.log(

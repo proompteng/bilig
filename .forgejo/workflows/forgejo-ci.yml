@@ -236,6 +236,7 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
+      BILIG_BROWSER_STACK: "compose"
       BILIG_BENCH_TOLERANCE: "1.5"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
       BILIG_FUZZ_PROFILE: "main"
@@ -362,6 +363,7 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
+      BILIG_BROWSER_STACK: "compose"
       BILIG_BENCH_TOLERANCE: "1.5"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
       BILIG_FUZZ_PROFILE: "main"

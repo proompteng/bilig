@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 
 const textDecoder = new TextDecoder();
@@ -29,6 +30,46 @@ let composeInvocationLogged = false;
 
 function commandExists(command: string): boolean {
   return Bun.which(command) !== null;
+}
+
+function parseProcRouteGateway(hexValue: string): string | null {
+  if (!/^[0-9a-fA-F]{8}$/.test(hexValue)) {
+    return null;
+  }
+  const octets = hexValue
+    .match(/../g)
+    ?.map((chunk) => Number.parseInt(chunk, 16))
+    .toReversed();
+  if (!octets || octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) {
+    return null;
+  }
+  return octets.join(".");
+}
+
+function resolvePublishedServiceHost(): string {
+  const explicitHost = process.env["BILIG_E2E_HOST"]?.trim();
+  if (explicitHost) {
+    return explicitHost;
+  }
+
+  if (process.platform !== "linux" || !existsSync("/.dockerenv")) {
+    return "127.0.0.1";
+  }
+
+  try {
+    const routes = readFileSync("/proc/net/route", "utf8").trim().split("\n").slice(1);
+    for (const route of routes) {
+      const fields = route.trim().split(/\s+/);
+      const destination = fields[1] ?? "";
+      const gateway = fields[2] ?? "";
+      if (destination !== "00000000") {
+        continue;
+      }
+      return parseProcRouteGateway(gateway) ?? "127.0.0.1";
+    }
+  } catch {}
+
+  return "127.0.0.1";
 }
 
 function probeComposeInvocation(): ComposeInvocation | null {
@@ -270,9 +311,10 @@ const e2eWebPort = await resolvePort(process.env["BILIG_E2E_WEB_PORT"], 4180);
 const e2eSyncServerPort = await resolvePort(process.env["BILIG_E2E_SYNC_SERVER_PORT"], 54422);
 const e2eZeroPort = await resolvePort(process.env["BILIG_E2E_ZERO_PORT"], 54849);
 const e2ePostgresPort = await resolvePort(process.env["BILIG_E2E_POSTGRES_PORT"], 55433);
-const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
+const e2eHost = resolvePublishedServiceHost();
+const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://${e2eHost}:${e2eWebPort}`;
 const e2eSyncServerUrl =
-  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
+  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://${e2eHost}:${e2eSyncServerPort}`;
 const e2eZeroKeepaliveUrl =
   process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
 
@@ -310,6 +352,7 @@ function runPlaywright(args: string[]): void {
       BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
       BILIG_E2E_ZERO_PORT: e2eZeroPort,
       BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
+      BILIG_E2E_HOST: e2eHost,
       BILIG_E2E_BASE_URL: e2eBaseUrl,
       BILIG_E2E_SYNC_SERVER_URL: e2eSyncServerUrl,
       BILIG_E2E_ZERO_KEEPALIVE_URL: e2eZeroKeepaliveUrl,
@@ -433,11 +476,11 @@ async function runComposePlaywright(): Promise<void> {
   runDockerCompose(["up", "-d", "--build", "postgres", "bilig-app", "zero-cache"]);
   try {
     console.info(
-      `compose browser stack starting with web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
+      `compose browser stack starting with host=${e2eHost}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
     );
     await waitForHttp(`${e2eBaseUrl}/healthz`, composeStartupTimeoutMs);
     await waitForHttp(`${e2eSyncServerUrl}/healthz`, composeStartupTimeoutMs);
-    await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs);
+    await waitForTcp(e2eHost, Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs);
     await waitForHttp(e2eZeroKeepaliveUrl, composeStartupTimeoutMs);
     runPlaywright(playwrightArgs);
   } catch (error) {
