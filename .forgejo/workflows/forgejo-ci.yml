@@ -78,8 +78,8 @@ jobs:
           set -eu
           git diff --exit-code
 
-  verify-fuzz:
-    name: strict-verify-fuzz
+  verify-fuzz-unit:
+    name: strict-verify-fuzz-unit
     runs-on: docker
     needs:
       - verify-static
@@ -87,8 +87,6 @@ jobs:
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_BROWSER_STACK: "compose"
-      BILIG_E2E_STARTUP_TIMEOUT_MS: "300000"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -125,7 +123,97 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Install Chromium for test verify
+      - name: Run unit fuzz CI
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          roots = [pathlib.Path("packages"), pathlib.Path("apps")]
+          fuzz_files = sorted(
+            str(path)
+            for root in roots
+            if root.exists()
+            for path in root.rglob("*.fuzz.test.ts")
+          )
+          if not fuzz_files:
+            print("No fuzz test files found", file=sys.stderr)
+            raise SystemExit(1)
+          subprocess.check_call(
+            ["pnpm", "exec", "vitest", "run", *fuzz_files],
+            env={
+              **dict(__import__("os").environ),
+              "BILIG_FUZZ_PROFILE": "main",
+              "BILIG_FUZZ_CAPTURE": "1",
+            },
+          )
+          PY
+
+      - name: Upload unit fuzz artifacts on failure
+        if: failure()
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
+        with:
+          name: bilig-fuzz-unit-artifacts
+          path: |
+            artifacts/fuzz
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  verify-fuzz-browser:
+    name: strict-verify-fuzz-browser
+    runs-on: docker
+    needs:
+      - verify-static
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_BROWSER_STACK: "compose"
+      BILIG_E2E_STARTUP_TIMEOUT_MS: "300000"
+      BILIG_FUZZ_PROFILE: "main"
+      BILIG_FUZZ_CAPTURE: "1"
+      BILIG_FUZZ_BROWSER: "1"
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Log runner environment
+        run: |
+          set -eu
+          uname -a
+          pwd
+          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
+
+      - name: Verify Node baseline
+        run: |
+          set -eu
+          node --version
+          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
+
+      - name: Enable pnpm via Corepack
+        run: |
+          set -eu
+          corepack enable
+          pnpm --version
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install latest Bun
+        run: |
+          set -eu
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun --version
+
+      - name: Install dependencies
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+
+      - name: Install Chromium for browser fuzz verify
         run: |
           set -eu
           pnpm exec playwright install --with-deps chromium
@@ -153,17 +241,17 @@ jobs:
           docker --version
           docker info
 
-      - name: Run fuzz CI
+      - name: Run browser fuzz CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          pnpm test:fuzz:main
+          bun scripts/run-browser-tests.ts --grep @fuzz-browser
 
-      - name: Upload fuzz artifacts on failure
+      - name: Upload browser fuzz artifacts on failure
         if: failure()
         uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
-          name: bilig-fuzz-artifacts
+          name: bilig-fuzz-browser-artifacts
           path: |
             artifacts/fuzz
             playwright-report
@@ -174,7 +262,8 @@ jobs:
     name: strict-verify-coverage
     runs-on: docker
     needs:
-      - verify-fuzz
+      - verify-fuzz-unit
+      - verify-fuzz-browser
     timeout-minutes: 20
     env:
       CI: "true"
