@@ -18,20 +18,15 @@ import {
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
-  deleteWorkbookVersionArgsSchema,
-  deleteSheetViewArgsSchema,
   rangeMutationArgsSchema,
   renderCommitArgsSchema,
   revertWorkbookChangeArgsSchema,
-  restoreWorkbookVersionArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
-  sheetViewArgsSchema,
   updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
-  workbookVersionArgsSchema,
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
 } from "@bilig/zero-sync";
@@ -40,13 +35,7 @@ import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
-import { deleteWorkbookSheetView, upsertWorkbookSheetView } from "./sheet-view-store.js";
 import { loadWorkbookChange } from "./workbook-change-store.js";
-import {
-  createWorkbookVersion,
-  deleteWorkbookVersion,
-  loadWorkbookVersion,
-} from "./workbook-version-store.js";
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -672,100 +661,6 @@ export async function handleServerMutator(
         address: parsed.address ?? null,
         selection: parsed.selection,
       });
-      return;
-    }
-
-    case "workbook.upsertSheetView": {
-      const parsed = sheetViewArgsSchema.parse(args);
-      await upsertWorkbookSheetView(serverTx.dbTransaction.wrappedTransaction, {
-        documentId: parsed.documentId,
-        id: parsed.id,
-        ownerUserId: session?.userID ?? "system",
-        name: parsed.name,
-        visibility: parsed.visibility,
-        sheetId: parsed.sheetId ?? null,
-        sheetName: parsed.sheetName ?? null,
-        address: parsed.address,
-        viewport: parsed.viewport,
-      });
-      return;
-    }
-
-    case "workbook.deleteSheetView": {
-      const parsed = deleteSheetViewArgsSchema.parse(args);
-      await deleteWorkbookSheetView(serverTx.dbTransaction.wrappedTransaction, {
-        documentId: parsed.documentId,
-        id: parsed.id,
-        ownerUserId: session?.userID ?? "system",
-      });
-      return;
-    }
-
-    case "workbook.createVersion": {
-      const parsed = workbookVersionArgsSchema.parse(args);
-      await runtimeManager.runExclusive(parsed.documentId, async () => {
-        const db = serverTx.dbTransaction.wrappedTransaction;
-        await acquireWorkbookMutationLock(db, parsed.documentId);
-        const state = await runtimeManager.loadRuntime(db, parsed.documentId);
-        await createWorkbookVersion(db, {
-          documentId: parsed.documentId,
-          id: parsed.id,
-          ownerUserId: session?.userID ?? "system",
-          name: parsed.name,
-          revision: state.headRevision,
-          snapshot: state.engine.exportSnapshot(),
-          ...(parsed.sheetId !== undefined ? { sheetId: parsed.sheetId } : {}),
-          ...(parsed.sheetName !== undefined ? { sheetName: parsed.sheetName } : {}),
-          ...(parsed.address !== undefined ? { address: parsed.address } : {}),
-          ...(parsed.viewport !== undefined ? { viewport: parsed.viewport } : {}),
-        });
-      });
-      return;
-    }
-
-    case "workbook.deleteVersion": {
-      const parsed = deleteWorkbookVersionArgsSchema.parse(args);
-      await deleteWorkbookVersion(serverTx.dbTransaction.wrappedTransaction, {
-        documentId: parsed.documentId,
-        id: parsed.id,
-        ownerUserId: session?.userID ?? "system",
-      });
-      return;
-    }
-
-    case "workbook.restoreVersion": {
-      const parsed = restoreWorkbookVersionArgsSchema.parse(args);
-      const version = await loadWorkbookVersion(
-        serverTx.dbTransaction.wrappedTransaction,
-        parsed.documentId,
-        parsed.id,
-      );
-      if (!version) {
-        throw new Error("Workbook version was not found");
-      }
-      await commitWorkbookMutation(
-        parsed.documentId,
-        serverTx,
-        {
-          kind: "restoreVersion",
-          versionId: version.id,
-          versionName: version.name,
-          ...(version.sheetName ? { sheetName: version.sheetName } : {}),
-          ...(version.address ? { address: version.address } : {}),
-          snapshot: version.snapshot,
-        },
-        runtimeManager,
-        (engine) => {
-          const undoSnapshot = engine.exportSnapshot();
-          engine.importSnapshot(version.snapshot);
-          return {
-            kind: "snapshot",
-            snapshot: undoSnapshot,
-          };
-        },
-        parsed.clientMutationId,
-        session,
-      );
       return;
     }
 

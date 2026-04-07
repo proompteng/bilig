@@ -202,59 +202,6 @@ export const updatePresenceArgsSchema = baseMutationArgsSchema.extend({
   selection: z.any().optional(),
 });
 
-const workbookViewportSchema = z
-  .object({
-    rowStart: z.number().int().nonnegative(),
-    rowEnd: z.number().int().nonnegative(),
-    colStart: z.number().int().nonnegative(),
-    colEnd: z.number().int().nonnegative(),
-  })
-  .refine(
-    (viewport) => viewport.rowEnd >= viewport.rowStart && viewport.colEnd >= viewport.colStart,
-    {
-      message: "viewport bounds must be ordered",
-    },
-  );
-
-export const sheetViewArgsSchema = baseMutationArgsSchema
-  .extend({
-    id: z.string().min(1),
-    sheetId: z.number().int().positive().optional(),
-    sheetName: z.string().trim().min(1).optional(),
-    name: z.string().trim().min(1),
-    visibility: z.enum(["private", "shared"]),
-    address: z.string().min(1),
-    viewport: workbookViewportSchema,
-  })
-  .refine((args) => args.sheetId !== undefined || args.sheetName !== undefined, {
-    message: "sheetId or sheetName is required",
-  });
-
-export const deleteSheetViewArgsSchema = baseMutationArgsSchema.extend({
-  id: z.string().min(1),
-});
-
-export const workbookVersionArgsSchema = baseMutationArgsSchema
-  .extend({
-    id: z.string().min(1),
-    name: z.string().trim().min(1),
-    sheetId: z.number().int().positive().optional(),
-    sheetName: z.string().trim().min(1).optional(),
-    address: z.string().min(1),
-    viewport: workbookViewportSchema.optional(),
-  })
-  .refine((args) => args.sheetId !== undefined || args.sheetName !== undefined, {
-    message: "sheetId or sheetName is required",
-  });
-
-export const deleteWorkbookVersionArgsSchema = baseMutationArgsSchema.extend({
-  id: z.string().min(1),
-});
-
-export const restoreWorkbookVersionArgsSchema = baseMutationArgsSchema.extend({
-  id: z.string().min(1),
-});
-
 export const revertWorkbookChangeArgsSchema = baseMutationArgsSchema.extend({
   revision: z.number().int().positive(),
 });
@@ -285,11 +232,6 @@ export const mutators = defineMutators({
     setRangeNumberFormat: defineMutator(setRangeNumberFormatArgsSchema, noop),
     clearRangeNumberFormat: defineMutator(clearRangeNumberFormatArgsSchema, noop),
     updatePresence: defineMutator(updatePresenceArgsSchema, noop),
-    upsertSheetView: defineMutator(sheetViewArgsSchema, noop),
-    deleteSheetView: defineMutator(deleteSheetViewArgsSchema, noop),
-    createVersion: defineMutator(workbookVersionArgsSchema, noop),
-    deleteVersion: defineMutator(deleteWorkbookVersionArgsSchema, noop),
-    restoreVersion: defineMutator(restoreWorkbookVersionArgsSchema, noop),
     revertChange: defineMutator(revertWorkbookChangeArgsSchema, noop),
   },
 });

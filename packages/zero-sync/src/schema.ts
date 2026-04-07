@@ -131,21 +131,6 @@ const presenceCoarse = table("presence_coarse")
   })
   .primaryKey("workbookId", "sessionId");
 
-const sheetView = table("sheet_view")
-  .columns({
-    workbookId: string().from("workbook_id"),
-    id: string(),
-    ownerUserId: string().from("owner_user_id"),
-    name: string(),
-    visibility: string<"private" | "shared">(),
-    sheetId: number().from("sheet_id").optional(),
-    sheetName: string().from("sheet_name").optional(),
-    address: string(),
-    viewportJson: json().from("viewport_json"),
-    updatedAt: number().from("updated_at"),
-  })
-  .primaryKey("workbookId", "id");
-
 const workbookChange = table("workbook_change")
   .columns({
     workbookId: string().from("workbook_id"),
@@ -165,38 +150,6 @@ const workbookChange = table("workbook_change")
   })
   .primaryKey("workbookId", "revision");
 
-const workbookVersion = table("workbook_version")
-  .columns({
-    workbookId: string().from("workbook_id"),
-    id: string(),
-    ownerUserId: string().from("owner_user_id"),
-    name: string(),
-    revision: number(),
-    sheetId: number().from("sheet_id").optional(),
-    sheetName: string().from("sheet_name").optional(),
-    address: string().optional(),
-    viewportJson: json().from("viewport_json").optional(),
-    createdAt: number().from("created_at"),
-    updatedAt: number().from("updated_at"),
-  })
-  .primaryKey("workbookId", "id");
-
-const workbookScenario = table("workbook_scenario")
-  .columns({
-    documentId: string().from("document_id"),
-    workbookId: string().from("workbook_id"),
-    ownerUserId: string().from("owner_user_id"),
-    name: string(),
-    baseRevision: number().from("base_revision"),
-    sheetId: number().from("sheet_id").optional(),
-    sheetName: string().from("sheet_name").optional(),
-    address: string().optional(),
-    viewportJson: json().from("viewport_json").optional(),
-    createdAt: number().from("created_at"),
-    updatedAt: number().from("updated_at"),
-  })
-  .primaryKey("documentId");
-
 export const schema = createSchema({
   tables: [
     workbooks,
@@ -209,10 +162,7 @@ export const schema = createSchema({
     cellEval,
     definedNames,
     presenceCoarse,
-    sheetView,
     workbookChange,
-    workbookVersion,
-    workbookScenario,
   ],
   relationships: [],
 });

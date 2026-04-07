@@ -75,12 +75,6 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async loadAuthoritativeEvents() {
       throw new Error("not used");
     },
-    async createWorkbookScenario() {
-      throw new Error("not used");
-    },
-    async deleteWorkbookScenario() {
-      throw new Error("not used");
-    },
     ...overrides,
   };
 }
@@ -668,111 +662,6 @@ describe("sync-server workbook agent", () => {
           }),
         }),
       );
-    } finally {
-      await app.close();
-    }
-  });
-});
-
-describe("sync-server workbook scenarios", () => {
-  it("creates scenario branches through the monolith route", async () => {
-    const createWorkbookScenario = vi.fn(async () => ({
-      documentId: "scenario:new",
-      workbookId: "doc-1",
-      ownerUserId: "alex@example.com",
-      name: "What-if plan",
-      baseRevision: 12,
-      sheetId: 3,
-      sheetName: "Revenue",
-      address: "D12",
-      viewport: {
-        rowStart: 4,
-        rowEnd: 22,
-        colStart: 2,
-        colEnd: 10,
-      },
-      createdAt: 1_775_456_000_000,
-      updatedAt: 1_775_456_000_000,
-      browserUrl: "http://127.0.0.1:4321/?document=scenario%3Anew&sheet=Revenue&cell=D12",
-    }));
-    const { app } = createSyncServer({
-      logger: false,
-      zeroSyncService: createZeroSyncStub({
-        createWorkbookScenario,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v2/documents/doc-1/scenarios",
-        payload: {
-          name: "What-if plan",
-          sheetName: "Revenue",
-          address: "D12",
-          viewport: {
-            rowStart: 4,
-            rowEnd: 22,
-            colStart: 2,
-            colEnd: 10,
-          },
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(createWorkbookScenario).toHaveBeenCalledWith(
-        {
-          workbookId: "doc-1",
-          name: "What-if plan",
-          sheetName: "Revenue",
-          address: "D12",
-          viewport: {
-            rowStart: 4,
-            rowEnd: 22,
-            colStart: 2,
-            colEnd: 10,
-          },
-        },
-        expect.objectContaining({
-          userID: expect.any(String),
-        }),
-      );
-      expect(response.json()).toMatchObject({
-        documentId: "scenario:new",
-        workbookId: "doc-1",
-        name: "What-if plan",
-      });
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("deletes scenario branches through the monolith route", async () => {
-    const deleteWorkbookScenario = vi.fn(async () => undefined);
-    const { app } = createSyncServer({
-      logger: false,
-      zeroSyncService: createZeroSyncStub({
-        deleteWorkbookScenario,
-      }),
-    });
-
-    try {
-      const response = await app.inject({
-        method: "DELETE",
-        url: "/v2/documents/doc-1/scenarios/scenario%3Adelete",
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(deleteWorkbookScenario).toHaveBeenCalledWith(
-        {
-          workbookId: "doc-1",
-          documentId: "scenario:delete",
-        },
-        expect.objectContaining({
-          userID: expect.any(String),
-        }),
-      );
-      expect(response.json()).toEqual({ ok: true });
     } finally {
       await app.close();
     }

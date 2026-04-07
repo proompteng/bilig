@@ -121,16 +121,12 @@ function WorkerWorkbookAppInner({
                   {app.headerStatus}
                 </div>
               }
-              restoreViewportTarget={app.restoreViewportTarget}
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
               sideRail={app.agentPanel}
             />
           ) : null}
         </div>
-        {app.scenariosPanel}
-        {app.versionsPanel}
-        {app.viewsPanel}
         {app.changesPanel}
         {importPanel}
       </div>

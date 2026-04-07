@@ -95,15 +95,6 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
       "bilig.rename_sheet",
     ],
   },
-  {
-    id: "branch-scratchpad",
-    label: "Branch Scratchpad",
-    focus: "edit",
-    description: "Create a private scratchpad workbook branch from the current context.",
-    prompt:
-      "Create a private scratchpad branch for the current workbook context so I can explore a risky what-if without touching the source workbook.",
-    toolNames: ["bilig.get_context", "bilig.create_scenario"],
-  },
 ];
 
 export function renderWorkbookAgentSkillInstructions(): string {

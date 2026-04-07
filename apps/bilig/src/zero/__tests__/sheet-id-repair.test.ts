@@ -94,10 +94,7 @@ describe("sheet-id-repair", () => {
           : null,
       (text) =>
         text.includes("FROM pg_tables")
-          ? [
-              { tableName: "presence_coarse" } satisfies QueryResultRow,
-              { tableName: "sheet_view" } satisfies QueryResultRow,
-            ]
+          ? [{ tableName: "presence_coarse" } satisfies QueryResultRow]
           : null,
     ]);
 
@@ -117,15 +114,6 @@ describe("sheet-id-repair", () => {
       queryable.calls.some(
         (call) =>
           call.text.includes("UPDATE presence_coarse") &&
-          call.values?.[0] === "doc-1" &&
-          call.values?.[1] === "Sheet1" &&
-          call.values?.[2] === 1,
-      ),
-    ).toBe(true);
-    expect(
-      queryable.calls.some(
-        (call) =>
-          call.text.includes("UPDATE sheet_view") &&
           call.values?.[0] === "doc-1" &&
           call.values?.[1] === "Sheet1" &&
           call.values?.[2] === 1,

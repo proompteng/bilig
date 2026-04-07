@@ -47,14 +47,6 @@ const workbookGet = defineQuery(workbookQueryArgsSchema, ({ args: { documentId }
   zql.workbooks.where("id", documentId).one(),
 );
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function resolveQueryUserId(ctx: unknown): string {
-  return isRecord(ctx) && typeof ctx["userID"] === "string" ? ctx["userID"] : "";
-}
-
 const sheetByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
   zql.sheets.where("workbookId", documentId).orderBy("sortOrder", "asc"),
 );
@@ -129,51 +121,11 @@ const presenceCoarseByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
   zql.presence_coarse.where("workbookId", documentId).orderBy("updatedAt", "desc"),
 );
 
-const sheetViewByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId }, ctx }) =>
-  zql.sheet_view
-    .where((eb) =>
-      eb.and(
-        eb.cmp("workbookId", documentId),
-        eb.or(eb.cmp("visibility", "shared"), eb.cmp("ownerUserId", resolveQueryUserId(ctx))),
-      ),
-    )
-    .orderBy("updatedAt", "desc")
-    .orderBy("name", "asc"),
-);
-
 const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
   zql.workbook_change
     .where("workbookId", documentId)
     .orderBy("createdAt", "desc")
     .orderBy("revision", "desc"),
-);
-
-const workbookVersionByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-  zql.workbook_version
-    .where("workbookId", documentId)
-    .orderBy("updatedAt", "desc")
-    .orderBy("createdAt", "desc")
-    .orderBy("name", "asc"),
-);
-
-const workbookScenarioByWorkbook = defineQuery(
-  workbookQueryArgsSchema,
-  ({ args: { documentId }, ctx }) =>
-    zql.workbook_scenario
-      .where("workbookId", documentId)
-      .where("ownerUserId", resolveQueryUserId(ctx))
-      .orderBy("updatedAt", "desc")
-      .orderBy("createdAt", "desc")
-      .orderBy("name", "asc"),
-);
-
-const workbookScenarioByDocument = defineQuery(
-  workbookQueryArgsSchema,
-  ({ args: { documentId }, ctx }) =>
-    zql.workbook_scenario
-      .where("documentId", documentId)
-      .where("ownerUserId", resolveQueryUserId(ctx))
-      .one(),
 );
 
 export const queries = defineQueries({
@@ -229,30 +181,10 @@ export const queries = defineQueries({
   presence: {
     byWorkbook: presenceCoarseByWorkbook,
   },
-  sheetView: {
-    byWorkbook: sheetViewByWorkbook,
-  },
-  sheetViews: {
-    byWorkbook: sheetViewByWorkbook,
-  },
   workbookChange: {
     byWorkbook: workbookChangeByWorkbook,
   },
   workbookChanges: {
     byWorkbook: workbookChangeByWorkbook,
-  },
-  workbookVersion: {
-    byWorkbook: workbookVersionByWorkbook,
-  },
-  workbookVersions: {
-    byWorkbook: workbookVersionByWorkbook,
-  },
-  workbookScenario: {
-    byWorkbook: workbookScenarioByWorkbook,
-    byDocument: workbookScenarioByDocument,
-  },
-  workbookScenarios: {
-    byWorkbook: workbookScenarioByWorkbook,
-    byDocument: workbookScenarioByDocument,
   },
 });

@@ -13,10 +13,7 @@ export const ZERO_PUBLICATION_TABLES = [
   "cell_eval",
   "defined_names",
   "presence_coarse",
-  "sheet_view",
   "workbook_change",
-  "workbook_version",
-  "workbook_scenario",
 ] as const;
 
 const POSTGRES_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;

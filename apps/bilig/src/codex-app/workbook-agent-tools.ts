@@ -69,9 +69,6 @@ const traceDependenciesToolArgsSchema = z.object({
   direction: z.enum(["precedents", "dependents", "both"]).optional(),
   depth: z.number().int().positive().max(4).optional(),
 });
-const createScenarioToolArgsSchema = z.object({
-  name: z.string().trim().min(1),
-});
 
 const writeRangeToolArgsSchema = z.object({
   sheetName: z.string().min(1),
@@ -542,19 +539,6 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.create_scenario",
-      description:
-        "Create a private scratchpad branch as a separate workbook document from the current workbook context.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["name"],
-        properties: {
-          name: { type: "string" },
-        },
-      },
-    },
-    {
       name: "bilig.write_range",
       description:
         "Write a rectangular matrix of spreadsheet inputs starting at a top-left address. Use primitives for literals, {formula} for formulas, and null to clear a cell.",
@@ -899,37 +883,6 @@ export async function handleWorkbookAgentToolCall(
             }),
         );
         return textToolResult(stringifyJson(report));
-      }
-      case "bilig.create_scenario": {
-        const args = createScenarioToolArgsSchema.parse(request.arguments);
-        const scenario = await context.zeroSyncService.createWorkbookScenario(
-          {
-            workbookId: context.documentId,
-            name: args.name,
-            ...(context.uiContext
-              ? {
-                  sheetName: context.uiContext.selection.sheetName,
-                  address: context.uiContext.selection.address,
-                  viewport: context.uiContext.viewport,
-                }
-              : {}),
-          },
-          context.session,
-        );
-        return textToolResult(
-          stringifyJson({
-            created: true,
-            documentId: scenario.documentId,
-            workbookId: scenario.workbookId,
-            name: scenario.name,
-            baseRevision: scenario.baseRevision,
-            target: {
-              documentId: scenario.documentId,
-              sheetName: scenario.sheetName,
-              address: scenario.address,
-            },
-          }),
-        );
       }
       case "bilig.write_range": {
         const args = writeRangeToolArgsSchema.parse(request.arguments);

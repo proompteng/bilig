@@ -153,7 +153,7 @@ afterEach(() => {
 });
 
 describe("workbook agent pane", () => {
-  it("shows local spreadsheet skills in the right rail and seeds the composer from a skill", async () => {
+  it("renders the assistant rail without the skill-card strip", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -176,23 +176,15 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(host.textContent).toContain("Local Skills");
-    expect(host.textContent).toContain("Find Formula Issues");
-    expect(host.textContent).toContain("Trace Dependencies");
-    const inspectSkill = [...host.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Inspect Selection"),
-    );
-    expect(inspectSkill).toBeDefined();
-
-    await act(async () => {
-      inspectSkill?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
     const input = host.querySelector("[data-testid='workbook-agent-input']");
     expect(input instanceof HTMLTextAreaElement).toBe(true);
-    expect(input instanceof HTMLTextAreaElement ? input.value : "").toContain(
-      "Inspect the current cell selection",
+    expect(input instanceof HTMLTextAreaElement ? input.value : "").toBe("");
+    expect(host.textContent).not.toContain("Local Skills");
+    expect(host.textContent).not.toContain("Inspect Selection");
+    expect(host.textContent).not.toContain(
+      "Ask the assistant to inspect, edit, or restructure this workbook.",
     );
+    expect(host.textContent).toContain("Assistant");
 
     await act(async () => {
       root.unmount();

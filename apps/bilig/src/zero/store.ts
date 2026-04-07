@@ -23,7 +23,6 @@ import {
 } from "@bilig/zero-sync";
 import { appendWorkbookChange } from "./workbook-change-store.js";
 import { repairWorkbookSheetIds } from "./sheet-id-repair.js";
-import { reconcileWorkbookSheetViews } from "./sheet-view-store.js";
 import {
   buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine,
@@ -2228,11 +2227,6 @@ export async function persistWorkbookMutation(
     payload: options.eventPayload,
     undoBundle: options.undoBundle,
     createdAtUnixMs: Date.parse(updatedAt),
-  });
-  await reconcileWorkbookSheetViews({
-    db,
-    documentId,
-    payload: options.eventPayload,
   });
 
   await supersedePendingRecalcJobs(db, documentId, revision);

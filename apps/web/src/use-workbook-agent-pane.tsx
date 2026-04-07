@@ -657,9 +657,6 @@ export function useWorkbookAgentPane(input: {
         onSubmit={() => {
           void sendPrompt();
         }}
-        onUseSkillPrompt={(prompt) => {
-          setDraft(prompt);
-        }}
       />
     ),
     [

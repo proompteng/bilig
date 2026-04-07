@@ -722,8 +722,6 @@ Network becomes shared truth plumbing, not the source of immediacy.
 - `bench:contracts` now also enforces worker reconnect catch-up with `100` pending ops p95 `<2s` on the real SQLite-backed worker runtime path for a `10k` active workbook, including authoritative drift, local rebase, submission drain, and authoritative absorption
 - Zero-backed coarse collaborator presence is now live in the mounted workbook header, with session-scoped location heartbeats and click-to-jump on active collaborator cells
 - authoritative `workbook_change` rows now persist beside workbook revisions, sync through Zero, and render in a mounted changes pane with jump-to-change targets in the browser shell
-- authoritative `sheet_view` rows now persist beside workbook metadata, sync through Zero with owner-aware visibility rules, and render as private/shared named views with exact viewport restore in the browser shell
-- authoritative `workbook_version` rows now persist named workbook checkpoints beside workbook revisions, sync through Zero as version metadata, render in a mounted versions pane, and restore through the same authoritative mutation/rebase path as any other workbook change
 - same-cell stale-submit conflicts now keep the local draft alive, surface a remote-change badge during editing, and require an explicit compare choice before a non-trivial stale draft can overwrite the authoritative cell
 - authoritative `workbook_change` rows now persist replayable undo bundles, support one-click authoritative revert from the mounted changes pane, and mark reverted revisions in shared history
 
@@ -1037,7 +1035,7 @@ Postpone these until the local-first core is solid:
   Q&A is fine. The priority is semantic plan/preview/apply over workbook ops.
 
 - **heavy comments/tasks bureaucracy**
-  Views, changes, presence, and conflict-safe editing add more value earlier.
+  Changes, presence, and conflict-safe editing add more value earlier.
 
 - **visual novelty work**
   Quiet dense tool-like UI is the right design language for this product. The repo’s own UI rules are right about that.
@@ -1165,7 +1163,6 @@ Change it into:
 - `useWorkbookCommands.ts`
 - `useWorkbookEditor.ts`
 - `useWorkbookSelection.ts`
-- `useWorkbookViews.ts`
 - `useWorkbookChangesRail.ts`
 - `useWorkbookAiRail.ts`
 
@@ -1356,7 +1353,6 @@ Add / change:
 - tile queries that stay stable under scroll
 - `workbook_change`
 - `presence_coarse`
-- `sheet_view`
 
 Remove client dependence on:
 

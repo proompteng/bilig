@@ -41,9 +41,6 @@ import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { WorkbookHeaderControlGroup } from "./workbook-header-controls.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
-import { useWorkbookScenariosPane } from "./use-workbook-scenarios-pane.js";
-import { useWorkbookViewsPane } from "./use-workbook-views-pane.js";
-import { useWorkbookVersionsPane } from "./use-workbook-versions-pane.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
@@ -104,14 +101,6 @@ export function useWorkerWorkbookAppState(input: {
   const zeroRef = useRef<ZeroClient>(zero);
   const connectionStateRef = useRef(connectionState.name);
   const visibleViewportRef = useRef<Viewport>(selectionViewport(selection));
-  const restoreViewportTokenRef = useRef(0);
-  const [restoreViewportTarget, setRestoreViewportTarget] = useState<
-    | {
-        readonly token: number;
-        readonly viewport: Viewport;
-      }
-    | undefined
-  >(undefined);
 
   useEffect(() => {
     selectionRef.current = selection;
@@ -766,42 +755,6 @@ export function useWorkerWorkbookAppState(input: {
       selectAddress(sheetName, address);
     },
   });
-  const { scenarioStatus, scenariosPanel, scenariosToggle } = useWorkbookScenariosPane({
-    documentId,
-    currentUserId: runtimeConfig.currentUserId,
-    selection,
-    zero,
-    enabled: runtimeReady,
-    getCurrentViewport: () => visibleViewportRef.current,
-  });
-  const { viewsPanel, viewsToggle } = useWorkbookViewsPane({
-    documentId,
-    currentUserId: runtimeConfig.currentUserId,
-    selection,
-    sheetNames,
-    zero,
-    enabled: runtimeReady,
-    getCurrentViewport: () => visibleViewportRef.current,
-    onApply: (view) => {
-      if (!view.sheetName) {
-        return;
-      }
-      restoreViewportTokenRef.current += 1;
-      setRestoreViewportTarget({
-        token: restoreViewportTokenRef.current,
-        viewport: view.viewport,
-      });
-      selectAddress(view.sheetName, view.address);
-    },
-  });
-  const { versionsPanel, versionsToggle } = useWorkbookVersionsPane({
-    documentId,
-    currentUserId: runtimeConfig.currentUserId,
-    selection,
-    zero,
-    enabled: runtimeReady,
-    getCurrentViewport: () => visibleViewportRef.current,
-  });
   const { agentPanel, agentToggle, previewRanges } = useWorkbookAgentPane({
     documentId,
     enabled: runtimeReady,
@@ -908,14 +861,10 @@ export function useWorkerWorkbookAppState(input: {
     return (
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         <WorkbookHeaderControlGroup data-testid="workbook-panel-toggle-group">
-          {scenariosToggle}
-          {versionsToggle}
-          {viewsToggle}
           {changesToggle}
           {agentToggle}
         </WorkbookHeaderControlGroup>
         {toolbarHeaderStatus}
-        {scenarioStatus}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -926,17 +875,7 @@ export function useWorkerWorkbookAppState(input: {
         ) : null}
       </div>
     );
-  }, [
-    changesToggle,
-    collaborators,
-    agentToggle,
-    scenarioStatus,
-    scenariosToggle,
-    selectAddress,
-    toolbarHeaderStatus,
-    versionsToggle,
-    viewsToggle,
-  ]);
+  }, [changesToggle, collaborators, agentToggle, selectAddress, toolbarHeaderStatus]);
 
   return {
     agentPanel,
@@ -967,7 +906,6 @@ export function useWorkerWorkbookAppState(input: {
     ribbon,
     runtimeError,
     runtimeReady,
-    scenariosPanel,
     selectAddress,
     selectedCell,
     selection,
@@ -978,11 +916,8 @@ export function useWorkerWorkbookAppState(input: {
     subscribeViewport,
     toggleBooleanCell,
     visibleEditorValue,
-    viewsPanel,
-    versionsPanel,
     workbookReady,
     workerHandle,
     writesAllowed,
-    restoreViewportTarget,
   };
 }

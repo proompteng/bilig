@@ -116,12 +116,6 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async loadAuthoritativeEvents() {
       throw new Error("not used");
     },
-    async createWorkbookScenario() {
-      throw new Error("not used");
-    },
-    async deleteWorkbookScenario() {
-      throw new Error("not used");
-    },
     ...overrides,
   };
 }
@@ -160,7 +154,6 @@ describe("workbook agent service", () => {
           "bilig.find_formula_issues",
           "bilig.search_workbook",
           "bilig.trace_dependencies",
-          "bilig.create_scenario",
           "bilig.read_range",
           "bilig.write_range",
         ]),

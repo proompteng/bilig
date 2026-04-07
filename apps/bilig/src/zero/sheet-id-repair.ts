@@ -1,12 +1,6 @@
 import type { QueryResultRow, Queryable } from "./store.js";
 
-const SHEET_ID_DEPENDENT_TABLES = [
-  "presence_coarse",
-  "sheet_view",
-  "workbook_change",
-  "workbook_version",
-  "workbook_scenario",
-] as const;
+const SHEET_ID_DEPENDENT_TABLES = ["presence_coarse", "workbook_change"] as const;
 
 export interface WorkbookSheetIdRow {
   readonly workbookId: string;

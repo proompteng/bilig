@@ -92,10 +92,7 @@ describe("publication-store", () => {
     const query = latestQuery(queryable);
     expect(query.text).toContain(`ALTER PUBLICATION "${DEFAULT_ZERO_PUBLICATION}" ADD TABLE`);
     expect(query.text).toContain(`public."presence_coarse"`);
-    expect(query.text).toContain(`public."sheet_view"`);
     expect(query.text).toContain(`public."workbook_change"`);
-    expect(query.text).toContain(`public."workbook_version"`);
-    expect(query.text).toContain(`public."workbook_scenario"`);
     expect(query.text).not.toContain(`public."workbooks"`);
     expect(query.text).not.toContain(`public."defined_names"`);
   });

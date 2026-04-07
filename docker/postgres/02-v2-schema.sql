@@ -35,20 +35,6 @@ CREATE TABLE IF NOT EXISTS sheet (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS sheet_view (
-    id TEXT PRIMARY KEY,
-    workbook_id TEXT NOT NULL REFERENCES workbook(id) ON DELETE CASCADE,
-    sheet_id TEXT NOT NULL REFERENCES sheet(id) ON DELETE CASCADE,
-    owner_user_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    filter_json JSONB NOT NULL,
-    sort_json JSONB NOT NULL,
-    slicer_json JSONB NOT NULL,
-    is_default BOOLEAN NOT NULL DEFAULT FALSE,
-    updated_at BIGINT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS cell_style (
     workbook_id TEXT NOT NULL REFERENCES workbook(id) ON DELETE CASCADE,
     style_id TEXT NOT NULL,
@@ -173,7 +159,6 @@ CREATE PUBLICATION zero_data_v2 FOR TABLE
     workbook, 
     workbook_member, 
     sheet, 
-    sheet_view, 
     cell_style, 
     number_format, 
     cell_input, 
