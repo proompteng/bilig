@@ -1113,7 +1113,7 @@ test("web app renders the fill color palette as a visible popover below the tool
   expect(paletteBox.height).toBeGreaterThan(120);
   expect(paletteBox.width).toBeGreaterThan(200);
   expect(swatchBox.y + swatchBox.height).toBeLessThanOrEqual(paletteBox.y + paletteBox.height);
-  await expect(page.getByText("Standard")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show fill color swatches" })).toBeVisible();
 });
 
 test("web app applies preset swatch colors directly from the palette", async ({ page }) => {
