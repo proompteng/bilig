@@ -144,15 +144,10 @@ function StructuredToolOutput(props: {
     const issues = parsed["issues"].flatMap((issue) => (isRecord(issue) ? [issue] : []));
     return (
       <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 text-[11px] text-[var(--wb-text-muted)]">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-              Formula Issues
-            </div>
-            <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
-              {readNumber(summary?.["issueCount"], issues.length)} issues across{" "}
-              {readNumber(summary?.["scannedFormulaCells"])} formulas
-            </div>
+            {readNumber(summary?.["issueCount"], issues.length)} issues ·{" "}
+            {readNumber(summary?.["scannedFormulaCells"])} formulas
           </div>
           <div className="text-right text-[10px] text-[var(--wb-text-subtle)]">
             {readNumber(summary?.["errorCount"])} errors · {readNumber(summary?.["cycleCount"])}{" "}
@@ -204,15 +199,8 @@ function StructuredToolOutput(props: {
     const matches = parsed["matches"].flatMap((match) => (isRecord(match) ? [match] : []));
     return (
       <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-              Search Matches
-            </div>
-            <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
-              Query: “{readString(parsed["query"])}”
-            </div>
-          </div>
+        <div className="flex items-start justify-between gap-3 text-[11px] text-[var(--wb-text-muted)]">
+          <div className="truncate">“{readString(parsed["query"])}”</div>
           <div className="text-[10px] text-[var(--wb-text-subtle)]">
             {readNumber(
               isRecord(parsed["summary"]) ? parsed["summary"]["matchCount"] : undefined,
@@ -269,14 +257,9 @@ function StructuredToolOutput(props: {
     const layers = parsed["layers"].flatMap((layer) => (isRecord(layer) ? [layer] : []));
     return (
       <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 text-[11px] text-[var(--wb-text-muted)]">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-              Dependency Trace
-            </div>
-            <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
-              {readString(root?.["sheetName"])}!{readString(root?.["address"])}
-            </div>
+            {readString(root?.["sheetName"])}!{readString(root?.["address"])}
           </div>
           <div className="text-[10px] text-[var(--wb-text-subtle)]">
             {readString(parsed["direction"], "both")} · {readNumber(parsed["depth"])} hops
@@ -352,7 +335,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   if (entry.kind === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
+        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
           {entry.text}
         </div>
       </div>
@@ -366,7 +349,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
     return (
       <div
         className={cn(
-          workbookSurfaceClass(),
+          workbookInsetClass(),
           "px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]",
         )}
       >
@@ -390,18 +373,15 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
 
   if (entry.kind === "tool") {
     return (
-      <div className={cn(workbookSurfaceClass(), "px-3 py-2")}>
+      <div className={cn(workbookInsetClass(), "px-3 py-2")}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[12px] font-semibold text-[var(--wb-text)]">{entry.toolName}</div>
+            <div className="text-[11px] font-medium text-[var(--wb-text-muted)]">
+              {entry.toolName}
+            </div>
           </div>
           <ToolStatusPill status={entry.toolStatus} />
         </div>
-        {entry.argumentsText ? (
-          <pre className="mt-2 overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-app-bg)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
-            {entry.argumentsText}
-          </pre>
-        ) : null}
         <StructuredToolOutput toolName={entry.toolName} outputText={entry.outputText} />
         {entry.outputText &&
         (!supportsStructuredToolOutput(entry.toolName) ||
@@ -736,9 +716,9 @@ export function WorkbookAgentPanel(props: {
         <div className="relative">
           <textarea
             id="workbook-agent-input"
-            className="min-h-32 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+            className="min-h-32 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] placeholder:text-[var(--wb-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
             data-testid="workbook-agent-input"
-            placeholder=""
+            placeholder="Message"
             value={props.draft}
             onChange={(event) => {
               props.onDraftChange(event.target.value);

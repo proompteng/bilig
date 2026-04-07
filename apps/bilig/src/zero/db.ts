@@ -12,9 +12,13 @@ export function resolveZeroDatabaseUrl(): string | null {
 }
 
 export function createZeroPool(connectionString: string): Pool {
-  return new Pool({
+  const pool = new Pool({
     connectionString,
   });
+  pool.on("error", (error) => {
+    console.error("Zero Postgres pool error", error);
+  });
+  return pool;
 }
 
 export function createZeroDbProvider(connectionString: string) {

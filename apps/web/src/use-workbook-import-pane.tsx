@@ -117,7 +117,6 @@ export function useWorkbookImportPane(input: {
   const importPanel = useMemo(
     () => (
       <WorkbookImportPanel
-        currentDocumentId={currentDocumentId}
         enabled={enabled}
         isImporting={isImporting}
         isOpen={isOpen}
@@ -138,7 +137,6 @@ export function useWorkbookImportPane(input: {
       />
     ),
     [
-      currentDocumentId,
       enabled,
       importStagedFile,
       isImporting,

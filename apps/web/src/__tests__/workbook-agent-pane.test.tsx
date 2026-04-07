@@ -206,7 +206,7 @@ describe("workbook agent pane", () => {
     );
     expect(host.textContent).toContain("Sheet1!A1");
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
-      "",
+      "Message",
     );
 
     await act(async () => {
@@ -499,10 +499,11 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(host.textContent).toContain("Search Matches");
     expect(host.textContent).toContain("Gross Margin");
-    expect(host.textContent).toContain("Formula Issues");
+    expect(host.textContent).toContain("gross margin");
     expect(host.textContent).toContain("C1");
+    expect(host.textContent).not.toContain("Search Matches");
+    expect(host.textContent).not.toContain("Formula Issues");
 
     await act(async () => {
       root.unmount();
