@@ -115,33 +115,29 @@ export function WorkbookImportPanel(props: {
 
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(15,23,42,0.18)] p-4"
+      className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(28,25,38,0.14)] p-4"
       data-testid="workbook-import-panel"
       id="workbook-import-panel"
     >
       <div
         aria-label="Workbook import staging"
         aria-modal="true"
-        className="flex max-h-[calc(100vh-3rem)] w-full max-w-[72rem] flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[72rem] flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[0_18px_48px_rgba(28,25,38,0.12)]"
         role="dialog"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-5 py-4">
-          <div />
-          <button
-            aria-label="Close workbook import"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
-            type="button"
-            onClick={props.onClose}
-          >
-            ×
-          </button>
-        </div>
-
+        <button
+          aria-label="Close workbook import"
+          className="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+          type="button"
+          onClick={props.onClose}
+        >
+          ×
+        </button>
         <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[20rem,minmax(0,1fr)]">
-          <div className="flex flex-col gap-4 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-5 lg:border-b-0 lg:border-r">
+          <div className="flex flex-col gap-4 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-5 pr-12 lg:border-b-0 lg:border-r">
             <label className="flex flex-col gap-3">
               <span className="sr-only">Select file</span>
-              <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4 shadow-[var(--wb-shadow-sm)]">
+              <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4">
                 <div className="flex items-center gap-3 text-[12px] text-[var(--wb-text-muted)]">
                   <Upload className="h-4 w-4" />
                 </div>
@@ -167,7 +163,7 @@ export function WorkbookImportPanel(props: {
 
             {props.stagedPreview ? (
               <div className="flex flex-col gap-3">
-                <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4 shadow-[var(--wb-shadow-sm)]">
+                <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4">
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-[var(--wb-accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
                       {formatImportType(props.stagedPreview.contentType)}
@@ -189,7 +185,7 @@ export function WorkbookImportPanel(props: {
                 </div>
 
                 {props.stagedPreview.warnings.length > 0 ? (
-                  <div className="rounded-[var(--wb-radius-control)] border border-[#f5d38a] bg-[#fff8e8] px-4 py-3 text-[12px] text-[#8a5a00]">
+                  <div className="rounded-[var(--wb-radius-control)] border border-[#f5d38a] bg-[#fffaf0] px-4 py-3 text-[12px] text-[#8a5a00]">
                     <ul className="list-disc space-y-1 pl-4">
                       {props.stagedPreview.warnings.map((warning) => (
                         <li key={warning}>{warning}</li>
@@ -200,7 +196,7 @@ export function WorkbookImportPanel(props: {
 
                 <div className="mt-auto flex flex-col gap-2">
                   <button
-                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 text-[12px] font-semibold text-[var(--wb-accent)] shadow-[var(--wb-shadow-sm)] transition-colors hover:bg-[var(--wb-accent-soft)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-semibold text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
                     data-testid="workbook-import-create"
                     disabled={props.isImporting}
                     type="button"
@@ -209,7 +205,7 @@ export function WorkbookImportPanel(props: {
                     {props.isImporting ? "…" : "New"}
                   </button>
                   <button
-                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[var(--wb-accent-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
                     data-testid="workbook-import-replace"
                     disabled={props.isImporting}
                     type="button"

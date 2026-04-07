@@ -14,17 +14,17 @@ interface WorkbookSheetTabsProps {
 }
 
 const sheetStripClass = cva(
-  "flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 py-1.5",
+  "flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5",
 );
 
 const sheetTabsRootClass = cva("min-w-0 flex-1");
 
 const sheetListClass = cva(
-  "relative z-0 flex max-w-full items-center gap-1 overflow-x-auto rounded-[calc(var(--wb-radius-control)+3px)] bg-[var(--wb-surface-muted)] px-1.5 py-1.5",
+  "relative z-0 flex max-w-full items-center gap-1 overflow-x-auto px-1 py-1 shadow-[inset_0_-1px_0_var(--wb-border)]",
 );
 
 const sheetIndicatorClass = cva(
-  "pointer-events-none absolute top-1/2 left-0 z-[-1] h-8 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] -translate-y-1/2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[translate,width] duration-200 ease-out",
+  "pointer-events-none absolute top-1/2 left-0 z-[-1] h-8 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] -translate-y-1/2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] transition-[translate,width] duration-200 ease-out",
 );
 
 const sheetRenameShellClass = cva(
@@ -32,16 +32,16 @@ const sheetRenameShellClass = cva(
 );
 
 const sheetActionButtonClass = cva(
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border border-transparent bg-transparent text-[var(--wb-text-subtle)] outline-none transition-[background-color,border-color,color] hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] focus-visible:border-[var(--wb-border)] focus-visible:bg-[var(--wb-surface)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] disabled:cursor-not-allowed disabled:opacity-50",
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--wb-text-subtle)] outline-none transition-[background-color,border-color,color] hover:bg-[var(--wb-surface-muted)] hover:text-[var(--wb-text)] focus-visible:bg-[var(--wb-surface-muted)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] disabled:cursor-not-allowed disabled:opacity-50",
 );
 
 const sheetTabClass = cva(
-  "relative z-[1] flex h-8 items-center rounded-[var(--wb-radius-control)] px-4 text-[12px] outline-none transition-colors duration-150 before:inset-x-0 before:inset-y-1 before:rounded-[calc(var(--wb-radius-control)-1px)] before:-outline-offset-1 before:outline-[var(--wb-accent)] hover:text-[var(--wb-text)] focus-visible:before:absolute focus-visible:before:outline focus-visible:before:outline-2",
+  "relative z-[1] flex h-8 items-center rounded-[var(--wb-radius-control)] px-3.5 text-[12px] outline-none transition-colors duration-150 before:inset-x-0 before:inset-y-1 before:rounded-[calc(var(--wb-radius-control)-1px)] before:-outline-offset-1 before:outline-[var(--wb-accent)] hover:text-[var(--wb-text)] focus-visible:before:absolute focus-visible:before:outline focus-visible:before:outline-2",
   {
     variants: {
       active: {
         true: "font-semibold text-[var(--wb-text)]",
-        false: "font-medium text-[var(--wb-text-muted)]",
+        false: "font-medium text-[var(--wb-text-subtle)]",
       },
       disabled: {
         true: "cursor-not-allowed opacity-50",

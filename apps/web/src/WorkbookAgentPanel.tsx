@@ -4,6 +4,7 @@ import {
   describeWorkbookAgentCommand,
   normalizeWorkbookAgentToolName,
 } from "@bilig/agent-api";
+import { cva } from "class-variance-authority";
 import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentPreviewChangeKind,
@@ -17,6 +18,20 @@ import type {
 } from "@bilig/contracts";
 import { cn } from "./cn.js";
 
+const toolStatusPillClass = cva(
+  "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
+  {
+    variants: {
+      status: {
+        completed:
+          "border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+        failed: "border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
+        running: "border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[var(--wb-text)]",
+      },
+    },
+  },
+);
+
 function contextLabel(context: WorkbookAgentUiContext | null): string {
   if (!context) {
     return "";
@@ -29,14 +44,14 @@ function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["to
     props.status === "completed" ? "Done" : props.status === "failed" ? "Failed" : "Running";
   return (
     <span
-      className={cn(
-        "inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
-        props.status === "completed"
-          ? "bg-[#dcfce7] text-[#166534]"
-          : props.status === "failed"
-            ? "bg-[#fee2e2] text-[#991b1b]"
-            : "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
-      )}
+      className={toolStatusPillClass({
+        status:
+          props.status === "completed"
+            ? "completed"
+            : props.status === "failed"
+              ? "failed"
+              : "running",
+      })}
     >
       {label}
     </span>
@@ -331,7 +346,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   if (entry.kind === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] bg-[var(--wb-accent-soft)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
+        <div className="max-w-[90%] rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
           {entry.text}
         </div>
       </div>
@@ -389,7 +404,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   return (
-    <div className="rounded-[var(--wb-radius-control)] border border-[#f1b5b5] bg-[#fff7f7] px-3 py-2 text-[12px] leading-5 text-[#991b1b]">
+    <div className="rounded-[var(--wb-radius-control)] border border-[#efc7c7] bg-[#fff6f6] px-3 py-2 text-[12px] leading-5 text-[#8f2d2d]">
       {entry.text}
     </div>
   );
@@ -456,7 +471,7 @@ function PendingBundleCard(props: {
             ? "Applying…"
             : "Apply";
   return (
-    <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-surface)] px-3 py-3 shadow-[var(--wb-shadow-sm)]">
+    <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[13px] font-semibold text-[var(--wb-text)]">
@@ -601,7 +616,7 @@ function ExecutionRecordRow(props: {
       <PreviewRangeList ranges={props.record.preview?.ranges ?? []} />
       <div className="mt-3 flex items-center justify-end">
         <button
-          className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+          className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
           type="button"
           onClick={props.onReplay}
         >
@@ -649,14 +664,14 @@ export function WorkbookAgentPanel(props: {
       data-testid="workbook-agent-panel"
       id="workbook-agent-panel"
     >
-      <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-3">
+      <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2.5">
         <div className="min-w-0 text-[12px] font-medium text-[var(--wb-text)]">
           {contextLabel(props.snapshot?.context ?? props.currentContext)}
         </div>
       </div>
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-[var(--wb-app-bg)] px-3 py-3"
+        className="min-h-0 flex-1 overflow-y-auto bg-[var(--wb-app-bg)] px-2.5 py-2.5"
       >
         {props.pendingBundle ? (
           <div className="mb-3">
@@ -673,7 +688,7 @@ export function WorkbookAgentPanel(props: {
           </div>
         ) : null}
         {props.isLoading ? null : props.snapshot && props.snapshot.entries.length > 0 ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {props.snapshot.entries
               .filter((entry) => entry.kind !== "system")
               .map((entry) => (
@@ -698,7 +713,7 @@ export function WorkbookAgentPanel(props: {
         ) : null}
       </div>
       <form
-        className="border-t border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3"
+        className="border-t border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-2.5"
         onSubmit={(event) => {
           event.preventDefault();
           props.onSubmit();
@@ -710,7 +725,7 @@ export function WorkbookAgentPanel(props: {
         <div className="relative">
           <textarea
             id="workbook-agent-input"
-            className="min-h-32 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+            className="min-h-32 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
             data-testid="workbook-agent-input"
             placeholder=""
             value={props.draft}
@@ -730,7 +745,7 @@ export function WorkbookAgentPanel(props: {
           />
           <button
             aria-label={isRunning ? "Stop" : "Send message"}
-            className="absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0f0f10] bg-[#0f0f10] text-[var(--color-mauve-200)] transition-colors hover:bg-[#18181b] hover:text-[var(--color-mauve-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--color-mauve-300)] disabled:bg-[var(--color-mauve-100)] disabled:text-[var(--color-mauve-500)] disabled:opacity-55 disabled:shadow-none"
+            className="absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0f0f10] bg-[#0f0f10] text-[var(--color-mauve-200)] transition-colors hover:bg-[#18181b] hover:text-[var(--color-mauve-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--wb-border)] disabled:bg-[var(--wb-surface-muted)] disabled:text-[var(--wb-text-subtle)] disabled:opacity-70 disabled:shadow-none"
             data-testid="workbook-agent-send"
             disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
             type="button"

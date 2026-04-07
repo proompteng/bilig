@@ -5,22 +5,35 @@ import {
 } from "./workbook-changes-model.js";
 
 const CHANGE_EVENT_TONE_CLASS_NAMES: Record<string, string> = {
-  setCellValue: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
-  setCellFormula: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
-  clearCell: "bg-[#fee2e2] text-[#991b1b]",
-  clearRange: "bg-[#fee2e2] text-[#991b1b]",
-  fillRange: "bg-[#dcfce7] text-[#166534]",
-  copyRange: "bg-[#dcfce7] text-[#166534]",
-  moveRange: "bg-[#dcfce7] text-[#166534]",
-  updateColumnWidth: "bg-[#ede9fe] text-[#5b21b6]",
-  setRangeStyle: "bg-[#fef3c7] text-[#92400e]",
-  clearRangeStyle: "bg-[#fef3c7] text-[#92400e]",
-  setRangeNumberFormat: "bg-[#fef3c7] text-[#92400e]",
-  clearRangeNumberFormat: "bg-[#fef3c7] text-[#92400e]",
-  renderCommit: "bg-[#e2e8f0] text-[#334155]",
-  restoreVersion: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
-  revertChange: "bg-[#fee2e2] text-[#991b1b]",
-  applyBatch: "bg-[#e2e8f0] text-[#334155]",
+  setCellValue:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  setCellFormula:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  clearCell: "border border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
+  clearRange: "border border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
+  fillRange:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  copyRange:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  moveRange:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  updateColumnWidth:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  setRangeStyle:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  clearRangeStyle:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  setRangeNumberFormat:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  clearRangeNumberFormat:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  renderCommit:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  restoreVersion:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+  revertChange: "border border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
+  applyBatch:
+    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
 };
 
 function formatEventLabel(eventKind: string): string {
@@ -86,23 +99,15 @@ function WorkbookChangeRow(props: {
           </div>
         </div>
       </div>
-      <div className="mt-2 text-[11px] text-[var(--wb-text-subtle)]">
-        {change.targetLabel ? (
-          change.isJumpable ? (
-            <>{change.targetLabel}</>
-          ) : (
-            <>{change.targetLabel}</>
-          )
-        ) : (
-          <></>
-        )}
-      </div>
+      {change.targetLabel ? (
+        <div className="mt-2 text-[11px] text-[var(--wb-text-subtle)]">{change.targetLabel}</div>
+      ) : null}
     </>
   );
 
   return (
     <div
-      className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3 shadow-[var(--wb-shadow-sm)]"
+      className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3"
       data-testid="workbook-change-row"
     >
       {change.isJumpable ? (
@@ -137,7 +142,7 @@ function WorkbookChangeRow(props: {
         )}
         {change.canRevert ? (
           <button
-            className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[#f0c2c2] bg-[#fff7f7] px-3 text-[12px] font-medium text-[#991b1b] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[#e58e8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1b5b5] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[#efc7c7] bg-[#fffafa] px-3 text-[12px] font-medium text-[#8f2d2d] transition-colors hover:bg-[#fff6f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1b5b5] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="workbook-change-revert"
             disabled={isPending}
             type="button"
@@ -170,7 +175,7 @@ export function WorkbookChangesPanel(props: {
         {props.changes.length === 0 ? (
           <div />
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {props.changes.map((change) => (
               <WorkbookChangeRow
                 key={`${change.revision}:${change.summary}`}
