@@ -133,7 +133,9 @@ export function WorkbookView({
         <div className="flex shrink-0 items-start justify-between gap-3 bg-[var(--wb-surface)]">
           <div className="min-w-0 flex-1">{ribbon}</div>
           {headerStatus ? (
-            <div className="flex min-h-10 shrink-0 items-center px-2.5 py-1">{headerStatus}</div>
+            <div className="flex min-h-10 shrink-0 items-center justify-end px-2.5 py-1">
+              {headerStatus}
+            </div>
           ) : null}
         </div>
       ) : null}

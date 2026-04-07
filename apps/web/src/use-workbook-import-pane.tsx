@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { WorkbookLoadedResponse } from "@bilig/agent-api";
 import type { ImportedWorkbookPreview } from "@bilig/excel-import";
 import { WorkbookImportPanel } from "./WorkbookImportPanel.js";
+import { WorkbookHeaderActionButton } from "./workbook-header-controls.js";
 import {
   finalizeWorkbookImport,
   previewWorkbookImport,
@@ -96,20 +97,19 @@ export function useWorkbookImportPane(input: {
 
   const importToggle = useMemo(
     () => (
-      <button
+      <WorkbookHeaderActionButton
         aria-controls="workbook-import-panel"
         aria-expanded={isOpen}
         aria-label="Import workbook"
-        className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="workbook-import-toggle"
         disabled={!enabled}
-        type="button"
+        isActive={isOpen}
         onClick={() => {
           setIsOpen((current) => !current);
         }}
       >
         Import
-      </button>
+      </WorkbookHeaderActionButton>
     ),
     [enabled, isOpen],
   );

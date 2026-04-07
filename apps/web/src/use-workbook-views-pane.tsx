@@ -3,6 +3,10 @@ import { mutators } from "@bilig/zero-sync";
 import type { Viewport } from "@bilig/protocol";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import { WorkbookViewsPanel } from "./WorkbookViewsPanel.js";
+import {
+  WorkbookHeaderActionButton,
+  WorkbookHeaderCountBadge,
+} from "./workbook-header-controls.js";
 import { useWorkbookViews, type ZeroWorkbookSheetViewQuerySource } from "./use-workbook-views.js";
 import type {
   WorkbookSheetViewEntry,
@@ -131,22 +135,20 @@ export function useWorkbookViewsPane(input: {
 
   const viewsToggle = useMemo(
     () => (
-      <button
+      <WorkbookHeaderActionButton
         aria-controls="workbook-views-panel"
         aria-expanded={isOpen}
         aria-label={`Show workbook views (${views.length})`}
-        className="inline-flex h-8 items-center gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
         data-testid="workbook-views-toggle"
-        type="button"
+        isActive={isOpen}
+        isGrouped
         onClick={() => {
           setIsOpen((current) => !current);
         }}
       >
         <span>Views</span>
-        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--wb-surface-subtle)] px-1.5 text-[11px] font-semibold text-[var(--wb-text)]">
-          {viewCount}
-        </span>
-      </button>
+        <WorkbookHeaderCountBadge value={viewCount} />
+      </WorkbookHeaderActionButton>
     ),
     [isOpen, viewCount, views.length],
   );

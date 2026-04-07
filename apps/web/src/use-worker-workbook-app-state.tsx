@@ -39,6 +39,7 @@ import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
+import { WorkbookHeaderControlGroup } from "./workbook-header-controls.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookScenariosPane } from "./use-workbook-scenarios-pane.js";
 import { useWorkbookViewsPane } from "./use-workbook-views-pane.js";
@@ -905,14 +906,16 @@ export function useWorkerWorkbookAppState(input: {
 
   const headerStatus = useMemo(() => {
     return (
-      <>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <WorkbookHeaderControlGroup data-testid="workbook-panel-toggle-group">
+          {scenariosToggle}
+          {versionsToggle}
+          {viewsToggle}
+          {changesToggle}
+          {agentToggle}
+        </WorkbookHeaderControlGroup>
         {toolbarHeaderStatus}
         {scenarioStatus}
-        {scenariosToggle}
-        {versionsToggle}
-        {viewsToggle}
-        {changesToggle}
-        {agentToggle}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
             collaborators={collaborators}
@@ -921,7 +924,7 @@ export function useWorkerWorkbookAppState(input: {
             }}
           />
         ) : null}
-      </>
+      </div>
     );
   }, [
     changesToggle,

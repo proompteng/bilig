@@ -116,10 +116,10 @@ function WorkerWorkbookAppInner({
               sheetName={app.selection.sheetName}
               sheetNames={app.sheetNames}
               headerStatus={
-                <>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
                   {importToggle}
                   {app.headerStatus}
-                </>
+                </div>
               }
               restoreViewportTarget={app.restoreViewportTarget}
               subscribeViewport={app.subscribeViewport}

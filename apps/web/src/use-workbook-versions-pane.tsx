@@ -4,6 +4,10 @@ import type { Viewport } from "@bilig/protocol";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import { WorkbookVersionsPanel } from "./WorkbookVersionsPanel.js";
 import {
+  WorkbookHeaderActionButton,
+  WorkbookHeaderCountBadge,
+} from "./workbook-header-controls.js";
+import {
   useWorkbookVersions,
   type ZeroWorkbookVersionQuerySource,
 } from "./use-workbook-versions.js";
@@ -132,22 +136,20 @@ export function useWorkbookVersionsPane(input: {
 
   const versionsToggle = useMemo(
     () => (
-      <button
+      <WorkbookHeaderActionButton
         aria-controls="workbook-versions-panel"
         aria-expanded={isOpen}
         aria-label={`Show workbook versions (${versions.length})`}
-        className="inline-flex h-8 items-center gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
         data-testid="workbook-versions-toggle"
-        type="button"
+        isActive={isOpen}
+        isGrouped
         onClick={() => {
           setIsOpen((current) => !current);
         }}
       >
         <span>Versions</span>
-        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--wb-surface-subtle)] px-1.5 text-[11px] font-semibold text-[var(--wb-text)]">
-          {versionCount}
-        </span>
-      </button>
+        <WorkbookHeaderCountBadge value={versionCount} />
+      </WorkbookHeaderActionButton>
     ),
     [isOpen, versionCount, versions.length],
   );

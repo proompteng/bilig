@@ -8,8 +8,8 @@ import {
   type CellStyleRecord,
 } from "@bilig/protocol";
 import { WorkbookToolbar, type BorderPreset } from "./workbook-toolbar.js";
-import { cn } from "./cn.js";
 import { isPresetColor, mergeRecentCustomColors, normalizeHexColor } from "./workbook-colors.js";
+import { WorkbookHeaderStatusChip } from "./workbook-header-controls.js";
 import type { WorkbookMutationMethod } from "./workbook-sync.js";
 import {
   createRangeRef,
@@ -109,33 +109,7 @@ export function useWorkbookToolbar(input: {
   );
 
   const headerStatus = useMemo(
-    () => (
-      <>
-        <span
-          aria-label={`Workbook status: ${statusModeValue}, ${statusSyncValue}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)]"
-          data-testid="status-mode"
-          role="status"
-          title={statusSyncValue}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "block h-2.5 w-2.5 rounded-full",
-              statusSyncValue === "Ready"
-                ? "bg-[#1f7a43]"
-                : statusSyncValue === "Syncing" || statusSyncValue === "Loading"
-                  ? "bg-[#b26a00]"
-                  : "bg-[#b42318]",
-            )}
-          />
-          <span className="sr-only">{statusModeValue}</span>
-        </span>
-        <span className="sr-only" data-testid="status-sync">
-          {statusSyncValue}
-        </span>
-      </>
-    ),
+    () => <WorkbookHeaderStatusChip modeLabel={statusModeValue} syncLabel={statusSyncValue} />,
     [statusModeValue, statusSyncValue],
   );
 

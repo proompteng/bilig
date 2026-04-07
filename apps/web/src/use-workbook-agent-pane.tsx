@@ -18,6 +18,7 @@ import {
   type WorkbookAgentUiContext,
 } from "@bilig/contracts";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
+import { WorkbookHeaderActionButton } from "./workbook-header-controls.js";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
 
@@ -604,19 +605,19 @@ export function useWorkbookAgentPane(input: {
 
   const agentToggle = useMemo(
     () => (
-      <button
+      <WorkbookHeaderActionButton
         aria-controls="workbook-agent-panel"
         aria-expanded={isOpen}
         aria-label="Toggle workbook assistant"
-        className="inline-flex h-8 items-center gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
         data-testid="workbook-agent-toggle"
-        type="button"
+        isActive={isOpen}
+        isGrouped
         onClick={() => {
           setIsOpen((current) => !current);
         }}
       >
         <span>Assistant</span>
-      </button>
+      </WorkbookHeaderActionButton>
     ),
     [isOpen],
   );
