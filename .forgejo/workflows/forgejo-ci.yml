@@ -292,6 +292,11 @@ jobs:
           rm -rf "$HOME/.cache/ms-playwright"
           cp -R artifacts/playwright-runtime/ms-playwright "$HOME/.cache/ms-playwright"
 
+      - name: Install Chromium system dependencies
+        run: |
+          set -eu
+          pnpm exec playwright install-deps chromium
+
       - name: Verify Docker Compose environment
         run: |
           set -eu
@@ -519,6 +524,11 @@ jobs:
           mkdir -p "$HOME/.cache"
           rm -rf "$HOME/.cache/ms-playwright"
           cp -R artifacts/playwright-runtime/ms-playwright "$HOME/.cache/ms-playwright"
+
+      - name: Install Chromium system dependencies
+        run: |
+          set -eu
+          pnpm exec playwright install-deps chromium
 
       - name: Verify Docker Compose environment
         run: |
