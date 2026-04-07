@@ -15,7 +15,7 @@ jobs:
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_BROWSER_STACK: "local"
+      BILIG_BROWSER_STACK: "compose"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -62,36 +62,23 @@ jobs:
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
 
-          if ! command -v docker >/dev/null 2>&1 || ! command -v docker-compose >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends docker.io docker-compose
-          fi
-
-          docker --version
-          docker-compose version
-
-          if ! docker info >/dev/null 2>&1; then
-            if command -v service >/dev/null 2>&1; then
-              service docker start || true
-            fi
-          fi
-
-          if ! docker info >/dev/null 2>&1; then
-            nohup dockerd >/tmp/bilig-dockerd.log 2>&1 &
-          fi
-
-          for _ in $(seq 1 60); do
-            if docker info >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-
-          if ! docker info >/dev/null 2>&1; then
-            cat /tmp/bilig-dockerd.log || true
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "docker is required on the Forgejo docker runner"
             exit 1
           fi
 
+          if docker compose version >/dev/null 2>&1; then
+            docker compose version
+          elif command -v docker-compose >/dev/null 2>&1; then
+            docker-compose version
+          else
+            apt-get update
+            apt-get install -y --no-install-recommends docker-compose
+            docker-compose version
+          fi
+
+          docker --version
+          docker info
           pnpm run ci
 
       - name: Upload fuzz and browser artifacts on failure

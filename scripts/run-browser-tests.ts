@@ -113,15 +113,6 @@ if (normalizedBrowserStack === "compose" && !compose && !isCi) {
 }
 const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
-const e2eWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
-const e2eSyncServerPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
-const e2eZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
-const e2ePostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
-const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
-const e2eSyncServerUrl =
-  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
-const e2eZeroKeepaliveUrl =
-  process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
 
 const PREVIEW_PORTS = [4179, 4180];
 
@@ -216,6 +207,55 @@ function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+async function reservePort(port: number): Promise<number | null> {
+  return await new Promise<number | null>((resolve) => {
+    const server = net.createServer();
+
+    server.unref();
+    server.once("error", () => {
+      resolve(null);
+    });
+    server.listen(port, () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") {
+          resolve(address.port);
+          return;
+        }
+        resolve(null);
+      });
+    });
+  });
+}
+
+async function resolvePort(envValue: string | undefined, preferredPort: number): Promise<string> {
+  if (envValue) {
+    return envValue;
+  }
+
+  const preferred = await reservePort(preferredPort);
+  if (preferred !== null) {
+    return String(preferred);
+  }
+
+  const ephemeral = await reservePort(0);
+  if (ephemeral !== null) {
+    return String(ephemeral);
+  }
+
+  throw new Error(`Unable to allocate a free TCP port for browser tests near ${preferredPort}.`);
+}
+
+const e2eWebPort = await resolvePort(process.env["BILIG_E2E_WEB_PORT"], 4180);
+const e2eSyncServerPort = await resolvePort(process.env["BILIG_E2E_SYNC_SERVER_PORT"], 54422);
+const e2eZeroPort = await resolvePort(process.env["BILIG_E2E_ZERO_PORT"], 54849);
+const e2ePostgresPort = await resolvePort(process.env["BILIG_E2E_POSTGRES_PORT"], 55433);
+const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://127.0.0.1:${e2eWebPort}`;
+const e2eSyncServerUrl =
+  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://127.0.0.1:${e2eSyncServerPort}`;
+const e2eZeroKeepaliveUrl =
+  process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
+
 function terminatePreviewServers(): void {
   const pids = Array.from(new Set(PREVIEW_PORTS.flatMap((port) => getListeningPids(port))));
   if (pids.length === 0) {
@@ -246,7 +286,13 @@ function runPlaywright(args: string[]): void {
     env: {
       ...process.env,
       BILIG_BROWSER_STACK: browserStack,
+      BILIG_E2E_WEB_PORT: e2eWebPort,
+      BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
+      BILIG_E2E_ZERO_PORT: e2eZeroPort,
+      BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
       BILIG_E2E_BASE_URL: e2eBaseUrl,
+      BILIG_E2E_SYNC_SERVER_URL: e2eSyncServerUrl,
+      BILIG_E2E_ZERO_KEEPALIVE_URL: e2eZeroKeepaliveUrl,
     },
   });
   if (result.exitCode !== 0) {
