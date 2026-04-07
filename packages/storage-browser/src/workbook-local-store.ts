@@ -21,6 +21,7 @@ import { initializeWorkbookLocalStoreSchema } from "./workbook-local-store-schem
 const WORKBOOK_VFS_NAME = "bilig-opfs-sahpool";
 const WORKBOOK_VFS_DIRECTORY = "/bilig/workbooks";
 const WORKBOOK_VFS_INITIAL_CAPACITY = 12;
+const WORKBOOK_VFS_VERBOSITY = 0;
 
 let sqliteRuntimePromise: Promise<{ sqlite3: Sqlite3Static; poolUtil: SAHPoolUtil }> | null = null;
 let memorySqliteRuntimePromise: Promise<Sqlite3Static> | null = null;
@@ -243,7 +244,10 @@ async function getSqliteRuntime(
           name: options.vfsName,
           directory: options.directory,
           initialCapacity: options.initialCapacity,
-        });
+          // The app translates lock conflicts into its own persistence-state path.
+          // Keep sqlite-wasm from spamming expected pool diagnostics into the console.
+          verbosity: WORKBOOK_VFS_VERBOSITY,
+        } as Parameters<Sqlite3Static["installOpfsSAHPoolVfs"]>[0] & { verbosity: number });
         return { sqlite3, poolUtil };
       } catch (error) {
         if (isAccessHandleConflict(error)) {

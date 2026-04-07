@@ -52,5 +52,10 @@ describe("opfs workbook local store", () => {
 
     expect(sqlite3InitModule).toHaveBeenCalledTimes(1);
     expect(installOpfsSAHPoolVfs).toHaveBeenCalledTimes(1);
+    expect(installOpfsSAHPoolVfs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        verbosity: 0,
+      }),
+    );
   });
 });

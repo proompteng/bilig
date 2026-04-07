@@ -7,6 +7,12 @@ const syncServerTarget =
   process.env["BILIG_SYNC_SERVER_TARGET"] ??
   `http://127.0.0.1:${process.env["BILIG_SYNC_SERVER_PORT"] ?? "4321"}`;
 
+export const crossOriginIsolationHeaders = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "require-corp",
+  "Origin-Agent-Cluster": "?1",
+} as const;
+
 function includesAny(id: string, patterns: readonly string[]): boolean {
   const normalizedId = id.replaceAll("\\", "/");
   return patterns.some((pattern) => normalizedId.includes(pattern));
@@ -147,6 +153,7 @@ export default defineConfig({
     },
   },
   server: {
+    headers: crossOriginIsolationHeaders,
     proxy: {
       "/runtime-config.json": {
         target: syncServerTarget,
@@ -170,5 +177,8 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  preview: {
+    headers: crossOriginIsolationHeaders,
   },
 });
