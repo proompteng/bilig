@@ -1,6 +1,7 @@
 import { Upload } from "lucide-react";
 import type { WorkbookImportContentType } from "@bilig/agent-api";
 import type { ImportedWorkbookPreview } from "@bilig/excel-import";
+import { workbookButtonClass, workbookPillClass } from "./workbook-shell-chrome.js";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) {
@@ -165,7 +166,7 @@ export function WorkbookImportPanel(props: {
               <div className="flex flex-col gap-3">
                 <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-[var(--wb-accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
+                    <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
                       {formatImportType(props.stagedPreview.contentType)}
                     </span>
                     <span className="truncate text-[13px] font-semibold text-[var(--wb-text)]">
@@ -196,7 +197,11 @@ export function WorkbookImportPanel(props: {
 
                 <div className="mt-auto flex flex-col gap-2">
                   <button
-                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-semibold text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={workbookButtonClass({
+                      tone: "accent",
+                      size: "md",
+                      weight: "strong",
+                    })}
                     data-testid="workbook-import-create"
                     disabled={props.isImporting}
                     type="button"
@@ -205,7 +210,10 @@ export function WorkbookImportPanel(props: {
                     {props.isImporting ? "…" : "New"}
                   </button>
                   <button
-                    className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={workbookButtonClass({
+                      tone: "neutral",
+                      size: "md",
+                    })}
                     data-testid="workbook-import-replace"
                     disabled={props.isImporting}
                     type="button"

@@ -17,16 +17,16 @@ import type {
   WorkbookAgentUiContext,
 } from "@bilig/contracts";
 import { cn } from "./cn.js";
+import { workbookButtonClass, workbookPillClass } from "./workbook-shell-chrome.js";
 
 const toolStatusPillClass = cva(
   "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
   {
     variants: {
       status: {
-        completed:
-          "border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-        failed: "border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
-        running: "border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[var(--wb-text)]",
+        completed: workbookPillClass({ tone: "neutral", weight: "strong" }),
+        failed: workbookPillClass({ tone: "danger", weight: "strong" }),
+        running: workbookPillClass({ tone: "accent", weight: "strong" }),
       },
     },
   },
@@ -177,7 +177,7 @@ function StructuredToolOutput(props: {
                   ? issue["issueKinds"].map((kind) => (
                       <span
                         key={readString(kind)}
-                        className="rounded-full bg-[#fee2e2] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#991b1b]"
+                        className={workbookPillClass({ tone: "danger", weight: "strong" })}
                       >
                         {readString(kind)}
                       </span>
@@ -241,7 +241,7 @@ function StructuredToolOutput(props: {
                   {match["reasons"].map((reason) => (
                     <span
                       key={readString(reason)}
-                      className="rounded-full bg-[var(--color-mauve-100)] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--color-mauve-800)]"
+                      className={workbookPillClass({ tone: "neutral" })}
                     >
                       {renderReasonLabel(readString(reason))}
                     </span>
@@ -426,12 +426,9 @@ function PreviewRangeList(props: {
       {props.ranges.map((range) => (
         <span
           key={`${range.role}:${range.sheetName}:${range.startAddress}:${range.endAddress}`}
-          className={cn(
-            "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium",
-            range.role === "target"
-              ? "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]"
-              : "bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-          )}
+          className={workbookPillClass({
+            tone: range.role === "target" ? "accent" : "neutral",
+          })}
         >
           {range.sheetName}!{range.startAddress}
           {range.startAddress === range.endAddress ? "" : `:${range.endAddress}`}
@@ -478,7 +475,7 @@ function PendingBundleCard(props: {
             {props.bundle.summary}
           </div>
         </div>
-        <span className="rounded-full bg-[var(--wb-accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
+        <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
           {props.bundle.riskClass}
         </span>
       </div>
@@ -548,10 +545,7 @@ function PendingBundleCard(props: {
                 </div>
                 <div className="col-span-2 mt-1 flex flex-wrap gap-1">
                   {diff.changeKinds.map((kind) => (
-                    <span
-                      key={kind}
-                      className="rounded-full bg-[var(--wb-surface-subtle)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]"
-                    >
+                    <span key={kind} className={workbookPillClass({ tone: "neutral" })}>
                       {renderPreviewChangeKind(kind)}
                     </span>
                   ))}
@@ -569,14 +563,14 @@ function PendingBundleCard(props: {
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
         <button
-          className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+          className={workbookButtonClass({ tone: "neutral" })}
           type="button"
           onClick={props.onDismiss}
         >
           Clear
         </button>
         <button
-          className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 text-[12px] font-semibold text-[var(--wb-accent)] shadow-[var(--wb-shadow-sm)] transition-colors hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+          className={workbookButtonClass({ tone: "accent", weight: "strong" })}
           data-testid="workbook-agent-apply-pending"
           disabled={!canApply}
           type="button"
@@ -604,9 +598,7 @@ function ExecutionRecordRow(props: {
             r{String(props.record.appliedRevision)}
           </div>
         </div>
-        <span className="rounded-full bg-[var(--wb-surface-subtle)] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-          {props.record.scope}
-        </span>
+        <span className={workbookPillClass({ tone: "neutral" })}>{props.record.scope}</span>
       </div>
       {(props.record.planText ?? props.record.goalText).trim().length > 0 ? (
         <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
@@ -616,7 +608,7 @@ function ExecutionRecordRow(props: {
       <PreviewRangeList ranges={props.record.preview?.ranges ?? []} />
       <div className="mt-3 flex items-center justify-end">
         <button
-          className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
+          className={workbookButtonClass({ tone: "neutral" })}
           type="button"
           onClick={props.onReplay}
         >

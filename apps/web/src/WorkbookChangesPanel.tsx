@@ -1,39 +1,37 @@
+import { cva } from "class-variance-authority";
 import { cn } from "./cn.js";
 import {
   formatWorkbookChangeTimestamp,
   type WorkbookChangeEntry,
 } from "./workbook-changes-model.js";
+import { workbookButtonClass, workbookPillClass } from "./workbook-shell-chrome.js";
 
-const CHANGE_EVENT_TONE_CLASS_NAMES: Record<string, string> = {
-  setCellValue:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  setCellFormula:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  clearCell: "border border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
-  clearRange: "border border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
-  fillRange:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  copyRange:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  moveRange:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  updateColumnWidth:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  setRangeStyle:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  clearRangeStyle:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  setRangeNumberFormat:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  clearRangeNumberFormat:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  renderCommit:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  restoreVersion:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
-  revertChange: "border border-[#efc7c7] bg-[#fff6f6] text-[#8f2d2d]",
-  applyBatch:
-    "border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
+const changeEventToneClass = cva("", {
+  variants: {
+    tone: {
+      neutral: workbookPillClass({ tone: "neutral", weight: "strong" }),
+      danger: workbookPillClass({ tone: "danger", weight: "strong" }),
+    },
+  },
+});
+
+const CHANGE_EVENT_TONES: Record<string, "neutral" | "danger"> = {
+  setCellValue: "neutral",
+  setCellFormula: "neutral",
+  clearCell: "danger",
+  clearRange: "danger",
+  fillRange: "neutral",
+  copyRange: "neutral",
+  moveRange: "neutral",
+  updateColumnWidth: "neutral",
+  setRangeStyle: "neutral",
+  clearRangeStyle: "neutral",
+  setRangeNumberFormat: "neutral",
+  clearRangeNumberFormat: "neutral",
+  renderCommit: "neutral",
+  restoreVersion: "neutral",
+  revertChange: "danger",
+  applyBatch: "neutral",
 };
 
 function formatEventLabel(eventKind: string): string {
@@ -81,8 +79,9 @@ function WorkbookChangeRow(props: {
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                "inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
-                CHANGE_EVENT_TONE_CLASS_NAMES[change.eventKind] ?? "bg-[#e2e8f0] text-[#334155]",
+                changeEventToneClass({
+                  tone: CHANGE_EVENT_TONES[change.eventKind] ?? "neutral",
+                }),
               )}
             >
               {formatEventLabel(change.eventKind)}
@@ -142,7 +141,7 @@ function WorkbookChangeRow(props: {
         )}
         {change.canRevert ? (
           <button
-            className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[#efc7c7] bg-[#fffafa] px-3 text-[12px] font-medium text-[#8f2d2d] transition-colors hover:bg-[#fff6f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1b5b5] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+            className={workbookButtonClass({ tone: "danger" })}
             data-testid="workbook-change-revert"
             disabled={isPending}
             type="button"
