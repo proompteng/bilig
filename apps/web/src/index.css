@@ -33,20 +33,20 @@
 
 @layer base {
   :root {
-    --wb-app-bg: #eef2f6;
+    --wb-app-bg: var(--color-mauve-50);
     --wb-surface: #ffffff;
-    --wb-surface-subtle: #f7f9fb;
-    --wb-surface-muted: #eef2f6;
-    --wb-border: #d7dee7;
-    --wb-border-strong: #c1cad6;
-    --wb-grid-border: #e3e9f0;
-    --wb-text: #1f2328;
-    --wb-text-muted: #5f6b7a;
-    --wb-text-subtle: #7a8595;
-    --wb-accent: #0b57d0;
-    --wb-accent-soft: #e8f0fe;
-    --wb-accent-ring: #d2e3fc;
-    --wb-hover: #f1f4f8;
+    --wb-surface-subtle: var(--color-mauve-50);
+    --wb-surface-muted: var(--color-mauve-100);
+    --wb-border: var(--color-mauve-200);
+    --wb-border-strong: var(--color-mauve-300);
+    --wb-grid-border: var(--color-mauve-100);
+    --wb-text: var(--color-mauve-950);
+    --wb-text-muted: var(--color-mauve-700);
+    --wb-text-subtle: var(--color-mauve-600);
+    --wb-accent: var(--color-mauve-800);
+    --wb-accent-soft: var(--color-mauve-100);
+    --wb-accent-ring: var(--color-mauve-200);
+    --wb-hover: var(--color-mauve-100);
     --wb-shadow-sm: 0 1px 1px rgba(15, 23, 42, 0.05);
     --wb-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.1);
     --wb-shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.12);

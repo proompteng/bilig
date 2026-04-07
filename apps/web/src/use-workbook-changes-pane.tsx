@@ -1,10 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { mutators } from "@bilig/zero-sync";
 import { WorkbookChangesPanel } from "./WorkbookChangesPanel.js";
-import {
-  WorkbookHeaderActionButton,
-  WorkbookHeaderCountBadge,
-} from "./workbook-header-controls.js";
 import { useWorkbookChanges, type ZeroWorkbookChangeQuerySource } from "./use-workbook-changes.js";
 import type { WorkbookChangeEntry } from "./workbook-changes-model.js";
 
@@ -38,9 +34,8 @@ export function useWorkbookChangesPane(input: {
     zero,
     enabled,
   });
-  const [isOpen, setIsOpen] = useState(false);
   const [pendingRevisions, setPendingRevisions] = useState<readonly number[]>([]);
-  const changeCount = Math.min(changes.length, 99);
+  const changeCount = changes.length;
 
   const revertChange = useCallback(
     (change: WorkbookChangeEntry) => {
@@ -65,44 +60,20 @@ export function useWorkbookChangesPane(input: {
     [documentId, enabled, pendingRevisions, zero],
   );
 
-  const changesToggle = useMemo(
-    () => (
-      <WorkbookHeaderActionButton
-        aria-controls="workbook-changes-panel"
-        aria-expanded={isOpen}
-        aria-label={`Show workbook changes (${changes.length})`}
-        data-testid="workbook-changes-toggle"
-        isActive={isOpen}
-        isGrouped
-        onClick={() => {
-          setIsOpen((current) => !current);
-        }}
-      >
-        <span>Changes</span>
-        <WorkbookHeaderCountBadge value={changeCount} />
-      </WorkbookHeaderActionButton>
-    ),
-    [changeCount, changes.length, isOpen],
-  );
-
   const changesPanel = useMemo(
     () => (
       <WorkbookChangesPanel
         changes={changes}
-        isOpen={isOpen}
-        onClose={() => {
-          setIsOpen(false);
-        }}
         onJump={onJump}
         onRevert={revertChange}
         pendingRevisions={pendingRevisions}
       />
     ),
-    [changes, isOpen, onJump, pendingRevisions, revertChange],
+    [changes, onJump, pendingRevisions, revertChange],
   );
 
   return {
+    changeCount,
     changesPanel,
-    changesToggle,
   };
 }

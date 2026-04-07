@@ -18,7 +18,6 @@ import {
   type WorkbookAgentUiContext,
 } from "@bilig/contracts";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
-import { WorkbookHeaderActionButton } from "./workbook-header-controls.js";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
 
@@ -92,6 +91,16 @@ function updateSnapshotFromDelta(
   };
 }
 
+function normalizeWorkbookAgentErrorMessage(error: string): string {
+  if (error.includes("thread/start.dynamicTools requires experimentalApi capability")) {
+    return "Retry in a moment.";
+  }
+  if (error.includes("Invalid Codex initialize response")) {
+    return "Retry in a moment.";
+  }
+  return error;
+}
+
 export function useWorkbookAgentPane(input: {
   readonly documentId: string;
   readonly enabled: boolean;
@@ -105,7 +114,6 @@ export function useWorkbookAgentPane(input: {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
@@ -603,24 +611,9 @@ export function useWorkbookAgentPane(input: {
     [documentId, ensureSession, persistSessionSnapshot],
   );
 
-  const agentToggle = useMemo(
-    () => (
-      <WorkbookHeaderActionButton
-        aria-controls="workbook-agent-panel"
-        aria-expanded={isOpen}
-        aria-label="Toggle workbook assistant"
-        data-testid="workbook-agent-toggle"
-        isActive={isOpen}
-        isGrouped
-        onClick={() => {
-          setIsOpen((current) => !current);
-        }}
-      >
-        <span>Assistant</span>
-      </WorkbookHeaderActionButton>
-    ),
-    [isOpen],
-  );
+  const clearAgentError = useCallback(() => {
+    setError(null);
+  }, []);
 
   const agentPanel = useMemo(
     () => (
@@ -628,19 +621,14 @@ export function useWorkbookAgentPane(input: {
         currentContext={currentContext}
         draft={draft}
         executionRecords={executionRecords}
-        error={error}
         isApplyingBundle={isApplyingBundle}
         isLoading={isLoading}
-        isOpen={isOpen}
         pendingBundle={pendingBundle}
         preview={preview}
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
         onApplyPendingBundle={() => {
           void applyPendingBundle("user");
-        }}
-        onClose={() => {
-          setIsOpen(false);
         }}
         onDraftChange={setDraft}
         onDismissPendingBundle={() => {
@@ -664,12 +652,10 @@ export function useWorkbookAgentPane(input: {
       currentContext,
       dismissPendingBundle,
       draft,
-      error,
       executionRecords,
       interrupt,
       isApplyingBundle,
       isLoading,
-      isOpen,
       normalizedCommandIndexes,
       pendingBundle,
       preview,
@@ -683,7 +669,9 @@ export function useWorkbookAgentPane(input: {
 
   return {
     agentPanel,
-    agentToggle,
+    agentError: error ? normalizeWorkbookAgentErrorMessage(error) : null,
+    clearAgentError,
+    pendingCommandCount,
     previewRanges: preview?.ranges ?? pendingBundle?.affectedRanges ?? [],
   };
 }

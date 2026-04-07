@@ -119,7 +119,6 @@ export function useWorkbookImportPane(input: {
       <WorkbookImportPanel
         currentDocumentId={currentDocumentId}
         enabled={enabled}
-        error={error}
         isImporting={isImporting}
         isOpen={isOpen}
         isPreviewing={isPreviewing}
@@ -141,7 +140,6 @@ export function useWorkbookImportPane(input: {
     [
       currentDocumentId,
       enabled,
-      error,
       importStagedFile,
       isImporting,
       isOpen,
@@ -151,7 +149,13 @@ export function useWorkbookImportPane(input: {
     ],
   );
 
+  const clearImportError = useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
+    clearImportError,
+    importError: error,
     importPanel,
     importToggle,
   };

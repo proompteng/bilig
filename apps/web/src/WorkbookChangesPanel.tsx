@@ -5,8 +5,8 @@ import {
 } from "./workbook-changes-model.js";
 
 const CHANGE_EVENT_TONE_CLASS_NAMES: Record<string, string> = {
-  setCellValue: "bg-[#e0f2fe] text-[#075985]",
-  setCellFormula: "bg-[#e0f2fe] text-[#075985]",
+  setCellValue: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
+  setCellFormula: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
   clearCell: "bg-[#fee2e2] text-[#991b1b]",
   clearRange: "bg-[#fee2e2] text-[#991b1b]",
   fillRange: "bg-[#dcfce7] text-[#166534]",
@@ -18,7 +18,7 @@ const CHANGE_EVENT_TONE_CLASS_NAMES: Record<string, string> = {
   setRangeNumberFormat: "bg-[#fef3c7] text-[#92400e]",
   clearRangeNumberFormat: "bg-[#fef3c7] text-[#92400e]",
   renderCommit: "bg-[#e2e8f0] text-[#334155]",
-  restoreVersion: "bg-[#dbeafe] text-[#1d4ed8]",
+  restoreVersion: "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
   revertChange: "bg-[#fee2e2] text-[#991b1b]",
   applyBatch: "bg-[#e2e8f0] text-[#334155]",
 };
@@ -89,12 +89,12 @@ function WorkbookChangeRow(props: {
       <div className="mt-2 text-[11px] text-[var(--wb-text-subtle)]">
         {change.targetLabel ? (
           change.isJumpable ? (
-            <>Jump to {change.targetLabel}</>
+            <>{change.targetLabel}</>
           ) : (
-            <>{change.targetLabel} is no longer available</>
+            <>{change.targetLabel}</>
           )
         ) : (
-          <>No jump target</>
+          <></>
         )}
       </div>
     </>
@@ -128,12 +128,12 @@ function WorkbookChangeRow(props: {
           >
             Reverted in r{change.revertedByRevision}
           </span>
-        ) : (
+        ) : change.revertsRevision !== null ? (
           <span className="text-[11px] text-[var(--wb-text-subtle)]">
-            {change.revertsRevision !== null
-              ? `Reverted r${change.revertsRevision}`
-              : "Authoritative"}
+            Reverted r{change.revertsRevision}
           </span>
+        ) : (
+          <span />
         )}
         {change.canRevert ? (
           <button
@@ -155,46 +155,20 @@ function WorkbookChangeRow(props: {
 
 export function WorkbookChangesPanel(props: {
   readonly changes: readonly WorkbookChangeEntry[];
-  readonly isOpen: boolean;
-  readonly onClose: () => void;
   readonly onJump: (sheetName: string, address: string) => void;
   readonly onRevert: (change: WorkbookChangeEntry) => void;
   readonly pendingRevisions: readonly number[];
 }) {
-  if (!props.isOpen) {
-    return null;
-  }
-
   return (
-    <aside
+    <div
       aria-label="Workbook changes"
-      className="absolute inset-y-3 right-3 z-20 flex w-[22rem] flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[0_20px_48px_rgba(15,23,42,0.16)]"
+      className="flex h-full min-h-0 flex-col"
       data-testid="workbook-changes-panel"
       id="workbook-changes-panel"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="text-[13px] font-semibold text-[var(--wb-text)]">Changes</h2>
-          <p className="text-[11px] text-[var(--wb-text-subtle)]">
-            {props.changes.length === 0
-              ? "No authoritative changes yet"
-              : `${props.changes.length} recent authoritative changes`}
-          </p>
-        </div>
-        <button
-          aria-label="Close changes pane"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
-          type="button"
-          onClick={props.onClose}
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-      </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {props.changes.length === 0 ? (
-          <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-4 py-5 text-sm text-[var(--wb-text-subtle)]">
-            New workbook edits will appear here with jump targets into the affected sheet.
-          </div>
+          <div />
         ) : (
           <div className="flex flex-col gap-2">
             {props.changes.map((change) => (
@@ -209,6 +183,6 @@ export function WorkbookChangesPanel(props: {
           </div>
         )}
       </div>
-    </aside>
+    </div>
   );
 }

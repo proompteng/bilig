@@ -4,6 +4,7 @@ import type {
   CodexDynamicToolCallRequest,
   CodexDynamicToolCallResult,
   CodexDynamicToolSpec,
+  CodexInitializeCapabilities,
   CodexInitializeResponse,
   CodexJsonRpcError,
   CodexJsonRpcResponse,
@@ -130,6 +131,10 @@ function isDynamicToolCallServerRequest(
 
 const JSON_RPC_INTERNAL_ERROR = -32603;
 const JSON_RPC_METHOD_NOT_FOUND = -32601;
+const CODEX_INITIALIZE_CAPABILITIES: CodexInitializeCapabilities = {
+  experimentalApi: true,
+};
+const TELEMETRY_ENV_PREFIXES = ["OTEL_"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -165,24 +170,35 @@ function asError(value: unknown, fallback: string): Error {
   return value instanceof Error ? value : new Error(fallback);
 }
 
+function stripTelemetryEnv(inputEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  const nextEnv: NodeJS.ProcessEnv = {
+    ...(inputEnv ?? process.env),
+    OTEL_SDK_DISABLED: "true",
+  };
+  for (const key of Object.keys(nextEnv)) {
+    if (key === "OTEL_SDK_DISABLED") {
+      continue;
+    }
+    if (TELEMETRY_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      delete nextEnv[key];
+    }
+  }
+  return nextEnv;
+}
+
 function parseInitializeResponse(value: unknown): CodexInitializeResponse | null {
   if (!isRecord(value)) {
     return null;
   }
   const { codexHome, platformFamily, platformOs, userAgent } = value;
-  if (
-    !isString(userAgent) ||
-    !isString(codexHome) ||
-    !isString(platformFamily) ||
-    !isString(platformOs)
-  ) {
+  if (!isString(userAgent)) {
     return null;
   }
   return {
     userAgent,
-    codexHome,
-    platformFamily,
-    platformOs,
+    ...(isString(codexHome) ? { codexHome } : {}),
+    ...(isString(platformFamily) ? { platformFamily } : {}),
+    ...(isString(platformOs) ? { platformOs } : {}),
   };
 }
 
@@ -590,7 +606,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
   private readonly command: string;
   private readonly args: string[];
   private readonly cwd: string | undefined;
-  private readonly env: NodeJS.ProcessEnv | undefined;
+  private readonly env: NodeJS.ProcessEnv;
   private readonly onLog: ((message: string) => void) | undefined;
   private readonly handleDynamicToolCall;
   private readonly pending = new Map<CodexRequestId, PendingResponse>();
@@ -606,7 +622,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
     this.command = options.command ?? "codex";
     this.args = options.args ?? ["app-server"];
     this.cwd = options.cwd;
-    this.env = options.env;
+    this.env = stripTelemetryEnv(options.env);
     this.onLog = options.onLog;
     this.handleDynamicToolCall = options.handleDynamicToolCall;
   }
@@ -717,7 +733,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
     const child = spawn(this.command, this.args, {
       stdio: ["pipe", "pipe", "pipe"],
       ...(this.cwd ? { cwd: this.cwd } : {}),
-      ...(this.env ? { env: this.env } : {}),
+      env: this.env,
     });
     this.process = child;
 
@@ -752,7 +768,7 @@ export class CodexAppServerClient implements CodexAppServerTransport {
           title: "Bilig Monolith",
           version: "0.1.0",
         },
-        capabilities: null,
+        capabilities: CODEX_INITIALIZE_CAPABILITIES,
       }),
     );
     this.notify("initialized", {});

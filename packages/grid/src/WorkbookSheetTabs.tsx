@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "@base-ui/react/button";
 import { Tabs } from "@base-ui/react/tabs";
+import { cva } from "class-variance-authority";
 import { cn } from "./cn.js";
 
 interface WorkbookSheetTabsProps {
@@ -12,17 +13,43 @@ interface WorkbookSheetTabsProps {
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined;
 }
 
-const SHEET_STRIP_CLASS =
-  "flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 py-1.5";
-const SHEET_TABS_ROOT_CLASS = "min-w-0";
-const SHEET_LIST_CLASS =
-  "relative flex max-w-full items-center gap-1 overflow-x-auto rounded-[calc(var(--wb-radius-control)+4px)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-1";
-const SHEET_INDICATOR_CLASS =
-  "pointer-events-none absolute inset-y-1 rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[left,top,width,height] duration-150 ease-out";
-const SHEET_RENAME_SHELL_CLASS =
-  "relative z-[1] inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent)] bg-[var(--wb-surface)] px-3 shadow-[var(--wb-shadow-sm)]";
-const SHEET_ACTION_BUTTON_CLASS =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-subtle)] outline-none transition-[background-color,border-color,color,box-shadow] hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] hover:shadow-[var(--wb-shadow-sm)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] disabled:cursor-not-allowed disabled:opacity-50";
+const sheetStripClass = cva(
+  "flex min-h-11 items-center justify-between gap-3 border-t border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2.5 py-1.5",
+);
+
+const sheetTabsRootClass = cva("min-w-0 flex-1");
+
+const sheetListClass = cva(
+  "relative z-0 flex max-w-full items-center gap-1 overflow-x-auto rounded-[calc(var(--wb-radius-control)+3px)] bg-[var(--wb-surface-muted)] px-1.5 py-1.5",
+);
+
+const sheetIndicatorClass = cva(
+  "pointer-events-none absolute top-1/2 left-0 z-[-1] h-8 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] -translate-y-1/2 rounded-[calc(var(--wb-radius-control)+1px)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[translate,width] duration-200 ease-out",
+);
+
+const sheetRenameShellClass = cva(
+  "relative z-[1] inline-flex h-8 items-center rounded-[calc(var(--wb-radius-control)+1px)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 shadow-[var(--wb-shadow-sm)]",
+);
+
+const sheetActionButtonClass = cva(
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[calc(var(--wb-radius-control)+1px)] border border-transparent bg-transparent text-[var(--wb-text-subtle)] outline-none transition-[background-color,border-color,color] hover:bg-[var(--wb-surface)] hover:text-[var(--wb-text)] focus-visible:border-[var(--wb-border)] focus-visible:bg-[var(--wb-surface)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] disabled:cursor-not-allowed disabled:opacity-50",
+);
+
+const sheetTabClass = cva(
+  "relative z-[1] flex h-8 items-center rounded-[calc(var(--wb-radius-control)+1px)] px-4 text-[12px] outline-none transition-colors duration-150 before:inset-x-0 before:inset-y-1 before:rounded-[calc(var(--wb-radius-control)-1px)] before:-outline-offset-1 before:outline-[var(--wb-accent)] hover:text-[var(--wb-text)] focus-visible:before:absolute focus-visible:before:outline focus-visible:before:outline-2",
+  {
+    variants: {
+      active: {
+        true: "font-semibold text-[var(--wb-text)]",
+        false: "font-medium text-[var(--wb-text-muted)]",
+      },
+      disabled: {
+        true: "cursor-not-allowed opacity-50",
+        false: "",
+      },
+    },
+  },
+);
 
 function SheetAddIcon() {
   return (
@@ -38,15 +65,7 @@ function SheetAddIcon() {
 }
 
 function getSheetTabClassName(state: Tabs.Tab.State): string {
-  return cn(
-    "relative z-[1] inline-flex h-8 items-center rounded-[var(--wb-radius-control)] px-3 text-[12px] outline-none transition-[color,font-weight] duration-150",
-    state.active
-      ? "font-semibold text-[var(--wb-text)]"
-      : "font-medium text-[var(--wb-text-subtle)] hover:text-[var(--wb-text)]",
-    !state.disabled &&
-      "focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:text-[var(--wb-text)]",
-    state.disabled && "cursor-not-allowed opacity-50",
-  );
+  return cn(sheetTabClass({ active: state.active, disabled: state.disabled }));
 }
 
 export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
@@ -106,18 +125,18 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
   }, [cancelSheetRename, renamingSheetName, sheetNames]);
 
   return (
-    <div className={SHEET_STRIP_CLASS}>
-      <div className="flex min-w-0 items-center gap-1.5">
+    <div className={sheetStripClass()}>
+      <div className="flex min-w-0 flex-1 items-center gap-1">
         <Tabs.Root
-          className={SHEET_TABS_ROOT_CLASS}
+          className={sheetTabsRootClass()}
           value={sheetName}
           onValueChange={(value) => onSelectSheet(String(value))}
         >
-          <Tabs.List aria-label="Sheets" className={SHEET_LIST_CLASS}>
-            <Tabs.Indicator className={SHEET_INDICATOR_CLASS} renderBeforeHydration />
+          <Tabs.List aria-label="Sheets" className={sheetListClass()}>
+            <Tabs.Indicator className={sheetIndicatorClass()} renderBeforeHydration />
             {sheetNames.map((name) =>
               renamingSheetName === name ? (
-                <div className={SHEET_RENAME_SHELL_CLASS} key={name}>
+                <div className={sheetRenameShellClass()} key={name}>
                   <input
                     aria-label={`Rename ${name}`}
                     className="w-[120px] min-w-0 border-none bg-transparent p-0 text-[12px] font-semibold text-[var(--wb-text)] outline-none"
@@ -162,7 +181,7 @@ export const WorkbookSheetTabs = React.memo(function WorkbookSheetTabs({
         {onCreateSheet ? (
           <Button
             aria-label="Create sheet"
-            className={SHEET_ACTION_BUTTON_CLASS}
+            className={sheetActionButtonClass()}
             onClick={onCreateSheet}
             title="Add sheet"
             type="button"

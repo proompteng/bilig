@@ -4,6 +4,7 @@ import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
 import { parseSelectionTarget, type ZeroConnectionState } from "./worker-workbook-app-model.js";
+import { WorkbookToastRegion } from "./WorkbookToastRegion.js";
 import { useWorkbookImportPane } from "./use-workbook-import-pane.js";
 import { useWorkerWorkbookAppState } from "./use-worker-workbook-app-state.js";
 
@@ -38,21 +39,50 @@ function WorkerWorkbookAppInner({
   zero: ZeroClient;
 }) {
   const app = useWorkerWorkbookAppState({ runtimeConfig, connectionState, zero });
-  const { importPanel, importToggle } = useWorkbookImportPane({
+  const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
     currentDocumentId: runtimeConfig.documentId,
     enabled: true,
   });
+  const toasts = useMemo(
+    () =>
+      [
+        app.runtimeError
+          ? {
+              id: "runtime-error",
+              tone: "error" as const,
+              message: app.runtimeError,
+              onDismiss: app.clearRuntimeError,
+            }
+          : null,
+        app.agentError
+          ? {
+              id: "agent-error",
+              tone: "error" as const,
+              message: app.agentError,
+              onDismiss: app.clearAgentError,
+            }
+          : null,
+        importError
+          ? {
+              id: "import-error",
+              tone: "error" as const,
+              message: importError,
+              onDismiss: clearImportError,
+            }
+          : null,
+      ].flatMap((toast) => (toast ? [toast] : [])),
+    [
+      app.agentError,
+      app.clearAgentError,
+      app.clearRuntimeError,
+      app.runtimeError,
+      clearImportError,
+      importError,
+    ],
+  );
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
-      {app.runtimeError ? (
-        <div
-          className="border-b border-[#f1b5b5] bg-[#fff7f7] px-3 py-2 text-sm text-[#991b1b]"
-          data-testid="worker-error"
-        >
-          {app.runtimeError}
-        </div>
-      ) : null}
       {app.runtimeReady && !app.remoteSyncAvailable ? (
         <div className="border-b border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-2 text-sm text-[var(--wb-accent)]">
           Zero is {app.statusModeLabel.toLowerCase()}. Local edits remain available while sync is
@@ -61,6 +91,7 @@ function WorkerWorkbookAppInner({
       ) : null}
       {app.editorConflictBanner}
       <div className="relative flex min-h-0 flex-1">
+        <WorkbookToastRegion toasts={toasts} />
         <div className="min-h-0 min-w-0 flex-1">
           {app.workbookReady && app.workerHandle ? (
             <WorkbookView
@@ -123,11 +154,10 @@ function WorkerWorkbookAppInner({
               }
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
-              sideRail={app.agentPanel}
+              sideRail={app.sideRail}
             />
           ) : null}
         </div>
-        {app.changesPanel}
         {importPanel}
       </div>
     </div>

@@ -9,11 +9,16 @@ export interface CodexClientInfo {
   version: string;
 }
 
+export interface CodexInitializeCapabilities {
+  experimentalApi: boolean;
+  optOutNotificationMethods?: string[] | null;
+}
+
 export interface CodexInitializeResponse {
   userAgent: string;
-  codexHome: string;
-  platformFamily: string;
-  platformOs: string;
+  codexHome?: string;
+  platformFamily?: string;
+  platformOs?: string;
 }
 
 export interface CodexThread {

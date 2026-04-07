@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkbookLoadedResponse } from "@bilig/agent-api";
 import { CSV_CONTENT_TYPE, XLSX_CONTENT_TYPE } from "@bilig/agent-api";
 import type { ImportedWorkbookPreview } from "@bilig/excel-import";
+import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
 import { resolveWorkbookImportContentType } from "../workbook-import-client.js";
 import { useWorkbookImportPane } from "../use-workbook-import-pane.js";
 
@@ -48,7 +49,7 @@ function ImportHarness(props: {
   readonly finalizeImport?: Parameters<typeof useWorkbookImportPane>[0]["finalizeImport"];
   readonly navigateToWorkbook?: (result: WorkbookLoadedResponse) => void;
 }) {
-  const { importPanel, importToggle } = useWorkbookImportPane({
+  const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
     currentDocumentId: "doc-1",
     enabled: true,
     previewFile: props.previewFile,
@@ -58,6 +59,20 @@ function ImportHarness(props: {
 
   return (
     <div>
+      <WorkbookToastRegion
+        toasts={
+          importError
+            ? [
+                {
+                  id: "import-error",
+                  tone: "error",
+                  message: importError,
+                  onDismiss: clearImportError,
+                },
+              ]
+            : []
+        }
+      />
       {importToggle}
       {importPanel}
     </div>

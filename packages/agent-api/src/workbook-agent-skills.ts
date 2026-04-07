@@ -1,3 +1,5 @@
+import { WORKBOOK_AGENT_TOOL_NAMES } from "./workbook-agent-tool-names.js";
+
 export type WorkbookAgentSkillFocus = "read" | "analyze" | "edit";
 
 export interface WorkbookAgentSkillDescriptor {
@@ -17,7 +19,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Read the workbook structure and explain what each sheet appears to do.",
     prompt:
       "Summarize this workbook, explain what each sheet appears to do, and call out any obvious hotspots or risks.",
-    toolNames: ["bilig.read_workbook"],
+    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.readWorkbook],
   },
   {
     id: "inspect-selection",
@@ -26,7 +28,11 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Read the current cell, explain its value or formula, and trace direct links.",
     prompt:
       "Inspect the current cell selection, explain its value or formula, and trace its direct precedents and dependents.",
-    toolNames: ["bilig.get_context", "bilig.read_selection", "bilig.inspect_cell"],
+    toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.getContext,
+      WORKBOOK_AGENT_TOOL_NAMES.readSelection,
+      WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
+    ],
   },
   {
     id: "find-formula-issues",
@@ -35,7 +41,10 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Scan the workbook for broken formulas, cycles, and JS-only fallback formulas.",
     prompt:
       "Scan this workbook for broken formulas, cycles, and JS-only fallback formulas, then summarize the highest-risk issues first.",
-    toolNames: ["bilig.read_workbook", "bilig.find_formula_issues"],
+    toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
+      WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues,
+    ],
   },
   {
     id: "search-workbook",
@@ -44,7 +53,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Search workbook structure, formulas, inputs, and visible values for a concept.",
     prompt:
       "Search this workbook for the concept I mention, use workbook search before broader explanation, and cite the strongest matching cells or sheets.",
-    toolNames: ["bilig.search_workbook", "bilig.inspect_cell"],
+    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook, WORKBOOK_AGENT_TOOL_NAMES.inspectCell],
   },
   {
     id: "trace-dependencies",
@@ -53,7 +62,11 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Trace upstream and downstream workbook links from the current selection.",
     prompt:
       "Trace the dependency graph around the current selection for multiple hops, then explain the most important upstream and downstream cells.",
-    toolNames: ["bilig.get_context", "bilig.inspect_cell", "bilig.trace_dependencies"],
+    toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.getContext,
+      WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
+      WORKBOOK_AGENT_TOOL_NAMES.traceDependencies,
+    ],
   },
   {
     id: "review-visible-range",
@@ -62,7 +75,7 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     description: "Read the current viewport and summarize headers, patterns, and issues.",
     prompt:
       "Read the currently visible range and summarize its structure, headers, patterns, and any obvious issues.",
-    toolNames: ["bilig.get_context", "bilig.read_visible_range"],
+    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.getContext, WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange],
   },
   {
     id: "edit-selection",
@@ -72,10 +85,10 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     prompt:
       "Use the current selection context to stage the right spreadsheet edit as one coherent preview bundle.",
     toolNames: [
-      "bilig.get_context",
-      "bilig.read_selection",
-      "bilig.write_range",
-      "bilig.format_range",
+      WORKBOOK_AGENT_TOOL_NAMES.getContext,
+      WORKBOOK_AGENT_TOOL_NAMES.readSelection,
+      WORKBOOK_AGENT_TOOL_NAMES.writeRange,
+      WORKBOOK_AGENT_TOOL_NAMES.formatRange,
     ],
   },
   {
@@ -86,13 +99,13 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     prompt:
       "Restructure this sheet using semantic range and sheet tools, then stage one coherent preview bundle.",
     toolNames: [
-      "bilig.read_workbook",
-      "bilig.read_range",
-      "bilig.fill_range",
-      "bilig.copy_range",
-      "bilig.move_range",
-      "bilig.create_sheet",
-      "bilig.rename_sheet",
+      WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
+      WORKBOOK_AGENT_TOOL_NAMES.readRange,
+      WORKBOOK_AGENT_TOOL_NAMES.fillRange,
+      WORKBOOK_AGENT_TOOL_NAMES.copyRange,
+      WORKBOOK_AGENT_TOOL_NAMES.moveRange,
+      WORKBOOK_AGENT_TOOL_NAMES.createSheet,
+      WORKBOOK_AGENT_TOOL_NAMES.renameSheet,
     ],
   },
 ];

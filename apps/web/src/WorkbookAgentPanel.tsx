@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react";
-import { describeWorkbookAgentCommand } from "@bilig/agent-api";
+import {
+  WORKBOOK_AGENT_TOOL_NAMES,
+  describeWorkbookAgentCommand,
+  normalizeWorkbookAgentToolName,
+} from "@bilig/agent-api";
 import type {
   WorkbookAgentCommandBundle,
   WorkbookAgentPreviewChangeKind,
@@ -15,7 +19,7 @@ import { cn } from "./cn.js";
 
 function contextLabel(context: WorkbookAgentUiContext | null): string {
   if (!context) {
-    return "No selection context";
+    return "";
   }
   return `${context.selection.sheetName}!${context.selection.address}`;
 }
@@ -31,7 +35,7 @@ function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["to
           ? "bg-[#dcfce7] text-[#166534]"
           : props.status === "failed"
             ? "bg-[#fee2e2] text-[#991b1b]"
-            : "bg-[#e0f2fe] text-[#075985]",
+            : "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]",
       )}
     >
       {label}
@@ -63,10 +67,11 @@ function safeParseToolOutput(outputText: string | null): unknown {
 }
 
 function supportsStructuredToolOutput(toolName: string | null): boolean {
+  const normalizedToolName = toolName ? normalizeWorkbookAgentToolName(toolName) : null;
   return (
-    toolName === "bilig.find_formula_issues" ||
-    toolName === "bilig.search_workbook" ||
-    toolName === "bilig.trace_dependencies"
+    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues ||
+    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook ||
+    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies
   );
 }
 
@@ -105,11 +110,15 @@ function StructuredToolOutput(props: {
   readonly outputText: string | null;
 }) {
   const parsed = safeParseToolOutput(props.outputText);
-  if (!props.toolName || !isRecord(parsed)) {
+  const normalizedToolName = props.toolName ? normalizeWorkbookAgentToolName(props.toolName) : null;
+  if (!normalizedToolName || !isRecord(parsed)) {
     return null;
   }
 
-  if (props.toolName === "bilig.find_formula_issues" && Array.isArray(parsed["issues"])) {
+  if (
+    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues &&
+    Array.isArray(parsed["issues"])
+  ) {
     const summary = isRecord(parsed["summary"]) ? parsed["summary"] : null;
     const issues = parsed["issues"].flatMap((issue) => (isRecord(issue) ? [issue] : []));
     return (
@@ -167,7 +176,10 @@ function StructuredToolOutput(props: {
     );
   }
 
-  if (props.toolName === "bilig.search_workbook" && Array.isArray(parsed["matches"])) {
+  if (
+    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook &&
+    Array.isArray(parsed["matches"])
+  ) {
     const matches = parsed["matches"].flatMap((match) => (isRecord(match) ? [match] : []));
     return (
       <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
@@ -214,7 +226,7 @@ function StructuredToolOutput(props: {
                   {match["reasons"].map((reason) => (
                     <span
                       key={readString(reason)}
-                      className="rounded-full bg-[#e0f2fe] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[#075985]"
+                      className="rounded-full bg-[var(--color-mauve-100)] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--color-mauve-800)]"
                     >
                       {renderReasonLabel(readString(reason))}
                     </span>
@@ -228,7 +240,10 @@ function StructuredToolOutput(props: {
     );
   }
 
-  if (props.toolName === "bilig.trace_dependencies" && Array.isArray(parsed["layers"])) {
+  if (
+    normalizedToolName === WORKBOOK_AGENT_TOOL_NAMES.traceDependencies &&
+    Array.isArray(parsed["layers"])
+  ) {
     const root = isRecord(parsed["root"]) ? parsed["root"] : null;
     const layers = parsed["layers"].flatMap((layer) => (isRecord(layer) ? [layer] : []));
     return (
@@ -324,21 +339,24 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   if (entry.kind === "assistant") {
+    if (!entry.text?.trim().length) {
+      return null;
+    }
     return (
       <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
-        {entry.text?.trim().length ? entry.text : "Thinking..."}
+        {entry.text}
       </div>
     );
   }
 
   if (entry.kind === "plan") {
+    if (!entry.text?.trim().length) {
+      return null;
+    }
     return (
       <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-          Plan
-        </div>
-        <div className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
-          {entry.text?.trim().length ? entry.text : "Planning..."}
+        <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
+          {entry.text}
         </div>
       </div>
     );
@@ -350,7 +368,6 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[12px] font-semibold text-[var(--wb-text)]">{entry.toolName}</div>
-            <div className="text-[11px] text-[var(--wb-text-subtle)]">Workbook tool call</div>
           </div>
           <ToolStatusPill status={entry.toolStatus} />
         </div>
@@ -396,10 +413,12 @@ function PreviewRangeList(props: {
           key={`${range.role}:${range.sheetName}:${range.startAddress}:${range.endAddress}`}
           className={cn(
             "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-medium",
-            range.role === "target" ? "bg-[#e0f2fe] text-[#0c4a6e]" : "bg-[#f1f5f9] text-[#475569]",
+            range.role === "target"
+              ? "bg-[var(--color-mauve-100)] text-[var(--color-mauve-800)]"
+              : "bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
           )}
         >
-          {range.role === "target" ? "Target" : "Source"} {range.sheetName}!{range.startAddress}
+          {range.sheetName}!{range.startAddress}
           {range.startAddress === range.endAddress ? "" : `:${range.endAddress}`}
         </span>
       ))}
@@ -423,27 +442,24 @@ function PendingBundleCard(props: {
   const applyLabel =
     selectedCount > 0 && !hasFullSelection
       ? props.isApplyingBundle
-        ? "Applying Selected..."
-        : "Apply Selected"
+        ? "Applying…"
+        : "Apply"
       : props.bundle.approvalMode === "explicit"
         ? props.isApplyingBundle
-          ? "Approving..."
-          : "Approve and Apply"
+          ? "Applying…"
+          : "Approve"
         : props.bundle.approvalMode === "auto"
           ? props.isApplyingBundle
-            ? "Auto-Applying..."
-            : "Apply Now"
+            ? "Applying…"
+            : "Apply"
           : props.isApplyingBundle
-            ? "Applying..."
-            : "Apply Preview";
+            ? "Applying…"
+            : "Apply";
   return (
     <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-surface)] px-3 py-3 shadow-[var(--wb-shadow-sm)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
-            Pending Preview
-          </div>
-          <div className="mt-1 text-[13px] font-semibold text-[var(--wb-text)]">
+          <div className="text-[13px] font-semibold text-[var(--wb-text)]">
             {props.bundle.summary}
           </div>
         </div>
@@ -451,26 +467,10 @@ function PendingBundleCard(props: {
           {props.bundle.riskClass}
         </span>
       </div>
-      <div className="mt-2 text-[12px] leading-5 text-[var(--wb-text-subtle)]">
-        Scope: {props.bundle.scope}. Base revision: r{String(props.bundle.baseRevision)}.
-        {props.bundle.estimatedAffectedCells === null
-          ? ""
-          : ` ${String(props.bundle.estimatedAffectedCells)} affected cell${
-              props.bundle.estimatedAffectedCells === 1 ? "" : "s"
-            }.`}
-      </div>
-      <div className="mt-2 text-[11px] font-medium text-[var(--wb-text-subtle)]">
-        Approval:{" "}
-        {props.bundle.approvalMode === "auto"
-          ? "auto-apply after local preview"
-          : props.bundle.approvalMode === "explicit"
-            ? "explicit approval required"
-            : "preview required before apply"}
-      </div>
       <div className="mt-3 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2 py-2">
         <div className="flex items-center justify-between gap-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-            Selected {String(selectedCount)} of {String(props.bundle.commands.length)} changes
+            {String(selectedCount)}/{String(props.bundle.commands.length)}
           </div>
           {!hasFullSelection ? (
             <button
@@ -478,7 +478,7 @@ function PendingBundleCard(props: {
               type="button"
               onClick={props.onSelectAll}
             >
-              Select all
+              All
             </button>
           ) : null}
         </div>
@@ -507,33 +507,13 @@ function PendingBundleCard(props: {
                   }}
                 />
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">
-                    Change {String(index + 1)}
-                  </div>
-                  <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
-                    {commandLabel}
-                  </div>
+                  <div className="text-[11px] leading-5 text-[var(--wb-text)]">{commandLabel}</div>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-      {props.preview ? (
-        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
-          Preview effects: {String(props.preview.effectSummary.displayedCellDiffCount)} sampled cell
-          diff{props.preview.effectSummary.displayedCellDiffCount === 1 ? "" : "s"} ·{" "}
-          {String(props.preview.effectSummary.formulaChangeCount)} formulas ·{" "}
-          {String(props.preview.effectSummary.inputChangeCount)} values ·{" "}
-          {String(props.preview.effectSummary.styleChangeCount)} styles ·{" "}
-          {String(props.preview.effectSummary.numberFormatChangeCount)} number formats
-          {props.preview.effectSummary.truncatedCellDiffs ? " · diff list truncated" : ""}
-        </div>
-      ) : selectedCount === 0 ? (
-        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
-          Select at least one change to preview and apply.
-        </div>
-      ) : null}
       <PreviewRangeList ranges={props.preview?.ranges ?? props.bundle.affectedRanges} />
       {props.preview?.structuralChanges?.length ? (
         <div className="mt-2 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
@@ -542,9 +522,6 @@ function PendingBundleCard(props: {
       ) : null}
       {props.preview?.cellDiffs?.length ? (
         <div className="mt-2 overflow-hidden rounded-[var(--wb-radius-control)] border border-[var(--wb-border)]">
-          <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-            Local Preview Diff
-          </div>
           <div className="max-h-44 overflow-y-auto">
             {props.preview.cellDiffs.map((diff) => (
               <div
@@ -565,10 +542,10 @@ function PendingBundleCard(props: {
                   ))}
                 </div>
                 <div className="text-[var(--wb-text-subtle)]">
-                  Before: {(diff.beforeFormula ?? String(diff.beforeInput ?? "")) || "(empty)"}
+                  {(diff.beforeFormula ?? String(diff.beforeInput ?? "")) || "(empty)"}
                 </div>
                 <div className="text-[var(--wb-text)]">
-                  After: {(diff.afterFormula ?? String(diff.afterInput ?? "")) || "(empty)"}
+                  {(diff.afterFormula ?? String(diff.afterInput ?? "")) || "(empty)"}
                 </div>
               </div>
             ))}
@@ -581,7 +558,7 @@ function PendingBundleCard(props: {
           type="button"
           onClick={props.onDismiss}
         >
-          Dismiss
+          Clear
         </button>
         <button
           className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 text-[12px] font-semibold text-[var(--wb-accent)] shadow-[var(--wb-shadow-sm)] transition-colors hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
@@ -609,9 +586,7 @@ function ExecutionRecordRow(props: {
             {props.record.summary}
           </div>
           <div className="text-[11px] text-[var(--wb-text-subtle)]">
-            {props.record.appliedBy === "auto" ? "Auto-applied" : "Applied"} at r
-            {String(props.record.appliedRevision)} · {props.record.riskClass} risk ·{" "}
-            {props.record.approvalMode} · {props.record.acceptedScope}
+            r{String(props.record.appliedRevision)}
           </div>
         </div>
         <span className="rounded-full bg-[var(--wb-surface-subtle)] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
@@ -623,14 +598,6 @@ function ExecutionRecordRow(props: {
           {props.record.planText ?? props.record.goalText}
         </div>
       ) : null}
-      {props.record.preview ? (
-        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
-          Preview effects: {String(props.record.preview.effectSummary.displayedCellDiffCount)}{" "}
-          sampled cell diff
-          {props.record.preview.effectSummary.displayedCellDiffCount === 1 ? "" : "s"} ·{" "}
-          {String(props.record.preview.effectSummary.structuralChangeCount)} structural changes
-        </div>
-      ) : null}
       <PreviewRangeList ranges={props.record.preview?.ranges ?? []} />
       <div className="mt-3 flex items-center justify-end">
         <button
@@ -638,7 +605,7 @@ function ExecutionRecordRow(props: {
           type="button"
           onClick={props.onReplay}
         >
-          Replay as Preview
+          Replay
         </button>
       </div>
     </div>
@@ -653,12 +620,9 @@ export function WorkbookAgentPanel(props: {
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly draft: string;
-  readonly error: string | null;
   readonly isLoading: boolean;
   readonly isApplyingBundle: boolean;
-  readonly isOpen: boolean;
   readonly onApplyPendingBundle: () => void;
-  readonly onClose: () => void;
   readonly onDraftChange: (value: string) => void;
   readonly onDismissPendingBundle: () => void;
   readonly onInterrupt: () => void;
@@ -668,7 +632,6 @@ export function WorkbookAgentPanel(props: {
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -678,10 +641,6 @@ export function WorkbookAgentPanel(props: {
     node.scrollTop = node.scrollHeight;
   }, [props.snapshot?.entries.length, props.snapshot?.status]);
 
-  if (!props.isOpen) {
-    return null;
-  }
-
   const isRunning = props.snapshot?.status === "inProgress";
 
   return (
@@ -690,23 +649,15 @@ export function WorkbookAgentPanel(props: {
       data-testid="workbook-agent-panel"
       id="workbook-agent-panel"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="text-[13px] font-semibold text-[var(--wb-text)]">Assistant</h2>
-          <p className="text-[11px] text-[var(--wb-text-subtle)]">
-            {contextLabel(props.snapshot?.context ?? props.currentContext)}
-          </p>
+      <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-3">
+        <div className="min-w-0 text-[12px] font-medium text-[var(--wb-text)]">
+          {contextLabel(props.snapshot?.context ?? props.currentContext)}
         </div>
-        <button
-          aria-label="Close assistant"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
-          type="button"
-          onClick={props.onClose}
-        >
-          <span aria-hidden="true">×</span>
-        </button>
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto bg-[var(--wb-app-bg)] px-3 py-3"
+      >
         {props.pendingBundle ? (
           <div className="mb-3">
             <PendingBundleCard
@@ -721,20 +672,15 @@ export function WorkbookAgentPanel(props: {
             />
           </div>
         ) : null}
-        {props.isLoading ? (
-          <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-5 text-sm text-[var(--wb-text-subtle)]">
-            Starting workbook assistant...
-          </div>
-        ) : props.snapshot && props.snapshot.entries.length > 0 ? (
+        {props.isLoading ? null : props.snapshot && props.snapshot.entries.length > 0 ? (
           <div className="flex flex-col gap-2">
-            {props.snapshot.entries.map((entry) => (
-              <WorkbookAgentEntryRow key={entry.id} entry={entry} />
-            ))}
+            {props.snapshot.entries
+              .filter((entry) => entry.kind !== "system")
+              .map((entry) => (
+                <WorkbookAgentEntryRow key={entry.id} entry={entry} />
+              ))}
             {props.executionRecords.length > 0 ? (
               <div className="pt-2">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                  Applied Plans
-                </div>
                 <div className="flex flex-col gap-2">
                   {props.executionRecords.slice(0, 5).map((record) => (
                     <ExecutionRecordRow
@@ -751,11 +697,6 @@ export function WorkbookAgentPanel(props: {
           </div>
         ) : null}
       </div>
-      {props.error ? (
-        <div className="border-t border-[#f1b5b5] bg-[#fff7f7] px-4 py-2 text-[12px] text-[#991b1b]">
-          {props.error}
-        </div>
-      ) : null}
       <form
         className="border-t border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-3"
         onSubmit={(event) => {
@@ -766,40 +707,63 @@ export function WorkbookAgentPanel(props: {
         <label className="sr-only" htmlFor="workbook-agent-input">
           Ask the workbook assistant
         </label>
-        <textarea
-          id="workbook-agent-input"
-          className="min-h-24 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
-          data-testid="workbook-agent-input"
-          ref={textareaRef}
-          placeholder="Ask the assistant to update this workbook..."
-          value={props.draft}
-          onChange={(event) => {
-            props.onDraftChange(event.target.value);
-          }}
-        />
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="ml-auto flex items-center gap-2">
-            {isRunning ? (
-              <button
-                className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[#f1b5b5] bg-[#fff7f7] px-3 text-[12px] font-medium text-[#991b1b] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[#e58e8e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1b5b5] focus-visible:ring-offset-1"
-                data-testid="workbook-agent-interrupt"
-                type="button"
-                onClick={props.onInterrupt}
-              >
-                Stop
-              </button>
-            ) : null}
-            <button
-              className="inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 text-[12px] font-semibold text-[var(--wb-accent)] shadow-[var(--wb-shadow-sm)] transition-colors hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="workbook-agent-send"
-              disabled={props.draft.trim().length === 0 || props.isLoading}
-              type="submit"
-            >
-              Send
-            </button>
-          </div>
+        <div className="relative">
+          <textarea
+            id="workbook-agent-input"
+            className="min-h-32 w-full resize-none rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3 pr-14 text-[13px] leading-5 text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)]"
+            data-testid="workbook-agent-input"
+            placeholder=""
+            value={props.draft}
+            onChange={(event) => {
+              props.onDraftChange(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (isRunning) {
+                return;
+              }
+              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+                return;
+              }
+              event.preventDefault();
+              props.onSubmit();
+            }}
+          />
+          <button
+            aria-label={isRunning ? "Stop" : "Send message"}
+            className="absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#0f0f10] bg-[#0f0f10] text-[var(--color-mauve-200)] transition-colors hover:bg-[#18181b] hover:text-[var(--color-mauve-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:border-[var(--color-mauve-300)] disabled:bg-[var(--color-mauve-100)] disabled:text-[var(--color-mauve-500)] disabled:opacity-55 disabled:shadow-none"
+            data-testid="workbook-agent-send"
+            disabled={!isRunning && (props.draft.trim().length === 0 || props.isLoading)}
+            type="button"
+            onClick={() => {
+              if (isRunning) {
+                props.onInterrupt();
+                return;
+              }
+              props.onSubmit();
+            }}
+          >
+            {isRunning ? <StopIcon /> : <SendArrowIcon />}
+          </button>
         </div>
       </form>
     </div>
   );
+}
+
+function SendArrowIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 16 16">
+      <path
+        d="M8 12V4M8 4L4.75 7.25M8 4l3.25 3.25"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return <div aria-hidden="true" className="h-3.5 w-3.5 rounded-[3px] bg-current" />;
 }

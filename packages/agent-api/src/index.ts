@@ -151,6 +151,13 @@ export type AgentFrame =
   | { kind: "response"; response: AgentResponse }
   | { kind: "event"; event: AgentEvent };
 
+export {
+  WORKBOOK_AGENT_TOOL_NAMES,
+  isWorkbookAgentToolName,
+  normalizeWorkbookAgentToolName,
+  type WorkbookAgentToolName,
+} from "./workbook-agent-tool-names.js";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }

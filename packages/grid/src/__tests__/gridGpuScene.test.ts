@@ -372,13 +372,56 @@ describe("gridGpuScene", () => {
     });
   });
 
-  test("adds GPU body highlights for column and row slice selections", () => {
+  test("adds GPU body highlights for column slice selections without inner borders", () => {
     const scene = buildGridGpuScene({
       engine: makeEngine({}),
       columnWidths: {},
       gridMetrics: getGridMetrics(),
       gridSelection: {
         columns: CompactSelection.fromSingleSelection([1, 3]),
+        rows: CompactSelection.empty(),
+        current: undefined,
+      },
+      selectedCell: [1, 2],
+      sheetName: "Sheet1",
+      visibleItems: [
+        [1, 2],
+        [2, 2],
+        [1, 3],
+        [2, 3],
+      ],
+      visibleRegion: { range: { x: 1, y: 2, width: 2, height: 2 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: () => ({ x: 146, y: 48, width: 100, height: 24 }),
+    });
+
+    expect(scene.fillRects).toContainEqual({
+      x: 47,
+      y: 25,
+      width: 206,
+      height: 42,
+      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
+    });
+    expect(
+      scene.borderRects.filter(
+        (rect) =>
+          rect.color.r === 31 / 255 &&
+          rect.color.g === 122 / 255 &&
+          rect.color.b === 67 / 255 &&
+          rect.color.a === 1 &&
+          rect.width === 2 &&
+          rect.height === 44,
+      ),
+    ).toHaveLength(0);
+  });
+
+  test("adds GPU body highlights for row slice selections without inner borders", () => {
+    const scene = buildGridGpuScene({
+      engine: makeEngine({}),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      gridSelection: {
+        columns: CompactSelection.empty(),
         rows: CompactSelection.fromSingleSelection([2, 4]),
         current: undefined,
       },
@@ -398,17 +441,21 @@ describe("gridGpuScene", () => {
     expect(scene.fillRects).toContainEqual({
       x: 47,
       y: 25,
-      width: 102,
+      width: 206,
       height: 42,
       color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
     });
-    expect(scene.fillRects).toContainEqual({
-      x: 47,
-      y: 25,
-      width: 206,
-      height: 20,
-      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.06 },
-    });
+    expect(
+      scene.borderRects.filter(
+        (rect) =>
+          rect.color.r === 31 / 255 &&
+          rect.color.g === 122 / 255 &&
+          rect.color.b === 67 / 255 &&
+          rect.color.a === 1 &&
+          rect.width === 206 &&
+          rect.height === 2,
+      ),
+    ).toHaveLength(0);
   });
 
   test("adds GPU-backed boolean checkbox chrome", () => {

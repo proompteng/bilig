@@ -8,6 +8,7 @@ import {
   type CellStylePatch,
   normalizeCellNumberFormatPreset,
 } from "@bilig/protocol";
+import { WORKBOOK_AGENT_TOOL_NAMES, normalizeWorkbookAgentToolName } from "@bilig/agent-api";
 import type {
   CodexDynamicToolCallRequest,
   CodexDynamicToolCallResult,
@@ -426,7 +427,7 @@ export interface WorkbookAgentToolContext {
 function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
   return [
     {
-      name: "bilig.get_context",
+      name: WORKBOOK_AGENT_TOOL_NAMES.getContext,
       description:
         "Read the current browser workbook context, including the active cell selection and visible viewport.",
       inputSchema: {
@@ -436,7 +437,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.read_workbook",
+      name: WORKBOOK_AGENT_TOOL_NAMES.readWorkbook,
       description:
         "Read a workbook summary with sheet names, populated cell counts, and used ranges.",
       inputSchema: {
@@ -446,7 +447,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.read_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.readRange,
       description:
         "Read a rectangular cell range. Use this before editing a region you have not inspected yet.",
       inputSchema: {
@@ -461,7 +462,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.read_selection",
+      name: WORKBOOK_AGENT_TOOL_NAMES.readSelection,
       description: "Read the currently selected cell from the attached browser workbook context.",
       inputSchema: {
         type: "object",
@@ -470,7 +471,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.read_visible_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange,
       description:
         "Read the currently visible viewport range from the attached browser workbook context.",
       inputSchema: {
@@ -480,7 +481,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.inspect_cell",
+      name: WORKBOOK_AGENT_TOOL_NAMES.inspectCell,
       description:
         "Explain one cell, including its current value, formula, version, cycle status, and direct precedents/dependents. Defaults to the current selection when no address is provided.",
       inputSchema: {
@@ -493,7 +494,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.find_formula_issues",
+      name: WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues,
       description:
         "Scan the workbook for broken formulas, error cells, cycles, and formulas still running through the JS fallback path.",
       inputSchema: {
@@ -506,7 +507,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.search_workbook",
+      name: WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook,
       description:
         "Search workbook sheet names, addresses, formulas, inputs, and displayed values through the warm local runtime.",
       inputSchema: {
@@ -521,7 +522,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.trace_dependencies",
+      name: WORKBOOK_AGENT_TOOL_NAMES.traceDependencies,
       description:
         "Trace workbook precedents and dependents from one cell for multiple hops. Defaults to the current selection when no address is provided.",
       inputSchema: {
@@ -539,7 +540,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.write_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.writeRange,
       description:
         "Write a rectangular matrix of spreadsheet inputs starting at a top-left address. Use primitives for literals, {formula} for formulas, and null to clear a cell.",
       inputSchema: {
@@ -590,7 +591,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.clear_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.clearRange,
       description: "Clear a rectangular range of cells.",
       inputSchema: {
         type: "object",
@@ -611,7 +612,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.format_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.formatRange,
       description:
         "Apply style and/or number-format changes to a range. Use patch for style properties and numberFormat for number formatting.",
       inputSchema: {
@@ -637,7 +638,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.fill_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.fillRange,
       description: "Fill a target range from a source range using spreadsheet fill semantics.",
       inputSchema: {
         type: "object",
@@ -668,7 +669,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.copy_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.copyRange,
       description: "Copy a source range into a target range.",
       inputSchema: {
         type: "object",
@@ -699,7 +700,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.move_range",
+      name: WORKBOOK_AGENT_TOOL_NAMES.moveRange,
       description: "Move a source range into a target range.",
       inputSchema: {
         type: "object",
@@ -730,7 +731,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.create_sheet",
+      name: WORKBOOK_AGENT_TOOL_NAMES.createSheet,
       description: "Create a new worksheet.",
       inputSchema: {
         type: "object",
@@ -742,7 +743,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
       },
     },
     {
-      name: "bilig.rename_sheet",
+      name: WORKBOOK_AGENT_TOOL_NAMES.renameSheet,
       description: "Rename an existing worksheet.",
       inputSchema: {
         type: "object",
@@ -782,11 +783,11 @@ export async function handleWorkbookAgentToolCall(
   request: CodexDynamicToolCallRequest,
 ): Promise<CodexDynamicToolCallResult> {
   try {
-    switch (request.tool) {
-      case "bilig.get_context": {
+    switch (normalizeWorkbookAgentToolName(request.tool)) {
+      case WORKBOOK_AGENT_TOOL_NAMES.getContext: {
         return textToolResult(workbookToolContextText(context.uiContext));
       }
-      case "bilig.read_workbook": {
+      case WORKBOOK_AGENT_TOOL_NAMES.readWorkbook: {
         const summary = await context.zeroSyncService.inspectWorkbook(
           context.documentId,
           (runtime) => {
@@ -826,7 +827,7 @@ export async function handleWorkbookAgentToolCall(
         );
         return textToolResult(stringifyJson(summary));
       }
-      case "bilig.read_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.readRange: {
         const args = readRangeToolArgsSchema.parse(request.arguments);
         return await inspectWorkbookRange(context, {
           sheetName: args.sheetName,
@@ -834,17 +835,17 @@ export async function handleWorkbookAgentToolCall(
           endAddress: args.endAddress,
         });
       }
-      case "bilig.read_selection": {
+      case WORKBOOK_AGENT_TOOL_NAMES.readSelection: {
         return await inspectWorkbookRange(context, resolveSelectionRange(context.uiContext));
       }
-      case "bilig.read_visible_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange: {
         return await inspectWorkbookRange(context, resolveVisibleRange(context.uiContext));
       }
-      case "bilig.inspect_cell": {
+      case WORKBOOK_AGENT_TOOL_NAMES.inspectCell: {
         const args = inspectCellToolArgsSchema.parse(request.arguments);
         return await inspectWorkbookCell(context, resolveInspectionTarget(context.uiContext, args));
       }
-      case "bilig.find_formula_issues": {
+      case WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues: {
         const args = formulaIssueToolArgsSchema.parse(request.arguments);
         const report = await context.zeroSyncService.inspectWorkbook(
           context.documentId,
@@ -856,7 +857,7 @@ export async function handleWorkbookAgentToolCall(
         );
         return textToolResult(stringifyJson(report));
       }
-      case "bilig.search_workbook": {
+      case WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook: {
         const args = searchWorkbookToolArgsSchema.parse(request.arguments);
         const report = await context.zeroSyncService.inspectWorkbook(
           context.documentId,
@@ -869,7 +870,7 @@ export async function handleWorkbookAgentToolCall(
         );
         return textToolResult(stringifyJson(report));
       }
-      case "bilig.trace_dependencies": {
+      case WORKBOOK_AGENT_TOOL_NAMES.traceDependencies: {
         const args = traceDependenciesToolArgsSchema.parse(request.arguments);
         const target = resolveInspectionTarget(context.uiContext, args);
         const report = await context.zeroSyncService.inspectWorkbook(
@@ -884,7 +885,7 @@ export async function handleWorkbookAgentToolCall(
         );
         return textToolResult(stringifyJson(report));
       }
-      case "bilig.write_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.writeRange: {
         const args = writeRangeToolArgsSchema.parse(request.arguments);
         const start = parseCellAddress(args.startAddress, args.sheetName);
         const maxWidth = args.values.reduce(
@@ -929,7 +930,7 @@ export async function handleWorkbookAgentToolCall(
           ),
         });
       }
-      case "bilig.clear_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.clearRange: {
         const args = clearRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.range, MAX_MUTATION_RANGE_CELLS);
         return await stageCommandResult(context, {
@@ -937,7 +938,7 @@ export async function handleWorkbookAgentToolCall(
           range: args.range,
         });
       }
-      case "bilig.format_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.formatRange: {
         const args = formatRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.range, MAX_MUTATION_RANGE_CELLS);
         const formatCommand: Extract<WorkbookAgentCommand, { kind: "formatRange" }> = {
@@ -952,7 +953,7 @@ export async function handleWorkbookAgentToolCall(
         }
         return await stageCommandResult(context, formatCommand);
       }
-      case "bilig.fill_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.fillRange: {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
         ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
@@ -962,7 +963,7 @@ export async function handleWorkbookAgentToolCall(
           target: args.target,
         });
       }
-      case "bilig.copy_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.copyRange: {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
         ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
@@ -972,7 +973,7 @@ export async function handleWorkbookAgentToolCall(
           target: args.target,
         });
       }
-      case "bilig.move_range": {
+      case WORKBOOK_AGENT_TOOL_NAMES.moveRange: {
         const args = transferRangeToolArgsSchema.parse(request.arguments);
         ensureRangeLimit(args.source, MAX_MUTATION_RANGE_CELLS);
         ensureRangeLimit(args.target, MAX_MUTATION_RANGE_CELLS);
@@ -982,14 +983,14 @@ export async function handleWorkbookAgentToolCall(
           target: args.target,
         });
       }
-      case "bilig.create_sheet": {
+      case WORKBOOK_AGENT_TOOL_NAMES.createSheet: {
         const args = sheetMutationToolArgsSchema.parse(request.arguments);
         return await stageCommandResult(context, {
           kind: "createSheet",
           name: args.name,
         });
       }
-      case "bilig.rename_sheet": {
+      case WORKBOOK_AGENT_TOOL_NAMES.renameSheet: {
         const args = renameSheetToolArgsSchema.parse(request.arguments);
         return await stageCommandResult(context, {
           kind: "renameSheet",

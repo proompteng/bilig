@@ -142,7 +142,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-selection",
-        tool: "bilig.read_selection",
+        tool: "bilig_read_selection",
         arguments: {},
       },
     );
@@ -184,7 +184,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-visible",
-        tool: "bilig.read_visible_range",
+        tool: "bilig_read_visible_range",
         arguments: {},
       },
     );
@@ -226,7 +226,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-inspect",
-        tool: "bilig.inspect_cell",
+        tool: "bilig_inspect_cell",
         arguments: {},
       },
     );
@@ -271,7 +271,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-formula-issues",
-        tool: "bilig.find_formula_issues",
+        tool: "bilig_find_formula_issues",
         arguments: {},
       },
     );
@@ -317,7 +317,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-search",
-        tool: "bilig.search_workbook",
+        tool: "bilig_search_workbook",
         arguments: {
           query: "gross margin",
         },
@@ -364,7 +364,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-trace",
-        tool: "bilig.trace_dependencies",
+        tool: "bilig_trace_dependencies",
         arguments: {
           direction: "both",
           depth: 2,
@@ -413,7 +413,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-1",
-        tool: "bilig.read_range",
+        tool: "bilig_read_range",
         arguments: {
           sheetName: "Sheet1",
           startAddress: "A1",
@@ -454,7 +454,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-2",
-        tool: "bilig.write_range",
+        tool: "bilig_write_range",
         arguments: {
           sheetName: "Sheet1",
           startAddress: "C3",
@@ -505,7 +505,7 @@ describe("workbook agent tools", () => {
         threadId: "thr-1",
         turnId: "turn-1",
         callId: "call-3",
-        tool: "bilig.format_range",
+        tool: "bilig_format_range",
         arguments: {
           range: {
             sheetName: "Sheet1",

@@ -39,7 +39,7 @@ import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
-import { WorkbookHeaderControlGroup } from "./workbook-header-controls.js";
+import { WorkbookSideRailTabs } from "./WorkbookSideRailTabs.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 
@@ -209,6 +209,9 @@ export function useWorkerWorkbookAppState(input: {
     },
     [runtimeActorRef],
   );
+  const clearRuntimeError = useCallback(() => {
+    runtimeActorRef.send({ type: "error.clear" });
+  }, [runtimeActorRef]);
   const { invokeMutation, invokeColumnWidthMutation } = useWorkbookSync({
     documentId,
     connectionStateName: connectionState.name,
@@ -746,7 +749,7 @@ export function useWorkerWorkbookAppState(input: {
     zero,
     enabled: runtimeReady && remoteSyncAvailable,
   });
-  const { changesPanel, changesToggle } = useWorkbookChangesPane({
+  const { changeCount, changesPanel } = useWorkbookChangesPane({
     documentId,
     sheetNames,
     zero,
@@ -755,24 +758,25 @@ export function useWorkerWorkbookAppState(input: {
       selectAddress(sheetName, address);
     },
   });
-  const { agentPanel, agentToggle, previewRanges } = useWorkbookAgentPane({
-    documentId,
-    enabled: runtimeReady,
-    getContext: () => ({
-      selection: selectionRef.current,
-      viewport: visibleViewportRef.current,
-    }),
-    previewBundle: async (bundle: WorkbookAgentCommandBundle) => {
-      if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
-        throw new Error("Workbook runtime is not ready for agent preview");
-      }
-      const value = await runtimeController.invoke("previewAgentCommandBundle", bundle);
-      if (!isWorkbookAgentPreviewSummary(value)) {
-        throw new Error("Worker returned an invalid workbook agent preview");
-      }
-      return value;
-    },
-  });
+  const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges } =
+    useWorkbookAgentPane({
+      documentId,
+      enabled: runtimeReady,
+      getContext: () => ({
+        selection: selectionRef.current,
+        viewport: visibleViewportRef.current,
+      }),
+      previewBundle: async (bundle: WorkbookAgentCommandBundle) => {
+        if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
+          throw new Error("Workbook runtime is not ready for agent preview");
+        }
+        const value = await runtimeController.invoke("previewAgentCommandBundle", bundle);
+        if (!isWorkbookAgentPreviewSummary(value)) {
+          throw new Error("Worker returned an invalid workbook agent preview");
+        }
+        return value;
+      },
+    });
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
@@ -860,10 +864,6 @@ export function useWorkerWorkbookAppState(input: {
   const headerStatus = useMemo(() => {
     return (
       <div className="flex flex-wrap items-center justify-end gap-1.5">
-        <WorkbookHeaderControlGroup data-testid="workbook-panel-toggle-group">
-          {changesToggle}
-          {agentToggle}
-        </WorkbookHeaderControlGroup>
         {toolbarHeaderStatus}
         {collaborators.length > 0 ? (
           <WorkbookPresenceBar
@@ -875,9 +875,35 @@ export function useWorkerWorkbookAppState(input: {
         ) : null}
       </div>
     );
-  }, [changesToggle, collaborators, agentToggle, selectAddress, toolbarHeaderStatus]);
+  }, [collaborators, selectAddress, toolbarHeaderStatus]);
+
+  const sideRail = useMemo(
+    () => (
+      <WorkbookSideRailTabs
+        defaultValue="assistant"
+        tabs={[
+          {
+            value: "assistant",
+            label: "Assistant",
+            count: pendingCommandCount > 0 ? pendingCommandCount : undefined,
+            panel: agentPanel,
+          },
+          {
+            value: "changes",
+            label: "Changes",
+            count: changeCount,
+            panel: changesPanel,
+          },
+        ]}
+      />
+    ),
+    [agentPanel, changeCount, changesPanel, pendingCommandCount],
+  );
 
   return {
+    agentError,
+    clearAgentError,
+    clearRuntimeError,
     agentPanel,
     beginEditing,
     cancelEditor,
@@ -912,6 +938,7 @@ export function useWorkerWorkbookAppState(input: {
     selectionStatus,
     setSelectionLabel,
     sheetNames,
+    sideRail,
     statusModeLabel,
     subscribeViewport,
     toggleBooleanCell,

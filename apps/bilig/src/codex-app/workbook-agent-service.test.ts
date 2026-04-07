@@ -148,19 +148,24 @@ describe("workbook agent service", () => {
       expect(capturedOptions.current?.args).toEqual(["app-server"]);
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.map((tool) => tool.name)).toEqual(
         expect.arrayContaining([
-          "bilig.read_selection",
-          "bilig.read_visible_range",
-          "bilig.inspect_cell",
-          "bilig.find_formula_issues",
-          "bilig.search_workbook",
-          "bilig.trace_dependencies",
-          "bilig.read_range",
-          "bilig.write_range",
+          "bilig_read_selection",
+          "bilig_read_visible_range",
+          "bilig_inspect_cell",
+          "bilig_find_formula_issues",
+          "bilig_search_workbook",
+          "bilig_trace_dependencies",
+          "bilig_read_range",
+          "bilig_write_range",
         ]),
       );
-      expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("local workbook skills");
+      expect(
+        fakeCodex.lastThreadStartInput?.dynamicTools.every((tool) =>
+          /^[a-zA-Z0-9_-]+$/.test(tool.name),
+        ),
+      ).toBe(true);
+      expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("bilig workbook tools");
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
-        "bilig.search_workbook",
+        "bilig_search_workbook",
       );
     } finally {
       await service.close();
@@ -277,6 +282,109 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("uses nested app-server error messages instead of the generic fallback", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+    });
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      fakeCodex.emit({
+        method: "error",
+        params: {
+          error: {
+            code: -32602,
+            message: "thread/start.dynamicTools requires experimentalApi capability",
+          },
+        },
+      });
+
+      const snapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(snapshot.status).toBe("failed");
+      expect(snapshot.lastError).toBe(
+        "thread/start.dynamicTools requires experimentalApi capability",
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "thread/start.dynamicTools requires experimentalApi capability",
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("falls back to a stable runtime message when the app-server emits an empty error", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+    });
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      fakeCodex.emit({
+        method: "error",
+        params: {},
+      });
+
+      const snapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(snapshot.status).toBe("failed");
+      expect(snapshot.lastError).toBe("Workbook assistant runtime failed. Retry in a moment.");
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Workbook assistant runtime failed. Retry in a moment.",
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("persists the authoritative preview returned by apply and not the caller payload", async () => {
     const fakeCodex = new FakeCodexTransport();
     const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
@@ -347,7 +455,7 @@ describe("workbook agent service", () => {
         threadId: "thr-test",
         turnId: "turn-1",
         callId: "call-1",
-        tool: "bilig.write_range",
+        tool: "bilig_write_range",
         arguments: {
           sheetName: "Sheet1",
           startAddress: "B2",
@@ -461,7 +569,7 @@ describe("workbook agent service", () => {
         threadId: "thr-test",
         turnId: "turn-1",
         callId: "call-1",
-        tool: "bilig.write_range",
+        tool: "bilig_write_range",
         arguments: {
           sheetName: "Sheet1",
           startAddress: "B2",
@@ -584,7 +692,7 @@ describe("workbook agent service", () => {
         threadId: "thr-test",
         turnId: "turn-1",
         callId: "call-1",
-        tool: "bilig.write_range",
+        tool: "bilig_write_range",
         arguments: {
           sheetName: "Sheet1",
           startAddress: "B2",
@@ -595,7 +703,7 @@ describe("workbook agent service", () => {
         threadId: "thr-test",
         turnId: "turn-1",
         callId: "call-2",
-        tool: "bilig.write_range",
+        tool: "bilig_write_range",
         arguments: {
           sheetName: "Sheet1",
           startAddress: "C3",

@@ -25,6 +25,7 @@ interface WorkerRuntimeMachineContext {
 
 type WorkerRuntimeMachineEvent =
   | { type: "retry" }
+  | { type: "error.clear" }
   | { type: "selection.changed"; selection: WorkerRuntimeSelection }
   | { type: "connection.changed"; connectionStateName: ConnectionStateName }
   | { type: "session.ready"; controller: WorkerRuntimeSessionController }
@@ -285,6 +286,11 @@ export function createWorkerRuntimeMachine() {
           }),
         },
         on: {
+          "error.clear": {
+            actions: assign({
+              error: () => null,
+            }),
+          },
           "selection.changed": {
             actions: [
               assign({
@@ -593,6 +599,11 @@ export function createWorkerRuntimeMachine() {
       },
       failed: {
         on: {
+          "error.clear": {
+            actions: assign({
+              error: () => null,
+            }),
+          },
           retry: {
             target: "active",
             actions: assign({

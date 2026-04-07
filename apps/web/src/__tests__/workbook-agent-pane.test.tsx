@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WorkbookToastRegion } from "../WorkbookToastRegion.js";
 import { useWorkbookAgentPane } from "../use-workbook-agent-pane.js";
 
 class MockEventSource {
@@ -115,7 +116,7 @@ function createPreviewSummary(overrides: Record<string, unknown> = {}) {
 function AgentHarness(props: {
   readonly previewBundle?: Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"];
 }) {
-  const { agentPanel, agentToggle } = useWorkbookAgentPane({
+  const { agentError, agentPanel, clearAgentError } = useWorkbookAgentPane({
     documentId: "doc-1",
     enabled: true,
     getContext: () => ({
@@ -135,7 +136,20 @@ function AgentHarness(props: {
 
   return (
     <div>
-      {agentToggle}
+      <WorkbookToastRegion
+        toasts={
+          agentError
+            ? [
+                {
+                  id: "agent-error",
+                  tone: "error",
+                  message: agentError,
+                  onDismiss: clearAgentError,
+                },
+              ]
+            : []
+        }
+      />
       {agentPanel}
     </div>
   );
@@ -184,7 +198,203 @@ describe("workbook agent pane", () => {
     expect(host.textContent).not.toContain(
       "Ask the assistant to inspect, edit, or restructure this workbook.",
     );
-    expect(host.textContent).toContain("Assistant");
+    expect(host.textContent).toContain("Sheet1!A1");
+    expect(input instanceof HTMLTextAreaElement ? input.getAttribute("placeholder") : null).toBe(
+      "",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("submits the draft on Enter from the chat composer", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/sessions")) {
+        return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/turns")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              status: "inProgress",
+              activeTurnId: "turn-1",
+              entries: [
+                {
+                  id: "optimistic-user:turn-1",
+                  kind: "user",
+                  turnId: "turn-1",
+                  text: "Summarize this sheet",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["Summarize this sheet"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+        }),
+      );
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe(
+      "/v2/documents/doc-1/agent/sessions/agent-session-1/turns",
+    );
+    const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("uses the composer button to interrupt an active turn", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/sessions")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              status: "inProgress",
+              activeTurnId: "turn-1",
+              entries: [
+                {
+                  id: "assistant-1",
+                  kind: "assistant",
+                  turnId: "turn-1",
+                  text: "Working",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/interrupt")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              status: "idle",
+              activeTurnId: null,
+              entries: [
+                {
+                  id: "assistant-1",
+                  kind: "assistant",
+                  turnId: "turn-1",
+                  text: "Working",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector("[data-testid='workbook-agent-send']");
+    expect(button instanceof HTMLButtonElement).toBe(true);
+    expect(button instanceof HTMLButtonElement ? button.getAttribute("aria-label") : null).toBe(
+      "Stop",
+    );
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Agent button not found");
+      }
+      button.click();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe(
+      "/v2/documents/doc-1/agent/sessions/agent-session-1/interrupt",
+    );
 
     await act(async () => {
       root.unmount();
@@ -216,7 +426,7 @@ describe("workbook agent pane", () => {
                     turnId: "turn-1",
                     text: null,
                     phase: null,
-                    toolName: "bilig.search_workbook",
+                    toolName: "bilig_search_workbook",
                     toolStatus: "completed",
                     argumentsText: '{"query":"gross margin"}',
                     outputText: JSON.stringify({
@@ -241,7 +451,7 @@ describe("workbook agent pane", () => {
                     turnId: "turn-1",
                     text: null,
                     phase: null,
-                    toolName: "bilig.find_formula_issues",
+                    toolName: "bilig_find_formula_issues",
                     toolStatus: "completed",
                     argumentsText: "{}",
                     outputText: JSON.stringify({
@@ -293,6 +503,73 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("hides raw app-server protocol errors behind user-facing copy", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: "WORKBOOK_AGENT_RUNTIME_UNAVAILABLE",
+              message: "thread/start.dynamicTools requires experimentalApi capability",
+              retryable: true,
+            }),
+            {
+              status: 503,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["Summarize this sheet"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const submit = host.querySelector("[data-testid='workbook-agent-send']");
+    await act(async () => {
+      if (!(submit instanceof HTMLButtonElement)) {
+        throw new Error("Send button not found");
+      }
+      submit.click();
+    });
+
+    expect(host.textContent).toContain("Retry in a moment.");
+    expect(host.textContent).not.toContain(
+      "thread/start.dynamicTools requires experimentalApi capability",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("bootstraps the assistant session and streams assistant deltas into the rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -331,7 +608,7 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain(
       "Thinking",
     );
     expect(MockEventSource.latest?.url).toContain(
@@ -548,9 +825,7 @@ describe("workbook agent pane", () => {
         preview,
       }),
     );
-    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
-      "Auto-applied",
-    );
+    expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain("r4");
 
     await act(async () => {
       root.unmount();
@@ -795,7 +1070,7 @@ describe("workbook agent pane", () => {
     });
 
     expect(previewBundle).toHaveBeenCalledTimes(1);
-    expect(host.textContent).toContain("Selected 2 of 2 changes");
+    expect(host.textContent).toContain("2/2");
 
     const firstToggle = host.querySelector("[data-testid='workbook-agent-command-toggle-0']");
     expect(firstToggle instanceof HTMLInputElement).toBe(true);
@@ -821,7 +1096,7 @@ describe("workbook agent pane", () => {
         ],
       }),
     );
-    expect(host.textContent).toContain("Selected 1 of 2 changes");
+    expect(host.textContent).toContain("1/2");
 
     const applyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
     expect(applyButton).toBeTruthy();
@@ -840,7 +1115,7 @@ describe("workbook agent pane", () => {
         preview: subsetPreview,
       }),
     );
-    expect(host.textContent).toContain("partial");
+    expect(host.textContent).toContain("Write cells in Sheet1!C3");
 
     await act(async () => {
       root.unmount();

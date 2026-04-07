@@ -246,7 +246,6 @@ function pushHeaderRects(options: {
 
   if (gridSelection.columns.length > 0) {
     pushColumnSelectionBodyRects({
-      borderRects,
       fillRects,
       gridMetrics,
       selectedColumns,
@@ -257,7 +256,6 @@ function pushHeaderRects(options: {
 
   if (gridSelection.rows.length > 0) {
     pushRowSelectionBodyRects({
-      borderRects,
       fillRects,
       gridMetrics,
       selectedRows,
@@ -418,7 +416,6 @@ function resolveAxisSelectionRange(
 }
 
 function pushColumnSelectionBodyRects(options: {
-  borderRects: GridGpuRect[];
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   selectedColumns: { start: number; end: number };
@@ -434,42 +431,27 @@ function pushColumnSelectionBodyRects(options: {
     readonly ty: number;
   };
 }) {
-  const { borderRects, fillRects, gridMetrics, selectedColumns, visibleColumns, visibleRegion } =
-    options;
-  for (const column of visibleColumns) {
-    if (column.index < selectedColumns.start || column.index > selectedColumns.end) {
-      continue;
-    }
-    const top = gridMetrics.headerHeight;
-    const height = visibleRegion.range.height * gridMetrics.rowHeight;
-    fillRects.push({
-      x: column.left + 1,
-      y: top + 1,
-      width: Math.max(0, column.width - 2),
-      height: Math.max(0, height - 2),
-      color: SELECTION_FILL_COLOR,
-    });
-    borderRects.push(
-      {
-        x: column.left,
-        y: top,
-        width: 2,
-        height,
-        color: SELECTION_OUTLINE_COLOR,
-      },
-      {
-        x: column.right - 2,
-        y: top,
-        width: 2,
-        height,
-        color: SELECTION_OUTLINE_COLOR,
-      },
-    );
+  const { fillRects, gridMetrics, selectedColumns, visibleColumns, visibleRegion } = options;
+  const visibleSelectionColumns = visibleColumns.filter(
+    (column) => column.index >= selectedColumns.start && column.index <= selectedColumns.end,
+  );
+  if (visibleSelectionColumns.length === 0) {
+    return;
   }
+  const left = visibleSelectionColumns[0]!.left;
+  const right = visibleSelectionColumns.at(-1)!.right;
+  const top = gridMetrics.headerHeight;
+  const height = visibleRegion.range.height * gridMetrics.rowHeight;
+  fillRects.push({
+    x: left + 1,
+    y: top + 1,
+    width: Math.max(0, right - left - 2),
+    height: Math.max(0, height - 2),
+    color: SELECTION_FILL_COLOR,
+  });
 }
 
 function pushRowSelectionBodyRects(options: {
-  borderRects: GridGpuRect[];
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   selectedRows: { start: number; end: number };
@@ -481,52 +463,29 @@ function pushRowSelectionBodyRects(options: {
   visibleRowEnd: number;
   visibleWidth: number;
 }) {
-  const {
-    borderRects,
-    fillRects,
-    gridMetrics,
-    selectedRows,
-    visibleRegion,
-    visibleRowEnd,
-    visibleWidth,
-  } = options;
+  const { fillRects, gridMetrics, selectedRows, visibleRegion, visibleRowEnd, visibleWidth } =
+    options;
   if (visibleWidth <= 0) {
     return;
   }
   const bodyLeft = gridMetrics.rowMarkerWidth;
-  for (
-    let row = Math.max(visibleRegion.range.y, selectedRows.start);
-    row <= Math.min(visibleRowEnd, selectedRows.end);
-    row += 1
-  ) {
-    const top =
-      gridMetrics.headerHeight +
-      (row - visibleRegion.range.y) * gridMetrics.rowHeight -
-      visibleRegion.ty;
-    fillRects.push({
-      x: bodyLeft + 1,
-      y: top + 1,
-      width: Math.max(0, visibleWidth - 2),
-      height: Math.max(0, gridMetrics.rowHeight - 2),
-      color: SELECTION_FILL_COLOR,
-    });
-    borderRects.push(
-      {
-        x: bodyLeft,
-        y: top,
-        width: visibleWidth,
-        height: 2,
-        color: SELECTION_OUTLINE_COLOR,
-      },
-      {
-        x: bodyLeft,
-        y: top + gridMetrics.rowHeight - 2,
-        width: visibleWidth,
-        height: 2,
-        color: SELECTION_OUTLINE_COLOR,
-      },
-    );
+  const visibleSelectionStart = Math.max(visibleRegion.range.y, selectedRows.start);
+  const visibleSelectionEnd = Math.min(visibleRowEnd, selectedRows.end);
+  if (visibleSelectionStart > visibleSelectionEnd) {
+    return;
   }
+  const top =
+    gridMetrics.headerHeight +
+    (visibleSelectionStart - visibleRegion.range.y) * gridMetrics.rowHeight -
+    visibleRegion.ty;
+  const height = (visibleSelectionEnd - visibleSelectionStart + 1) * gridMetrics.rowHeight;
+  fillRects.push({
+    x: bodyLeft + 1,
+    y: top + 1,
+    width: Math.max(0, visibleWidth - 2),
+    height: Math.max(0, height - 2),
+    color: SELECTION_FILL_COLOR,
+  });
 }
 
 function pushGridLineRects(

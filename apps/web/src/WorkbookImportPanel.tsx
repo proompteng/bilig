@@ -64,9 +64,6 @@ function WorkbookImportSheetPreview(props: {
             {props.preview.nonEmptyCellCount} populated cells
           </div>
         </div>
-        <span className="rounded-full bg-[var(--wb-accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-accent)]">
-          Preview
-        </span>
       </div>
       {props.preview.previewRows.length > 0 ? (
         <div className="mt-3 overflow-hidden rounded-[var(--wb-radius-control)] border border-[var(--wb-border)]">
@@ -93,7 +90,7 @@ function WorkbookImportSheetPreview(props: {
         </div>
       ) : (
         <div className="mt-3 rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-4 text-[12px] text-[var(--wb-text-subtle)]">
-          This sheet is empty.
+          Empty
         </div>
       )}
     </section>
@@ -105,7 +102,6 @@ export function WorkbookImportPanel(props: {
   readonly enabled: boolean;
   readonly currentDocumentId: string;
   readonly stagedPreview: ImportedWorkbookPreview | null;
-  readonly error: string | null;
   readonly isPreviewing: boolean;
   readonly isImporting: boolean;
   readonly onClose: () => void;
@@ -130,13 +126,7 @@ export function WorkbookImportPanel(props: {
         role="dialog"
       >
         <div className="flex items-center justify-between gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="text-[14px] font-semibold text-[var(--wb-text)]">Import workbook</h2>
-            <p className="text-[11px] text-[var(--wb-text-subtle)]">
-              Parse CSV or XLSX locally, inspect the staged result, then finalize through the
-              authoritative runtime.
-            </p>
-          </div>
+          <div />
           <button
             aria-label="Close workbook import"
             className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1"
@@ -150,13 +140,10 @@ export function WorkbookImportPanel(props: {
         <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[20rem,minmax(0,1fr)]">
           <div className="flex flex-col gap-4 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-5 lg:border-b-0 lg:border-r">
             <label className="flex flex-col gap-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--wb-text-subtle)]">
-                Source file
-              </span>
+              <span className="sr-only">Select file</span>
               <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4 shadow-[var(--wb-shadow-sm)]">
                 <div className="flex items-center gap-3 text-[12px] text-[var(--wb-text-muted)]">
                   <Upload className="h-4 w-4" />
-                  <span>Select a local `.csv` or `.xlsx` file</span>
                 </div>
                 <input
                   accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -172,15 +159,9 @@ export function WorkbookImportPanel(props: {
               </div>
             </label>
 
-            {props.error ? (
-              <div className="rounded-[var(--wb-radius-control)] border border-[#f0c2c2] bg-[#fff7f7] px-3 py-3 text-[12px] text-[#991b1b]">
-                {props.error}
-              </div>
-            ) : null}
-
             {props.isPreviewing ? (
               <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-3 text-[12px] text-[var(--wb-accent)]">
-                Staging preview locally…
+                Loading…
               </div>
             ) : null}
 
@@ -196,40 +177,20 @@ export function WorkbookImportPanel(props: {
                     </span>
                   </div>
                   <div className="mt-3 grid gap-2 text-[12px] text-[var(--wb-text-muted)]">
-                    <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                        Workbook
-                      </div>
-                      <div className="mt-1 text-[13px] text-[var(--wb-text)]">
-                        {props.stagedPreview.workbookName}
-                      </div>
+                    <div className="text-[13px] text-[var(--wb-text)]">
+                      {props.stagedPreview.workbookName}
                     </div>
                     <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                        Shape
-                      </div>
-                      <div className="mt-1">
-                        {props.stagedPreview.sheetCount} sheets ·{" "}
-                        {formatFileSize(props.stagedPreview.fileSizeBytes)}
-                      </div>
+                      {props.stagedPreview.sheetCount} sheets ·{" "}
+                      {formatFileSize(props.stagedPreview.fileSizeBytes)}
                     </div>
-                    <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
-                        Target
-                      </div>
-                      <div className="mt-1 truncate">
-                        Current workbook: {props.currentDocumentId}
-                      </div>
-                    </div>
+                    <div className="truncate">{props.currentDocumentId}</div>
                   </div>
                 </div>
 
                 {props.stagedPreview.warnings.length > 0 ? (
                   <div className="rounded-[var(--wb-radius-control)] border border-[#f5d38a] bg-[#fff8e8] px-4 py-3 text-[12px] text-[#8a5a00]">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.04em]">
-                      Import notes
-                    </div>
-                    <ul className="mt-2 list-disc space-y-1 pl-4">
+                    <ul className="list-disc space-y-1 pl-4">
                       {props.stagedPreview.warnings.map((warning) => (
                         <li key={warning}>{warning}</li>
                       ))}
@@ -245,7 +206,7 @@ export function WorkbookImportPanel(props: {
                     type="button"
                     onClick={props.onImportAsNew}
                   >
-                    {props.isImporting ? "Importing…" : "Import as new workbook"}
+                    {props.isImporting ? "…" : "New"}
                   </button>
                   <button
                     className="inline-flex h-10 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[var(--wb-accent-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
@@ -254,16 +215,11 @@ export function WorkbookImportPanel(props: {
                     type="button"
                     onClick={props.onReplaceCurrent}
                   >
-                    Replace current workbook
+                    Replace
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-5 text-[12px] leading-6 text-[var(--wb-text-subtle)] shadow-[var(--wb-shadow-sm)]">
-                The file stays local for staging and preview first. Finalize only happens when you
-                explicitly import it into the authoritative workbook runtime.
-              </div>
-            )}
+            ) : null}
           </div>
 
           <div className="min-h-0 overflow-y-auto p-5">
@@ -274,10 +230,7 @@ export function WorkbookImportPanel(props: {
                 ))}
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-6 py-10 text-center text-[13px] text-[var(--wb-text-subtle)]">
-                Choose a file to inspect sheet structure, populated cells, and a staged cell preview
-                before importing it.
-              </div>
+              <div />
             )}
           </div>
         </div>

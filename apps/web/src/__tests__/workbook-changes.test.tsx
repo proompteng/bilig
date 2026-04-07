@@ -59,7 +59,7 @@ function ChangesHarness(props: {
   enabled: boolean;
   onJump: (sheetName: string, address: string) => void;
 }) {
-  const { changesPanel, changesToggle } = useWorkbookChangesPane({
+  const { changeCount, changesPanel } = useWorkbookChangesPane({
     documentId: props.documentId,
     sheetNames: props.sheetNames,
     zero: props.zero,
@@ -69,7 +69,7 @@ function ChangesHarness(props: {
 
   return (
     <div>
-      {changesToggle}
+      <div data-testid="workbook-changes-count">{String(changeCount)}</div>
       {changesPanel}
     </div>
   );
@@ -134,19 +134,13 @@ describe("workbook changes", () => {
       );
     });
 
-    const toggle = host.querySelector("[data-testid='workbook-changes-toggle']");
-    expect(toggle?.textContent).toContain("2");
-
-    await act(async () => {
-      toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    expect(host.querySelector("[data-testid='workbook-changes-count']")?.textContent).toBe("2");
 
     const rows = host.querySelectorAll<HTMLElement>("[data-testid='workbook-change-row']");
     expect(rows).toHaveLength(2);
     expect(rows[0]?.textContent).toContain("Filled Sheet1!B1:B3");
     expect(rows[0]?.textContent).toContain("Amy Smith");
     expect(rows[1]?.textContent).toContain("Deleted sheet Archive");
-    expect(rows[1]?.textContent).toContain("No jump target");
 
     await act(async () => {
       rows[0]?.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -177,9 +171,7 @@ describe("workbook changes", () => {
       );
     });
 
-    expect(host.querySelector("[data-testid='workbook-changes-toggle']")?.textContent).toContain(
-      "0",
-    );
+    expect(host.querySelector("[data-testid='workbook-changes-count']")?.textContent).toBe("0");
 
     await act(async () => {
       changes.emit([
@@ -204,9 +196,7 @@ describe("workbook changes", () => {
       ]);
     });
 
-    expect(host.querySelector("[data-testid='workbook-changes-toggle']")?.textContent).toContain(
-      "1",
-    );
+    expect(host.querySelector("[data-testid='workbook-changes-count']")?.textContent).toBe("1");
 
     await act(async () => {
       root.unmount();
@@ -251,12 +241,6 @@ describe("workbook changes", () => {
           zero={changes.zero}
         />,
       );
-    });
-
-    await act(async () => {
-      host
-        .querySelector("[data-testid='workbook-changes-toggle']")
-        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     await act(async () => {

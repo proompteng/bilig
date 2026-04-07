@@ -65,6 +65,57 @@ function removeEntry(
   return entries.filter((entry) => entry.id !== entryId);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function extractCodexNotificationErrorMessage(value: unknown): string | null {
+  const direct = readNonEmptyString(value);
+  if (direct) {
+    return direct;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  for (const key of ["message", "detail", "details", "reason", "hint", "title", "errorMessage"]) {
+    const nested = readNonEmptyString(value[key]);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  for (const key of ["error", "cause", "data"]) {
+    const nested = extractCodexNotificationErrorMessage(value[key]);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  const errors = value["errors"];
+  if (Array.isArray(errors)) {
+    for (const entry of errors) {
+      const nested = extractCodexNotificationErrorMessage(entry);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeCodexNotificationErrorMessage(params: Record<string, unknown>): string {
+  return (
+    extractCodexNotificationErrorMessage(params) ??
+    "Workbook assistant runtime failed. Retry in a moment."
+  );
+}
+
 type MutableWorkbookAgentSessionSnapshot = {
   -readonly [Key in Exclude<
     keyof WorkbookAgentSessionSnapshot,
@@ -773,10 +824,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         return;
       }
       case "error": {
-        const message =
-          typeof notification.params.message === "string"
-            ? notification.params.message
-            : "Codex app-server error";
+        const message = normalizeCodexNotificationErrorMessage(notification.params);
         this.sessions.forEach((sessionState) => {
           sessionState.snapshot.lastError = message;
           sessionState.snapshot.status = "failed";

@@ -1336,7 +1336,7 @@ test("web app reverts an authoritative change from the changes pane", async ({ p
   await openZeroWorkbookPage(page, documentId);
 
   const formulaInput = page.getByTestId("formula-input");
-  const changesToggle = page.getByTestId("workbook-changes-toggle");
+  const changesTab = page.getByTestId("workbook-side-rail-tab-changes");
 
   await clickProductCell(page, 0, 0);
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
@@ -1344,8 +1344,8 @@ test("web app reverts an authoritative change from the changes pane", async ({ p
   await formulaInput.press("Enter");
   await expect(formulaInput).toHaveValue("seed");
 
-  await expect(changesToggle).toContainText("1");
-  await changesToggle.click();
+  await expect(changesTab).toContainText("1");
+  await changesTab.click();
 
   const changeRows = page.getByTestId("workbook-change-row");
   await expect(changeRows).toHaveCount(1);
@@ -1354,7 +1354,7 @@ test("web app reverts an authoritative change from the changes pane", async ({ p
   await page.getByTestId("workbook-change-revert").click();
 
   await expect(formulaInput).toHaveValue("");
-  await expect(changesToggle).toContainText("2");
+  await expect(changesTab).toContainText("2");
   await expect(changeRows).toHaveCount(2);
   await expect(changeRows.first()).toContainText("Reverted r1: Updated Sheet1!A1");
   await expect(changeRows.nth(1)).toContainText("Reverted in r2");
