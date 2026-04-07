@@ -21,7 +21,9 @@ const browserLocalStackCommand =
   "BILIG_DEV_COMPOSE_PROJECT=bilig-playwright-local " +
   "BILIG_DEV_CLEANUP_COMPOSE=true " +
   "bun scripts/run-dev-web-local.ts";
-const chromiumCiArgs = ciContainerMode ? ["--no-sandbox", "--disable-dev-shm-usage"] : [];
+const chromiumLaunchArgs = ciContainerMode
+  ? ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+  : ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist"];
 
 export default defineConfig({
   testDir: "./e2e/tests",
@@ -40,7 +42,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          args: ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist", ...chromiumCiArgs],
+          args: chromiumLaunchArgs,
         },
       },
     },
