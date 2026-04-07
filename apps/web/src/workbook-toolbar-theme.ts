@@ -37,13 +37,13 @@ export const TOOLBAR_SELECT_TRIGGER_CLASS =
   "inline-flex h-8 items-center justify-between gap-2 rounded-[var(--wb-radius-control)] border border-transparent bg-transparent px-2 text-[12px] font-medium text-[var(--wb-text)] outline-none transition-[border-color,box-shadow,background-color,color] hover:border-[var(--wb-border)] hover:bg-[var(--wb-hover)] focus-visible:border-[var(--wb-accent)] focus-visible:bg-[var(--wb-surface)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] disabled:cursor-default disabled:opacity-60";
 export const TOOLBAR_BORDER_ICON_CLASS = "text-[20px] leading-none text-[var(--wb-text-muted)]";
 export const TOOLBAR_POPUP_CLASS =
-  "overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] p-1.5 shadow-[var(--wb-shadow-md)]";
+  "overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-1.5 shadow-[var(--wb-shadow-sm)]";
 export const TOOLBAR_BORDER_POPUP_CLASS =
-  "overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-1.5 py-1.5 shadow-[var(--wb-shadow-md)]";
+  "overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-1.5 py-1.5 shadow-[var(--wb-shadow-sm)]";
 export const TOOLBAR_POPUP_ACTION_CLASS =
   "inline-flex h-8 items-center rounded-[4px] px-2 text-[11px] font-semibold transition-colors";
 export const COLOR_PICKER_POPUP_CLASS =
-  "overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] p-2.5 shadow-[var(--wb-shadow-md)]";
+  "overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-2 shadow-[var(--wb-shadow-sm)]";
 export const COLOR_PICKER_SWATCH_CLASS =
   "relative border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] outline-none transition-colors hover:border-[var(--wb-text-subtle)] focus-visible:border-[var(--wb-accent)] focus-visible:ring-1 focus-visible:ring-[var(--wb-accent)]";
 

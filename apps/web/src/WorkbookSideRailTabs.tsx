@@ -15,11 +15,11 @@ const railRootClass = cva(
 );
 
 const railListClass = cva(
-  "relative z-0 flex gap-1 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2 shadow-[inset_0_-1px_0_var(--wb-border)]",
+  "relative z-0 flex gap-1 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 shadow-[inset_0_-1px_0_var(--wb-border)]",
 );
 
 const railTabClass = cva(
-  "group relative flex h-8 items-center justify-center gap-1.5 rounded-[var(--wb-radius-control)] border-0 px-3 text-[12px] font-medium break-keep whitespace-nowrap outline-none select-none transition-colors before:inset-x-0 before:inset-y-1 before:rounded-[calc(var(--wb-radius-control)-2px)] before:-outline-offset-1 before:outline-[var(--wb-accent)] hover:text-[var(--wb-text)] focus-visible:before:absolute focus-visible:before:outline focus-visible:before:outline-2",
+  "group relative flex h-7 items-center justify-center gap-1.5 rounded-[var(--wb-radius-control)] border-0 px-3 text-[12px] font-medium break-keep whitespace-nowrap outline-none select-none transition-colors before:inset-x-0 before:inset-y-0.5 before:rounded-[calc(var(--wb-radius-control)-2px)] before:-outline-offset-1 before:outline-[var(--wb-accent)] hover:text-[var(--wb-text)] focus-visible:before:absolute focus-visible:before:outline focus-visible:before:outline-2",
   {
     variants: {
       active: {
@@ -31,17 +31,17 @@ const railTabClass = cva(
 );
 
 const railIndicatorClass = cva(
-  "absolute top-1/2 left-0 z-[-1] h-8 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] -translate-y-1/2 rounded-[calc(var(--wb-radius-control)-2px)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface-muted)] transition-[translate,width] duration-200 ease-out",
+  "absolute top-1/2 left-0 z-[-1] h-7 w-[var(--active-tab-width)] translate-x-[var(--active-tab-left)] -translate-y-1/2 rounded-[calc(var(--wb-radius-control)-2px)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)] transition-[translate,width] duration-200 ease-out",
 );
 
 const railPanelClass = cva("min-h-0 flex-1 overflow-hidden bg-[var(--wb-app-bg)]");
 
 const railCountBadgeClass = cva(
-  "inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-none",
+  "inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-none transition-colors",
   {
     variants: {
       active: {
-        true: "bg-[var(--wb-surface)] text-[var(--wb-text)]",
+        true: "bg-[var(--wb-surface-muted)] text-[var(--wb-text)]",
         false: "bg-[var(--wb-surface-subtle)] text-[var(--wb-text-subtle)]",
       },
     },

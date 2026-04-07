@@ -23,6 +23,7 @@ import {
   TOOLBAR_BUTTON_CLASS,
   TOOLBAR_POPUP_ACTION_CLASS,
 } from "./workbook-toolbar-theme.js";
+import { workbookButtonClass } from "./workbook-shell-chrome.js";
 
 type EyeDropperConstructor = new () => {
   open(): Promise<{ sRGBHex: string }>;
@@ -152,19 +153,21 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                   style={{ backgroundColor: normalizedCurrentColor } satisfies CSSProperties}
                 />
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">{ariaLabel}</div>
+                  <div className="text-[11px] font-semibold text-[var(--wb-text)]">
+                    {ariaLabel}
+                  </div>
                   <div className="text-[11px] text-[var(--wb-text-muted)] uppercase">
                     {toDisplayHexColor(normalizedCurrentColor)}
                   </div>
                 </div>
               </div>
-              <div className="inline-flex rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-0.5 shadow-[var(--wb-shadow-sm)]">
+              <div className="inline-flex rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-0.5">
                 <button
                   aria-label={`Show ${ariaLabel.toLowerCase()} swatches`}
                   className={classNames(
                     "inline-flex h-7 items-center rounded-[4px] px-3 text-[11px] font-semibold transition-colors",
                     panel === "palette"
-                      ? "bg-[var(--wb-surface-subtle)] text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)]"
+                      ? "bg-[var(--wb-surface)] text-[var(--wb-text)]"
                       : "bg-transparent text-[var(--wb-text-muted)] hover:bg-[var(--wb-hover)]",
                   )}
                   onClick={() => setPanel("palette")}
@@ -177,7 +180,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                   className={classNames(
                     "inline-flex h-7 items-center rounded-[4px] px-3 text-[11px] font-semibold transition-colors",
                     panel === "custom"
-                      ? "bg-[var(--wb-surface-subtle)] text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)]"
+                      ? "bg-[var(--wb-surface)] text-[var(--wb-text)]"
                       : "bg-transparent text-[var(--wb-text-muted)] hover:bg-[var(--wb-hover)]",
                   )}
                   onClick={() => setPanel("custom")}
@@ -191,9 +194,6 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
             {panel === "palette" ? (
               <div className="space-y-3">
                 <div>
-                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--wb-text-subtle)]">
-                    Standard
-                  </div>
                   <div className="grid grid-cols-8 gap-1.5">
                     {GOOGLE_SHEETS_STANDARD_SWATCHES.map((swatch) => {
                       const selected = swatch.value === normalizedCurrentColor;
@@ -217,9 +217,6 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                 </div>
 
                 <div>
-                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--wb-text-subtle)]">
-                    Palette
-                  </div>
                   <div className="space-y-1.5">
                     {paletteRows.map((row) => (
                       <div
@@ -254,9 +251,6 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
 
                 {recentColors.length > 0 ? (
                   <div className="border-t border-[var(--wb-border)] pt-3">
-                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--wb-text-subtle)]">
-                      Recent
-                    </div>
                     <div className="grid grid-cols-8 gap-1.5">
                       {recentColors.map((color) => (
                         <button
@@ -281,9 +275,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
               <div className="space-y-3">
                 <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3">
                   <label className="block">
-                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--wb-text-subtle)]">
-                      Picker
-                    </span>
+                    <span className="sr-only">{customInputLabel}</span>
                     <input
                       aria-label={customInputLabel}
                       className="h-24 w-full cursor-pointer rounded-[6px] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-0.5 shadow-[var(--wb-shadow-sm)]"
@@ -297,9 +289,7 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                   </label>
                   <div className="space-y-3">
                     <label className="block">
-                      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--wb-text-subtle)]">
-                        Hex
-                      </span>
+                      <span className="sr-only">{`${ariaLabel} hex value`}</span>
                       <input
                         aria-label={`${ariaLabel} hex value`}
                         className="h-9 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium tracking-[0.04em] text-[var(--wb-text)] uppercase outline-none transition-[border-color,box-shadow] focus:border-[var(--wb-accent)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
@@ -316,7 +306,14 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
                     </label>
                     <div className="flex gap-2">
                       <button
-                        className="inline-flex h-9 flex-1 items-center justify-center rounded-[var(--wb-radius-control)] bg-[var(--wb-accent)] px-3 text-[12px] font-semibold text-white transition-colors hover:brightness-95 disabled:cursor-not-allowed disabled:bg-[var(--wb-accent-ring)] disabled:text-[var(--wb-text-muted)]"
+                        className={classNames(
+                          workbookButtonClass({
+                            tone: "accent",
+                            size: "md",
+                            weight: "strong",
+                          }),
+                          "flex-1",
+                        )}
                         disabled={!typedColorValid}
                         onClick={applyTypedColor}
                         type="button"
@@ -341,9 +338,6 @@ export const ColorPaletteButton = memo(function ColorPaletteButton({
 
                 {recentColors.length > 0 ? (
                   <div className="border-t border-[var(--wb-border)] pt-3">
-                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--wb-text-subtle)]">
-                      Recent
-                    </div>
                     <div className="grid grid-cols-8 gap-1.5">
                       {recentColors.map((color) => (
                         <button
