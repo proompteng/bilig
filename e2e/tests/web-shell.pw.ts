@@ -1981,6 +1981,7 @@ test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
 
   await formulaInput.fill("=1+");
+  await expect(formulaInput).toHaveValue("=1+");
   await formulaInput.press("Enter");
 
   await expect(formulaInput).toHaveValue("#VALUE!");
