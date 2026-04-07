@@ -113,8 +113,25 @@ if (normalizedBrowserStack === "compose" && !compose && !isCi) {
 }
 const composeFile = process.env["BILIG_E2E_COMPOSE_FILE"] ?? "compose.yaml";
 const composeProject = process.env["BILIG_E2E_COMPOSE_PROJECT"] ?? `bilig-e2e-${Date.now()}`;
+const composeStartupTimeoutMs = resolveTimeoutMs(
+  process.env["BILIG_E2E_STARTUP_TIMEOUT_MS"],
+  isCi ? 300_000 : 120_000,
+);
 
 const PREVIEW_PORTS = [4179, 4180];
+
+function resolveTimeoutMs(value: string | undefined, fallbackMs: number): number {
+  if (!value) {
+    return fallbackMs;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallbackMs;
+  }
+
+  return parsed;
+}
 
 function parsePidList(output: string): number[] {
   if (!output) {
@@ -412,10 +429,13 @@ async function runComposePlaywright(): Promise<void> {
   terminatePreviewServers();
   runDockerCompose(["up", "-d", "--build", "postgres", "bilig-app", "zero-cache"]);
   try {
-    await waitForHttp(`${e2eBaseUrl}/healthz`);
-    await waitForHttp(`${e2eSyncServerUrl}/healthz`);
-    await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10));
-    await waitForHttp(e2eZeroKeepaliveUrl);
+    console.info(
+      `compose browser stack starting with web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
+    );
+    await waitForHttp(`${e2eBaseUrl}/healthz`, composeStartupTimeoutMs);
+    await waitForHttp(`${e2eSyncServerUrl}/healthz`, composeStartupTimeoutMs);
+    await waitForTcp("127.0.0.1", Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs);
+    await waitForHttp(e2eZeroKeepaliveUrl, composeStartupTimeoutMs);
     runPlaywright(playwrightArgs);
   } catch (error) {
     const logs = collectComposeLogs();
