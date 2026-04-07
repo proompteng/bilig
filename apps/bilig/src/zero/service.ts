@@ -39,6 +39,7 @@ import {
   replaceWorkbookDocument,
 } from "./store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
+import { ensureZeroPublication } from "./publication-store.js";
 import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";
 import {
   appendWorkbookAgentRun,
@@ -211,6 +212,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await ensureWorkbookScenarioSchema(this.pool);
     await ensureWorkbookChangeSchema(this.pool);
     await ensureWorkbookAgentRunSchema(this.pool);
+    await ensureZeroPublication(this.pool);
     await backfillAuthoritativeCellEval(this.pool);
     await backfillWorkbookChanges(this.pool);
     await dropLegacyZeroSyncSchemaObjects(this.pool);

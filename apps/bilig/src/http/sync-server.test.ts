@@ -186,6 +186,26 @@ describe("sync-server zero keepalive", () => {
   });
 });
 
+describe("sync-server cross-origin isolation", () => {
+  it("serves runtime responses with the headers required for SharedArrayBuffer-backed OPFS", async () => {
+    const { app } = createSyncServer({ logger: false });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/runtime-config.json",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cross-origin-opener-policy"]).toBe("same-origin");
+      expect(response.headers["cross-origin-embedder-policy"]).toBe("require-corp");
+      expect(response.headers["origin-agent-cluster"]).toBe("?1");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
 describe("sync-server authoritative events", () => {
   it("returns authoritative workbook events from the zero sync service", async () => {
     const { app } = createSyncServer({

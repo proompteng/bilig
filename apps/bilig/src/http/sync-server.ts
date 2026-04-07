@@ -112,6 +112,14 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   const zeroSyncService = options.zeroSyncService;
   const workbookAgentService = options.workbookAgentService;
   const app = Fastify({ logger: options.logger ?? true });
+
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("Cross-Origin-Opener-Policy", "same-origin");
+    reply.header("Cross-Origin-Embedder-Policy", "require-corp");
+    reply.header("Origin-Agent-Cluster", "?1");
+    return payload;
+  });
+
   const handleWorkbookAgentRequest = async <T>(
     request: FastifyRequest,
     reply: FastifyReply,
