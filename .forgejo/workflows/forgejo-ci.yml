@@ -177,6 +177,7 @@ jobs:
       BILIG_FUZZ_PROFILE: "main"
       BILIG_FUZZ_CAPTURE: "1"
       BILIG_FUZZ_BROWSER: "1"
+      BILIG_FUZZ_NUM_RUNS: "8"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2

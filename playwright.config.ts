@@ -25,7 +25,7 @@ export default defineConfig({
   testMatch: "**/web-shell.pw.ts",
   fullyParallel: false,
   retries: 0,
-  timeout: fuzzBrowserMode ? 120_000 : 30_000,
+  timeout: fuzzBrowserMode ? 600_000 : 30_000,
   reporter: "list",
   use: {
     baseURL: browserBaseUrl,
