@@ -25,7 +25,6 @@ services:
       - "${BILIG_E2E_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres/01-zero-publication.sql:/docker-entrypoint-initdb.d/01-zero-publication.sql:ro
 
   bilig-app:
     build:

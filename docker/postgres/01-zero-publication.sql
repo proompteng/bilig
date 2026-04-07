@@ -1,1 +1,0 @@
-CREATE PUBLICATION zero_data_v2 FOR TABLES IN SCHEMA public;
