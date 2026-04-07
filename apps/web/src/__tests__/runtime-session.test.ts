@@ -5,13 +5,48 @@ import { formatAddress } from "@bilig/formula";
 import type {
   WorkbookLocalMutationRecord,
   WorkbookLocalStoreFactory,
-  WorkbookStoredState,
 } from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
 import { ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
 import { applyPendingWorkbookMutationToEngine } from "../worker-runtime-mutation-replay.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime.js";
 import { createWorkerRuntimeSessionController } from "../runtime-session.js";
+
+type TestLocalStore = Awaited<ReturnType<WorkbookLocalStoreFactory["open"]>>;
+type TestStoredState = Awaited<ReturnType<TestLocalStore["loadState"]>>;
+type TestAxisEntry = {
+  id: string;
+  index: number;
+  size?: number;
+  hidden?: boolean;
+};
+type TestCellSnapshot = {
+  sheetName: string;
+  address: string;
+  value: {
+    tag: ValueTag;
+    value?: boolean | number | string;
+    code?: number;
+    stringId?: number;
+  };
+  flags: number;
+  version: number;
+  input?: boolean | number | string | null;
+  formula?: string;
+  format?: string;
+  styleId?: string;
+  numberFormatId?: string;
+};
+type TestSpreadsheetEngine = {
+  ready(): Promise<void>;
+  importSnapshot(snapshot: WorkbookSnapshot): void;
+  getCell(sheetName: string, address: string): TestCellSnapshot;
+  getRowAxisEntries(sheetName: string): readonly TestAxisEntry[];
+  getColumnAxisEntries(sheetName: string): readonly TestAxisEntry[];
+  workbook: {
+    getSheet(sheetName: string): { id: number } | undefined;
+  };
+};
 
 function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLocalMutationRecord {
   const nextMutation = structuredClone(mutation);
@@ -34,26 +69,30 @@ function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
 }
 
 function createMemoryLocalStoreFactory(seed?: {
-  state?: WorkbookStoredState | null;
+  state?: TestStoredState;
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
   let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
-  let currentEngine: SpreadsheetEngine | null = null;
-  const loadCurrentEngine = async (): Promise<SpreadsheetEngine | null> => {
+  let currentEngine: TestSpreadsheetEngine | null = null;
+  const loadCurrentEngine = async (): Promise<TestSpreadsheetEngine | null> => {
     if (!currentState) {
       currentEngine = null;
       return null;
     }
-    currentEngine = new SpreadsheetEngine({ workbookName: "derived", replicaId: "derived" });
+    currentEngine = new SpreadsheetEngine({
+      workbookName: "derived",
+      replicaId: "derived",
+    });
     await currentEngine.ready();
     if (isWorkbookSnapshot(currentState.snapshot)) {
       currentEngine.importSnapshot(currentState.snapshot);
     }
+    const engine = currentEngine;
     currentPendingMutations.forEach((mutation) => {
-      applyPendingWorkbookMutationToEngine(currentEngine!, mutation);
+      applyPendingWorkbookMutationToEngine(engine, mutation);
     });
-    return currentEngine;
+    return engine;
   };
   return {
     async open() {

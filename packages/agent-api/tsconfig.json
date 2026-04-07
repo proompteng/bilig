@@ -4,6 +4,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "paths": {
+      "@bilig/binary-protocol": ["../binary-protocol/src/index.ts"],
       "@bilig/core": ["../core/src/index.ts"],
       "@bilig/formula": ["../formula/src/index.ts"],
       "@bilig/protocol": ["../protocol/src/index.ts"]
@@ -18,6 +19,9 @@
     },
     {
       "path": "../formula"
+    },
+    {
+      "path": "../protocol"
     }
   ],
   "include": ["src/**/*"],

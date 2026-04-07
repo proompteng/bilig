@@ -2,12 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SpreadsheetEngine } from "@bilig/core";
 import { formatAddress } from "@bilig/formula";
 import type {
-  WorkbookLocalAuthoritativeDelta,
-  WorkbookLocalAuthoritativeBase,
   WorkbookLocalMutationRecord,
-  WorkbookLocalProjectionOverlay,
   WorkbookLocalStoreFactory,
-  WorkbookStoredState,
 } from "@bilig/storage-browser";
 import {
   WorkbookLocalStoreLockedError,
@@ -19,6 +15,15 @@ import { buildWorkbookLocalAuthoritativeBase } from "../worker-local-base.js";
 import { collectChangedCellsBySheet, collectViewportCells } from "../worker-runtime-support.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime";
 
+type TestLocalStore = Awaited<ReturnType<WorkbookLocalStoreFactory["open"]>>;
+type TestStoredState = Awaited<ReturnType<TestLocalStore["loadState"]>>;
+type TestStoredStateValue = NonNullable<TestStoredState>;
+type TestPersistProjectionStateInput = Parameters<TestLocalStore["persistProjectionState"]>[0];
+type TestIngestAuthoritativeDeltaInput = Parameters<TestLocalStore["ingestAuthoritativeDelta"]>[0];
+type TestAuthoritativeBase = TestPersistProjectionStateInput["authoritativeBase"];
+type TestProjectionOverlay = TestPersistProjectionStateInput["projectionOverlay"];
+type TestAuthoritativeDelta = TestIngestAuthoritativeDeltaInput["authoritativeDelta"];
+
 function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLocalMutationRecord {
   const nextMutation = structuredClone(mutation);
   nextMutation.args = [...mutation.args];
@@ -29,7 +34,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isWorkbookSnapshot(value: unknown): value is WorkbookStoredState["snapshot"] {
+function isWorkbookSnapshot(value: unknown): value is TestStoredStateValue["snapshot"] {
   return (
     isRecord(value) &&
     value["version"] === 1 &&
@@ -40,7 +45,7 @@ function isWorkbookSnapshot(value: unknown): value is WorkbookStoredState["snaps
 }
 
 function buildViewportFromAuthoritativeBase(input: {
-  authoritativeBase: WorkbookLocalAuthoritativeBase;
+  authoritativeBase: NonNullable<TestAuthoritativeBase>;
   sheetName: string;
   viewport: {
     rowStart: number;
@@ -115,7 +120,7 @@ function buildViewportFromAuthoritativeBase(input: {
 
 function mergeViewportWithProjectionOverlay(input: {
   baseViewport: ReturnType<typeof buildViewportFromAuthoritativeBase>;
-  projectionOverlay: WorkbookLocalProjectionOverlay | null;
+  projectionOverlay: TestProjectionOverlay;
   sheetName: string;
   viewport: {
     rowStart: number;
@@ -196,9 +201,9 @@ function mergeViewportWithProjectionOverlay(input: {
 }
 
 function mergeAuthoritativeBaseDelta(input: {
-  currentBase: WorkbookLocalAuthoritativeBase | null;
-  authoritativeDelta: WorkbookLocalAuthoritativeDelta;
-}): WorkbookLocalAuthoritativeBase {
+  currentBase: TestAuthoritativeBase;
+  authoritativeDelta: TestAuthoritativeDelta;
+}): NonNullable<TestAuthoritativeBase> {
   const { currentBase, authoritativeDelta } = input;
   if (authoritativeDelta.replaceAll || currentBase === null) {
     return structuredClone(authoritativeDelta.base);
@@ -231,12 +236,12 @@ function mergeAuthoritativeBaseDelta(input: {
 }
 
 function createMemoryLocalStoreFactory(seed?: {
-  state?: WorkbookStoredState | null;
+  state?: TestStoredState;
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
-  onPersistProjectionState?: (state: WorkbookStoredState) => Promise<void> | void;
+  onPersistProjectionState?: (state: TestStoredStateValue) => Promise<void> | void;
   onIngestAuthoritativeDelta?: (
-    state: WorkbookStoredState,
-    delta: WorkbookLocalAuthoritativeDelta,
+    state: TestStoredStateValue,
+    delta: TestAuthoritativeDelta,
   ) => Promise<void> | void;
   onReadViewportProjection?: (
     sheetName: string,
@@ -247,8 +252,8 @@ function createMemoryLocalStoreFactory(seed?: {
       colEnd: number;
     },
   ) => void;
-  authoritativeBase?: WorkbookLocalAuthoritativeBase | null;
-  projectionOverlay?: WorkbookLocalProjectionOverlay | null;
+  authoritativeBase?: TestAuthoritativeBase;
+  projectionOverlay?: TestProjectionOverlay;
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
   let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);

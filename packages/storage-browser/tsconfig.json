@@ -2,8 +2,16 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "@bilig/protocol": ["../protocol/src/index.ts"]
+    }
   },
+  "references": [
+    {
+      "path": "../protocol"
+    }
+  ],
   "include": ["src/**/*"],
   "exclude": ["src/**/__tests__/**"]
 }

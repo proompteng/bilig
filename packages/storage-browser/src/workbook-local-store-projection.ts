@@ -28,19 +28,18 @@ function parseCellSnapshotValue(value: unknown): CellSnapshot["value"] | null {
   if (!isRecord(value) || typeof value["tag"] !== "number") {
     return null;
   }
-  const tag = value["tag"] as ValueTag;
-  switch (tag) {
-    case ValueTag.Empty:
+  switch (value["tag"]) {
+    case 0:
       return { tag: ValueTag.Empty };
-    case ValueTag.Number:
+    case 1:
       return typeof value["value"] === "number"
         ? { tag: ValueTag.Number, value: value["value"] }
         : null;
-    case ValueTag.Boolean:
+    case 2:
       return typeof value["value"] === "boolean"
         ? { tag: ValueTag.Boolean, value: value["value"] }
         : null;
-    case ValueTag.String:
+    case 3:
       return typeof value["value"] === "string"
         ? {
             tag: ValueTag.String,
@@ -48,7 +47,7 @@ function parseCellSnapshotValue(value: unknown): CellSnapshot["value"] | null {
             stringId: typeof value["stringId"] === "number" ? value["stringId"] : 0,
           }
         : null;
-    case ValueTag.Error:
+    case 4:
       return typeof value["code"] === "number"
         ? { tag: ValueTag.Error, code: value["code"] }
         : null;

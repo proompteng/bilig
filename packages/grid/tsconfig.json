@@ -4,6 +4,11 @@
     "rootDir": "src",
     "outDir": "dist",
     "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@bilig/core": ["../core/src/index.ts"],
+      "@bilig/formula": ["../formula/src/index.ts"],
+      "@bilig/protocol": ["../protocol/src/index.ts"]
+    },
     "types": ["node", "react"]
   },
   "references": [

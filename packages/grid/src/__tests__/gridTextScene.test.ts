@@ -4,13 +4,14 @@ import { buildGridTextScene } from "../gridTextScene.js";
 import type { GridEngineLike } from "../grid-engine.js";
 import { getGridMetrics } from "../gridMetrics.js";
 
-type TestCellSnapshot = ReturnType<GridEngineLike["getCell"]>;
-type TestCellValue = TestCellSnapshot["value"];
+type TestCellValue =
+  | { tag: ValueTag.Empty }
+  | { tag: ValueTag.Number; value: number }
+  | { tag: ValueTag.Boolean; value: boolean }
+  | { tag: ValueTag.String; value: string; stringId?: number }
+  | { tag: ValueTag.Error; code: number };
 
-function createCellSnapshot(
-  value: TestCellValue,
-  styleId: string | undefined = "style-1",
-): TestCellSnapshot {
+function createCellSnapshot(value: TestCellValue, styleId: string | undefined = "style-1") {
   return {
     sheetName: "Sheet1",
     address: "A1",
@@ -21,6 +22,8 @@ function createCellSnapshot(
     ...(styleId ? { styleId } : {}),
   };
 }
+
+type TestCellSnapshot = ReturnType<typeof createCellSnapshot>;
 
 function makeEngine(
   styles: Record<string, CellStyleRecord>,
