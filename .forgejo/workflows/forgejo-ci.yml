@@ -87,6 +87,8 @@ jobs:
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_BROWSER_STACK: "compose"
+      BILIG_E2E_STARTUP_TIMEOUT_MS: "300000"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
