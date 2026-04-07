@@ -17,6 +17,7 @@ jobs:
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_BROWSER_STACK: "compose"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -47,6 +48,14 @@ jobs:
           curl -fsSL https://bun.sh/install | bash
           export PATH="$HOME/.bun/bin:$PATH"
           bun --version
+
+      - name: Install Docker Compose client for browser stack
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends docker.io docker-compose
+          docker --version
+          docker-compose version
 
       - name: Install dependencies
         run: |

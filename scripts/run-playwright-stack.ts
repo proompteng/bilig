@@ -16,7 +16,14 @@ const e2eSyncServerUrl =
 const e2eZeroKeepaliveUrl =
   process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
 
+function commandExists(command: string): boolean {
+  return Bun.which(command) !== null;
+}
+
 function dockerDaemonReady(): boolean {
+  if (!commandExists("docker")) {
+    return false;
+  }
   const result = Bun.spawnSync(["docker", "ps"], {
     stdin: "ignore",
     stdout: "ignore",
@@ -30,22 +37,25 @@ function resolveComposeInvocation(): {
   readonly command: readonly string[];
   readonly label: string;
 } | null {
-  const dockerCompose = Bun.spawnSync(["docker", "compose", "version"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  if (dockerCompose.exitCode === 0) {
-    return { command: ["docker", "compose"], label: "docker compose" };
-  }
+  const candidates = [
+    { command: ["docker", "compose"], label: "docker compose" },
+    { command: ["docker-compose"], label: "docker-compose" },
+    { command: ["podman", "compose"], label: "podman compose" },
+    { command: ["podman-compose"], label: "podman-compose" },
+  ] as const;
 
-  const dockerComposeStandalone = Bun.spawnSync(["docker-compose", "version"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  if (dockerComposeStandalone.exitCode === 0) {
-    return { command: ["docker-compose"], label: "docker-compose" };
+  for (const candidate of candidates) {
+    if (!commandExists(candidate.command[0])) {
+      continue;
+    }
+    const result = Bun.spawnSync([...candidate.command, "version"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    if (result.exitCode === 0) {
+      return candidate;
+    }
   }
 
   return null;
