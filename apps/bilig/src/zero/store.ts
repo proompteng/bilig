@@ -22,6 +22,7 @@ import {
   type WorkbookEventRecord,
 } from "@bilig/zero-sync";
 import { appendWorkbookChange } from "./workbook-change-store.js";
+import { repairWorkbookSheetIds } from "./sheet-id-repair.js";
 import { reconcileWorkbookSheetViews } from "./sheet-view-store.js";
 import {
   buildCalculationSettingsRowFromEngine,
@@ -1653,6 +1654,7 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
     `CREATE INDEX IF NOT EXISTS sheets_workbook_sort_order_idx ON sheets(workbook_id, sort_order);`,
   );
   await db.query(`UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL;`);
+  await repairWorkbookSheetIds(db);
   await db.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS sheets_workbook_sheet_id_idx ON sheets(workbook_id, sheet_id);`,
   );
