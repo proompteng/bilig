@@ -17,7 +17,13 @@ import type {
   WorkbookAgentUiContext,
 } from "@bilig/contracts";
 import { cn } from "./cn.js";
-import { workbookButtonClass, workbookPillClass } from "./workbook-shell-chrome.js";
+import {
+  workbookAlertClass,
+  workbookButtonClass,
+  workbookInsetClass,
+  workbookPillClass,
+  workbookSurfaceClass,
+} from "./workbook-shell-chrome.js";
 
 const toolStatusPillClass = cva(
   "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
@@ -137,7 +143,7 @@ function StructuredToolOutput(props: {
     const summary = isRecord(parsed["summary"]) ? parsed["summary"] : null;
     const issues = parsed["issues"].flatMap((issue) => (isRecord(issue) ? [issue] : []));
     return (
-      <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
+      <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
@@ -197,7 +203,7 @@ function StructuredToolOutput(props: {
   ) {
     const matches = parsed["matches"].flatMap((match) => (isRecord(match) ? [match] : []));
     return (
-      <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
+      <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
@@ -262,7 +268,7 @@ function StructuredToolOutput(props: {
     const root = isRecord(parsed["root"]) ? parsed["root"] : null;
     const layers = parsed["layers"].flatMap((layer) => (isRecord(layer) ? [layer] : []));
     return (
-      <div className="mt-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-3">
+      <div className={cn(workbookInsetClass(), "mt-2 px-3 py-3")}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
@@ -358,7 +364,12 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       return null;
     }
     return (
-      <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]">
+      <div
+        className={cn(
+          workbookSurfaceClass(),
+          "px-3 py-2 text-[13px] leading-5 text-[var(--wb-text)]",
+        )}
+      >
         {entry.text}
       </div>
     );
@@ -369,7 +380,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       return null;
     }
     return (
-      <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-3 py-2">
+      <div className={cn(workbookInsetClass(), "px-3 py-2")}>
         <div className="whitespace-pre-wrap text-[12px] leading-5 text-[var(--wb-text-muted)]">
           {entry.text}
         </div>
@@ -379,7 +390,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
 
   if (entry.kind === "tool") {
     return (
-      <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
+      <div className={cn(workbookSurfaceClass(), "px-3 py-2")}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[12px] font-semibold text-[var(--wb-text)]">{entry.toolName}</div>
@@ -404,9 +415,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   }
 
   return (
-    <div className="rounded-[var(--wb-radius-control)] border border-[#efc7c7] bg-[#fff6f6] px-3 py-2 text-[12px] leading-5 text-[#8f2d2d]">
-      {entry.text}
-    </div>
+    <div className={cn(workbookAlertClass({ tone: "danger" }), "px-3 py-2")}>{entry.text}</div>
   );
 }
 
@@ -468,7 +477,12 @@ function PendingBundleCard(props: {
             ? "Applying…"
             : "Apply";
   return (
-    <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 py-3">
+    <div
+      className={cn(
+        workbookSurfaceClass({ emphasis: "raised" }),
+        "border-[var(--wb-border-strong)] px-3 py-3",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[13px] font-semibold text-[var(--wb-text)]">
@@ -479,7 +493,7 @@ function PendingBundleCard(props: {
           {props.bundle.riskClass}
         </span>
       </div>
-      <div className="mt-3 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] px-2 py-2">
+      <div className={cn(workbookInsetClass(), "mt-3 px-2 py-2")}>
         <div className="flex items-center justify-between gap-3">
           <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
             {String(selectedCount)}/{String(props.bundle.commands.length)}
@@ -528,7 +542,12 @@ function PendingBundleCard(props: {
       </div>
       <PreviewRangeList ranges={props.preview?.ranges ?? props.bundle.affectedRanges} />
       {props.preview?.structuralChanges?.length ? (
-        <div className="mt-2 rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]">
+        <div
+          className={cn(
+            workbookInsetClass(),
+            "mt-2 border-transparent px-2 py-2 text-[11px] leading-5 text-[var(--wb-text-muted)]",
+          )}
+        >
           {props.preview.structuralChanges.join(" · ")}
         </div>
       ) : null}
@@ -588,7 +607,7 @@ function ExecutionRecordRow(props: {
   readonly onReplay: () => void;
 }) {
   return (
-    <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
+    <div className={cn(workbookSurfaceClass(), "px-3 py-2")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[12px] font-semibold text-[var(--wb-text)]">

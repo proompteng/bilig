@@ -1,5 +1,6 @@
 import { cva } from "class-variance-authority";
 import { cn } from "./cn.js";
+import { workbookAlertClass, workbookSurfaceClass } from "./workbook-shell-chrome.js";
 
 export interface WorkbookToast {
   readonly id: string;
@@ -13,12 +14,12 @@ const toastViewportClass = cva(
 );
 
 const toastClass = cva(
-  "pointer-events-auto flex items-start gap-3 rounded-[var(--wb-radius-panel)] border bg-[var(--wb-surface)] px-3 py-3 shadow-[var(--wb-shadow-md)]",
+  "pointer-events-auto flex items-start gap-3 rounded-[var(--wb-radius-panel)] px-3 py-3 shadow-[var(--wb-shadow-md)]",
   {
     variants: {
       tone: {
-        error: "border-[#f1b5b5] bg-[#fff7f7] text-[#991b1b]",
-        neutral: "border-[var(--wb-border)] text-[var(--wb-text)]",
+        error: workbookAlertClass({ tone: "danger" }),
+        neutral: cn(workbookSurfaceClass({ emphasis: "raised" }), "text-[var(--wb-text)]"),
       },
     },
     defaultVariants: {
@@ -32,10 +33,9 @@ const toastDismissClass = cva(
   {
     variants: {
       tone: {
-        error:
-          "border-[#f1b5b5] text-[#991b1b] hover:border-[#e58e8e] focus-visible:ring-[#f1b5b5]",
+        error: "border-[#ead0d0] text-[#8f2d2d] hover:bg-[#fff3f3] focus-visible:ring-[#ead0d0]",
         neutral:
-          "border-[var(--wb-border)] text-[var(--wb-text-muted)] hover:text-[var(--wb-text)] focus-visible:ring-[var(--wb-accent-ring)]",
+          "border-[var(--wb-border)] text-[var(--wb-text-muted)] hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:ring-[var(--wb-accent-ring)]",
       },
     },
     defaultVariants: {

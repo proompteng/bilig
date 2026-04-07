@@ -1,38 +1,31 @@
 import { cn } from "./cn.js";
 import type { WorkbookCollaboratorPresence } from "./workbook-presence-model.js";
+import { workbookSurfaceClass } from "./workbook-shell-chrome.js";
 
 const PRESENCE_TONE_CLASS_NAMES = [
   {
-    avatar: "bg-[#dbeafe] text-[#1d4ed8]",
-    chip: "border-[#bfdbfe] hover:border-[#60a5fa]",
+    avatar: "bg-[var(--color-mauve-200)] text-[var(--color-mauve-900)]",
   },
   {
-    avatar: "bg-[#dcfce7] text-[#15803d]",
-    chip: "border-[#bbf7d0] hover:border-[#4ade80]",
+    avatar: "bg-[#e8efe8] text-[#31533d]",
   },
   {
-    avatar: "bg-[#fef3c7] text-[#b45309]",
-    chip: "border-[#fde68a] hover:border-[#f59e0b]",
+    avatar: "bg-[#f3ede1] text-[#7a5b20]",
   },
   {
-    avatar: "bg-[#fae8ff] text-[#a21caf]",
-    chip: "border-[#f5d0fe] hover:border-[#d946ef]",
+    avatar: "bg-[#efe7f6] text-[#654786]",
   },
   {
-    avatar: "bg-[#fee2e2] text-[#b91c1c]",
-    chip: "border-[#fecaca] hover:border-[#f87171]",
+    avatar: "bg-[#f5e6e6] text-[#8a3b3b]",
   },
   {
-    avatar: "bg-[#cffafe] text-[#0f766e]",
-    chip: "border-[#a5f3fc] hover:border-[#22d3ee]",
+    avatar: "bg-[#e3efef] text-[#2f6260]",
   },
   {
-    avatar: "bg-[#e0e7ff] text-[#4338ca]",
-    chip: "border-[#c7d2fe] hover:border-[#818cf8]",
+    avatar: "bg-[#e8ebf6] text-[#40518c]",
   },
   {
-    avatar: "bg-[#f3e8ff] text-[#7e22ce]",
-    chip: "border-[#e9d5ff] hover:border-[#c084fc]",
+    avatar: "bg-[#f0e8f4] text-[#744488]",
   },
 ] as const;
 
@@ -54,8 +47,8 @@ export function WorkbookPresenceBar(props: {
             key={collaborator.sessionId}
             aria-label={`Jump to ${collaborator.label} at ${collaborator.sheetName}!${collaborator.address}`}
             className={cn(
-              "inline-flex h-8 items-center gap-2 rounded-[var(--wb-radius-control)] border bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)] transition-colors hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1",
-              tone.chip,
+              workbookSurfaceClass({ emphasis: "raised" }),
+              "inline-flex h-8 items-center gap-2 px-2.5 text-[12px] font-medium text-[var(--wb-text-muted)] transition-colors hover:bg-[var(--wb-hover)] hover:text-[var(--wb-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1",
             )}
             data-testid="ax-presence-chip"
             title={`${collaborator.label} • ${collaborator.sheetName}!${collaborator.address}`}

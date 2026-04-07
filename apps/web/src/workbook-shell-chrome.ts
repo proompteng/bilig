@@ -22,6 +22,25 @@ export const workbookPillClass = cva(
   },
 );
 
+export const workbookSurfaceClass = cva(
+  "rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]",
+  {
+    variants: {
+      emphasis: {
+        flat: "",
+        raised: "shadow-[var(--wb-shadow-sm)]",
+      },
+    },
+    defaultVariants: {
+      emphasis: "flat",
+    },
+  },
+);
+
+export const workbookInsetClass = cva(
+  "rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)]",
+);
+
 export const workbookButtonClass = cva(
   "inline-flex items-center justify-center rounded-[var(--wb-radius-control)] border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
   {
@@ -46,6 +65,36 @@ export const workbookButtonClass = cva(
       tone: "neutral",
       size: "sm",
       weight: "regular",
+    },
+  },
+);
+
+export const workbookStatusDotClass = cva("block h-2 w-2 rounded-full", {
+  variants: {
+    tone: {
+      ready: "bg-[var(--color-mauve-800)]",
+      pending: "bg-[var(--color-mauve-500)]",
+      danger: "bg-[#8f2d2d]",
+      neutral: "bg-[var(--wb-text-subtle)]",
+    },
+  },
+  defaultVariants: {
+    tone: "neutral",
+  },
+});
+
+export const workbookAlertClass = cva(
+  "rounded-[var(--wb-radius-control)] border px-3 py-2 text-[12px] leading-5",
+  {
+    variants: {
+      tone: {
+        danger: "border-[#ead0d0] bg-[#fff8f8] text-[#8f2d2d]",
+        warning:
+          "border-[var(--color-mauve-300)] bg-[var(--color-mauve-50)] text-[var(--wb-text-muted)]",
+      },
+    },
+    defaultVariants: {
+      tone: "danger",
     },
   },
 );

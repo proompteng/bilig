@@ -1,7 +1,14 @@
+import { useId } from "react";
 import { Upload } from "lucide-react";
 import type { WorkbookImportContentType } from "@bilig/agent-api";
 import type { ImportedWorkbookPreview } from "@bilig/excel-import";
-import { workbookButtonClass, workbookPillClass } from "./workbook-shell-chrome.js";
+import { cn } from "./cn.js";
+import {
+  workbookAlertClass,
+  workbookButtonClass,
+  workbookPillClass,
+  workbookSurfaceClass,
+} from "./workbook-shell-chrome.js";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) {
@@ -110,6 +117,8 @@ export function WorkbookImportPanel(props: {
   readonly onImportAsNew: () => void;
   readonly onReplaceCurrent: () => void;
 }) {
+  const fileInputId = useId();
+
   if (!props.isOpen) {
     return null;
   }
@@ -138,26 +147,48 @@ export function WorkbookImportPanel(props: {
           <div className="flex flex-col gap-4 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-5 pr-12 lg:border-b-0 lg:border-r">
             <label className="flex flex-col gap-3">
               <span className="sr-only">Select file</span>
-              <div className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4">
+              <div
+                className="rounded-[var(--wb-radius-control)] border border-dashed border-[var(--wb-border)] bg-[var(--wb-surface)] px-4 py-4"
+                data-testid="workbook-import-picker-shell"
+              >
                 <div className="flex items-center gap-3 text-[12px] text-[var(--wb-text-muted)]">
                   <Upload className="h-4 w-4" />
+                  <span className="truncate">
+                    {props.stagedPreview?.fileName ?? "Select CSV or XLSX"}
+                  </span>
                 </div>
                 <input
                   accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  className="mt-3 block w-full text-[12px] text-[var(--wb-text)] file:mr-3 file:rounded-[var(--wb-radius-control)] file:border file:border-[var(--wb-border)] file:bg-[var(--wb-surface-subtle)] file:px-3 file:py-2 file:text-[12px] file:font-medium file:text-[var(--wb-text)]"
+                  className="sr-only"
                   data-testid="workbook-import-file"
                   disabled={!props.enabled || props.isPreviewing || props.isImporting}
+                  id={fileInputId}
                   type="file"
                   onChange={(event) => {
                     props.onFileSelected(event.currentTarget.files?.[0] ?? null);
                     event.currentTarget.value = "";
                   }}
                 />
+                <div className="mt-3 flex items-center gap-2">
+                  <label className={workbookButtonClass({ tone: "neutral" })} htmlFor={fileInputId}>
+                    Select file
+                  </label>
+                  <span className="min-w-0 truncate text-[11px] text-[var(--wb-text-subtle)]">
+                    {props.stagedPreview?.contentType
+                      ? formatImportType(props.stagedPreview.contentType)
+                      : "CSV, XLSX"}
+                  </span>
+                </div>
               </div>
             </label>
 
             {props.isPreviewing ? (
-              <div className="rounded-[var(--wb-radius-control)] border border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-3 text-[12px] text-[var(--wb-accent)]">
+              <div
+                className={cn(
+                  workbookSurfaceClass(),
+                  "px-3 py-3 text-[12px] text-[var(--wb-text-muted)]",
+                )}
+              >
                 Loading…
               </div>
             ) : null}
@@ -186,7 +217,7 @@ export function WorkbookImportPanel(props: {
                 </div>
 
                 {props.stagedPreview.warnings.length > 0 ? (
-                  <div className="rounded-[var(--wb-radius-control)] border border-[#f5d38a] bg-[#fffaf0] px-4 py-3 text-[12px] text-[#8a5a00]">
+                  <div className={cn(workbookAlertClass({ tone: "warning" }), "px-4 py-3")}>
                     <ul className="list-disc space-y-1 pl-4">
                       {props.stagedPreview.warnings.map((warning) => (
                         <li key={warning}>{warning}</li>
