@@ -46,14 +46,16 @@ function parseProcRouteGateway(hexValue: string): string | null {
   return octets.join(".");
 }
 
-function resolvePublishedServiceHost(): string {
+function resolvePublishedServiceHosts(): string[] {
   const explicitHost = process.env["BILIG_E2E_HOST"]?.trim();
   if (explicitHost) {
-    return explicitHost;
+    return [explicitHost];
   }
 
+  const hosts = ["127.0.0.1", "host.docker.internal", "host.containers.internal"];
+
   if (process.platform !== "linux" || !existsSync("/.dockerenv")) {
-    return "127.0.0.1";
+    return hosts;
   }
 
   try {
@@ -65,11 +67,15 @@ function resolvePublishedServiceHost(): string {
       if (destination !== "00000000") {
         continue;
       }
-      return parseProcRouteGateway(gateway) ?? "127.0.0.1";
+      const parsedGateway = parseProcRouteGateway(gateway);
+      if (parsedGateway) {
+        hosts.push(parsedGateway);
+      }
+      break;
     }
   } catch {}
 
-  return "127.0.0.1";
+  return Array.from(new Set(hosts));
 }
 
 function probeComposeInvocation(): ComposeInvocation | null {
@@ -311,12 +317,23 @@ const e2eWebPort = await resolvePort(process.env["BILIG_E2E_WEB_PORT"], 4180);
 const e2eSyncServerPort = await resolvePort(process.env["BILIG_E2E_SYNC_SERVER_PORT"], 54422);
 const e2eZeroPort = await resolvePort(process.env["BILIG_E2E_ZERO_PORT"], 54849);
 const e2ePostgresPort = await resolvePort(process.env["BILIG_E2E_POSTGRES_PORT"], 55433);
-const e2eHost = resolvePublishedServiceHost();
-const e2eBaseUrl = process.env["BILIG_E2E_BASE_URL"] ?? `http://${e2eHost}:${e2eWebPort}`;
-const e2eSyncServerUrl =
-  process.env["BILIG_E2E_SYNC_SERVER_URL"] ?? `http://${e2eHost}:${e2eSyncServerPort}`;
-const e2eZeroKeepaliveUrl =
-  process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"] ?? `${e2eBaseUrl}/zero/keepalive`;
+const e2eHostCandidates = resolvePublishedServiceHosts();
+const configuredE2eBaseUrl = process.env["BILIG_E2E_BASE_URL"];
+const configuredE2eSyncServerUrl = process.env["BILIG_E2E_SYNC_SERVER_URL"];
+const configuredE2eZeroKeepaliveUrl = process.env["BILIG_E2E_ZERO_KEEPALIVE_URL"];
+let e2eHost = e2eHostCandidates[0] ?? "127.0.0.1";
+
+function getE2eBaseUrl(): string {
+  return configuredE2eBaseUrl ?? `http://${e2eHost}:${e2eWebPort}`;
+}
+
+function getE2eSyncServerUrl(): string {
+  return configuredE2eSyncServerUrl ?? `http://${e2eHost}:${e2eSyncServerPort}`;
+}
+
+function getE2eZeroKeepaliveUrl(): string {
+  return configuredE2eZeroKeepaliveUrl ?? `${getE2eBaseUrl()}/zero/keepalive`;
+}
 
 function terminatePreviewServers(): void {
   const pids = Array.from(new Set(PREVIEW_PORTS.flatMap((port) => getListeningPids(port))));
@@ -353,9 +370,9 @@ function runPlaywright(args: string[]): void {
       BILIG_E2E_ZERO_PORT: e2eZeroPort,
       BILIG_E2E_POSTGRES_PORT: e2ePostgresPort,
       BILIG_E2E_HOST: e2eHost,
-      BILIG_E2E_BASE_URL: e2eBaseUrl,
-      BILIG_E2E_SYNC_SERVER_URL: e2eSyncServerUrl,
-      BILIG_E2E_ZERO_KEEPALIVE_URL: e2eZeroKeepaliveUrl,
+      BILIG_E2E_BASE_URL: getE2eBaseUrl(),
+      BILIG_E2E_SYNC_SERVER_URL: getE2eSyncServerUrl(),
+      BILIG_E2E_ZERO_KEEPALIVE_URL: getE2eZeroKeepaliveUrl(),
     },
   });
   if (result.exitCode !== 0) {
@@ -382,6 +399,56 @@ async function pollHttp(url: string, deadline: number, lastError = "unknown erro
 
 async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
   await pollHttp(url, Date.now() + timeoutMs);
+}
+
+async function resolveReachableHttpHost(
+  hosts: readonly string[],
+  port: string,
+  pathname: string,
+  timeoutMs: number,
+): Promise<string> {
+  return pollReachableHttpHost(hosts, port, pathname, Date.now() + timeoutMs);
+}
+
+async function pollReachableHttpHost(
+  hosts: readonly string[],
+  port: string,
+  pathname: string,
+  deadline: number,
+  lastError = "unknown error",
+): Promise<string> {
+  if (Date.now() >= deadline) {
+    throw new Error(
+      `Timed out waiting for a reachable host on port ${port} (${hosts.join(", ")}): ${lastError}`,
+    );
+  }
+
+  const results = await Promise.all(
+    hosts.map(async (host) => {
+      const url = `http://${host}:${port}${pathname}`;
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          return { host, lastError: "" };
+        }
+        return { host: null, lastError: `${url}: HTTP ${response.status}` };
+      } catch (error) {
+        return {
+          host: null,
+          lastError: `${url}: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    }),
+  );
+
+  const reachableHost = results.find((result) => result.host !== null)?.host;
+  if (reachableHost) {
+    return reachableHost;
+  }
+
+  const nextLastError = results.at(-1)?.lastError ?? lastError;
+  await Bun.sleep(250);
+  return pollReachableHttpHost(hosts, port, pathname, deadline, nextLastError);
 }
 
 async function pollTcp(
@@ -476,12 +543,26 @@ async function runComposePlaywright(): Promise<void> {
   runDockerCompose(["up", "-d", "--build", "postgres", "bilig-app", "zero-cache"]);
   try {
     console.info(
-      `compose browser stack starting with host=${e2eHost}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
+      `compose browser stack starting with hostCandidates=${e2eHostCandidates.join(",")}, web=${e2eWebPort}, sync=${e2eSyncServerPort}, zero=${e2eZeroPort}, postgres=${e2ePostgresPort}, startupTimeoutMs=${String(composeStartupTimeoutMs)}`,
     );
-    await waitForHttp(`${e2eBaseUrl}/healthz`, composeStartupTimeoutMs);
-    await waitForHttp(`${e2eSyncServerUrl}/healthz`, composeStartupTimeoutMs);
+    if (
+      !process.env["BILIG_E2E_HOST"] &&
+      !configuredE2eBaseUrl &&
+      !configuredE2eSyncServerUrl &&
+      !configuredE2eZeroKeepaliveUrl
+    ) {
+      e2eHost = await resolveReachableHttpHost(
+        e2eHostCandidates,
+        e2eWebPort,
+        "/healthz",
+        composeStartupTimeoutMs,
+      );
+      console.info(`compose browser stack resolved host=${e2eHost}`);
+    }
+    await waitForHttp(`${getE2eBaseUrl()}/healthz`, composeStartupTimeoutMs);
+    await waitForHttp(`${getE2eSyncServerUrl()}/healthz`, composeStartupTimeoutMs);
     await waitForTcp(e2eHost, Number.parseInt(e2eZeroPort, 10), composeStartupTimeoutMs);
-    await waitForHttp(e2eZeroKeepaliveUrl, composeStartupTimeoutMs);
+    await waitForHttp(getE2eZeroKeepaliveUrl(), composeStartupTimeoutMs);
     runPlaywright(playwrightArgs);
   } catch (error) {
     const logs = collectComposeLogs();
