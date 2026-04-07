@@ -623,6 +623,52 @@ async function upsertWorkbookHeader(
   );
 }
 
+async function insertWorkbookHeaderIfMissing(
+  db: Queryable,
+  documentId: string,
+  projection: WorkbookSourceProjection["workbook"],
+  checkpointPayload: WorkbookSnapshot | null,
+  replicaState: EngineReplicaSnapshot | null,
+): Promise<boolean> {
+  const result = await db.query<{ id: string }>(
+    `
+      INSERT INTO workbooks (
+        id,
+        name,
+        owner_user_id,
+        head_revision,
+        calculated_revision,
+        source_projection_version,
+        calc_mode,
+        compatibility_mode,
+        recalc_epoch,
+        snapshot,
+        replica_snapshot,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::timestamptz)
+      ON CONFLICT (id)
+      DO NOTHING
+      RETURNING id
+    `,
+    [
+      documentId,
+      projection.name,
+      projection.ownerUserId,
+      projection.headRevision,
+      projection.calculatedRevision,
+      AUTHORITATIVE_SOURCE_PROJECTION_VERSION,
+      projection.calcMode,
+      projection.compatibilityMode,
+      projection.recalcEpoch,
+      JSON.stringify(checkpointPayload),
+      JSON.stringify(replicaState),
+      projection.updatedAt,
+    ],
+  );
+  return result.rows.length > 0;
+}
+
 async function applySheetDiff(
   db: Queryable,
   previousRows: readonly SheetSourceRow[],
@@ -1831,6 +1877,33 @@ export async function replaceWorkbookDocument(
     input.documentId,
     materializeCellEvalProjection(engine, input.documentId, input.calculatedRevision, updatedAt),
   );
+}
+
+export async function ensureWorkbookDocumentExists(
+  db: Queryable,
+  documentId: string,
+  ownerUserId = "system",
+): Promise<void> {
+  const snapshot = createEmptyWorkbookSnapshot(documentId);
+  const updatedAt = nowIso();
+  const projection = buildWorkbookSourceProjection(documentId, snapshot, {
+    revision: 0,
+    calculatedRevision: 0,
+    ownerUserId,
+    updatedBy: ownerUserId,
+    updatedAt,
+  });
+  const inserted = await insertWorkbookHeaderIfMissing(
+    db,
+    documentId,
+    projection.workbook,
+    snapshot,
+    null,
+  );
+  if (!inserted) {
+    return;
+  }
+  await replaceWorkbookSourceProjectionForMigration(db, projection);
 }
 
 export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void> {

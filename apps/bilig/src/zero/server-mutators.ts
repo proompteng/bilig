@@ -33,7 +33,12 @@ import {
 import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
-import { acquireWorkbookMutationLock, persistWorkbookMutation, type Queryable } from "./store.js";
+import {
+  acquireWorkbookMutationLock,
+  ensureWorkbookDocumentExists,
+  persistWorkbookMutation,
+  type Queryable,
+} from "./store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
 import { loadWorkbookChange } from "./workbook-change-store.js";
 
@@ -652,6 +657,11 @@ export async function handleServerMutator(
 
     case "workbook.updatePresence": {
       const parsed = updatePresenceArgsSchema.parse(args);
+      await ensureWorkbookDocumentExists(
+        serverTx.dbTransaction.wrappedTransaction,
+        parsed.documentId,
+        session?.userID ?? "system",
+      );
       await upsertWorkbookPresence(serverTx.dbTransaction.wrappedTransaction, {
         documentId: parsed.documentId,
         sessionId: parsed.sessionId,

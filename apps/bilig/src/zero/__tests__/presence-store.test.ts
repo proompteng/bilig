@@ -156,4 +156,50 @@ describe("presence-store", () => {
       JSON.stringify({ sheetName: "Sheet1", address: "C4" }),
     ]);
   });
+
+  it("bootstraps a missing workbook before upserting presence", async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes("INSERT INTO workbooks") ? [{ id: "doc-1" } satisfies QueryResultRow] : null,
+      (text) =>
+        text.includes("FROM sheets")
+          ? [{ sheetId: 1, sheetName: "Sheet1" } satisfies QueryResultRow]
+          : null,
+    ]);
+
+    await handleServerMutator(
+      {
+        dbTransaction: {
+          wrappedTransaction: queryable,
+        },
+      },
+      "workbook.updatePresence",
+      {
+        documentId: "doc-1",
+        sessionId: "doc-1:browser:test",
+        sheetName: "Sheet1",
+        address: "A1",
+        selection: { sheetName: "Sheet1", address: "A1" },
+      },
+      new WorkbookRuntimeManager(),
+      {
+        userID: "guest@example.com",
+        roles: ["editor"],
+      },
+    );
+
+    const workbookInsertIndex = queryable.calls.findIndex((call) =>
+      call.text.includes("INSERT INTO workbooks"),
+    );
+    const sheetInsertIndex = queryable.calls.findIndex((call) =>
+      call.text.includes("INSERT INTO sheets"),
+    );
+    const presenceInsertIndex = queryable.calls.findIndex((call) =>
+      call.text.includes("INSERT INTO presence_coarse"),
+    );
+
+    expect(workbookInsertIndex).toBeGreaterThanOrEqual(0);
+    expect(sheetInsertIndex).toBeGreaterThan(workbookInsertIndex);
+    expect(presenceInsertIndex).toBeGreaterThan(sheetInsertIndex);
+  });
 });
