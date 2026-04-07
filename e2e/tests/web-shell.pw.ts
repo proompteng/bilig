@@ -1969,8 +1969,8 @@ test("web app supports product-shell column resize", async ({ page }) => {
 });
 
 test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
-  await page.goto("/");
-  await waitForWorkbookReady(page);
+  const documentId = `playwright-invalid-formula-${Date.now()}`;
+  await openZeroWorkbookPage(page, documentId);
 
   const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
