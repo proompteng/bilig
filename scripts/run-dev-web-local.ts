@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { readlinkSync } from "node:fs";
 import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -101,6 +102,14 @@ function composeArgs(args: readonly string[]): readonly string[] {
   ];
 }
 
+function composeSupportsWait(): boolean {
+  const invocation = resolveComposeInvocation();
+  if (!invocation) {
+    return false;
+  }
+  return invocation.command[0] === "docker" && invocation.command[1] === "compose";
+}
+
 function runComposeSync(
   args: readonly string[],
   options?: { readonly allowFailure?: boolean },
@@ -145,6 +154,35 @@ async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
   return poll("not started");
 }
 
+async function waitForTcp(host: string, port: number, timeoutMs = 120_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const poll = async (lastError: string): Promise<void> => {
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for tcp://${host}:${String(port)} (${lastError})`);
+    }
+
+    const connected = await new Promise<boolean>((resolveTcp) => {
+      const socket = net.createConnection({ host, port });
+      socket.once("connect", () => {
+        socket.end();
+        resolveTcp(true);
+      });
+      socket.once("error", () => {
+        socket.destroy();
+        resolveTcp(false);
+      });
+    });
+
+    if (connected) {
+      return;
+    }
+    await Bun.sleep(250);
+    return poll("connection refused");
+  };
+
+  return poll("not started");
+}
+
 async function ensureDockerCompose(): Promise<void> {
   if (resolveComposeInvocation()) {
     if (dockerDaemonReady()) {
@@ -178,7 +216,27 @@ async function ensureDockerCompose(): Promise<void> {
 }
 
 function listListeningPids(port: number): string[] {
-  const result = Bun.spawnSync(["lsof", "-tiTCP:" + String(port), "-sTCP:LISTEN"], {
+  if (commandExists("lsof")) {
+    const result = Bun.spawnSync(["lsof", "-tiTCP:" + String(port), "-sTCP:LISTEN"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    if (result.exitCode !== 0) {
+      return [];
+    }
+    return new TextDecoder()
+      .decode(result.stdout)
+      .split("\n")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+  }
+
+  if (!commandExists("ss")) {
+    return [];
+  }
+
+  const result = Bun.spawnSync(["ss", "-ltnp", `sport = :${String(port)}`], {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "ignore",
@@ -186,11 +244,14 @@ function listListeningPids(port: number): string[] {
   if (result.exitCode !== 0) {
     return [];
   }
-  return new TextDecoder()
-    .decode(result.stdout)
-    .split("\n")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+
+  return [
+    ...new Set(
+      Array.from(new TextDecoder().decode(result.stdout).matchAll(/pid=(\d+)/g), (match) =>
+        match[1]?.trim(),
+      ).filter((value): value is string => Boolean(value && value.length > 0)),
+    ),
+  ];
 }
 
 function commandForPid(pid: string): string {
@@ -206,22 +267,34 @@ function commandForPid(pid: string): string {
 }
 
 function cwdForPid(pid: string): string {
-  const result = Bun.spawnSync(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"], {
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  if (result.exitCode !== 0) {
+  if (commandExists("lsof")) {
+    const result = Bun.spawnSync(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    if (result.exitCode !== 0) {
+      return "";
+    }
+    return (
+      new TextDecoder()
+        .decode(result.stdout)
+        .split("\n")
+        .find((line) => line.startsWith("n"))
+        ?.slice(1)
+        .trim() ?? ""
+    );
+  }
+
+  if (process.platform !== "linux") {
     return "";
   }
-  return (
-    new TextDecoder()
-      .decode(result.stdout)
-      .split("\n")
-      .find((line) => line.startsWith("n"))
-      ?.slice(1)
-      .trim() ?? ""
-  );
+
+  try {
+    return readlinkSync(`/proc/${pid}/cwd`);
+  } catch {
+    return "";
+  }
 }
 
 function isRepoOwnedListener(pid: string): boolean {
@@ -386,7 +459,12 @@ const postgresUrl =
   process.env["DATABASE_URL"] ?? `postgresql://bilig:bilig@127.0.0.1:${postgresPort}/bilig`;
 const publicServerUrl = process.env["BILIG_PUBLIC_SERVER_URL"] ?? `http://127.0.0.1:${appPort}`;
 const appHealthUrl = `${publicServerUrl}/healthz`;
-runComposeSync(["up", "-d", "--wait", postgresService]);
+if (composeSupportsWait()) {
+  runComposeSync(["up", "-d", "--wait", postgresService]);
+} else {
+  runComposeSync(["up", "-d", postgresService]);
+}
+await waitForTcp("127.0.0.1", Number(postgresPort));
 const webPort = await resolveWebPort(preferredWebPort);
 const webAppBaseUrl = process.env["BILIG_WEB_APP_BASE_URL"] ?? `http://localhost:${webPort}`;
 
