@@ -34,6 +34,10 @@ interface DevChildProcess {
   kill(signal?: "SIGINT" | "SIGTERM" | number): void;
 }
 
+function commandExists(command: string): boolean {
+  return Bun.which(command) !== null;
+}
+
 function composeEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -41,6 +45,19 @@ function composeEnv(): NodeJS.ProcessEnv {
     BILIG_DEV_APP_PORT: resolvedAppPort,
     BILIG_DEV_ZERO_PORT: String(preferredZeroPort),
   };
+}
+
+function dockerDaemonReady(): boolean {
+  if (!commandExists("docker")) {
+    return false;
+  }
+  const result = Bun.spawnSync(["docker", "ps"], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+    env: composeEnv(),
+  });
+  return result.exitCode === 0;
 }
 
 function resolveComposeInvocation(): {
@@ -130,6 +147,31 @@ async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
 
 async function ensureDockerCompose(): Promise<void> {
   if (resolveComposeInvocation()) {
+    if (dockerDaemonReady()) {
+      return;
+    }
+
+    if (process.platform === "darwin" && Bun.which("open")) {
+      Bun.spawnSync(["open", "-a", "Docker"], {
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+    }
+
+    const deadline = Date.now() + 120_000;
+    const waitForDockerDaemon = async (): Promise<void> => {
+      if (dockerDaemonReady()) {
+        return;
+      }
+      if (Date.now() > deadline) {
+        throw new Error("Docker daemon is required for pnpm dev:web-local.");
+      }
+      await Bun.sleep(2_000);
+      return waitForDockerDaemon();
+    };
+
+    await waitForDockerDaemon();
     return;
   }
   throw new Error("Docker Compose is required for pnpm dev:web-local.");
