@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify-core:
-    name: strict-verify-core
+  verify-static:
+    name: strict-verify-static
     runs-on: docker
     timeout-minutes: 20
     env:
@@ -51,12 +51,7 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Install Chromium for browser smoke
-        run: |
-          set -eu
-          pnpm exec playwright install --with-deps chromium
-
-      - name: Run strict repository core CI
+      - name: Run static repository CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
@@ -66,20 +61,12 @@ jobs:
           pnpm lint
           pnpm wasm:build
           pnpm typecheck
-          pnpm test:fuzz:main
-          pnpm coverage
-          bun scripts/coverage-contracts.ts
-          pnpm bench:smoke
-          CI=1 pnpm bench:contracts
-          pnpm release:check
-          git diff --exit-code
-          git diff --cached --exit-code
 
-      - name: Upload fuzz and browser artifacts on failure
+      - name: Upload static artifacts on failure
         if: failure()
         uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
-          name: bilig-core-artifacts
+          name: bilig-static-artifacts
           path: |
             artifacts/fuzz
             playwright-report
@@ -91,11 +78,168 @@ jobs:
           set -eu
           git diff --exit-code
 
+  verify-tests:
+    name: strict-verify-tests
+    runs-on: docker
+    needs:
+      - verify-static
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      BILIG_BENCH_TOLERANCE: "1.5"
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Log runner environment
+        run: |
+          set -eu
+          uname -a
+          pwd
+          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
+
+      - name: Verify Node baseline
+        run: |
+          set -eu
+          node --version
+          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
+
+      - name: Enable pnpm via Corepack
+        run: |
+          set -eu
+          corepack enable
+          pnpm --version
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install latest Bun
+        run: |
+          set -eu
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun --version
+
+      - name: Install dependencies
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+
+      - name: Install Chromium for test verify
+        run: |
+          set -eu
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Verify Docker Compose environment
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "docker is required on the Forgejo docker runner"
+            exit 1
+          fi
+
+          if docker compose version >/dev/null 2>&1; then
+            docker compose version
+          elif command -v docker-compose >/dev/null 2>&1; then
+            docker-compose version
+          else
+            apt-get update
+            apt-get install -y --no-install-recommends docker-compose
+            docker-compose version
+          fi
+
+          docker --version
+          docker info
+
+      - name: Run test and coverage CI
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm test:fuzz:main
+          pnpm coverage
+          bun scripts/coverage-contracts.ts
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
+        with:
+          name: bilig-test-artifacts
+          path: |
+            artifacts/fuzz
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  verify-bench:
+    name: strict-verify-bench
+    runs-on: docker
+    needs:
+      - verify-tests
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      BILIG_BENCH_TOLERANCE: "1.5"
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Log runner environment
+        run: |
+          set -eu
+          uname -a
+          pwd
+          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
+
+      - name: Verify Node baseline
+        run: |
+          set -eu
+          node --version
+          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
+
+      - name: Enable pnpm via Corepack
+        run: |
+          set -eu
+          corepack enable
+          pnpm --version
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install latest Bun
+        run: |
+          set -eu
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun --version
+
+      - name: Install dependencies
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+
+      - name: Run bench and release CI
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm bench:smoke
+          CI=1 pnpm bench:contracts
+          pnpm release:check
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Upload bench artifacts on failure
+        if: failure()
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
+        with:
+          name: bilig-bench-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
   verify-browser:
     name: strict-verify-browser
     runs-on: docker
     needs:
-      - verify-core
+      - verify-bench
     timeout-minutes: 20
     env:
       CI: "true"
