@@ -1972,13 +1972,15 @@ test("web app shows #VALUE! for invalid formulas", async ({ page }) => {
   await page.goto("/");
   await waitForWorkbookReady(page);
 
-  await clickProductCell(page, 0, 0);
+  const nameBox = page.getByTestId("name-box");
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");
 
-  await formulaInput.focus();
-  await formulaInput.selectText();
-  await page.keyboard.type("=1+");
+  await nameBox.fill("A1");
+  await nameBox.press("Enter");
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+  await formulaInput.fill("=1+");
   await formulaInput.press("Enter");
 
   await expect(formulaInput).toHaveValue("#VALUE!");
