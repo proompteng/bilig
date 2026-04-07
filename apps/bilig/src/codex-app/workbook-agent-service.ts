@@ -861,7 +861,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   ): WorkbookAgentSessionState {
     const sessionState = this.sessions.get(sessionId);
     if (!sessionState) {
-      throw new Error("Workbook agent session not found");
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+        message: "Workbook agent session not found",
+        statusCode: 404,
+        retryable: true,
+      });
     }
     return this.requireOwnedSession(sessionState, documentId, userId);
   }

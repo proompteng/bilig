@@ -43,6 +43,12 @@ class MockEventSource {
       );
     });
   }
+
+  emitError(): void {
+    this.listeners.get("error")?.forEach((listener) => {
+      listener(new Event("error"));
+    });
+  }
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -625,6 +631,71 @@ describe("workbook agent pane", () => {
 
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain(
       "Updated Sheet1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("recreates the assistant session and reconnects the stream after a stale session error", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+
+    let resumeCount = 0;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/sessions")) {
+        resumeCount += 1;
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: resumeCount === 1 ? "agent-session-1" : "agent-session-2",
+              threadId: "thr-1",
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(MockEventSource.latest?.url).toContain(
+      "/v2/documents/doc-1/agent/sessions/agent-session-1/events",
+    );
+
+    await act(async () => {
+      MockEventSource.latest?.emitError();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(MockEventSource.latest?.url).toContain(
+      "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
+    );
+    expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
+      '"sessionId":"agent-session-2"',
     );
 
     await act(async () => {

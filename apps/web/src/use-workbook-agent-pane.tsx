@@ -120,6 +120,7 @@ export function useWorkbookAgentPane(input: {
   const autoApplyBundleIdRef = useRef<string | null>(null);
   const sessionRef = useRef<StoredWorkbookAgentSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const recoveringStreamRef = useRef(false);
   const lastContextKeyRef = useRef<string>("");
   const getContextRef = useRef(getContext);
   const currentContext = getContextRef.current();
@@ -193,6 +194,7 @@ export function useWorkbookAgentPane(input: {
           }
           const event = decodeUnknownSync(WorkbookAgentStreamEventSchema, JSON.parse(payloadText));
           if (event.type === "snapshot") {
+            recoveringStreamRef.current = false;
             persistSessionSnapshot(event.snapshot);
             setError(null);
             return;
@@ -205,7 +207,55 @@ export function useWorkbookAgentPane(input: {
         }
       });
       source.addEventListener("error", () => {
-        setError("Assistant stream disconnected. Retrying...");
+        if (eventSourceRef.current === source) {
+          source.close();
+          eventSourceRef.current = null;
+        }
+        if (recoveringStreamRef.current) {
+          return;
+        }
+        const storedSession = sessionRef.current;
+        if (!storedSession) {
+          setError("Assistant stream disconnected.");
+          return;
+        }
+        recoveringStreamRef.current = true;
+        setError(null);
+        void (async () => {
+          try {
+            setIsLoading(true);
+            const response = await fetch(
+              `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
+              {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                  ...storedSession,
+                  context: getContextRef.current(),
+                }),
+              },
+            );
+            const payload = (await response.json()) as unknown;
+            if (!response.ok) {
+              throw new Error(
+                resolvePayloadMessage(
+                  payload,
+                  `Workbook agent request failed with status ${response.status}`,
+                ),
+              );
+            }
+            const nextSnapshot = decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+            persistSessionSnapshot(nextSnapshot);
+            connectStream(nextSnapshot.sessionId);
+          } catch (nextError) {
+            recoveringStreamRef.current = false;
+            setError(nextError instanceof Error ? nextError.message : String(nextError));
+          } finally {
+            setIsLoading(false);
+          }
+        })();
       });
       eventSourceRef.current = source;
     },
@@ -405,6 +455,7 @@ export function useWorkbookAgentPane(input: {
     if (!enabled) {
       closeStream();
       sessionRef.current = null;
+      recoveringStreamRef.current = false;
       setSnapshot(null);
       setIsLoading(false);
       return;

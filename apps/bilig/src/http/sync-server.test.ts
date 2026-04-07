@@ -666,4 +666,64 @@ describe("sync-server workbook agent", () => {
       await app.close();
     }
   });
+
+  it("returns a structured not-found envelope when the agent event stream session is stale", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        async createSession() {
+          throw new Error("not used");
+        },
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        getSnapshot() {
+          throw createWorkbookAgentServiceError({
+            code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+            message: "Workbook agent session not found",
+            statusCode: 404,
+            retryable: true,
+          });
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/events",
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          error: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
+          message: "Workbook agent session not found",
+          retryable: true,
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
 });

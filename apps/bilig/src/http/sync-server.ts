@@ -469,11 +469,20 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         );
       }
       const session = resolveSessionIdentity(request, reply);
-      const sessionSnapshot = workbookAgentService.getSnapshot({
-        documentId: request.params.documentId,
-        sessionId: request.params.sessionId,
-        session,
-      });
+      let sessionSnapshot: ReturnType<typeof workbookAgentService.getSnapshot>;
+      try {
+        sessionSnapshot = workbookAgentService.getSnapshot({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          session,
+        });
+      } catch (error) {
+        if (isWorkbookAgentServiceError(error)) {
+          reply.code(error.statusCode);
+          return createErrorEnvelope(error.code, error.message, error.retryable);
+        }
+        throw error;
+      }
 
       reply.hijack();
       const raw = reply.raw;
