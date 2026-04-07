@@ -65,24 +65,28 @@ function resolveComposeInvocation(): {
   readonly command: readonly string[];
   readonly label: string;
 } | null {
-  const dockerCompose = Bun.spawnSync(["docker", "compose", "version"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-    env: composeEnv(),
-  });
-  if (dockerCompose.exitCode === 0) {
-    return { command: ["docker", "compose"], label: "docker compose" };
+  if (commandExists("docker")) {
+    const dockerCompose = Bun.spawnSync(["docker", "compose", "version"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: composeEnv(),
+    });
+    if (dockerCompose.exitCode === 0) {
+      return { command: ["docker", "compose"], label: "docker compose" };
+    }
   }
 
-  const dockerComposeStandalone = Bun.spawnSync(["docker-compose", "version"], {
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-    env: composeEnv(),
-  });
-  if (dockerComposeStandalone.exitCode === 0) {
-    return { command: ["docker-compose"], label: "docker-compose" };
+  if (commandExists("docker-compose")) {
+    const dockerComposeStandalone = Bun.spawnSync(["docker-compose", "version"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: composeEnv(),
+    });
+    if (dockerComposeStandalone.exitCode === 0) {
+      return { command: ["docker-compose"], label: "docker-compose" };
+    }
   }
 
   return null;

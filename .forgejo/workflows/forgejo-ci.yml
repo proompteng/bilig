@@ -47,41 +47,6 @@ jobs:
           export PATH="$HOME/.bun/bin:$PATH"
           bun --version
 
-      - name: Install Docker Compose client for browser stack
-        run: |
-          set -eu
-          apt-get update
-          apt-get install -y --no-install-recommends docker.io docker-compose
-          docker --version
-          docker-compose version
-
-      - name: Start Docker daemon for browser stack
-        run: |
-          set -eu
-          if docker info >/dev/null 2>&1; then
-            docker info
-            exit 0
-          fi
-
-          if command -v service >/dev/null 2>&1; then
-            service docker start || true
-          fi
-
-          if ! docker info >/dev/null 2>&1; then
-            nohup dockerd >/tmp/bilig-dockerd.log 2>&1 &
-          fi
-
-          for _ in $(seq 1 60); do
-            if docker info >/dev/null 2>&1; then
-              docker info
-              exit 0
-            fi
-            sleep 2
-          done
-
-          cat /tmp/bilig-dockerd.log || true
-          exit 1
-
       - name: Install dependencies
         run: |
           set -eu
@@ -96,6 +61,37 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
+
+          if ! command -v docker >/dev/null 2>&1 || ! command -v docker-compose >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends docker.io docker-compose
+          fi
+
+          docker --version
+          docker-compose version
+
+          if ! docker info >/dev/null 2>&1; then
+            if command -v service >/dev/null 2>&1; then
+              service docker start || true
+            fi
+          fi
+
+          if ! docker info >/dev/null 2>&1; then
+            nohup dockerd >/tmp/bilig-dockerd.log 2>&1 &
+          fi
+
+          for _ in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+
+          if ! docker info >/dev/null 2>&1; then
+            cat /tmp/bilig-dockerd.log || true
+            exit 1
+          fi
+
           pnpm run ci
 
       - name: Upload fuzz and browser artifacts on failure
