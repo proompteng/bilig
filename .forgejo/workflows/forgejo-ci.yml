@@ -55,6 +55,33 @@ jobs:
           docker --version
           docker-compose version
 
+      - name: Start Docker daemon for browser stack
+        run: |
+          set -eu
+          if docker info >/dev/null 2>&1; then
+            docker info
+            exit 0
+          fi
+
+          if command -v service >/dev/null 2>&1; then
+            service docker start || true
+          fi
+
+          if ! docker info >/dev/null 2>&1; then
+            nohup dockerd >/tmp/bilig-dockerd.log 2>&1 &
+          fi
+
+          for _ in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              docker info
+              exit 0
+            fi
+            sleep 2
+          done
+
+          cat /tmp/bilig-dockerd.log || true
+          exit 1
+
       - name: Install dependencies
         run: |
           set -eu
