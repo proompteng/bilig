@@ -44,6 +44,7 @@ import {
 } from "./workbook-agent-session-model.js";
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
+const CODEX_APP_SERVER_ARGS = ["app-server", "-c", "analytics.enabled=false"] as const;
 
 function upsertEntry(
   entries: readonly WorkbookAgentTimelineEntry[],
@@ -652,7 +653,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (!this.codexClient) {
       this.codexClient = this.codexClientFactory({
         command: process.env["BILIG_CODEX_BIN"]?.trim() || "codex",
-        args: ["app-server"],
+        args: [...CODEX_APP_SERVER_ARGS],
         cwd: process.cwd(),
         env: process.env,
         onLog: (message) => {

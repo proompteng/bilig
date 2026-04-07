@@ -145,7 +145,11 @@ describe("workbook agent service", () => {
         },
       });
 
-      expect(capturedOptions.current?.args).toEqual(["app-server"]);
+      expect(capturedOptions.current?.args).toEqual([
+        "app-server",
+        "-c",
+        "analytics.enabled=false",
+      ]);
       expect(fakeCodex.lastThreadStartInput?.dynamicTools.map((tool) => tool.name)).toEqual(
         expect.arrayContaining([
           "bilig_read_selection",
