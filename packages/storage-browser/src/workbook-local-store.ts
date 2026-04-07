@@ -115,11 +115,34 @@ function sanitizeDocumentId(documentId: string): string {
 }
 
 function isAccessHandleConflict(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
   return (
-    error instanceof Error &&
-    error.message.includes("createSyncAccessHandle") &&
-    error.message.includes("Access Handles cannot be created")
+    (error.message.includes("createSyncAccessHandle") &&
+      error.message.includes("Access Handles cannot be created")) ||
+    (error.name === "NoModificationAllowedError" &&
+      error.message.includes("Access Handles cannot be created"))
   );
+}
+
+function toWorkbookLocalStoreLockedError(
+  documentId: string | null,
+  cause?: unknown,
+): WorkbookLocalStoreLockedError {
+  const suffix = documentId ? ` for ${documentId}` : "";
+  const error = new WorkbookLocalStoreLockedError(
+    `Workbook local store is locked by another tab${suffix}`,
+  );
+  if (cause !== undefined) {
+    Object.defineProperty(error, "cause", {
+      configurable: true,
+      enumerable: false,
+      value: cause,
+      writable: true,
+    });
+  }
+  return error;
 }
 
 function parseWorkbookStoredState(value: unknown): WorkbookStoredState | null {
@@ -214,8 +237,8 @@ async function getSqliteRuntime(
   }
   if (!sqliteRuntimePromise) {
     sqliteRuntimePromise = (async () => {
+      const sqlite3 = await sqlite3InitModule();
       try {
-        const sqlite3 = await sqlite3InitModule();
         const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
           name: options.vfsName,
           directory: options.directory,
@@ -223,12 +246,21 @@ async function getSqliteRuntime(
         });
         return { sqlite3, poolUtil };
       } catch (error) {
-        sqliteRuntimePromise = null;
+        if (isAccessHandleConflict(error)) {
+          throw toWorkbookLocalStoreLockedError(null, error);
+        }
         throw error;
       }
     })();
   }
-  return await sqliteRuntimePromise;
+  try {
+    return await sqliteRuntimePromise;
+  } catch (error) {
+    if (!(error instanceof WorkbookLocalStoreLockedError)) {
+      sqliteRuntimePromise = null;
+    }
+    throw error;
+  }
 }
 
 function extractWorkbookName(snapshot: unknown): string | null {
@@ -588,10 +620,8 @@ export function createOpfsWorkbookLocalStoreFactory(
         initializeWorkbookLocalStoreSchema(db);
         return new SqliteWorkbookLocalStore(db, documentId);
       } catch (error) {
-        if (isAccessHandleConflict(error)) {
-          throw new WorkbookLocalStoreLockedError(
-            `Workbook local store is locked by another tab for ${documentId}`,
-          );
+        if (error instanceof WorkbookLocalStoreLockedError || isAccessHandleConflict(error)) {
+          throw toWorkbookLocalStoreLockedError(documentId, error);
         }
         throw error;
       }
