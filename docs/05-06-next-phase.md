@@ -1,18 +1,17 @@
 ## 1. Executive Summary
 
-`bilig` today is a promising server-authoritative spreadsheet with a native grid, a warm server runtime, typed workbook operations, and a clear architectural direction around worker-first UI, narrow Zero sync, and projected viewport patches. It is **not** yet a real local-first workbook system: the mounted browser path still revolves around `ZeroWorkbookBridge` plus an in-memory viewport cache, offline writes are gated by connection state, and browser durability is still JSON snapshot persistence rather than a real local database. The attached repo brief and docs point in the right direction, but the hot path is not there yet.
+This document started as the implementation plan for the worker/local-first migration. As of `2026-04-06`, that migration is shipped on `main`.
 
-The right next move is **not** “more spreadsheet features.” It is to turn `bilig` into a **local-first workbook operating system**: a browser-resident workbook runtime that opens instantly, writes locally first, stays durable offline, reconciles cleanly with a server-authoritative model, and keeps giant workbooks fluid. The product should feel native because the visible state comes from a worker-owned local database and local projection engine, not from network round-trips or React-held sheet arrays.
+`bilig` now runs as a worker-first, local-first spreadsheet:
 
-Direct answer to the SQLite question: **yes, use browser SQLite/WASM**, but refine the storage choice. For a giant-data workbook engine, the default should be **SQLite/WASM on OPFS in a worker**, with IndexedDB kept for fallback/bootstrap metadata rather than as the primary page store. MDN describes OPFS as origin-private storage optimized for in-place writes with synchronous worker access, and the official SQLite WASM docs expose `OpfsDb` as the browser-persistent path while the lighter JS storage path is aimed at local/session storage. That makes OPFS the right default for the serious path. ([MDN Web Docs][1])
+1. the mounted browser path boots the real worker runtime
+2. browser truth lives in OPFS-backed SQLite with normalized authoritative base and projection overlay tables
+3. pending ops are durable, reconnect/rebase runs on the worker path, and authoritative deltas ingest directly into the local DB
+4. Zero is narrowed to authoritative deltas plus collaboration metadata instead of serving as the hot render model
+5. collaboration rails, named views, versions, revertable changes, and agent preview/apply all ride the same semantic workbook model
+6. the monolith-hosted Codex `app-server` agent runtime is part of the application, with a persistent right-rail chat and local semantic workbook tools
 
-The next major plan should do five things in order:
-
-1. make the existing worker runtime the **real** mounted path
-2. add a worker-owned **local SQLite + op journal + local projection** layer
-3. narrow Zero into an **authoritative delta and collaboration feed**, not the hot UI model
-4. harden the grid for giant-data UX
-5. layer AI on **semantic workbook operations** with preview/apply, not on DOM automation
+The roadmap below is now best read as an implementation record and architecture reference. Remaining work is ordinary product iteration, hardening, and polish, not topology migration.
 
 ---
 
@@ -20,72 +19,56 @@ The next major plan should do five things in order:
 
 ### What is already strong
 
-The repo already has the right backbone.
+The repo now has the right backbone and the right hot path.
 
-- The architecture direction is solid: worker-first browser shell, server-authoritative ordering, Zero as narrow relational sync, projected viewport patches rather than raw engine state, and Postgres as the durable shared store. The repo docs are aligned on that, which matters.
-- The product owns a native grid/runtime instead of hiding behind Glide. That is the only path that can produce spreadsheet-grade interaction quality at scale. The renderer docs explicitly treat the native path as the active one now.
-- `packages/workbook-domain` is a real semantic operation layer, not UI event soup. That is exactly what a local op journal, replay, preview/apply AI, and authoritative reconciliation need.
-- `apps/bilig` already has a warm runtime manager and authoritative mutation path. That is a major advantage: you do not need to invent the server model from scratch.
-- `packages/zero-sync` is already tile/range-shaped enough to be useful. The current repo direction to keep Zero narrow and reduce projection churn is correct.
-- The formula plan is disciplined: Excel semantics as canonical baseline, JS first, WASM later after parity gates. That sequencing is right.
-
-### What is structurally weak
-
-The browser-side product architecture is still the weak link.
-
-- The mounted runtime path is now worker-owned, the browser store is now OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer has been deleted in favor of a narrower projected viewport store. The browser DB now has normalized authoritative base tables plus normalized projection overlay tables for cells, axis metadata, and styles, and the worker can serve full viewport patches from merged local base+overlay reads. Narrow authoritative event batches now ingest directly into those normalized local tables instead of forcing a full base repersist. Stable `sheet_id` now survives workbook snapshots, browser local tables, and the server sheet projection path. The worker now owns a hot `128 x 32` tile cache for local full-patch reads instead of issuing ad hoc wide viewport queries against SQLite.
-- Offline/local-first credibility is materially better now because writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until the authoritative revision feed absorbs them, reconnect now prefers authoritative event ingest before snapshot fallback, restored pending overlays survive reload, restored local sessions no longer block on a cold snapshot fetch before showing accepted local state, absorbed authoritative events now update the local DB through a direct delta path, sheet rename/reconcile no longer depends on sheet name as the browser-local storage key, the full-patch warm path now reuses hot worker tiles instead of rebuilding whole visible viewports from scratch, and the real SQLite migration harness now covers legacy `sheet_id` backfill into authoritative and overlay tables. The product is still not fully local-first because failure harnesses and deeper rebase/conflict hardening are not done.
-- Browser durability is materially better now because accepted local state and pending ops live in SQLite/OPFS rather than IndexedDB/localStorage JSON. The remaining weakness is the data model inside that DB, not the browser persistence substrate.
-- The original hot-path file-size debt has been materially reduced, but the runtime is still split across cache/session/runtime layers that need a cleaner local-first decomposition.
-  - `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with the interaction and render logic extracted.
+- The architecture direction is real in production: worker-first browser shell, server-authoritative ordering, Zero as narrow relational sync, projected viewport patches instead of raw engine state, and Postgres as the durable shared store.
+- The product owns a native grid/runtime instead of hiding behind Glide. That remains the only path that can produce spreadsheet-grade interaction quality at scale.
+- `packages/workbook-domain` is a real semantic operation layer, not UI event soup. That is what local op journaling, replay, collaboration rails, and preview/apply AI all build on.
+- `apps/bilig` has a warm runtime manager and authoritative mutation path, and the browser runtime now mirrors that with a real local worker-owned runtime rather than a bridge/cache facade.
+- The mounted runtime path is worker-owned, the browser store is OPFS-backed SQLite through `@bilig/storage-browser`, and the old `viewport-cache.ts` layer is gone in favor of the projected viewport store plus worker tile cache.
+- The browser DB has normalized authoritative base tables plus normalized projection overlay tables for cells, axis metadata, and styles. Authoritative event batches ingest directly into those local tables, and stable `sheet_id` survives workbook snapshots, browser local tables, and the server sheet projection path.
+- Offline/local-first credibility is now real: writes are no longer gated by Zero connection state, the worker keeps a crash-safe pending-op journal in SQLite, submitted ops stay durable until authoritative absorption, reconnect prefers authoritative event ingest before snapshot fallback, and restored local sessions can show accepted state before a cold snapshot fetch.
+- The original hot-path file-size debt was materially reduced.
+  - `packages/grid/src/WorkbookGridSurface.tsx` is now 175 lines with interaction and render logic extracted.
   - `apps/web/src/WorkerWorkbookApp.tsx` is now 119 lines with state/sync/toolbar logic extracted.
   - `apps/web/src/worker-runtime.ts` is now 776 lines with persistence and viewport support split out.
-- The selected-cell synthetic live-sync path is gone. Selected-cell state now comes through the same viewport/tile subscription path as the rest of the grid, which removes a stale-path class that used to exist.
-- The grid still uses DOM text rendering and browser text measurement for autofit. The repo docs already call that out. It limits both polish and giant-workbook consistency.
+- The selected-cell synthetic live-sync path is gone. Selected-cell state now comes through the same viewport/tile subscription path as the rest of the grid.
 
-### What most affects UX quality
+### What still needs ordinary product iteration
 
-Three things are doing the most damage:
+- The grid still uses DOM text rendering and browser text measurement for autofit. That is good enough for the current product, but a fuller text-native path is still the biggest renderer-quality upgrade left.
+- Failure harness breadth, deeper rebase/conflict fuzzing, and browser-path hardening can still expand. Those are hardening tasks now, not topology blockers.
+- Some shell/runtime composition layers can still be simplified further, but the old bridge/cache/browser-truth confusion is no longer the main architectural problem.
 
-1. **No single browser truth store.**
-   Visible state, selected-cell state, editor state, and optimistic state are still too spread out.
+### What most affects UX quality now
 
-2. **The hot path is too UI-thread-centric.**
-   The repo says worker-first; the mounted product still behaves more like “UI thread shell + bridge + in-memory cache.”
+1. **Text rendering and measurement**
+   The renderer still relies on DOM text plus browser measurement for autofit, which limits polish and consistency on giant workbooks.
 
-3. **The renderer is not yet text-native.**
-   DOM text plus browser-only measurement is good enough for bring-up, not for a 10x-feels-native product.
+2. **Workflow polish across collaboration and agent rails**
+   The underlying model is now correct; the remaining work is density, ergonomics, and sharpness across already-shipped surfaces.
 
-### What most affects speed
+3. **Perf budget preservation as the product grows**
+   The product now has real perf contracts, and keeping new features inside those bounds is the ongoing discipline.
 
-- no worker-owned local database
-- no local op journal
-- no local projection tables
-- in-memory cache budget that is too small and too arbitrary for giant workbooks
-- per-feature optimistic cache mutation from `WorkerWorkbookApp.tsx`
-- bridge patterns that still rebuild or reproject too much state
+### What most affects speed headroom now
 
-### What most affects local-first credibility
+- DOM text measurement and autofit
+- large import and workbook-comprehension workloads
+- tile/cache budget tuning on giant workbooks
 
-Right now the product cannot honestly claim local-first because:
+### What most affects local-first confidence now
 
-- accepted local edits are not durably written to a real local store first
-- offline writes are blocked
-- reconnect semantics are not built around a durable local outbox
-- conflict handling is not built around rebase/replay on top of authoritative revisions
-- startup does not come from a proper local workbook database
+- broader failure-harness coverage
+- deeper rebase/conflict hardening
+- multi-tab and browser-storage edge-case hardening
 
-### What most affects long-term architecture quality
+### What most affects long-term architecture quality now
 
-The biggest architectural issue is that the repo already contains the pieces of a better browser runtime, but the product is still not using them as the primary state model. That causes a bad middle state:
-
-- a real worker runtime exists
-- the UI still behaves like a bridge-and-cache app
-- the browser persistence layer is snapshot-oriented
-- the selection path still has special handling
-- the grid shell still owns too much behavior
-
-Bluntly: `bilig` is a **good server-authoritative spreadsheet core** with a **browser runtime that still needs to grow up**.
+- keep browser truth in worker + SQLite, not UI-thread caches
+- keep Zero narrow and authoritative rather than letting it grow back into the render model
+- keep AI execution semantic, previewed, and undoable
+- keep shell components compositional instead of re-concentrating behavior in giant files
 
 ---
 
@@ -853,7 +836,7 @@ Make `bilig` genuinely local-first.
 Make shared workbook work smoother than Sheets for serious day-to-day use.
 
 **Status**
-Partially implemented.
+Implemented.
 
 **User-visible outcomes**
 
@@ -1199,7 +1182,7 @@ Current state:
 
 - this split is mostly done for the mounted workbook shell
 - the agent rail now exists as `use-workbook-agent-pane.tsx` plus `WorkbookAgentPanel.tsx`
-- the remaining AI work is domain capability depth and workflow polish, not preview/apply execution discipline or “add a chat box”
+- the remaining work in this area is ordinary product iteration and workflow polish, not preview/apply execution discipline or “add a chat box”
 
 #### `/Users/gregkonush/github.com/bilig/apps/web/src/runtime-session.ts`
 
