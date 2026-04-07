@@ -834,6 +834,47 @@ describe("createWorkerRuntimeSessionController", () => {
     controller.dispose();
   });
 
+  it("treats a 204 latest snapshot response as a cold-start miss", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const errors: string[] = [];
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/snapshot/latest")) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: false,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          errors.push(message);
+        },
+      },
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(errors).toEqual([]);
+    expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Empty,
+    });
+
+    controller.dispose();
+  });
+
   it("applies remote cell and style changes through authoritative event rebases", async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),

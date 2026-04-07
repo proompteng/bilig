@@ -235,8 +235,8 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         documentService.getLatestSnapshot(request.params.documentId),
       );
       if (!snapshot) {
-        reply.code(404);
-        return createErrorEnvelope("SNAPSHOT_NOT_FOUND", "Latest snapshot was not found", false);
+        reply.code(204);
+        return reply.send();
       }
 
       reply.header("x-bilig-snapshot-cursor", String(snapshot.cursor));

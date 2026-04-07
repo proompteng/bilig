@@ -240,7 +240,7 @@ async function loadLatestWorkbookSnapshot(
       cache: "no-store",
     },
   );
-  if (response.status === 404) {
+  if (response.status === 204 || response.status === 404) {
     return null;
   }
   if (!response.ok) {

@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkbookAgentSessionSnapshot } from "@bilig/contracts";
+import { Effect } from "effect";
+import type { DocumentControlService } from "@bilig/runtime-kernel";
 import type { ZeroSyncService } from "../zero/service.js";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 import { createSyncServer } from "./sync-server.js";
@@ -74,6 +76,42 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     },
     async loadAuthoritativeEvents() {
       throw new Error("not used");
+    },
+    ...overrides,
+  };
+}
+
+function createDocumentServiceStub(
+  overrides: Partial<DocumentControlService> = {},
+): DocumentControlService {
+  return {
+    attachBrowser() {
+      return Effect.sync(() => {
+        throw new Error("not used");
+      });
+    },
+    openBrowserSession() {
+      return Effect.sync(() => {
+        throw new Error("not used");
+      });
+    },
+    handleSyncFrame() {
+      return Effect.sync(() => {
+        throw new Error("not used");
+      });
+    },
+    handleAgentFrame() {
+      return Effect.sync(() => {
+        throw new Error("not used");
+      });
+    },
+    getDocumentState() {
+      return Effect.sync(() => {
+        throw new Error("not used");
+      });
+    },
+    getLatestSnapshot() {
+      return Effect.succeed(null);
     },
     ...overrides,
   };
@@ -194,6 +232,33 @@ describe("sync-server cross-origin isolation", () => {
       expect(response.headers["cross-origin-opener-policy"]).toBe("same-origin");
       expect(response.headers["cross-origin-embedder-policy"]).toBe("require-corp");
       expect(response.headers["origin-agent-cluster"]).toBe("?1");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("sync-server snapshots", () => {
+  it("returns 204 when no latest snapshot exists", async () => {
+    const { app } = createSyncServer({
+      logger: false,
+      documentService: createDocumentServiceStub({
+        getLatestSnapshot(documentId) {
+          expect(documentId).toBe("doc-1");
+          return Effect.succeed(null);
+        },
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/snapshot/latest",
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(response.body).toBe("");
+      expect(response.headers["content-type"]).toBeUndefined();
     } finally {
       await app.close();
     }
