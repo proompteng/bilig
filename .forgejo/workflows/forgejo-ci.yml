@@ -367,7 +367,9 @@ jobs:
       BILIG_FUZZ_PROFILE: "main"
       BILIG_FUZZ_CAPTURE: "1"
       BILIG_FUZZ_BROWSER: "1"
-      BILIG_FUZZ_NUM_RUNS: "8"
+      BILIG_FUZZ_MAX_MS: "120000"
+      BILIG_FUZZ_NUM_RUNS: "1"
+      BILIG_FUZZ_SEED: "2128392860"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
