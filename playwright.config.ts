@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const browserStack = process.env["BILIG_BROWSER_STACK"];
 const useComposeBrowserStack = browserStack === "compose";
+const fuzzBrowserMode = process.env["BILIG_FUZZ_BROWSER"] === "1";
 const browserWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
 const browserAppPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const browserZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
@@ -24,6 +25,7 @@ export default defineConfig({
   testMatch: "**/web-shell.pw.ts",
   fullyParallel: false,
   retries: 0,
+  timeout: fuzzBrowserMode ? 120_000 : 30_000,
   reporter: "list",
   use: {
     baseURL: browserBaseUrl,
