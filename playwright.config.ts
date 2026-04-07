@@ -3,6 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 const browserStack = process.env["BILIG_BROWSER_STACK"];
 const useComposeBrowserStack = browserStack === "compose";
 const fuzzBrowserMode = process.env["BILIG_FUZZ_BROWSER"] === "1";
+const ciContainerMode =
+  process.platform === "linux" && (process.env["CI"] === "1" || process.env["CI"] === "true");
 const browserWebPort = process.env["BILIG_E2E_WEB_PORT"] ?? "4180";
 const browserAppPort = process.env["BILIG_E2E_SYNC_SERVER_PORT"] ?? "54422";
 const browserZeroPort = process.env["BILIG_E2E_ZERO_PORT"] ?? "54849";
@@ -19,6 +21,7 @@ const browserLocalStackCommand =
   "BILIG_DEV_COMPOSE_PROJECT=bilig-playwright-local " +
   "BILIG_DEV_CLEANUP_COMPOSE=true " +
   "bun scripts/run-dev-web-local.ts";
+const chromiumCiArgs = ciContainerMode ? ["--no-sandbox", "--disable-dev-shm-usage"] : [];
 
 export default defineConfig({
   testDir: "./e2e/tests",
@@ -37,7 +40,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          args: ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist"],
+          args: ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist", ...chromiumCiArgs],
         },
       },
     },
