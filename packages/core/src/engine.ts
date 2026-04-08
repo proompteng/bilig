@@ -82,6 +82,7 @@ import {
   mapStructuralBoundary,
   structuralTransformForOp,
 } from "./engine-structural-utils.js";
+import { intersectRangeBounds, normalizeRange } from "./engine-range-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
 import { materializePivotTable, type PivotDefinitionInput } from "./pivot-engine.js";
@@ -6614,37 +6615,6 @@ function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32A
   next.set(indices);
   next[indices.length] = cellIndex;
   return next;
-}
-
-function intersectRangeBounds(
-  range: CellRangeRef,
-  bounds: { startRow: number; endRow: number; startCol: number; endCol: number },
-): { startRow: number; endRow: number; startCol: number; endCol: number } | undefined {
-  const normalized = normalizeRange(range);
-  const startRow = Math.max(bounds.startRow, normalized.startRow);
-  const endRow = Math.min(bounds.endRow, normalized.endRow);
-  const startCol = Math.max(bounds.startCol, normalized.startCol);
-  const endCol = Math.min(bounds.endCol, normalized.endCol);
-  if (startRow > endRow || startCol > endCol) {
-    return undefined;
-  }
-  return { startRow, endRow, startCol, endCol };
-}
-
-function normalizeRange(range: CellRangeRef): {
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-} {
-  const start = parseCellAddress(range.startAddress, range.sheetName);
-  const end = parseCellAddress(range.endAddress, range.sheetName);
-  return {
-    startRow: Math.min(start.row, end.row),
-    endRow: Math.max(start.row, end.row),
-    startCol: Math.min(start.col, end.col),
-    endCol: Math.max(start.col, end.col),
-  };
 }
 
 export const selectors = {
