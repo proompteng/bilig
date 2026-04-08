@@ -6,8 +6,8 @@ import {
   type WorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
 import type { EditMovement, EditSelectionBehavior } from "@bilig/grid";
-import { formatAddress, parseCellAddress } from "@bilig/formula";
-import type { CellSnapshot, LiteralInput, Viewport } from "@bilig/protocol";
+import { parseCellAddress } from "@bilig/formula";
+import type { CellSnapshot, Viewport } from "@bilig/protocol";
 import { createWorkerRuntimeMachine } from "./runtime-machine.js";
 import { resolveRuntimeConfig } from "./runtime-config.js";
 import type { ZeroClient } from "./runtime-session.js";
@@ -37,6 +37,7 @@ import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useZeroHealthReady } from "./use-zero-health-ready.js";
 import { useWorkbookAppPanels } from "./use-workbook-app-panels.js";
 import { useWorkbookSheetActions } from "./use-workbook-sheet-actions.js";
+import { useWorkbookSelectionActions } from "./use-workbook-selection-actions.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -381,188 +382,28 @@ export function useWorkerWorkbookAppState(input: {
     resetEditorConflictTracking();
   }, [getLiveSelectedCell, resetEditorConflictTracking]);
 
-  const clearSelectedRange = useCallback(() => {
-    if (!writesAllowed) {
-      return;
-    }
-    const targetRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
-    editorValueRef.current = "";
-    setEditorValue("");
-    editorTargetRef.current = selectionRef.current;
-    editingModeRef.current = "idle";
-    setEditingMode("idle");
-    resetEditorConflictTracking();
-    void invokeMutation("clearRange", targetRange).catch((error: unknown) => {
-      reportRuntimeError(error);
-    });
-  }, [
-    invokeMutation,
-    reportRuntimeError,
-    resetEditorConflictTracking,
-    selection.sheetName,
+  const {
+    clearSelectedCell,
+    copySelectionRange,
+    fillSelectionRange,
+    moveSelectionRange,
+    pasteIntoSelection,
+    toggleBooleanCell,
+  } = useWorkbookSelectionActions({
     selectionLabel,
     writesAllowed,
-  ]);
-
-  const clearSelectedCell = useCallback(() => {
-    if (!writesAllowed) {
-      return;
-    }
-    clearSelectedRange();
-  }, [clearSelectedRange, writesAllowed]);
-
-  const toggleBooleanCell = useCallback(
-    (sheetName: string, address: string, nextValue: boolean) => {
-      if (!writesAllowed) {
-        return;
-      }
-      void applyParsedInput(sheetName, address, { kind: "value", value: nextValue }).catch(
-        reportRuntimeError,
-      );
-    },
-    [applyParsedInput, reportRuntimeError, writesAllowed],
-  );
-
-  const pasteIntoSelection = useCallback(
-    (sheetName: string, startAddr: string, values: readonly (readonly string[])[]) => {
-      const start = parseCellAddress(startAddr, sheetName);
-      const ops: {
-        kind: "upsertCell" | "deleteCell";
-        sheetName: string;
-        addr: string;
-        formula?: string;
-        value?: LiteralInput;
-      }[] = [];
-      values.forEach((rowValues, rowOffset) => {
-        rowValues.forEach((cellValue, colOffset) => {
-          const address = formatAddress(start.row + rowOffset, start.col + colOffset);
-          const parsed = parseEditorInput(cellValue);
-          if (parsed.kind === "formula") {
-            ops.push({
-              kind: "upsertCell",
-              sheetName,
-              addr: address,
-              formula: parsed.formula,
-            });
-            return;
-          }
-          if (parsed.kind === "clear") {
-            ops.push({ kind: "deleteCell", sheetName, addr: address });
-            return;
-          }
-          ops.push({
-            kind: "upsertCell",
-            sheetName,
-            addr: address,
-            value: parsed.value,
-          });
-        });
-      });
-      if (ops.length === 0) {
-        return;
-      }
-      void invokeMutation("renderCommit", ops).catch(reportRuntimeError);
-      setEditorSelectionBehavior("select-all");
-      editorTargetRef.current = selectionRef.current;
-      editingModeRef.current = "idle";
-      setEditingMode("idle");
-      resetEditorConflictTracking();
-    },
-    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
-  );
-
-  const fillSelectionRange = useCallback(
-    (
-      sourceStartAddr: string,
-      sourceEndAddr: string,
-      targetStartAddr: string,
-      targetEndAddr: string,
-    ) => {
-      const targetSelection = selectionRef.current;
-      const source = {
-        sheetName: targetSelection.sheetName,
-        startAddress: sourceStartAddr,
-        endAddress: sourceEndAddr,
-      };
-      const target = {
-        sheetName: targetSelection.sheetName,
-        startAddress: targetStartAddr,
-        endAddress: targetEndAddr,
-      };
-      void invokeMutation("fillRange", source, target)
-        .then(() => {
-          editorTargetRef.current = selectionRef.current;
-          editingModeRef.current = "idle";
-          setEditingMode("idle");
-          resetEditorConflictTracking();
-          return undefined;
-        })
-        .catch(reportRuntimeError);
-    },
-    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
-  );
-
-  const copySelectionRange = useCallback(
-    (
-      sourceStartAddr: string,
-      sourceEndAddr: string,
-      targetStartAddr: string,
-      targetEndAddr: string,
-    ) => {
-      const targetSelection = selectionRef.current;
-      const source = {
-        sheetName: targetSelection.sheetName,
-        startAddress: sourceStartAddr,
-        endAddress: sourceEndAddr,
-      };
-      const target = {
-        sheetName: targetSelection.sheetName,
-        startAddress: targetStartAddr,
-        endAddress: targetEndAddr,
-      };
-      void invokeMutation("copyRange", source, target)
-        .then(() => {
-          editorTargetRef.current = selectionRef.current;
-          editingModeRef.current = "idle";
-          setEditingMode("idle");
-          resetEditorConflictTracking();
-          return undefined;
-        })
-        .catch(reportRuntimeError);
-    },
-    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
-  );
-
-  const moveSelectionRange = useCallback(
-    (
-      sourceStartAddr: string,
-      sourceEndAddr: string,
-      targetStartAddr: string,
-      targetEndAddr: string,
-    ) => {
-      const targetSelection = selectionRef.current;
-      const source = {
-        sheetName: targetSelection.sheetName,
-        startAddress: sourceStartAddr,
-        endAddress: sourceEndAddr,
-      };
-      const target = {
-        sheetName: targetSelection.sheetName,
-        startAddress: targetStartAddr,
-        endAddress: targetEndAddr,
-      };
-      void invokeMutation("moveRange", source, target)
-        .then(() => {
-          editorTargetRef.current = selectionRef.current;
-          editingModeRef.current = "idle";
-          setEditingMode("idle");
-          resetEditorConflictTracking();
-          return undefined;
-        })
-        .catch(reportRuntimeError);
-    },
-    [invokeMutation, reportRuntimeError, resetEditorConflictTracking],
-  );
+    selectionRef,
+    editorTargetRef,
+    editorValueRef,
+    editingModeRef,
+    invokeMutation,
+    applyParsedInput,
+    resetEditorConflictTracking,
+    reportRuntimeError,
+    setEditorValue,
+    setEditingMode,
+    setEditorSelectionBehavior,
+  });
 
   const selectAddress = useCallback(
     (sheetName: string, address: string) => {
