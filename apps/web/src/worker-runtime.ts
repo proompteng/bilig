@@ -48,6 +48,14 @@ import {
 } from "./workbook-sync.js";
 import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
 import {
+  EMPTY_RUNTIME_METRICS,
+  buildWorkerRuntimeStateFromBootstrap,
+  buildWorkerRuntimeStateFromEngine,
+  cloneRuntimeMetrics,
+  cloneWorkerRuntimeState,
+  withExternalSyncState,
+} from "./worker-runtime-state.js";
+import {
   collectSheetViewportImpacts,
   normalizeViewport,
   viewportPatchMayBeImpacted,
@@ -94,16 +102,6 @@ export interface WorkbookWorkerBootstrapResult {
   requiresAuthoritativeHydrate: boolean;
 }
 
-const EMPTY_METRICS: RecalcMetrics = {
-  batchId: 0,
-  changedInputCount: 0,
-  dirtyFormulaCount: 0,
-  wasmFormulaCount: 0,
-  jsFormulaCount: 0,
-  rangeNodeVisits: 0,
-  recalcMs: 0,
-  compileMs: 0,
-};
 const DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT = 100_000;
 
 export class WorkbookWorkerRuntime {
@@ -228,7 +226,7 @@ export class WorkbookWorkerRuntime {
 
     if (shouldDeferProjectionEngineBootstrap && restoredBootstrapState !== null) {
       this.authoritativeStateSource = "localStore";
-      this.runtimeStateCache = this.buildRuntimeStateFromBootstrapState(restoredBootstrapState);
+      this.runtimeStateCache = buildWorkerRuntimeStateFromBootstrap(restoredBootstrapState);
     } else {
       restoredState = this.localStore ? await this.localStore.loadState() : null;
       const parsedRestoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot)
@@ -270,10 +268,7 @@ export class WorkbookWorkerRuntime {
     }
     const engine = this.requireEngine();
     return this.storeRuntimeState({
-      workbookName: engine.workbook.workbookName,
-      sheetNames: this.listSheetNames(),
-      metrics: { ...engine.getLastMetrics() },
-      syncState: engine.getSyncState(),
+      ...buildWorkerRuntimeStateFromEngine(engine),
     });
   }
 
@@ -729,63 +724,22 @@ export class WorkbookWorkerRuntime {
     this.viewportTileStore.reset();
   }
 
-  private listSheetNames(): string[] {
-    if (this.engine) {
-      return [...this.engine.workbook.sheetsByName.values()]
-        .toSorted((left, right) => left.order - right.order)
-        .map((sheet) => sheet.name);
-    }
-    return [...(this.runtimeStateCache?.sheetNames ?? ["Sheet1"])];
-  }
-
   private storeRuntimeState(state: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot {
-    this.runtimeStateCache = {
-      workbookName: state.workbookName,
-      sheetNames: [...state.sheetNames],
-      metrics: { ...state.metrics },
-      syncState: state.syncState,
-    };
-    return {
-      workbookName: state.workbookName,
-      sheetNames: [...state.sheetNames],
-      metrics: { ...state.metrics },
-      syncState: this.externalSyncState ?? state.syncState,
-    };
-  }
-
-  private buildRuntimeStateFromBootstrapState(state: {
-    workbookName: string;
-    sheetNames: readonly string[];
-    materializedCellCount: number;
-    authoritativeRevision: number;
-    appliedPendingLocalSeq: number;
-  }): WorkbookWorkerStateSnapshot {
-    return this.storeRuntimeState({
-      workbookName: state.workbookName,
-      sheetNames: [...state.sheetNames],
-      metrics: { ...EMPTY_METRICS },
-      syncState: "syncing",
-    });
+    this.runtimeStateCache = cloneWorkerRuntimeState(state);
+    return withExternalSyncState(this.runtimeStateCache, this.externalSyncState);
   }
 
   private updateRuntimeStateFromEngine(
     engine: SpreadsheetEngine & WorkerEngine = this.requireEngine(),
   ): WorkbookWorkerStateSnapshot {
-    return this.storeRuntimeState({
-      workbookName: engine.workbook.workbookName,
-      sheetNames: [...engine.workbook.sheetsByName.values()]
-        .toSorted((left, right) => left.order - right.order)
-        .map((sheet) => sheet.name),
-      metrics: { ...engine.getLastMetrics() },
-      syncState: engine.getSyncState(),
-    });
+    return this.storeRuntimeState(buildWorkerRuntimeStateFromEngine(engine));
   }
 
   private getCurrentMetrics(): RecalcMetrics {
     if (this.engine) {
-      return { ...this.engine.getLastMetrics() };
+      return cloneRuntimeMetrics(this.engine.getLastMetrics());
     }
-    return { ...(this.runtimeStateCache?.metrics ?? EMPTY_METRICS) };
+    return cloneRuntimeMetrics(this.runtimeStateCache?.metrics ?? EMPTY_RUNTIME_METRICS);
   }
 
   private async getAuthoritativeStateInput(): Promise<{
