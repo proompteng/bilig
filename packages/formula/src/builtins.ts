@@ -2,6 +2,28 @@ import { BUILTINS, BuiltinId, ErrorCode, ValueTag } from "@bilig/protocol";
 import type { CellValue } from "@bilig/protocol";
 import { builtinJsSpecialNames } from "./builtin-capabilities.js";
 import { createComplexBuiltins } from "./builtins/complex.js";
+import {
+  countLeadingZeros,
+  formatFixed,
+  isValidDollarFraction,
+  parseDollarDecimal,
+  toColumnLabel,
+} from "./builtins/formatting.js";
+import {
+  buildIdentityMatrix,
+  collectNumericArgs,
+  collectStatNumericArgs,
+  createNumericBuiltinHelpers,
+  doubleFactorialValue,
+  evenValue,
+  factorialValue,
+  gcdPair,
+  lcmPair,
+  oddValue,
+  roundDownToDigits,
+  roundTowardZero,
+  roundUpToDigits,
+} from "./builtins/numeric.js";
 import { createRadixBuiltins } from "./builtins/radix.js";
 import {
   collectAStyleNumericArgs,
@@ -1119,171 +1141,14 @@ function getAmorlinc(
   return result > 0.0 ? result : 0.0;
 }
 
-function roundToDigits(value: number, digits: number): number {
-  if (digits >= 0) {
-    const factor = 10 ** digits;
-    return Math.round(value * factor) / factor;
-  }
-  const factor = 10 ** -digits;
-  return Math.round(value / factor) * factor;
-}
-
-function roundUpToDigits(value: number, digits: number): number {
-  if (digits >= 0) {
-    const factor = 10 ** digits;
-    return (value >= 0 ? Math.ceil(value * factor) : Math.floor(value * factor)) / factor;
-  }
-  const factor = 10 ** -digits;
-  return (value >= 0 ? Math.ceil(value / factor) : Math.floor(value / factor)) * factor;
-}
-
-function roundDownToDigits(value: number, digits: number): number {
-  if (digits >= 0) {
-    const factor = 10 ** digits;
-    return (value >= 0 ? Math.floor(value * factor) : Math.ceil(value * factor)) / factor;
-  }
-  const factor = 10 ** -digits;
-  return (value >= 0 ? Math.floor(value / factor) : Math.ceil(value / factor)) * factor;
-}
-
-function roundTowardZero(value: number, digits: number): number {
-  if (digits >= 0) {
-    const factor = 10 ** digits;
-    return Math.trunc(value * factor) / factor;
-  }
-  const factor = 10 ** -digits;
-  return Math.trunc(value / factor) * factor;
-}
-
-function roundWith(value: CellValue, digits: CellValue | undefined): CellValue {
-  const numberValue = toNumber(value);
-  const digitValue = digits === undefined ? 0 : toNumber(digits);
-  if (numberValue === undefined || digitValue === undefined) {
-    return valueError();
-  }
-  return numberResult(roundToDigits(numberValue, Math.trunc(digitValue)));
-}
-
-function floorWith(value: CellValue, significance?: CellValue): CellValue {
-  const numberValue = toNumber(value);
-  const significanceValue = significance === undefined ? 1 : toNumber(significance);
-  if (numberValue === undefined || significanceValue === undefined) {
-    return valueError();
-  }
-  if (significanceValue === 0) {
-    return { tag: ValueTag.Error, code: ErrorCode.Div0 };
-  }
-  return numberResult(Math.floor(numberValue / significanceValue) * significanceValue);
-}
-
-function ceilingWith(value: CellValue, significance?: CellValue): CellValue {
-  const numberValue = toNumber(value);
-  const significanceValue = significance === undefined ? 1 : toNumber(significance);
-  if (numberValue === undefined || significanceValue === undefined) {
-    return valueError();
-  }
-  if (significanceValue === 0) {
-    return { tag: ValueTag.Error, code: ErrorCode.Div0 };
-  }
-  return numberResult(Math.ceil(numberValue / significanceValue) * significanceValue);
-}
-
-function unaryMath(value: CellValue, evaluate: (numeric: number) => number): CellValue {
-  return numericResultOrError(evaluate(toNumber(value) ?? 0));
-}
-
-function binaryMath(
-  left: CellValue,
-  right: CellValue,
-  evaluate: (left: number, right: number) => number,
-): CellValue {
-  return numericResultOrError(evaluate(toNumber(left) ?? 0, toNumber(right) ?? 0));
-}
-
-function collectNumericArgs(args: CellValue[]): number[] {
-  return args.map(toNumber).filter((value): value is number => value !== undefined);
-}
-
-function collectStatNumericArgs(args: CellValue[]): number[] {
-  const values: number[] = [];
-  for (const arg of args) {
-    if (arg.tag === ValueTag.Number) {
-      values.push(arg.value);
-      continue;
-    }
-    if (arg.tag === ValueTag.Boolean) {
-      values.push(arg.value ? 1 : 0);
-    }
-  }
-  return values;
-}
-
-function factorialValue(value: number): number | undefined {
-  if (!Number.isFinite(value) || value < 0) {
-    return undefined;
-  }
-  const truncated = Math.trunc(value);
-  let result = 1;
-  for (let index = 2; index <= truncated; index += 1) {
-    result *= index;
-  }
-  return result;
-}
-
-function doubleFactorialValue(value: number): number | undefined {
-  if (!Number.isFinite(value) || value < 0) {
-    return undefined;
-  }
-  const truncated = Math.trunc(value);
-  let result = 1;
-  for (let index = truncated; index >= 2; index -= 2) {
-    result *= index;
-  }
-  return result;
-}
-
-function gcdPair(left: number, right: number): number {
-  let a = Math.abs(Math.trunc(left));
-  let b = Math.abs(Math.trunc(right));
-  while (b !== 0) {
-    const next = a % b;
-    a = b;
-    b = next;
-  }
-  return a;
-}
-
-function lcmPair(left: number, right: number): number {
-  if (left === 0 || right === 0) {
-    return 0;
-  }
-  return Math.abs(Math.trunc(left * right)) / gcdPair(left, right);
-}
-
-function evenValue(numberValue: number): number {
-  const sign = numberValue < 0 ? -1 : 1;
-  const rounded = Math.ceil(Math.abs(numberValue) / 2) * 2;
-  return sign * rounded;
-}
-
-function oddValue(numberValue: number): number {
-  const sign = numberValue < 0 ? -1 : 1;
-  const rounded = Math.ceil(Math.abs(numberValue));
-  const odd = rounded % 2 === 0 ? rounded + 1 : rounded;
-  return sign * odd;
-}
-
-function buildIdentityMatrix(size: number): ArrayValue {
-  const values: CellValue[] = [];
-  for (let row = 0; row < size; row += 1) {
-    for (let col = 0; col < size; col += 1) {
-      values.push(numberResult(row === col ? 1 : 0));
-    }
-  }
-  return { kind: "array", rows: size, cols: size, values };
-}
-
 const complexBuiltins = createComplexBuiltins({ toNumber, numberResult, valueError });
+const numericBuiltinHelpers = createNumericBuiltinHelpers({
+  toNumber,
+  numberResult,
+  valueError,
+  numericResultOrError,
+});
+const { binaryMath, ceilingWith, floorWith, roundWith, unaryMath } = numericBuiltinHelpers;
 const radixBuiltins = createRadixBuiltins({
   toNumber,
   integerValue,
@@ -2562,66 +2427,9 @@ function toZeroNumericValue(value: CellValue): number | undefined {
   return toNumber(value);
 }
 
-function toColumnLabel(column: number): string | undefined {
-  if (!Number.isInteger(column) || column < 1) {
-    return undefined;
-  }
-  let current = column;
-  let label = "";
-  while (current > 0) {
-    const offset = (current - 1) % 26;
-    label = String.fromCharCode(65 + offset) + label;
-    current = Math.floor((current - 1) / 26);
-  }
-  return label;
-}
-
-function formatThousands(value: string): string {
-  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-function formatFixed(value: number, decimals: number, includeThousands: boolean): string {
-  if (!Number.isFinite(value) || !Number.isInteger(decimals)) {
-    return "";
-  }
-  const rounded = roundToDigits(value, decimals);
-  const sign = rounded < 0 ? "-" : "";
-  const unsigned = Math.abs(rounded);
-  const fixedDecimals = decimals >= 0 ? decimals : 0;
-  const fixed = unsigned.toFixed(fixedDecimals);
-  const [integerPart = "0", fractionPart] = fixed.split(".");
-  const normalizedInteger = includeThousands ? formatThousands(integerPart) : integerPart;
-  return `${sign}${normalizedInteger}${fractionPart === undefined ? "" : `.${fractionPart}`}`;
-}
-
-function countLeadingZeros(value: number): number {
-  if (value <= 0) {
-    return 1;
-  }
-  return Math.max(1, Math.ceil(Math.log10(value)));
-}
-
-function isValidDollarFraction(fraction: number): boolean {
-  if (!Number.isInteger(fraction) || fraction <= 0) {
-    return false;
-  }
-  if (fraction === 1) {
-    return true;
-  }
-  return Number.isInteger(Math.log2(fraction));
-}
-
-function parseDollarDecimal(value: number): { integerPart: number; fractionalNumerator: number } {
-  const absolute = Math.abs(value);
-  const parts = absolute.toString().split(".");
-  const integerPart = Number(parts[0] ?? 0);
-  const fractionalText = parts[1] ?? "0";
-  return { integerPart, fractionalNumerator: Number(fractionalText) };
-}
-
 function aggregateByCode(functionNum: number, values: CellValue[]): CellValue {
   const normalized = functionNum > 100 ? functionNum - 100 : functionNum;
-  const numericValues = collectNumericArgs(values);
+  const numericValues = collectNumericArgs(values, toNumber);
   switch (normalized) {
     case 1:
       return numericValues.length === 0
@@ -2715,14 +2523,14 @@ const scalarBuiltins: Record<string, Builtin> = {
   AVERAGE: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const numbers = collectNumericArgs(args);
+    const numbers = collectNumericArgs(args, toNumber);
     if (numbers.length === 0) return numberResult(0);
     return numberResult(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
   },
   AVG: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const numbers = collectNumericArgs(args);
+    const numbers = collectNumericArgs(args, toNumber);
     if (numbers.length === 0) return numberResult(0);
     return numberResult(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
   },
@@ -2885,7 +2693,7 @@ const scalarBuiltins: Record<string, Builtin> = {
   GEOMEAN: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const numbers = collectNumericArgs(args);
+    const numbers = collectNumericArgs(args, toNumber);
     if (numbers.length === 0) {
       return valueError();
     }
@@ -2901,7 +2709,7 @@ const scalarBuiltins: Record<string, Builtin> = {
   HARMEAN: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const numbers = collectNumericArgs(args);
+    const numbers = collectNumericArgs(args, toNumber);
     if (numbers.length === 0 || numbers.some((value) => value <= 0)) {
       return valueError();
     }
@@ -3247,14 +3055,14 @@ const scalarBuiltins: Record<string, Builtin> = {
       : numberResult(numerator / (denominator * remainder));
   },
   GCD: (...args) => {
-    const numbers = collectNumericArgs(args).map((value) => Math.abs(Math.trunc(value)));
+    const numbers = collectNumericArgs(args, toNumber).map((value) => Math.abs(Math.trunc(value)));
     if (numbers.length === 0) {
       return valueError();
     }
     return numberResult(numbers.reduce((acc, value) => gcdPair(acc, value)));
   },
   LCM: (...args) => {
-    const numbers = collectNumericArgs(args).map((value) => Math.abs(Math.trunc(value)));
+    const numbers = collectNumericArgs(args, toNumber).map((value) => Math.abs(Math.trunc(value)));
     if (numbers.length === 0) {
       return valueError();
     }
@@ -3272,7 +3080,7 @@ const scalarBuiltins: Record<string, Builtin> = {
     return numberResult(Math.round(numberValue / multipleValue) * multipleValue);
   },
   MULTINOMIAL: (...args) => {
-    const numbers = collectNumericArgs(args).map((value) => Math.trunc(value));
+    const numbers = collectNumericArgs(args, toNumber).map((value) => Math.trunc(value));
     if (numbers.some((value) => value < 0)) {
       return valueError();
     }
@@ -3288,7 +3096,7 @@ const scalarBuiltins: Record<string, Builtin> = {
   PRODUCT: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const numbers = collectNumericArgs(args);
+    const numbers = collectNumericArgs(args, toNumber);
     return numberResult(
       numbers.length === 0 ? 0 : numbers.reduce((product, value) => product * value, 1),
     );
@@ -4108,7 +3916,7 @@ const scalarBuiltins: Record<string, Builtin> = {
   },
   MUNIT: (sizeArg) => {
     const size = positiveIntegerValue(sizeArg);
-    return size === undefined ? valueError() : buildIdentityMatrix(size);
+    return size === undefined ? valueError() : buildIdentityMatrix(size, numberResult);
   },
   SERIESSUM: (xArg, nArg, mArg, ...coefficientArgs) => {
     const x = toNumber(xArg);
@@ -4133,7 +3941,9 @@ const scalarBuiltins: Record<string, Builtin> = {
   SUMSQ: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    return numberResult(collectNumericArgs(args).reduce((sum, value) => sum + value ** 2, 0));
+    return numberResult(
+      collectNumericArgs(args, toNumber).reduce((sum, value) => sum + value ** 2, 0),
+    );
   },
   CONVERT: (numberArg, fromUnitArg, toUnitArg) => convertBuiltin(numberArg, fromUnitArg, toUnitArg),
   EUROCONVERT: (numberArg, sourceArg, targetArg, fullPrecisionArg, triangulationPrecisionArg) =>
@@ -4222,13 +4032,13 @@ const scalarBuiltins: Record<string, Builtin> = {
   MODE: (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const mode = modeSingle(collectNumericArgs(args));
+    const mode = modeSingle(collectNumericArgs(args, toNumber));
     return mode === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : numberResult(mode);
   },
   "MODE.SNGL": (...args) => {
     const error = firstError(args);
     if (error) return error;
-    const mode = modeSingle(collectNumericArgs(args));
+    const mode = modeSingle(collectNumericArgs(args, toNumber));
     return mode === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : numberResult(mode);
   },
   STDEV: (...args) => {
