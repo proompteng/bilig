@@ -50,7 +50,7 @@
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm workspace-resolution:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm workspace-resolution:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm --filter @bilig/web build && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "devDependencies": {
     "@bilig/test-fuzz": "workspace:*",
