@@ -440,11 +440,10 @@ export function useWorkerWorkbookAppState(input: {
       }
       editorValueRef.current = next;
       setEditorValue(next);
-      setEditingMode((current) => {
-        const nextMode = current === "idle" ? "cell" : current;
-        editingModeRef.current = nextMode;
-        return nextMode;
-      });
+      if (editingModeRef.current === "idle") {
+        editingModeRef.current = "cell";
+        setEditingMode("cell");
+      }
     },
     [cloneLiveSelectedCell],
   );

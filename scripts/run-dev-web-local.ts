@@ -37,6 +37,10 @@ interface DevChildProcess {
   kill(signal?: "SIGINT" | "SIGTERM" | number): void;
 }
 
+function childStdinMode(): "ignore" | "inherit" {
+  return process.stdin.isTTY ? "inherit" : "ignore";
+}
+
 function commandExists(command: string): boolean {
   return Bun.which(command) !== null;
 }
@@ -486,7 +490,7 @@ function spawnAppDev(
     env["BILIG_ZERO_CACHE_URL"] = "/zero";
   }
   return Bun.spawn(["pnpm", "--filter", "@bilig/app", "run", "dev"], {
-    stdin: "inherit",
+    stdin: childStdinMode(),
     stdout: "inherit",
     stderr: "inherit",
     env,
@@ -506,7 +510,7 @@ function spawnWebDev(webPort: number, publicServerUrl: string): DevChildProcess 
     ],
     {
       cwd: webAppDir,
-      stdin: "inherit",
+      stdin: childStdinMode(),
       stdout: "inherit",
       stderr: "inherit",
       env: {

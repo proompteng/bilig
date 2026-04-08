@@ -7,7 +7,7 @@ import type {
   WorkbookLocalStoreFactory,
 } from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
-import { isWorkbookSnapshot, ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
+import { ErrorCode, isWorkbookSnapshot, ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
 import { applyPendingWorkbookMutationToEngine } from "../worker-runtime-mutation-replay.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime.js";
 import { createWorkerRuntimeSessionController } from "../runtime-session.js";
@@ -817,6 +817,52 @@ describe("createWorkerRuntimeSessionController", () => {
       expect(controller.handle.viewportStore.getCell("Sheet1", "A1").value).toEqual({
         tag: ValueTag.Number,
         value: 123,
+      });
+    });
+
+    unsubscribe();
+    controller.dispose();
+  });
+
+  it("applies invalid local formulas through pending worker viewport patches", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: false,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    const unsubscribe = controller.subscribeViewport(
+      "Sheet1",
+      { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
+      () => {},
+    );
+
+    await controller.invoke("enqueuePendingMutation", {
+      method: "setCellFormula",
+      args: ["Sheet1", "A1", "1+"],
+    });
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A1")).toMatchObject({
+        value: {
+          tag: ValueTag.Error,
+          code: ErrorCode.Value,
+        },
       });
     });
 
