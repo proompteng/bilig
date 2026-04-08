@@ -299,47 +299,11 @@ jobs:
           set -eu
           pnpm exec playwright install-deps chromium
 
-      - name: Ensure container tooling for browser stack
-        run: |
-          set -eu
-
-          if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends docker.io docker-compose-plugin || \
-              apt-get install -y --no-install-recommends docker.io docker-compose
-          fi
-
-          if command -v docker >/dev/null 2>&1; then
-            docker --version
-            if docker compose version >/dev/null 2>&1; then
-              docker compose version
-            elif command -v docker-compose >/dev/null 2>&1; then
-              docker-compose version
-            fi
-            if docker ps >/dev/null 2>&1; then
-              exit 0
-            fi
-          fi
-
-          if command -v podman >/dev/null 2>&1; then
-            podman --version
-            if podman compose version >/dev/null 2>&1; then
-              podman compose version
-            elif command -v podman-compose >/dev/null 2>&1; then
-              podman-compose version
-            fi
-            if podman ps >/dev/null 2>&1; then
-              exit 0
-            fi
-          fi
-
-          echo "No usable container runtime is available for the browser stack."
-          exit 1
-
       - name: Probe browser stack CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
+          sh scripts/ensure-container-runtime-ci.sh
           bun scripts/run-browser-tests.ts --list --grep @fuzz-browser
 
       - name: Upload browser stack artifacts on failure
@@ -426,47 +390,11 @@ jobs:
           set -eu
           pnpm exec playwright install-deps chromium
 
-      - name: Ensure container tooling for browser stack
-        run: |
-          set -eu
-
-          if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends docker.io docker-compose-plugin || \
-              apt-get install -y --no-install-recommends docker.io docker-compose
-          fi
-
-          if command -v docker >/dev/null 2>&1; then
-            docker --version
-            if docker compose version >/dev/null 2>&1; then
-              docker compose version
-            elif command -v docker-compose >/dev/null 2>&1; then
-              docker-compose version
-            fi
-            if docker ps >/dev/null 2>&1; then
-              exit 0
-            fi
-          fi
-
-          if command -v podman >/dev/null 2>&1; then
-            podman --version
-            if podman compose version >/dev/null 2>&1; then
-              podman compose version
-            elif command -v podman-compose >/dev/null 2>&1; then
-              podman-compose version
-            fi
-            if podman ps >/dev/null 2>&1; then
-              exit 0
-            fi
-          fi
-
-          echo "No usable container runtime is available for the browser stack."
-          exit 1
-
       - name: Run browser fuzz CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
+          sh scripts/ensure-container-runtime-ci.sh
           bun scripts/run-browser-tests.ts --grep @fuzz-browser
 
       - name: Upload browser fuzz artifacts on failure
@@ -672,47 +600,11 @@ jobs:
           set -eu
           pnpm exec playwright install-deps chromium
 
-      - name: Ensure container tooling for browser stack
-        run: |
-          set -eu
-
-          if ! command -v docker >/dev/null 2>&1 && ! command -v podman >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends docker.io docker-compose-plugin || \
-              apt-get install -y --no-install-recommends docker.io docker-compose
-          fi
-
-          if command -v docker >/dev/null 2>&1; then
-            docker --version
-            if docker compose version >/dev/null 2>&1; then
-              docker compose version
-            elif command -v docker-compose >/dev/null 2>&1; then
-              docker-compose version
-            fi
-            if docker ps >/dev/null 2>&1; then
-              exit 0
-            fi
-          fi
-
-          if command -v podman >/dev/null 2>&1; then
-            podman --version
-            if podman compose version >/dev/null 2>&1; then
-              podman compose version
-            elif command -v podman-compose >/dev/null 2>&1; then
-              podman-compose version
-            fi
-            if podman ps >/dev/null 2>&1; then
-              exit 0
-            fi
-          fi
-
-          echo "No usable container runtime is available for the browser stack."
-          exit 1
-
       - name: Run browser CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
+          sh scripts/ensure-container-runtime-ci.sh
           pnpm test:browser
 
       - name: Upload browser artifacts on failure
