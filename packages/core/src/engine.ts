@@ -71,6 +71,8 @@ import { CellFlags } from "./cell-store.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from "./entity-ids.js";
+import { appendPackedCellIndex, growUint32 } from "./engine-buffer-utils.js";
+import { intersectRangeBounds, normalizeRange } from "./engine-range-utils.js";
 import {
   applyStylePatch,
   clearStyleFields,
@@ -82,7 +84,6 @@ import {
   mapStructuralBoundary,
   structuralTransformForOp,
 } from "./engine-structural-utils.js";
-import { intersectRangeBounds, normalizeRange } from "./engine-range-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
 import { materializePivotTable, type PivotDefinitionInput } from "./pivot-engine.js";
@@ -6593,28 +6594,6 @@ export class SpreadsheetEngine {
     this.materializedCells[this.materializedCellCount] = cellIndex;
     this.materializedCellCount = nextCount;
   }
-}
-
-function growUint32(buffer: U32, required: number): U32 {
-  let capacity = buffer.length;
-  while (capacity < required) {
-    capacity *= 2;
-  }
-  const next = new Uint32Array(capacity);
-  next.set(buffer);
-  return next as U32;
-}
-
-function appendPackedCellIndex(indices: Uint32Array, cellIndex: number): Uint32Array {
-  for (let index = 0; index < indices.length; index += 1) {
-    if (indices[index] === cellIndex) {
-      return indices;
-    }
-  }
-  const next = new Uint32Array(indices.length + 1);
-  next.set(indices);
-  next[indices.length] = cellIndex;
-  return next;
 }
 
 export const selectors = {
