@@ -1,7 +1,7 @@
 import type { ProtocolFrame, SnapshotChunkFrame } from "@bilig/binary-protocol";
 import { WORKBOOK_SNAPSHOT_CONTENT_TYPE, createSnapshotChunkFrames } from "@bilig/binary-protocol";
 import { CSV_CONTENT_TYPE, type WorkbookImportContentType } from "@bilig/agent-api";
-import type { WorkbookSnapshot } from "@bilig/protocol";
+import { isWorkbookSnapshot, type WorkbookSnapshot } from "@bilig/protocol";
 
 const snapshotEncoder = new TextEncoder();
 const snapshotDecoder = new TextDecoder();
@@ -217,18 +217,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  if (!isRecord(value) || value["version"] !== 1) {
-    return false;
-  }
-  const workbook = value["workbook"];
-  if (!isRecord(workbook) || typeof workbook["name"] !== "string") {
+function hasWorkbookSnapshotCellShape(value: unknown): value is WorkbookSnapshot {
+  if (!isWorkbookSnapshot(value)) {
     return false;
   }
   const sheets = value["sheets"];
-  if (!Array.isArray(sheets)) {
-    return false;
-  }
   return sheets.every((sheet) => {
     if (
       !isRecord(sheet) ||
@@ -250,7 +243,7 @@ export function decodeWorkbookSnapshotBytes(snapshot: CompletedSnapshotAssembly)
     throw new Error(`Unsupported snapshot content type: ${snapshot.contentType}`);
   }
   const decoded: unknown = JSON.parse(snapshotDecoder.decode(snapshot.bytes));
-  if (!isWorkbookSnapshot(decoded)) {
+  if (!hasWorkbookSnapshotCellShape(decoded)) {
     throw new Error("Workbook snapshot payload does not match the expected schema");
   }
   return decoded;

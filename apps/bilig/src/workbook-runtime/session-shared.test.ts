@@ -5,6 +5,7 @@ import {
   SNAPSHOT_ASSEMBLY_MAX_AGE_MS,
   acceptSnapshotChunk,
   createSnapshotPublication,
+  decodeWorkbookSnapshotBytes,
   encodeWorkbookSnapshot,
 } from "./session-shared.js";
 
@@ -62,5 +63,37 @@ describe("session-shared", () => {
     expect(result?.snapshotId).toBe("fresh");
     expect(registry.has("stale")).toBe(false);
     expect(registry.has("fresh")).toBe(false);
+  });
+
+  it("decodes assembled workbook snapshots through the shared protocol guard", () => {
+    const snapshot = createSnapshot();
+
+    expect(
+      decodeWorkbookSnapshotBytes({
+        documentId: "doc-1",
+        snapshotId: "snapshot-1",
+        cursor: 1,
+        contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+        bytes: encodeWorkbookSnapshot(snapshot),
+      }),
+    ).toEqual(snapshot);
+  });
+
+  it("rejects assembled workbook payloads that are missing sheet cells", () => {
+    expect(() =>
+      decodeWorkbookSnapshotBytes({
+        documentId: "doc-1",
+        snapshotId: "snapshot-1",
+        cursor: 1,
+        contentType: WORKBOOK_SNAPSHOT_CONTENT_TYPE,
+        bytes: new TextEncoder().encode(
+          JSON.stringify({
+            version: 1,
+            workbook: { name: "doc-1" },
+            sheets: [{ name: "Sheet1", order: 0 }],
+          }),
+        ),
+      }),
+    ).toThrow("Workbook snapshot payload does not match the expected schema");
   });
 });
