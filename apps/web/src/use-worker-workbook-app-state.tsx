@@ -37,12 +37,8 @@ import {
 } from "./worker-workbook-app-model.js";
 import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
-import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { useZeroHealthReady } from "./use-zero-health-ready.js";
-import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
-import { WorkbookSideRailTabs } from "./WorkbookSideRailTabs.js";
-import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
-import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
+import { useWorkbookAppPanels } from "./use-workbook-app-panels.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -734,58 +730,30 @@ export function useWorkerWorkbookAppState(input: {
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
   );
-  const collaborators = useWorkbookPresence({
-    documentId,
-    sessionId: `${documentId}:${replicaId}`,
-    selection,
-    sheetNames,
-    zero: zeroSource,
-    enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
-  });
-  const { changeCount, changesPanel } = useWorkbookChangesPane({
-    documentId,
-    sheetNames,
-    zero: zeroSource,
-    enabled: runtimeReady && zeroConfigured,
-    onJump: (sheetName, address) => {
-      selectAddress(sheetName, address);
-    },
-  });
-  const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges } =
-    useWorkbookAgentPane({
-      documentId,
-      enabled: runtimeReady,
-      getContext: () => ({
-        selection: selectionRef.current,
-        viewport: visibleViewportRef.current,
-      }),
-      previewBundle: async (bundle: WorkbookAgentCommandBundle) => {
-        if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
-          throw new Error("Workbook runtime is not ready for agent preview");
-        }
-        const value = await runtimeController.invoke("previewAgentCommandBundle", bundle);
-        if (!isWorkbookAgentPreviewSummary(value)) {
-          throw new Error("Worker returned an invalid workbook agent preview");
-        }
-        return value;
-      },
-    });
-  const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
-  const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
+  const getAgentContext = useCallback(
+    () => ({
+      selection: selectionRef.current,
+      viewport: visibleViewportRef.current,
+    }),
+    [],
+  );
 
-  const subscribeViewport = useCallback(
-    (
-      sheetName: string,
-      viewport: Parameters<ProjectedViewportStore["subscribeViewport"]>[1],
-      listener: Parameters<ProjectedViewportStore["subscribeViewport"]>[2],
-    ) => {
-      if (!runtimeController) {
-        return () => {};
+  const previewAgentBundle = useCallback(
+    async (bundle: WorkbookAgentCommandBundle) => {
+      if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
+        throw new Error("Workbook runtime is not ready for agent preview");
       }
-      return runtimeController.subscribeViewport(sheetName, viewport, listener);
+      const value = await runtimeController.invoke("previewAgentCommandBundle", bundle);
+      if (!isWorkbookAgentPreviewSummary(value)) {
+        throw new Error("Worker returned an invalid workbook agent preview");
+      }
+      return value;
     },
     [runtimeController],
   );
+
+  const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
+  const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
 
   const {
     headerStatus: toolbarHeaderStatus,
@@ -806,6 +774,43 @@ export function useWorkerWorkbookAppState(input: {
     selectedStyle,
     writesAllowed,
   });
+
+  const {
+    agentError,
+    clearAgentError,
+    agentPanel,
+    changesPanel,
+    headerStatus,
+    previewRanges,
+    sideRail,
+  } = useWorkbookAppPanels({
+    documentId,
+    replicaId,
+    selection,
+    sheetNames,
+    zero: zeroSource,
+    runtimeReady,
+    zeroConfigured,
+    remoteSyncAvailable,
+    toolbarHeaderStatus,
+    selectAddress,
+    getAgentContext,
+    previewAgentBundle,
+  });
+
+  const subscribeViewport = useCallback(
+    (
+      sheetName: string,
+      viewport: Parameters<ProjectedViewportStore["subscribeViewport"]>[1],
+      listener: Parameters<ProjectedViewportStore["subscribeViewport"]>[2],
+    ) => {
+      if (!runtimeController) {
+        return () => {};
+      }
+      return runtimeController.subscribeViewport(sheetName, viewport, listener);
+    },
+    [runtimeController],
+  );
 
   const createSheet = useCallback(() => {
     const nextSheetName = createNextSheetName(sheetNames);
@@ -853,45 +858,6 @@ export function useWorkerWorkbookAppState(input: {
         .catch(reportRuntimeError);
     },
     [invokeMutation, reportRuntimeError, selectAddress, sheetNames],
-  );
-
-  const headerStatus = useMemo(() => {
-    return (
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        {toolbarHeaderStatus}
-        {collaborators.length > 0 ? (
-          <WorkbookPresenceBar
-            collaborators={collaborators}
-            onJump={(sheetName, address) => {
-              selectAddress(sheetName, address);
-            }}
-          />
-        ) : null}
-      </div>
-    );
-  }, [collaborators, selectAddress, toolbarHeaderStatus]);
-
-  const sideRail = useMemo(
-    () => (
-      <WorkbookSideRailTabs
-        defaultValue="assistant"
-        tabs={[
-          {
-            value: "assistant",
-            label: "Assistant",
-            count: pendingCommandCount > 0 ? pendingCommandCount : undefined,
-            panel: agentPanel,
-          },
-          {
-            value: "changes",
-            label: "Changes",
-            count: changeCount,
-            panel: changesPanel,
-          },
-        ]}
-      />
-    ),
-    [agentPanel, changeCount, changesPanel, pendingCommandCount],
   );
 
   return {

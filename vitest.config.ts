@@ -1,7 +1,33 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const packagesDir = join(rootDir, "packages");
+
+function createWorkspacePackageAliases() {
+  return readdirSync(packagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const packageDir = join(packagesDir, entry.name);
+      const packageJsonPath = join(packageDir, "package.json");
+      const sourceEntryPath = join(packageDir, "src", "index.ts");
+      if (!existsSync(packageJsonPath) || !existsSync(sourceEntryPath)) {
+        return [];
+      }
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        name?: unknown;
+      };
+      if (typeof packageJson.name !== "string" || !packageJson.name.startsWith("@bilig/")) {
+        return [];
+      }
+      return [{ find: packageJson.name, replacement: sourceEntryPath }];
+    })
+    .toSorted((left, right) => left.find.localeCompare(right.find));
+}
+
+const workspacePackageAliases = createWorkspacePackageAliases();
 
 export default defineConfig({
   resolve: {
@@ -10,38 +36,7 @@ export default defineConfig({
         find: "@bilig/formula/program-arena",
         replacement: `${rootDir}packages/formula/src/program-arena.ts`,
       },
-      { find: "@bilig/protocol", replacement: `${rootDir}packages/protocol/src/index.ts` },
-      { find: "@bilig/formula", replacement: `${rootDir}packages/formula/src/index.ts` },
-      { find: "@bilig/core", replacement: `${rootDir}packages/core/src/index.ts` },
-      { find: "@bilig/crdt", replacement: `${rootDir}packages/crdt/src/index.ts` },
-      {
-        find: "@bilig/binary-protocol",
-        replacement: `${rootDir}packages/binary-protocol/src/index.ts`,
-      },
-      { find: "@bilig/agent-api", replacement: `${rootDir}packages/agent-api/src/index.ts` },
-      {
-        find: "@bilig/storage-browser",
-        replacement: `${rootDir}packages/storage-browser/src/index.ts`,
-      },
-      { find: "@bilig/zero-sync", replacement: `${rootDir}packages/zero-sync/src/index.ts` },
-      {
-        find: "@bilig/storage-server",
-        replacement: `${rootDir}packages/storage-server/src/index.ts`,
-      },
-      { find: "@bilig/wasm-kernel", replacement: `${rootDir}packages/wasm-kernel/src/index.ts` },
-      {
-        find: "@bilig/worker-transport",
-        replacement: `${rootDir}packages/worker-transport/src/index.ts`,
-      },
-      { find: "@bilig/renderer", replacement: `${rootDir}packages/renderer/src/index.ts` },
-      { find: "@bilig/grid", replacement: `${rootDir}packages/grid/src/index.ts` },
-      { find: "@bilig/contracts", replacement: `${rootDir}packages/contracts/src/index.ts` },
-      {
-        find: "@bilig/runtime-kernel",
-        replacement: `${rootDir}packages/runtime-kernel/src/index.ts`,
-      },
-      { find: "@bilig/actors", replacement: `${rootDir}packages/actors/src/index.ts` },
-      { find: "@bilig/test-fuzz", replacement: `${rootDir}packages/test-fuzz/src/index.ts` },
+      ...workspacePackageAliases,
     ],
   },
   test: {
