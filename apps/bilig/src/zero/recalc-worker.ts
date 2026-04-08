@@ -6,11 +6,8 @@ import {
   markRecalcJobFailed,
   markRecalcJobSuperseded,
 } from "./recalc-job-store.js";
-import {
-  loadWorkbookRuntimeMetadata,
-  shouldPersistWorkbookCheckpointRevision,
-  type Queryable,
-} from "./store.js";
+import { shouldPersistWorkbookCheckpointRevision, type Queryable } from "./store.js";
+import { loadWorkbookRuntimeMetadata } from "./workbook-runtime-store.js";
 
 const IDLE_POLL_MS = 250;
 const BUSY_POLL_MS = 25;

@@ -29,14 +29,16 @@ import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
 import {
-  acquireWorkbookMutationLock,
   backfillAuthoritativeCellEval,
   dropLegacyZeroSyncSchemaObjects,
   ensureZeroSyncSchema,
   loadWorkbookEventRecordsAfter,
-  loadWorkbookRuntimeMetadata,
   persistWorkbookMutation,
 } from "./store.js";
+import {
+  acquireWorkbookMutationLock,
+  loadWorkbookRuntimeMetadata,
+} from "./workbook-runtime-store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { ensureZeroPublication } from "./publication-store.js";
 import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";

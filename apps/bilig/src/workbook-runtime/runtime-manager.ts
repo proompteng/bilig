@@ -6,15 +6,14 @@ import {
   type AxisMetadataSourceRow,
   type CellSourceRow,
 } from "../zero/projection.js";
-import {
-  loadWorkbookRuntimeMetadata,
-  loadWorkbookState,
-  type Queryable,
-  type WorkbookProjectionCommit,
-  type WorkbookProjectionState,
-  type WorkbookRuntimeMetadata,
-  type WorkbookRuntimeState,
+import type {
+  Queryable,
+  WorkbookProjectionCommit,
+  WorkbookProjectionState,
+  WorkbookRuntimeMetadata,
+  WorkbookRuntimeState,
 } from "../zero/store.js";
+import { loadWorkbookRuntimeMetadata, loadWorkbookState } from "../zero/workbook-runtime-store.js";
 
 export interface WorkbookRuntime extends WorkbookProjectionState {
   documentId: string;
