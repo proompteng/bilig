@@ -33,9 +33,10 @@ import {
 import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
-import { persistWorkbookMutation, type Queryable } from "./store.js";
+import type { Queryable } from "./store.js";
 import { acquireWorkbookMutationLock } from "./workbook-runtime-store.js";
 import { ensureWorkbookDocumentExists } from "./workbook-migration-store.js";
+import { persistWorkbookMutation } from "./workbook-mutation-store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
 import { loadWorkbookChange } from "./workbook-change-store.js";
 
