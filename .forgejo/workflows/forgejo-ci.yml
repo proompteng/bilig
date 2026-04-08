@@ -236,8 +236,10 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
-      BILIG_BROWSER_STACK: "compose"
+      BILIG_BROWSER_STACK: "local"
       BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_DEV_DISABLE_COMPOSE: "1"
+      BILIG_E2E_REMOTE_SYNC: "0"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
       BILIG_FUZZ_PROFILE: "main"
       BILIG_FUZZ_CAPTURE: "1"
@@ -303,7 +305,6 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          sh scripts/ensure-container-runtime-ci.sh
           bun scripts/run-browser-tests.ts --list --grep @fuzz-browser
 
       - name: Upload browser stack artifacts on failure
@@ -327,8 +328,10 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
-      BILIG_BROWSER_STACK: "compose"
+      BILIG_BROWSER_STACK: "local"
       BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_DEV_DISABLE_COMPOSE: "1"
+      BILIG_E2E_REMOTE_SYNC: "0"
       BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
       BILIG_FUZZ_PROFILE: "main"
       BILIG_FUZZ_CAPTURE: "1"
@@ -394,7 +397,6 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          sh scripts/ensure-container-runtime-ci.sh
           bun scripts/run-browser-tests.ts --grep @fuzz-browser
 
       - name: Upload browser fuzz artifacts on failure
@@ -604,7 +606,6 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          sh scripts/ensure-container-runtime-ci.sh
           pnpm test:browser
 
       - name: Upload browser artifacts on failure

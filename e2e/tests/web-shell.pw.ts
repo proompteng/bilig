@@ -10,6 +10,7 @@ const PRODUCT_HEADER_HEIGHT = 24;
 const PRODUCT_ROW_HEIGHT = 22;
 const PRIMARY_MODIFIER = process.platform === "darwin" ? "Meta" : "Control";
 const fuzzBrowserEnabled = process.env["BILIG_FUZZ_BROWSER"] === "1";
+const remoteSyncEnabled = process.env["BILIG_E2E_REMOTE_SYNC"] !== "0";
 
 type BrowserSelectionAction =
   | { kind: "click"; row: number; col: number }
@@ -879,7 +880,10 @@ async function openZeroWorkbookPage(page: Page, documentId: string) {
 async function waitForWorkbookReady(page: Page) {
   await expect(page.getByTestId("formula-bar")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("sheet-grid")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId("status-sync")).toHaveText("Ready", { timeout: 15_000 });
+  await expect(page.getByTestId("status-sync")).toHaveText(
+    remoteSyncEnabled ? "Ready" : /^(Ready|Local)$/,
+    { timeout: 15_000 },
+  );
 }
 
 async function runToolbarSyncActions(
@@ -927,9 +931,10 @@ test("web app renders the minimal product shell without legacy demo chrome", asy
   await expect(page.getByTestId("replica-panel")).toHaveCount(0);
 
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
-  await expect(page.getByTestId("status-sync")).toHaveText("Ready", {
-    timeout: 15_000,
-  });
+  await expect(page.getByTestId("status-sync")).toHaveText(
+    remoteSyncEnabled ? "Ready" : /^(Ready|Local)$/,
+    { timeout: 15_000 },
+  );
   await expect(page.locator(".formula-result-shell")).toHaveCount(0);
 });
 
@@ -1130,6 +1135,7 @@ test("web app applies preset swatch colors directly from the palette", async ({ 
 test("web app propagates content and styling changes across live zero tabs", async ({
   page,
 }, testInfo) => {
+  test.skip(!remoteSyncEnabled, "requires Zero-backed browser sync");
   test.slow();
   const documentId = `playwright-zero-style-multiplayer-${Date.now()}`;
   const mirrorPage = await page.context().newPage();
@@ -1191,6 +1197,7 @@ test("web app propagates content and styling changes across live zero tabs", asy
 test("web app keeps two live zero tabs visually converged across toolbar actions", async ({
   page,
 }, testInfo) => {
+  test.skip(!remoteSyncEnabled, "requires Zero-backed browser sync");
   test.slow();
   const documentId = `playwright-zero-toolbar-multiplayer-${Date.now()}`;
   const mirrorPage = await page.context().newPage();
@@ -1231,6 +1238,7 @@ test("web app keeps two live zero tabs visually converged across toolbar actions
 test("web app preserves an in-progress local draft when another tab edits the same cell", async ({
   page,
 }) => {
+  test.skip(!remoteSyncEnabled, "requires Zero-backed browser sync");
   test.slow();
   const documentId = `playwright-zero-same-cell-draft-${Date.now()}`;
   const mirrorPage = await page.context().newPage();
@@ -1278,6 +1286,7 @@ test("web app preserves an in-progress local draft when another tab edits the sa
 test("web app compares and applies a stale same-cell draft without losing local work", async ({
   page,
 }) => {
+  test.skip(!remoteSyncEnabled, "requires Zero-backed browser sync");
   test.slow();
   const documentId = `playwright-zero-same-cell-conflict-${Date.now()}`;
   const mirrorPage = await page.context().newPage();
@@ -1332,6 +1341,7 @@ test("web app compares and applies a stale same-cell draft without losing local 
 });
 
 test("web app reverts an authoritative change from the changes pane", async ({ page }) => {
+  test.skip(!remoteSyncEnabled, "requires Zero-backed browser sync");
   const documentId = `playwright-zero-change-revert-${Date.now()}`;
   await openZeroWorkbookPage(page, documentId);
 
@@ -1361,6 +1371,7 @@ test("web app reverts an authoritative change from the changes pane", async ({ p
 });
 
 test("web app restores persisted workbook state after a full reload", async ({ page }) => {
+  test.skip(!remoteSyncEnabled, "requires Zero-backed browser sync");
   const documentId = `playwright-zero-reload-persist-${Date.now()}`;
   const formulaInput = page.getByTestId("formula-input");
   const resolvedValue = page.getByTestId("formula-resolved-value");

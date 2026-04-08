@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mutators, queries } from "@bilig/zero-sync";
-import type { ZeroClient } from "./runtime-session.js";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import {
   normalizeWorkbookPresenceRows,
@@ -14,6 +13,11 @@ interface ZeroLiveView<T> {
   readonly data: T;
   addListener(listener: (value: T) => void): () => void;
   destroy(): void;
+}
+
+interface ZeroPresenceSource {
+  materialize(query: unknown): unknown;
+  mutate(mutation: unknown): unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,7 +49,7 @@ export function useWorkbookPresence(input: {
   readonly sessionId: string;
   readonly selection: WorkerRuntimeSelection;
   readonly sheetNames: readonly string[];
-  readonly zero: ZeroClient;
+  readonly zero: ZeroPresenceSource;
   readonly enabled: boolean;
 }): readonly WorkbookCollaboratorPresence[] {
   const { documentId, enabled, selection, sessionId, sheetNames, zero } = input;

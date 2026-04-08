@@ -45,6 +45,15 @@ import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
+interface LocalOnlyZeroSource {
+  materialize(query: unknown): {
+    data: unknown;
+    addListener(listener: (value: unknown) => void): () => void;
+    destroy(): void;
+  };
+  mutate(mutation: unknown): unknown;
+}
+
 function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
   const parsed = parseCellAddress(selection.address, selection.sheetName);
   return {
@@ -58,10 +67,30 @@ function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
 export function useWorkerWorkbookAppState(input: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
   connectionState: ZeroConnectionState;
-  zero: ZeroClient;
+  zero?: ZeroClient;
 }) {
   const { runtimeConfig, connectionState, zero } = input;
   const documentId = runtimeConfig.documentId;
+  const zeroConfigured = Boolean(zero);
+  const zeroSource = useMemo<LocalOnlyZeroSource>(
+    () =>
+      zero ??
+      ({
+        materialize(_query: unknown) {
+          return {
+            data: [],
+            addListener(_listener: (value: unknown) => void) {
+              return () => undefined;
+            },
+            destroy() {},
+          };
+        },
+        mutate(_mutation: unknown) {
+          return {};
+        },
+      } satisfies LocalOnlyZeroSource),
+    [zero],
+  );
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const initialSelection = useMemo(() => loadPersistedSelection(documentId), [documentId]);
   const runtimeActorRef = useActorRef(workerRuntimeMachine, {
@@ -70,7 +99,7 @@ export function useWorkerWorkbookAppState(input: {
       replicaId,
       persistState: runtimeConfig.persistState,
       connectionStateName: connectionState.name,
-      zero,
+      ...(zero ? { zero } : {}),
       initialSelection,
     },
   });
@@ -98,7 +127,7 @@ export function useWorkerWorkbookAppState(input: {
   const editingModeRef = useRef(editingMode);
   const editorTargetRef = useRef(selection);
   const editorBaseSnapshotRef = useRef<CellSnapshot>(emptySelectedCell);
-  const zeroRef = useRef<ZeroClient>(zero);
+  const zeroRef = useRef<LocalOnlyZeroSource>(zeroSource);
   const connectionStateRef = useRef(connectionState.name);
   const visibleViewportRef = useRef<Viewport>(selectionViewport(selection));
 
@@ -123,8 +152,8 @@ export function useWorkerWorkbookAppState(input: {
   }, [editingMode]);
 
   useEffect(() => {
-    zeroRef.current = zero;
-  }, [zero]);
+    zeroRef.current = zeroSource;
+  }, [zeroSource]);
 
   useEffect(() => {
     connectionStateRef.current = connectionState.name;
@@ -746,14 +775,14 @@ export function useWorkerWorkbookAppState(input: {
     sessionId: `${documentId}:${replicaId}`,
     selection,
     sheetNames,
-    zero,
-    enabled: runtimeReady && remoteSyncAvailable,
+    zero: zeroSource,
+    enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
   });
   const { changeCount, changesPanel } = useWorkbookChangesPane({
     documentId,
     sheetNames,
-    zero,
-    enabled: runtimeReady,
+    zero: zeroSource,
+    enabled: runtimeReady && zeroConfigured,
     onJump: (sheetName, address) => {
       selectAddress(sheetName, address);
     },
@@ -803,6 +832,7 @@ export function useWorkerWorkbookAppState(input: {
     connectionStateName: connectionState.name,
     runtimeReady,
     remoteSyncAvailable,
+    zeroConfigured,
     zeroHealthReady,
     invokeMutation,
     selectionRange,
@@ -946,5 +976,6 @@ export function useWorkerWorkbookAppState(input: {
     workbookReady,
     workerHandle,
     writesAllowed,
+    zeroConfigured,
   };
 }

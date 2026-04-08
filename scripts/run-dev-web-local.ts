@@ -18,6 +18,7 @@ const preferredAppPort = Number.parseInt(
 const postgresPort = process.env["BILIG_DEV_POSTGRES_PORT"] ?? "55432";
 const preferredWebPort = Number.parseInt(process.env["BILIG_WEB_DEV_PORT"] ?? "5173", 10);
 const configuredZeroProxyUpstream = process.env["BILIG_ZERO_PROXY_UPSTREAM"];
+const disableCompose = process.env["BILIG_DEV_DISABLE_COMPOSE"] === "1";
 const preferredZeroPort = Number.parseInt(
   process.env["BILIG_DEV_ZERO_PORT"] ??
     (configuredZeroProxyUpstream ? new URL(configuredZeroProxyUpstream).port : "4848") ??
@@ -461,25 +462,33 @@ async function isPortAvailable(port: number): Promise<boolean> {
 
 function spawnAppDev(
   appPort: string,
-  postgresUrl: string,
   publicServerUrl: string,
   webAppBaseUrl: string,
+  options?: {
+    readonly postgresUrl?: string;
+    readonly zeroProxyUpstream?: string;
+  },
 ): DevChildProcess {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOST: process.env["HOST"] ?? "0.0.0.0",
+    PORT: appPort,
+    BILIG_PUBLIC_SERVER_URL: publicServerUrl,
+    BILIG_WEB_APP_BASE_URL: webAppBaseUrl,
+    BILIG_CORS_ORIGIN: webAppBaseUrl,
+  };
+  if (options?.postgresUrl) {
+    env["DATABASE_URL"] = options.postgresUrl;
+  }
+  if (options?.zeroProxyUpstream) {
+    env["BILIG_ZERO_PROXY_UPSTREAM"] = options.zeroProxyUpstream;
+    env["BILIG_ZERO_CACHE_URL"] = "/zero";
+  }
   return Bun.spawn(["pnpm", "--filter", "@bilig/app", "run", "dev"], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
-    env: {
-      ...process.env,
-      HOST: process.env["HOST"] ?? "0.0.0.0",
-      PORT: appPort,
-      DATABASE_URL: postgresUrl,
-      BILIG_ZERO_PROXY_UPSTREAM: zeroProxyUpstream,
-      BILIG_ZERO_CACHE_URL: "/zero",
-      BILIG_PUBLIC_SERVER_URL: publicServerUrl,
-      BILIG_WEB_APP_BASE_URL: webAppBaseUrl,
-      BILIG_CORS_ORIGIN: webAppBaseUrl,
-    },
+    env,
   });
 }
 
@@ -503,6 +512,7 @@ function spawnWebDev(webPort: number, publicServerUrl: string): DevChildProcess 
         ...process.env,
         BILIG_SYNC_SERVER_PORT: new URL(publicServerUrl).port,
         BILIG_SYNC_SERVER_TARGET: publicServerUrl,
+        VITE_BILIG_REMOTE_SYNC: process.env["BILIG_E2E_REMOTE_SYNC"] ?? "1",
       },
     },
   );
@@ -518,36 +528,48 @@ function killIfRunning(process: DevChildProcess | null | undefined, signal: Node
 }
 
 function cleanupComposeStack(): void {
-  if (!cleanupCompose) {
+  if (disableCompose || !cleanupCompose) {
     return;
   }
   runComposeSync(["down", "-v", "--remove-orphans"], { allowFailure: true });
 }
 
-console.log("Starting local compose dependencies...");
-await ensureComposeRuntime();
-cleanupComposeStack();
+console.log(
+  disableCompose
+    ? "Starting local dev stack without compose dependencies..."
+    : "Starting local compose dependencies...",
+);
+if (!disableCompose) {
+  await ensureComposeRuntime();
+  cleanupComposeStack();
+}
 await reapStaleRepoListeners(
   Array.from({ length: 10 }, (_, index) => preferredWebPort + index).concat(preferredAppPort),
 );
 const appPort = await resolveAppPort(preferredAppPort);
 resolvedAppPort = String(appPort);
-const postgresUrl =
-  process.env["DATABASE_URL"] ??
-  `postgresql://bilig:bilig@${composePublishedHost}:${postgresPort}/bilig`;
+const postgresUrl = disableCompose
+  ? undefined
+  : (process.env["DATABASE_URL"] ??
+    `postgresql://bilig:bilig@${composePublishedHost}:${postgresPort}/bilig`);
 const publicServerUrl = process.env["BILIG_PUBLIC_SERVER_URL"] ?? `http://127.0.0.1:${appPort}`;
 const appHealthUrl = `${publicServerUrl}/healthz`;
-if (composeSupportsWait()) {
+if (!disableCompose && composeSupportsWait()) {
   runComposeSync(["up", "-d", postgresService, zeroCacheService]);
-} else {
+} else if (!disableCompose) {
   runComposeSync(["up", "-d", postgresService, zeroCacheService]);
 }
-await waitForTcp(composePublishedHost, Number(postgresPort));
+if (!disableCompose) {
+  await waitForTcp(composePublishedHost, Number(postgresPort));
+}
 const webPort = await resolveWebPort(preferredWebPort);
 const webAppBaseUrl = process.env["BILIG_WEB_APP_BASE_URL"] ?? `http://localhost:${webPort}`;
 
 console.log(`Starting local app dev server (app=${publicServerUrl})...`);
-const appChild = spawnAppDev(String(appPort), postgresUrl, publicServerUrl, webAppBaseUrl);
+const appChild = spawnAppDev(String(appPort), publicServerUrl, webAppBaseUrl, {
+  ...(postgresUrl ? { postgresUrl } : {}),
+  ...(disableCompose ? {} : { zeroProxyUpstream }),
+});
 let webChild: DevChildProcess | null = null;
 
 let shuttingDown = false;
@@ -570,10 +592,14 @@ try {
   console.log(`Starting local web dev server (web=${webAppBaseUrl})...`);
   webChild = spawnWebDev(webPort, publicServerUrl);
   console.log("App is healthy.");
-  await waitForHttp(zeroHealthUrl);
+  if (!disableCompose) {
+    await waitForHttp(zeroHealthUrl);
+  }
   await waitForHttp(webAppBaseUrl);
   console.log(
-    `Local dev stack ready: web=${webAppBaseUrl} app=${publicServerUrl} zero=${zeroProxyUpstream}`,
+    disableCompose
+      ? `Local dev stack ready: web=${webAppBaseUrl} app=${publicServerUrl} sync=local-only`
+      : `Local dev stack ready: web=${webAppBaseUrl} app=${publicServerUrl} zero=${zeroProxyUpstream}`,
   );
 } catch (error) {
   forwardSignal("SIGTERM");

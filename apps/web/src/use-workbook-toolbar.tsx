@@ -36,6 +36,7 @@ export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState["name"];
   runtimeReady: boolean;
   remoteSyncAvailable: boolean;
+  zeroConfigured: boolean;
   zeroHealthReady: boolean;
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>;
   selectionRange: CellRangeRef;
@@ -49,6 +50,7 @@ export function useWorkbookToolbar(input: {
     connectionStateName,
     runtimeReady,
     remoteSyncAvailable,
+    zeroConfigured,
     zeroHealthReady,
     invokeMutation,
     selectionRange,
@@ -87,15 +89,17 @@ export function useWorkbookToolbar(input: {
   const statusModeValue = remoteSyncAvailable ? "Live" : statusModeLabel;
   const statusSyncValue = !runtimeReady
     ? "Loading"
-    : connectionStateName === "connected"
-      ? zeroHealthReady
-        ? "Ready"
-        : "Syncing"
-      : connectionStateName === "connecting"
-        ? "Syncing"
-        : connectionStateName === "disconnected"
-          ? "Local"
-          : "Unavailable";
+    : !zeroConfigured
+      ? "Local"
+      : connectionStateName === "connected"
+        ? zeroHealthReady
+          ? "Ready"
+          : "Syncing"
+        : connectionStateName === "connecting"
+          ? "Syncing"
+          : connectionStateName === "disconnected"
+            ? "Local"
+            : "Unavailable";
   const statusChipClass =
     "inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]";
 

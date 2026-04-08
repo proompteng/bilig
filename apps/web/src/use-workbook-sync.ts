@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { flushSync } from "react-dom";
-import type {
-  ZeroClient,
-  WorkerHandle,
-  WorkerRuntimeSessionController,
-} from "./runtime-session.js";
+import type { WorkerHandle, WorkerRuntimeSessionController } from "./runtime-session.js";
 import {
   buildZeroWorkbookMutation,
   isCellNumberFormatInputValue,
@@ -27,13 +23,29 @@ import {
   type ZeroConnectionState,
 } from "./worker-workbook-app-model.js";
 
+interface ZeroMutationSource {
+  mutate(mutation: unknown): unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function observeZeroMutationResult(result: unknown): Promise<unknown> | null {
+  if (!isRecord(result)) {
+    return null;
+  }
+  const observer = result["server"] ?? result["client"];
+  return observer instanceof Promise ? observer : null;
+}
+
 export function useWorkbookSync(input: {
   documentId: string;
   connectionStateName: ZeroConnectionState["name"];
   connectionStateRef: MutableRefObject<ZeroConnectionState["name"]>;
   runtimeController: WorkerRuntimeSessionController | null;
   workerHandleRef: MutableRefObject<WorkerHandle | null>;
-  zeroRef: MutableRefObject<ZeroClient>;
+  zeroRef: MutableRefObject<ZeroMutationSource>;
   reportRuntimeError: (error: unknown) => void;
 }) {
   const {
@@ -114,9 +126,7 @@ export function useWorkbookSync(input: {
     ): Promise<{ ok: true } | { ok: false; retryable: boolean; error: Error }> => {
       try {
         const result = zeroRef.current.mutate(buildZeroWorkbookMutation(documentId, mutation));
-        const observerResult =
-          (result as { server?: Promise<unknown> }).server ??
-          (result as { client?: Promise<unknown> }).client;
+        const observerResult = observeZeroMutationResult(result);
         if (!observerResult) {
           return { ok: true };
         }

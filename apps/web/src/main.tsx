@@ -9,11 +9,17 @@ import { App } from "./App.js";
 import { resolveRuntimeConfig, type RuntimeConfig } from "./runtime-config";
 import { loadRuntimeSession } from "./session";
 import { resolveZeroCacheUrl, ZERO_CONNECT_MAX_HEADER_LENGTH } from "./zero-connection";
+import type { ZeroConnectionState } from "./worker-workbook-app-model.js";
 import type { BiligRuntimeConfig } from "@bilig/zero-sync";
 
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
+const remoteSyncEnabled = import.meta.env["VITE_BILIG_REMOTE_SYNC"] !== "0";
+const LOCAL_ONLY_CONNECTION_STATE: ZeroConnectionState = {
+  name: "closed",
+  reason: "Remote sync disabled for this environment",
+};
 interface BootstrapConfig {
   readonly rawConfig: BiligRuntimeConfig;
   readonly runtimeConfig: RuntimeConfig;
@@ -131,6 +137,10 @@ function BootstrapRoot() {
         Missing runtime session after bootstrap
       </div>
     );
+  }
+
+  if (!remoteSyncEnabled) {
+    return <App config={config.rawConfig} connectionState={LOCAL_ONLY_CONNECTION_STATE} />;
   }
 
   return (

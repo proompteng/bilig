@@ -11,7 +11,7 @@ import { useWorkerWorkbookAppState } from "./use-worker-workbook-app-state.js";
 export function WorkerWorkbookApp(props: {
   config: BiligRuntimeConfig;
   connectionState: ZeroConnectionState;
-  zero: ZeroClient;
+  zero?: ZeroClient;
 }) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config]);
   const runtimeKey = [
@@ -24,7 +24,7 @@ export function WorkerWorkbookApp(props: {
       key={runtimeKey}
       runtimeConfig={runtimeConfig}
       connectionState={props.connectionState}
-      zero={props.zero}
+      {...(props.zero ? { zero: props.zero } : {})}
     />
   );
 }
@@ -36,9 +36,13 @@ function WorkerWorkbookAppInner({
 }: {
   runtimeConfig: ReturnType<typeof resolveRuntimeConfig>;
   connectionState: ZeroConnectionState;
-  zero: ZeroClient;
+  zero?: ZeroClient;
 }) {
-  const app = useWorkerWorkbookAppState({ runtimeConfig, connectionState, zero });
+  const app = useWorkerWorkbookAppState({
+    runtimeConfig,
+    connectionState,
+    ...(zero ? { zero } : {}),
+  });
   const { clearImportError, importError, importPanel, importToggle } = useWorkbookImportPane({
     currentDocumentId: runtimeConfig.documentId,
     enabled: true,
@@ -83,7 +87,7 @@ function WorkerWorkbookAppInner({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
-      {app.runtimeReady && !app.remoteSyncAvailable ? (
+      {app.runtimeReady && app.zeroConfigured && !app.remoteSyncAvailable ? (
         <div className="border-b border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-2 text-sm text-[var(--wb-accent)]">
           Zero is {app.statusModeLabel.toLowerCase()}. Local edits remain available while sync is
           degraded.

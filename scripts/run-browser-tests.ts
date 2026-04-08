@@ -80,10 +80,26 @@ function resolvePublishedServiceHosts(): string[] {
 
 function probeComposeInvocation(): ComposeInvocation | null {
   const composeCandidates = [
-    { label: "docker compose", command: ["docker", "compose"] },
-    { label: "podman compose", command: ["podman", "compose"] },
-    { label: "docker-compose", command: ["docker-compose"] },
-    { label: "podman-compose", command: ["podman-compose"] },
+    {
+      label: "docker compose",
+      command: ["docker", "compose"],
+      runtimeProbe: ["docker", "ps"],
+    },
+    {
+      label: "podman compose",
+      command: ["podman", "compose"],
+      runtimeProbe: ["podman", "ps"],
+    },
+    {
+      label: "docker-compose",
+      command: ["docker-compose"],
+      runtimeProbe: ["docker", "ps"],
+    },
+    {
+      label: "podman-compose",
+      command: ["podman-compose"],
+      runtimeProbe: ["podman", "ps"],
+    },
   ];
 
   for (const candidate of composeCandidates) {
@@ -97,6 +113,15 @@ function probeComposeInvocation(): ComposeInvocation | null {
       stderr: "pipe",
     });
     if (result.exitCode !== 0) {
+      continue;
+    }
+
+    const runtimeProbe = Bun.spawnSync(candidate.runtimeProbe, {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (runtimeProbe.exitCode !== 0) {
       continue;
     }
 
