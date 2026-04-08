@@ -54,7 +54,7 @@ function resolvePublishedServiceHosts(): string[] {
 
   const hosts = ["127.0.0.1", "host.docker.internal", "host.containers.internal"];
 
-  if (process.platform !== "linux" || !existsSync("/.dockerenv")) {
+  if (process.platform !== "linux" || !existsSync("/proc/net/route")) {
     return hosts;
   }
 
