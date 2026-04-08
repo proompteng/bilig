@@ -1,4 +1,4 @@
-import type { CommitOp } from "@bilig/core";
+import { isCommitOps } from "@bilig/core";
 import type { Zero } from "@rocicorp/zero";
 import { mutators } from "@bilig/zero-sync";
 import type {
@@ -72,9 +72,7 @@ export function isCellNumberFormatInputValue(value: unknown): value is CellNumbe
   return typeof value === "string" || isRecord(value);
 }
 
-export function isCommitOps(value: unknown): value is CommitOp[] {
-  return Array.isArray(value);
-}
+export { isCommitOps };
 
 export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutationMethod {
   return (
