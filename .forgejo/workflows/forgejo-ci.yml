@@ -126,11 +126,11 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
+          pnpm wasm:build
           pnpm coverage
           bun scripts/coverage-contracts.ts
           pnpm bench:smoke
           CI=1 pnpm bench:contracts
-          pnpm release:check
           git diff --exit-code
           git diff --cached --exit-code
 
@@ -204,6 +204,12 @@ jobs:
         run: |
           set -eu
           pnpm --filter @bilig/app... --filter @bilig/web... build
+
+      - name: Check release asset budgets
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm release:check
 
       - name: Run browser CI
         run: |
