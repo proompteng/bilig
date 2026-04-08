@@ -423,32 +423,38 @@ async function pollReachableHttpHost(
     );
   }
 
-  const results = await Promise.all(
-    hosts.map(async (host) => {
-      const url = `http://${host}:${port}${pathname}`;
-      try {
-        const response = await fetch(url);
-        if (response.ok) {
-          return { host, lastError: "" };
+  const requestTimeoutMs = Math.max(250, Math.min(2_000, deadline - Date.now()));
+
+  try {
+    return await Promise.any(
+      hosts.map(async (host) => {
+        const url = `http://${host}:${port}${pathname}`;
+        let response: Response;
+        try {
+          response = await fetch(url, { signal: AbortSignal.timeout(requestTimeoutMs) });
+        } catch (error) {
+          throw new Error(`${url}: ${error instanceof Error ? error.message : String(error)}`, {
+            cause: error,
+          });
         }
-        return { host: null, lastError: `${url}: HTTP ${response.status}` };
-      } catch (error) {
-        return {
-          host: null,
-          lastError: `${url}: ${error instanceof Error ? error.message : String(error)}`,
-        };
-      }
-    }),
-  );
-
-  const reachableHost = results.find((result) => result.host !== null)?.host;
-  if (reachableHost) {
-    return reachableHost;
+        if (!response.ok) {
+          throw new Error(`${url}: HTTP ${response.status}`);
+        }
+        return host;
+      }),
+    );
+  } catch (error) {
+    const nextLastError =
+      error instanceof AggregateError && error.errors.length > 0
+        ? error.errors
+            .map((entry) => (entry instanceof Error ? entry.message : String(entry)))
+            .join("; ")
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    await Bun.sleep(250);
+    return pollReachableHttpHost(hosts, port, pathname, deadline, nextLastError);
   }
-
-  const nextLastError = results.at(-1)?.lastError ?? lastError;
-  await Bun.sleep(250);
-  return pollReachableHttpHost(hosts, port, pathname, deadline, nextLastError);
 }
 
 async function pollTcp(
