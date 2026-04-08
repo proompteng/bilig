@@ -19,8 +19,8 @@
 - Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **525**
-- Not yet registered in codebase: **0**
+- Registered in codebase: **497**
+- Not yet registered in codebase: **28**
 - Placeholder-backed registrations: **0**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
@@ -40,7 +40,7 @@
 | AMORDEGRC | Not in ODF 1.4 mandatory | Yes | Yes |
 | AMORLINC | Implemented | Yes | Yes |
 | AND | Not in ODF 1.4 mandatory | Yes | Yes |
-| ARABIC | Implemented | Yes | Yes |
+| ARABIC | Implemented | Yes | No |
 | AREAS | Placeholder (blocked) | Yes | Yes |
 | ARRAYTOTEXT | Not in ODF 1.4 mandatory | Yes | Yes |
 | ASC | Placeholder (blocked) | Yes | Yes |
@@ -103,7 +103,7 @@
 | COLUMNS | Not in ODF 1.4 mandatory | Yes | Yes |
 | COMBIN | Implemented | Yes | Yes |
 | COMBINA | Implemented | Yes | Yes |
-| COMPLEX | Placeholder (blocked) | Yes | Yes |
+| COMPLEX | Placeholder (blocked) | Yes | No |
 | CONCAT | Not in ODF 1.4 mandatory | Yes | Yes |
 | CONCATENATE | Placeholder (blocked) | Yes | Yes |
 | CONFIDENCE | Placeholder (blocked) | Yes | Yes |
@@ -248,32 +248,32 @@
 | IFERROR | Implemented | Yes | Yes |
 | IFNA | Implemented | Yes | Yes |
 | IFS | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMABS | Placeholder (blocked) | Yes | Yes |
+| IMABS | Placeholder (blocked) | Yes | No |
 | IMAGE | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMAGINARY | Placeholder (blocked) | Yes | Yes |
-| IMARGUMENT | Placeholder (blocked) | Yes | Yes |
-| IMCONJUGATE | Placeholder (blocked) | Yes | Yes |
-| IMCOS | Placeholder (blocked) | Yes | Yes |
-| IMCOSH | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMCOT | Placeholder (blocked) | Yes | Yes |
-| IMCSC | Placeholder (blocked) | Yes | Yes |
-| IMCSCH | Placeholder (blocked) | Yes | Yes |
-| IMDIV | Placeholder (blocked) | Yes | Yes |
-| IMEXP | Placeholder (blocked) | Yes | Yes |
-| IMLN | Placeholder (blocked) | Yes | Yes |
-| IMLOG10 | Placeholder (blocked) | Yes | Yes |
-| IMLOG2 | Placeholder (blocked) | Yes | Yes |
-| IMPOWER | Placeholder (blocked) | Yes | Yes |
-| IMPRODUCT | Placeholder (blocked) | Yes | Yes |
-| IMREAL | Placeholder (blocked) | Yes | Yes |
-| IMSEC | Placeholder (blocked) | Yes | Yes |
-| IMSECH | Placeholder (blocked) | Yes | Yes |
-| IMSIN | Placeholder (blocked) | Yes | Yes |
-| IMSINH | Not in ODF 1.4 mandatory | Yes | Yes |
-| IMSQRT | Placeholder (blocked) | Yes | Yes |
-| IMSUB | Placeholder (blocked) | Yes | Yes |
-| IMSUM | Placeholder (blocked) | Yes | Yes |
-| IMTAN | Placeholder (blocked) | Yes | Yes |
+| IMAGINARY | Placeholder (blocked) | Yes | No |
+| IMARGUMENT | Placeholder (blocked) | Yes | No |
+| IMCONJUGATE | Placeholder (blocked) | Yes | No |
+| IMCOS | Placeholder (blocked) | Yes | No |
+| IMCOSH | Not in ODF 1.4 mandatory | Yes | No |
+| IMCOT | Placeholder (blocked) | Yes | No |
+| IMCSC | Placeholder (blocked) | Yes | No |
+| IMCSCH | Placeholder (blocked) | Yes | No |
+| IMDIV | Placeholder (blocked) | Yes | No |
+| IMEXP | Placeholder (blocked) | Yes | No |
+| IMLN | Placeholder (blocked) | Yes | No |
+| IMLOG10 | Placeholder (blocked) | Yes | No |
+| IMLOG2 | Placeholder (blocked) | Yes | No |
+| IMPOWER | Placeholder (blocked) | Yes | No |
+| IMPRODUCT | Placeholder (blocked) | Yes | No |
+| IMREAL | Placeholder (blocked) | Yes | No |
+| IMSEC | Placeholder (blocked) | Yes | No |
+| IMSECH | Placeholder (blocked) | Yes | No |
+| IMSIN | Placeholder (blocked) | Yes | No |
+| IMSINH | Not in ODF 1.4 mandatory | Yes | No |
+| IMSQRT | Placeholder (blocked) | Yes | No |
+| IMSUB | Placeholder (blocked) | Yes | No |
+| IMSUM | Placeholder (blocked) | Yes | No |
+| IMTAN | Placeholder (blocked) | Yes | No |
 | INDEX | Not in ODF 1.4 mandatory | Yes | Yes |
 | INDIRECT | Implemented | Yes | Yes |
 | INFO | Placeholder (blocked) | Yes | Yes |
@@ -428,7 +428,7 @@
 | REPT | Not in ODF 1.4 mandatory | Yes | Yes |
 | RIGHT | Not in ODF 1.4 mandatory | Yes | Yes |
 | RIGHTB | Missing | Yes | Yes |
-| ROMAN | Implemented | Yes | Yes |
+| ROMAN | Implemented | Yes | No |
 | ROUND | Not in ODF 1.4 mandatory | Yes | Yes |
 | ROUNDDOWN | Implemented | Yes | Yes |
 | ROUNDUP | Implemented | Yes | Yes |
