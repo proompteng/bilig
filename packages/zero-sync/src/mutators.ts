@@ -119,6 +119,11 @@ const cellNumberFormatPresetSchema = z.object({
 
 const cellNumberFormatInputSchema = z.union([z.string(), cellNumberFormatPresetSchema]);
 
+const presenceSelectionSchema = z.object({
+  sheetName: z.string().min(1),
+  address: z.string().min(1),
+});
+
 const defineMutators = defineMutatorsWithType<typeof schema>();
 
 const engineOpBatchSchema = z.object({
@@ -199,7 +204,7 @@ export const updatePresenceArgsSchema = baseMutationArgsSchema.extend({
   sheetId: z.number().int().positive().optional(),
   sheetName: z.string().min(1).optional(),
   address: z.string().optional(),
-  selection: z.any().optional(),
+  selection: presenceSelectionSchema.optional(),
 });
 
 export const revertWorkbookChangeArgsSchema = baseMutationArgsSchema.extend({
