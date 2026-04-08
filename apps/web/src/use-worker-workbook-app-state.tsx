@@ -5,7 +5,6 @@ import {
   isWorkbookAgentPreviewSummary,
   type WorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
-import type { CommitOp } from "@bilig/core";
 import type { EditMovement, EditSelectionBehavior } from "@bilig/grid";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import type { CellSnapshot, LiteralInput, Viewport } from "@bilig/protocol";
@@ -23,9 +22,7 @@ import {
   type ZeroConnectionState,
   canAttemptRemoteSync,
   clampSelectionMovement,
-  createNextSheetName,
   emptyCellSnapshot,
-  normalizeSheetNameKey,
   parseEditorInput,
   parsedEditorInputEquals,
   parsedEditorInputFromSnapshot,
@@ -39,6 +36,7 @@ import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useZeroHealthReady } from "./use-zero-health-ready.js";
 import { useWorkbookAppPanels } from "./use-workbook-app-panels.js";
+import { useWorkbookSheetActions } from "./use-workbook-sheet-actions.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -812,53 +810,13 @@ export function useWorkerWorkbookAppState(input: {
     [runtimeController],
   );
 
-  const createSheet = useCallback(() => {
-    const nextSheetName = createNextSheetName(sheetNames);
-    void invokeMutation("renderCommit", [
-      {
-        kind: "upsertSheet",
-        name: nextSheetName,
-        order: sheetNames.length,
-      } satisfies CommitOp,
-    ])
-      .then(() => selectAddress(nextSheetName, "A1"))
-      .catch(reportRuntimeError);
-  }, [invokeMutation, reportRuntimeError, selectAddress, sheetNames]);
-
-  const renameSheet = useCallback(
-    (currentName: string, nextName: string) => {
-      const trimmedName = nextName.trim();
-      if (trimmedName.length === 0 || trimmedName === currentName) {
-        return;
-      }
-      const currentKey = normalizeSheetNameKey(currentName);
-      const nextKey = normalizeSheetNameKey(trimmedName);
-      if (
-        sheetNames.some(
-          (name) =>
-            normalizeSheetNameKey(name) === nextKey && normalizeSheetNameKey(name) !== currentKey,
-        )
-      ) {
-        return;
-      }
-
-      void invokeMutation("renderCommit", [
-        {
-          kind: "renameSheet",
-          oldName: currentName,
-          newName: trimmedName,
-        } satisfies CommitOp,
-      ])
-        .then(() => {
-          if (selectionRef.current.sheetName === currentName) {
-            selectAddress(trimmedName, selectionRef.current.address);
-          }
-          return undefined;
-        })
-        .catch(reportRuntimeError);
-    },
-    [invokeMutation, reportRuntimeError, selectAddress, sheetNames],
-  );
+  const { createSheet, renameSheet } = useWorkbookSheetActions({
+    sheetNames,
+    selectionRef,
+    invokeMutation,
+    selectAddress,
+    reportRuntimeError,
+  });
 
   return {
     agentError,
