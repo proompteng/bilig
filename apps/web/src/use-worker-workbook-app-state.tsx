@@ -38,6 +38,7 @@ import {
 import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
+import { useZeroHealthReady } from "./use-zero-health-ready.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { WorkbookSideRailTabs } from "./WorkbookSideRailTabs.js";
 import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
@@ -115,7 +116,6 @@ export function useWorkerWorkbookAppState(input: {
     [selection.address, selection.sheetName],
   );
   const [selectionLabel, setSelectionLabel] = useState("A1");
-  const [zeroHealthReady, setZeroHealthReady] = useState(false);
   const [editorValue, setEditorValue] = useState("");
   const [editorSelectionBehavior, setEditorSelectionBehavior] =
     useState<EditSelectionBehavior>("select-all");
@@ -166,48 +166,12 @@ export function useWorkerWorkbookAppState(input: {
     });
   }, [connectionState.name, runtimeActorRef]);
 
-  useEffect(() => {
-    if (!runtimeReady) {
-      setZeroHealthReady(false);
-      return;
-    }
-    if (
-      connectionState.name === "disconnected" ||
-      connectionState.name === "needs-auth" ||
-      connectionState.name === "error" ||
-      connectionState.name === "closed"
-    ) {
-      setZeroHealthReady(false);
-      return;
-    }
-
-    let cancelled = false;
-    const probe = async (): Promise<void> => {
-      try {
-        const response = await fetch("/zero/keepalive", { cache: "no-store" });
-        if (response.ok) {
-          if (!cancelled) {
-            setZeroHealthReady(true);
-          }
-          return;
-        }
-      } catch {}
-      if (!cancelled) {
-        window.setTimeout(() => {
-          void probe();
-        }, 250);
-      }
-    };
-
-    setZeroHealthReady(false);
-    void probe();
-    return () => {
-      cancelled = true;
-    };
-  }, [connectionState.name, runtimeReady]);
-
   const writesAllowed = runtimeReady;
   const remoteSyncAvailable = canAttemptRemoteSync(connectionState.name);
+  const zeroHealthReady = useZeroHealthReady({
+    connectionStateName: connectionState.name,
+    runtimeReady,
+  });
 
   const columnWidths = useSyncExternalStore(
     useCallback(
