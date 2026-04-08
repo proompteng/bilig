@@ -28,7 +28,7 @@ import {
 import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./db.js";
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
-import { ensureZeroSyncSchema, loadWorkbookEventRecordsAfter } from "./store.js";
+import { loadWorkbookEventRecordsAfter } from "./store.js";
 import {
   backfillAuthoritativeCellEval,
   dropLegacyZeroSyncSchemaObjects,
@@ -41,6 +41,7 @@ import {
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { ensureZeroPublication } from "./publication-store.js";
 import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";
+import { ensureZeroSyncSchema } from "./zero-schema-store.js";
 import {
   appendWorkbookAgentRun,
   ensureWorkbookAgentRunSchema,
