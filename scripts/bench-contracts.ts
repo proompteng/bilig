@@ -156,6 +156,16 @@ function runIsolatedLoadBenchmark(
   return runIsolatedBenchmark("packages/benchmarks/src/benchmark-load.ts", [String(input)]);
 }
 
+function runIsolatedRangeAggregateBenchmark(
+  sourceCount: Parameters<typeof runRangeAggregateBenchmark>[0],
+  aggregateCount: Parameters<typeof runRangeAggregateBenchmark>[1],
+): Promise<Awaited<ReturnType<typeof runRangeAggregateBenchmark>>> {
+  return runIsolatedBenchmark("packages/benchmarks/src/benchmark-range-heavy.ts", [
+    String(sourceCount),
+    String(aggregateCount),
+  ]);
+}
+
 function runIsolatedWorkerWarmStartBenchmark(
   input: Parameters<typeof runWorkerWarmStartBenchmark>[0],
 ): Promise<Awaited<ReturnType<typeof runWorkerWarmStartBenchmark>>> {
@@ -171,9 +181,13 @@ const load250kRuns = await sampleBenchmark(() => runIsolatedLoadBenchmark("dense
 const editRuns = await sampleBenchmark(() => runEditBenchmark(10_000), 5, {
   warmupIterations: 1,
 });
-const rangeRuns = await sampleBenchmark(() => runRangeAggregateBenchmark(1_024, 10_000), 3, {
-  warmupIterations: 1,
-});
+const rangeRuns = await sampleBenchmark(
+  () => runIsolatedRangeAggregateBenchmark(1_024, 10_000),
+  3,
+  {
+    warmupIterations: 1,
+  },
+);
 const topologyRuns = await sampleBenchmark(() => runTopologyEditBenchmark(10_000), 3, {
   warmupIterations: 1,
 });
