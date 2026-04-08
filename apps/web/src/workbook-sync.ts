@@ -1,13 +1,8 @@
 import { isCommitOps } from "@bilig/core";
 import type { Zero } from "@rocicorp/zero";
 import { mutators } from "@bilig/zero-sync";
-import type {
-  CellNumberFormatInput,
-  CellRangeRef,
-  CellStyleField,
-  CellStylePatch,
-  LiteralInput,
-} from "@bilig/protocol";
+import type { CellNumberFormatInput, CellStyleField, CellStylePatch } from "@bilig/protocol";
+import { isCellRangeRef, isLiteralInput } from "@bilig/protocol";
 
 export type WorkbookMutationMethod =
   | "setCellValue"
@@ -42,24 +37,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function isLiteralInput(value: unknown): value is LiteralInput {
-  return (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
-}
-
-export function isCellRangeRef(value: unknown): value is CellRangeRef {
-  return (
-    isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["startAddress"] === "string" &&
-    typeof value["endAddress"] === "string"
-  );
-}
-
 export function isCellStyleFieldList(value: unknown): value is CellStyleField[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
@@ -72,7 +49,7 @@ export function isCellNumberFormatInputValue(value: unknown): value is CellNumbe
   return typeof value === "string" || isRecord(value);
 }
 
-export { isCommitOps };
+export { isCellRangeRef, isCommitOps, isLiteralInput };
 
 export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutationMethod {
   return (

@@ -1,5 +1,5 @@
 import { ValueTag } from "./enums.js";
-import type { CellSnapshot, WorkbookSnapshot } from "./types.js";
+import type { CellRangeRef, CellSnapshot, LiteralInput, WorkbookSnapshot } from "./types.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -12,6 +12,24 @@ function isCellValueTag(value: unknown): value is ValueTag {
     value === ValueTag.Boolean ||
     value === ValueTag.String ||
     value === ValueTag.Error
+  );
+}
+
+export function isLiteralInput(value: unknown): value is LiteralInput {
+  return (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  );
+}
+
+export function isCellRangeRef(value: unknown): value is CellRangeRef {
+  return (
+    isRecord(value) &&
+    typeof value["sheetName"] === "string" &&
+    typeof value["startAddress"] === "string" &&
+    typeof value["endAddress"] === "string"
   );
 }
 

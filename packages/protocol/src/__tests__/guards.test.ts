@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValueTag } from "../enums.js";
-import { isCellSnapshot, isWorkbookSnapshot } from "../guards.js";
+import { isCellRangeRef, isCellSnapshot, isLiteralInput, isWorkbookSnapshot } from "../guards.js";
 
 describe("protocol guards", () => {
   it("accepts workbook snapshots with the shipped shape", () => {
@@ -43,6 +43,27 @@ describe("protocol guards", () => {
         value: { tag: 99, value: 7 },
         flags: 0,
         version: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts literal inputs and cell range refs with the shipped shapes", () => {
+    expect(isLiteralInput(null)).toBe(true);
+    expect(isLiteralInput("text")).toBe(true);
+    expect(
+      isCellRangeRef({
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "B2",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects malformed cell range refs", () => {
+    expect(
+      isCellRangeRef({
+        sheetName: "Sheet1",
+        startAddress: "A1",
       }),
     ).toBe(false);
   });

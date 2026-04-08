@@ -6,7 +6,7 @@ import type {
   LiteralInput,
   WorkbookSnapshot,
 } from "@bilig/protocol";
-import { isWorkbookSnapshot } from "@bilig/protocol";
+import { isCellRangeRef, isWorkbookSnapshot } from "@bilig/protocol";
 import { parseCellAddress } from "@bilig/formula";
 import {
   applyWorkbookAgentCommandBundle,
@@ -158,15 +158,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
-}
-
-function isCellRangeRef(value: unknown): value is CellRangeRef {
-  return (
-    isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["startAddress"] === "string" &&
-    typeof value["endAddress"] === "string"
-  );
 }
 
 export function isWorkbookChangeUndoBundle(value: unknown): value is WorkbookChangeUndoBundle {

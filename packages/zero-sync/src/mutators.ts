@@ -2,7 +2,8 @@ import { defineMutator, defineMutatorsWithType } from "@rocicorp/zero";
 import { isWorkbookAgentCommandBundle, type WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import { z } from "zod";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
-import type { CellRangeRef, LiteralInput } from "@bilig/protocol";
+import type { CellRangeRef } from "@bilig/protocol";
+import { isLiteralInput } from "@bilig/protocol";
 import { schema } from "./schema.js";
 
 const literalInputSchema = z.union([z.number(), z.string(), z.boolean(), z.null()]);
@@ -241,11 +242,4 @@ export const mutators = defineMutators({
   },
 });
 
-export function isLiteralInput(value: unknown): value is LiteralInput {
-  return (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  );
-}
+export { isLiteralInput };
