@@ -74,8 +74,8 @@ jobs:
             test-results
           if-no-files-found: ignore
 
-  verify-fuzz-unit:
-    name: strict-verify-fuzz-unit
+  verify-unit:
+    name: strict-verify-unit
     runs-on: docker
     needs:
       - verify-static
@@ -122,43 +122,18 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Run unit fuzz CI
+      - name: Run unit CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          python3 - <<'PY'
-          import pathlib
-          import subprocess
-          import sys
+          pnpm test
 
-          roots = [pathlib.Path("packages"), pathlib.Path("apps")]
-          fuzz_files = sorted(
-            str(path)
-            for root in roots
-            if root.exists()
-            for path in root.rglob("*.fuzz.test.ts")
-          )
-          if not fuzz_files:
-            print("No fuzz test files found", file=sys.stderr)
-            raise SystemExit(1)
-          subprocess.check_call(
-            ["pnpm", "exec", "vitest", "run", *fuzz_files],
-            env={
-              **dict(__import__("os").environ),
-              "BILIG_FUZZ_PROFILE": "main",
-              "BILIG_FUZZ_CAPTURE": "1",
-            },
-          )
-          PY
-
-      - name: Upload unit fuzz artifacts on failure
+      - name: Upload unit artifacts on failure
         if: failure()
         uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
-          name: bilig-fuzz-unit-artifacts
+          name: bilig-unit-artifacts
           path: |
-            artifacts/fuzz
-            playwright-report
             test-results
           if-no-files-found: ignore
 
@@ -169,7 +144,7 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
     needs:
       - verify-static
-      - verify-fuzz-unit
+      - verify-unit
     timeout-minutes: 45
     env:
       CI: "true"
