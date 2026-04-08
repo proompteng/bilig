@@ -29,12 +29,14 @@ import { createZeroDbProvider, createZeroPool, resolveZeroDatabaseUrl } from "./
 import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
 import {
-  backfillAuthoritativeCellEval,
-  dropLegacyZeroSyncSchemaObjects,
   ensureZeroSyncSchema,
   loadWorkbookEventRecordsAfter,
   persistWorkbookMutation,
 } from "./store.js";
+import {
+  backfillAuthoritativeCellEval,
+  dropLegacyZeroSyncSchemaObjects,
+} from "./workbook-migration-store.js";
 import {
   acquireWorkbookMutationLock,
   loadWorkbookRuntimeMetadata,
