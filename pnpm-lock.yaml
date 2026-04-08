@@ -107,9 +107,6 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../../packages/crdt
       '@bilig/excel-import':
         specifier: workspace:*
         version: link:../../packages/excel-import
@@ -312,9 +309,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@bilig/crdt':
-        specifier: workspace:*
-        version: link:../crdt
       '@bilig/formula':
         specifier: workspace:*
         version: link:../formula
@@ -324,12 +318,6 @@ importers:
       '@bilig/wasm-kernel':
         specifier: workspace:*
         version: link:../wasm-kernel
-      '@bilig/workbook-domain':
-        specifier: workspace:*
-        version: link:../workbook-domain
-
-  packages/crdt:
-    dependencies:
       '@bilig/workbook-domain':
         specifier: workspace:*
         version: link:../workbook-domain

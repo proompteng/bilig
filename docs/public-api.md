@@ -13,7 +13,7 @@
 - `@bilig/core`
 - `@bilig/formula`
 - `@bilig/wasm-kernel`
-- `@bilig/crdt`
+- `@bilig/workbook-domain`
 - `@bilig/renderer`
 - `@bilig/grid`
 - `@bilig/binary-protocol`

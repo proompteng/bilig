@@ -34,11 +34,7 @@ const codeSplittingGroups = [
     name: "sync-vendor",
     priority: 60,
     test(id: string) {
-      return includesAny(id, [
-        "/node_modules/@rocicorp/zero/",
-        "/packages/zero-sync/",
-        "/packages/crdt/",
-      ]);
+      return includesAny(id, ["/node_modules/@rocicorp/zero/", "/packages/zero-sync/"]);
     },
   },
   {
@@ -127,7 +123,6 @@ export default defineConfig({
         new URL("../../packages/formula/src/program-arena.ts", import.meta.url),
       ),
       "@bilig/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)),
-      "@bilig/crdt": fileURLToPath(new URL("../../packages/crdt/src/index.ts", import.meta.url)),
       "@bilig/formula": fileURLToPath(
         new URL("../../packages/formula/src/index.ts", import.meta.url),
       ),

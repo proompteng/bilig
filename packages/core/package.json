@@ -41,7 +41,6 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bilig/crdt": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/wasm-kernel": "workspace:*",

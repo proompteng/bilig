@@ -1,44 +1,22 @@
 # CRDT and Local-First Model
 
-`bilig` is local-first by default. Collaboration is built on deterministic CRDT batches with last-writer-wins conflict resolution per entity.
+## Status
 
-## Entity ordering
+Archived historical note.
 
-Batch and op ordering is:
+The current production architecture is not CRDT-authoritative. The active design is:
 
-1. `clock.counter`
-2. `replicaId`
-3. `batchId`
-4. `opIndex`
+- server-authoritative ordering in `apps/bilig`
+- Zero as the narrow relational sync plane
+- `@bilig/core` as the owner of local replica bookkeeping needed for replay and snapshot restore
 
-## Entity keys
+## Current source of truth
 
-- workbook metadata
-- sheet metadata keyed by sheet name
-- cell source keyed by `sheetName!address`
-- format metadata keyed by `sheetName!address`
+- [design.md](/Users/gregkonush/github.com/bilig/docs/design.md)
+- [architecture.md](/Users/gregkonush/github.com/bilig/docs/architecture.md)
+- [05-06-next-phase.md](/Users/gregkonush/github.com/bilig/docs/05-06-next-phase.md)
+- [replica-state-ownership-cleanup-2026-04-07.md](/Users/gregkonush/github.com/bilig/docs/replica-state-ownership-cleanup-2026-04-07.md)
 
-## Durability contract
+## Why this file remains
 
-- local edits apply immediately
-- outbound sync batches are persisted locally before reconnect/replay
-- remote server acks happen only after durable append
-- replay after restart must remain deterministic
-
-## Backend contract
-
-The backend sync layer is now part of the canonical product:
-
-- browsers push CRDT batches over the binary protocol
-- the server appends batches durably before ack
-- reconnect resumes from the last acknowledged cursor
-- compaction preserves dedupe and replay safety
-
-## Current tranche status
-
-The repo already had deterministic local-first replay semantics and persisted replica snapshots. The new production tranche adds binary transport framing and server-side durable-store abstractions so the CRDT model now has a concrete backend target instead of stopping at the engine boundary.
-
-## See also
-
-- [authoritative-workbook-op-model-rfc.md](/Users/gregkonush/github.com/bilig/docs/authoritative-workbook-op-model-rfc.md)
-- [durable-multiplayer-replication-rfc.md](/Users/gregkonush/github.com/bilig/docs/durable-multiplayer-replication-rfc.md)
+This file is kept only as historical context for earlier local-first replication language. It must not be read as the current runtime contract.

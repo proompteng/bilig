@@ -3245,10 +3245,10 @@ describe("SpreadsheetEngine", () => {
     expect(valueBatch).toBeDefined();
 
     replica.applyRemoteBatch(createBatch);
-    replica.applyRemoteBatch(valueBatch);
+    expect(replica.applyRemoteBatch(valueBatch)).toBe(true);
     const versionBeforeDuplicate = replica.explainCell("Sheet1", "A1").version;
 
-    replica.applyRemoteBatch(valueBatch);
+    expect(replica.applyRemoteBatch(valueBatch)).toBe(false);
     expect(replica.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 7 });
     expect(replica.explainCell("Sheet1", "A1").version).toBe(versionBeforeDuplicate);
 

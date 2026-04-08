@@ -1,16 +1,12 @@
 import type {
   Clock as WorkbookDomainClock,
-  EngineOp as WorkbookDomainEngineOp,
-  EngineOpBatch as WorkbookDomainEngineOpBatch,
-  OpId as WorkbookDomainOpId,
-  ReplicaId as WorkbookDomainReplicaId,
+  EngineOp,
+  EngineOpBatch,
+  OpId,
+  ReplicaId,
 } from "@bilig/workbook-domain";
 
-export type Clock = WorkbookDomainClock;
-export type EngineOp = WorkbookDomainEngineOp;
-export type EngineOpBatch = WorkbookDomainEngineOpBatch;
-export type OpId = WorkbookDomainOpId;
-export type ReplicaId = WorkbookDomainReplicaId;
+type Clock = WorkbookDomainClock;
 
 export interface ReplicaState {
   replicaId: ReplicaId;
@@ -25,14 +21,6 @@ export interface OpOrder {
   opIndex: number;
 }
 
-function normalizedDefinedName(name: string): string {
-  return name.trim().toUpperCase();
-}
-
-function pivotEntityKey(sheetName: string, address: string): string {
-  return `pivot:${sheetName}!${address}`;
-}
-
 export interface ReplicaSnapshot {
   replicaId: ReplicaId;
   counter: number;
@@ -42,6 +30,14 @@ export interface ReplicaSnapshot {
 export interface ReplicaVersionSnapshot {
   entityKey: string;
   order: OpOrder;
+}
+
+function normalizedDefinedName(name: string): string {
+  return name.trim().toUpperCase();
+}
+
+function pivotEntityKey(sheetName: string, address: string): string {
+  return `pivot:${sheetName}!${address}`;
 }
 
 export function createReplicaState(replicaId: ReplicaId): ReplicaState {
@@ -59,7 +55,6 @@ export function hydrateReplicaState(state: ReplicaState, snapshot: ReplicaSnapsh
   snapshot.appliedBatchIds.forEach((id) => state.appliedBatchIds.add(id));
 }
 
-/** @deprecated Use authoritative linearization in monolith instead. */
 export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): ReplicaSnapshot {
   const appliedBatchIds = [...state.appliedBatchIds].toSorted();
   const trimmed = appliedBatchIds.slice(Math.max(0, appliedBatchIds.length - limit));
@@ -70,14 +65,13 @@ export function exportReplicaSnapshot(state: ReplicaState, limit = 2048): Replic
   };
 }
 
-/** @deprecated Use authoritative linearization in monolith instead. */
 export function importReplicaSnapshot(snapshot: ReplicaSnapshot): ReplicaState {
   const state = createReplicaState(snapshot.replicaId);
   hydrateReplicaState(state, snapshot);
   return state;
 }
 
-export function nextClock(state: ReplicaState): Clock {
+function nextClock(state: ReplicaState): Clock {
   state.clock.counter += 1;
   return { counter: state.clock.counter };
 }
@@ -190,7 +184,6 @@ function entityKeyForOp(op: EngineOp): string {
     case "deleteSpillRange":
       return `spill:${op.sheetName}!${op.address}`;
     case "upsertPivotTable":
-      return pivotEntityKey(op.sheetName, op.address);
     case "deletePivotTable":
       return pivotEntityKey(op.sheetName, op.address);
   }
@@ -243,7 +236,6 @@ function sheetDeleteBarrierForOp(
     case "setFormatRange":
       return latestSheetDeletes.get(op.range.sheetName);
     case "upsertCellNumberFormat":
-      return undefined;
     case "upsertCellStyle":
       return undefined;
     case "upsertPivotTable":

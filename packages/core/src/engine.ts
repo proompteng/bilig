@@ -52,6 +52,7 @@ import {
   utcDateToExcelSerial,
 } from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
+import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import {
   batchOpOrder,
   compareOpOrder,
@@ -65,8 +66,7 @@ import {
   type ReplicaSnapshot,
   type ReplicaVersionSnapshot,
   type ReplicaState,
-} from "@bilig/crdt";
-import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
+} from "./replica-state.js";
 import { CellFlags } from "./cell-store.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
@@ -134,7 +134,7 @@ export interface EngineSyncClientConnection {
 
 export interface EngineSyncClient {
   connect(handlers: {
-    applyRemoteBatch(batch: EngineOpBatch): void;
+    applyRemoteBatch(batch: EngineOpBatch): boolean;
     applyRemoteSnapshot?(snapshot: WorkbookSnapshot): void;
     setState(state: SyncState): void;
   }): EngineSyncClientConnection | Promise<EngineSyncClientConnection>;
@@ -520,7 +520,7 @@ export class SpreadsheetEngine {
   readonly workbook: WorkbookStore;
   readonly strings = new StringPool();
   readonly events = new EngineEventBus();
-  readonly replica: ReplicaState;
+  private readonly replicaState: ReplicaState;
   readonly ranges = new RangeRegistry();
   readonly scheduler = new RecalcScheduler();
   readonly wasm = new WasmKernelFacade();
@@ -614,7 +614,7 @@ export class SpreadsheetEngine {
   constructor(options: SpreadsheetEngineOptions = {}) {
     this.workbook = new WorkbookStore(options.workbookName ?? "Workbook");
     this.formulas = new FormulaTable(this.workbook.cellStore);
-    this.replica = createReplicaState(options.replicaId ?? "local");
+    this.replicaState = createReplicaState(options.replicaId ?? "local");
     void this.wasm.init();
   }
 
@@ -715,7 +715,7 @@ export class SpreadsheetEngine {
     this.setSyncState("syncing");
     const connection = await client.connect({
       applyRemoteBatch: (batch) => {
-        this.applyRemoteBatch(batch);
+        return this.applyRemoteBatch(batch);
       },
       applyRemoteSnapshot: (snapshot) => {
         this.importSnapshot(snapshot);
@@ -3328,7 +3328,7 @@ export class SpreadsheetEngine {
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {
     return {
-      replica: exportReplicaStateSnapshot(this.replica),
+      replica: exportReplicaStateSnapshot(this.replicaState),
       entityVersions: [...this.entityVersions.entries()].map(([entityKey, order]) => ({
         entityKey,
         order,
@@ -3341,7 +3341,7 @@ export class SpreadsheetEngine {
   }
 
   importReplicaSnapshot(snapshot: EngineReplicaSnapshot): void {
-    hydrateReplicaState(this.replica, snapshot.replica);
+    hydrateReplicaState(this.replicaState, snapshot.replica);
     this.entityVersions.clear();
     snapshot.entityVersions.forEach(({ entityKey, order }) => {
       this.entityVersions.set(entityKey, order);
@@ -3414,9 +3414,12 @@ export class SpreadsheetEngine {
     this.executeLocalTransaction(engineOps, potentialNewCells);
   }
 
-  applyRemoteBatch(batch: EngineOpBatch): void {
-    if (!shouldApplyBatch(this.replica, batch)) return;
+  applyRemoteBatch(batch: EngineOpBatch): boolean {
+    if (!shouldApplyBatch(this.replicaState, batch)) {
+      return false;
+    }
     this.applyBatch(batch, "remote");
+    return true;
   }
 
   captureUndoOps<T>(mutate: () => T): {
@@ -3491,7 +3494,7 @@ export class SpreadsheetEngine {
     if (record.ops.length === 0) {
       return;
     }
-    const batch = createBatch(this.replica, record.ops);
+    const batch = createBatch(this.replicaState, record.ops);
     this.applyBatch(batch, source, record.potentialNewCells);
   }
 
@@ -3501,7 +3504,7 @@ export class SpreadsheetEngine {
       { kind: "upsertSpillRange" | "deleteSpillRange" | "upsertPivotTable" | "deletePivotTable" }
     >,
   ): number[] {
-    const batch = createBatch(this.replica, [op]);
+    const batch = createBatch(this.replicaState, [op]);
     const order = batchOpOrder(batch, 0);
     switch (op.kind) {
       case "upsertSpillRange":
@@ -3946,7 +3949,7 @@ export class SpreadsheetEngine {
       this.flushWasmProgramSync();
     }
 
-    markBatchApplied(this.replica, batch);
+    markBatchApplied(this.replicaState, batch);
     if (appliedOps === 0) {
       if (source === "local") {
         this.emitBatch(batch);

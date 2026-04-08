@@ -14,7 +14,6 @@
     "@bilig/binary-protocol": "workspace:*",
     "@bilig/contracts": "workspace:*",
     "@bilig/core": "workspace:*",
-    "@bilig/crdt": "workspace:*",
     "@bilig/excel-import": "workspace:*",
     "@bilig/formula": "workspace:*",
     "@bilig/protocol": "workspace:*",

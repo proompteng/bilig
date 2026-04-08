@@ -5,7 +5,6 @@ import type {
   AgentResponse,
   LoadWorkbookFileRequest,
 } from "@bilig/agent-api";
-import { shouldApplyBatch } from "@bilig/crdt";
 import { SpreadsheetEngine } from "@bilig/core";
 import type { UpstreamSyncRelay } from "../zero/sync-relay.js";
 import type { AgentFrameContext } from "./agent-routing.js";
@@ -106,10 +105,9 @@ export class LocalWorkbookSessionManager {
       hello: (helloFrame) => this.openBrowserSession(helloFrame),
       appendBatch: (appendFrame) => {
         const session = this.ensureSession(appendFrame.documentId);
-        if (!shouldApplyBatch(session.engine.replica, appendFrame.batch)) {
+        if (!session.engine.applyRemoteBatch(appendFrame.batch)) {
           return [createAckFrame(appendFrame.documentId, appendFrame.batch.id, session.cursor)];
         }
-        session.engine.applyRemoteBatch(appendFrame.batch);
         session.cursor += 1;
         const committedFrame = createAppendBatchFrame(
           appendFrame.documentId,

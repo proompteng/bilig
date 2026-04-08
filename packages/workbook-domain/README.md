@@ -10,4 +10,4 @@ runtime, or replica-state implementation, including:
 - `EngineOp`
 - `EngineOpBatch`
 
-Replica-state helpers remain in `@bilig/crdt`.
+Replica-state bookkeeping lives inside `@bilig/core`.

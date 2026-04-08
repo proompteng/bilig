@@ -8,7 +8,7 @@ Closed runtime facts:
 
 - `@bilig/core` persists and exposes defined names, tables, pivots, spills, row and column metadata, calc settings, freeze panes, filters, and sorts.
 - `@bilig/workbook-domain` owns the transport-neutral workbook operation language.
-- `@bilig/crdt` remains only as a compatibility layer for replica-state helpers still needed by legacy/local tooling.
+- `@bilig/core` owns the replica-state helpers needed for local replay and snapshot restore.
 - `apps/bilig/src/zero/*` materializes authoritative workbook metadata into Postgres-backed rows for the browser path.
 
 ## Goals

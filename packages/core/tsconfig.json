@@ -15,9 +15,6 @@
       "path": "../workbook-domain"
     },
     {
-      "path": "../crdt"
-    },
-    {
       "path": "../wasm-kernel"
     }
   ],

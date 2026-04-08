@@ -7,9 +7,9 @@ import {
   exportReplicaSnapshot,
   importReplicaSnapshot,
   mergeBatches,
-} from "../index.js";
+} from "../replica-state.js";
 
-describe("crdt", () => {
+describe("replica-state", () => {
   it("orders batches deterministically", () => {
     const a = createReplicaState("a");
     const b = createReplicaState("b");
@@ -136,6 +136,61 @@ describe("crdt", () => {
     expect(compactLog([define, redefine, pivotCreate, pivotDelete])).toEqual([
       redefine,
       pivotDelete,
+    ]);
+  });
+
+  it("drops stale row and range metadata that sit behind a later sheet tombstone", () => {
+    const state = createReplicaState("replica");
+    const createSheet = createBatch(state, [{ kind: "upsertSheet", name: "Sheet1", order: 0 }]);
+    const rowMetadata = createBatch(state, [
+      {
+        kind: "updateRowMetadata",
+        sheetName: "Sheet1",
+        start: 0,
+        count: 2,
+        size: 32,
+        hidden: null,
+      },
+    ]);
+    const styleRange = createBatch(state, [
+      {
+        kind: "setStyleRange",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+        styleId: "style:body",
+      },
+    ]);
+    const formatRange = createBatch(state, [
+      {
+        kind: "setFormatRange",
+        range: { sheetName: "Sheet1", startAddress: "A1", endAddress: "B2" },
+        formatId: "fmt:body",
+      },
+    ]);
+    const deleteSheet = createBatch(state, [{ kind: "deleteSheet", name: "Sheet1" }]);
+
+    expect(compactLog([createSheet, rowMetadata, styleRange, formatRange, deleteSheet])).toEqual([
+      deleteSheet,
+    ]);
+  });
+
+  it("keeps global style and number format entities while compacting them by id", () => {
+    const state = createReplicaState("replica");
+    const firstStyle = createBatch(state, [
+      { kind: "upsertCellStyle", style: { id: "style:body", fill: { backgroundColor: "#fff" } } },
+    ]);
+    const latestStyle = createBatch(state, [
+      { kind: "upsertCellStyle", style: { id: "style:body", fill: { backgroundColor: "#eee" } } },
+    ]);
+    const firstFormat = createBatch(state, [
+      { kind: "upsertCellNumberFormat", format: { id: "fmt:body", code: "0.0", kind: "number" } },
+    ]);
+    const latestFormat = createBatch(state, [
+      { kind: "upsertCellNumberFormat", format: { id: "fmt:body", code: "0.00", kind: "number" } },
+    ]);
+
+    expect(compactLog([firstStyle, latestStyle, firstFormat, latestFormat])).toEqual([
+      latestStyle,
+      latestFormat,
     ]);
   });
 });

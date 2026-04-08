@@ -2,6 +2,19 @@
 ## Date: 2026-04-07
 ## Scope: remove `@bilig/crdt` as a package boundary without regressing local replay semantics
 
+## Status
+
+Implemented on `main`.
+
+Current outcome:
+
+- `packages/crdt` no longer exists
+- `@bilig/core` owns replica-state bookkeeping internally
+- app code no longer reads `engine.replica`
+- `SpreadsheetEngine.applyRemoteBatch(batch)` is the public dedupe/apply boundary
+
+The detailed sections below are kept as the design rationale and execution record for the cleanup. Where they describe `@bilig/crdt` as active, read that as pre-cleanup context rather than current architecture.
+
 ## Why this document exists
 
 `bilig` no longer runs a CRDT-first product architecture. The production path is:
