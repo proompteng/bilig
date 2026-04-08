@@ -370,6 +370,20 @@ export async function createWorkerRuntimeSessionController(
     }
   };
 
+  const syncSelectionAfterRuntimeState = async (
+    runtimeState: WorkbookWorkerStateSnapshot,
+  ): Promise<void> => {
+    const reconciledSelection = reconcileSelection(currentSelection, runtimeState.sheetNames);
+    if (
+      reconciledSelection.sheetName !== currentSelection.sheetName ||
+      reconciledSelection.address !== currentSelection.address
+    ) {
+      await applySelection(reconciledSelection);
+      return;
+    }
+    updateSelectionViewport(reconciledSelection);
+  };
+
   const runAuthoritativeRebase = async (): Promise<void> => {
     if (disposed) {
       return;
@@ -397,7 +411,7 @@ export async function createWorkerRuntimeSessionController(
       );
       currentAuthoritativeRevision = eventBatch.headRevision;
       publishRuntimeState(runtimeState);
-      await applySelection(reconcileSelection(currentSelection, runtimeState.sheetNames));
+      await syncSelectionAfterRuntimeState(runtimeState);
       return runAuthoritativeRebase();
     }
     publishPhase("recovering");
@@ -417,7 +431,7 @@ export async function createWorkerRuntimeSessionController(
     );
     currentAuthoritativeRevision = targetRevision;
     publishRuntimeState(runtimeState);
-    await applySelection(reconcileSelection(currentSelection, runtimeState.sheetNames));
+    await syncSelectionAfterRuntimeState(runtimeState);
     return runAuthoritativeRebase();
   };
 

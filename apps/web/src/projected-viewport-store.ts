@@ -172,6 +172,15 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   setCellSnapshot(snapshot: CellSnapshot): void {
     const key = `${snapshot.sheetName}!${snapshot.address}`;
+    const current = this.cellSnapshots.get(key);
+    if (current) {
+      if (shouldKeepCurrentSnapshot(current, snapshot)) {
+        return;
+      }
+      if (cellSnapshotSignature(current) === cellSnapshotSignature(snapshot)) {
+        return;
+      }
+    }
     this.knownSheets.add(snapshot.sheetName);
     this.cellSnapshots.set(key, snapshot);
     this.sheetCellKeys(snapshot.sheetName).add(key);

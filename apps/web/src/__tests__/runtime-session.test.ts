@@ -870,6 +870,58 @@ describe("createWorkerRuntimeSessionController", () => {
     controller.dispose();
   });
 
+  it("preserves case-insensitive string comparison results for pending local formulas", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: false,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    const unsubscribe = controller.subscribeViewport(
+      "Sheet1",
+      { rowStart: 0, rowEnd: 1, colStart: 0, colEnd: 0 },
+      () => {},
+    );
+
+    await controller.invoke("enqueuePendingMutation", {
+      method: "setCellValue",
+      args: ["Sheet1", "A1", "hello"],
+    });
+    await controller.setSelection({ sheetName: "Sheet1", address: "A2" });
+    await controller.invoke("enqueuePendingMutation", {
+      method: "setCellFormula",
+      args: ["Sheet1", "A2", 'A1="HELLO"'],
+    });
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell("Sheet1", "A2")).toMatchObject({
+        value: {
+          tag: ValueTag.Boolean,
+          value: true,
+        },
+        formula: 'A1="HELLO"',
+      });
+    });
+
+    unsubscribe();
+    controller.dispose();
+  });
+
   it("treats a 204 latest snapshot response as a cold-start miss", async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),

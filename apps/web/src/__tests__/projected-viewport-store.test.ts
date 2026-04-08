@@ -183,6 +183,34 @@ describe("ProjectedViewportStore", () => {
     });
   });
 
+  it("keeps a local formula snapshot when a direct cell refresh drops source metadata", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.setCellSnapshot({
+      sheetName: "Sheet1",
+      address: "D5",
+      value: { tag: ValueTag.Boolean, value: true },
+      input: '=A1="HELLO"',
+      formula: 'A1="HELLO"',
+      flags: 0,
+      version: 3,
+    });
+
+    cache.setCellSnapshot({
+      sheetName: "Sheet1",
+      address: "D5",
+      value: { tag: ValueTag.Boolean, value: false },
+      flags: 0,
+      version: 4,
+    });
+
+    expect(cache.getCell("Sheet1", "D5")).toMatchObject({
+      value: { tag: ValueTag.Boolean, value: true },
+      formula: 'A1="HELLO"',
+      version: 3,
+    });
+  });
+
   it("accepts a newer literal snapshot when the source input is present", () => {
     const cache = new ProjectedViewportStore();
 
