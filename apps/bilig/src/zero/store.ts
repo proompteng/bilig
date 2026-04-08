@@ -1,6 +1,11 @@
-import { SpreadsheetEngine, type EngineReplicaSnapshot } from "@bilig/core";
+import {
+  isEngineReplicaSnapshot,
+  SpreadsheetEngine,
+  type EngineReplicaSnapshot,
+} from "@bilig/core";
 import { parseCellAddress } from "@bilig/formula";
 import {
+  isWorkbookSnapshot,
   ValueTag,
   type CellBorderStyle,
   type CellBorderWeight,
@@ -200,25 +205,6 @@ function parseInteger(value: unknown): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
-  );
-}
-
-function isEngineReplicaSnapshot(value: unknown): value is EngineReplicaSnapshot {
-  return (
-    isRecord(value) &&
-    isRecord(value["replica"]) &&
-    Array.isArray(value["entityVersions"]) &&
-    Array.isArray(value["sheetDeleteVersions"])
-  );
 }
 
 function isDirtyRegion(value: unknown): value is DirtyRegion {

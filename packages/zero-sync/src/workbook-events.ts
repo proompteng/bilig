@@ -6,6 +6,7 @@ import type {
   LiteralInput,
   WorkbookSnapshot,
 } from "@bilig/protocol";
+import { isWorkbookSnapshot } from "@bilig/protocol";
 import { parseCellAddress } from "@bilig/formula";
 import {
   applyWorkbookAgentCommandBundle,
@@ -165,16 +166,6 @@ function isCellRangeRef(value: unknown): value is CellRangeRef {
     typeof value["sheetName"] === "string" &&
     typeof value["startAddress"] === "string" &&
     typeof value["endAddress"] === "string"
-  );
-}
-
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
   );
 }
 

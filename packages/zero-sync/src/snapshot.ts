@@ -13,6 +13,7 @@ import type {
   WorkbookPropertySnapshot,
   WorkbookSnapshot,
 } from "@bilig/protocol";
+import { isWorkbookSnapshot } from "@bilig/protocol";
 import { isLiteralInput } from "./mutators.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,16 +52,6 @@ function isCellNumberFormatKind(value: unknown): value is CellNumberFormatRecord
 
 function isCompatibilityMode(value: unknown): value is CompatibilityMode {
   return value === "excel-modern" || value === "odf-1.4";
-}
-
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
-  );
 }
 
 export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapshot {

@@ -1,5 +1,5 @@
 import type { CommitOp, EngineReplicaSnapshot } from "@bilig/core";
-import { SpreadsheetEngine } from "@bilig/core";
+import { isEngineReplicaSnapshot, SpreadsheetEngine } from "@bilig/core";
 import {
   buildWorkbookAgentPreview,
   isWorkbookAgentCommandBundle,
@@ -21,6 +21,7 @@ import {
   type AuthoritativeWorkbookEventRecord,
 } from "@bilig/zero-sync";
 import {
+  isWorkbookSnapshot,
   type CellRangeRef,
   type CellNumberFormatInput,
   type CellStyleField,
@@ -104,29 +105,6 @@ const EMPTY_METRICS: RecalcMetrics = {
   compileMs: 0,
 };
 const DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT = 100_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isWorkbookSnapshotValue(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
-  );
-}
-
-function isEngineReplicaSnapshotValue(value: unknown): value is EngineReplicaSnapshot {
-  return (
-    isRecord(value) &&
-    isRecord(value["replica"]) &&
-    Array.isArray(value["entityVersions"]) &&
-    Array.isArray(value["sheetDeleteVersions"])
-  );
-}
 
 export class WorkbookWorkerRuntime {
   [method: string]: unknown;
@@ -253,10 +231,10 @@ export class WorkbookWorkerRuntime {
       this.runtimeStateCache = this.buildRuntimeStateFromBootstrapState(restoredBootstrapState);
     } else {
       restoredState = this.localStore ? await this.localStore.loadState() : null;
-      const parsedRestoredSnapshot = isWorkbookSnapshotValue(restoredState?.snapshot)
+      const parsedRestoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot)
         ? restoredState.snapshot
         : null;
-      const parsedRestoredReplica = isEngineReplicaSnapshotValue(restoredState?.replica)
+      const parsedRestoredReplica = isEngineReplicaSnapshot(restoredState?.replica)
         ? restoredState.replica
         : null;
       if (parsedRestoredSnapshot || parsedRestoredReplica) {
@@ -816,10 +794,10 @@ export class WorkbookWorkerRuntime {
   }> {
     if (this.authoritativeStateSource === "localStore") {
       const restoredState = this.localStore ? await this.localStore.loadState() : null;
-      const restoredSnapshot = isWorkbookSnapshotValue(restoredState?.snapshot)
+      const restoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot)
         ? restoredState.snapshot
         : null;
-      const restoredReplica = isEngineReplicaSnapshotValue(restoredState?.replica)
+      const restoredReplica = isEngineReplicaSnapshot(restoredState?.replica)
         ? restoredState.replica
         : null;
       this.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica);

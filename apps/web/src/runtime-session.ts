@@ -5,8 +5,15 @@ import {
   isAuthoritativeWorkbookEventBatch,
   type AuthoritativeWorkbookEventBatch,
 } from "@bilig/zero-sync";
-import type { CellSnapshot, RecalcMetrics, Viewport, WorkbookSnapshot } from "@bilig/protocol";
-import { ValueTag } from "@bilig/protocol";
+import {
+  isCellSnapshot,
+  isWorkbookSnapshot,
+  ValueTag,
+  type CellSnapshot,
+  type RecalcMetrics,
+  type Viewport,
+  type WorkbookSnapshot,
+} from "@bilig/protocol";
 import type {
   WorkbookWorkerBootstrapResult,
   WorkbookWorkerStateSnapshot,
@@ -100,42 +107,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
-  );
-}
-
-function isCellSnapshot(value: unknown): value is CellSnapshot {
-  return (
-    isRecord(value) &&
-    typeof value["sheetName"] === "string" &&
-    typeof value["address"] === "string" &&
-    typeof value["flags"] === "number" &&
-    typeof value["version"] === "number" &&
-    isRecord(value["value"]) &&
-    typeof value["value"]["tag"] === "number"
-  );
-}
-
 function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerStateSnapshot {
+  if (!isRecord(value)) {
+    return false;
+  }
   return (
-    isRecord(value) &&
     typeof value["workbookName"] === "string" &&
     Array.isArray(value["sheetNames"]) &&
     value["sheetNames"].every((sheetName) => typeof sheetName === "string") &&
-    isRecord(value["metrics"]) &&
+    typeof value["metrics"] === "object" &&
+    value["metrics"] !== null &&
     typeof value["syncState"] === "string"
   );
 }
 
 function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorkerBootstrapResult {
+  if (!isRecord(value)) {
+    return false;
+  }
   return (
-    isRecord(value) &&
     typeof value["restoredFromPersistence"] === "boolean" &&
     typeof value["requiresAuthoritativeHydrate"] === "boolean" &&
     isWorkbookWorkerStateSnapshot(value["runtimeState"])

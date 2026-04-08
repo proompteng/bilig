@@ -9,7 +9,7 @@ import {
   WorkbookLocalStoreLockedError,
   createMemoryWorkbookLocalStoreFactory,
 } from "@bilig/storage-browser";
-import { ValueTag } from "@bilig/protocol";
+import { isWorkbookSnapshot, ValueTag } from "@bilig/protocol";
 import { decodeViewportPatch } from "@bilig/worker-transport";
 import { buildWorkbookLocalAuthoritativeBase } from "../worker-local-base.js";
 import { collectChangedCellsBySheet, collectViewportCells } from "../worker-runtime-support.js";
@@ -32,16 +32,6 @@ function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLoc
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isWorkbookSnapshot(value: unknown): value is TestStoredStateValue["snapshot"] {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
-  );
 }
 
 function buildViewportFromAuthoritativeBase(input: {

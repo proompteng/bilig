@@ -7,7 +7,7 @@ import type {
   WorkbookLocalStoreFactory,
 } from "@bilig/storage-browser";
 import { SpreadsheetEngine } from "@bilig/core";
-import { ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
+import { isWorkbookSnapshot, ValueTag, type WorkbookSnapshot } from "@bilig/protocol";
 import { applyPendingWorkbookMutationToEngine } from "../worker-runtime-mutation-replay.js";
 import { WorkbookWorkerRuntime } from "../worker-runtime.js";
 import { createWorkerRuntimeSessionController } from "../runtime-session.js";
@@ -56,16 +56,6 @@ function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLoc
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
-  return (
-    isRecord(value) &&
-    value["version"] === 1 &&
-    isRecord(value["workbook"]) &&
-    typeof value["workbook"]["name"] === "string" &&
-    Array.isArray(value["sheets"])
-  );
 }
 
 function createMemoryLocalStoreFactory(seed?: {
