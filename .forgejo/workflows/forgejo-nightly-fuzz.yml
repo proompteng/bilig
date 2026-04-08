@@ -41,6 +41,9 @@ jobs:
           set -eu
           curl -fsSL https://bun.sh/install | bash
           export PATH="$HOME/.bun/bin:$PATH"
+          if [ -n "${GITHUB_PATH:-}" ]; then
+            echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+          fi
           bun --version
 
       - name: Install dependencies
