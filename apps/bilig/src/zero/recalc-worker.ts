@@ -2,10 +2,12 @@ import { WorkbookRuntimeManager } from "../workbook-runtime/runtime-manager.js";
 import { materializeCellEvalProjection } from "./projection.js";
 import {
   leaseNextRecalcJob,
-  loadWorkbookRuntimeMetadata,
   markRecalcJobCompleted,
   markRecalcJobFailed,
   markRecalcJobSuperseded,
+} from "./recalc-job-store.js";
+import {
+  loadWorkbookRuntimeMetadata,
   shouldPersistWorkbookCheckpointRevision,
   type Queryable,
 } from "./store.js";
