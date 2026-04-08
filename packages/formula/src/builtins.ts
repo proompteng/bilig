@@ -22,19 +22,12 @@ import {
   inverseChiSquare,
   inverseFDistribution,
   inverseGammaDistribution,
-  inverseNormal,
   inverseStandardNormal,
   inverseStudentT,
-  kurtosis,
   logGamma,
   negativeBinomialProbability,
-  percentileNormal,
   poissonProbability,
   regularizedUpperGamma,
-  skewPopulation,
-  skewSample,
-  standardNormalCdf,
-  standardNormalPdf,
   studentTCdf,
   studentTDensity,
 } from "./builtins/distributions.js";
@@ -62,7 +55,6 @@ import {
 import {
   buildIdentityMatrix,
   collectNumericArgs,
-  collectStatNumericArgs,
   createNumericBuiltinHelpers,
   doubleFactorialValue,
   evenValue,
@@ -75,15 +67,8 @@ import {
   roundUpToDigits,
 } from "./builtins/numeric.js";
 import { createRadixBuiltins } from "./builtins/radix.js";
-import {
-  collectAStyleNumericArgs,
-  erfApprox,
-  modeSingle,
-  populationStandardDeviation,
-  populationVariance,
-  sampleStandardDeviation,
-  sampleVariance,
-} from "./builtins/statistics.js";
+import { erfApprox, populationVariance, sampleVariance } from "./builtins/statistics.js";
+import { createStatisticalBuiltins } from "./builtins/statistical-builtins.js";
 import { datetimeBuiltins } from "./builtins/datetime.js";
 import { convertBuiltin, euroconvertBuiltin } from "./builtins/convert.js";
 import { logicalBuiltins } from "./builtins/logical.js";
@@ -285,6 +270,14 @@ const fixedIncomeBuiltins = createFixedIncomeBuiltins({
   coerceNumber,
   integerValue,
   numberResult,
+  valueError,
+});
+const statisticalBuiltins = createStatisticalBuiltins({
+  toNumber,
+  coerceBoolean,
+  firstError,
+  numberResult,
+  numericResultOrError,
   valueError,
 });
 
@@ -1111,273 +1104,7 @@ const scalarBuiltins: Record<string, Builtin> = {
     }
     return numberResult(numberValue >= stepValue ? 1 : 0);
   },
-  GAUSS: (value) => {
-    const numeric = toNumber(value);
-    return numeric === undefined ? valueError() : numberResult(standardNormalCdf(numeric) - 0.5);
-  },
-  PHI: (value) => {
-    const numeric = toNumber(value);
-    return numeric === undefined ? valueError() : numberResult(standardNormalPdf(numeric));
-  },
-  STANDARDIZE: (xArg, meanArg, standardDeviationArg) => {
-    const x = toNumber(xArg);
-    const mean = toNumber(meanArg);
-    const standardDeviation = toNumber(standardDeviationArg);
-    if (
-      x === undefined ||
-      mean === undefined ||
-      standardDeviation === undefined ||
-      standardDeviation <= 0
-    ) {
-      return valueError();
-    }
-    return numberResult((x - mean) / standardDeviation);
-  },
-  MODE: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const mode = modeSingle(collectNumericArgs(args, toNumber));
-    return mode === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : numberResult(mode);
-  },
-  "MODE.SNGL": (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const mode = modeSingle(collectNumericArgs(args, toNumber));
-    return mode === undefined ? { tag: ValueTag.Error, code: ErrorCode.NA } : numberResult(mode);
-  },
-  STDEV: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length < 2
-      ? valueError()
-      : numericResultOrError(sampleStandardDeviation(numbers));
-  },
-  "STDEV.S": (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length < 2
-      ? valueError()
-      : numericResultOrError(sampleStandardDeviation(numbers));
-  },
-  STDEVP: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length === 0
-      ? valueError()
-      : numericResultOrError(populationStandardDeviation(numbers));
-  },
-  "STDEV.P": (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length === 0
-      ? valueError()
-      : numericResultOrError(populationStandardDeviation(numbers));
-  },
-  STDEVA: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectAStyleNumericArgs(args);
-    return numbers.length < 2
-      ? valueError()
-      : numericResultOrError(sampleStandardDeviation(numbers));
-  },
-  STDEVPA: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectAStyleNumericArgs(args);
-    return numbers.length === 0
-      ? valueError()
-      : numericResultOrError(populationStandardDeviation(numbers));
-  },
-  VAR: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers));
-  },
-  "VAR.S": (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers));
-  },
-  VARP: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers));
-  },
-  "VAR.P": (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectStatNumericArgs(args);
-    return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers));
-  },
-  VARA: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectAStyleNumericArgs(args);
-    return numbers.length < 2 ? valueError() : numberResult(sampleVariance(numbers));
-  },
-  VARPA: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const numbers = collectAStyleNumericArgs(args);
-    return numbers.length === 0 ? valueError() : numberResult(populationVariance(numbers));
-  },
-  SKEW: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const skew = skewSample(collectStatNumericArgs(args));
-    return skew === undefined ? valueError() : numberResult(skew);
-  },
-  "SKEW.P": (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const skew = skewPopulation(collectStatNumericArgs(args));
-    return skew === undefined ? valueError() : numberResult(skew);
-  },
-  SKEWP: (...args) => {
-    return scalarBuiltins["SKEW.P"]!(...args);
-  },
-  KURT: (...args) => {
-    const error = firstError(args);
-    if (error) return error;
-    const value = kurtosis(collectStatNumericArgs(args));
-    return value === undefined ? valueError() : numberResult(value);
-  },
-  NORMDIST: (xArg, meanArg, standardDeviationArg, cumulativeArg) => {
-    const x = toNumber(xArg);
-    const mean = toNumber(meanArg);
-    const standardDeviation = toNumber(standardDeviationArg);
-    const cumulative = coerceBoolean(cumulativeArg, false);
-    if (
-      x === undefined ||
-      mean === undefined ||
-      standardDeviation === undefined ||
-      cumulative === undefined ||
-      standardDeviation <= 0
-    ) {
-      return valueError();
-    }
-    return numberResult(
-      cumulative
-        ? percentileNormal(mean, standardDeviation, x)
-        : standardNormalPdf((x - mean) / standardDeviation) / standardDeviation,
-    );
-  },
-  "NORM.DIST": (xArg, meanArg, standardDeviationArg, cumulativeArg) => {
-    return scalarBuiltins["NORMDIST"]!(xArg, meanArg, standardDeviationArg, cumulativeArg);
-  },
-  NORMINV: (probabilityArg, meanArg, standardDeviationArg) => {
-    const probability = toNumber(probabilityArg);
-    const mean = toNumber(meanArg);
-    const standardDeviation = toNumber(standardDeviationArg);
-    if (
-      probability === undefined ||
-      mean === undefined ||
-      standardDeviation === undefined ||
-      standardDeviation <= 0
-    ) {
-      return valueError();
-    }
-    const result = inverseNormal(probability, mean, standardDeviation);
-    return result === undefined ? valueError() : numberResult(result);
-  },
-  "NORM.INV": (probabilityArg, meanArg, standardDeviationArg) => {
-    return scalarBuiltins["NORMINV"]!(probabilityArg, meanArg, standardDeviationArg);
-  },
-  NORMSDIST: (value) => {
-    const numeric = toNumber(value);
-    return numeric === undefined ? valueError() : numberResult(standardNormalCdf(numeric));
-  },
-  "LEGACY.NORMSDIST": (value) => {
-    return scalarBuiltins["NORMSDIST"]!(value);
-  },
-  "NORM.S.DIST": (value, cumulativeArg = { tag: ValueTag.Boolean, value: true }) => {
-    const numeric = toNumber(value);
-    const cumulative = coerceBoolean(cumulativeArg, true);
-    if (numeric === undefined || cumulative === undefined) {
-      return valueError();
-    }
-    return numberResult(cumulative ? standardNormalCdf(numeric) : standardNormalPdf(numeric));
-  },
-  NORMSINV: (value) => {
-    const numeric = toNumber(value);
-    if (numeric === undefined) {
-      return valueError();
-    }
-    const result = inverseStandardNormal(numeric);
-    return result === undefined ? valueError() : numberResult(result);
-  },
-  "LEGACY.NORMSINV": (value) => {
-    return scalarBuiltins["NORMSINV"]!(value);
-  },
-  "NORM.S.INV": (value) => {
-    return scalarBuiltins["NORMSINV"]!(value);
-  },
-  LOGINV: (probabilityArg, meanArg, standardDeviationArg) => {
-    const probability = toNumber(probabilityArg);
-    const mean = toNumber(meanArg);
-    const standardDeviation = toNumber(standardDeviationArg);
-    if (
-      probability === undefined ||
-      mean === undefined ||
-      standardDeviation === undefined ||
-      standardDeviation <= 0
-    ) {
-      return valueError();
-    }
-    const normal = inverseNormal(probability, mean, standardDeviation);
-    return normal === undefined ? valueError() : numberResult(Math.exp(normal));
-  },
-  "LOGNORM.INV": (probabilityArg, meanArg, standardDeviationArg) => {
-    return scalarBuiltins["LOGINV"]!(probabilityArg, meanArg, standardDeviationArg);
-  },
-  LOGNORMDIST: (xArg, meanArg, standardDeviationArg) => {
-    const x = toNumber(xArg);
-    const mean = toNumber(meanArg);
-    const standardDeviation = toNumber(standardDeviationArg);
-    if (
-      x === undefined ||
-      mean === undefined ||
-      standardDeviation === undefined ||
-      standardDeviation <= 0 ||
-      x <= 0
-    ) {
-      return valueError();
-    }
-    return numberResult(percentileNormal(mean, standardDeviation, Math.log(x)));
-  },
-  "LOGNORM.DIST": (
-    xArg,
-    meanArg,
-    standardDeviationArg,
-    cumulativeArg = { tag: ValueTag.Boolean, value: true },
-  ) => {
-    const x = toNumber(xArg);
-    const mean = toNumber(meanArg);
-    const standardDeviation = toNumber(standardDeviationArg);
-    const cumulative = coerceBoolean(cumulativeArg, true);
-    if (
-      x === undefined ||
-      mean === undefined ||
-      standardDeviation === undefined ||
-      cumulative === undefined ||
-      standardDeviation <= 0 ||
-      x <= 0
-    ) {
-      return valueError();
-    }
-    const z = (Math.log(x) - mean) / standardDeviation;
-    return numberResult(
-      cumulative ? standardNormalCdf(z) : standardNormalPdf(z) / (x * standardDeviation),
-    );
-  },
+  ...statisticalBuiltins,
   EFFECT: (nominalRateArg, periodsArg) => {
     const nominalRate = toNumber(nominalRateArg);
     const periods = positiveIntegerValue(periodsArg);
