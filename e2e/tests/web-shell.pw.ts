@@ -643,6 +643,7 @@ const TOOLBAR_SYNC_ACTIONS: readonly ToolbarSyncAction[] = [
 
 async function selectToolbarActionRange(page: Page) {
   await clickProductCell(page, 1, 1);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2");
   await clickProductCell(page, 2, 2, { shift: true });
   await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!B2:C3");
 }

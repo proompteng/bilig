@@ -11,7 +11,7 @@ jobs:
     runs-on: docker
     timeout-minutes: 45
     container:
-      image: docker.io/library/node:24-bookworm
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
     env:
       CI: "true"
     steps:
@@ -41,11 +41,6 @@ jobs:
         run: |
           set -eu
           pnpm install --frozen-lockfile
-
-      - name: Install Chromium for nightly browser fuzz
-        run: |
-          set -eu
-          pnpm exec playwright install --with-deps chromium
 
       - name: Run nightly fuzz campaign
         run: |
