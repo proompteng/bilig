@@ -48,6 +48,10 @@ import {
 } from "./workbook-sync.js";
 import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
 import {
+  createProjectionEngineFromState,
+  createWorkbookEngineFromState,
+} from "./worker-runtime-engine-state.js";
+import {
   EMPTY_RUNTIME_METRICS,
   buildWorkerRuntimeStateFromBootstrap,
   buildWorkerRuntimeStateFromEngine,
@@ -238,9 +242,12 @@ export class WorkbookWorkerRuntime {
       if (parsedRestoredSnapshot || parsedRestoredReplica) {
         this.installRestoredAuthoritativeState(parsedRestoredSnapshot, parsedRestoredReplica);
       }
-      const { engine, overlayScope } = await this.createProjectionEngineFromState({
+      const { engine, overlayScope } = await createProjectionEngineFromState({
+        workbookName: options.documentId,
+        replicaId: options.replicaId,
         snapshot: parsedRestoredSnapshot,
         replica: parsedRestoredReplica,
+        pendingMutations: this.pendingMutations,
       });
       this.projectionOverlayScope = overlayScope;
       this.installEngine(engine);
@@ -282,7 +289,10 @@ export class WorkbookWorkerRuntime {
   ): Promise<WorkbookWorkerStateSnapshot> {
     this.projectionBuildVersion += 1;
     this.projectionEnginePromise = null;
-    const authoritativeEngine = await this.createEngineFromState({
+    const options = this.requireBootstrapOptions();
+    const authoritativeEngine = await createWorkbookEngineFromState({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
       snapshot,
       replica: null,
     });
@@ -305,7 +315,10 @@ export class WorkbookWorkerRuntime {
   ): Promise<WorkbookWorkerStateSnapshot> {
     this.projectionBuildVersion += 1;
     this.projectionEnginePromise = null;
-    const authoritativeEngine = await this.createEngineFromState({
+    const options = this.requireBootstrapOptions();
+    const authoritativeEngine = await createWorkbookEngineFromState({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
       snapshot,
       replica: null,
     });
@@ -789,56 +802,6 @@ export class WorkbookWorkerRuntime {
     return cell ? structuredClone(cell.snapshot) : null;
   }
 
-  private async createEngineFromState(input: {
-    snapshot: WorkbookSnapshot | null;
-    replica: EngineReplicaSnapshot | null;
-  }): Promise<SpreadsheetEngine> {
-    const options = this.requireBootstrapOptions();
-    const engine = new SpreadsheetEngine({
-      workbookName: options.documentId,
-      replicaId: options.replicaId,
-    });
-    await engine.ready();
-    if (input.snapshot) {
-      engine.importSnapshot(input.snapshot);
-    }
-    if (input.replica) {
-      engine.importReplicaSnapshot(input.replica);
-    }
-    if (engine.workbook.sheetsByName.size === 0) {
-      engine.createSheet("Sheet1");
-    }
-    return engine;
-  }
-
-  private async createProjectionEngineFromState(input: {
-    snapshot: WorkbookSnapshot | null;
-    replica: EngineReplicaSnapshot | null;
-  }): Promise<{
-    engine: SpreadsheetEngine;
-    overlayScope: ProjectionOverlayScope | null;
-  }> {
-    const engine = await this.createEngineFromState(input);
-    if (this.pendingMutations.length === 0) {
-      return { engine, overlayScope: null };
-    }
-    const replayEvents: EngineEvent[] = [];
-    const unsubscribe = engine.subscribe((event) => {
-      replayEvents.push(event);
-    });
-    try {
-      this.pendingMutations.forEach((mutation) => {
-        applyPendingWorkbookMutationToEngine(engine, mutation);
-      });
-    } finally {
-      unsubscribe();
-    }
-    return {
-      engine,
-      overlayScope: collectProjectionOverlayScopeFromEngineEvents(engine, replayEvents),
-    };
-  }
-
   private installAuthoritativeEngine(
     engine: SpreadsheetEngine,
     snapshot: WorkbookSnapshot | null,
@@ -867,7 +830,10 @@ export class WorkbookWorkerRuntime {
       return this.authoritativeEngine;
     }
     const authoritativeState = await this.getAuthoritativeStateInput();
-    const engine = await this.createEngineFromState({
+    const options = this.requireBootstrapOptions();
+    const engine = await createWorkbookEngineFromState({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
       snapshot: authoritativeState.snapshot,
       replica: authoritativeState.replica,
     });
@@ -890,7 +856,14 @@ export class WorkbookWorkerRuntime {
     overlayScope: ProjectionOverlayScope | null;
   }> {
     const authoritativeState = await this.getAuthoritativeStateInput();
-    return await this.createProjectionEngineFromState(authoritativeState);
+    const options = this.requireBootstrapOptions();
+    return await createProjectionEngineFromState({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
+      snapshot: authoritativeState.snapshot,
+      replica: authoritativeState.replica,
+      pendingMutations: this.pendingMutations,
+    });
   }
 
   private async getProjectionEngine(): Promise<SpreadsheetEngine & WorkerEngine> {
