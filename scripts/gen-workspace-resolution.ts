@@ -12,6 +12,24 @@ function formatJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function formatTsconfigPathsJson(paths: Record<string, string[]>): string {
+  const entries = Object.entries(paths).map(
+    ([packageName, values]) =>
+      `      ${JSON.stringify(packageName)}: [${values.map((value) => JSON.stringify(value)).join(", ")}]`,
+  );
+  return [
+    "{",
+    '  "extends": "./tsconfig.base.json",',
+    '  "compilerOptions": {',
+    '    "paths": {',
+    entries.join(",\n"),
+    "    }",
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+}
+
 function readFileIfExists(path: string): string | null {
   try {
     return readFileSync(path, "utf8");
@@ -22,12 +40,7 @@ function readFileIfExists(path: string): string | null {
 
 const resolution = scanWorkspaceResolution();
 const resolutionJson = formatJson(resolution);
-const tsconfigJson = formatJson({
-  extends: "./tsconfig.base.json",
-  compilerOptions: {
-    paths: createTsconfigPaths(resolution),
-  },
-});
+const tsconfigJson = formatTsconfigPathsJson(createTsconfigPaths(resolution));
 
 if (checkOnly) {
   const failures: string[] = [];
