@@ -1,5 +1,4 @@
 import {
-  createCellNumberFormatRecord,
   type CellNumberFormatInput,
   type CellNumberFormatRecord,
   type CellRangeRef,
@@ -78,14 +77,17 @@ import {
   spillDependencyKeyFromRef,
   tableDependencyKey,
 } from "./engine-metadata-utils.js";
-import { intersectRangeBounds, normalizeRange } from "./engine-range-utils.js";
-import { exportSheetMetadata, sheetMetadataToOps } from "./engine-snapshot-utils.js";
+import { normalizeRange } from "./engine-range-utils.js";
 import {
-  applyStylePatch,
-  clearStyleFields,
-  cloneCellStyleRecord,
-  normalizeCellStylePatch,
-} from "./engine-style-utils.js";
+  buildFormatClearOps,
+  buildFormatPatchOps,
+  buildStyleClearOps,
+  buildStylePatchOps,
+  restoreFormatRangeOps,
+  restoreStyleRangeOps,
+} from "./engine-range-format-ops.js";
+import { exportSheetMetadata, sheetMetadataToOps } from "./engine-snapshot-utils.js";
+import { cloneCellStyleRecord } from "./engine-style-utils.js";
 import {
   areCellValuesEqual,
   cellValueDisplayText,
@@ -498,22 +500,22 @@ export class SpreadsheetEngine {
   }
 
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {
-    const ops = this.buildFormatPatchOps(range, format);
+    const ops = buildFormatPatchOps(this.workbook, range, format);
     this.executeLocalTransaction(ops);
   }
 
   clearRangeNumberFormat(range: CellRangeRef): void {
-    const ops = this.buildFormatClearOps(range);
+    const ops = buildFormatClearOps(this.workbook, range);
     this.executeLocalTransaction(ops);
   }
 
   setRangeStyle(range: CellRangeRef, patch: CellStylePatch): void {
-    const ops = this.buildStylePatchOps(range, patch);
+    const ops = buildStylePatchOps(this.workbook, range, patch);
     this.executeLocalTransaction(ops);
   }
 
   clearRangeStyle(range: CellRangeRef, fields?: readonly CellStyleField[]): void {
-    const ops = this.buildStyleClearOps(range, fields);
+    const ops = buildStyleClearOps(this.workbook, range, fields);
     this.executeLocalTransaction(ops);
   }
 
@@ -3849,9 +3851,9 @@ export class SpreadsheetEngine {
         return [{ kind: "upsertCellNumberFormat", format: { ...existing } }];
       }
       case "setStyleRange":
-        return this.restoreStyleRangeOps(op.range);
+        return restoreStyleRangeOps(this.workbook, op.range);
       case "setFormatRange":
-        return this.restoreFormatRangeOps(op.range);
+        return restoreFormatRangeOps(this.workbook, op.range);
       case "upsertDefinedName": {
         const existing = this.workbook.getDefinedName(op.name);
         if (!existing) {
@@ -3999,195 +4001,6 @@ export class SpreadsheetEngine {
       rows.push(cells);
     }
     return rows;
-  }
-
-  private buildStylePatchOps(range: CellRangeRef, patch: CellStylePatch): EngineOp[] {
-    const normalizedPatch = normalizeCellStylePatch(patch);
-    if (
-      !normalizedPatch.fill &&
-      !normalizedPatch.font &&
-      !normalizedPatch.alignment &&
-      !normalizedPatch.borders
-    ) {
-      return [];
-    }
-    return this.materializeStyleRangeOps(range, (baseStyle) =>
-      this.workbook.internCellStyle(applyStylePatch(baseStyle, normalizedPatch)),
-    );
-  }
-
-  private buildStyleClearOps(range: CellRangeRef, fields?: readonly CellStyleField[]): EngineOp[] {
-    return this.materializeStyleRangeOps(range, (baseStyle) =>
-      this.workbook.internCellStyle(clearStyleFields(baseStyle, fields)),
-    );
-  }
-
-  private restoreStyleRangeOps(range: CellRangeRef): EngineOp[] {
-    return this.materializeStyleRangeOps(range, (baseStyle, currentStyleId) => ({
-      id: currentStyleId,
-      ...baseStyle,
-    }));
-  }
-
-  private buildFormatPatchOps(range: CellRangeRef, format: CellNumberFormatInput): EngineOp[] {
-    const normalized = this.workbook.internCellNumberFormat(
-      typeof format === "string"
-        ? format
-        : createCellNumberFormatRecord(WorkbookStore.defaultFormatId, format),
-    );
-    return this.materializeFormatRangeOps(range, () => normalized.id, normalized);
-  }
-
-  private buildFormatClearOps(range: CellRangeRef): EngineOp[] {
-    return this.materializeFormatRangeOps(range, () => WorkbookStore.defaultFormatId);
-  }
-
-  private restoreFormatRangeOps(range: CellRangeRef): EngineOp[] {
-    return this.materializeFormatRangeOps(range, (_currentFormatId, tile) => tile.formatId);
-  }
-
-  private materializeStyleRangeOps(
-    range: CellRangeRef,
-    resolveStyle: (
-      baseStyle: Omit<CellStyleRecord, "id">,
-      currentStyleId: string,
-    ) => CellStyleRecord,
-  ): EngineOp[] {
-    const tiles = this.resolveStyleTiles(range);
-    const ops: EngineOp[] = [];
-    tiles.forEach((tile) => {
-      const current = this.workbook.getCellStyle(tile.styleId) ?? {
-        id: WorkbookStore.defaultStyleId,
-      };
-      const next = resolveStyle(current, tile.styleId);
-      const normalizedId = next.id || WorkbookStore.defaultStyleId;
-      if (normalizedId === tile.styleId) {
-        return;
-      }
-      if (normalizedId !== WorkbookStore.defaultStyleId) {
-        ops.push({
-          kind: "upsertCellStyle",
-          style: cloneCellStyleRecord(next),
-        });
-      }
-      ops.push({
-        kind: "setStyleRange",
-        range: tile.range,
-        styleId: normalizedId,
-      });
-    });
-    return ops;
-  }
-
-  private materializeFormatRangeOps(
-    range: CellRangeRef,
-    resolveFormatId: (
-      currentFormatId: string,
-      tile: { range: CellRangeRef; formatId: string },
-    ) => string,
-    upsertFormat?: CellNumberFormatRecord,
-  ): EngineOp[] {
-    const tiles = this.resolveFormatTiles(range);
-    const ops: EngineOp[] = [];
-    if (upsertFormat && upsertFormat.id !== WorkbookStore.defaultFormatId) {
-      ops.push({ kind: "upsertCellNumberFormat", format: { ...upsertFormat } });
-    }
-    tiles.forEach((tile) => {
-      const nextFormatId = resolveFormatId(tile.formatId, tile);
-      if (nextFormatId === tile.formatId) {
-        return;
-      }
-      ops.push({
-        kind: "setFormatRange",
-        range: tile.range,
-        formatId: nextFormatId,
-      });
-    });
-    return ops;
-  }
-
-  private resolveStyleTiles(range: CellRangeRef): Array<{ range: CellRangeRef; styleId: string }> {
-    const bounds = normalizeRange(range);
-    const sheetRanges = this.workbook.listStyleRanges(range.sheetName);
-    const rowBoundaries = new Set<number>([bounds.startRow, bounds.endRow + 1]);
-    const colBoundaries = new Set<number>([bounds.startCol, bounds.endCol + 1]);
-
-    sheetRanges.forEach((record) => {
-      const clipped = intersectRangeBounds(record.range, bounds);
-      if (!clipped) {
-        return;
-      }
-      rowBoundaries.add(clipped.startRow);
-      rowBoundaries.add(clipped.endRow + 1);
-      colBoundaries.add(clipped.startCol);
-      colBoundaries.add(clipped.endCol + 1);
-    });
-
-    const rows = [...rowBoundaries].toSorted((left, right) => left - right);
-    const cols = [...colBoundaries].toSorted((left, right) => left - right);
-    const tiles: Array<{ range: CellRangeRef; styleId: string }> = [];
-
-    for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex += 1) {
-      const startRow = rows[rowIndex]!;
-      const endRow = rows[rowIndex + 1]! - 1;
-      for (let colIndex = 0; colIndex < cols.length - 1; colIndex += 1) {
-        const startCol = cols[colIndex]!;
-        const endCol = cols[colIndex + 1]! - 1;
-        tiles.push({
-          range: {
-            sheetName: range.sheetName,
-            startAddress: formatAddress(startRow, startCol),
-            endAddress: formatAddress(endRow, endCol),
-          },
-          styleId: this.workbook.getStyleId(range.sheetName, startRow, startCol),
-        });
-      }
-    }
-
-    return tiles;
-  }
-
-  private resolveFormatTiles(
-    range: CellRangeRef,
-  ): Array<{ range: CellRangeRef; formatId: string }> {
-    const bounds = normalizeRange(range);
-    const sheetRanges = this.workbook.listFormatRanges(range.sheetName);
-    const rowBoundaries = new Set<number>([bounds.startRow, bounds.endRow + 1]);
-    const colBoundaries = new Set<number>([bounds.startCol, bounds.endCol + 1]);
-
-    sheetRanges.forEach((record) => {
-      const clipped = intersectRangeBounds(record.range, bounds);
-      if (!clipped) {
-        return;
-      }
-      rowBoundaries.add(clipped.startRow);
-      rowBoundaries.add(clipped.endRow + 1);
-      colBoundaries.add(clipped.startCol);
-      colBoundaries.add(clipped.endCol + 1);
-    });
-
-    const rows = [...rowBoundaries].toSorted((left, right) => left - right);
-    const cols = [...colBoundaries].toSorted((left, right) => left - right);
-    const tiles: Array<{ range: CellRangeRef; formatId: string }> = [];
-
-    for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex += 1) {
-      const startRow = rows[rowIndex]!;
-      const endRow = rows[rowIndex + 1]! - 1;
-      for (let colIndex = 0; colIndex < cols.length - 1; colIndex += 1) {
-        const startCol = cols[colIndex]!;
-        const endCol = cols[colIndex + 1]! - 1;
-        tiles.push({
-          range: {
-            sheetName: range.sheetName,
-            startAddress: formatAddress(startRow, startCol),
-            endAddress: formatAddress(endRow, endCol),
-          },
-          formatId: this.workbook.getRangeFormatId(range.sheetName, startRow, startCol),
-        });
-      }
-    }
-
-    return tiles;
   }
 
   private toCellStateOps(
