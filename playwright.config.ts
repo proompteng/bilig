@@ -15,7 +15,10 @@ const browserPostgresPort = process.env["BILIG_E2E_POSTGRES_PORT"] ?? "55433";
 const browserBaseUrl =
   process.env["BILIG_E2E_BASE_URL"] ?? `http://${browserHost}:${browserWebPort}`;
 const browserReadyUrl =
-  process.env["BILIG_E2E_READY_URL"] ?? `http://${browserHost}:${browserAppPort}/healthz`;
+  process.env["BILIG_E2E_READY_URL"] ??
+  (remoteSyncEnabled
+    ? `${browserBaseUrl}/zero/keepalive`
+    : `${browserBaseUrl}/runtime-config.json`);
 const browserLocalStackCommand = [
   `BILIG_WEB_DEV_PORT=${browserWebPort}`,
   `PORT=${browserAppPort}`,
