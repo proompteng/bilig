@@ -211,11 +211,7 @@ jobs:
       - name: Install latest Bun
         run: |
           set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          if [ -n "${GITHUB_PATH:-}" ]; then
-            echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
-          fi
+          npm install -g bun
           bun --version
 
       - name: Install dependencies
@@ -231,7 +227,6 @@ jobs:
       - name: Run browser CI
         run: |
           set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
           pnpm test:browser
 
       - name: Upload browser artifacts on failure
