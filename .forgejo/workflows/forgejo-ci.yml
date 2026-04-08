@@ -24,7 +24,7 @@ jobs:
           set -eu
           uname -a
           pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH)=' || true
+          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
 
       - name: Verify Node baseline
         run: |
@@ -61,6 +61,8 @@ jobs:
           pnpm lint
           pnpm wasm:build
           pnpm typecheck
+          git diff --exit-code
+          git diff --cached --exit-code
 
       - name: Upload static artifacts on failure
         if: failure()
@@ -72,11 +74,6 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
-
-      - name: Ensure tracked files stay clean
-        run: |
-          set -eu
-          git diff --exit-code
 
   verify-fuzz-unit:
     name: strict-verify-fuzz-unit
@@ -163,15 +160,26 @@ jobs:
             test-results
           if-no-files-found: ignore
 
-  verify-browser-runtime:
-    name: strict-verify-browser-runtime
+  verify-browser:
+    name: strict-verify-browser
     runs-on: docker
     needs:
       - verify-static
-    timeout-minutes: 20
+      - verify-fuzz-unit
+    timeout-minutes: 45
     env:
       CI: "true"
       BILIG_BENCH_TOLERANCE: "1.5"
+      BILIG_BROWSER_STACK: "local"
+      BILIG_DEV_DISABLE_COMPOSE: "1"
+      BILIG_E2E_REMOTE_SYNC: "0"
+      BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
+      BILIG_FUZZ_PROFILE: "main"
+      BILIG_FUZZ_CAPTURE: "1"
+      BILIG_FUZZ_BROWSER: "1"
+      BILIG_FUZZ_MAX_MS: "120000"
+      BILIG_FUZZ_NUM_RUNS: "1"
+      BILIG_FUZZ_SEED: "2128392860"
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -207,400 +215,16 @@ jobs:
         run: |
           set -eu
           pnpm install --frozen-lockfile
+
+      - name: Build local browser stack packages
+        run: |
+          set -eu
+          pnpm --filter @bilig/app... --filter @bilig/web... build
 
       - name: Install Chromium runtime
         run: |
           set -eu
           pnpm exec playwright install --with-deps chromium
-
-      - name: Stage Chromium runtime artifact
-        run: |
-          set -eu
-          rm -rf artifacts/playwright-runtime
-          mkdir -p artifacts/playwright-runtime
-          cp -R "$HOME/.cache/ms-playwright" artifacts/playwright-runtime/ms-playwright
-
-      - name: Upload Chromium runtime artifact
-        uses: https://data.forgejo.org/actions/upload-artifact@v3
-        with:
-          name: bilig-playwright-runtime
-          path: artifacts/playwright-runtime
-          if-no-files-found: error
-
-  verify-fuzz-browser:
-    name: strict-verify-fuzz-browser-stack
-    runs-on: docker
-    needs:
-      - verify-static
-      - verify-browser-runtime
-    timeout-minutes: 30
-    env:
-      CI: "true"
-      BILIG_BROWSER_STACK: "local"
-      BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_DEV_DISABLE_COMPOSE: "1"
-      BILIG_E2E_REMOTE_SYNC: "0"
-      BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
-      BILIG_FUZZ_PROFILE: "main"
-      BILIG_FUZZ_CAPTURE: "1"
-      BILIG_FUZZ_BROWSER: "1"
-      BILIG_FUZZ_MAX_MS: "120000"
-      BILIG_FUZZ_NUM_RUNS: "1"
-      BILIG_FUZZ_SEED: "2128392860"
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
-
-      - name: Verify Node baseline
-        run: |
-          set -eu
-          node --version
-          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
-
-      - name: Enable pnpm via Corepack
-        run: |
-          set -eu
-          corepack enable
-          pnpm --version
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install latest Bun
-        run: |
-          set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun --version
-
-      - name: Install dependencies
-        run: |
-          set -eu
-          pnpm install --frozen-lockfile
-
-      - name: Download Chromium runtime artifact
-        uses: https://data.forgejo.org/actions/download-artifact@v3
-        with:
-          name: bilig-playwright-runtime
-          path: artifacts/playwright-runtime
-
-      - name: Restore Chromium runtime
-        run: |
-          set -eu
-          mkdir -p "$HOME/.cache"
-          rm -rf "$HOME/.cache/ms-playwright"
-          cp -R artifacts/playwright-runtime/ms-playwright "$HOME/.cache/ms-playwright"
-
-      - name: Install Chromium system dependencies
-        run: |
-          set -eu
-          pnpm exec playwright install-deps chromium
-
-      - name: Probe browser stack CI
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun scripts/run-browser-tests.ts --list --grep @fuzz-browser
-
-      - name: Upload browser stack artifacts on failure
-        if: failure()
-        uses: https://data.forgejo.org/actions/upload-artifact@v3
-        with:
-          name: bilig-fuzz-browser-stack-artifacts
-          path: |
-            artifacts/fuzz
-            playwright-report
-            test-results
-          if-no-files-found: ignore
-
-  verify-fuzz-browser-test:
-    name: strict-verify-fuzz-browser
-    runs-on: docker
-    needs:
-      - verify-static
-      - verify-browser-runtime
-      - verify-fuzz-browser
-    timeout-minutes: 30
-    env:
-      CI: "true"
-      BILIG_BROWSER_STACK: "local"
-      BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_DEV_DISABLE_COMPOSE: "1"
-      BILIG_E2E_REMOTE_SYNC: "0"
-      BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
-      BILIG_FUZZ_PROFILE: "main"
-      BILIG_FUZZ_CAPTURE: "1"
-      BILIG_FUZZ_BROWSER: "1"
-      BILIG_FUZZ_MAX_MS: "120000"
-      BILIG_FUZZ_NUM_RUNS: "1"
-      BILIG_FUZZ_SEED: "2128392860"
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
-
-      - name: Verify Node baseline
-        run: |
-          set -eu
-          node --version
-          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
-
-      - name: Enable pnpm via Corepack
-        run: |
-          set -eu
-          corepack enable
-          pnpm --version
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install latest Bun
-        run: |
-          set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun --version
-
-      - name: Install dependencies
-        run: |
-          set -eu
-          pnpm install --frozen-lockfile
-
-      - name: Download Chromium runtime artifact
-        uses: https://data.forgejo.org/actions/download-artifact@v3
-        with:
-          name: bilig-playwright-runtime
-          path: artifacts/playwright-runtime
-
-      - name: Restore Chromium runtime
-        run: |
-          set -eu
-          mkdir -p "$HOME/.cache"
-          rm -rf "$HOME/.cache/ms-playwright"
-          cp -R artifacts/playwright-runtime/ms-playwright "$HOME/.cache/ms-playwright"
-
-      - name: Install Chromium system dependencies
-        run: |
-          set -eu
-          pnpm exec playwright install-deps chromium
-
-      - name: Run browser fuzz CI
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun scripts/run-browser-tests.ts --grep @fuzz-browser
-
-      - name: Upload browser fuzz artifacts on failure
-        if: failure()
-        uses: https://data.forgejo.org/actions/upload-artifact@v3
-        with:
-          name: bilig-fuzz-browser-artifacts
-          path: |
-            artifacts/fuzz
-            playwright-report
-            test-results
-          if-no-files-found: ignore
-
-  verify-coverage:
-    name: strict-verify-coverage
-    runs-on: docker
-    needs:
-      - verify-fuzz-unit
-      - verify-fuzz-browser-test
-    timeout-minutes: 20
-    env:
-      CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
-
-      - name: Verify Node baseline
-        run: |
-          set -eu
-          node --version
-          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
-
-      - name: Enable pnpm via Corepack
-        run: |
-          set -eu
-          corepack enable
-          pnpm --version
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install latest Bun
-        run: |
-          set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun --version
-
-      - name: Install dependencies
-        run: |
-          set -eu
-          pnpm install --frozen-lockfile
-
-      - name: Run coverage CI
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          pnpm coverage
-          bun scripts/coverage-contracts.ts
-
-      - name: Upload coverage artifacts on failure
-        if: failure()
-        uses: https://data.forgejo.org/actions/upload-artifact@v3
-        with:
-          name: bilig-coverage-artifacts
-          path: |
-            playwright-report
-            test-results
-          if-no-files-found: ignore
-
-  verify-bench:
-    name: strict-verify-bench
-    runs-on: docker
-    needs:
-      - verify-coverage
-    timeout-minutes: 20
-    env:
-      CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
-
-      - name: Verify Node baseline
-        run: |
-          set -eu
-          node --version
-          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
-
-      - name: Enable pnpm via Corepack
-        run: |
-          set -eu
-          corepack enable
-          pnpm --version
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install latest Bun
-        run: |
-          set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun --version
-
-      - name: Install dependencies
-        run: |
-          set -eu
-          pnpm install --frozen-lockfile
-
-      - name: Run bench and release CI
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          pnpm bench:smoke
-          CI=1 pnpm bench:contracts
-          pnpm release:check
-          git diff --exit-code
-          git diff --cached --exit-code
-
-      - name: Upload bench artifacts on failure
-        if: failure()
-        uses: https://data.forgejo.org/actions/upload-artifact@v3
-        with:
-          name: bilig-bench-artifacts
-          path: |
-            playwright-report
-            test-results
-          if-no-files-found: ignore
-
-  verify-browser:
-    name: strict-verify-browser
-    runs-on: docker
-    needs:
-      - verify-bench
-      - verify-browser-runtime
-    timeout-minutes: 30
-    env:
-      CI: "true"
-      BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
-
-      - name: Verify Node baseline
-        run: |
-          set -eu
-          node --version
-          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
-
-      - name: Enable pnpm via Corepack
-        run: |
-          set -eu
-          corepack enable
-          pnpm --version
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install latest Bun
-        run: |
-          set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun --version
-
-      - name: Install dependencies
-        run: |
-          set -eu
-          pnpm install --frozen-lockfile
-
-      - name: Download Chromium runtime artifact
-        uses: https://data.forgejo.org/actions/download-artifact@v3
-        with:
-          name: bilig-playwright-runtime
-          path: artifacts/playwright-runtime
-
-      - name: Restore Chromium runtime
-        run: |
-          set -eu
-          mkdir -p "$HOME/.cache"
-          rm -rf "$HOME/.cache/ms-playwright"
-          cp -R artifacts/playwright-runtime/ms-playwright "$HOME/.cache/ms-playwright"
-
-      - name: Install Chromium system dependencies
-        run: |
-          set -eu
-          pnpm exec playwright install-deps chromium
 
       - name: Run browser CI
         run: |
@@ -613,6 +237,74 @@ jobs:
         uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
           name: bilig-browser-artifacts
+          path: |
+            artifacts/fuzz
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  verify-final:
+    name: strict-verify-final
+    runs-on: docker
+    needs:
+      - verify-browser
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      BILIG_BENCH_TOLERANCE: "1.5"
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Log runner environment
+        run: |
+          set -eu
+          uname -a
+          pwd
+          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
+
+      - name: Verify Node baseline
+        run: |
+          set -eu
+          node --version
+          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
+
+      - name: Enable pnpm via Corepack
+        run: |
+          set -eu
+          corepack enable
+          pnpm --version
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install latest Bun
+        run: |
+          set -eu
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun --version
+
+      - name: Install dependencies
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+
+      - name: Run coverage, bench, and release CI
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm coverage
+          bun scripts/coverage-contracts.ts
+          pnpm bench:smoke
+          CI=1 pnpm bench:contracts
+          pnpm release:check
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Upload final artifacts on failure
+        if: failure()
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
+        with:
+          name: bilig-final-artifacts
           path: |
             playwright-report
             test-results
