@@ -21,11 +21,9 @@ import {
   type RecalcMetrics,
   type SyncState,
   type SelectionState,
-  type SheetMetadataSnapshot,
   type SheetFormatRangeSnapshot,
   type SheetStyleRangeSnapshot,
   type WorkbookAxisEntrySnapshot,
-  type WorkbookAxisMetadataSnapshot,
   type WorkbookCalculationSettingsSnapshot,
   type WorkbookDefinedNameValueSnapshot,
   type WorkbookFreezePaneSnapshot,
@@ -81,6 +79,7 @@ import {
   tableDependencyKey,
 } from "./engine-metadata-utils.js";
 import { intersectRangeBounds, normalizeRange } from "./engine-range-utils.js";
+import { exportSheetMetadata, sheetMetadataToOps } from "./engine-snapshot-utils.js";
 import {
   applyStylePatch,
   clearStyleFields,
@@ -1534,7 +1533,7 @@ export class SpreadsheetEngine {
       sheets: [...this.workbook.sheetsByName.values()]
         .toSorted((left, right) => left.order - right.order)
         .map((sheet) => {
-          const metadata = this.exportSheetMetadata(sheet.name);
+          const metadata = exportSheetMetadata(this.workbook, sheet.name);
           const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
           sheet.grid.forEachCell((cellIndex) => {
             const snapshot = this.getCellByIndex(cellIndex);
@@ -1760,166 +1759,6 @@ export class SpreadsheetEngine {
       potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
       "restore",
     );
-  }
-
-  private exportSheetMetadata(sheetName: string): SheetMetadataSnapshot | undefined {
-    const rows = this.workbook.listRowAxisEntries(sheetName);
-    const columns = this.workbook.listColumnAxisEntries(sheetName);
-    const rowMetadata = this.axisMetadataToSnapshot(this.workbook.listRowMetadata(sheetName));
-    const columnMetadata = this.axisMetadataToSnapshot(this.workbook.listColumnMetadata(sheetName));
-    const styleRanges = this.workbook.listStyleRanges(sheetName).map((record) => ({
-      range: this.toSnapshotRangeRef(record.range),
-      styleId: record.styleId,
-    }));
-    const formatRanges = this.workbook.listFormatRanges(sheetName).map((record) => ({
-      range: this.toSnapshotRangeRef(record.range),
-      formatId: record.formatId,
-    }));
-    const freezePane = this.freezePaneToSnapshot(this.workbook.getFreezePane(sheetName));
-    const filters = this.workbook
-      .listFilters(sheetName)
-      .map((filter) => Object.assign({}, filter.range));
-    const sorts = this.workbook.listSorts(sheetName).map((sort) => ({
-      range: Object.assign({}, sort.range),
-      keys: sort.keys.map((key) => Object.assign({}, key)),
-    }));
-
-    if (
-      rows.length === 0 &&
-      columns.length === 0 &&
-      rowMetadata.length === 0 &&
-      columnMetadata.length === 0 &&
-      styleRanges.length === 0 &&
-      formatRanges.length === 0 &&
-      freezePane === undefined &&
-      filters.length === 0 &&
-      sorts.length === 0
-    ) {
-      return undefined;
-    }
-
-    const metadata: SheetMetadataSnapshot = {};
-    if (rows.length > 0) {
-      metadata.rows = rows;
-    }
-    if (columns.length > 0) {
-      metadata.columns = columns;
-    }
-    if (rowMetadata.length > 0) {
-      metadata.rowMetadata = rowMetadata;
-    }
-    if (columnMetadata.length > 0) {
-      metadata.columnMetadata = columnMetadata;
-    }
-    if (styleRanges.length > 0) {
-      metadata.styleRanges = styleRanges;
-    }
-    if (formatRanges.length > 0) {
-      metadata.formatRanges = formatRanges;
-    }
-    if (freezePane) {
-      metadata.freezePane = freezePane;
-    }
-    if (filters.length > 0) {
-      metadata.filters = filters;
-    }
-    if (sorts.length > 0) {
-      metadata.sorts = sorts;
-    }
-    return metadata;
-  }
-
-  private toSnapshotRangeRef(range: CellRangeRef): CellRangeRef {
-    return {
-      sheetName: range.sheetName,
-      startAddress: range.startAddress,
-      endAddress: range.endAddress,
-    };
-  }
-
-  private sheetMetadataToOps(sheetName: string): EngineOp[] {
-    const ops: EngineOp[] = [];
-    this.workbook.listRowAxisEntries(sheetName).forEach((entry) => {
-      ops.push({ kind: "insertRows", sheetName, start: entry.index, count: 1, entries: [entry] });
-    });
-    this.workbook.listColumnAxisEntries(sheetName).forEach((entry) => {
-      ops.push({
-        kind: "insertColumns",
-        sheetName,
-        start: entry.index,
-        count: 1,
-        entries: [entry],
-      });
-    });
-    this.workbook.listRowMetadata(sheetName).forEach((record) => {
-      ops.push({
-        kind: "updateRowMetadata",
-        sheetName,
-        start: record.start,
-        count: record.count,
-        size: record.size,
-        hidden: record.hidden,
-      });
-    });
-    this.workbook.listColumnMetadata(sheetName).forEach((record) => {
-      ops.push({
-        kind: "updateColumnMetadata",
-        sheetName,
-        start: record.start,
-        count: record.count,
-        size: record.size,
-        hidden: record.hidden,
-      });
-    });
-    this.workbook.listStyleRanges(sheetName).forEach((record) => {
-      ops.push({ kind: "setStyleRange", range: { ...record.range }, styleId: record.styleId });
-    });
-    this.workbook.listFormatRanges(sheetName).forEach((record) => {
-      ops.push({ kind: "setFormatRange", range: { ...record.range }, formatId: record.formatId });
-    });
-    const freezePane = this.workbook.getFreezePane(sheetName);
-    if (freezePane) {
-      ops.push({ kind: "setFreezePane", sheetName, rows: freezePane.rows, cols: freezePane.cols });
-    }
-    this.workbook.listFilters(sheetName).forEach((record) => {
-      ops.push({ kind: "setFilter", sheetName, range: { ...record.range } });
-    });
-    this.workbook.listSorts(sheetName).forEach((record) => {
-      ops.push({
-        kind: "setSort",
-        sheetName,
-        range: { ...record.range },
-        keys: record.keys.map((key) => Object.assign({}, key)),
-      });
-    });
-    return ops;
-  }
-
-  private axisMetadataToSnapshot(
-    records: readonly WorkbookAxisMetadataRecord[],
-  ): WorkbookAxisMetadataSnapshot[] {
-    return records.map((record) => {
-      const snapshot: WorkbookAxisMetadataSnapshot = {
-        start: record.start,
-        count: record.count,
-      };
-      if (record.size !== null) {
-        snapshot.size = record.size;
-      }
-      if (record.hidden !== null) {
-        snapshot.hidden = record.hidden;
-      }
-      return snapshot;
-    });
-  }
-
-  private freezePaneToSnapshot(
-    record: { rows: number; cols: number } | undefined,
-  ): WorkbookFreezePaneSnapshot | undefined {
-    if (!record) {
-      return undefined;
-    }
-    return { rows: record.rows, cols: record.cols };
   }
 
   private captureRowRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
@@ -3759,7 +3598,7 @@ export class SpreadsheetEngine {
         const restoredOps: EngineOp[] = [
           { kind: "upsertSheet", name: sheet.name, order: sheet.order },
         ];
-        restoredOps.push(...this.sheetMetadataToOps(sheet.name));
+        restoredOps.push(...sheetMetadataToOps(this.workbook, sheet.name));
         this.workbook
           .listTables()
           .filter((table) => table.sheetName === sheet.name)
