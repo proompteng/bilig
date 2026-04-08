@@ -48,9 +48,12 @@ vi.mock("../store.js", () => ({
   applyNumberFormatDiff: storeFns.applyNumberFormatDiff,
   applySourceProjectionDiff: storeFns.applySourceProjectionDiff,
   applyStyleDiff: storeFns.applyStyleDiff,
-  persistCellEvalRangeDiff: storeFns.persistCellEvalRangeDiff,
   persistCellSourceRange: storeFns.persistCellSourceRange,
   upsertWorkbookHeader: storeFns.upsertWorkbookHeader,
+}));
+
+vi.mock("../workbook-calculation-store.js", () => ({
+  persistCellEvalRangeDiff: storeFns.persistCellEvalRangeDiff,
 }));
 
 vi.mock("../workbook-change-store.js", () => ({

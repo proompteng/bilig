@@ -24,8 +24,11 @@ vi.mock("../store.js", () => ({
   applyStyleDiff: storeFns.applyStyleDiff,
   applyWorkbookMetadataDiff: storeFns.applyWorkbookMetadataDiff,
   insertWorkbookHeaderIfMissing: storeFns.insertWorkbookHeaderIfMissing,
-  persistCellEvalRows: storeFns.persistCellEvalRows,
   upsertWorkbookHeader: storeFns.upsertWorkbookHeader,
+}));
+
+vi.mock("../workbook-calculation-store.js", () => ({
+  persistCellEvalRows: storeFns.persistCellEvalRows,
 }));
 
 import {

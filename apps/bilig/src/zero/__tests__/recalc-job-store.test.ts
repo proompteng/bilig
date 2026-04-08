@@ -9,10 +9,13 @@ const storeFns = vi.hoisted(() => ({
 }));
 
 vi.mock("../store.js", () => ({
+  shouldPersistWorkbookCheckpointRevision: storeFns.shouldPersistWorkbookCheckpointRevision,
+}));
+
+vi.mock("../workbook-calculation-store.js", () => ({
   persistCellEvalDiff: storeFns.persistCellEvalDiff,
   persistCellEvalIncremental: storeFns.persistCellEvalIncremental,
   persistWorkbookCheckpoint: storeFns.persistWorkbookCheckpoint,
-  shouldPersistWorkbookCheckpointRevision: storeFns.shouldPersistWorkbookCheckpointRevision,
 }));
 
 import {

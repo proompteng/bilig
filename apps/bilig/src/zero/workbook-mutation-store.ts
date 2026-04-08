@@ -26,7 +26,6 @@ import {
   applyNumberFormatDiff,
   applySourceProjectionDiff,
   applyStyleDiff,
-  persistCellEvalRangeDiff,
   persistCellSourceRange,
   upsertWorkbookHeader,
   type PersistWorkbookMutationOptions,
@@ -34,6 +33,7 @@ import {
   type Queryable,
   type WorkbookProjectionCommit,
 } from "./store.js";
+import { persistCellEvalRangeDiff } from "./workbook-calculation-store.js";
 
 function buildFocusedProjectionCellRows(
   projection: PersistWorkbookMutationOptions["previousState"]["projection"],

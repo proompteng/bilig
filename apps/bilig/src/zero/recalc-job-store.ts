@@ -2,13 +2,12 @@ import type { EngineReplicaSnapshot } from "@bilig/core";
 import type { WorkbookSnapshot } from "@bilig/protocol";
 import type { CellEvalRow } from "./projection.js";
 import { isDirtyRegion, parseInteger } from "./store-support.js";
+import { shouldPersistWorkbookCheckpointRevision, type Queryable } from "./store.js";
 import {
   persistCellEvalDiff,
   persistCellEvalIncremental,
   persistWorkbookCheckpoint,
-  shouldPersistWorkbookCheckpointRevision,
-  type Queryable,
-} from "./store.js";
+} from "./workbook-calculation-store.js";
 
 const RECALC_LEASE_MS = 30_000;
 const MAX_RECALC_ATTEMPTS = 3;

@@ -22,11 +22,11 @@ import {
   applyStyleDiff,
   applyWorkbookMetadataDiff,
   insertWorkbookHeaderIfMissing,
-  persistCellEvalRows,
   upsertWorkbookHeader,
   type Queryable,
   type ReplaceWorkbookDocumentInput,
 } from "./store.js";
+import { persistCellEvalRows } from "./workbook-calculation-store.js";
 
 const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2;
 
