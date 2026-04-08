@@ -1,6 +1,6 @@
 import { isCommitOps } from "@bilig/core";
 import type { Zero } from "@rocicorp/zero";
-import { mutators } from "@bilig/zero-sync";
+import { createRenderCommitArgs, mutators } from "@bilig/zero-sync";
 import type { CellNumberFormatInput, CellStyleField, CellStylePatch } from "@bilig/protocol";
 import { isCellRangeRef, isLiteralInput } from "@bilig/protocol";
 
@@ -152,7 +152,9 @@ export function buildZeroWorkbookMutation(
       if (!isCommitOps(ops)) {
         throw new Error("Invalid renderCommit args");
       }
-      return mutators.workbook.renderCommit({ documentId, clientMutationId, ops });
+      return mutators.workbook.renderCommit(
+        createRenderCommitArgs({ documentId, clientMutationId, ops }),
+      );
     }
     case "fillRange":
     case "copyRange":

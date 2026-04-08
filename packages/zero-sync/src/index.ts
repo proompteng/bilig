@@ -6,6 +6,7 @@ export {
   clearRangeArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
+  createRenderCommitArgs,
   rangeMutationArgsSchema,
   renderCommitArgsSchema,
   revertWorkbookChangeArgsSchema,
@@ -13,6 +14,8 @@ export {
   setCellValueArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  parseApplyBatchArgs,
+  parseRenderCommitArgs,
   updateColumnWidthArgsSchema,
   updatePresenceArgsSchema,
 } from "./mutators.js";

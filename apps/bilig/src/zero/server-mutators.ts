@@ -12,14 +12,14 @@ import type {
   CellStylePatch,
 } from "@bilig/protocol";
 import {
-  applyBatchArgsSchema,
   applyAgentCommandBundleArgsSchema,
   clearRangeArgsSchema,
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
+  parseApplyBatchArgs,
+  parseRenderCommitArgs,
   rangeMutationArgsSchema,
-  renderCommitArgsSchema,
   revertWorkbookChangeArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
@@ -317,7 +317,7 @@ export async function handleServerMutator(
 
   switch (name) {
     case "workbook.applyBatch": {
-      const parsed = applyBatchArgsSchema.parse(args);
+      const parsed = parseApplyBatchArgs(args);
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,
@@ -450,7 +450,7 @@ export async function handleServerMutator(
     }
 
     case "workbook.renderCommit": {
-      const parsed = renderCommitArgsSchema.parse(args);
+      const parsed = parseRenderCommitArgs(args);
       await commitWorkbookMutation(
         parsed.documentId,
         serverTx,

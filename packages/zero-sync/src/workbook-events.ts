@@ -13,12 +13,13 @@ import {
   isWorkbookAgentCommandBundle,
   type WorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
-import { applyBatchArgsSchema } from "./mutators.js";
-import type { CommitOp, SpreadsheetEngine } from "@bilig/core";
-import type { EngineOp } from "@bilig/workbook-domain";
-import { z } from "zod";
-
-type EngineOpBatch = z.infer<typeof applyBatchArgsSchema>["batch"];
+import { isCommitOps, type CommitOp, type SpreadsheetEngine } from "@bilig/core";
+import {
+  isEngineOpBatch,
+  isEngineOps,
+  type EngineOp,
+  type EngineOpBatch,
+} from "@bilig/workbook-domain";
 
 export type WorkbookChangeUndoBundle =
   | {
@@ -166,7 +167,7 @@ export function isWorkbookChangeUndoBundle(value: unknown): value is WorkbookCha
   }
   switch (value["kind"]) {
     case "engineOps":
-      return Array.isArray(value["ops"]);
+      return isEngineOps(value["ops"]);
     case "snapshot":
       return isWorkbookSnapshot(value["snapshot"]);
     default:
@@ -181,7 +182,7 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
 
   switch (value["kind"]) {
     case "applyBatch":
-      return Array.isArray(value["batch"]);
+      return isEngineOpBatch(value["batch"]);
     case "applyAgentCommandBundle":
       return isWorkbookAgentCommandBundle(value["bundle"]);
     case "setCellValue":
@@ -201,7 +202,7 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
     case "clearRange":
       return isCellRangeRef(value["range"]);
     case "renderCommit":
-      return Array.isArray(value["ops"]);
+      return isCommitOps(value["ops"]);
     case "fillRange":
     case "copyRange":
     case "moveRange":
