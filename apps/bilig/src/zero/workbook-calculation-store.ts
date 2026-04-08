@@ -291,3 +291,30 @@ export async function persistWorkbookCheckpoint(
     [documentId, WORKBOOK_CHECKPOINT_RETENTION],
   );
 }
+
+export async function backfillWorkbookSnapshotsFromInlineState(db: Queryable): Promise<void> {
+  await db.query(
+    `
+      INSERT INTO workbook_snapshot (
+        workbook_id,
+        revision,
+        format,
+        payload,
+        replica_snapshot,
+        created_at
+      )
+      SELECT
+        id,
+        head_revision,
+        $1,
+        snapshot,
+        replica_snapshot,
+        updated_at
+      FROM workbooks
+      WHERE snapshot IS NOT NULL
+      ON CONFLICT (workbook_id, revision)
+      DO NOTHING
+    `,
+    [WORKBOOK_CHECKPOINT_FORMAT],
+  );
+}

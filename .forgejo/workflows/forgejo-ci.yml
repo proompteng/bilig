@@ -56,6 +56,7 @@ jobs:
           export PATH="$HOME/.bun/bin:$PATH"
           pnpm protocol:check
           pnpm formula-inventory:check
+          pnpm workspace-resolution:check
           pnpm naming:check
           pnpm lint
           pnpm wasm:build

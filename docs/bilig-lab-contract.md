@@ -24,6 +24,7 @@
 - `bilig` docs must not prescribe Argo implementation details beyond required runtime assumptions
 - `lab` docs must not redefine formula semantics or product acceptance logic
 - every runtime assumption that affects formula behavior or performance must be documented on both sides with matching language
+- required Zero data migrations must complete before a new `bilig` app version is allowed to become healthy
 
 ## Companion docs
 

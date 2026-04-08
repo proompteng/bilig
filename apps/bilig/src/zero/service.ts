@@ -30,9 +30,12 @@ import { handleServerMutator } from "./server-mutators.js";
 import { ZeroRecalcWorker } from "./recalc-worker.js";
 import { loadWorkbookEventRecordsAfter } from "./store.js";
 import {
-  backfillAuthoritativeCellEval,
-  dropLegacyZeroSyncSchemaObjects,
-} from "./workbook-migration-store.js";
+  assertZeroDataMigrationsReady,
+  ensureZeroDataMigrationSchema,
+  resolveAllowPendingCleanupMigrations,
+  resolveRunDataMigrationsOnBoot,
+  runPendingZeroDataMigrations,
+} from "./data-migration-runner.js";
 import { persistWorkbookMutation } from "./workbook-mutation-store.js";
 import {
   acquireWorkbookMutationLock,
@@ -40,7 +43,7 @@ import {
 } from "./workbook-runtime-store.js";
 import { ensureWorkbookPresenceSchema } from "./presence-store.js";
 import { ensureZeroPublication } from "./publication-store.js";
-import { backfillWorkbookChanges, ensureWorkbookChangeSchema } from "./workbook-change-store.js";
+import { ensureWorkbookChangeSchema } from "./workbook-change-store.js";
 import { ensureZeroSyncSchema } from "./zero-schema-store.js";
 import {
   appendWorkbookAgentRun,
@@ -182,9 +185,13 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await ensureWorkbookChangeSchema(this.pool);
     await ensureWorkbookAgentRunSchema(this.pool);
     await ensureZeroPublication(this.pool);
-    await backfillAuthoritativeCellEval(this.pool);
-    await backfillWorkbookChanges(this.pool);
-    await dropLegacyZeroSyncSchemaObjects(this.pool);
+    await ensureZeroDataMigrationSchema(this.pool);
+    if (resolveRunDataMigrationsOnBoot()) {
+      await runPendingZeroDataMigrations(this.pool);
+    }
+    await assertZeroDataMigrationsReady(this.pool, {
+      allowPendingCleanup: resolveAllowPendingCleanupMigrations(),
+    });
     this.recalcWorker.start();
   }
 

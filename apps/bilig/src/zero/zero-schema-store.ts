@@ -1,7 +1,4 @@
-import { repairWorkbookSheetIds } from "./sheet-id-repair.js";
 import type { Queryable } from "./store.js";
-
-const WORKBOOK_CHECKPOINT_FORMAT = "json-v1";
 
 export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   await db.query(`
@@ -234,8 +231,6 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
   await db.query(
     `CREATE INDEX IF NOT EXISTS sheets_workbook_sort_order_idx ON sheets(workbook_id, sort_order);`,
   );
-  await db.query(`UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL;`);
-  await repairWorkbookSheetIds(db);
   await db.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS sheets_workbook_sheet_id_idx ON sheets(workbook_id, sheet_id);`,
   );
@@ -300,29 +295,4 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
       END IF;
     END $$;
   `);
-
-  await db.query(
-    `
-      INSERT INTO workbook_snapshot (
-        workbook_id,
-        revision,
-        format,
-        payload,
-        replica_snapshot,
-        created_at
-      )
-      SELECT
-        id,
-        head_revision,
-        $1,
-        snapshot,
-        replica_snapshot,
-        updated_at
-      FROM workbooks
-      WHERE snapshot IS NOT NULL
-      ON CONFLICT (workbook_id, revision)
-      DO NOTHING
-    `,
-    [WORKBOOK_CHECKPOINT_FORMAT],
-  );
 }

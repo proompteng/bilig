@@ -1,29 +1,6 @@
 {
+  "extends": "./tsconfig.workspace-paths.json",
   "files": [],
-  "compilerOptions": {
-    "paths": {
-      "@bilig/actors": ["./packages/actors/src/index.ts"],
-      "@bilig/agent-api": ["./packages/agent-api/src/index.ts"],
-      "@bilig/benchmarks": ["./packages/benchmarks/src/index.ts"],
-      "@bilig/binary-protocol": ["./packages/binary-protocol/src/index.ts"],
-      "@bilig/contracts": ["./packages/contracts/src/index.ts"],
-      "@bilig/core": ["./packages/core/src/index.ts"],
-      "@bilig/excel-fixtures": ["./packages/excel-fixtures/src/index.ts"],
-      "@bilig/excel-import": ["./packages/excel-import/src/index.ts"],
-      "@bilig/formula": ["./packages/formula/src/index.ts"],
-      "@bilig/grid": ["./packages/grid/src/index.ts"],
-      "@bilig/protocol": ["./packages/protocol/src/index.ts"],
-      "@bilig/renderer": ["./packages/renderer/src/index.ts"],
-      "@bilig/runtime-kernel": ["./packages/runtime-kernel/src/index.ts"],
-      "@bilig/storage-browser": ["./packages/storage-browser/src/index.ts"],
-      "@bilig/storage-server": ["./packages/storage-server/src/index.ts"],
-      "@bilig/test-fuzz": ["./packages/test-fuzz/src/index.ts"],
-      "@bilig/wasm-kernel": ["./packages/wasm-kernel/src/index.ts"],
-      "@bilig/workbook-domain": ["./packages/workbook-domain/src/index.ts"],
-      "@bilig/worker-transport": ["./packages/worker-transport/src/index.ts"],
-      "@bilig/zero-sync": ["./packages/zero-sync/src/index.ts"]
-    }
-  },
   "references": [
     { "path": "./packages/protocol" },
     { "path": "./packages/contracts" },

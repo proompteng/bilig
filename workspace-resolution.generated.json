@@ -1,0 +1,82 @@
+{
+  "@bilig/actors": {
+    "packageDir": "packages/actors",
+    "sourceEntry": "packages/actors/src/index.ts"
+  },
+  "@bilig/agent-api": {
+    "packageDir": "packages/agent-api",
+    "sourceEntry": "packages/agent-api/src/index.ts"
+  },
+  "@bilig/benchmarks": {
+    "packageDir": "packages/benchmarks",
+    "sourceEntry": "packages/benchmarks/src/index.ts"
+  },
+  "@bilig/binary-protocol": {
+    "packageDir": "packages/binary-protocol",
+    "sourceEntry": "packages/binary-protocol/src/index.ts"
+  },
+  "@bilig/contracts": {
+    "packageDir": "packages/contracts",
+    "sourceEntry": "packages/contracts/src/index.ts"
+  },
+  "@bilig/core": {
+    "packageDir": "packages/core",
+    "sourceEntry": "packages/core/src/index.ts"
+  },
+  "@bilig/excel-fixtures": {
+    "packageDir": "packages/excel-fixtures",
+    "sourceEntry": "packages/excel-fixtures/src/index.ts"
+  },
+  "@bilig/excel-import": {
+    "packageDir": "packages/excel-import",
+    "sourceEntry": "packages/excel-import/src/index.ts"
+  },
+  "@bilig/formula": {
+    "packageDir": "packages/formula",
+    "sourceEntry": "packages/formula/src/index.ts"
+  },
+  "@bilig/grid": {
+    "packageDir": "packages/grid",
+    "sourceEntry": "packages/grid/src/index.ts"
+  },
+  "@bilig/protocol": {
+    "packageDir": "packages/protocol",
+    "sourceEntry": "packages/protocol/src/index.ts"
+  },
+  "@bilig/renderer": {
+    "packageDir": "packages/renderer",
+    "sourceEntry": "packages/renderer/src/index.ts"
+  },
+  "@bilig/runtime-kernel": {
+    "packageDir": "packages/runtime-kernel",
+    "sourceEntry": "packages/runtime-kernel/src/index.ts"
+  },
+  "@bilig/storage-browser": {
+    "packageDir": "packages/storage-browser",
+    "sourceEntry": "packages/storage-browser/src/index.ts"
+  },
+  "@bilig/storage-server": {
+    "packageDir": "packages/storage-server",
+    "sourceEntry": "packages/storage-server/src/index.ts"
+  },
+  "@bilig/test-fuzz": {
+    "packageDir": "packages/test-fuzz",
+    "sourceEntry": "packages/test-fuzz/src/index.ts"
+  },
+  "@bilig/wasm-kernel": {
+    "packageDir": "packages/wasm-kernel",
+    "sourceEntry": "packages/wasm-kernel/src/index.ts"
+  },
+  "@bilig/workbook-domain": {
+    "packageDir": "packages/workbook-domain",
+    "sourceEntry": "packages/workbook-domain/src/index.ts"
+  },
+  "@bilig/worker-transport": {
+    "packageDir": "packages/worker-transport",
+    "sourceEntry": "packages/worker-transport/src/index.ts"
+  },
+  "@bilig/zero-sync": {
+    "packageDir": "packages/zero-sync",
+    "sourceEntry": "packages/zero-sync/src/index.ts"
+  }
+}

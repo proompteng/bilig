@@ -43,7 +43,7 @@
 
 - The browser is server-authoritative in production mode.
 - Disconnected or auth-failed Zero states must become read-only.
-- `replaceSnapshot` is legacy-only debug plumbing, not the product write path.
+- authoritative snapshot hydrate and recovery go through the worker `installAuthoritativeSnapshot(...)` path.
 - The grid contract remains viewport-patch based until a dedicated binary patch codec is introduced deliberately.
 
 ## Exit gate

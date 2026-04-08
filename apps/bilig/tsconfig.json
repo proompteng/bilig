@@ -1,22 +1,8 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.workspace-paths.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist",
-    "paths": {
-      "@bilig/agent-api": ["../../packages/agent-api/src/index.ts"],
-      "@bilig/actors": ["../../packages/actors/src/index.ts"],
-      "@bilig/binary-protocol": ["../../packages/binary-protocol/src/index.ts"],
-      "@bilig/contracts": ["../../packages/contracts/src/index.ts"],
-      "@bilig/core": ["../../packages/core/src/index.ts"],
-      "@bilig/excel-import": ["../../packages/excel-import/src/index.ts"],
-      "@bilig/formula": ["../../packages/formula/src/index.ts"],
-      "@bilig/protocol": ["../../packages/protocol/src/index.ts"],
-      "@bilig/runtime-kernel": ["../../packages/runtime-kernel/src/index.ts"],
-      "@bilig/storage-server": ["../../packages/storage-server/src/index.ts"],
-      "@bilig/workbook-domain": ["../../packages/workbook-domain/src/index.ts"],
-      "@bilig/zero-sync": ["../../packages/zero-sync/src/index.ts"]
-    }
+    "outDir": "dist"
   },
   "references": [
     { "path": "../../packages/core" },

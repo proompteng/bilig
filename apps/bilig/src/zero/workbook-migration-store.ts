@@ -23,12 +23,24 @@ import {
   applyWorkbookMetadataDiff,
   insertWorkbookHeaderIfMissing,
   upsertWorkbookHeader,
+  type QueryResultRow,
   type Queryable,
   type ReplaceWorkbookDocumentInput,
 } from "./store.js";
 import { persistCellEvalRows } from "./workbook-calculation-store.js";
+import { repairWorkbookSheetIds } from "./sheet-id-repair.js";
 
 const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2;
+
+interface WorkbookMigrationRow extends QueryResultRow {
+  readonly id: string;
+  readonly snapshot: unknown;
+  readonly replica_snapshot: unknown;
+  readonly calculated_revision: number | string | null;
+  readonly head_revision: number | string | null;
+  readonly owner_user_id: string | null;
+  readonly updated_at: string | null;
+}
 
 async function tableExists(db: Queryable, name: string): Promise<boolean> {
   const result = await db.query<{ relation: string | null }>(`SELECT to_regclass($1) AS relation`, [
@@ -71,6 +83,145 @@ async function replaceCellEvalForMigration(
   if (rows.length > 0) {
     await persistCellEvalRows(db, documentId, [], rows);
   }
+}
+
+async function collectWorkbookIds(
+  db: Queryable,
+  query: string,
+  values?: readonly unknown[],
+): Promise<Set<string>> {
+  const result = await db.query<{ workbook_id?: string | null; id?: string | null }>(
+    query,
+    values ? [...values] : undefined,
+  );
+  return new Set(
+    result.rows.flatMap((row) => {
+      if (typeof row.workbook_id === "string" && row.workbook_id.length > 0) {
+        return [row.workbook_id];
+      }
+      if (typeof row.id === "string" && row.id.length > 0) {
+        return [row.id];
+      }
+      return [];
+    }),
+  );
+}
+
+async function loadWorkbookMigrationRows(
+  db: Queryable,
+  workbookIds: readonly string[],
+): Promise<readonly WorkbookMigrationRow[]> {
+  if (workbookIds.length === 0) {
+    return [];
+  }
+  const result = await db.query<WorkbookMigrationRow>(
+    `
+      SELECT
+        id,
+        snapshot,
+        replica_snapshot,
+        calculated_revision,
+        head_revision,
+        owner_user_id,
+        updated_at
+      FROM workbooks
+      WHERE id = ANY($1::text[])
+    `,
+    [workbookIds],
+  );
+  return result.rows;
+}
+
+async function rebuildWorkbookStateForMigration(
+  db: Queryable,
+  row: WorkbookMigrationRow,
+  options: {
+    readonly replaceSourceProjection: boolean;
+    readonly replaceCellEval: boolean;
+  },
+): Promise<void> {
+  const checkpointPayload = parseCheckpointPayload(row.snapshot, row.id);
+  const replicaState = parseCheckpointReplicaState(row.replica_snapshot);
+  const updatedAt = row.updated_at ?? nowIso();
+  const headRevision = parseInteger(row.head_revision);
+  const calculatedRevision = parseInteger(row.calculated_revision);
+  const ownerUserId = row.owner_user_id ?? "system";
+
+  const engine = new SpreadsheetEngine({
+    workbookName: row.id,
+    replicaId: `migration:${row.id}:${headRevision}`,
+  });
+  await engine.ready();
+  engine.importSnapshot(checkpointPayload);
+  if (replicaState) {
+    engine.importReplicaSnapshot(replicaState);
+  }
+
+  if (options.replaceSourceProjection) {
+    const projection = buildWorkbookSourceProjection(row.id, checkpointPayload, {
+      revision: headRevision,
+      calculatedRevision,
+      ownerUserId,
+      updatedBy: ownerUserId,
+      updatedAt,
+    });
+    await replaceWorkbookSourceProjectionForMigration(db, projection);
+    await upsertWorkbookHeader(db, row.id, projection.workbook, checkpointPayload, replicaState);
+  }
+
+  if (options.replaceCellEval) {
+    await replaceCellEvalForMigration(
+      db,
+      row.id,
+      materializeCellEvalProjection(engine, row.id, calculatedRevision, updatedAt),
+    );
+  }
+}
+
+async function rebuildWorkbooksForMigration(
+  db: Queryable,
+  workbookIds: ReadonlySet<string>,
+  options: {
+    readonly replaceSourceProjection: boolean;
+    readonly replaceCellEval: boolean;
+  },
+): Promise<void> {
+  if (workbookIds.size === 0) {
+    return;
+  }
+  const rows = await loadWorkbookMigrationRows(db, [...workbookIds]);
+  await Promise.all(
+    rows.map(async (row) => {
+      await rebuildWorkbookStateForMigration(db, row, options);
+    }),
+  );
+}
+
+async function loadLegacyProjectionWorkbookIds(db: Queryable): Promise<Set<string>> {
+  const workbookIds = await collectWorkbookIds(
+    db,
+    `
+      SELECT id
+      FROM workbooks
+      WHERE source_projection_version < $1
+    `,
+    [AUTHORITATIVE_SOURCE_PROJECTION_VERSION],
+  );
+  if (await tableExists(db, "sheet_style_ranges")) {
+    const styleWorkbookIds = await collectWorkbookIds(
+      db,
+      `SELECT DISTINCT workbook_id FROM sheet_style_ranges`,
+    );
+    styleWorkbookIds.forEach((workbookId) => workbookIds.add(workbookId));
+  }
+  if (await tableExists(db, "sheet_format_ranges")) {
+    const formatWorkbookIds = await collectWorkbookIds(
+      db,
+      `SELECT DISTINCT workbook_id FROM sheet_format_ranges`,
+    );
+    formatWorkbookIds.forEach((workbookId) => workbookIds.add(workbookId));
+  }
+  return workbookIds;
 }
 
 export async function replaceWorkbookDocument(
@@ -128,24 +279,21 @@ export async function ensureWorkbookDocumentExists(
   await replaceWorkbookSourceProjectionForMigration(db, projection);
 }
 
-export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void> {
-  const styleRangesExist = await tableExists(db, "sheet_style_ranges");
-  const formatRangesExist = await tableExists(db, "sheet_format_ranges");
-  const legacyWorkbookIds = new Set<string>();
+export async function repairWorkbookSheetIdsForMigration(db: Queryable): Promise<void> {
+  await db.query(`UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL`);
+  await repairWorkbookSheetIds(db);
+}
 
-  const staleProjectionRows = await db.query<{ id: string }>(
-    `
-      SELECT id
-      FROM workbooks
-      WHERE source_projection_version < $1
-    `,
-    [AUTHORITATIVE_SOURCE_PROJECTION_VERSION],
-  );
-  for (const row of staleProjectionRows.rows) {
-    legacyWorkbookIds.add(row.id);
-  }
+export async function backfillWorkbookSourceProjectionVersion(db: Queryable): Promise<void> {
+  await rebuildWorkbooksForMigration(db, await loadLegacyProjectionWorkbookIds(db), {
+    replaceSourceProjection: true,
+    replaceCellEval: false,
+  });
+}
 
-  const staleRenderRows = await db.query<{ workbook_id: string }>(
+export async function backfillCellEvalStyleJson(db: Queryable): Promise<void> {
+  const workbookIds = await collectWorkbookIds(
+    db,
     `
       SELECT DISTINCT workbook_id
       FROM cell_eval
@@ -153,91 +301,10 @@ export async function backfillAuthoritativeCellEval(db: Queryable): Promise<void
         AND style_json IS NULL
     `,
   );
-  for (const row of staleRenderRows.rows) {
-    legacyWorkbookIds.add(row.workbook_id);
-  }
-
-  if (styleRangesExist) {
-    const legacyStyleRows = await db.query<{ workbook_id: string }>(
-      `SELECT DISTINCT workbook_id FROM sheet_style_ranges`,
-    );
-    for (const row of legacyStyleRows.rows) {
-      legacyWorkbookIds.add(row.workbook_id);
-    }
-  }
-
-  if (formatRangesExist) {
-    const legacyFormatRows = await db.query<{ workbook_id: string }>(
-      `SELECT DISTINCT workbook_id FROM sheet_format_ranges`,
-    );
-    for (const row of legacyFormatRows.rows) {
-      legacyWorkbookIds.add(row.workbook_id);
-    }
-  }
-
-  if (legacyWorkbookIds.size === 0) {
-    return;
-  }
-
-  const result = await db.query<{
-    id: string;
-    snapshot: unknown;
-    replica_snapshot: unknown;
-    calculated_revision: number | string | null;
-    head_revision: number | string | null;
-    owner_user_id: string | null;
-    updated_at: string | null;
-  }>(
-    `
-      SELECT
-        id,
-        snapshot,
-        replica_snapshot,
-        calculated_revision,
-        head_revision,
-        owner_user_id,
-        updated_at
-      FROM workbooks
-      WHERE id = ANY($1::text[])
-    `,
-    [[...legacyWorkbookIds]],
-  );
-
-  await Promise.all(
-    result.rows.map(async (row) => {
-      const checkpointPayload = parseCheckpointPayload(row.snapshot, row.id);
-      const replicaState = parseCheckpointReplicaState(row.replica_snapshot);
-      const updatedAt = row.updated_at ?? nowIso();
-      const engine = new SpreadsheetEngine({
-        workbookName: row.id,
-        replicaId: `cell-eval-backfill:${row.id}`,
-      });
-      await engine.ready();
-      engine.importSnapshot(checkpointPayload);
-      if (replicaState) {
-        engine.importReplicaSnapshot(replicaState);
-      }
-      const projection = buildWorkbookSourceProjection(row.id, checkpointPayload, {
-        revision: parseInteger(row.head_revision),
-        calculatedRevision: parseInteger(row.calculated_revision),
-        ownerUserId: row.owner_user_id ?? "system",
-        updatedBy: row.owner_user_id ?? "system",
-        updatedAt,
-      });
-      await replaceWorkbookSourceProjectionForMigration(db, projection);
-      await replaceCellEvalForMigration(
-        db,
-        row.id,
-        materializeCellEvalProjection(
-          engine,
-          row.id,
-          parseInteger(row.calculated_revision),
-          updatedAt,
-        ),
-      );
-      await upsertWorkbookHeader(db, row.id, projection.workbook, checkpointPayload, replicaState);
-    }),
-  );
+  await rebuildWorkbooksForMigration(db, workbookIds, {
+    replaceSourceProjection: false,
+    replaceCellEval: true,
+  });
 }
 
 export async function dropLegacyZeroSyncSchemaObjects(db: Queryable): Promise<void> {

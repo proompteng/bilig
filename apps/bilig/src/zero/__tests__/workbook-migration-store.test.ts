@@ -11,6 +11,7 @@ const storeFns = vi.hoisted(() => ({
   applyWorkbookMetadataDiff: vi.fn(),
   insertWorkbookHeaderIfMissing: vi.fn(),
   persistCellEvalRows: vi.fn(),
+  repairWorkbookSheetIds: vi.fn(),
   upsertWorkbookHeader: vi.fn(),
 }));
 
@@ -31,10 +32,16 @@ vi.mock("../workbook-calculation-store.js", () => ({
   persistCellEvalRows: storeFns.persistCellEvalRows,
 }));
 
+vi.mock("../sheet-id-repair.js", () => ({
+  repairWorkbookSheetIds: storeFns.repairWorkbookSheetIds,
+}));
+
 import {
-  backfillAuthoritativeCellEval,
+  backfillCellEvalStyleJson,
+  backfillWorkbookSourceProjectionVersion,
   dropLegacyZeroSyncSchemaObjects,
   ensureWorkbookDocumentExists,
+  repairWorkbookSheetIdsForMigration,
 } from "../workbook-migration-store.js";
 import type { Queryable } from "../store.js";
 
@@ -65,19 +72,40 @@ describe("workbook migration store", () => {
     ]);
   });
 
-  it("returns early from backfill when no legacy workbook ids are found", async () => {
+  it("repairs sheet ids after backfilling missing sort-order ids", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const db: Queryable = { query };
+
+    await repairWorkbookSheetIdsForMigration(db);
+
+    expect(query).toHaveBeenCalledWith(
+      `UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL`,
+    );
+    expect(storeFns.repairWorkbookSheetIds).toHaveBeenCalledWith(db);
+  });
+
+  it("returns early from projection backfill when no legacy workbook ids are found", async () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rows: [{ relation: null }] })
       .mockResolvedValueOnce({ rows: [{ relation: null }] })
-      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
     const db: Queryable = { query };
 
-    await backfillAuthoritativeCellEval(db);
+    await backfillWorkbookSourceProjectionVersion(db);
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
     expect(storeFns.upsertWorkbookHeader).not.toHaveBeenCalled();
+    expect(storeFns.persistCellEvalRows).not.toHaveBeenCalled();
+  });
+
+  it("returns early from cell-eval backfill when no stale style_json rows are found", async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [] });
+    const db: Queryable = { query };
+
+    await backfillCellEvalStyleJson(db);
+
+    expect(query).toHaveBeenCalledOnce();
     expect(storeFns.persistCellEvalRows).not.toHaveBeenCalled();
   });
 });

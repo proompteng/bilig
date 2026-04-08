@@ -12,15 +12,18 @@
   "scripts": {
     "dev": "pnpm dev:web-local",
     "dev:web": "pnpm --filter @bilig/web dev",
-    "dev:local": "pnpm --filter @bilig/app dev",
+    "dev:local": "BILIG_RUN_DATA_MIGRATIONS_ON_BOOT=true pnpm --filter @bilig/app dev",
     "dev:web-local": "bun scripts/run-dev-web-local.ts",
-    "dev:sync": "pnpm --filter @bilig/app dev",
+    "dev:sync": "BILIG_RUN_DATA_MIGRATIONS_ON_BOOT=true pnpm --filter @bilig/app dev",
     "docker:build:app": "docker buildx build --load --target bilig-runtime -t registry.ide-newton.ts.net/lab/bilig-app:${BILIG_IMAGE_TAG:-local} .",
     "docker:publish:app": "docker buildx build --platform ${BILIG_IMAGE_PLATFORMS:-linux/amd64,linux/arm64} --provenance=false --sbom=false --push --target bilig-runtime -t registry.ide-newton.ts.net/lab/bilig-app:${BILIG_IMAGE_TAG:-local} .",
     "protocol:generate": "bun scripts/gen-protocol.ts",
     "protocol:check": "bun scripts/gen-protocol.ts --check",
     "formula-inventory:generate": "bun scripts/gen-formula-inventory.ts",
     "formula-inventory:check": "bun scripts/gen-formula-inventory.ts --check",
+    "workspace-resolution:generate": "bun scripts/gen-workspace-resolution.ts",
+    "workspace-resolution:check": "bun scripts/gen-workspace-resolution.ts --check",
+    "zero:data-migrate": "bun scripts/run-zero-data-migrations.ts",
     "naming:check": "bun scripts/check-canonical-naming.ts",
     "sheet:agent": "bun scripts/spreadsheet-agent.ts",
     "format": "oxfmt --write .oxlintrc.json package.json playwright.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
@@ -47,7 +50,7 @@
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm workspace-resolution:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
   },
   "devDependencies": {
     "@bilig/test-fuzz": "workspace:*",

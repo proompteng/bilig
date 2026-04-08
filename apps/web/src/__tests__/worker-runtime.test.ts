@@ -1243,7 +1243,7 @@ describe("WorkbookWorkerRuntime", () => {
     expect(runtime.listPendingMutations()).toHaveLength(1);
   });
 
-  it("rebases authoritative snapshots by replaying pending local mutations", async () => {
+  it("installs authoritative reconcile snapshots by replaying pending local mutations", async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),
     });
@@ -1259,8 +1259,8 @@ describe("WorkbookWorkerRuntime", () => {
       args: ["Sheet1", "A1", 17],
     });
 
-    await runtime.rebaseToSnapshot(
-      {
+    await runtime.installAuthoritativeSnapshot({
+      snapshot: {
         version: 1,
         workbook: { name: "rebase-doc" },
         sheets: [
@@ -1271,8 +1271,9 @@ describe("WorkbookWorkerRuntime", () => {
           },
         ],
       },
-      3,
-    );
+      authoritativeRevision: 3,
+      mode: "reconcile",
+    });
 
     expect(runtime.getAuthoritativeRevision()).toBe(3);
     expect(runtime.getCell("Sheet1", "A1").value).toEqual({

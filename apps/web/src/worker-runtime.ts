@@ -100,6 +100,12 @@ export interface WorkbookWorkerBootstrapResult {
   requiresAuthoritativeHydrate: boolean;
 }
 
+export interface InstallAuthoritativeSnapshotInput {
+  readonly snapshot: WorkbookSnapshot;
+  readonly authoritativeRevision: number;
+  readonly mode: "bootstrap" | "reconcile";
+}
+
 const DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT = 100_000;
 
 export class WorkbookWorkerRuntime {
@@ -283,35 +289,20 @@ export class WorkbookWorkerRuntime {
     return this.authoritativeRevision;
   }
 
-  async replaceSnapshot(
-    snapshot: WorkbookSnapshot,
-    authoritativeRevision = this.authoritativeRevision,
+  async installAuthoritativeSnapshot(
+    input: InstallAuthoritativeSnapshotInput,
   ): Promise<WorkbookWorkerStateSnapshot> {
-    this.projectionBuildVersion += 1;
-    this.projectionEnginePromise = null;
-    const options = this.requireBootstrapOptions();
-    const authoritativeEngine = await createWorkbookEngineFromState({
-      workbookName: options.documentId,
-      replicaId: options.replicaId,
-      snapshot,
-      replica: null,
-    });
-    this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision);
-    this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
-    const { engine, overlayScope } = await this.rebuildProjectionEngine();
-    this.projectionOverlayScope = overlayScope;
-    this.installEngine(engine);
-    this.projectionMatchesLocalStore = false;
-    this.viewportTileStore.reset();
-    this.snapshotCaches.invalidateProjectionSnapshot();
-    await this.persistStateNow();
-    this.broadcastViewportPatches(null, engine.getLastMetrics());
-    return this.getRuntimeState();
+    const { snapshot, authoritativeRevision, mode } = input;
+    if (mode !== "bootstrap" && mode !== "reconcile") {
+      throw new Error("Invalid authoritative snapshot install mode");
+    }
+    return this.installAuthoritativeSnapshotInternal(snapshot, authoritativeRevision, mode);
   }
 
-  async rebaseToSnapshot(
+  private async installAuthoritativeSnapshotInternal(
     snapshot: WorkbookSnapshot,
     authoritativeRevision: number,
+    mode: InstallAuthoritativeSnapshotInput["mode"],
   ): Promise<WorkbookWorkerStateSnapshot> {
     this.projectionBuildVersion += 1;
     this.projectionEnginePromise = null;
@@ -322,7 +313,10 @@ export class WorkbookWorkerRuntime {
       snapshot,
       replica: null,
     });
-    this.authoritativeRevision = authoritativeRevision;
+    this.authoritativeRevision =
+      mode === "bootstrap"
+        ? Math.max(this.authoritativeRevision, authoritativeRevision)
+        : authoritativeRevision;
     this.installAuthoritativeEngine(authoritativeEngine, snapshot, null);
     const { engine, overlayScope } = await this.rebuildProjectionEngine();
     this.projectionOverlayScope = overlayScope;

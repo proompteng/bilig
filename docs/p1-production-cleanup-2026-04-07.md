@@ -45,6 +45,7 @@ None of these are correctness bugs every day. All three are production-shape pro
 
 - `apps/bilig/src/zero/service.ts` calls `backfillAuthoritativeCellEval(this.pool)` during `initialize()`
 - `apps/bilig/src/zero/service.ts` also calls `dropLegacyZeroSyncSchemaObjects(this.pool)` in the same boot path
+- `apps/bilig/src/zero/zero-schema-store.ts` also performs sheet-id repair and workbook-snapshot backfill during schema ensure
 - `apps/bilig/src/zero/workbook-migration-store.ts` rebuilds workbook source projections and `cell_eval` rows by:
   - scanning for stale projection versions
   - scanning for stale render rows
@@ -225,22 +226,30 @@ This runner becomes the only place allowed to invoke heavy historical backfills.
 
 Split current startup work into named migrations:
 
-1. `workbook-source-projection-v2-backfill`
+1. `sheet-id-repair`
+   - current source: `UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL` plus `repairWorkbookSheetIds(...)` in `zero-schema-store.ts`
+   - repairs missing or duplicate sheet ids before dependent tables rely on them
+
+2. `workbook-source-projection-v2-backfill`
    - current source: `backfillAuthoritativeCellEval(...)` logic in `workbook-migration-store.ts`
    - scans `workbooks.source_projection_version`
    - rebuilds authoritative source projection rows
 
-2. `cell-eval-style-json-backfill`
+3. `cell-eval-style-json-backfill`
    - current source: the stale `cell_eval` scan in the same function
    - rebuilds rows where `style_id` is present but `style_json` is missing
-
-3. `legacy-zero-style-format-table-retirement`
-   - current source: `dropLegacyZeroSyncSchemaObjects(...)`
-   - only runs after backfills are confirmed complete
 
 4. `workbook-change-backfill`
    - current source: `backfillWorkbookChanges(...)`
    - remains explicit instead of hidden in startup
+
+5. `workbook-snapshot-json-v1-backfill`
+   - current source: `INSERT INTO workbook_snapshot ... SELECT ... FROM workbooks` in `zero-schema-store.ts`
+   - backfills retained JSON checkpoints from inline workbook state
+
+6. `legacy-zero-style-format-table-retirement`
+   - current source: `dropLegacyZeroSyncSchemaObjects(...)`
+   - only runs after backfills are confirmed complete
 
 These names should be committed in code and used in logs/tests.
 
@@ -253,9 +262,11 @@ Each migration must declare whether it is:
 
 Initial classification:
 
+- `sheet-id-repair`: `required`
 - `workbook-source-projection-v2-backfill`: `required`
 - `cell-eval-style-json-backfill`: `required`
 - `workbook-change-backfill`: `required`
+- `workbook-snapshot-json-v1-backfill`: `cleanup`
 - `legacy-zero-style-format-table-retirement`: `cleanup`
 
 #### Service startup contract

@@ -1,43 +1,17 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { createVitestAliasEntries, workspaceRootDir } from "./scripts/workspace-resolution.js";
 
-const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const packagesDir = join(rootDir, "packages");
-
-function createWorkspacePackageAliases() {
-  return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => {
-      const packageDir = join(packagesDir, entry.name);
-      const packageJsonPath = join(packageDir, "package.json");
-      const sourceEntryPath = join(packageDir, "src", "index.ts");
-      if (!existsSync(packageJsonPath) || !existsSync(sourceEntryPath)) {
-        return [];
-      }
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-        name?: unknown;
-      };
-      if (typeof packageJson.name !== "string" || !packageJson.name.startsWith("@bilig/")) {
-        return [];
-      }
-      return [{ find: packageJson.name, replacement: sourceEntryPath }];
-    })
-    .toSorted((left, right) => left.find.localeCompare(right.find));
-}
-
-const workspacePackageAliases = createWorkspacePackageAliases();
+const workspacePackageAliases = createVitestAliasEntries([
+  {
+    find: "@bilig/formula/program-arena",
+    replacement: join(workspaceRootDir, "packages/formula/src/program-arena.ts"),
+  },
+]);
 
 export default defineConfig({
   resolve: {
-    alias: [
-      {
-        find: "@bilig/formula/program-arena",
-        replacement: `${rootDir}packages/formula/src/program-arena.ts`,
-      },
-      ...workspacePackageAliases,
-    ],
+    alias: workspacePackageAliases,
   },
   test: {
     environment: "node",

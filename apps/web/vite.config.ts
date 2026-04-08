@@ -2,6 +2,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { createViteAliasRecord } from "../../scripts/workspace-resolution.js";
 
 const syncServerTarget =
   process.env["BILIG_SYNC_SERVER_TARGET"] ??
@@ -109,43 +110,11 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      "@bilig/actors": fileURLToPath(
-        new URL("../../packages/actors/src/index.ts", import.meta.url),
-      ),
-      "@bilig/binary-protocol": fileURLToPath(
-        new URL("../../packages/binary-protocol/src/index.ts", import.meta.url),
-      ),
-      "@bilig/contracts": fileURLToPath(
-        new URL("../../packages/contracts/src/index.ts", import.meta.url),
-      ),
+    alias: createViteAliasRecord({
       "@bilig/formula/program-arena": fileURLToPath(
         new URL("../../packages/formula/src/program-arena.ts", import.meta.url),
       ),
-      "@bilig/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)),
-      "@bilig/formula": fileURLToPath(
-        new URL("../../packages/formula/src/index.ts", import.meta.url),
-      ),
-      "@bilig/grid": fileURLToPath(new URL("../../packages/grid/src/index.ts", import.meta.url)),
-      "@bilig/protocol": fileURLToPath(
-        new URL("../../packages/protocol/src/index.ts", import.meta.url),
-      ),
-      "@bilig/renderer": fileURLToPath(
-        new URL("../../packages/renderer/src/index.ts", import.meta.url),
-      ),
-      "@bilig/runtime-kernel": fileURLToPath(
-        new URL("../../packages/runtime-kernel/src/index.ts", import.meta.url),
-      ),
-      "@bilig/storage-browser": fileURLToPath(
-        new URL("../../packages/storage-browser/src/index.ts", import.meta.url),
-      ),
-      "@bilig/zero-sync": fileURLToPath(
-        new URL("../../packages/zero-sync/src/index.ts", import.meta.url),
-      ),
-      "@bilig/wasm-kernel": fileURLToPath(
-        new URL("../../packages/wasm-kernel/src/index.ts", import.meta.url),
-      ),
-    },
+    }),
   },
   server: {
     headers: crossOriginIsolationHeaders,

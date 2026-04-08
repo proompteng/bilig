@@ -15,6 +15,7 @@ import {
   type WorkbookSnapshot,
 } from "@bilig/protocol";
 import type {
+  InstallAuthoritativeSnapshotInput,
   WorkbookWorkerBootstrapResult,
   WorkbookWorkerStateSnapshot,
 } from "./worker-runtime.js";
@@ -134,6 +135,19 @@ function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorke
 
 function isNumber(value: unknown): value is number {
   return typeof value === "number";
+}
+
+function isInstallAuthoritativeSnapshotInput(
+  value: unknown,
+): value is InstallAuthoritativeSnapshotInput {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    isWorkbookSnapshot(value["snapshot"]) &&
+    typeof value["authoritativeRevision"] === "number" &&
+    (value["mode"] === "bootstrap" || value["mode"] === "reconcile")
+  );
 }
 
 async function loadAuthoritativeEventBatch(
@@ -380,10 +394,13 @@ export async function createWorkerRuntimeSessionController(
     }
     const runtimeState = await invokeWorkerMethod(
       client,
-      "rebaseToSnapshot",
+      "installAuthoritativeSnapshot",
       isWorkbookWorkerStateSnapshot,
-      snapshot,
-      targetRevision,
+      {
+        snapshot,
+        authoritativeRevision: targetRevision,
+        mode: "reconcile",
+      } satisfies InstallAuthoritativeSnapshotInput,
     );
     currentAuthoritativeRevision = targetRevision;
     publishRuntimeState(runtimeState);
@@ -450,10 +467,13 @@ export async function createWorkerRuntimeSessionController(
       if (snapshot) {
         const hydratedState = await invokeWorkerMethod(
           client,
-          "replaceSnapshot",
+          "installAuthoritativeSnapshot",
           isWorkbookWorkerStateSnapshot,
-          snapshot,
-          currentAuthoritativeRevision,
+          {
+            snapshot,
+            authoritativeRevision: currentAuthoritativeRevision,
+            mode: "bootstrap",
+          } satisfies InstallAuthoritativeSnapshotInput,
         );
         publishRuntimeState(hydratedState);
       }
@@ -484,8 +504,16 @@ export async function createWorkerRuntimeSessionController(
     },
     async invoke(method, ...args) {
       try {
+        if (
+          method === "installAuthoritativeSnapshot" &&
+          !isInstallAuthoritativeSnapshotInput(args[0])
+        ) {
+          throw new Error(
+            "installAuthoritativeSnapshot requires a valid authoritative snapshot input",
+          );
+        }
         const result = await client.invoke(method, ...args);
-        if (method === "renderCommit" || method === "replaceSnapshot") {
+        if (method === "renderCommit" || method === "installAuthoritativeSnapshot") {
           await refreshRuntimeState();
         }
         return result;

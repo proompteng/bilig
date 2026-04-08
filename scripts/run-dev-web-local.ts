@@ -476,6 +476,7 @@ function spawnAppDev(
     BILIG_PUBLIC_SERVER_URL: publicServerUrl,
     BILIG_WEB_APP_BASE_URL: webAppBaseUrl,
     BILIG_CORS_ORIGIN: webAppBaseUrl,
+    BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: process.env["BILIG_RUN_DATA_MIGRATIONS_ON_BOOT"] ?? "true",
   };
   if (options?.postgresUrl) {
     env["DATABASE_URL"] = options.postgresUrl;
