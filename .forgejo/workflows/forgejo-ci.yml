@@ -32,12 +32,6 @@ jobs:
           node --version
           node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
 
-      - name: Install Bun bootstrap dependency
-        run: |
-          set -eu
-          apt-get update
-          apt-get install -y unzip
-
       - name: Enable pnpm via Corepack
         run: |
           set -eu
@@ -48,11 +42,7 @@ jobs:
       - name: Install latest Bun
         run: |
           set -eu
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          if [ -n "${GITHUB_PATH:-}" ]; then
-            echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
-          fi
+          npm install -g bun
           bun --version
 
       - name: Install dependencies
