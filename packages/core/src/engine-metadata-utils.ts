@@ -1,24 +1,10 @@
-import { ErrorCode, ValueTag, type CellValue, type LiteralInput } from "@bilig/protocol";
+import { ErrorCode, type CellValue, type LiteralInput } from "@bilig/protocol";
 import type { FormulaNode } from "@bilig/formula";
 import { parseCellAddress, parseFormula, renameFormulaSheetReferences } from "@bilig/formula";
 import { StringPool } from "./string-pool.js";
+import { errorValue, literalToValue } from "./engine-value-utils.js";
 import { normalizeDefinedName, normalizeWorkbookObjectName } from "./workbook-store.js";
 import type { WorkbookDefinedNameValueSnapshot } from "@bilig/protocol";
-
-function emptyValue(): CellValue {
-  return { tag: ValueTag.Empty };
-}
-
-function errorValue(code: ErrorCode): CellValue {
-  return { tag: ValueTag.Error, code };
-}
-
-function literalToValue(input: LiteralInput, stringPool: StringPool): CellValue {
-  if (input === null) return emptyValue();
-  if (typeof input === "number") return { tag: ValueTag.Number, value: input };
-  if (typeof input === "boolean") return { tag: ValueTag.Boolean, value: input };
-  return { tag: ValueTag.String, value: input, stringId: stringPool.intern(input) };
-}
 
 function literalToFormulaNode(input: LiteralInput): FormulaNode | null {
   if (typeof input === "number") {
