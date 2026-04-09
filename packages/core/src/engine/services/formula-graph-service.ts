@@ -2,8 +2,7 @@ import { Effect } from "effect";
 import { ErrorCode, FormulaMode } from "@bilig/protocol";
 import { CellFlags } from "../../cell-store.js";
 import type { CycleDetector } from "../../cycle-detection.js";
-import type { EdgeArena, EdgeSlice } from "../../edge-arena.js";
-import { isRangeEntity, makeCellEntity, entityPayload } from "../../entity-ids.js";
+import { makeCellEntity } from "../../entity-ids.js";
 import { growUint32 } from "../../engine-buffer-utils.js";
 import { errorValue } from "../../engine-value-utils.js";
 import type { EngineRuntimeState, U32 } from "../runtime-state.js";
@@ -28,30 +27,13 @@ function graphErrorMessage(message: string, cause: unknown): string {
 export function createEngineFormulaGraphService(args: {
   readonly state: Pick<EngineRuntimeState, "workbook" | "formulas" | "ranges" | "wasm">;
   readonly cycleDetector: CycleDetector;
-  readonly edgeArena: EdgeArena;
   readonly programArena: Uint32Arena;
   readonly constantArena: Float64Arena;
   readonly rangeListArena: Uint32Arena;
-  readonly reverseState: {
-    reverseCellEdges: Array<EdgeSlice | undefined>;
-    reverseRangeEdges: Array<EdgeSlice | undefined>;
-  };
   readonly getTopoIndegree: () => U32;
   readonly setTopoIndegree: (next: U32) => void;
   readonly getTopoQueue: () => U32;
   readonly setTopoQueue: (next: U32) => void;
-  readonly getTopoFormulaBuffer: () => U32;
-  readonly setTopoFormulaBuffer: (next: U32) => void;
-  readonly getTopoEntityQueue: () => U32;
-  readonly setTopoEntityQueue: (next: U32) => void;
-  readonly getTopoFormulaSeenEpoch: () => number;
-  readonly setTopoFormulaSeenEpoch: (next: number) => void;
-  readonly getTopoRangeSeenEpoch: () => number;
-  readonly setTopoRangeSeenEpoch: (next: number) => void;
-  readonly getTopoFormulaSeen: () => U32;
-  readonly setTopoFormulaSeen: (next: U32) => void;
-  readonly getTopoRangeSeen: () => U32;
-  readonly setTopoRangeSeen: (next: U32) => void;
   readonly getWasmProgramTargets: () => U32;
   readonly setWasmProgramTargets: (next: U32) => void;
   readonly getWasmProgramOffsets: () => U32;
@@ -73,29 +55,18 @@ export function createEngineFormulaGraphService(args: {
   readonly getBatchMutationDepth: () => number;
   readonly getWasmProgramSyncPending: () => boolean;
   readonly setWasmProgramSyncPending: (next: boolean) => void;
+  readonly forEachFormulaDependencyCell: (
+    cellIndex: number,
+    fn: (dependencyCellIndex: number) => void,
+  ) => void;
+  readonly collectFormulaDependents: (entityId: number) => Uint32Array;
 }): EngineFormulaGraphService {
-  const ensureTopoScratchCapacity = (
-    cellSize: number,
-    entitySize: number,
-    rangeSize: number,
-  ): void => {
+  const ensureTopoScratchCapacity = (cellSize: number): void => {
     if (cellSize > args.getTopoIndegree().length) {
       args.setTopoIndegree(growUint32(args.getTopoIndegree(), cellSize));
     }
     if (cellSize > args.getTopoQueue().length) {
       args.setTopoQueue(growUint32(args.getTopoQueue(), cellSize));
-    }
-    if (cellSize > args.getTopoFormulaBuffer().length) {
-      args.setTopoFormulaBuffer(growUint32(args.getTopoFormulaBuffer(), cellSize));
-    }
-    if (cellSize > args.getTopoFormulaSeen().length) {
-      args.setTopoFormulaSeen(growUint32(args.getTopoFormulaSeen(), cellSize));
-    }
-    if (entitySize > args.getTopoEntityQueue().length) {
-      args.setTopoEntityQueue(growUint32(args.getTopoEntityQueue(), entitySize));
-    }
-    if (rangeSize > args.getTopoRangeSeen().length) {
-      args.setTopoRangeSeen(growUint32(args.getTopoRangeSeen(), rangeSize));
     }
   };
 
@@ -129,74 +100,9 @@ export function createEngineFormulaGraphService(args: {
     }
   };
 
-  const getReverseEdgeSlice = (entityId: number): EdgeSlice | undefined => {
-    if (isRangeEntity(entityId)) {
-      return args.reverseState.reverseRangeEdges[entityPayload(entityId)];
-    }
-    return args.reverseState.reverseCellEdges[entityPayload(entityId)];
-  };
-
-  const getEntityDependents = (entityId: number): Uint32Array =>
-    args.edgeArena.readView(getReverseEdgeSlice(entityId) ?? args.edgeArena.empty());
-
-  const forEachFormulaDependencyCellNow = (
-    cellIndex: number,
-    fn: (dependencyCellIndex: number) => void,
-  ): void => {
-    const formula = args.state.formulas.get(cellIndex);
-    if (!formula) {
-      return;
-    }
-    for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
-      fn(formula.dependencyIndices[index]!);
-    }
-  };
-
-  const collectFormulaDependentsForEntityInto = (entityId: number): number => {
-    args.setTopoFormulaSeenEpoch(args.getTopoFormulaSeenEpoch() + 1);
-    args.setTopoRangeSeenEpoch(args.getTopoRangeSeenEpoch() + 1);
-
-    let entityQueueLength = 1;
-    let formulaCount = 0;
-    args.getTopoEntityQueue()[0] = entityId;
-
-    for (let queueIndex = 0; queueIndex < entityQueueLength; queueIndex += 1) {
-      const currentEntity = args.getTopoEntityQueue()[queueIndex]!;
-      const dependents = getEntityDependents(currentEntity);
-      for (let index = 0; index < dependents.length; index += 1) {
-        const dependent = dependents[index]!;
-        if (isRangeEntity(dependent)) {
-          const rangeIndex = entityPayload(dependent);
-          if (args.getTopoRangeSeen()[rangeIndex] === args.getTopoRangeSeenEpoch()) {
-            continue;
-          }
-          args.getTopoRangeSeen()[rangeIndex] = args.getTopoRangeSeenEpoch();
-          args.getTopoEntityQueue()[entityQueueLength] = dependent;
-          entityQueueLength += 1;
-          continue;
-        }
-
-        const formulaCellIndex = entityPayload(dependent);
-        if (args.getTopoFormulaSeen()[formulaCellIndex] === args.getTopoFormulaSeenEpoch()) {
-          continue;
-        }
-        args.getTopoFormulaSeen()[formulaCellIndex] = args.getTopoFormulaSeenEpoch();
-        args.getTopoFormulaBuffer()[formulaCount] = formulaCellIndex;
-        formulaCount += 1;
-      }
-    }
-
-    return formulaCount;
-  };
-
   const rebuildTopoRanksNow = (): void => {
     const requiredCellCapacity = args.state.workbook.cellStore.size + 1;
-    const requiredEntityCapacity = args.state.workbook.cellStore.size + args.state.ranges.size + 1;
-    ensureTopoScratchCapacity(
-      requiredCellCapacity,
-      requiredEntityCapacity,
-      args.state.ranges.size + 1,
-    );
+    ensureTopoScratchCapacity(requiredCellCapacity);
 
     let queueLength = 0;
     args.state.formulas.forEach((_formula, cellIndex) => {
@@ -222,9 +128,9 @@ export function createEngineFormulaGraphService(args: {
     for (let queueIndex = 0; queueIndex < queueLength; queueIndex += 1) {
       const cellIndex = args.getTopoQueue()[queueIndex]!;
       args.state.workbook.cellStore.topoRanks[cellIndex] = rank++;
-      const dependentCount = collectFormulaDependentsForEntityInto(makeCellEntity(cellIndex));
-      for (let dependentIndex = 0; dependentIndex < dependentCount; dependentIndex += 1) {
-        const dependent = args.getTopoFormulaBuffer()[dependentIndex]!;
+      const dependents = args.collectFormulaDependents(makeCellEntity(cellIndex));
+      for (let dependentIndex = 0; dependentIndex < dependents.length; dependentIndex += 1) {
+        const dependent = dependents[dependentIndex]!;
         if ((args.state.workbook.cellStore.formulaIds[dependent] ?? 0) === 0) {
           continue;
         }
@@ -242,7 +148,7 @@ export function createEngineFormulaGraphService(args: {
     const result = args.cycleDetector.detect(
       args.state.formulas.keys(),
       args.state.workbook.cellStore.size + 1,
-      (cellIndex, fn) => forEachFormulaDependencyCellNow(cellIndex, fn),
+      (cellIndex, fn) => args.forEachFormulaDependencyCell(cellIndex, fn),
       (cellIndex) => args.state.formulas.has(cellIndex),
     );
 
@@ -390,7 +296,7 @@ export function createEngineFormulaGraphService(args: {
     forEachFormulaDependencyCell(cellIndex, fn) {
       return Effect.try({
         try: () => {
-          forEachFormulaDependencyCellNow(cellIndex, fn);
+          args.forEachFormulaDependencyCell(cellIndex, fn);
         },
         catch: (cause) =>
           new EngineFormulaGraphError({

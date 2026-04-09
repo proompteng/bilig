@@ -65,9 +65,14 @@ import {
   createEngineStructureService,
   type EngineStructureService,
 } from "./services/structure-service.js";
+import {
+  createEngineTraversalService,
+  type EngineTraversalService,
+} from "./services/traversal-service.js";
 
 export interface EngineServiceRuntime {
   readonly cellState: EngineCellStateService;
+  readonly traversal: EngineTraversalService;
   readonly events: EngineEventService;
   readonly evaluation: EngineFormulaEvaluationService;
   readonly selection: EngineSelectionService;
@@ -87,7 +92,11 @@ export interface EngineServiceRuntime {
 
 type EngineMutationSupportRuntimeConfig = Omit<
   Parameters<typeof createEngineMutationSupportService>[0],
-  "removeFormula" | "rebindFormulasForSheet" | "applyDerivedOp" | "scheduleWasmProgramSync"
+  | "removeFormula"
+  | "rebindFormulasForSheet"
+  | "applyDerivedOp"
+  | "scheduleWasmProgramSync"
+  | "collectFormulaDependents"
 >;
 
 type EngineFormulaBindingRuntimeConfig = Omit<
@@ -95,9 +104,15 @@ type EngineFormulaBindingRuntimeConfig = Omit<
   | "ensureCellTracked"
   | "ensureCellTrackedByCoords"
   | "markFormulaChanged"
+  | "forEachSheetCell"
   | "resolveStructuredReference"
   | "resolveSpillReference"
   | "scheduleWasmProgramSync"
+>;
+
+type EngineFormulaGraphRuntimeConfig = Omit<
+  Parameters<typeof createEngineFormulaGraphService>[0],
+  "forEachFormulaDependencyCell" | "collectFormulaDependents"
 >;
 
 type EngineRecalcRuntimeConfig = Omit<
@@ -112,6 +127,7 @@ type EngineRecalcRuntimeConfig = Omit<
   | "composeChangedRootsAndOrdered"
   | "emptyChangedSet"
   | "getChangedInputBuffer"
+  | "getEntityDependents"
   | "materializeSpill"
   | "clearOwnedSpill"
   | "evaluateUnsupportedFormula"
@@ -120,7 +136,11 @@ type EngineRecalcRuntimeConfig = Omit<
 
 type EnginePivotRuntimeConfig = Omit<
   Parameters<typeof createEnginePivotService>[0],
-  "ensureCellTrackedByCoords" | "scheduleWasmProgramSync" | "flushWasmProgramSync" | "applyDerivedOp"
+  | "ensureCellTrackedByCoords"
+  | "forEachSheetCell"
+  | "scheduleWasmProgramSync"
+  | "flushWasmProgramSync"
+  | "applyDerivedOp"
 >;
 
 type EngineOperationRuntimeConfig = Omit<
@@ -160,6 +180,8 @@ type EngineOperationRuntimeConfig = Omit<
   | "flushWasmProgramSync"
 >;
 
+type EngineTraversalRuntimeConfig = Parameters<typeof createEngineTraversalService>[0];
+
 function requireService<Service>(service: Service | undefined, name: string): Service {
   if (service === undefined) {
     throw new Error(`Engine service ${name} is not initialized`);
@@ -188,27 +210,25 @@ export function createEngineServiceRuntime(args: {
     count: number,
   ) => import("@bilig/workbook-domain").EngineOp[];
   readonly formulaBinding: EngineFormulaBindingRuntimeConfig;
-  readonly formulaGraph: Parameters<typeof createEngineFormulaGraphService>[0];
+  readonly formulaGraph: EngineFormulaGraphRuntimeConfig;
   readonly recalc: EngineRecalcRuntimeConfig;
   readonly pivot: EnginePivotRuntimeConfig;
   readonly operation: EngineOperationRuntimeConfig;
-  readonly forEachFormulaDependencyCell: (
-    cellIndex: number,
-    fn: (dependencyCellIndex: number) => void,
-  ) => void;
+  readonly traversal: EngineTraversalRuntimeConfig;
   readonly cellToCsvValue: (cell: CellSnapshot) => string;
   readonly serializeCsv: (rows: string[][]) => string;
   readonly pivotState: {
     readonly pivotOutputOwners: Map<number, string>;
   };
-  readonly forEachSheetCell: (
-    sheetId: number,
-    fn: (cellIndex: number, row: number, col: number) => void,
-  ) => void;
-  readonly getEntityDependents: (entityId: number) => Uint32Array;
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
 }): EngineServiceRuntime {
-  const graph = createEngineFormulaGraphService(args.formulaGraph);
+  const traversal = createEngineTraversalService(args.traversal);
+  const graph = createEngineFormulaGraphService({
+    ...args.formulaGraph,
+    forEachFormulaDependencyCell: (cellIndex, fn) =>
+      traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
+    collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
+  });
   let binding: EngineFormulaBindingService | undefined;
   let operations: EngineOperationService | undefined;
   let pivot: EnginePivotService | undefined;
@@ -227,6 +247,7 @@ export function createEngineServiceRuntime(args: {
       ),
     applyDerivedOp: (op) =>
       runEngineEffect(requireService(operations, "operations").applyDerivedOp(op)),
+    collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
   const evaluation = createEngineFormulaEvaluationService({
@@ -251,12 +272,14 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(evaluation.resolveStructuredReference(tableName, columnName)),
     resolveSpillReference: (currentSheetName, sheetName, address) =>
       runEngineEffect(evaluation.resolveSpillReference(currentSheetName, sheetName, address)),
+    forEachSheetCell: (sheetId, fn) => traversal.forEachSheetCellNow(sheetId, fn),
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
   const read = createEngineReadService({
     state: args.state,
-    forEachFormulaDependencyCell: args.forEachFormulaDependencyCell,
-    getEntityDependents: args.getEntityDependents,
+    forEachFormulaDependencyCell: (cellIndex, fn) =>
+      traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
+    getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
     cellToCsvValue: args.cellToCsvValue,
     serializeCsv: args.serializeCsv,
   });
@@ -311,7 +334,7 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     materializePivot: (pivotRecord) =>
       runEngineEffect(requireService(pivot, "pivot").materializePivot(pivotRecord)),
-    getEntityDependents: args.getEntityDependents,
+    getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
   });
   operations = createEngineOperationService({
     ...args.operation,
@@ -409,7 +432,7 @@ export function createEngineServiceRuntime(args: {
     ...args.pivot,
     ensureCellTrackedByCoords: (sheetId, row, col) =>
       runEngineEffect(support.ensureCellTrackedByCoords(sheetId, row, col)),
-    forEachSheetCell: args.forEachSheetCell,
+    forEachSheetCell: (sheetId, fn) => traversal.forEachSheetCellNow(sheetId, fn),
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
     flushWasmProgramSync: () => runEngineEffect(graph.flushWasmProgramSync()),
     applyDerivedOp: (op) => runEngineEffect(operations.applyDerivedOp(op)),
@@ -429,6 +452,7 @@ export function createEngineServiceRuntime(args: {
 
   return {
     cellState,
+    traversal,
     events: createEngineEventService(args.state),
     evaluation,
     selection,

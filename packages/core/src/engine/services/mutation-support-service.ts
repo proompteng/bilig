@@ -117,8 +117,7 @@ export function createEngineMutationSupportService(args: {
   readonly applyDerivedOp: (op: DerivedOp) => number[];
   readonly scheduleWasmProgramSync: () => void;
   readonly ensureRecalcScratchCapacity: (size: number) => void;
-  readonly collectFormulaDependentsForEntityInto: (entityId: number) => number;
-  readonly getTopoFormulaBuffer: () => U32;
+  readonly collectFormulaDependents: (entityId: number) => Uint32Array;
   readonly getChangedInputEpoch: () => number;
   readonly setChangedInputEpoch: (next: number) => void;
   readonly getChangedInputSeen: () => U32;
@@ -397,9 +396,9 @@ export function createEngineMutationSupportService(args: {
     let impactedCount = 0;
     for (let cellCursor = 0; cellCursor < cellIndices.length; cellCursor += 1) {
       const cellIndex = cellIndices[cellCursor]!;
-      const dependentCount = args.collectFormulaDependentsForEntityInto(makeCellEntity(cellIndex));
-      for (let dependentIndex = 0; dependentIndex < dependentCount; dependentIndex += 1) {
-        const formulaCellIndex = args.getTopoFormulaBuffer()[dependentIndex]!;
+      const dependents = args.collectFormulaDependents(makeCellEntity(cellIndex));
+      for (let dependentIndex = 0; dependentIndex < dependents.length; dependentIndex += 1) {
+        const formulaCellIndex = dependents[dependentIndex]!;
         if (args.getImpactedFormulaSeen()[formulaCellIndex] === args.getImpactedFormulaEpoch()) {
           continue;
         }

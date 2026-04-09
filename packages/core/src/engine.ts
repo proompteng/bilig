@@ -31,7 +31,6 @@ import {
 } from "./replica-state.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
-import { entityPayload, isRangeEntity } from "./entity-ids.js";
 import { growUint32 } from "./engine-buffer-utils.js";
 import {
   definedNameValuesEqual,
@@ -169,12 +168,6 @@ export class SpreadsheetEngine {
   private wasmRangeColCounts: U32 = new Uint32Array(128);
   private topoIndegree: U32 = new Uint32Array(128);
   private topoQueue: U32 = new Uint32Array(128);
-  private topoFormulaBuffer: U32 = new Uint32Array(128);
-  private topoEntityQueue: U32 = new Uint32Array(128);
-  private topoFormulaSeenEpoch = 1;
-  private topoRangeSeenEpoch = 1;
-  private topoFormulaSeen: U32 = new Uint32Array(128);
-  private topoRangeSeen: U32 = new Uint32Array(128);
   private batchMutationDepth = 0;
   private wasmProgramSyncPending = false;
   private lastMetrics: RecalcMetrics = createInitialRecalcMetrics();
@@ -237,9 +230,6 @@ export class SpreadsheetEngine {
         getSelectionState: () => this.getSelectionState(),
         setSelection: (sheetName, address) => this.setSelection(sheetName, address),
         ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
-        collectFormulaDependentsForEntityInto: (entityId) =>
-          this.collectFormulaDependentsForEntityInto(entityId),
-        getTopoFormulaBuffer: () => this.topoFormulaBuffer,
         getChangedInputEpoch: () => this.changedInputEpoch,
         setChangedInputEpoch: (next) => {
           this.changedInputEpoch = next;
@@ -331,7 +321,6 @@ export class SpreadsheetEngine {
           reverseTableEdges: this.reverseTableEdges,
           reverseSpillEdges: this.reverseSpillEdges,
         },
-        forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
         getDependencyBuildEpoch: () => this.dependencyBuildEpoch,
         setDependencyBuildEpoch: (next) => {
           this.dependencyBuildEpoch = next;
@@ -368,14 +357,9 @@ export class SpreadsheetEngine {
       formulaGraph: {
         state: this.state,
         cycleDetector: this.cycleDetector,
-        edgeArena: this.edgeArena,
         programArena: this.programArena,
         constantArena: this.constantArena,
         rangeListArena: this.rangeListArena,
-        reverseState: {
-          reverseCellEdges: this.reverseCellEdges,
-          reverseRangeEdges: this.reverseRangeEdges,
-        },
         getTopoIndegree: () => this.topoIndegree,
         setTopoIndegree: (next) => {
           this.topoIndegree = next;
@@ -383,30 +367,6 @@ export class SpreadsheetEngine {
         getTopoQueue: () => this.topoQueue,
         setTopoQueue: (next) => {
           this.topoQueue = next;
-        },
-        getTopoFormulaBuffer: () => this.topoFormulaBuffer,
-        setTopoFormulaBuffer: (next) => {
-          this.topoFormulaBuffer = next;
-        },
-        getTopoEntityQueue: () => this.topoEntityQueue,
-        setTopoEntityQueue: (next) => {
-          this.topoEntityQueue = next;
-        },
-        getTopoFormulaSeenEpoch: () => this.topoFormulaSeenEpoch,
-        setTopoFormulaSeenEpoch: (next) => {
-          this.topoFormulaSeenEpoch = next;
-        },
-        getTopoRangeSeenEpoch: () => this.topoRangeSeenEpoch,
-        setTopoRangeSeenEpoch: (next) => {
-          this.topoRangeSeenEpoch = next;
-        },
-        getTopoFormulaSeen: () => this.topoFormulaSeen,
-        setTopoFormulaSeen: (next) => {
-          this.topoFormulaSeen = next;
-        },
-        getTopoRangeSeen: () => this.topoRangeSeen,
-        setTopoRangeSeen: (next) => {
-          this.topoRangeSeen = next;
         },
         getWasmProgramTargets: () => this.wasmProgramTargets,
         setWasmProgramTargets: (next) => {
@@ -450,13 +410,19 @@ export class SpreadsheetEngine {
           this.wasmProgramSyncPending = next;
         },
       },
-      forEachFormulaDependencyCell: (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
+      traversal: {
+        state: this.state,
+        edgeArena: this.edgeArena,
+        reverseState: {
+          reverseCellEdges: this.reverseCellEdges,
+          reverseRangeEdges: this.reverseRangeEdges,
+        },
+      },
       cellToCsvValue: (cell) => cellToCsvValue(cell),
       serializeCsv: (rows) => serializeCsv(rows),
       pivotState: {
         pivotOutputOwners: this.pivotOutputOwners,
       },
-      forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
       recalc: {
         state: this.state,
         getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
@@ -465,12 +431,10 @@ export class SpreadsheetEngine {
         ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
         getPendingKernelSync: () => this.pendingKernelSync,
         getWasmBatch: () => this.wasmBatch,
-        getEntityDependents: (entityId) => this.getEntityDependents(entityId),
         now: () => new Date(),
         random: () => Math.random(),
         performanceNow: () => performance.now(),
       },
-      getEntityDependents: (entityId) => this.getEntityDependents(entityId),
       pivot: {
         state: {
           workbook: this.state.workbook,
@@ -480,7 +444,6 @@ export class SpreadsheetEngine {
           wasm: this.state.wasm,
           pivotOutputOwners: this.pivotOutputOwners,
         },
-        forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
       },
       applyRemoteSnapshot: (snapshot) => {
         this.importSnapshot(snapshot);
@@ -1166,81 +1129,6 @@ export class SpreadsheetEngine {
       }
     }
     return count;
-  }
-
-  private getEntityDependents(entityId: number): Uint32Array {
-    const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
-    return this.edgeArena.readView(slice);
-  }
-
-  private getReverseEdgeSlice(entityId: number): EdgeSlice | undefined {
-    if (isRangeEntity(entityId)) {
-      return this.reverseRangeEdges[entityPayload(entityId)];
-    }
-    return this.reverseCellEdges[entityPayload(entityId)];
-  }
-
-  private collectFormulaDependentsForEntityInto(entityId: number): number {
-    this.topoFormulaSeenEpoch += 1;
-    this.topoRangeSeenEpoch += 1;
-
-    let entityQueueLength = 1;
-    let formulaCount = 0;
-    this.topoEntityQueue[0] = entityId;
-
-    for (let queueIndex = 0; queueIndex < entityQueueLength; queueIndex += 1) {
-      const currentEntity = this.topoEntityQueue[queueIndex]!;
-      const dependents = this.getEntityDependents(currentEntity);
-      for (let index = 0; index < dependents.length; index += 1) {
-        const dependent = dependents[index]!;
-        if (isRangeEntity(dependent)) {
-          const rangeIndex = entityPayload(dependent);
-          if (this.topoRangeSeen[rangeIndex] === this.topoRangeSeenEpoch) {
-            continue;
-          }
-          this.topoRangeSeen[rangeIndex] = this.topoRangeSeenEpoch;
-          this.topoEntityQueue[entityQueueLength] = dependent;
-          entityQueueLength += 1;
-          continue;
-        }
-
-        const formulaCellIndex = entityPayload(dependent);
-        if (this.topoFormulaSeen[formulaCellIndex] === this.topoFormulaSeenEpoch) {
-          continue;
-        }
-        this.topoFormulaSeen[formulaCellIndex] = this.topoFormulaSeenEpoch;
-        this.topoFormulaBuffer[formulaCount] = formulaCellIndex;
-        formulaCount += 1;
-      }
-    }
-
-    return formulaCount;
-  }
-
-  private forEachFormulaDependencyCell(
-    cellIndex: number,
-    fn: (dependencyCellIndex: number) => void,
-  ): void {
-    const formula = this.formulas.get(cellIndex);
-    if (!formula) {
-      return;
-    }
-    for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
-      fn(formula.dependencyIndices[index]!);
-    }
-  }
-
-  private forEachSheetCell(
-    sheetId: number,
-    fn: (cellIndex: number, row: number, col: number) => void,
-  ): void {
-    const sheet = this.workbook.getSheetById(sheetId);
-    if (!sheet) {
-      return;
-    }
-    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
-      fn(cellIndex, row, col);
-    });
   }
 
   private resetWorkbook(workbookName = "Workbook"): void {
