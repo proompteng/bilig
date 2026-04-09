@@ -16,7 +16,7 @@ export function cloneWorkbookRangeRecords<RecordType extends WorkbookRangeRecord
   records: readonly RecordType[],
   cloneRecord: (range: CellRangeRef, record: RecordType) => RecordType,
 ): RecordType[] {
-  return records.map((record) => cloneRecord(toPlainWorkbookRangeRef(record.range), record));
+  return records.map((record) => cloneRecord(canonicalWorkbookRangeRef(record.range), record));
 }
 
 export function overlayWorkbookRangeRecords<RecordType extends WorkbookRangeRecord>(
@@ -26,7 +26,7 @@ export function overlayWorkbookRangeRecords<RecordType extends WorkbookRangeReco
   isDefaultRecord: (record: RecordType) => boolean,
 ): RecordType[] {
   const normalizedNext = cloneRecord(
-    toPlainWorkbookRangeRef(normalizeWorkbookRangeRef(nextRecord.range)),
+    canonicalWorkbookRangeRef(nextRecord.range),
     nextRecord,
   );
   const remainders = records.flatMap((record) =>
@@ -43,7 +43,7 @@ export function replaceWorkbookRangeRecords<RecordType extends WorkbookRangeReco
   validateRecord: (record: RecordType) => void,
 ): RecordType[] {
   const nextRecords = records.map((record) =>
-    cloneRecord(toPlainWorkbookRangeRef(normalizeWorkbookRangeRef(record.range)), record),
+    cloneRecord(canonicalWorkbookRangeRef(record.range), record),
   );
   nextRecords.forEach((record) => {
     validateRecord(record);
@@ -86,6 +86,15 @@ export function normalizeWorkbookRangeRef(range: CellRangeRef): NormalizedWorkbo
     startCol,
     endCol,
   };
+}
+
+export function canonicalWorkbookRangeRef(range: CellRangeRef): CellRangeRef {
+  return toPlainWorkbookRangeRef(normalizeWorkbookRangeRef(range));
+}
+
+export function canonicalWorkbookAddress(sheetName: string, address: string): string {
+  const parsed = parseCellAddress(address, sheetName);
+  return formatAddress(parsed.row, parsed.col);
 }
 
 export function subtractWorkbookRangeRecord(existing: CellRangeRef, cut: CellRangeRef): CellRangeRef[] {

@@ -24,6 +24,8 @@ import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { SheetGrid } from "./sheet-grid.js";
 import { CellStore } from "./cell-store.js";
 import {
+  canonicalWorkbookAddress,
+  canonicalWorkbookRangeRef,
   cloneWorkbookRangeRecords,
   findWorkbookRangeRecord,
   overlayWorkbookRangeRecords,
@@ -844,7 +846,7 @@ export class WorkbookStore {
   }
 
   setFilter(sheetName: string, range: CellRangeRef): WorkbookFilterRecord {
-    const storedRange = { ...range };
+    const storedRange = canonicalWorkbookRangeRef(range);
     const record: WorkbookFilterRecord = { sheetName, range: storedRange };
     this.metadata.filters.set(filterKey(sheetName, storedRange), record);
     return record;
@@ -873,7 +875,7 @@ export class WorkbookStore {
     range: CellRangeRef,
     keys: readonly WorkbookSortKeyRecord[],
   ): WorkbookSortRecord {
-    const storedRange = { ...range };
+    const storedRange = canonicalWorkbookRangeRef(range);
     const record: WorkbookSortRecord = {
       sheetName,
       range: storedRange,
@@ -900,8 +902,9 @@ export class WorkbookStore {
   }
 
   setSpill(sheetName: string, address: string, rows: number, cols: number): WorkbookSpillRecord {
-    const record: WorkbookSpillRecord = { sheetName, address, rows, cols };
-    this.metadata.spills.set(spillKey(sheetName, address), record);
+    const normalizedAddress = canonicalWorkbookAddress(sheetName, address);
+    const record: WorkbookSpillRecord = { sheetName, address: normalizedAddress, rows, cols };
+    this.metadata.spills.set(spillKey(sheetName, normalizedAddress), record);
     return record;
   }
 
@@ -920,14 +923,16 @@ export class WorkbookStore {
   }
 
   setPivot(record: WorkbookPivotSnapshot): WorkbookPivotRecord {
+    const normalizedAddress = canonicalWorkbookAddress(record.sheetName, record.address);
     const stored: WorkbookPivotRecord = {
       ...record,
       name: record.name.trim(),
+      address: normalizedAddress,
       groupBy: [...record.groupBy],
       values: record.values.map((value) => Object.assign({}, value)),
-      source: { ...record.source },
+      source: canonicalWorkbookRangeRef(record.source),
     };
-    this.metadata.pivots.set(pivotKey(record.sheetName, record.address), stored);
+    this.metadata.pivots.set(pivotKey(record.sheetName, normalizedAddress), stored);
     return stored;
   }
 
@@ -1668,11 +1673,13 @@ function axisMetadataKey(sheetName: string, start: number, count: number): strin
 }
 
 function filterKey(sheetName: string, range: CellRangeRef): string {
-  return `${sheetName}:${range.startAddress}:${range.endAddress}`;
+  const normalized = canonicalWorkbookRangeRef(range);
+  return `${sheetName}:${normalized.startAddress}:${normalized.endAddress}`;
 }
 
 function sortKey(sheetName: string, range: CellRangeRef): string {
-  return `${sheetName}:${range.startAddress}:${range.endAddress}`;
+  const normalized = canonicalWorkbookRangeRef(range);
+  return `${sheetName}:${normalized.startAddress}:${normalized.endAddress}`;
 }
 
 function tableKey(name: string): string {
@@ -1680,11 +1687,11 @@ function tableKey(name: string): string {
 }
 
 function spillKey(sheetName: string, address: string): string {
-  return `${sheetName}!${address}`;
+  return `${sheetName}!${canonicalWorkbookAddress(sheetName, address)}`;
 }
 
 export function pivotKey(sheetName: string, address: string): string {
-  return `${sheetName}!${address}`;
+  return `${sheetName}!${canonicalWorkbookAddress(sheetName, address)}`;
 }
 
 export function makeCellKey(sheetId: number, row: number, col: number): number {
