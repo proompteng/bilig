@@ -18,3 +18,5 @@ export class EngineHistoryError extends Data.TaggedError("EngineHistoryError")<E
 export class EnginePivotError extends Data.TaggedError("EnginePivotError")<EngineServiceErrorDetails> {}
 
 export class EngineStructureError extends Data.TaggedError("EngineStructureError")<EngineServiceErrorDetails> {}
+
+export class EngineFormulaBindingError extends Data.TaggedError("EngineFormulaBindingError")<EngineServiceErrorDetails> {}

@@ -9,7 +9,6 @@ import {
   FormulaMode,
   MAX_COLS,
   MAX_ROWS,
-  Opcode,
   ValueTag,
   type CellSnapshot,
   type CellValue,
@@ -30,14 +29,11 @@ import {
 } from "@bilig/protocol";
 import {
   type FormulaNode,
-  compileFormula,
-  compileFormulaAst,
   evaluatePlanResult,
   formatAddress,
   isArrayValue,
   parseCellAddress,
   parseRangeAddress,
-  renameFormulaSheetReferences,
   translateFormulaReferences,
 } from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
@@ -60,9 +56,7 @@ import {
   definedNameValueToCellValue,
   definedNameValuesEqual,
   renameDefinedNameValueSheet,
-  resolveMetadataReferencesInAst,
   spillDependencyKey,
-  spillDependencyKeyFromRef,
   tableDependencyKey,
 } from "./engine-metadata-utils.js";
 import { normalizeRange } from "./engine-range-utils.js";
@@ -115,14 +109,12 @@ import {
   type EngineRuntimeState,
   type EngineSyncClient,
   type EngineSyncClientConnection,
-  type MaterializedDependencies,
   type PivotTableInput,
   type RuntimeFormula,
   type SpreadsheetEngineOptions,
   type SpillMaterialization,
   type TransactionLogEntry,
   type TransactionRecord,
-  UNRESOLVED_WASM_OPERAND,
   type U32,
 } from "./engine/runtime-state.js";
 import {
@@ -280,6 +272,62 @@ export class SpreadsheetEngine {
       captureColumnRangeCellState: (sheetName, start, count) =>
         this.captureColumnRangeCellState(sheetName, start, count),
       restoreCellOps: (sheetName, address) => this.restoreCellOps(sheetName, address),
+      formulaBinding: {
+        state: this.state,
+        edgeArena: this.edgeArena,
+        programArena: this.programArena,
+        constantArena: this.constantArena,
+        rangeListArena: this.rangeListArena,
+        reverseState: {
+          reverseCellEdges: this.reverseCellEdges,
+          reverseRangeEdges: this.reverseRangeEdges,
+          reverseDefinedNameEdges: this.reverseDefinedNameEdges,
+          reverseTableEdges: this.reverseTableEdges,
+          reverseSpillEdges: this.reverseSpillEdges,
+        },
+        ensureCellTracked: (sheetName, address) => this.ensureCellTracked(sheetName, address),
+        ensureCellTrackedByCoords: (sheetId, row, col) =>
+          this.ensureCellTrackedByCoords(sheetId, row, col),
+        forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
+        scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
+        markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
+        resolveStructuredReference: (tableName, columnName) =>
+          this.resolveStructuredReference(tableName, columnName),
+        resolveSpillReference: (currentSheetName, sheetName, address) =>
+          this.resolveSpillReference(currentSheetName, sheetName, address),
+        getDependencyBuildEpoch: () => this.dependencyBuildEpoch,
+        setDependencyBuildEpoch: (next) => {
+          this.dependencyBuildEpoch = next;
+        },
+        getDependencyBuildSeen: () => this.dependencyBuildSeen,
+        setDependencyBuildSeen: (next) => {
+          this.dependencyBuildSeen = next;
+        },
+        getDependencyBuildCells: () => this.dependencyBuildCells,
+        setDependencyBuildCells: (next) => {
+          this.dependencyBuildCells = next;
+        },
+        getDependencyBuildEntities: () => this.dependencyBuildEntities,
+        setDependencyBuildEntities: (next) => {
+          this.dependencyBuildEntities = next;
+        },
+        getDependencyBuildRanges: () => this.dependencyBuildRanges,
+        setDependencyBuildRanges: (next) => {
+          this.dependencyBuildRanges = next;
+        },
+        getDependencyBuildNewRanges: () => this.dependencyBuildNewRanges,
+        setDependencyBuildNewRanges: (next) => {
+          this.dependencyBuildNewRanges = next;
+        },
+        getSymbolicRefBindings: () => this.symbolicRefBindings,
+        setSymbolicRefBindings: (next) => {
+          this.symbolicRefBindings = next;
+        },
+        getSymbolicRangeBindings: () => this.symbolicRangeBindings,
+        setSymbolicRangeBindings: (next) => {
+          this.symbolicRangeBindings = next;
+        },
+      },
       readRangeCells: (range) => this.readRangeCells(range),
       toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
         this.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
@@ -315,10 +363,8 @@ export class SpreadsheetEngine {
       clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
       evaluateUnsupportedFormula: (cellIndex) => this.evaluateUnsupportedFormula(cellIndex),
       getEntityDependents: (entityId) => this.getEntityDependents(entityId),
-      removeFormula: (cellIndex) => this.removeFormula(cellIndex),
       clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
       materializePivot: (pivot) => this.materializePivot(pivot),
-      rebuildAllFormulaBindings: () => this.rebuildAllFormulaBindings(),
       scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
       flushWasmProgramSync: () => this.flushWasmProgramSync(),
       applyDerivedOp: (op) => this.applyDerivedOp(op),
@@ -921,63 +967,13 @@ export class SpreadsheetEngine {
     newSheetName: string,
     formulaChangedCount: number,
   ): number {
-    this.formulas.forEach((formula, cellIndex) => {
-      if (!formula) {
-        return;
-      }
-      const ownerSheetName = this.workbook.getSheetNameById(
-        this.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      if (!ownerSheetName) {
-        return;
-      }
-      const nextSource = renameFormulaSheetReferences(formula.source, oldSheetName, newSheetName);
-      if (nextSource === formula.source && ownerSheetName !== newSheetName) {
-        return;
-      }
-      const compiled = this.compileFormulaForSheet(ownerSheetName, nextSource);
-      const dependencies = this.materializeDependencies(ownerSheetName, compiled);
-      this.setFormula(cellIndex, nextSource, compiled, dependencies);
-      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-    });
-    return formulaChangedCount;
-  }
-
-  private rebuildAllFormulaBindings(): number[] {
-    const pending = [...this.formulas.entries()].map(([cellIndex, formula]) => ({
-      cellIndex,
-      source: formula.source,
-    }));
-    this.formulas.clear();
-    this.ranges.reset();
-    this.edgeArena.reset();
-    this.programArena.reset();
-    this.constantArena.reset();
-    this.rangeListArena.reset();
-    this.reverseCellEdges = [];
-    this.reverseRangeEdges = [];
-    this.reverseDefinedNameEdges.clear();
-    this.reverseTableEdges.clear();
-    this.reverseSpillEdges.clear();
-
-    const activeCellIndices: number[] = [];
-    pending.forEach(({ cellIndex, source }) => {
-      const ownerSheetName = this.workbook.getSheetNameById(
-        this.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      if (!ownerSheetName || !this.workbook.getSheet(ownerSheetName)) {
-        return;
-      }
-      try {
-        const compiled = this.compileFormulaForSheet(ownerSheetName, source);
-        const dependencies = this.materializeDependencies(ownerSheetName, compiled);
-        this.setFormula(cellIndex, source, compiled, dependencies);
-      } catch {
-        this.setInvalidFormulaValue(cellIndex);
-      }
-      activeCellIndices.push(cellIndex);
-    });
-    return activeCellIndices;
+    return runEngineEffect(
+      this.runtime.binding.rewriteCellFormulasForSheetRename(
+        oldSheetName,
+        newSheetName,
+        formulaChangedCount,
+      ),
+    );
   }
 
   private collectTrackedDependents(
@@ -994,44 +990,29 @@ export class SpreadsheetEngine {
   }
 
   private rebindFormulaCells(candidates: readonly number[], formulaChangedCount: number): number {
-    candidates.forEach((cellIndex) => {
-      const formula = this.formulas.get(cellIndex);
-      const ownerSheetName = this.workbook.getSheetNameById(
-        this.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      if (formula && ownerSheetName) {
-        const compiled = this.compileFormulaForSheet(ownerSheetName, formula.source);
-        const dependencies = this.materializeDependencies(ownerSheetName, compiled);
-        this.setFormula(cellIndex, formula.source, compiled, dependencies);
-      }
-      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-    });
-    return formulaChangedCount;
-  }
-
-  private rebindTrackedDependents(
-    registry: Map<string, Set<number>>,
-    keys: readonly string[],
-    formulaChangedCount: number,
-  ): number {
-    return this.rebindFormulaCells(
-      this.collectTrackedDependents(registry, keys),
-      formulaChangedCount,
-    );
+    return runEngineEffect(this.runtime.binding.rebindFormulaCells(candidates, formulaChangedCount));
   }
 
   private rebindDefinedNameDependents(
     names: readonly string[],
     formulaChangedCount: number,
   ): number {
-    return this.rebindTrackedDependents(this.reverseDefinedNameEdges, names, formulaChangedCount);
+    return runEngineEffect(
+      this.runtime.binding.rebindDefinedNameDependents(names, formulaChangedCount),
+    );
   }
 
   private rebindTableDependents(
     tableNames: readonly string[],
     formulaChangedCount: number,
   ): number {
-    return this.rebindTrackedDependents(this.reverseTableEdges, tableNames, formulaChangedCount);
+    return runEngineEffect(
+      this.runtime.binding.rebindTableDependents(tableNames, formulaChangedCount),
+    );
+  }
+
+  private bindFormula(cellIndex: number, ownerSheetName: string, source: string): void {
+    runEngineEffect(this.runtime.binding.bindFormula(cellIndex, ownerSheetName, source));
   }
 
   private reconcilePivotOutputs(baseChanged: U32, forceAllPivots = false): U32 {
@@ -1589,10 +1570,8 @@ export class SpreadsheetEngine {
             );
             const compileStarted = performance.now();
             try {
-              const compiled = this.compileFormulaForSheet(op.sheetName, op.formula);
+              this.bindFormula(cellIndex, op.sheetName, op.formula);
               this.lastMetrics.compileMs = performance.now() - compileStarted;
-              const dependencies = this.materializeDependencies(op.sheetName, compiled);
-              this.setFormula(cellIndex, op.formula, compiled, dependencies);
               formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
               topologyChanged = true;
             } catch {
@@ -1837,282 +1816,12 @@ export class SpreadsheetEngine {
     return translateFormulaReferences(formula, target.row - source.row, target.col - source.col);
   }
 
-  private materializeDependencies(
-    currentSheet: string,
-    compiled: ReturnType<typeof compileFormula>,
-  ): MaterializedDependencies {
-    const deps = compiled.deps;
-    this.ensureDependencyBuildCapacity(
-      this.workbook.cellStore.size + 1,
-      deps.length + 1,
-      compiled.symbolicRefs.length + 1,
-      compiled.symbolicRanges.length + 1,
-    );
-    this.dependencyBuildEpoch += 1;
-    if (this.dependencyBuildEpoch === 0xffff_ffff) {
-      this.dependencyBuildEpoch = 1;
-      this.dependencyBuildSeen.fill(0);
-    }
-
-    let dependencyIndexCount = 0;
-    let dependencyEntityCount = 0;
-    let rangeDependencyCount = 0;
-    let newRangeCount = 0;
-    this.symbolicRangeBindings.fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length);
-    for (const dep of deps) {
-      if (dep.includes(":")) {
-        const range = parseRangeAddress(dep, currentSheet);
-        const sheetName = range.sheetName ?? currentSheet;
-        const symbolicRangeIndex = compiled.symbolicRanges.indexOf(dep);
-        if (range.sheetName && !this.workbook.getSheet(sheetName)) {
-          continue;
-        }
-        const sheet = this.workbook.getSheet(sheetName);
-        if (!sheet) {
-          continue;
-        }
-        const registered = this.ranges.intern(sheet.id, range, {
-          ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col),
-          forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
-        });
-        if (symbolicRangeIndex !== -1) {
-          this.symbolicRangeBindings[symbolicRangeIndex] = registered.rangeIndex;
-        }
-        const rangeEntity = makeRangeEntity(registered.rangeIndex);
-        this.dependencyBuildEntities[dependencyEntityCount] = rangeEntity;
-        dependencyEntityCount += 1;
-        this.dependencyBuildRanges[rangeDependencyCount] = registered.rangeIndex;
-        rangeDependencyCount += 1;
-        const memberIndices = this.ranges.expandToCells(registered.rangeIndex);
-        for (let memberIndex = 0; memberIndex < memberIndices.length; memberIndex += 1) {
-          const cellIndex = memberIndices[memberIndex]!;
-          if (this.dependencyBuildSeen[cellIndex] === this.dependencyBuildEpoch) {
-            continue;
-          }
-          this.dependencyBuildSeen[cellIndex] = this.dependencyBuildEpoch;
-          this.dependencyBuildCells[dependencyIndexCount] = cellIndex;
-          dependencyIndexCount += 1;
-        }
-        if (registered.materialized) {
-          this.dependencyBuildNewRanges[newRangeCount] = registered.rangeIndex;
-          newRangeCount += 1;
-        }
-        continue;
-      }
-      const parsed = parseCellAddress(dep, currentSheet);
-      const sheetName = parsed.sheetName ?? currentSheet;
-      if (parsed.sheetName && !this.workbook.getSheet(sheetName)) {
-        continue;
-      }
-      const cellIndex = this.ensureCellTracked(sheetName, parsed.text);
-      if (this.dependencyBuildSeen[cellIndex] !== this.dependencyBuildEpoch) {
-        this.dependencyBuildSeen[cellIndex] = this.dependencyBuildEpoch;
-        this.dependencyBuildCells[dependencyIndexCount] = cellIndex;
-        dependencyIndexCount += 1;
-      }
-      this.dependencyBuildEntities[dependencyEntityCount] = makeCellEntity(cellIndex);
-      dependencyEntityCount += 1;
-    }
-    return {
-      dependencyIndices: this.dependencyBuildCells.slice(0, dependencyIndexCount),
-      dependencyEntities: this.dependencyBuildEntities.slice(0, dependencyEntityCount),
-      rangeDependencies: this.dependencyBuildRanges.slice(0, rangeDependencyCount),
-      symbolicRangeIndices: this.symbolicRangeBindings,
-      symbolicRangeCount: compiled.symbolicRanges.length,
-      newRangeIndices: this.dependencyBuildNewRanges,
-      newRangeCount,
-    };
-  }
-
-  private setFormula(
-    cellIndex: number,
-    source: string,
-    compiled: ReturnType<typeof compileFormula>,
-    dependencies: MaterializedDependencies,
-  ): void {
-    this.removeFormula(cellIndex);
-
-    this.ensureDependencyBuildCapacity(
-      this.workbook.cellStore.size + 1,
-      compiled.deps.length + 1,
-      compiled.symbolicRefs.length + 1,
-      compiled.symbolicRanges.length + 1,
-    );
-    for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
-      const ref = compiled.symbolicRefs[index]!;
-      const [qualifiedSheetName, qualifiedAddress] = ref.includes("!")
-        ? ref.split("!")
-        : [undefined, ref];
-      const parsed = parseCellAddress(qualifiedAddress, qualifiedSheetName);
-      const sheetName =
-        qualifiedSheetName ??
-        this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-      if (qualifiedSheetName && !this.workbook.getSheet(sheetName)) {
-        this.symbolicRefBindings[index] = UNRESOLVED_WASM_OPERAND;
-        continue;
-      }
-      this.symbolicRefBindings[index] = this.ensureCellTracked(sheetName, parsed.text);
-    }
-
-    const literalStringIds = compiled.symbolicStrings.map((value) => this.strings.intern(value));
-    const runtimeProgram = new Uint32Array(compiled.program.length);
-    runtimeProgram.set(compiled.program);
-    compiled.program.forEach((instruction, index) => {
-      const opcode = (instruction >>> 24) as Opcode;
-      const operand = instruction & 0x00ff_ffff;
-      if (opcode === Opcode.PushCell) {
-        const targetIndex =
-          operand < compiled.symbolicRefs.length ? (this.symbolicRefBindings[operand] ?? 0) : 0;
-        runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
-        return;
-      }
-      if (opcode === Opcode.PushRange) {
-        const targetIndex =
-          operand < dependencies.symbolicRangeCount
-            ? (dependencies.symbolicRangeIndices[operand] ?? 0)
-            : 0;
-        runtimeProgram[index] = (opcode << 24) | (targetIndex & 0x00ff_ffff);
-        return;
-      }
-      if (opcode === Opcode.PushString) {
-        const stringId = operand < literalStringIds.length ? (literalStringIds[operand] ?? 0) : 0;
-        runtimeProgram[index] = (opcode << 24) | (stringId & 0x00ff_ffff);
-      }
-    });
-
-    const dependencyEntities = this.edgeArena.replace(
-      this.edgeArena.empty(),
-      dependencies.dependencyEntities,
-    );
-    const runtimeFormula: RuntimeFormula = {
-      cellIndex,
-      source,
-      compiled: {
-        ...compiled,
-        depsPtr: dependencyEntities.ptr,
-        depsLen: dependencyEntities.len,
-      },
-      dependencyIndices: dependencies.dependencyIndices,
-      dependencyEntities,
-      rangeDependencies: dependencies.rangeDependencies,
-      runtimeProgram,
-      constants: compiled.constants,
-      programOffset: 0,
-      programLength: runtimeProgram.length,
-      constNumberOffset: 0,
-      constNumberLength: compiled.constants.length,
-      rangeListOffset: 0,
-      rangeListLength: dependencies.rangeDependencies.length,
-    };
-    const formulaId = this.formulas.set(cellIndex, runtimeFormula);
-    runtimeFormula.compiled.id = formulaId;
-    this.workbook.cellStore.flags[cellIndex] =
-      ((this.workbook.cellStore.flags[cellIndex] ?? 0) &
-        ~(CellFlags.SpillChild | CellFlags.PivotOutput)) |
-      CellFlags.HasFormula;
-    if (runtimeFormula.compiled.mode === FormulaMode.JsOnly) {
-      this.workbook.cellStore.flags[cellIndex] =
-        (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.JsOnly;
-    } else {
-      this.workbook.cellStore.flags[cellIndex] =
-        (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly;
-    }
-
-    for (let rangeCursor = 0; rangeCursor < dependencies.newRangeCount; rangeCursor += 1) {
-      const rangeIndex = dependencies.newRangeIndices[rangeCursor]!;
-      const memberIndices = this.ranges.expandToCells(rangeIndex);
-      const rangeEntity = makeRangeEntity(rangeIndex);
-      for (let index = 0; index < memberIndices.length; index += 1) {
-        this.appendReverseEdge(makeCellEntity(memberIndices[index]!), rangeEntity);
-      }
-    }
-    const formulaEntity = makeCellEntity(cellIndex);
-    for (let index = 0; index < dependencies.dependencyEntities.length; index += 1) {
-      this.appendReverseEdge(dependencies.dependencyEntities[index]!, formulaEntity);
-    }
-    runtimeFormula.compiled.symbolicNames.forEach((name) => {
-      this.appendDefinedNameReverseEdge(name, cellIndex);
-    });
-    runtimeFormula.compiled.symbolicTables.forEach((name) => {
-      this.appendTrackedReverseEdge(this.reverseTableEdges, tableDependencyKey(name), cellIndex);
-    });
-    runtimeFormula.compiled.symbolicSpills.forEach((key) => {
-      this.appendTrackedReverseEdge(
-        this.reverseSpillEdges,
-        spillDependencyKeyFromRef(
-          key,
-          this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!),
-        ),
-        cellIndex,
-      );
-    });
-    this.scheduleWasmProgramSync();
-  }
-
   private setInvalidFormulaValue(cellIndex: number): void {
-    this.removeFormula(cellIndex);
-    this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Value));
-    this.workbook.cellStore.flags[cellIndex] =
-      (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-      ~(
-        CellFlags.HasFormula |
-        CellFlags.JsOnly |
-        CellFlags.InCycle |
-        CellFlags.SpillChild |
-        CellFlags.PivotOutput
-      );
+    runEngineEffect(this.runtime.binding.invalidateFormula(cellIndex));
   }
 
   private removeFormula(cellIndex: number): boolean {
-    const existing = this.formulas.get(cellIndex);
-    if (existing) {
-      const dependencyEntities = this.edgeArena.readView(existing.dependencyEntities);
-      const formulaEntity = makeCellEntity(cellIndex);
-      for (let index = 0; index < dependencyEntities.length; index += 1) {
-        this.removeReverseEdge(dependencyEntities[index]!, formulaEntity);
-      }
-      existing.compiled.symbolicNames.forEach((name) => {
-        this.removeDefinedNameReverseEdge(name, cellIndex);
-      });
-      existing.compiled.symbolicTables.forEach((name) => {
-        this.removeTrackedReverseEdge(this.reverseTableEdges, tableDependencyKey(name), cellIndex);
-      });
-      const ownerSheetName = this.workbook.getSheetNameById(
-        this.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      existing.compiled.symbolicSpills.forEach((key) => {
-        this.removeTrackedReverseEdge(
-          this.reverseSpillEdges,
-          spillDependencyKeyFromRef(key, ownerSheetName),
-          cellIndex,
-        );
-      });
-      for (let index = 0; index < existing.rangeDependencies.length; index += 1) {
-        const rangeIndex = existing.rangeDependencies[index]!;
-        const released = this.ranges.release(rangeIndex);
-        if (!released.removed) {
-          continue;
-        }
-        const rangeEntity = makeRangeEntity(rangeIndex);
-        for (let memberIndex = 0; memberIndex < released.members.length; memberIndex += 1) {
-          this.removeReverseEdge(makeCellEntity(released.members[memberIndex]!), rangeEntity);
-        }
-        this.setReverseEdgeSlice(rangeEntity, this.edgeArena.empty());
-      }
-      this.edgeArena.free(existing.dependencyEntities);
-    }
-    this.formulas.delete(cellIndex);
-    this.workbook.cellStore.flags[cellIndex] =
-      (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-      ~(
-        CellFlags.HasFormula |
-        CellFlags.JsOnly |
-        CellFlags.InCycle |
-        CellFlags.SpillChild |
-        CellFlags.PivotOutput
-      );
-    this.scheduleWasmProgramSync();
-    return existing !== undefined;
+    return runEngineEffect(this.runtime.binding.clearFormula(cellIndex));
   }
 
   private rebuildTopoRanks(): void {
@@ -2228,46 +1937,11 @@ export class SpreadsheetEngine {
     if (size > this.explicitChangedBuffer.length) {
       this.explicitChangedBuffer = growUint32(this.explicitChangedBuffer, size);
     }
-    if (size > this.dependencyBuildSeen.length) {
-      this.dependencyBuildSeen = growUint32(this.dependencyBuildSeen, size);
-    }
-    if (size > this.dependencyBuildCells.length) {
-      this.dependencyBuildCells = growUint32(this.dependencyBuildCells, size);
-    }
     if (size > this.impactedFormulaSeen.length) {
       this.impactedFormulaSeen = growUint32(this.impactedFormulaSeen, size);
     }
     if (size > this.impactedFormulaBuffer.length) {
       this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
-    }
-  }
-
-  private ensureDependencyBuildCapacity(
-    cellCapacity: number,
-    dependencyCapacity: number,
-    symbolicRefCapacity = 0,
-    symbolicRangeCapacity = 0,
-  ): void {
-    if (cellCapacity > this.dependencyBuildSeen.length) {
-      this.dependencyBuildSeen = growUint32(this.dependencyBuildSeen, cellCapacity);
-    }
-    if (cellCapacity > this.dependencyBuildCells.length) {
-      this.dependencyBuildCells = growUint32(this.dependencyBuildCells, cellCapacity);
-    }
-    if (dependencyCapacity > this.dependencyBuildEntities.length) {
-      this.dependencyBuildEntities = growUint32(this.dependencyBuildEntities, dependencyCapacity);
-    }
-    if (dependencyCapacity > this.dependencyBuildRanges.length) {
-      this.dependencyBuildRanges = growUint32(this.dependencyBuildRanges, dependencyCapacity);
-    }
-    if (dependencyCapacity > this.dependencyBuildNewRanges.length) {
-      this.dependencyBuildNewRanges = growUint32(this.dependencyBuildNewRanges, dependencyCapacity);
-    }
-    if (symbolicRefCapacity > this.symbolicRefBindings.length) {
-      this.symbolicRefBindings = growUint32(this.symbolicRefBindings, symbolicRefCapacity);
-    }
-    if (symbolicRangeCapacity > this.symbolicRangeBindings.length) {
-      this.symbolicRangeBindings = growUint32(this.symbolicRangeBindings, symbolicRangeCapacity);
     }
   }
 
@@ -2406,38 +2080,6 @@ export class SpreadsheetEngine {
         : 0,
     );
     return materialization.changedCellIndices;
-  }
-
-  private compileFormulaForSheet(
-    currentSheetName: string,
-    source: string,
-  ): ReturnType<typeof compileFormula> {
-    const compiled = compileFormula(source);
-    if (
-      compiled.symbolicNames.length === 0 &&
-      compiled.symbolicTables.length === 0 &&
-      compiled.symbolicSpills.length === 0
-    ) {
-      return compiled;
-    }
-
-    const resolved = resolveMetadataReferencesInAst(compiled.ast, {
-      resolveName: (name) => this.workbook.getDefinedName(name)?.value,
-      resolveStructuredReference: (tableName, columnName) =>
-        this.resolveStructuredReference(tableName, columnName),
-      resolveSpillReference: (sheetName, address) =>
-        this.resolveSpillReference(currentSheetName, sheetName, address),
-    });
-    if (!resolved.substituted || !resolved.fullyResolved) {
-      return compiled;
-    }
-
-    return compileFormulaAst(source, resolved.node, {
-      originalAst: compiled.ast,
-      symbolicNames: compiled.symbolicNames,
-      symbolicTables: compiled.symbolicTables,
-      symbolicSpills: compiled.symbolicSpills,
-    });
   }
 
   private resolveStructuredReference(
@@ -2677,50 +2319,6 @@ export class SpreadsheetEngine {
     return this.edgeArena.readView(slice);
   }
 
-  private appendDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
-    this.appendTrackedReverseEdge(
-      this.reverseDefinedNameEdges,
-      normalizeDefinedName(name),
-      dependentCellIndex,
-    );
-  }
-
-  private removeDefinedNameReverseEdge(name: string, dependentCellIndex: number): void {
-    this.removeTrackedReverseEdge(
-      this.reverseDefinedNameEdges,
-      normalizeDefinedName(name),
-      dependentCellIndex,
-    );
-  }
-
-  private appendTrackedReverseEdge(
-    registry: Map<string, Set<number>>,
-    key: string,
-    dependentCellIndex: number,
-  ): void {
-    const existing = registry.get(key);
-    if (existing) {
-      existing.add(dependentCellIndex);
-      return;
-    }
-    registry.set(key, new Set([dependentCellIndex]));
-  }
-
-  private removeTrackedReverseEdge(
-    registry: Map<string, Set<number>>,
-    key: string,
-    dependentCellIndex: number,
-  ): void {
-    const existing = registry.get(key);
-    if (!existing) {
-      return;
-    }
-    existing.delete(dependentCellIndex);
-    if (existing.size === 0) {
-      registry.delete(key);
-    }
-  }
-
   private setReverseEdgeSlice(entityId: number, slice: EdgeSlice): void {
     const empty = slice.ptr < 0 || slice.len === 0;
     if (isRangeEntity(entityId)) {
@@ -2733,14 +2331,6 @@ export class SpreadsheetEngine {
   private appendReverseEdge(entityId: number, dependentEntityId: number): void {
     const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
     this.setReverseEdgeSlice(entityId, this.edgeArena.appendUnique(slice, dependentEntityId));
-  }
-
-  private removeReverseEdge(entityId: number, dependentEntityId: number): void {
-    const slice = this.getReverseEdgeSlice(entityId);
-    if (!slice) {
-      return;
-    }
-    this.setReverseEdgeSlice(entityId, this.edgeArena.removeValue(slice, dependentEntityId));
   }
 
   private getReverseEdgeSlice(entityId: number): EdgeSlice | undefined {
@@ -2979,48 +2569,9 @@ export class SpreadsheetEngine {
     formulaChangedCount: number,
     candidates?: readonly number[] | U32,
   ): number {
-    if (candidates) {
-      for (let index = 0; index < candidates.length; index += 1) {
-        const cellIndex = candidates[index]!;
-        const formula = this.formulas.get(cellIndex);
-        if (!formula) continue;
-        const ownerSheetName = this.workbook.getSheetNameById(
-          this.workbook.cellStore.sheetIds[cellIndex]!,
-        );
-        if (!ownerSheetName) continue;
-        const touchesSheet = formula.compiled.deps.some((dep) => {
-          if (!dep.includes("!")) return false;
-          const [qualifiedSheet] = dep.split("!");
-          return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
-        });
-        if (!touchesSheet) continue;
-        const compiled = this.compileFormulaForSheet(ownerSheetName, formula.source);
-        const dependencies = this.materializeDependencies(ownerSheetName, compiled);
-        this.setFormula(cellIndex, formula.source, compiled, dependencies);
-        formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-      }
-      return formulaChangedCount;
-    }
-
-    this.formulas.forEach((formula, cellIndex) => {
-      if (!formula) return;
-      const ownerSheetName = this.workbook.getSheetNameById(
-        this.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      if (!ownerSheetName) return;
-      const touchesSheet = formula.compiled.deps.some((dep) => {
-        if (!dep.includes("!")) return false;
-        const [qualifiedSheet] = dep.split("!");
-        return qualifiedSheet?.replace(/^'(.*)'$/, "$1") === sheetName;
-      });
-      if (!touchesSheet) return;
-      const compiled = this.compileFormulaForSheet(ownerSheetName, formula.source);
-      const dependencies = this.materializeDependencies(ownerSheetName, compiled);
-      this.setFormula(cellIndex, formula.source, compiled, dependencies);
-      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-    });
-
-    return formulaChangedCount;
+    return runEngineEffect(
+      this.runtime.binding.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates),
+    );
   }
 
   private collectImpactedFormulasForCells(cellIndices: readonly number[]): number {
@@ -3419,8 +2970,8 @@ export class SpreadsheetEngine {
     const previousBatchId = this.lastMetrics.batchId;
     this.workbook.reset(workbookName);
     this.formulas.clear();
-    this.reverseCellEdges = [];
-    this.reverseRangeEdges = [];
+    this.reverseCellEdges.length = 0;
+    this.reverseRangeEdges.length = 0;
     this.reverseDefinedNameEdges.clear();
     this.reverseTableEdges.clear();
     this.reverseSpillEdges.clear();

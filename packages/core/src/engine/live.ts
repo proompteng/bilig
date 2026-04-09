@@ -6,6 +6,10 @@ import {
   type EngineEventService,
 } from "./services/event-service.js";
 import {
+  createEngineFormulaBindingService,
+  type EngineFormulaBindingService,
+} from "./services/formula-binding-service.js";
+import {
   createEngineHistoryService,
   type EngineHistoryService,
 } from "./services/history-service.js";
@@ -45,6 +49,7 @@ import {
 export interface EngineServiceRuntime {
   readonly events: EngineEventService;
   readonly selection: EngineSelectionService;
+  readonly binding: EngineFormulaBindingService;
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
   readonly pivot: EnginePivotService;
@@ -80,6 +85,7 @@ export function createEngineServiceRuntime(args: {
     sheetName: string,
     address: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
+  readonly formulaBinding: Parameters<typeof createEngineFormulaBindingService>[0];
   readonly readRangeCells: (
     range: import("@bilig/protocol").CellRangeRef,
   ) => CellSnapshot[][];
@@ -142,14 +148,12 @@ export function createEngineServiceRuntime(args: {
   readonly clearOwnedSpill: (cellIndex: number) => number[];
   readonly evaluateUnsupportedFormula: (cellIndex: number) => number[];
   readonly getEntityDependents: (entityId: number) => Uint32Array;
-  readonly removeFormula: (cellIndex: number) => boolean;
   readonly clearOwnedPivot: (
     pivot: import("../workbook-store.js").WorkbookPivotRecord,
   ) => number[];
   readonly materializePivot: (
     pivot: import("../workbook-store.js").WorkbookPivotRecord,
   ) => number[];
-  readonly rebuildAllFormulaBindings: () => number[];
   readonly scheduleWasmProgramSync: () => void;
   readonly flushWasmProgramSync: () => void;
   readonly applyDerivedOp: (
@@ -167,6 +171,7 @@ export function createEngineServiceRuntime(args: {
   readonly applyRemoteBatchNow: (batch: import("@bilig/workbook-domain").EngineOpBatch) => void;
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
 }): EngineServiceRuntime {
+  const binding = createEngineFormulaBindingService(args.formulaBinding);
   const structure = createEngineStructureService({
     state: {
       workbook: args.state.workbook,
@@ -175,9 +180,9 @@ export function createEngineServiceRuntime(args: {
     },
     getCellByIndex: args.getCellByIndex,
     toCellStateOps: args.toCellStateOps,
-    removeFormula: (cellIndex) => args.removeFormula(cellIndex),
+    removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
     clearOwnedPivot: (pivot) => args.clearOwnedPivot(pivot),
-    rebuildAllFormulaBindings: () => args.rebuildAllFormulaBindings(),
+    rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
   });
   const read = createEngineReadService({
     state: args.state,
@@ -214,6 +219,7 @@ export function createEngineServiceRuntime(args: {
   return {
     events: createEngineEventService(args.state),
     selection: createEngineSelectionService(args.state),
+    binding,
     history: createEngineHistoryService({
       state: args.state,
       executeTransaction: args.executeHistoryTransaction,
