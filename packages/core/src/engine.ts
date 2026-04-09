@@ -6,8 +6,6 @@ import {
   type CellStylePatch,
   type CellStyleRecord,
   ErrorCode,
-  MAX_COLS,
-  MAX_ROWS,
   ValueTag,
   type CellSnapshot,
   type CellValue,
@@ -45,8 +43,8 @@ import {
 import { CellFlags } from "./cell-store.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
-import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from "./entity-ids.js";
-import { appendPackedCellIndex, growUint32 } from "./engine-buffer-utils.js";
+import { entityPayload, isRangeEntity } from "./entity-ids.js";
+import { growUint32 } from "./engine-buffer-utils.js";
 import {
   definedNameValueToCellValue,
   definedNameValuesEqual,
@@ -59,11 +57,7 @@ import {
   buildStyleClearOps,
   buildStylePatchOps,
 } from "./engine-range-format-ops.js";
-import {
-  areCellValuesEqual,
-  emptyValue,
-  errorValue,
-} from "./engine-value-utils.js";
+import { emptyValue, errorValue } from "./engine-value-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
 import { RangeRegistry } from "./range-registry.js";
@@ -250,6 +244,97 @@ export class SpreadsheetEngine {
       exportSnapshot: () => this.exportSnapshot(),
       importSnapshot: (snapshot) => this.importSnapshot(snapshot),
       resetWorkbook: () => this.resetWorkbook(),
+      mutationSupport: {
+        state: this.state,
+        edgeArena: this.edgeArena,
+        reverseState: {
+          reverseCellEdges: this.reverseCellEdges,
+          reverseRangeEdges: this.reverseRangeEdges,
+        },
+        removeFormula: (cellIndex) => this.removeFormula(cellIndex),
+        rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
+          this.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates),
+        getSelectionState: () => this.getSelectionState(),
+        setSelection: (sheetName, address) => this.setSelection(sheetName, address),
+        applyDerivedOp: (op) => this.applyDerivedOp(op),
+        scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
+        ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
+        collectFormulaDependentsForEntityInto: (entityId) =>
+          this.collectFormulaDependentsForEntityInto(entityId),
+        getTopoFormulaBuffer: () => this.topoFormulaBuffer,
+        getChangedInputEpoch: () => this.changedInputEpoch,
+        setChangedInputEpoch: (next) => {
+          this.changedInputEpoch = next;
+        },
+        getChangedInputSeen: () => this.changedInputSeen,
+        setChangedInputSeen: (next) => {
+          this.changedInputSeen = next;
+        },
+        getChangedInputBuffer: () => this.changedInputBuffer,
+        setChangedInputBuffer: (next) => {
+          this.changedInputBuffer = next;
+        },
+        getChangedFormulaEpoch: () => this.changedFormulaEpoch,
+        setChangedFormulaEpoch: (next) => {
+          this.changedFormulaEpoch = next;
+        },
+        getChangedFormulaSeen: () => this.changedFormulaSeen,
+        setChangedFormulaSeen: (next) => {
+          this.changedFormulaSeen = next;
+        },
+        getChangedFormulaBuffer: () => this.changedFormulaBuffer,
+        setChangedFormulaBuffer: (next) => {
+          this.changedFormulaBuffer = next;
+        },
+        getChangedUnionEpoch: () => this.changedUnionEpoch,
+        setChangedUnionEpoch: (next) => {
+          this.changedUnionEpoch = next;
+        },
+        getChangedUnionSeen: () => this.changedUnionSeen,
+        setChangedUnionSeen: (next) => {
+          this.changedUnionSeen = next;
+        },
+        getChangedUnion: () => this.changedUnion,
+        setChangedUnion: (next) => {
+          this.changedUnion = next;
+        },
+        getMutationRoots: () => this.mutationRoots,
+        setMutationRoots: (next) => {
+          this.mutationRoots = next;
+        },
+        getMaterializedCellCount: () => this.materializedCellCount,
+        setMaterializedCellCount: (next) => {
+          this.materializedCellCount = next;
+        },
+        getMaterializedCells: () => this.materializedCells,
+        setMaterializedCells: (next) => {
+          this.materializedCells = next;
+        },
+        getExplicitChangedEpoch: () => this.explicitChangedEpoch,
+        setExplicitChangedEpoch: (next) => {
+          this.explicitChangedEpoch = next;
+        },
+        getExplicitChangedSeen: () => this.explicitChangedSeen,
+        setExplicitChangedSeen: (next) => {
+          this.explicitChangedSeen = next;
+        },
+        getExplicitChangedBuffer: () => this.explicitChangedBuffer,
+        setExplicitChangedBuffer: (next) => {
+          this.explicitChangedBuffer = next;
+        },
+        getImpactedFormulaEpoch: () => this.impactedFormulaEpoch,
+        setImpactedFormulaEpoch: (next) => {
+          this.impactedFormulaEpoch = next;
+        },
+        getImpactedFormulaSeen: () => this.impactedFormulaSeen,
+        setImpactedFormulaSeen: (next) => {
+          this.impactedFormulaSeen = next;
+        },
+        getImpactedFormulaBuffer: () => this.impactedFormulaBuffer,
+        setImpactedFormulaBuffer: (next) => {
+          this.impactedFormulaBuffer = next;
+        },
+      },
       captureSheetCellState: (sheetName) => this.captureSheetCellState(sheetName),
       captureRowRangeCellState: (sheetName, start, count) =>
         this.captureRowRangeCellState(sheetName, start, count),
@@ -1729,20 +1814,6 @@ export class SpreadsheetEngine {
     return this.edgeArena.readView(slice);
   }
 
-  private setReverseEdgeSlice(entityId: number, slice: EdgeSlice): void {
-    const empty = slice.ptr < 0 || slice.len === 0;
-    if (isRangeEntity(entityId)) {
-      this.reverseRangeEdges[entityPayload(entityId)] = empty ? undefined : slice;
-      return;
-    }
-    this.reverseCellEdges[entityPayload(entityId)] = empty ? undefined : slice;
-  }
-
-  private appendReverseEdge(entityId: number, dependentEntityId: number): void {
-    const slice = this.getReverseEdgeSlice(entityId) ?? this.edgeArena.empty();
-    this.setReverseEdgeSlice(entityId, this.edgeArena.appendUnique(slice, dependentEntityId));
-  }
-
   private getReverseEdgeSlice(entityId: number): EdgeSlice | undefined {
     if (isRangeEntity(entityId)) {
       return this.reverseRangeEdges[entityPayload(entityId)];
@@ -1804,42 +1875,7 @@ export class SpreadsheetEngine {
     sheetName: string,
     explicitChangedCount: number,
   ): { changedInputCount: number; formulaChangedCount: number; explicitChangedCount: number } {
-    const sheet = this.workbook.getSheet(sheetName);
-    if (!sheet) {
-      return { changedInputCount: 0, formulaChangedCount: 0, explicitChangedCount };
-    }
-
-    const cellIndices: number[] = [];
-    sheet.grid.forEachCell((cellIndex) => {
-      cellIndices.push(cellIndex);
-    });
-    const impactedCount = this.collectImpactedFormulasForCells(cellIndices);
-
-    let changedInputCount = 0;
-    let formulaChangedCount = 0;
-    cellIndices.forEach((cellIndex) => {
-      this.removeFormula(cellIndex);
-      this.setReverseEdgeSlice(makeCellEntity(cellIndex), this.edgeArena.empty());
-      this.workbook.cellStore.setValue(cellIndex, emptyValue());
-      this.workbook.cellStore.flags[cellIndex] =
-        (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.PendingDelete;
-      changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
-      explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-    });
-
-    this.workbook.deleteSheet(sheetName);
-    if (this.selection.sheetName === sheetName) {
-      const nextSheet = [...this.workbook.sheetsByName.values()].toSorted(
-        (left, right) => left.order - right.order,
-      )[0];
-      this.setSelection(nextSheet?.name ?? sheetName, "A1");
-    }
-    formulaChangedCount = this.rebindFormulasForSheet(
-      sheetName,
-      formulaChangedCount,
-      this.impactedFormulaBuffer.subarray(0, impactedCount),
-    );
-    return { changedInputCount, formulaChangedCount, explicitChangedCount };
+    return runEngineEffect(this.runtime.support.removeSheetRuntime(sheetName, explicitChangedCount));
   }
 
   private rebindFormulasForSheet(
@@ -1852,165 +1888,46 @@ export class SpreadsheetEngine {
     );
   }
 
-  private collectImpactedFormulasForCells(cellIndices: readonly number[]): number {
-    this.ensureRecalcScratchCapacity(this.workbook.cellStore.size + 1);
-    this.impactedFormulaEpoch += 1;
-    if (this.impactedFormulaEpoch === 0xffff_ffff) {
-      this.impactedFormulaEpoch = 1;
-      this.impactedFormulaSeen.fill(0);
-    }
-
-    let impactedCount = 0;
-    for (let cellCursor = 0; cellCursor < cellIndices.length; cellCursor += 1) {
-      const cellIndex = cellIndices[cellCursor]!;
-      const dependentCount = this.collectFormulaDependentsForEntityInto(makeCellEntity(cellIndex));
-      for (let dependentIndex = 0; dependentIndex < dependentCount; dependentIndex += 1) {
-        const formulaCellIndex = this.topoFormulaBuffer[dependentIndex]!;
-        if (this.impactedFormulaSeen[formulaCellIndex] === this.impactedFormulaEpoch) {
-          continue;
-        }
-        this.impactedFormulaSeen[formulaCellIndex] = this.impactedFormulaEpoch;
-        this.impactedFormulaBuffer[impactedCount] = formulaCellIndex;
-        impactedCount += 1;
-      }
-    }
-
-    return impactedCount;
-  }
-
   private beginMutationCollection(): void {
-    this.changedInputEpoch += 1;
-    if (this.changedInputEpoch === 0xffff_ffff) {
-      this.changedInputEpoch = 1;
-      this.changedInputSeen.fill(0);
-    }
-    this.changedFormulaEpoch += 1;
-    if (this.changedFormulaEpoch === 0xffff_ffff) {
-      this.changedFormulaEpoch = 1;
-      this.changedFormulaSeen.fill(0);
-    }
-    this.explicitChangedEpoch += 1;
-    if (this.explicitChangedEpoch === 0xffff_ffff) {
-      this.explicitChangedEpoch = 1;
-      this.explicitChangedSeen.fill(0);
-    }
-    this.ensureRecalcScratchCapacity(this.workbook.cellStore.size + 1);
+    runEngineEffect(this.runtime.support.beginMutationCollection());
   }
 
   private markInputChanged(cellIndex: number, count: number): number {
-    if (this.changedInputSeen[cellIndex] === this.changedInputEpoch) {
-      return count;
-    }
-    this.changedInputSeen[cellIndex] = this.changedInputEpoch;
-    this.changedInputBuffer[count] = cellIndex;
-    return count + 1;
+    return runEngineEffect(this.runtime.support.markInputChanged(cellIndex, count));
   }
 
   private markFormulaChanged(cellIndex: number, count: number): number {
-    if (this.changedFormulaSeen[cellIndex] === this.changedFormulaEpoch) {
-      return count;
-    }
-    this.changedFormulaSeen[cellIndex] = this.changedFormulaEpoch;
-    this.changedFormulaBuffer[count] = cellIndex;
-    return count + 1;
+    return runEngineEffect(this.runtime.support.markFormulaChanged(cellIndex, count));
   }
 
   private markVolatileFormulasChanged(count: number): number {
-    this.formulas.forEach((formula, cellIndex) => {
-      if (!formula.compiled.volatile) {
-        return;
-      }
-      count = this.markFormulaChanged(cellIndex, count);
-    });
-    return count;
+    return runEngineEffect(this.runtime.support.markVolatileFormulasChanged(count));
   }
 
   private markSpillRootsChanged(cellIndices: readonly number[], count: number): number {
-    for (let index = 0; index < cellIndices.length; index += 1) {
-      count = this.markInputChanged(cellIndices[index]!, count);
-    }
-    return count;
+    return runEngineEffect(this.runtime.support.markSpillRootsChanged(cellIndices, count));
   }
 
   private markPivotRootsChanged(cellIndices: readonly number[], count: number): number {
-    for (let index = 0; index < cellIndices.length; index += 1) {
-      count = this.markInputChanged(cellIndices[index]!, count);
-    }
-    return count;
+    return runEngineEffect(this.runtime.support.markPivotRootsChanged(cellIndices, count));
   }
 
   private markExplicitChanged(cellIndex: number, count: number): number {
-    if (this.explicitChangedSeen[cellIndex] === this.explicitChangedEpoch) {
-      return count;
-    }
-    this.explicitChangedSeen[cellIndex] = this.explicitChangedEpoch;
-    this.explicitChangedBuffer[count] = cellIndex;
-    return count + 1;
+    return runEngineEffect(this.runtime.support.markExplicitChanged(cellIndex, count));
   }
 
   private composeMutationRoots(changedInputCount: number, formulaChangedCount: number): U32 {
-    const total = changedInputCount + formulaChangedCount;
-    this.ensureRecalcScratchCapacity(total + 1);
-    for (let index = 0; index < changedInputCount; index += 1) {
-      this.mutationRoots[index] = this.changedInputBuffer[index]!;
-    }
-    for (let index = 0; index < formulaChangedCount; index += 1) {
-      this.mutationRoots[changedInputCount + index] = this.changedFormulaBuffer[index]!;
-    }
-    return this.mutationRoots.subarray(0, total);
+    return runEngineEffect(
+      this.runtime.support.composeMutationRoots(changedInputCount, formulaChangedCount),
+    );
   }
 
   private composeEventChanges(recalculated: U32, explicitChangedCount: number): U32 {
-    this.changedUnionEpoch += 1;
-    if (this.changedUnionEpoch === 0xffff_ffff) {
-      this.changedUnionEpoch = 1;
-      this.changedUnionSeen.fill(0);
-    }
-    let changedCount = 0;
-
-    for (let index = 0; index < explicitChangedCount; index += 1) {
-      const cellIndex = this.explicitChangedBuffer[index]!;
-      if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
-        continue;
-      }
-      this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
-      this.changedUnion[changedCount] = cellIndex;
-      changedCount += 1;
-    }
-
-    for (let index = 0; index < recalculated.length; index += 1) {
-      const cellIndex = recalculated[index]!;
-      if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
-        continue;
-      }
-      this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
-      this.changedUnion[changedCount] = cellIndex;
-      changedCount += 1;
-    }
-
-    return this.changedUnion.subarray(0, changedCount);
+    return runEngineEffect(this.runtime.support.composeEventChanges(recalculated, explicitChangedCount));
   }
 
   private unionChangedSets(...sets: Array<readonly number[] | U32>): U32 {
-    this.changedUnionEpoch += 1;
-    if (this.changedUnionEpoch === 0xffff_ffff) {
-      this.changedUnionEpoch = 1;
-      this.changedUnionSeen.fill(0);
-    }
-    let changedCount = 0;
-    for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
-      const set = sets[setIndex]!;
-      for (let index = 0; index < set.length; index += 1) {
-        const cellIndex = set[index]!;
-        if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
-          continue;
-        }
-        this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
-        this.changedUnion[changedCount] = cellIndex;
-        changedCount += 1;
-      }
-    }
-    return this.changedUnion.subarray(0, changedCount);
+    return runEngineEffect(this.runtime.support.unionChangedSets(...sets));
   }
 
   private composeChangedRootsAndOrdered(
@@ -2018,178 +1935,28 @@ export class SpreadsheetEngine {
     ordered: U32,
     orderedCount: number,
   ): U32 {
-    this.changedUnionEpoch += 1;
-    if (this.changedUnionEpoch === 0xffff_ffff) {
-      this.changedUnionEpoch = 1;
-      this.changedUnionSeen.fill(0);
-    }
-    let changedCount = 0;
-
-    for (let index = 0; index < changedRoots.length; index += 1) {
-      const cellIndex = changedRoots[index]!;
-      if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
-        continue;
-      }
-      this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
-      this.changedUnion[changedCount] = cellIndex;
-      changedCount += 1;
-    }
-    for (let index = 0; index < orderedCount; index += 1) {
-      const cellIndex = ordered[index]!;
-      if (this.changedUnionSeen[cellIndex] === this.changedUnionEpoch) {
-        continue;
-      }
-      this.changedUnionSeen[cellIndex] = this.changedUnionEpoch;
-      this.changedUnion[changedCount] = cellIndex;
-      changedCount += 1;
-    }
-
-    return this.changedUnion.subarray(0, changedCount);
+    return runEngineEffect(
+      this.runtime.support.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount),
+    );
   }
 
   private ensureCellTracked(sheetName: string, address: string): number {
-    const ensured = this.workbook.ensureCellRecord(sheetName, address);
-    if (ensured.created) {
-      this.pushMaterializedCell(ensured.cellIndex);
-    }
-    return ensured.cellIndex;
+    return runEngineEffect(this.runtime.support.ensureCellTracked(sheetName, address));
   }
 
   private ensureCellTrackedByCoords(sheetId: number, row: number, col: number): number {
-    const ensured = this.workbook.ensureCellAt(sheetId, row, col);
-    if (ensured.created) {
-      this.pushMaterializedCell(ensured.cellIndex);
-    }
-    return ensured.cellIndex;
+    return runEngineEffect(this.runtime.support.ensureCellTrackedByCoords(sheetId, row, col));
   }
 
   private clearOwnedSpill(cellIndex: number): number[] {
-    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-    const address = this.workbook.getAddress(cellIndex);
-    const spill = this.workbook.getSpill(sheetName, address);
-    if (!spill) {
-      return [];
-    }
-
-    const owner = parseCellAddress(address, sheetName);
-    const changedCellIndices: number[] = [];
-    for (let rowOffset = 0; rowOffset < spill.rows; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < spill.cols; colOffset += 1) {
-        if (rowOffset === 0 && colOffset === 0) {
-          continue;
-        }
-        const childAddress = formatAddress(owner.row + rowOffset, owner.col + colOffset);
-        const childIndex = this.workbook.getCellIndex(sheetName, childAddress);
-        if (childIndex === undefined) {
-          continue;
-        }
-        if (this.clearSpillChildCell(childIndex)) {
-          changedCellIndices.push(childIndex);
-        }
-      }
-    }
-    changedCellIndices.push(
-      ...this.applyDerivedOp({ kind: "deleteSpillRange", sheetName, address }),
-    );
-    return changedCellIndices;
+    return runEngineEffect(this.runtime.support.clearOwnedSpill(cellIndex));
   }
 
   private materializeSpill(
     cellIndex: number,
     arrayValue: { values: CellValue[]; rows: number; cols: number },
   ): SpillMaterialization {
-    const changedCellIndices = this.clearOwnedSpill(cellIndex);
-    const sheetId = this.workbook.cellStore.sheetIds[cellIndex]!;
-    const sheetName = this.workbook.getSheetNameById(sheetId);
-    const address = this.workbook.getAddress(cellIndex);
-    const owner = parseCellAddress(address, sheetName);
-
-    if (owner.row + arrayValue.rows > MAX_ROWS || owner.col + arrayValue.cols > MAX_COLS) {
-      return { changedCellIndices, ownerValue: errorValue(ErrorCode.Spill) };
-    }
-
-    for (let rowOffset = 0; rowOffset < arrayValue.rows; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < arrayValue.cols; colOffset += 1) {
-        if (rowOffset === 0 && colOffset === 0) {
-          continue;
-        }
-        const targetAddress = formatAddress(owner.row + rowOffset, owner.col + colOffset);
-        const targetIndex = this.workbook.getCellIndex(sheetName, targetAddress);
-        if (targetIndex === undefined) {
-          continue;
-        }
-        const targetValue = this.workbook.cellStore.getValue(targetIndex, (id) =>
-          this.strings.get(id),
-        );
-        if (this.formulas.get(targetIndex) || targetValue.tag !== ValueTag.Empty) {
-          return { changedCellIndices, ownerValue: errorValue(ErrorCode.Blocked) };
-        }
-      }
-    }
-
-    for (let rowOffset = 0; rowOffset < arrayValue.rows; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < arrayValue.cols; colOffset += 1) {
-        if (rowOffset === 0 && colOffset === 0) {
-          continue;
-        }
-        const targetIndex = this.ensureCellTrackedByCoords(
-          sheetId,
-          owner.row + rowOffset,
-          owner.col + colOffset,
-        );
-        const valueIndex = rowOffset * arrayValue.cols + colOffset;
-        const value = arrayValue.values[valueIndex] ?? emptyValue();
-        if (this.setSpillChildValue(targetIndex, value)) {
-          changedCellIndices.push(targetIndex);
-        }
-      }
-    }
-
-    if (arrayValue.rows > 1 || arrayValue.cols > 1) {
-      changedCellIndices.push(
-        ...this.applyDerivedOp({
-          kind: "upsertSpillRange",
-          sheetName,
-          address,
-          rows: arrayValue.rows,
-          cols: arrayValue.cols,
-        }),
-      );
-    }
-
-    return {
-      changedCellIndices,
-      ownerValue: arrayValue.values[0] ?? emptyValue(),
-    };
-  }
-
-  private clearSpillChildCell(cellIndex: number): boolean {
-    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
-    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-    if (currentValue.tag === ValueTag.Empty && (currentFlags & CellFlags.SpillChild) === 0) {
-      return false;
-    }
-    this.workbook.cellStore.setValue(cellIndex, emptyValue());
-    this.workbook.cellStore.flags[cellIndex] = currentFlags & ~CellFlags.SpillChild;
-    return true;
-  }
-
-  private setSpillChildValue(cellIndex: number, value: CellValue): boolean {
-    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
-    const nextFlags =
-      (currentFlags & ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle)) |
-      CellFlags.SpillChild;
-    if (areCellValuesEqual(currentValue, value) && currentFlags === nextFlags) {
-      return false;
-    }
-    this.workbook.cellStore.setValue(
-      cellIndex,
-      value,
-      value.tag === ValueTag.String ? this.strings.intern(value.value) : 0,
-    );
-    this.workbook.cellStore.flags[cellIndex] = nextFlags;
-    return true;
+    return runEngineEffect(this.runtime.support.materializeSpill(cellIndex, arrayValue));
   }
 
   private forEachSheetCell(
@@ -2206,42 +1973,7 @@ export class SpreadsheetEngine {
   }
 
   private syncDynamicRanges(formulaChangedCount: number): number {
-    for (let index = 0; index < this.materializedCellCount; index += 1) {
-      const cellIndex = this.materializedCells[index]!;
-      const sheetId = this.workbook.cellStore.sheetIds[cellIndex] ?? 0;
-      if (sheetId === 0) {
-        continue;
-      }
-      const row = this.workbook.cellStore.rows[cellIndex] ?? 0;
-      const col = this.workbook.cellStore.cols[cellIndex] ?? 0;
-      const rangeIndices = this.ranges.addDynamicMember(sheetId, row, col, cellIndex);
-      if (rangeIndices.length > 0) {
-        this.scheduleWasmProgramSync();
-      }
-      for (let rangeCursor = 0; rangeCursor < rangeIndices.length; rangeCursor += 1) {
-        const rangeIndex = rangeIndices[rangeCursor]!;
-        const rangeEntity = makeRangeEntity(rangeIndex);
-        this.appendReverseEdge(makeCellEntity(cellIndex), rangeEntity);
-        const formulas = this.getEntityDependents(rangeEntity);
-        for (let formulaCursor = 0; formulaCursor < formulas.length; formulaCursor += 1) {
-          const formulaEntity = formulas[formulaCursor]!;
-          if (isRangeEntity(formulaEntity)) {
-            continue;
-          }
-          const formulaCellIndex = entityPayload(formulaEntity);
-          const formula = this.formulas.get(formulaCellIndex);
-          if (!formula) {
-            continue;
-          }
-          const nextDependencyIndices = appendPackedCellIndex(formula.dependencyIndices, cellIndex);
-          if (nextDependencyIndices !== formula.dependencyIndices) {
-            formula.dependencyIndices = nextDependencyIndices;
-            formulaChangedCount = this.markFormulaChanged(formulaCellIndex, formulaChangedCount);
-          }
-        }
-      }
-    }
-    return formulaChangedCount;
+    return runEngineEffect(this.runtime.support.syncDynamicRanges(formulaChangedCount));
   }
 
   private resetWorkbook(workbookName = "Workbook"): void {
@@ -2284,19 +2016,7 @@ export class SpreadsheetEngine {
   }
 
   private resetMaterializedCellScratch(expectedSize: number): void {
-    this.materializedCellCount = 0;
-    if (expectedSize > this.materializedCells.length) {
-      this.materializedCells = growUint32(this.materializedCells, expectedSize);
-    }
-  }
-
-  private pushMaterializedCell(cellIndex: number): void {
-    const nextCount = this.materializedCellCount + 1;
-    if (nextCount > this.materializedCells.length) {
-      this.materializedCells = growUint32(this.materializedCells, nextCount);
-    }
-    this.materializedCells[this.materializedCellCount] = cellIndex;
-    this.materializedCellCount = nextCount;
+    runEngineEffect(this.runtime.support.resetMaterializedCellScratch(expectedSize));
   }
 }
 

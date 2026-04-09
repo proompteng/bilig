@@ -22,6 +22,10 @@ import {
   type EngineMutationService,
 } from "./services/mutation-service.js";
 import {
+  createEngineMutationSupportService,
+  type EngineMutationSupportService,
+} from "./services/mutation-support-service.js";
+import {
   createEngineOperationService,
   type EngineOperationService,
 } from "./services/operation-service.js";
@@ -61,6 +65,7 @@ export interface EngineServiceRuntime {
   readonly graph: EngineFormulaGraphService;
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
+  readonly support: EngineMutationSupportService;
   readonly operations: EngineOperationService;
   readonly pivot: EnginePivotService;
   readonly read: EngineReadService;
@@ -76,6 +81,7 @@ export function createEngineServiceRuntime(args: {
   readonly exportSnapshot: () => import("@bilig/protocol").WorkbookSnapshot;
   readonly importSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly resetWorkbook: () => void;
+  readonly mutationSupport: Parameters<typeof createEngineMutationSupportService>[0];
   readonly captureSheetCellState: (
     sheetName: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
@@ -164,6 +170,7 @@ export function createEngineServiceRuntime(args: {
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly operation: Parameters<typeof createEngineOperationService>[0];
 }): EngineServiceRuntime {
+  const support = createEngineMutationSupportService(args.mutationSupport);
   const binding = createEngineFormulaBindingService(args.formulaBinding);
   const graph = createEngineFormulaGraphService(args.formulaGraph);
   const structure = createEngineStructureService({
@@ -260,6 +267,7 @@ export function createEngineServiceRuntime(args: {
     binding,
     graph,
     history,
+    support,
     read,
     recalc,
     structure,
