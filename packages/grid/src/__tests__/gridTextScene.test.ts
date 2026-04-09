@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
 import { buildGridTextScene } from "../gridTextScene.js";
+import { getResolvedCellFontFamily } from "../gridCells.js";
 import type { GridEngineLike } from "../grid-engine.js";
 import { getGridMetrics } from "../gridMetrics.js";
 
@@ -24,6 +25,8 @@ function createCellSnapshot(value: TestCellValue, styleId: string | undefined = 
 }
 
 type TestCellSnapshot = ReturnType<typeof createCellSnapshot>;
+const CELL_FONT_FAMILY = getResolvedCellFontFamily();
+const HEADER_FONT = `500 11px ${CELL_FONT_FAMILY}`;
 
 function makeEngine(
   styles: Record<string, CellStyleRecord>,
@@ -75,7 +78,7 @@ describe("gridTextScene", () => {
       align: "right",
       wrap: false,
       color: "#ff0000",
-      font: 'italic 700 14px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: `italic 700 14px ${CELL_FONT_FAMILY}`,
       fontSize: 14,
       underline: false,
       strike: false,
@@ -105,7 +108,7 @@ describe("gridTextScene", () => {
       align: "center",
       wrap: false,
       color: "#1f7a43",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -119,7 +122,7 @@ describe("gridTextScene", () => {
       align: "right",
       wrap: false,
       color: "#1f7a43",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -151,7 +154,7 @@ describe("gridTextScene", () => {
       align: "center",
       wrap: false,
       color: "#176239",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -165,7 +168,7 @@ describe("gridTextScene", () => {
       align: "right",
       wrap: false,
       color: "#1f7a43",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -179,7 +182,7 @@ describe("gridTextScene", () => {
       align: "right",
       wrap: false,
       color: "#3c4043",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -209,7 +212,7 @@ describe("gridTextScene", () => {
       align: "center",
       wrap: false,
       color: "#176239",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -240,7 +243,7 @@ describe("gridTextScene", () => {
       align: "center",
       wrap: false,
       color: "#1f7a43",
-      font: '500 11px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: HEADER_FONT,
       fontSize: 11,
       underline: false,
       strike: false,
@@ -278,7 +281,7 @@ describe("gridTextScene", () => {
       align: "left",
       wrap: false,
       color: "#202124",
-      font: '400 13px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: `400 13px ${CELL_FONT_FAMILY}`,
       fontSize: 13,
       underline: false,
       strike: false,
@@ -373,7 +376,7 @@ describe("gridTextScene", () => {
       align: "left",
       wrap: false,
       color: "#202124",
-      font: '400 13px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      font: `400 13px ${CELL_FONT_FAMILY}`,
       fontSize: 13,
       underline: false,
       strike: false,

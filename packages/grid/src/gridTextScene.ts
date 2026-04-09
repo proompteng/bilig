@@ -2,7 +2,7 @@ import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
 import { getResolvedCellFontFamily, snapshotToRenderCell } from "./gridCells.js";
 import type { GridMetrics } from "./gridMetrics.js";
-import { getVisibleColumnBounds } from "./gridMetrics.js";
+import { getVisibleColumnBounds, getVisibleRowBounds } from "./gridMetrics.js";
 import { indexToColumn } from "@bilig/formula";
 import type { HeaderSelection } from "./gridPointer.js";
 import type { Item, Rectangle } from "./gridTypes.js";
@@ -37,6 +37,7 @@ interface BuildGridTextSceneOptions {
   };
   readonly gridMetrics: GridMetrics;
   readonly columnWidths: Readonly<Record<number, number>>;
+  readonly rowHeights?: Readonly<Record<number, number>>;
   readonly editingCell?: Item | null;
   readonly selectedCell: Item;
   readonly selectedCellSnapshot?: CellSnapshot | null;
@@ -62,6 +63,7 @@ export function buildGridTextScene({
   visibleRegion,
   gridMetrics,
   columnWidths,
+  rowHeights = {},
   editingCell = null,
   selectedCell,
   selectedCellSnapshot = null,
@@ -78,6 +80,7 @@ export function buildGridTextScene({
     columnWidths,
     gridMetrics,
     items,
+    rowHeights,
     selectedCell,
     selectionRange,
     hoveredHeader,
@@ -272,6 +275,7 @@ function pushHeaderTextItems(options: {
   columnWidths: Readonly<Record<number, number>>;
   gridMetrics: GridMetrics;
   items: GridTextItem[];
+  rowHeights: Readonly<Record<number, number>>;
   selectedCell: Item;
   selectionRange: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
   hoveredHeader: HeaderSelection | null;
@@ -287,6 +291,7 @@ function pushHeaderTextItems(options: {
     columnWidths,
     gridMetrics,
     items,
+    rowHeights,
     selectedCell,
     selectionRange,
     hoveredHeader,
@@ -334,25 +339,27 @@ function pushHeaderTextItems(options: {
     });
   }
 
-  const visibleRowEnd = visibleRegion.range.y + visibleRegion.range.height - 1;
-  for (let row = visibleRegion.range.y; row <= visibleRowEnd; row += 1) {
-    const top =
-      gridMetrics.headerHeight +
-      (row - visibleRegion.range.y) * gridMetrics.rowHeight -
-      visibleRegion.ty;
+  const visibleRows = getVisibleRowBounds(
+    visibleRegion.range,
+    gridMetrics.headerHeight - visibleRegion.ty,
+    Number.MAX_SAFE_INTEGER,
+    rowHeights,
+    gridMetrics.rowHeight,
+  );
+  for (const row of visibleRows) {
     items.push({
       x: 0,
-      y: top,
+      y: row.top,
       width: gridMetrics.rowMarkerWidth,
-      height: gridMetrics.rowHeight,
-      text: String(row + 1),
+      height: row.height,
+      text: String(row.index + 1),
       align: "right",
       wrap: false,
       color: resolveHeaderTextColor({
         activeHeaderDrag,
         hoveredHeader,
-        index: row,
-        isSelected: row >= selectedRows.start && row <= selectedRows.end,
+        index: row.index,
+        isSelected: row.index >= selectedRows.start && row.index <= selectedRows.end,
         kind: "row",
         resizeGuideColumn,
       }),

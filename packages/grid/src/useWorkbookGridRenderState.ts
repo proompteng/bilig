@@ -14,10 +14,15 @@ import { buildGridGpuScene, type GridGpuScene } from "./gridGpuScene.js";
 import { buildGridTextScene, type GridTextScene } from "./gridTextScene.js";
 import {
   EMPTY_COLUMN_WIDTHS,
+  EMPTY_ROW_HEIGHTS,
+  MAX_ROW_HEIGHT,
   MAX_COLUMN_WIDTH,
+  MIN_ROW_HEIGHT,
   MIN_COLUMN_WIDTH,
   getGridMetrics,
   getResolvedColumnWidth,
+  getResolvedRowHeight,
+  resolveRowOffset,
 } from "./gridMetrics.js";
 import { createGridSelection, isSheetSelection } from "./gridSelection.js";
 import {
@@ -80,8 +85,10 @@ export function useWorkbookGridRenderState(input: {
   isEditingCell: boolean;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   controlledColumnWidths?: Readonly<Record<number, number>> | undefined;
+  controlledRowHeights?: Readonly<Record<number, number>> | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
+  onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
   restoreViewportTarget?:
     | {
         readonly token: number;
@@ -98,6 +105,7 @@ export function useWorkbookGridRenderState(input: {
     isEditingCell,
     subscribeViewport,
     controlledColumnWidths,
+    controlledRowHeights,
     onVisibleViewportChange,
     restoreViewportTarget,
   } = input;
@@ -122,6 +130,7 @@ export function useWorkbookGridRenderState(input: {
     cursor: "default",
   });
   const [activeResizeColumn, setActiveResizeColumn] = useState<number | null>(null);
+  const [activeResizeRow, setActiveResizeRow] = useState<number | null>(null);
   const [activeHeaderDrag, setActiveHeaderDrag] = useState<HeaderSelection | null>(null);
   const [isWebGpuActive, setIsWebGpuActive] = useState(false);
   const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null);
@@ -134,10 +143,18 @@ export function useWorkbookGridRenderState(input: {
   const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<
     Record<string, Record<number, number>>
   >({});
+  const [rowHeightsBySheet, setRowHeightsBySheet] = useState<
+    Record<string, Record<number, number>>
+  >({});
   const [columnResizePreview, setColumnResizePreview] = useState<{
     sheetName: string;
     columnIndex: number;
     width: number;
+  } | null>(null);
+  const [rowResizePreview, setRowResizePreview] = useState<{
+    sheetName: string;
+    rowIndex: number;
+    height: number;
   } | null>(null);
   const selectedCell = useMemo(
     () => parseCellAddress(selectedAddr, sheetName),
@@ -153,8 +170,14 @@ export function useWorkbookGridRenderState(input: {
     columnIndex: number;
     width: number;
   } | null>(null);
+  const rowResizePreviewRef = useRef<{
+    sheetName: string;
+    rowIndex: number;
+    height: number;
+  } | null>(null);
   const baseColumnWidths =
     controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS;
+  const baseRowHeights = controlledRowHeights ?? rowHeightsBySheet[sheetName] ?? EMPTY_ROW_HEIGHTS;
   const columnWidths = useMemo(() => {
     if (!columnResizePreview || columnResizePreview.sheetName !== sheetName) {
       return baseColumnWidths;
@@ -167,12 +190,31 @@ export function useWorkbookGridRenderState(input: {
       [columnResizePreview.columnIndex]: columnResizePreview.width,
     };
   }, [baseColumnWidths, columnResizePreview, sheetName]);
+  const rowHeights = useMemo(() => {
+    if (!rowResizePreview || rowResizePreview.sheetName !== sheetName) {
+      return baseRowHeights;
+    }
+    if (baseRowHeights[rowResizePreview.rowIndex] === rowResizePreview.height) {
+      return baseRowHeights;
+    }
+    return {
+      ...baseRowHeights,
+      [rowResizePreview.rowIndex]: rowResizePreview.height,
+    };
+  }, [baseRowHeights, rowResizePreview, sheetName]);
   const sortedColumnWidthOverrides = useMemo(
     () =>
       Object.entries(columnWidths)
         .map(([index, width]) => [Number(index), width] as const)
         .toSorted((left, right) => left[0] - right[0]),
     [columnWidths],
+  );
+  const sortedRowHeightOverrides = useMemo(
+    () =>
+      Object.entries(rowHeights)
+        .map(([index, height]) => [Number(index), height] as const)
+        .toSorted((left, right) => left[0] - right[0]),
+    [rowHeights],
   );
   const columnWidthOverridesAttr = useMemo(() => {
     const entries = Object.entries(columnWidths).toSorted(
@@ -187,8 +229,10 @@ export function useWorkbookGridRenderState(input: {
     [gridMetrics.columnWidth, gridMetrics.rowMarkerWidth, sortedColumnWidthOverrides],
   );
   const totalGridHeight = useMemo(
-    () => gridMetrics.headerHeight + MAX_ROWS * gridMetrics.rowHeight,
-    [gridMetrics.headerHeight, gridMetrics.rowHeight],
+    () =>
+      gridMetrics.headerHeight +
+      resolveRowOffset(MAX_ROWS, sortedRowHeightOverrides, gridMetrics.rowHeight),
+    [gridMetrics.headerHeight, gridMetrics.rowHeight, sortedRowHeightOverrides],
   );
   const scrollLeft = useMemo(
     () =>
@@ -200,8 +244,10 @@ export function useWorkbookGridRenderState(input: {
     [gridMetrics.columnWidth, sortedColumnWidthOverrides, visibleRegion.range.x, visibleRegion.tx],
   );
   const scrollTop = useMemo(
-    () => visibleRegion.range.y * gridMetrics.rowHeight + visibleRegion.ty,
-    [gridMetrics.rowHeight, visibleRegion.range.y, visibleRegion.ty],
+    () =>
+      resolveRowOffset(visibleRegion.range.y, sortedRowHeightOverrides, gridMetrics.rowHeight) +
+      visibleRegion.ty,
+    [gridMetrics.rowHeight, sortedRowHeightOverrides, visibleRegion.range.y, visibleRegion.ty],
   );
   const selectionRange = gridSelection.current?.range ?? null;
 
@@ -215,9 +261,12 @@ export function useWorkbookGridRenderState(input: {
           gridMetrics.rowMarkerWidth +
           resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
           scrollLeft,
-        y: gridMetrics.headerHeight + row * gridMetrics.rowHeight - scrollTop,
+        y:
+          gridMetrics.headerHeight +
+          resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight) -
+          scrollTop,
         width: getResolvedColumnWidth(columnWidths, col, gridMetrics.columnWidth),
-        height: gridMetrics.rowHeight,
+        height: getResolvedRowHeight(rowHeights, row, gridMetrics.rowHeight),
       };
     },
     [
@@ -226,9 +275,11 @@ export function useWorkbookGridRenderState(input: {
       gridMetrics.headerHeight,
       gridMetrics.rowHeight,
       gridMetrics.rowMarkerWidth,
+      rowHeights,
       scrollLeft,
       scrollTop,
       sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
     ],
   );
 
@@ -301,10 +352,11 @@ export function useWorkbookGridRenderState(input: {
       viewportWidth: scrollViewport.clientWidth,
       viewportHeight: scrollViewport.clientHeight,
       columnWidths,
+      rowHeights,
       gridMetrics,
     });
     setVisibleRegion((current) => (sameVisibleRegion(current, next) ? current : next));
-  }, [columnWidths, gridMetrics]);
+  }, [columnWidths, gridMetrics, rowHeights]);
 
   useEffect(() => {
     const preview = columnResizePreviewRef.current;
@@ -323,6 +375,24 @@ export function useWorkbookGridRenderState(input: {
         : current,
     );
   }, [baseColumnWidths, sheetName]);
+
+  useEffect(() => {
+    const preview = rowResizePreviewRef.current;
+    if (!preview || preview.sheetName !== sheetName) {
+      return;
+    }
+    if (baseRowHeights[preview.rowIndex] !== preview.height) {
+      return;
+    }
+    rowResizePreviewRef.current = null;
+    setRowResizePreview((current) =>
+      current?.sheetName === preview.sheetName &&
+      current.rowIndex === preview.rowIndex &&
+      current.height === preview.height
+        ? null
+        : current,
+    );
+  }, [baseRowHeights, sheetName]);
 
   useEffect(() => {
     onVisibleViewportChange?.(viewport);
@@ -377,6 +447,14 @@ export function useWorkbookGridRenderState(input: {
         : null),
     [activeResizeColumn, hoverState.cursor, hoverState.header],
   );
+  const resizeGuideRow = useMemo(
+    () =>
+      activeResizeRow ??
+      (hoverState.cursor === "row-resize" && hoverState.header?.kind === "row"
+        ? hoverState.header.index
+        : null),
+    [activeResizeRow, hoverState.cursor, hoverState.header],
+  );
 
   const gpuScene = useMemo<GridGpuScene>(() => {
     if (!hostElement) {
@@ -386,12 +464,14 @@ export function useWorkbookGridRenderState(input: {
     return buildGridGpuScene({
       engine,
       columnWidths,
+      rowHeights,
       gridMetrics,
       gridSelection,
       activeHeaderDrag,
       hoveredCell: hoverState.cell,
       hoveredHeader: hoverState.header,
       resizeGuideColumn,
+      resizeGuideRow,
       selectedCell: [selectedCell.col, selectedCell.row],
       selectionRange,
       sheetName,
@@ -414,6 +494,8 @@ export function useWorkbookGridRenderState(input: {
     hoverState.cell,
     hoverState.header,
     resizeGuideColumn,
+    resizeGuideRow,
+    rowHeights,
     sceneRevision,
     selectedCell.col,
     selectedCell.row,
@@ -429,6 +511,7 @@ export function useWorkbookGridRenderState(input: {
     return buildGridTextScene({
       engine,
       columnWidths,
+      rowHeights,
       editingCell: isEditingCell ? ([selectedCell.col, selectedCell.row] as const) : null,
       gridMetrics,
       activeHeaderDrag,
@@ -456,6 +539,7 @@ export function useWorkbookGridRenderState(input: {
     hoverState.header,
     isEditingCell,
     resizeGuideColumn,
+    rowHeights,
     sceneRevision,
     selectedCellSnapshot,
     selectedCell.col,
@@ -520,17 +604,21 @@ export function useWorkbookGridRenderState(input: {
     scrollCellIntoView({
       cell: [selectedCell.col, selectedCell.row],
       columnWidths,
+      rowHeights,
       gridMetrics,
       scrollViewport,
       sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
     });
   }, [
     columnWidths,
     gridMetrics,
+    rowHeights,
     selectedCell.col,
     selectedCell.row,
     sheetName,
     sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
   ]);
 
   useLayoutEffect(() => {
@@ -545,11 +633,12 @@ export function useWorkbookGridRenderState(input: {
     const { scrollLeft: nextScrollLeft, scrollTop: nextScrollTop } = resolveViewportScrollPosition({
       viewport: restoreViewportTarget.viewport,
       sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
       gridMetrics,
     });
     scrollViewport.scrollLeft = nextScrollLeft;
     scrollViewport.scrollTop = nextScrollTop;
-  }, [gridMetrics, restoreViewportTarget, sortedColumnWidthOverrides]);
+  }, [gridMetrics, restoreViewportTarget, sortedColumnWidthOverrides, sortedRowHeightOverrides]);
 
   const refreshOverlayBounds = useCallback(() => {
     const next = getCellScreenBounds(selectedCell.col, selectedCell.row);
@@ -625,6 +714,30 @@ export function useWorkbookGridRenderState(input: {
     [input, sheetName],
   );
 
+  const commitRowHeight = useCallback(
+    (rowIndex: number, newSize: number) => {
+      const clampedSize = Math.max(MIN_ROW_HEIGHT, Math.min(MAX_ROW_HEIGHT, Math.round(newSize)));
+      if (input.onRowHeightChange) {
+        input.onRowHeightChange(rowIndex, clampedSize);
+        return;
+      }
+      setRowHeightsBySheet((current) => {
+        const nextSheetHeights = current[sheetName] ?? EMPTY_ROW_HEIGHTS;
+        if (nextSheetHeights[rowIndex] === clampedSize) {
+          return current;
+        }
+        return {
+          ...current,
+          [sheetName]: {
+            ...nextSheetHeights,
+            [rowIndex]: clampedSize,
+          },
+        };
+      });
+    },
+    [input, sheetName],
+  );
+
   const previewColumnWidth = useCallback(
     (columnIndex: number, newSize: number): number => {
       const clampedSize = Math.max(
@@ -645,11 +758,38 @@ export function useWorkbookGridRenderState(input: {
     [sheetName],
   );
 
+  const previewRowHeight = useCallback(
+    (rowIndex: number, newSize: number): number => {
+      const clampedSize = Math.max(MIN_ROW_HEIGHT, Math.min(MAX_ROW_HEIGHT, Math.round(newSize)));
+      const nextPreview = { sheetName, rowIndex, height: clampedSize };
+      rowResizePreviewRef.current = nextPreview;
+      setRowResizePreview((current) =>
+        current?.sheetName === nextPreview.sheetName &&
+        current.rowIndex === nextPreview.rowIndex &&
+        current.height === nextPreview.height
+          ? current
+          : nextPreview,
+      );
+      return clampedSize;
+    },
+    [sheetName],
+  );
+
   const getPreviewColumnWidth = useCallback(
     (columnIndex: number): number | null => {
       const preview = columnResizePreviewRef.current;
       return preview?.sheetName === sheetName && preview.columnIndex === columnIndex
         ? preview.width
+        : null;
+    },
+    [sheetName],
+  );
+
+  const getPreviewRowHeight = useCallback(
+    (rowIndex: number): number | null => {
+      const preview = rowResizePreviewRef.current;
+      return preview?.sheetName === sheetName && preview.rowIndex === rowIndex
+        ? preview.height
         : null;
     },
     [sheetName],
@@ -663,6 +803,19 @@ export function useWorkbookGridRenderState(input: {
       }
       setColumnResizePreview((current) =>
         current?.sheetName === sheetName && current.columnIndex === columnIndex ? null : current,
+      );
+    },
+    [sheetName],
+  );
+
+  const clearRowResizePreview = useCallback(
+    (rowIndex: number) => {
+      const preview = rowResizePreviewRef.current;
+      if (preview?.sheetName === sheetName && preview.rowIndex === rowIndex) {
+        rowResizePreviewRef.current = null;
+      }
+      setRowResizePreview((current) =>
+        current?.sheetName === sheetName && current.rowIndex === rowIndex ? null : current,
       );
     },
     [sheetName],
@@ -728,10 +881,13 @@ export function useWorkbookGridRenderState(input: {
   return {
     activeHeaderDrag,
     activeResizeColumn,
+    activeResizeRow,
     clearColumnResizePreview,
+    clearRowResizePreview,
     columnWidths,
     columnWidthOverridesAttr,
     commitColumnWidth,
+    commitRowHeight,
     computeAutofitColumnWidth,
     fillHandleBounds,
     fillPreviewBounds,
@@ -741,6 +897,7 @@ export function useWorkbookGridRenderState(input: {
     getCellLocalBounds,
     getCellScreenBounds,
     getPreviewColumnWidth,
+    getPreviewRowHeight,
     gridMetrics,
     gridSelection,
     gridTheme,
@@ -755,11 +912,14 @@ export function useWorkbookGridRenderState(input: {
     isWebGpuActive,
     overlayStyle,
     previewColumnWidth,
+    previewRowHeight,
+    rowHeights,
     scrollViewportRef,
     selectedCell,
     selectionRange,
     setActiveHeaderDrag,
     setActiveResizeColumn,
+    setActiveResizeRow,
     setFillPreviewRange,
     setGridSelection,
     setHoverState,

@@ -2,6 +2,7 @@ import { useCallback, type MutableRefObject } from "react";
 import {
   createPointerGeometry,
   resolveColumnResizeTarget,
+  resolveRowResizeTarget,
   resolveHeaderSelection as resolveHeaderSelectionFromGeometry,
   resolveHeaderSelectionForDrag as resolveHeaderSelectionForDragFromGeometry,
   resolvePointerCell as resolvePointerCellFromGeometry,
@@ -16,6 +17,7 @@ export function useWorkbookGridPointerResolvers(input: {
   hostRef: MutableRefObject<HTMLDivElement | null>;
   visibleRegion: VisibleRegionState;
   columnWidths: Readonly<Record<number, number>>;
+  rowHeights: Readonly<Record<number, number>>;
   gridMetrics: ReturnType<typeof getGridMetrics>;
   selectedCell: { col: number; row: number };
   gridSelection: GridSelection;
@@ -25,6 +27,7 @@ export function useWorkbookGridPointerResolvers(input: {
     hostRef,
     visibleRegion,
     columnWidths,
+    rowHeights,
     gridMetrics,
     selectedCell,
     gridSelection,
@@ -46,10 +49,11 @@ export function useWorkbookGridPointerResolvers(input: {
         },
         region,
         columnWidths,
+        rowHeights,
         gridMetrics,
       );
     },
-    [columnWidths, gridMetrics, hostRef, visibleRegion],
+    [columnWidths, gridMetrics, hostRef, rowHeights, visibleRegion],
   );
 
   const resolvePointerCell = useCallback(
@@ -69,6 +73,7 @@ export function useWorkbookGridPointerResolvers(input: {
         region,
         geometry: activeGeometry,
         columnWidths,
+        rowHeights,
         gridMetrics,
         selectedCell: [selectedCell.col, selectedCell.row],
         selectedCellBounds: getCellScreenBounds(selectedCell.col, selectedCell.row) ?? null,
@@ -82,6 +87,7 @@ export function useWorkbookGridPointerResolvers(input: {
       getCellScreenBounds,
       gridMetrics,
       gridSelection,
+      rowHeights,
       resolvePointerGeometry,
       selectedCell.col,
       selectedCell.row,
@@ -106,10 +112,11 @@ export function useWorkbookGridPointerResolvers(input: {
         region,
         activeGeometry,
         columnWidths,
+        rowHeights,
         gridMetrics,
       );
     },
-    [columnWidths, gridMetrics, resolvePointerGeometry, visibleRegion],
+    [columnWidths, gridMetrics, resolvePointerGeometry, rowHeights, visibleRegion],
   );
 
   const resolveHeaderSelectionForPointerDrag = useCallback(
@@ -131,14 +138,16 @@ export function useWorkbookGridPointerResolvers(input: {
         region,
         activeGeometry,
         columnWidths,
+        rowHeights,
         gridMetrics,
       );
     },
-    [columnWidths, gridMetrics, resolvePointerGeometry, visibleRegion],
+    [columnWidths, gridMetrics, resolvePointerGeometry, rowHeights, visibleRegion],
   );
 
   return {
     resolveColumnResizeTarget,
+    resolveRowResizeTarget,
     resolveHeaderSelectionAtPointer,
     resolveHeaderSelectionForPointerDrag,
     resolvePointerCell,

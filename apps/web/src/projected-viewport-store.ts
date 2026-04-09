@@ -8,6 +8,7 @@ import {
 } from "@bilig/worker-transport";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
+const EMPTY_HEIGHTS: Readonly<Record<number, number>> = Object.freeze({});
 const DEFAULT_STYLE_ID = "style-0";
 const MAX_CACHED_CELLS_PER_SHEET = 6000;
 type CellItem = readonly [number, number];
@@ -138,6 +139,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly pendingColumnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>();
+  private readonly pendingRowHeightsBySheet = new Map<string, Record<number, number>>();
   private readonly knownSheets = new Set<string>();
   private readonly activeViewportKeysBySheet = new Map<string, Set<string>>();
   private readonly activeViewports = new Map<string, Viewport>();
@@ -157,6 +159,10 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   getColumnWidths(sheetName: string): Readonly<Record<number, number>> {
     return this.columnWidthsBySheet.get(sheetName) ?? EMPTY_WIDTHS;
+  }
+
+  getRowHeights(sheetName: string): Readonly<Record<number, number>> {
+    return this.rowHeightsBySheet.get(sheetName) ?? EMPTY_HEIGHTS;
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
@@ -236,6 +242,58 @@ export class ProjectedViewportStore implements GridEngineLike {
       this.pendingColumnWidthsBySheet.delete(sheetName);
     } else {
       this.pendingColumnWidthsBySheet.set(sheetName, pendingWidths);
+    }
+    this.listeners.forEach((listener) => listener());
+  }
+
+  setRowHeight(sheetName: string, rowIndex: number, height: number): void {
+    const currentHeight = this.rowHeightsBySheet.get(sheetName)?.[rowIndex];
+    if (currentHeight === height) {
+      return;
+    }
+    this.knownSheets.add(sheetName);
+    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
+    heights[rowIndex] = height;
+    this.rowHeightsBySheet.set(sheetName, heights);
+    const pending = { ...this.pendingRowHeightsBySheet.get(sheetName) };
+    pending[rowIndex] = height;
+    this.pendingRowHeightsBySheet.set(sheetName, pending);
+    this.listeners.forEach((listener) => listener());
+  }
+
+  ackRowHeight(sheetName: string, rowIndex: number, height: number): void {
+    const pendingHeights = this.pendingRowHeightsBySheet.get(sheetName);
+    if (!pendingHeights || pendingHeights[rowIndex] !== height) {
+      return;
+    }
+    const nextPendingHeights = { ...pendingHeights };
+    delete nextPendingHeights[rowIndex];
+    if (Object.keys(nextPendingHeights).length === 0) {
+      this.pendingRowHeightsBySheet.delete(sheetName);
+    } else {
+      this.pendingRowHeightsBySheet.set(sheetName, nextPendingHeights);
+    }
+  }
+
+  rollbackRowHeight(sheetName: string, rowIndex: number, height: number | undefined): void {
+    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
+    if (height === undefined) {
+      delete heights[rowIndex];
+    } else {
+      heights[rowIndex] = height;
+    }
+    if (Object.keys(heights).length === 0) {
+      this.rowHeightsBySheet.delete(sheetName);
+    } else {
+      this.rowHeightsBySheet.set(sheetName, heights);
+    }
+
+    const pendingHeights = { ...this.pendingRowHeightsBySheet.get(sheetName) };
+    delete pendingHeights[rowIndex];
+    if (Object.keys(pendingHeights).length === 0) {
+      this.pendingRowHeightsBySheet.delete(sheetName);
+    } else {
+      this.pendingRowHeightsBySheet.set(sheetName, pendingHeights);
     }
     this.listeners.forEach((listener) => listener());
   }
@@ -396,11 +454,20 @@ export class ProjectedViewportStore implements GridEngineLike {
 
     if (patch.rows.length > 0) {
       const heights = { ...this.rowHeightsBySheet.get(patch.viewport.sheetName) };
+      const pendingHeights = { ...this.pendingRowHeightsBySheet.get(patch.viewport.sheetName) };
       patch.rows.forEach((row: { index: number; size: number }) => {
+        const pending = pendingHeights[row.index];
+        if (pending !== undefined && pending !== row.size) {
+          return;
+        }
+        if (pending === row.size) {
+          delete pendingHeights[row.index];
+        }
         heights[row.index] = row.size;
         axisChanged = true;
       });
       this.rowHeightsBySheet.set(patch.viewport.sheetName, heights);
+      this.pendingRowHeightsBySheet.set(patch.viewport.sheetName, pendingHeights);
     }
 
     this.pruneSheetCache(patch.viewport.sheetName);
@@ -478,6 +545,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.columnWidthsBySheet.delete(sheetName);
     this.pendingColumnWidthsBySheet.delete(sheetName);
     this.rowHeightsBySheet.delete(sheetName);
+    this.pendingRowHeightsBySheet.delete(sheetName);
     const viewportKeys = this.activeViewportKeysBySheet.get(sheetName);
     viewportKeys?.forEach((key) => this.activeViewports.delete(key));
     this.activeViewportKeysBySheet.delete(sheetName);

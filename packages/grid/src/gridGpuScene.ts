@@ -2,7 +2,7 @@ import { formatAddress } from "@bilig/formula";
 import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
 import type { GridMetrics } from "./gridMetrics.js";
-import { getVisibleColumnBounds } from "./gridMetrics.js";
+import { getVisibleColumnBounds, getVisibleRowBounds } from "./gridMetrics.js";
 import type { HeaderSelection } from "./gridPointer.js";
 import type { GridSelection, Item, Rectangle } from "./gridTypes.js";
 
@@ -37,6 +37,7 @@ interface BuildGridGpuSceneOptions {
   };
   readonly gridMetrics: GridMetrics;
   readonly columnWidths: Readonly<Record<number, number>>;
+  readonly rowHeights?: Readonly<Record<number, number>>;
   readonly hostBounds: Pick<DOMRect, "left" | "top">;
   readonly getCellBounds: (col: number, row: number) => Rectangle | undefined;
   readonly gridSelection: GridSelection;
@@ -45,6 +46,7 @@ interface BuildGridGpuSceneOptions {
   readonly hoveredCell?: Item | null;
   readonly hoveredHeader?: HeaderSelection | null;
   readonly resizeGuideColumn?: number | null;
+  readonly resizeGuideRow?: number | null;
   readonly activeHeaderDrag?: HeaderSelection | null;
 }
 
@@ -72,6 +74,7 @@ export function buildGridGpuScene({
   visibleRegion,
   gridMetrics,
   columnWidths,
+  rowHeights = {},
   hostBounds,
   getCellBounds,
   gridSelection,
@@ -80,6 +83,7 @@ export function buildGridGpuScene({
   hoveredCell = null,
   hoveredHeader = null,
   resizeGuideColumn = null,
+  resizeGuideRow = null,
   activeHeaderDrag = null,
 }: BuildGridGpuSceneOptions): GridGpuScene {
   const fillRects: GridGpuRect[] = [];
@@ -90,9 +94,11 @@ export function buildGridGpuScene({
     fillRects,
     gridMetrics,
     gridSelection,
+    rowHeights,
     activeHeaderDrag,
     hoveredHeader,
     resizeGuideColumn,
+    resizeGuideRow,
     selectedCell,
     selectionRange,
     visibleRegion,
@@ -200,9 +206,11 @@ function pushHeaderRects(options: {
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   gridSelection: GridSelection;
+  rowHeights: Readonly<Record<number, number>>;
   activeHeaderDrag: HeaderSelection | null;
   hoveredHeader: HeaderSelection | null;
   resizeGuideColumn: number | null;
+  resizeGuideRow: number | null;
   selectedCell: Item;
   selectionRange: Pick<Rectangle, "x" | "y" | "width" | "height"> | null;
   visibleRegion: {
@@ -217,9 +225,11 @@ function pushHeaderRects(options: {
     fillRects,
     gridMetrics,
     gridSelection,
+    rowHeights,
     activeHeaderDrag,
     hoveredHeader,
     resizeGuideColumn,
+    resizeGuideRow,
     selectedCell,
     selectionRange,
     visibleRegion,
@@ -231,6 +241,13 @@ function pushHeaderRects(options: {
     Number.MAX_SAFE_INTEGER,
     columnWidths,
     gridMetrics.columnWidth,
+  );
+  const visibleRows = getVisibleRowBounds(
+    visibleRegion.range,
+    gridMetrics.headerHeight - visibleRegion.ty,
+    Number.MAX_SAFE_INTEGER,
+    rowHeights,
+    gridMetrics.rowHeight,
   );
   const visibleRowEnd = visibleRegion.range.y + visibleRegion.range.height - 1;
   const selectedColumns = resolveAxisSelectionRange(
@@ -251,6 +268,7 @@ function pushHeaderRects(options: {
       selectedColumns,
       visibleColumns,
       visibleRegion,
+      visibleRows,
     });
   }
 
@@ -261,6 +279,7 @@ function pushHeaderRects(options: {
       selectedRows,
       visibleRegion,
       visibleRowEnd,
+      visibleRows,
       visibleWidth:
         visibleColumns.length === 0
           ? 0
@@ -277,6 +296,7 @@ function pushHeaderRects(options: {
       selectedColumns,
       visibleColumns,
       visibleRegion,
+      visibleRows,
     });
   }
 
@@ -289,6 +309,7 @@ function pushHeaderRects(options: {
       selectedRows,
       visibleRegion,
       visibleRowEnd,
+      visibleRows,
       visibleWidth:
         visibleColumns.length === 0
           ? 0
@@ -353,36 +374,32 @@ function pushHeaderRects(options: {
     );
   }
 
-  for (let row = visibleRegion.range.y; row <= visibleRowEnd; row += 1) {
-    const top =
-      gridMetrics.headerHeight +
-      (row - visibleRegion.range.y) * gridMetrics.rowHeight -
-      visibleRegion.ty;
+  for (const row of visibleRows) {
     fillRects.push({
       x: 0,
-      y: top,
+      y: row.top,
       width: gridMetrics.rowMarkerWidth,
-      height: gridMetrics.rowHeight,
+      height: row.height,
       color:
-        row >= selectedRows.start && row <= selectedRows.end
-          ? activeHeaderDrag?.kind === "row" && activeHeaderDrag.index === row
+        row.index >= selectedRows.start && row.index <= selectedRows.end
+          ? activeHeaderDrag?.kind === "row" && activeHeaderDrag.index === row.index
             ? HEADER_DRAG_ANCHOR_FILL_COLOR
             : HEADER_SELECTED_FILL_COLOR
-          : hoveredHeader?.kind === "row" && hoveredHeader.index === row
+          : hoveredHeader?.kind === "row" && hoveredHeader.index === row.index
             ? HEADER_HOVER_FILL_COLOR
             : HEADER_FILL_COLOR,
     });
     borderRects.push(
       {
         x: gridMetrics.rowMarkerWidth - 1,
-        y: top,
+        y: row.top,
         width: 1,
-        height: gridMetrics.rowHeight,
+        height: row.height,
         color: GRID_LINE_COLOR,
       },
       {
         x: 0,
-        y: top + gridMetrics.rowHeight - 1,
+        y: row.bottom - 1,
         width: gridMetrics.rowMarkerWidth,
         height: 1,
         color: GRID_LINE_COLOR,
@@ -398,6 +415,18 @@ function pushHeaderRects(options: {
       resizeGuideColumn,
       visibleColumns,
       visibleRegion,
+      visibleRows,
+    });
+  }
+
+  if (resizeGuideRow !== null) {
+    pushRowResizeGuideRects({
+      borderRects,
+      fillRects,
+      gridMetrics,
+      resizeGuideRow,
+      visibleColumns,
+      visibleRows,
     });
   }
 }
@@ -430,8 +459,14 @@ function pushColumnSelectionBodyRects(options: {
     readonly tx: number;
     readonly ty: number;
   };
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
 }) {
-  const { fillRects, gridMetrics, selectedColumns, visibleColumns, visibleRegion } = options;
+  const { fillRects, gridMetrics, selectedColumns, visibleColumns, visibleRows } = options;
   const visibleSelectionColumns = visibleColumns.filter(
     (column) => column.index >= selectedColumns.start && column.index <= selectedColumns.end,
   );
@@ -441,7 +476,8 @@ function pushColumnSelectionBodyRects(options: {
   const left = visibleSelectionColumns[0]!.left;
   const right = visibleSelectionColumns.at(-1)!.right;
   const top = gridMetrics.headerHeight;
-  const height = visibleRegion.range.height * gridMetrics.rowHeight;
+  const height =
+    visibleRows.length === 0 ? 0 : visibleRows.at(-1)!.bottom - gridMetrics.headerHeight;
   fillRects.push({
     x: left + 1,
     y: top + 1,
@@ -461,10 +497,23 @@ function pushRowSelectionBodyRects(options: {
     readonly ty: number;
   };
   visibleRowEnd: number;
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
   visibleWidth: number;
 }) {
-  const { fillRects, gridMetrics, selectedRows, visibleRegion, visibleRowEnd, visibleWidth } =
-    options;
+  const {
+    fillRects,
+    gridMetrics,
+    selectedRows,
+    visibleRegion,
+    visibleRowEnd,
+    visibleRows,
+    visibleWidth,
+  } = options;
   if (visibleWidth <= 0) {
     return;
   }
@@ -474,11 +523,13 @@ function pushRowSelectionBodyRects(options: {
   if (visibleSelectionStart > visibleSelectionEnd) {
     return;
   }
-  const top =
-    gridMetrics.headerHeight +
-    (visibleSelectionStart - visibleRegion.range.y) * gridMetrics.rowHeight -
-    visibleRegion.ty;
-  const height = (visibleSelectionEnd - visibleSelectionStart + 1) * gridMetrics.rowHeight;
+  const startRow = visibleRows.find((row) => row.index === visibleSelectionStart);
+  const endRow = visibleRows.find((row) => row.index === visibleSelectionEnd);
+  if (!startRow || !endRow) {
+    return;
+  }
+  const top = startRow.top;
+  const height = endRow.bottom - startRow.top;
   fillRects.push({
     x: bodyLeft + 1,
     y: top + 1,
@@ -802,15 +853,22 @@ function pushResizeGuideRects(options: {
     readonly tx: number;
     readonly ty: number;
   };
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
 }) {
-  const { borderRects, fillRects, gridMetrics, resizeGuideColumn, visibleColumns, visibleRegion } =
+  const { borderRects, fillRects, gridMetrics, resizeGuideColumn, visibleColumns, visibleRows } =
     options;
   const column = visibleColumns.find((entry) => entry.index === resizeGuideColumn);
   if (!column) {
     return;
   }
   const lineX = column.right - 1;
-  const totalHeight = gridMetrics.headerHeight + visibleRegion.range.height * gridMetrics.rowHeight;
+  const totalHeight =
+    visibleRows.length === 0 ? gridMetrics.headerHeight : visibleRows.at(-1)!.bottom;
   fillRects.push({
     x: lineX - 2,
     y: 0,
@@ -823,6 +881,49 @@ function pushResizeGuideRects(options: {
     y: 0,
     width: 2,
     height: totalHeight,
+    color: RESIZE_GUIDE_COLOR,
+  });
+}
+
+function pushRowResizeGuideRects(options: {
+  borderRects: GridGpuRect[];
+  fillRects: GridGpuRect[];
+  gridMetrics: GridMetrics;
+  resizeGuideRow: number;
+  visibleColumns: ReadonlyArray<{
+    index: number;
+    left: number;
+    right: number;
+    width: number;
+  }>;
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
+}) {
+  const { borderRects, fillRects, gridMetrics, resizeGuideRow, visibleColumns, visibleRows } =
+    options;
+  const row = visibleRows.find((entry) => entry.index === resizeGuideRow);
+  if (!row) {
+    return;
+  }
+  const lineY = row.bottom - 1;
+  const totalWidth =
+    visibleColumns.length === 0 ? gridMetrics.rowMarkerWidth : visibleColumns.at(-1)!.right;
+  fillRects.push({
+    x: 0,
+    y: lineY - 2,
+    width: totalWidth,
+    height: 6,
+    color: RESIZE_GUIDE_GLOW_COLOR,
+  });
+  borderRects.push({
+    x: 0,
+    y: lineY,
+    width: totalWidth,
+    height: 2,
     color: RESIZE_GUIDE_COLOR,
   });
 }
@@ -844,6 +945,12 @@ function pushColumnHeaderDragGuideRects(options: {
     readonly tx: number;
     readonly ty: number;
   };
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
 }) {
   const {
     activeHeaderDrag,
@@ -852,7 +959,7 @@ function pushColumnHeaderDragGuideRects(options: {
     gridMetrics,
     selectedColumns,
     visibleColumns,
-    visibleRegion,
+    visibleRows,
   } = options;
   const startColumn = visibleColumns.find((entry) => entry.index === selectedColumns.start);
   const endColumn = visibleColumns.find((entry) => entry.index === selectedColumns.end);
@@ -861,7 +968,8 @@ function pushColumnHeaderDragGuideRects(options: {
   }
   const left = startColumn.left;
   const right = endColumn.right;
-  const totalHeight = gridMetrics.headerHeight + visibleRegion.range.height * gridMetrics.rowHeight;
+  const totalHeight =
+    visibleRows.length === 0 ? gridMetrics.headerHeight : visibleRows.at(-1)!.bottom;
   fillRects.push({
     x: left,
     y: 0,
@@ -916,6 +1024,12 @@ function pushRowHeaderDragGuideRects(options: {
     readonly ty: number;
   };
   visibleRowEnd: number;
+  visibleRows: ReadonlyArray<{
+    index: number;
+    top: number;
+    bottom: number;
+    height: number;
+  }>;
   visibleWidth: number;
 }) {
   const {
@@ -926,6 +1040,7 @@ function pushRowHeaderDragGuideRects(options: {
     selectedRows,
     visibleRegion,
     visibleRowEnd,
+    visibleRows,
     visibleWidth,
   } = options;
   if (visibleWidth <= 0) {
@@ -936,14 +1051,13 @@ function pushRowHeaderDragGuideRects(options: {
   if (topRow > bottomRow) {
     return;
   }
-  const top =
-    gridMetrics.headerHeight +
-    (topRow - visibleRegion.range.y) * gridMetrics.rowHeight -
-    visibleRegion.ty;
-  const bottom =
-    gridMetrics.headerHeight +
-    (bottomRow - visibleRegion.range.y + 1) * gridMetrics.rowHeight -
-    visibleRegion.ty;
+  const topEntry = visibleRows.find((row) => row.index === topRow);
+  const bottomEntry = visibleRows.find((row) => row.index === bottomRow);
+  if (!topEntry || !bottomEntry) {
+    return;
+  }
+  const top = topEntry.top;
+  const bottom = bottomEntry.bottom;
   const totalWidth = gridMetrics.rowMarkerWidth + visibleWidth;
   fillRects.push({
     x: 0,
@@ -976,15 +1090,15 @@ function pushRowHeaderDragGuideRects(options: {
     },
   );
   if (activeHeaderDrag.index >= topRow && activeHeaderDrag.index <= bottomRow) {
-    const anchorTop =
-      gridMetrics.headerHeight +
-      (activeHeaderDrag.index - visibleRegion.range.y) * gridMetrics.rowHeight -
-      visibleRegion.ty;
+    const anchorEntry = visibleRows.find((row) => row.index === activeHeaderDrag.index);
+    if (!anchorEntry) {
+      return;
+    }
     fillRects.push({
       x: gridMetrics.rowMarkerWidth - 3,
-      y: anchorTop,
+      y: anchorEntry.top,
       width: 3,
-      height: gridMetrics.rowHeight,
+      height: anchorEntry.height,
       color: RESIZE_GUIDE_COLOR,
     });
   }

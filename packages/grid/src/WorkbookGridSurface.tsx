@@ -25,8 +25,10 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     isEditingCell: props.isEditingCell,
     subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
+    controlledRowHeights: props.rowHeights,
     onVisibleViewportChange: props.onVisibleViewportChange,
     onColumnWidthChange: props.onColumnWidthChange,
+    onRowHeightChange: props.onRowHeightChange,
     restoreViewportTarget: props.restoreViewportTarget,
   });
   const interactions = useWorkbookGridInteractions({
@@ -49,6 +51,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onSelect: props.onSelect,
     onSelectionLabelChange: props.onSelectionLabelChange,
     onToggleBooleanCell: props.onToggleBooleanCell,
+    onRowHeightChange: props.onRowHeightChange,
     renderState,
   });
   const visibleRange = renderState.visibleRegion.range;

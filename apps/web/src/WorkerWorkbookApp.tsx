@@ -135,6 +135,11 @@ function WorkerWorkbookAppInner({
                   .invokeColumnWidthMutation(app.selection.sheetName, columnIndex, newSize)
                   .catch(app.reportRuntimeError);
               }}
+              onRowHeightChange={(rowIndex: number, newSize: number) => {
+                void app
+                  .invokeRowHeightMutation(app.selection.sheetName, rowIndex, newSize)
+                  .catch(app.reportRuntimeError);
+              }}
               onVisibleViewportChange={app.handleVisibleViewportChange}
               onCommitEdit={app.commitEditor}
               onCopyRange={app.copySelectionRange}
@@ -163,6 +168,7 @@ function WorkerWorkbookAppInner({
               }
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
+              rowHeights={app.rowHeights}
               onSideRailWidthChange={app.setSideRailWidth}
               sideRailId={app.sideRailId}
               sideRail={app.sideRail}

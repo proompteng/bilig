@@ -74,7 +74,9 @@ interface WorkbookViewProps {
   onSideRailWidthChange?: ((width: number) => void) | undefined;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
+  rowHeights?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
+  onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
@@ -133,7 +135,9 @@ export function WorkbookView({
   onSideRailWidthChange,
   subscribeViewport,
   columnWidths,
+  rowHeights,
   onColumnWidthChange,
+  onRowHeightChange,
   onAutofitColumn,
   onVisibleViewportChange,
   previewRanges,
@@ -220,7 +224,9 @@ export function WorkbookView({
             onSelect={onSelect}
             subscribeViewport={subscribeViewport}
             columnWidths={columnWidths}
+            rowHeights={rowHeights}
             onColumnWidthChange={onColumnWidthChange}
+            onRowHeightChange={onRowHeightChange}
             onAutofitColumn={onAutofitColumn}
             onVisibleViewportChange={onVisibleViewportChange}
             previewRanges={previewRanges}

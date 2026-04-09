@@ -186,6 +186,15 @@ export function useWorkerWorkbookAppState(input: {
     () => workerHandle?.viewportStore.getColumnWidths(selection.sheetName),
   );
 
+  const rowHeights = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => workerHandle?.viewportStore.getRowHeights(selection.sheetName),
+    () => workerHandle?.viewportStore.getRowHeights(selection.sheetName),
+  );
+
   const selectedCell = useSyncExternalStore(
     useCallback(
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
@@ -209,7 +218,7 @@ export function useWorkerWorkbookAppState(input: {
   const clearRuntimeError = useCallback(() => {
     runtimeActorRef.send({ type: "error.clear" });
   }, [runtimeActorRef]);
-  const { invokeMutation, invokeColumnWidthMutation } = useWorkbookSync({
+  const { invokeMutation, invokeColumnWidthMutation, invokeRowHeightMutation } = useWorkbookSync({
     documentId,
     connectionStateName: connectionState.name,
     connectionStateRef,
@@ -609,6 +618,7 @@ export function useWorkerWorkbookAppState(input: {
     cancelEditor,
     clearSelectedCell,
     columnWidths,
+    rowHeights,
     commitEditor,
     copySelectionRange,
     createSheet,
@@ -621,6 +631,7 @@ export function useWorkerWorkbookAppState(input: {
     headerStatus,
     handleVisibleViewportChange,
     invokeColumnWidthMutation,
+    invokeRowHeightMutation,
     isEditing,
     isEditingCell,
     moveSelectionRange,

@@ -5,7 +5,9 @@ import {
   type GridMetrics,
   type GridRect,
   getVisibleColumnBounds,
+  getVisibleRowBounds,
   resolveColumnAtClientX,
+  resolveRowAtClientY,
 } from "./gridMetrics.js";
 import type { Item, Rectangle } from "./gridTypes.js";
 
@@ -40,6 +42,7 @@ export interface PointerCellResolutionInput {
   region: VisibleRegionState;
   geometry: PointerGeometry;
   columnWidths: Readonly<Record<number, number>>;
+  rowHeights: Readonly<Record<number, number>>;
   gridMetrics: GridMetrics;
   selectedCell: Item;
   selectedCellBounds?: SelectedCellBounds | null;
@@ -52,6 +55,7 @@ export function createPointerGeometry(
   hostBounds: GridRect,
   region: VisibleRegionState,
   columnWidths: Readonly<Record<number, number>>,
+  rowHeights: Readonly<Record<number, number>>,
   gridMetrics: GridMetrics,
 ): PointerGeometry {
   const cellWidth = gridMetrics.columnWidth;
@@ -69,6 +73,17 @@ export function createPointerGeometry(
     visibleColumnBounds.length === 0
       ? region.range.width * cellWidth
       : visibleColumnBounds.at(-1)!.right - dataLeft;
+  const visibleRowBounds = getVisibleRowBounds(
+    region.range,
+    dataTop,
+    MAX_ROWS,
+    rowHeights,
+    gridMetrics.rowHeight,
+  );
+  const dataHeight =
+    visibleRowBounds.length === 0
+      ? region.range.height * cellHeight
+      : visibleRowBounds.at(-1)!.bottom - dataTop;
   return {
     hostBounds,
     cellWidth,
@@ -76,10 +91,7 @@ export function createPointerGeometry(
     dataLeft,
     dataTop,
     dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + dataWidth),
-    dataBottom: Math.min(
-      hostBounds.bottom - SCROLLBAR_GUTTER,
-      dataTop + region.range.height * cellHeight,
-    ),
+    dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + dataHeight),
   };
 }
 
@@ -114,6 +126,37 @@ export function resolveColumnResizeTarget(
   return null;
 }
 
+export function resolveRowResizeTarget(
+  clientX: number,
+  clientY: number,
+  region: VisibleRegionState,
+  geometry: PointerGeometry,
+  rowHeights: Readonly<Record<number, number>>,
+  defaultHeight: number,
+): number | null {
+  if (clientX < geometry.hostBounds.left || clientX >= geometry.dataLeft) {
+    return null;
+  }
+  for (const row of getVisibleRowBounds(
+    region.range,
+    geometry.dataTop,
+    MAX_ROWS,
+    rowHeights,
+    defaultHeight,
+  )) {
+    if (row.index >= MAX_ROWS - 1) {
+      continue;
+    }
+    if (
+      clientY >= row.bottom - COLUMN_RESIZE_HANDLE_THRESHOLD &&
+      clientY <= row.bottom + COLUMN_RESIZE_HANDLE_THRESHOLD
+    ) {
+      return row.index;
+    }
+  }
+  return null;
+}
+
 export function resolvePointerCell(input: PointerCellResolutionInput): Item | null {
   const {
     clientX,
@@ -121,6 +164,7 @@ export function resolvePointerCell(input: PointerCellResolutionInput): Item | nu
     region,
     geometry,
     columnWidths,
+    rowHeights,
     gridMetrics,
     selectedCell,
     selectedCellBounds,
@@ -128,7 +172,7 @@ export function resolvePointerCell(input: PointerCellResolutionInput): Item | nu
     hasColumnSelection,
     hasRowSelection,
   } = input;
-  const { hostBounds, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = geometry;
+  const { hostBounds, dataLeft, dataTop, dataRight, dataBottom } = geometry;
 
   if (
     clientX >= hostBounds.right - SCROLLBAR_GUTTER ||
@@ -163,8 +207,15 @@ export function resolvePointerCell(input: PointerCellResolutionInput): Item | nu
     columnWidths,
     gridMetrics.columnWidth,
   );
-  const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
-  if (col === null || col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
+  const row = resolveRowAtClientY(
+    clientY,
+    region.range,
+    dataTop,
+    MAX_ROWS,
+    rowHeights,
+    gridMetrics.rowHeight,
+  );
+  if (col === null || col < 0 || col >= MAX_COLS || row === null || row < 0 || row >= MAX_ROWS) {
     return null;
   }
 
@@ -177,9 +228,10 @@ export function resolveHeaderSelection(
   region: VisibleRegionState,
   geometry: PointerGeometry,
   columnWidths: Readonly<Record<number, number>>,
+  rowHeights: Readonly<Record<number, number>>,
   gridMetrics: GridMetrics,
 ): HeaderSelection | null {
-  const { hostBounds, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = geometry;
+  const { hostBounds, dataLeft, dataTop, dataRight, dataBottom } = geometry;
   const headerBottom = dataTop;
   const rowAreaRight = dataLeft;
 
@@ -208,8 +260,15 @@ export function resolveHeaderSelection(
     clientY >= dataTop &&
     clientY < dataBottom
   ) {
-    const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
-    if (row >= 0 && row < MAX_ROWS) {
+    const row = resolveRowAtClientY(
+      clientY,
+      region.range,
+      dataTop,
+      MAX_ROWS,
+      rowHeights,
+      gridMetrics.rowHeight,
+    );
+    if (row !== null && row >= 0 && row < MAX_ROWS) {
       return { kind: "row", index: row };
     }
   }
@@ -224,9 +283,10 @@ export function resolveHeaderSelectionForDrag(
   region: VisibleRegionState,
   geometry: PointerGeometry,
   columnWidths: Readonly<Record<number, number>>,
+  rowHeights: Readonly<Record<number, number>>,
   gridMetrics: GridMetrics,
 ): HeaderSelection | null {
-  const { hostBounds, cellHeight, dataLeft, dataTop, dataRight, dataBottom } = geometry;
+  const { hostBounds, dataLeft, dataTop, dataRight, dataBottom } = geometry;
 
   if (kind === "column") {
     if (
@@ -259,8 +319,15 @@ export function resolveHeaderSelectionForDrag(
   ) {
     return null;
   }
-  const row = region.range.y + Math.floor((clientY - dataTop) / cellHeight);
-  if (row < 0 || row >= MAX_ROWS) {
+  const row = resolveRowAtClientY(
+    clientY,
+    region.range,
+    dataTop,
+    MAX_ROWS,
+    rowHeights,
+    gridMetrics.rowHeight,
+  );
+  if (row === null || row < 0 || row >= MAX_ROWS) {
     return null;
   }
   return { kind: "row", index: row };

@@ -4,9 +4,12 @@ import {
   PRODUCT_HEADER_HEIGHT,
   PRODUCT_ROW_HEIGHT,
   PRODUCT_ROW_MARKER_WIDTH,
+  getResolvedRowHeight,
   getGridMetrics,
   getVisibleColumnBounds,
+  getVisibleRowBounds,
   resolveColumnAtClientX,
+  resolveRowAtClientY,
   getResolvedColumnWidth,
 } from "../gridMetrics.js";
 
@@ -72,5 +75,55 @@ describe("gridMetrics", () => {
     expect(getResolvedColumnWidth(columnWidths, 3, PRODUCT_COLUMN_WIDTH)).toBe(
       PRODUCT_COLUMN_WIDTH,
     );
+  });
+
+  test("resolves visible row bounds and pointer rows with overrides", () => {
+    const rowHeights = { 1: 34, 2: 28 };
+    const bounds = getVisibleRowBounds(
+      { y: 0, height: 4 },
+      57,
+      1_048_576,
+      rowHeights,
+      PRODUCT_ROW_HEIGHT,
+    );
+
+    expect(bounds.map((row) => ({ index: row.index, top: row.top, height: row.height }))).toEqual([
+      { index: 0, top: 57, height: PRODUCT_ROW_HEIGHT },
+      { index: 1, top: 57 + PRODUCT_ROW_HEIGHT, height: 34 },
+      { index: 2, top: 57 + PRODUCT_ROW_HEIGHT + 34, height: 28 },
+      { index: 3, top: 57 + PRODUCT_ROW_HEIGHT + 34 + 28, height: PRODUCT_ROW_HEIGHT },
+    ]);
+
+    expect(
+      resolveRowAtClientY(
+        57 + 6,
+        { y: 0, height: 4 },
+        57,
+        1_048_576,
+        rowHeights,
+        PRODUCT_ROW_HEIGHT,
+      ),
+    ).toBe(0);
+    expect(
+      resolveRowAtClientY(
+        57 + PRODUCT_ROW_HEIGHT + 12,
+        { y: 0, height: 4 },
+        57,
+        1_048_576,
+        rowHeights,
+        PRODUCT_ROW_HEIGHT,
+      ),
+    ).toBe(1);
+    expect(
+      resolveRowAtClientY(
+        57 + PRODUCT_ROW_HEIGHT + 34 + 4,
+        { y: 0, height: 4 },
+        57,
+        1_048_576,
+        rowHeights,
+        PRODUCT_ROW_HEIGHT,
+      ),
+    ).toBe(2);
+    expect(getResolvedRowHeight(rowHeights, 3, PRODUCT_ROW_HEIGHT)).toBe(PRODUCT_ROW_HEIGHT);
   });
 });

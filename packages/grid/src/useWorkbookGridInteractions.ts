@@ -77,6 +77,7 @@ export function useWorkbookGridInteractions(
     | "onCancelEdit"
     | "onClearCell"
     | "onColumnWidthChange"
+    | "onRowHeightChange"
     | "onCommitEdit"
     | "onCopyRange"
     | "onEditorChange"
@@ -116,24 +117,31 @@ export function useWorkbookGridInteractions(
   } = input;
   const {
     activeResizeColumn,
+    activeResizeRow,
     clearColumnResizePreview,
+    clearRowResizePreview,
     columnWidths,
     commitColumnWidth,
+    commitRowHeight,
     computeAutofitColumnWidth,
     fillPreviewRange,
     focusGrid,
     getCellScreenBounds,
     getPreviewColumnWidth,
+    getPreviewRowHeight,
     gridMetrics,
     gridSelection,
     hostRef,
     isFillHandleDragging,
     isRangeMoveDragging,
     previewColumnWidth,
+    previewRowHeight,
+    rowHeights,
     selectedCell,
     selectionRange,
     setActiveHeaderDrag,
     setActiveResizeColumn,
+    setActiveResizeRow,
     setFillPreviewRange,
     setGridSelection,
     setHoverState,
@@ -182,6 +190,7 @@ export function useWorkbookGridInteractions(
     [columnResizeActiveRef],
   );
   const {
+    resolveRowResizeTarget: resolveRowResizeTargetAtPointer,
     resolveHeaderSelectionAtPointer,
     resolveHeaderSelectionForPointerDrag,
     resolvePointerCell,
@@ -190,6 +199,7 @@ export function useWorkbookGridInteractions(
     hostRef,
     visibleRegion,
     columnWidths,
+    rowHeights,
     gridMetrics,
     selectedCell,
     gridSelection,
@@ -486,7 +496,9 @@ export function useWorkbookGridInteractions(
         region: visibleRegion,
         geometry,
         columnWidths,
+        rowHeights,
         defaultColumnWidth: gridMetrics.columnWidth,
+        defaultRowHeight: gridMetrics.rowHeight,
         gridMetrics,
         selectedCell: [selectedCell.col, selectedCell.row],
         selectedCellBounds: getCellScreenBounds(selectedCell.col, selectedCell.row) ?? null,
@@ -505,6 +517,7 @@ export function useWorkbookGridInteractions(
       gridSelection.rows.length,
       isFillHandleDragging,
       isRangeMoveDragging,
+      rowHeights,
       resolvePointerGeometry,
       selectedCell.col,
       selectedCell.row,
@@ -645,6 +658,55 @@ export function useWorkbookGridInteractions(
     ],
   );
 
+  const beginRowResize = useCallback(
+    (rowIndex: number, startClientY: number) => {
+      resizeCleanupRef.current?.();
+      startGridResize(interactionState);
+      setActiveResizeRow(rowIndex);
+      const startHeight = rowHeights[rowIndex] ?? gridMetrics.rowHeight;
+
+      const handlePointerMove = (nativeEvent: PointerEvent) => {
+        previewRowHeight(rowIndex, startHeight + (nativeEvent.clientY - startClientY));
+      };
+
+      const cleanup = (nativeEvent?: PointerEvent) => {
+        window.removeEventListener("pointermove", handlePointerMove, true);
+        window.removeEventListener("pointerup", handlePointerUp, true);
+        resizeCleanupRef.current = null;
+        setActiveResizeRow(null);
+        finishGridResize(interactionState);
+        if (nativeEvent) {
+          refreshHoverState(nativeEvent.clientX, nativeEvent.clientY, 0);
+        }
+      };
+
+      const handlePointerUp = (nativeEvent: PointerEvent) => {
+        const finalHeight = getPreviewRowHeight(rowIndex) ?? startHeight;
+        if (finalHeight === startHeight) {
+          clearRowResizePreview(rowIndex);
+        } else {
+          commitRowHeight(rowIndex, finalHeight);
+        }
+        cleanup(nativeEvent);
+      };
+
+      resizeCleanupRef.current = cleanup;
+      window.addEventListener("pointermove", handlePointerMove, true);
+      window.addEventListener("pointerup", handlePointerUp, true);
+    },
+    [
+      clearRowResizePreview,
+      commitRowHeight,
+      getPreviewRowHeight,
+      gridMetrics.rowHeight,
+      interactionState,
+      previewRowHeight,
+      refreshHoverState,
+      rowHeights,
+      setActiveResizeRow,
+    ],
+  );
+
   const handleSelectEntireSheet = useCallback(() => {
     if (isEditingCell) {
       onCommitEdit();
@@ -749,6 +811,17 @@ export function useWorkbookGridInteractions(
               columnWidths,
               gridMetrics.columnWidth,
             );
+      const rowResizeTarget =
+        pointerGeometry === null
+          ? null
+          : resolveRowResizeTargetAtPointer(
+              event.clientX,
+              event.clientY,
+              visibleRegion,
+              pointerGeometry,
+              rowHeights,
+              gridMetrics.rowHeight,
+            );
       if (resizeTarget !== null) {
         event.preventDefault();
         event.stopPropagation();
@@ -773,6 +846,30 @@ export function useWorkbookGridInteractions(
         beginColumnResize(resizeTarget, event.clientX);
         return;
       }
+      if (rowResizeTarget !== null) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isEditingCell) {
+          onCommitEdit();
+        }
+        focusGrid();
+        setActiveHeaderDrag(null);
+        setHoverState((current) =>
+          sameGridHoverState(current, {
+            cell: null,
+            header: { kind: "row", index: rowResizeTarget },
+            cursor: "row-resize",
+          })
+            ? current
+            : {
+                cell: null,
+                header: { kind: "row", index: rowResizeTarget },
+                cursor: "row-resize",
+              },
+        );
+        beginRowResize(rowResizeTarget, event.clientY);
+        return;
+      }
 
       if (allowsRangeMove) {
         const rangeMoveAnchorCell = resolveSelectionMoveAnchorCell(
@@ -788,6 +885,7 @@ export function useWorkbookGridInteractions(
             clearIgnoreNextPointerSelection: true,
           });
           setActiveResizeColumn(null);
+          setActiveResizeRow(null);
           setActiveHeaderDrag(null);
           beginRangeMove(rangeMoveAnchorCell);
           return;
@@ -804,6 +902,7 @@ export function useWorkbookGridInteractions(
               pointerGeometry,
             );
       setActiveResizeColumn(null);
+      setActiveResizeRow(null);
       setActiveHeaderDrag(headerSelection);
       setHoverState((current) =>
         sameGridHoverState(current, { cell: null, header: null, cursor: "default" })
@@ -829,7 +928,12 @@ export function useWorkbookGridInteractions(
       });
     },
     handleHostPointerLeave: () => {
-      if (activeResizeColumn !== null || isFillHandleDragging || isRangeMoveDragging) {
+      if (
+        activeResizeColumn !== null ||
+        activeResizeRow !== null ||
+        isFillHandleDragging ||
+        isRangeMoveDragging
+      ) {
         return;
       }
       setHoverState((current) =>

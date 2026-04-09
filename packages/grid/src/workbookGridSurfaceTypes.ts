@@ -64,7 +64,9 @@ export interface WorkbookGridSurfaceProps {
   ): void;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
+  rowHeights?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
+  onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;

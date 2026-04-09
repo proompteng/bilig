@@ -282,6 +282,40 @@ describe("gridGpuScene", () => {
     });
   });
 
+  test("adds a GPU resize guide for hovered or active row resize", () => {
+    const scene = buildGridGpuScene({
+      engine: makeEngine({}),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      gridSelection: createSelection(),
+      resizeGuideRow: 3,
+      selectedCell: [0, 0],
+      sheetName: "Sheet1",
+      visibleItems: [
+        [2, 3],
+        [3, 3],
+      ],
+      visibleRegion: { range: { x: 2, y: 3, width: 2, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: () => ({ x: 254, y: 90, width: 104, height: 22 }),
+    });
+
+    expect(scene.fillRects).toContainEqual({
+      x: 0,
+      y: 43,
+      width: 254,
+      height: 6,
+      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 0.18 },
+    });
+    expect(scene.borderRects).toContainEqual({
+      x: 0,
+      y: 45,
+      width: 254,
+      height: 2,
+      color: { r: 31 / 255, g: 122 / 255, b: 67 / 255, a: 1 },
+    });
+  });
+
   test("adds GPU drag guides for active column header drags", () => {
     const scene = buildGridGpuScene({
       engine: makeEngine({}),

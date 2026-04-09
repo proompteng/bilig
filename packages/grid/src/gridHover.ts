@@ -3,11 +3,19 @@ import {
   resolveColumnResizeTarget,
   resolveHeaderSelection,
   resolvePointerCell,
+  resolveRowResizeTarget,
 } from "./gridPointer.js";
 import type { GridMetrics } from "./gridMetrics.js";
 import type { Item, Rectangle } from "./gridTypes.js";
 
-export type GridHoverCursor = "default" | "cell" | "pointer" | "col-resize" | "grab" | "grabbing";
+export type GridHoverCursor =
+  | "default"
+  | "cell"
+  | "pointer"
+  | "col-resize"
+  | "row-resize"
+  | "grab"
+  | "grabbing";
 
 export interface GridHoverState {
   readonly cell: Item | null;
@@ -21,7 +29,9 @@ interface ResolveGridHoverStateOptions {
   readonly region: VisibleRegionState;
   readonly geometry: PointerGeometry;
   readonly columnWidths: Readonly<Record<number, number>>;
+  readonly rowHeights: Readonly<Record<number, number>>;
   readonly defaultColumnWidth: number;
+  readonly defaultRowHeight: number;
   readonly gridMetrics: GridMetrics;
   readonly selectedCell: Item;
   readonly selectedCellBounds?: Rectangle | null;
@@ -37,7 +47,9 @@ export function resolveGridHoverState(options: ResolveGridHoverStateOptions): Gr
     region,
     geometry,
     columnWidths,
+    rowHeights,
     defaultColumnWidth,
+    defaultRowHeight,
     gridMetrics,
     selectedCell,
     selectedCellBounds,
@@ -62,12 +74,29 @@ export function resolveGridHoverState(options: ResolveGridHoverStateOptions): Gr
     };
   }
 
+  const rowResizeTarget = resolveRowResizeTarget(
+    clientX,
+    clientY,
+    region,
+    geometry,
+    rowHeights,
+    defaultRowHeight,
+  );
+  if (rowResizeTarget !== null) {
+    return {
+      cell: null,
+      header: { kind: "row", index: rowResizeTarget },
+      cursor: "row-resize",
+    };
+  }
+
   const header = resolveHeaderSelection(
     clientX,
     clientY,
     region,
     geometry,
     columnWidths,
+    rowHeights,
     gridMetrics,
   );
   if (header) {
@@ -84,6 +113,7 @@ export function resolveGridHoverState(options: ResolveGridHoverStateOptions): Gr
     region,
     geometry,
     columnWidths,
+    rowHeights,
     gridMetrics,
     selectedCell,
     ...(selectedCellBounds ? { selectedCellBounds } : {}),

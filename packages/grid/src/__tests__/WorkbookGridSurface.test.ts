@@ -73,6 +73,7 @@ describe("WorkbookGridSurface selection autoscroll", () => {
           colStart: 3,
         },
         sortedColumnWidthOverrides: [],
+        sortedRowHeightOverrides: [],
         gridMetrics: getGridMetrics(),
       }),
     ).toEqual({

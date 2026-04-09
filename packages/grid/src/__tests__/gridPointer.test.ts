@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { PRODUCT_COLUMN_WIDTH, getGridMetrics } from "../gridMetrics.js";
+import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT, getGridMetrics } from "../gridMetrics.js";
 import {
   createPointerGeometry,
+  resolveColumnResizeTarget,
   resolveHeaderSelection,
   resolveHeaderSelectionForDrag,
   resolvePointerCell,
+  resolveRowResizeTarget,
   type PointerGeometry,
   type VisibleRegionState,
 } from "../gridPointer.js";
@@ -20,6 +22,7 @@ function buildGeometry(): PointerGeometry {
   return createPointerGeometry(
     { left: 0, top: 33, right: 1068, bottom: 868 },
     region,
+    {},
     {},
     gridMetrics,
   );
@@ -41,6 +44,7 @@ describe("gridPointer", () => {
       region,
       geometry,
       columnWidths: {},
+      rowHeights: {},
       gridMetrics,
       selectedCell: [0, 0],
       selectedCellBounds: null,
@@ -60,6 +64,7 @@ describe("gridPointer", () => {
       region,
       geometry,
       columnWidths: {},
+      rowHeights: {},
       gridMetrics,
       selectedCell: [2, 4],
       selectedCellBounds: {
@@ -80,13 +85,21 @@ describe("gridPointer", () => {
     const geometry = buildGeometry();
 
     expect(
-      resolveHeaderSelection(46 + PRODUCT_COLUMN_WIDTH + 10, 40, region, geometry, {}, gridMetrics),
+      resolveHeaderSelection(
+        46 + PRODUCT_COLUMN_WIDTH + 10,
+        40,
+        region,
+        geometry,
+        {},
+        {},
+        gridMetrics,
+      ),
     ).toEqual({
       kind: "column",
       index: 1,
     });
 
-    expect(resolveHeaderSelection(20, 57 + 22 + 3, region, geometry, {}, gridMetrics)).toEqual({
+    expect(resolveHeaderSelection(20, 57 + 22 + 3, region, geometry, {}, {}, gridMetrics)).toEqual({
       kind: "row",
       index: 1,
     });
@@ -99,6 +112,7 @@ describe("gridPointer", () => {
         region,
         geometry,
         {},
+        {},
         gridMetrics,
       ),
     ).toEqual({
@@ -107,10 +121,53 @@ describe("gridPointer", () => {
     });
 
     expect(
-      resolveHeaderSelectionForDrag("row", 20, 57 + 5 * 22 + 8, region, geometry, {}, gridMetrics),
+      resolveHeaderSelectionForDrag(
+        "row",
+        20,
+        57 + 5 * 22 + 8,
+        region,
+        geometry,
+        {},
+        {},
+        gridMetrics,
+      ),
     ).toEqual({
       kind: "row",
       index: 5,
     });
+  });
+
+  test("resolves row resize targets with row height overrides", () => {
+    const geometry = createPointerGeometry(
+      { left: 0, top: 33, right: 1068, bottom: 868 },
+      region,
+      {},
+      { 1: 34 },
+      gridMetrics,
+    );
+
+    expect(
+      resolveColumnResizeTarget(
+        46 + PRODUCT_COLUMN_WIDTH - 2,
+        40,
+        region,
+        geometry,
+        {},
+        PRODUCT_COLUMN_WIDTH,
+      ),
+    ).toBe(0);
+    expect(
+      resolveRowResizeTarget(
+        20,
+        57 + PRODUCT_ROW_HEIGHT + 34 - 2,
+        region,
+        geometry,
+        { 1: 34 },
+        PRODUCT_ROW_HEIGHT,
+      ),
+    ).toBe(1);
+    expect(
+      resolveRowResizeTarget(20, 40, region, geometry, { 1: 34 }, PRODUCT_ROW_HEIGHT),
+    ).toBeNull();
   });
 });

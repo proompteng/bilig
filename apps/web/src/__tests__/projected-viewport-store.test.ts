@@ -59,6 +59,14 @@ function createColumnPatch(size: number): ViewportPatch {
   };
 }
 
+function createRowPatch(size: number): ViewportPatch {
+  return {
+    ...createPatch(),
+    cells: [],
+    rows: [{ index: 0, size, hidden: false }],
+  };
+}
+
 describe("ProjectedViewportStore", () => {
   it("accepts equal-version empty snapshots that clear stale styling", () => {
     const cache = new ProjectedViewportStore();
@@ -346,5 +354,25 @@ describe("ProjectedViewportStore", () => {
     cache.applyViewportPatch(createColumnPatch(104));
 
     expect(cache.getColumnWidths("Sheet1")[0]).toBe(104);
+  });
+
+  it("clears a pending local row height once the authoritative patch matches it", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.setRowHeight("Sheet1", 0, 30);
+    cache.applyViewportPatch(createRowPatch(30));
+    cache.applyViewportPatch(createRowPatch(44));
+
+    expect(cache.getRowHeights("Sheet1")[0]).toBe(44);
+  });
+
+  it("rolls back a failed local row height mutation without leaving a pending height behind", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.setRowHeight("Sheet1", 0, 30);
+    cache.rollbackRowHeight("Sheet1", 0, undefined);
+    cache.applyViewportPatch(createRowPatch(22));
+
+    expect(cache.getRowHeights("Sheet1")[0]).toBe(22);
   });
 });

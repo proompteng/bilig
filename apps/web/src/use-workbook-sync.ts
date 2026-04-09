@@ -391,6 +391,25 @@ export function useWorkbookSync(input: {
     [invokeMutation, workerHandleRef],
   );
 
+  const invokeRowHeightMutation = useCallback(
+    async (sheetName: string, rowIndex: number, height: number): Promise<void> => {
+      const viewportStore = workerHandleRef.current?.viewportStore;
+      const previousHeight = viewportStore?.getRowHeights(sheetName)[rowIndex];
+      if (viewportStore) {
+        viewportStore.setRowHeight(sheetName, rowIndex, height);
+      }
+      try {
+        await invokeMutation("updateRowMetadata", sheetName, rowIndex, 1, height, null);
+      } catch (error) {
+        if (viewportStore && viewportStore.getRowHeights(sheetName)[rowIndex] === height) {
+          viewportStore.rollbackRowHeight(sheetName, rowIndex, previousHeight);
+        }
+        throw error;
+      }
+    },
+    [invokeMutation, workerHandleRef],
+  );
+
   useEffect(() => {
     if (!runtimeController || !canAttemptRemoteSync(connectionStateName)) {
       return;
@@ -401,5 +420,6 @@ export function useWorkbookSync(input: {
   return {
     invokeMutation,
     invokeColumnWidthMutation,
+    invokeRowHeightMutation,
   };
 }

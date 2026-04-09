@@ -1,5 +1,10 @@
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
-import { getGridMetrics, getResolvedColumnWidth } from "./gridMetrics.js";
+import {
+  getGridMetrics,
+  getResolvedColumnWidth,
+  getResolvedRowHeight,
+  resolveRowOffset,
+} from "./gridMetrics.js";
 import type { Item } from "./gridTypes.js";
 import type { VisibleRegionState } from "./gridPointer.js";
 
@@ -9,23 +14,27 @@ export function resolveVisibleRegionFromScroll(options: {
   viewportWidth: number;
   viewportHeight: number;
   columnWidths: Readonly<Record<number, number>>;
+  rowHeights: Readonly<Record<number, number>>;
   gridMetrics: ReturnType<typeof getGridMetrics>;
 }): VisibleRegionState {
-  const { scrollLeft, scrollTop, viewportWidth, viewportHeight, columnWidths, gridMetrics } =
-    options;
+  const {
+    scrollLeft,
+    scrollTop,
+    viewportWidth,
+    viewportHeight,
+    columnWidths,
+    rowHeights,
+    gridMetrics,
+  } = options;
   const bodyWidth = Math.max(0, viewportWidth - gridMetrics.rowMarkerWidth);
   const bodyHeight = Math.max(0, viewportHeight - gridMetrics.headerHeight);
   const horizontalAnchor = resolveColumnAnchor(scrollLeft, columnWidths, gridMetrics.columnWidth);
-  const startRow = Math.min(
-    MAX_ROWS - 1,
-    Math.max(0, Math.floor(scrollTop / gridMetrics.rowHeight)),
-  );
-  const ty = scrollTop - startRow * gridMetrics.rowHeight;
+  const verticalAnchor = resolveRowAnchor(scrollTop, rowHeights, gridMetrics.rowHeight);
 
   return {
     range: {
       x: horizontalAnchor.index,
-      y: startRow,
+      y: verticalAnchor.index,
       width: resolveVisibleColumnCount({
         startCol: horizontalAnchor.index,
         tx: horizontalAnchor.offset,
@@ -33,10 +42,16 @@ export function resolveVisibleRegionFromScroll(options: {
         columnWidths,
         defaultWidth: gridMetrics.columnWidth,
       }),
-      height: Math.max(1, Math.ceil((bodyHeight + ty) / gridMetrics.rowHeight) + 1),
+      height: resolveVisibleRowCount({
+        startRow: verticalAnchor.index,
+        ty: verticalAnchor.offset,
+        bodyHeight,
+        rowHeights,
+        defaultHeight: gridMetrics.rowHeight,
+      }),
     },
     tx: horizontalAnchor.offset,
-    ty,
+    ty: verticalAnchor.offset,
   };
 }
 
@@ -58,11 +73,21 @@ export function resolveColumnOffset(
 export function scrollCellIntoView(options: {
   cell: Item;
   columnWidths: Readonly<Record<number, number>>;
+  rowHeights: Readonly<Record<number, number>>;
   gridMetrics: ReturnType<typeof getGridMetrics>;
   scrollViewport: HTMLDivElement;
   sortedColumnWidthOverrides: readonly (readonly [number, number])[];
+  sortedRowHeightOverrides: readonly (readonly [number, number])[];
 }): void {
-  const { cell, columnWidths, gridMetrics, scrollViewport, sortedColumnWidthOverrides } = options;
+  const {
+    cell,
+    columnWidths,
+    rowHeights,
+    gridMetrics,
+    scrollViewport,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+  } = options;
   const cellLeft = resolveColumnOffset(
     cell[0],
     sortedColumnWidthOverrides,
@@ -76,18 +101,20 @@ export function scrollCellIntoView(options: {
     scrollViewport.scrollLeft = cellLeft + cellWidth - bodyWidth;
   }
 
-  const cellTop = cell[1] * gridMetrics.rowHeight;
+  const cellTop = resolveRowOffset(cell[1], sortedRowHeightOverrides, gridMetrics.rowHeight);
+  const cellHeight = getResolvedRowHeight(rowHeights, cell[1], gridMetrics.rowHeight);
   const bodyHeight = Math.max(0, scrollViewport.clientHeight - gridMetrics.headerHeight);
   if (cellTop < scrollViewport.scrollTop) {
     scrollViewport.scrollTop = cellTop;
-  } else if (cellTop + gridMetrics.rowHeight > scrollViewport.scrollTop + bodyHeight) {
-    scrollViewport.scrollTop = cellTop + gridMetrics.rowHeight - bodyHeight;
+  } else if (cellTop + cellHeight > scrollViewport.scrollTop + bodyHeight) {
+    scrollViewport.scrollTop = cellTop + cellHeight - bodyHeight;
   }
 }
 
 export function resolveViewportScrollPosition(options: {
   viewport: Pick<VisibleRegionState["range"], "x" | "y"> | { colStart: number; rowStart: number };
   sortedColumnWidthOverrides: readonly (readonly [number, number])[];
+  sortedRowHeightOverrides: readonly (readonly [number, number])[];
   gridMetrics: ReturnType<typeof getGridMetrics>;
 }): { scrollLeft: number; scrollTop: number } {
   const colStart = "colStart" in options.viewport ? options.viewport.colStart : options.viewport.x;
@@ -98,7 +125,11 @@ export function resolveViewportScrollPosition(options: {
       options.sortedColumnWidthOverrides,
       options.gridMetrics.columnWidth,
     ),
-    scrollTop: rowStart * options.gridMetrics.rowHeight,
+    scrollTop: resolveRowOffset(
+      rowStart,
+      options.sortedRowHeightOverrides,
+      options.gridMetrics.rowHeight,
+    ),
   };
 }
 
@@ -131,6 +162,23 @@ function resolveVisibleColumnCount(options: {
   return Math.max(1, count + 1);
 }
 
+function resolveVisibleRowCount(options: {
+  startRow: number;
+  ty: number;
+  bodyHeight: number;
+  rowHeights: Readonly<Record<number, number>>;
+  defaultHeight: number;
+}): number {
+  const { startRow, ty, bodyHeight, rowHeights, defaultHeight } = options;
+  let coveredHeight = -ty;
+  let count = 0;
+  for (let row = startRow; row < MAX_ROWS && coveredHeight < bodyHeight; row += 1) {
+    coveredHeight += getResolvedRowHeight(rowHeights, row, defaultHeight);
+    count += 1;
+  }
+  return Math.max(1, count + 1);
+}
+
 function resolveColumnAnchor(
   scrollLeft: number,
   columnWidths: Readonly<Record<number, number>>,
@@ -145,4 +193,20 @@ function resolveColumnAnchor(
     consumed += width;
   }
   return { index: MAX_COLS - 1, offset: 0 };
+}
+
+function resolveRowAnchor(
+  scrollTop: number,
+  rowHeights: Readonly<Record<number, number>>,
+  defaultHeight: number,
+): { index: number; offset: number } {
+  let consumed = 0;
+  for (let row = 0; row < MAX_ROWS; row += 1) {
+    const height = getResolvedRowHeight(rowHeights, row, defaultHeight);
+    if (consumed + height > scrollTop) {
+      return { index: row, offset: scrollTop - consumed };
+    }
+    consumed += height;
+  }
+  return { index: MAX_ROWS - 1, offset: 0 };
 }
