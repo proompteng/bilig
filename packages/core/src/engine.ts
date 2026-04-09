@@ -31,7 +31,6 @@ import {
 } from "./replica-state.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
-import { growUint32 } from "./engine-buffer-utils.js";
 import {
   definedNameValuesEqual,
 } from "./engine-metadata-utils.js";
@@ -128,23 +127,6 @@ export class SpreadsheetEngine {
   private readonly undoStack: TransactionLogEntry[] = [];
   private readonly redoStack: TransactionLogEntry[] = [];
   private transactionReplayDepth = 0;
-  private pendingKernelSync: U32 = new Uint32Array(128);
-  private wasmBatch: U32 = new Uint32Array(128);
-  private mutationRoots: U32 = new Uint32Array(128);
-  private changedInputEpoch = 1;
-  private changedInputSeen: U32 = new Uint32Array(128);
-  private changedInputBuffer: U32 = new Uint32Array(128);
-  private changedFormulaEpoch = 1;
-  private changedFormulaSeen: U32 = new Uint32Array(128);
-  private changedFormulaBuffer: U32 = new Uint32Array(128);
-  private changedUnionEpoch = 1;
-  private changedUnionSeen: U32 = new Uint32Array(128);
-  private changedUnion: U32 = new Uint32Array(128);
-  private materializedCellCount = 0;
-  private materializedCells: U32 = new Uint32Array(128);
-  private explicitChangedEpoch = 1;
-  private explicitChangedSeen: U32 = new Uint32Array(128);
-  private explicitChangedBuffer: U32 = new Uint32Array(128);
   private dependencyBuildEpoch = 1;
   private dependencyBuildSeen: U32 = new Uint32Array(128);
   private dependencyBuildCells: U32 = new Uint32Array(128);
@@ -153,9 +135,6 @@ export class SpreadsheetEngine {
   private dependencyBuildNewRanges: U32 = new Uint32Array(128);
   private symbolicRefBindings: U32 = new Uint32Array(128);
   private symbolicRangeBindings: U32 = new Uint32Array(128);
-  private impactedFormulaEpoch = 1;
-  private impactedFormulaSeen: U32 = new Uint32Array(128);
-  private impactedFormulaBuffer: U32 = new Uint32Array(128);
   private wasmProgramTargets: U32 = new Uint32Array(128);
   private wasmProgramOffsets: U32 = new Uint32Array(128);
   private wasmProgramLengths: U32 = new Uint32Array(128);
@@ -232,9 +211,6 @@ export class SpreadsheetEngine {
         setWasmProgramSyncPending: (next) => {
           this.wasmProgramSyncPending = next;
         },
-        setMaterializedCellCount: (next) => {
-          this.materializedCellCount = next;
-        },
       },
       mutationSupport: {
         state: this.state,
@@ -245,79 +221,6 @@ export class SpreadsheetEngine {
         },
         getSelectionState: () => this.getSelectionState(),
         setSelection: (sheetName, address) => this.setSelection(sheetName, address),
-        ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
-        getChangedInputEpoch: () => this.changedInputEpoch,
-        setChangedInputEpoch: (next) => {
-          this.changedInputEpoch = next;
-        },
-        getChangedInputSeen: () => this.changedInputSeen,
-        setChangedInputSeen: (next) => {
-          this.changedInputSeen = next;
-        },
-        getChangedInputBuffer: () => this.changedInputBuffer,
-        setChangedInputBuffer: (next) => {
-          this.changedInputBuffer = next;
-        },
-        getChangedFormulaEpoch: () => this.changedFormulaEpoch,
-        setChangedFormulaEpoch: (next) => {
-          this.changedFormulaEpoch = next;
-        },
-        getChangedFormulaSeen: () => this.changedFormulaSeen,
-        setChangedFormulaSeen: (next) => {
-          this.changedFormulaSeen = next;
-        },
-        getChangedFormulaBuffer: () => this.changedFormulaBuffer,
-        setChangedFormulaBuffer: (next) => {
-          this.changedFormulaBuffer = next;
-        },
-        getChangedUnionEpoch: () => this.changedUnionEpoch,
-        setChangedUnionEpoch: (next) => {
-          this.changedUnionEpoch = next;
-        },
-        getChangedUnionSeen: () => this.changedUnionSeen,
-        setChangedUnionSeen: (next) => {
-          this.changedUnionSeen = next;
-        },
-        getChangedUnion: () => this.changedUnion,
-        setChangedUnion: (next) => {
-          this.changedUnion = next;
-        },
-        getMutationRoots: () => this.mutationRoots,
-        setMutationRoots: (next) => {
-          this.mutationRoots = next;
-        },
-        getMaterializedCellCount: () => this.materializedCellCount,
-        setMaterializedCellCount: (next) => {
-          this.materializedCellCount = next;
-        },
-        getMaterializedCells: () => this.materializedCells,
-        setMaterializedCells: (next) => {
-          this.materializedCells = next;
-        },
-        getExplicitChangedEpoch: () => this.explicitChangedEpoch,
-        setExplicitChangedEpoch: (next) => {
-          this.explicitChangedEpoch = next;
-        },
-        getExplicitChangedSeen: () => this.explicitChangedSeen,
-        setExplicitChangedSeen: (next) => {
-          this.explicitChangedSeen = next;
-        },
-        getExplicitChangedBuffer: () => this.explicitChangedBuffer,
-        setExplicitChangedBuffer: (next) => {
-          this.explicitChangedBuffer = next;
-        },
-        getImpactedFormulaEpoch: () => this.impactedFormulaEpoch,
-        setImpactedFormulaEpoch: (next) => {
-          this.impactedFormulaEpoch = next;
-        },
-        getImpactedFormulaSeen: () => this.impactedFormulaSeen,
-        setImpactedFormulaSeen: (next) => {
-          this.impactedFormulaSeen = next;
-        },
-        getImpactedFormulaBuffer: () => this.impactedFormulaBuffer,
-        setImpactedFormulaBuffer: (next) => {
-          this.impactedFormulaBuffer = next;
-        },
       },
       formulaBinding: {
         state: this.state,
@@ -439,9 +342,6 @@ export class SpreadsheetEngine {
         getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
         exportSnapshot: () => this.exportSnapshot(),
         importSnapshot: (snapshot) => this.importSnapshot(snapshot),
-        ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
-        getPendingKernelSync: () => this.pendingKernelSync,
-        getWasmBatch: () => this.wasmBatch,
         now: () => new Date(),
         random: () => Math.random(),
         performanceNow: () => performance.now(),
@@ -1057,48 +957,6 @@ export class SpreadsheetEngine {
     potentialNewCells?: number,
   ): readonly EngineOp[] | null {
     return runEngineEffect(this.runtime.mutation.executeLocal(ops, potentialNewCells));
-  }
-
-  private ensureRecalcScratchCapacity(size: number): void {
-    if (size > this.mutationRoots.length) {
-      this.mutationRoots = growUint32(this.mutationRoots, size);
-    }
-    if (size > this.changedInputSeen.length) {
-      this.changedInputSeen = growUint32(this.changedInputSeen, size);
-    }
-    if (size > this.changedInputBuffer.length) {
-      this.changedInputBuffer = growUint32(this.changedInputBuffer, size);
-    }
-    if (size > this.changedFormulaSeen.length) {
-      this.changedFormulaSeen = growUint32(this.changedFormulaSeen, size);
-    }
-    if (size > this.changedFormulaBuffer.length) {
-      this.changedFormulaBuffer = growUint32(this.changedFormulaBuffer, size);
-    }
-    if (size > this.pendingKernelSync.length) {
-      this.pendingKernelSync = growUint32(this.pendingKernelSync, size);
-    }
-    if (size > this.wasmBatch.length) {
-      this.wasmBatch = growUint32(this.wasmBatch, size);
-    }
-    if (size > this.changedUnion.length) {
-      this.changedUnion = growUint32(this.changedUnion, size);
-    }
-    if (size > this.changedUnionSeen.length) {
-      this.changedUnionSeen = growUint32(this.changedUnionSeen, size);
-    }
-    if (size > this.explicitChangedSeen.length) {
-      this.explicitChangedSeen = growUint32(this.explicitChangedSeen, size);
-    }
-    if (size > this.explicitChangedBuffer.length) {
-      this.explicitChangedBuffer = growUint32(this.explicitChangedBuffer, size);
-    }
-    if (size > this.impactedFormulaSeen.length) {
-      this.impactedFormulaSeen = growUint32(this.impactedFormulaSeen, size);
-    }
-    if (size > this.impactedFormulaBuffer.length) {
-      this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
-    }
   }
 }
 

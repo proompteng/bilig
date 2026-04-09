@@ -58,6 +58,9 @@ import {
   type EngineRecalcService,
 } from "./services/recalc-service.js";
 import {
+  createEngineRuntimeScratchService,
+} from "./services/runtime-scratch-service.js";
+import {
   createEngineSelectionService,
   type EngineSelectionService,
 } from "./services/selection-service.js";
@@ -102,6 +105,43 @@ type EngineMutationSupportRuntimeConfig = Omit<
   | "applyDerivedOp"
   | "scheduleWasmProgramSync"
   | "collectFormulaDependents"
+  | "ensureRecalcScratchCapacity"
+  | "getChangedInputEpoch"
+  | "setChangedInputEpoch"
+  | "getChangedInputSeen"
+  | "setChangedInputSeen"
+  | "getChangedInputBuffer"
+  | "setChangedInputBuffer"
+  | "getChangedFormulaEpoch"
+  | "setChangedFormulaEpoch"
+  | "getChangedFormulaSeen"
+  | "setChangedFormulaSeen"
+  | "getChangedFormulaBuffer"
+  | "setChangedFormulaBuffer"
+  | "getChangedUnionEpoch"
+  | "setChangedUnionEpoch"
+  | "getChangedUnionSeen"
+  | "setChangedUnionSeen"
+  | "getChangedUnion"
+  | "setChangedUnion"
+  | "getMutationRoots"
+  | "setMutationRoots"
+  | "getMaterializedCellCount"
+  | "setMaterializedCellCount"
+  | "getMaterializedCells"
+  | "setMaterializedCells"
+  | "getExplicitChangedEpoch"
+  | "setExplicitChangedEpoch"
+  | "getExplicitChangedSeen"
+  | "setExplicitChangedSeen"
+  | "getExplicitChangedBuffer"
+  | "setExplicitChangedBuffer"
+  | "getImpactedFormulaEpoch"
+  | "setImpactedFormulaEpoch"
+  | "getImpactedFormulaSeen"
+  | "setImpactedFormulaSeen"
+  | "getImpactedFormulaBuffer"
+  | "setImpactedFormulaBuffer"
 >;
 
 type EngineFormulaBindingRuntimeConfig = Omit<
@@ -131,6 +171,9 @@ type EngineRecalcRuntimeConfig = Omit<
   | "unionChangedSets"
   | "composeChangedRootsAndOrdered"
   | "emptyChangedSet"
+  | "ensureRecalcScratchCapacity"
+  | "getPendingKernelSync"
+  | "getWasmBatch"
   | "getChangedInputBuffer"
   | "getEntityDependents"
   | "materializeSpill"
@@ -144,6 +187,7 @@ type EngineMaintenanceRuntimeConfig = Omit<
   | "captureSheetCellState"
   | "captureRowRangeCellState"
   | "captureColumnRangeCellState"
+  | "setMaterializedCellCount"
   | "scheduleWasmProgramSync"
 >;
 
@@ -224,6 +268,7 @@ export function createEngineServiceRuntime(args: {
   };
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
 }): EngineServiceRuntime {
+  const scratch = createEngineRuntimeScratchService();
   const traversal = createEngineTraversalService(args.traversal);
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
@@ -250,6 +295,79 @@ export function createEngineServiceRuntime(args: {
     applyDerivedOp: (op) =>
       runEngineEffect(requireService(operations, "operations").applyDerivedOp(op)),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
+    ensureRecalcScratchCapacity: (size) => runEngineEffect(scratch.ensureRecalcCapacity(size)),
+    getChangedInputEpoch: () => scratch.getChangedInputEpochNow(),
+    setChangedInputEpoch: (next) => {
+      scratch.setChangedInputEpochNow(next);
+    },
+    getChangedInputSeen: () => scratch.getChangedInputSeenNow(),
+    setChangedInputSeen: (next) => {
+      scratch.setChangedInputSeenNow(next);
+    },
+    getChangedInputBuffer: () => scratch.getChangedInputBufferNow(),
+    setChangedInputBuffer: (next) => {
+      scratch.setChangedInputBufferNow(next);
+    },
+    getChangedFormulaEpoch: () => scratch.getChangedFormulaEpochNow(),
+    setChangedFormulaEpoch: (next) => {
+      scratch.setChangedFormulaEpochNow(next);
+    },
+    getChangedFormulaSeen: () => scratch.getChangedFormulaSeenNow(),
+    setChangedFormulaSeen: (next) => {
+      scratch.setChangedFormulaSeenNow(next);
+    },
+    getChangedFormulaBuffer: () => scratch.getChangedFormulaBufferNow(),
+    setChangedFormulaBuffer: (next) => {
+      scratch.setChangedFormulaBufferNow(next);
+    },
+    getChangedUnionEpoch: () => scratch.getChangedUnionEpochNow(),
+    setChangedUnionEpoch: (next) => {
+      scratch.setChangedUnionEpochNow(next);
+    },
+    getChangedUnionSeen: () => scratch.getChangedUnionSeenNow(),
+    setChangedUnionSeen: (next) => {
+      scratch.setChangedUnionSeenNow(next);
+    },
+    getChangedUnion: () => scratch.getChangedUnionNow(),
+    setChangedUnion: (next) => {
+      scratch.setChangedUnionNow(next);
+    },
+    getMutationRoots: () => scratch.getMutationRootsNow(),
+    setMutationRoots: (next) => {
+      scratch.setMutationRootsNow(next);
+    },
+    getMaterializedCellCount: () => scratch.getMaterializedCellCountNow(),
+    setMaterializedCellCount: (next) => {
+      scratch.setMaterializedCellCountNow(next);
+    },
+    getMaterializedCells: () => scratch.getMaterializedCellsNow(),
+    setMaterializedCells: (next) => {
+      scratch.setMaterializedCellsNow(next);
+    },
+    getExplicitChangedEpoch: () => scratch.getExplicitChangedEpochNow(),
+    setExplicitChangedEpoch: (next) => {
+      scratch.setExplicitChangedEpochNow(next);
+    },
+    getExplicitChangedSeen: () => scratch.getExplicitChangedSeenNow(),
+    setExplicitChangedSeen: (next) => {
+      scratch.setExplicitChangedSeenNow(next);
+    },
+    getExplicitChangedBuffer: () => scratch.getExplicitChangedBufferNow(),
+    setExplicitChangedBuffer: (next) => {
+      scratch.setExplicitChangedBufferNow(next);
+    },
+    getImpactedFormulaEpoch: () => scratch.getImpactedFormulaEpochNow(),
+    setImpactedFormulaEpoch: (next) => {
+      scratch.setImpactedFormulaEpochNow(next);
+    },
+    getImpactedFormulaSeen: () => scratch.getImpactedFormulaSeenNow(),
+    setImpactedFormulaSeen: (next) => {
+      scratch.setImpactedFormulaSeenNow(next);
+    },
+    getImpactedFormulaBuffer: () => scratch.getImpactedFormulaBufferNow(),
+    setImpactedFormulaBuffer: (next) => {
+      scratch.setImpactedFormulaBufferNow(next);
+    },
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
   const evaluation = createEngineFormulaEvaluationService({
@@ -320,6 +438,9 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(structure.captureRowRangeCellState(sheetName, start, count)),
     captureColumnRangeCellState: (sheetName, start, count) =>
       runEngineEffect(structure.captureColumnRangeCellState(sheetName, start, count)),
+    setMaterializedCellCount: (next) => {
+      scratch.setMaterializedCellCountNow(next);
+    },
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
   recalc = createEngineRecalcService({
@@ -338,6 +459,9 @@ export function createEngineServiceRuntime(args: {
     composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
       runEngineEffect(support.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount)),
     emptyChangedSet: () => runEngineEffect(support.unionChangedSets()),
+    ensureRecalcScratchCapacity: (size) => runEngineEffect(scratch.ensureRecalcCapacity(size)),
+    getPendingKernelSync: () => scratch.getPendingKernelSyncNow(),
+    getWasmBatch: () => scratch.getWasmBatchNow(),
     getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
     materializeSpill: (cellIndex, arrayValue) =>
       runEngineEffect(support.materializeSpill(cellIndex, arrayValue)),

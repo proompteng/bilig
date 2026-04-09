@@ -30,3 +30,5 @@ export class EngineCellStateError extends Data.TaggedError("EngineCellStateError
 export class EngineTraversalError extends Data.TaggedError("EngineTraversalError")<EngineServiceErrorDetails> {}
 
 export class EngineMaintenanceError extends Data.TaggedError("EngineMaintenanceError")<EngineServiceErrorDetails> {}
+
+export class EngineRuntimeScratchError extends Data.TaggedError("EngineRuntimeScratchError")<EngineServiceErrorDetails> {}
