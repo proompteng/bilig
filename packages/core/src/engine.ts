@@ -85,12 +85,9 @@ import { sheetMetadataToOps } from "./engine-snapshot-utils.js";
 import { cloneCellStyleRecord } from "./engine-style-utils.js";
 import {
   areCellValuesEqual,
-  cellValueDisplayText,
   emptyValue,
   errorValue,
   literalToValue,
-  normalizePivotLookupText,
-  pivotItemMatches,
 } from "./engine-value-utils.js";
 import {
   mapStructuralAxisIndex,
@@ -99,7 +96,6 @@ import {
 } from "./engine-structural-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
-import { materializePivotTable, type PivotDefinitionInput } from "./pivot-engine.js";
 import { RangeRegistry } from "./range-registry.js";
 import { RecalcScheduler } from "./scheduler.js";
 import {
@@ -298,6 +294,15 @@ export class SpreadsheetEngine {
       applyBatchNow: (batch, source, potentialNewCells) => {
         this.applyBatch(batch, source, potentialNewCells);
       },
+      pivotState: {
+        pivotOutputOwners: this.pivotOutputOwners,
+      },
+      ensureCellTrackedByCoords: (sheetId, row, col) =>
+        this.ensureCellTrackedByCoords(sheetId, row, col),
+      forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
+      scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
+      flushWasmProgramSync: () => this.flushWasmProgramSync(),
+      applyDerivedOp: (op) => this.applyDerivedOp(op),
       applyRemoteBatchNow: (batch) => this.applyBatch(batch, "remote"),
       applyRemoteSnapshot: (snapshot) => {
         this.importSnapshot(snapshot);
@@ -1828,182 +1833,7 @@ export class SpreadsheetEngine {
   }
 
   private materializePivot(pivot: WorkbookPivotRecord): number[] {
-    const changedCellIndices = this.clearOwnedPivot(pivot);
-    const sourceSheet = this.workbook.getSheet(pivot.source.sheetName);
-    if (!sourceSheet) {
-      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Ref)], changedCellIndices);
-    }
-
-    if (this.wasm.ready) {
-      const bounds = normalizeRange(pivot.source);
-      const rangeAddr = parseRangeAddress(
-        `${pivot.source.sheetName}!${pivot.source.startAddress}:${pivot.source.endAddress}`,
-      );
-      const registered = this.ranges.intern(sourceSheet.id, rangeAddr, {
-        ensureCell: (sheetId, row, col) => this.ensureCellTrackedByCoords(sheetId, row, col),
-        forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
-      });
-      this.scheduleWasmProgramSync();
-      this.flushWasmProgramSync();
-
-      const sourceHeader =
-        this.readPivotSourceRows({
-          sheetName: pivot.source.sheetName,
-          startAddress: pivot.source.startAddress,
-          endAddress: formatAddress(bounds.startRow, bounds.endCol),
-        })[0] ?? [];
-      const headerLookup = new Map<string, number>();
-      sourceHeader.forEach((cell, index) => {
-        let label = "";
-        if (cell.tag === ValueTag.Number) {
-          label = String(cell.value);
-        } else if (cell.tag === ValueTag.Boolean) {
-          label = cell.value ? "TRUE" : "FALSE";
-        } else if (cell.tag === ValueTag.String) {
-          label = cell.value.trim();
-        }
-        const normalized = label.trim().toUpperCase();
-        if (normalized.length > 0 && !headerLookup.has(normalized)) {
-          headerLookup.set(normalized, index);
-        }
-      });
-
-      const groupByIndexValues = pivot.groupBy.map((g) => headerLookup.get(g.trim().toUpperCase()));
-      const valueIndexValues = pivot.values.map((v) =>
-        headerLookup.get(v.sourceColumn.trim().toUpperCase()),
-      );
-      if (
-        groupByIndexValues.every((value): value is number => value !== undefined) &&
-        valueIndexValues.every((value): value is number => value !== undefined)
-      ) {
-        const groupByIndices = new Uint32Array(groupByIndexValues);
-        const valueIndices = new Uint32Array(valueIndexValues);
-        const valueAggs = new Uint8Array(
-          pivot.values.map((v) => (v.summarizeBy === "sum" ? 1 : 2)),
-        );
-
-        const materialized = this.wasm.materializePivotTable(
-          registered.rangeIndex,
-          bounds.endCol - bounds.startCol + 1,
-          groupByIndices,
-          valueIndices,
-          valueAggs,
-        );
-
-        if (materialized) {
-          const owner = parseCellAddress(pivot.address, pivot.sheetName);
-          const blockedOutput = this.guardPivotOutputWrite(
-            pivot,
-            owner.row,
-            owner.col,
-            materialized.rows,
-            materialized.cols,
-            changedCellIndices,
-          );
-          if (blockedOutput) {
-            return blockedOutput;
-          }
-          const values: CellValue[] = [];
-          const count = materialized.rows * materialized.cols;
-          const groupByCount = pivot.groupBy.length;
-          for (let i = 0; i < count; i += 1) {
-            if (i < materialized.cols && i >= groupByCount) {
-              const valueIndex = i - groupByCount;
-              const field = pivot.values[valueIndex]!;
-              const label =
-                field.outputLabel?.trim() ||
-                `${field.summarizeBy.toUpperCase()} of ${field.sourceColumn}`;
-              values.push({
-                tag: ValueTag.String,
-                value: label,
-                stringId: this.strings.intern(label),
-              });
-              continue;
-            }
-            const tag = materialized.tags[i]! as ValueTag;
-            if (tag === ValueTag.Empty) {
-              values.push(emptyValue());
-            } else if (tag === ValueTag.Number) {
-              values.push({ tag: ValueTag.Number, value: materialized.numbers[i]! });
-            } else if (tag === ValueTag.Boolean) {
-              values.push({ tag: ValueTag.Boolean, value: materialized.numbers[i]! !== 0 });
-            } else if (tag === ValueTag.String) {
-              const stringId = materialized.stringIds[i]!;
-              values.push({ tag: ValueTag.String, value: this.strings.get(stringId), stringId });
-            } else if (tag === ValueTag.Error) {
-              values.push({ tag: ValueTag.Error, code: materialized.errors[i]! });
-            }
-          }
-          return this.writePivotOutput(
-            pivot,
-            materialized.rows,
-            materialized.cols,
-            values,
-            changedCellIndices,
-          );
-        }
-      }
-    }
-
-    const materialized = materializePivotTable(
-      this.toPivotDefinition(pivot),
-      this.readPivotSourceRows(pivot.source),
-    );
-    if (materialized.kind === "error") {
-      return this.writePivotOutput(
-        pivot,
-        materialized.rows,
-        materialized.cols,
-        materialized.values,
-        changedCellIndices,
-      );
-    }
-
-    const owner = parseCellAddress(pivot.address, pivot.sheetName);
-    const blockedOutput = this.guardPivotOutputWrite(
-      pivot,
-      owner.row,
-      owner.col,
-      materialized.rows,
-      materialized.cols,
-      changedCellIndices,
-    );
-    if (blockedOutput) {
-      return blockedOutput;
-    }
-
-    return this.writePivotOutput(
-      pivot,
-      materialized.rows,
-      materialized.cols,
-      materialized.values,
-      changedCellIndices,
-    );
-  }
-
-  private toPivotDefinition(pivot: WorkbookPivotRecord): PivotDefinitionInput {
-    return {
-      groupBy: pivot.groupBy,
-      values: pivot.values,
-    };
-  }
-
-  private readPivotSourceRows(range: CellRangeRef): CellValue[][] {
-    const bounds = normalizeRange(range);
-    const rows: CellValue[][] = [];
-    for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
-      const values: CellValue[] = [];
-      for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
-        const cellIndex = this.workbook.getCellIndex(range.sheetName, formatAddress(row, col));
-        values.push(
-          cellIndex === undefined
-            ? emptyValue()
-            : this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id)),
-        );
-      }
-      rows.push(values);
-    }
-    return rows;
+    return runEngineEffect(this.runtime.pivot.materializePivot(pivot));
   }
 
   private resolvePivotData(
@@ -2012,94 +1842,7 @@ export class SpreadsheetEngine {
     dataField: string,
     filters: ReadonlyArray<{ field: string; item: CellValue }>,
   ): CellValue {
-    const target = parseCellAddress(address, sheetName);
-    const pivot = this.workbook.listPivots().find((candidate) => {
-      if (candidate.sheetName !== sheetName || candidate.rows <= 0 || candidate.cols <= 0) {
-        return false;
-      }
-      const owner = parseCellAddress(candidate.address, candidate.sheetName);
-      return (
-        target.row >= owner.row &&
-        target.row < owner.row + candidate.rows &&
-        target.col >= owner.col &&
-        target.col < owner.col + candidate.cols
-      );
-    });
-    if (!pivot) {
-      return errorValue(ErrorCode.Ref);
-    }
-
-    const normalizedDataField = normalizePivotLookupText(dataField);
-    const valueField = pivot.values.find((field) => {
-      const defaultLabel = `${field.summarizeBy.toUpperCase()} of ${field.sourceColumn}`;
-      return (
-        normalizePivotLookupText(field.sourceColumn) === normalizedDataField ||
-        normalizePivotLookupText(field.outputLabel?.trim() ?? "") === normalizedDataField ||
-        normalizePivotLookupText(defaultLabel) === normalizedDataField
-      );
-    });
-    if (!valueField) {
-      return errorValue(ErrorCode.Ref);
-    }
-
-    const sourceRows = this.readPivotSourceRows(pivot.source);
-    const headerRow = sourceRows[0];
-    if (!headerRow || headerRow.length === 0) {
-      return errorValue(ErrorCode.Ref);
-    }
-
-    const headerLookup = new Map<string, number>();
-    headerRow.forEach((cell, index) => {
-      const normalized = normalizePivotLookupText(cellValueDisplayText(cell));
-      if (normalized.length > 0 && !headerLookup.has(normalized)) {
-        headerLookup.set(normalized, index);
-      }
-    });
-
-    const valueColumnIndex = headerLookup.get(normalizePivotLookupText(valueField.sourceColumn));
-    if (valueColumnIndex === undefined) {
-      return errorValue(ErrorCode.Ref);
-    }
-
-    const materializedFilters = filters.map((filter) => ({
-      fieldIndex: headerLookup.get(normalizePivotLookupText(filter.field)),
-      item: filter.item,
-    }));
-    if (materializedFilters.some((filter) => filter.fieldIndex === undefined)) {
-      return errorValue(ErrorCode.Ref);
-    }
-
-    for (let filterIndex = 0; filterIndex < materializedFilters.length; filterIndex += 1) {
-      const filter = materializedFilters[filterIndex]!;
-      const fieldIndex = filter.fieldIndex!;
-      const itemSeen = sourceRows
-        .slice(1)
-        .some((row) => pivotItemMatches(row[fieldIndex] ?? emptyValue(), filter.item));
-      if (!itemSeen) {
-        return errorValue(ErrorCode.Ref);
-      }
-    }
-
-    let matched = filters.length === 0;
-    let aggregate = 0;
-    for (let rowIndex = 1; rowIndex < sourceRows.length; rowIndex += 1) {
-      const row = sourceRows[rowIndex] ?? [];
-      const matches = materializedFilters.every((filter) =>
-        pivotItemMatches(row[filter.fieldIndex!] ?? emptyValue(), filter.item),
-      );
-      if (!matches) {
-        continue;
-      }
-      matched = true;
-      const value = row[valueColumnIndex] ?? emptyValue();
-      if (valueField.summarizeBy === "count") {
-        aggregate += value.tag === ValueTag.Empty ? 0 : 1;
-      } else if (value.tag === ValueTag.Number) {
-        aggregate += value.value;
-      }
-    }
-
-    return matched ? { tag: ValueTag.Number, value: aggregate } : errorValue(ErrorCode.Ref);
+    return runEngineEffect(this.runtime.pivot.resolvePivotData(sheetName, address, dataField, filters));
   }
 
   private resolveMultipleOperations(request: {
@@ -2251,195 +1994,12 @@ export class SpreadsheetEngine {
     return isArrayValue(result) ? (result.values[0] ?? emptyValue()) : result;
   }
 
-  private isPivotOutputBlocked(
-    pivot: WorkbookPivotRecord,
-    startRow: number,
-    startCol: number,
-    rows: number,
-    cols: number,
-  ): boolean {
-    const ownerKey = pivotKey(pivot.sheetName, pivot.address);
-    for (let rowOffset = 0; rowOffset < rows; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < cols; colOffset += 1) {
-        const targetIndex = this.workbook.getCellIndex(
-          pivot.sheetName,
-          formatAddress(startRow + rowOffset, startCol + colOffset),
-        );
-        if (targetIndex === undefined) {
-          continue;
-        }
-        const pivotOwner = this.pivotOutputOwners.get(targetIndex);
-        if (pivotOwner && pivotOwner !== ownerKey) {
-          return true;
-        }
-        if (this.formulas.get(targetIndex)) {
-          return true;
-        }
-        const targetFlags = this.workbook.cellStore.flags[targetIndex] ?? 0;
-        if ((targetFlags & CellFlags.SpillChild) !== 0) {
-          return true;
-        }
-        const targetValue = this.workbook.cellStore.getValue(targetIndex, (id) =>
-          this.strings.get(id),
-        );
-        if (!pivotOwner && targetValue.tag !== ValueTag.Empty) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  private guardPivotOutputWrite(
-    pivot: WorkbookPivotRecord,
-    startRow: number,
-    startCol: number,
-    rows: number,
-    cols: number,
-    changedCellIndices: number[],
-  ): number[] | undefined {
-    if (startRow + rows > MAX_ROWS || startCol + cols > MAX_COLS) {
-      return this.writePivotOutput(pivot, 1, 1, [errorValue(ErrorCode.Spill)], changedCellIndices);
-    }
-    if (this.isPivotOutputBlocked(pivot, startRow, startCol, rows, cols)) {
-      return this.writePivotOutput(
-        pivot,
-        1,
-        1,
-        [errorValue(ErrorCode.Blocked)],
-        changedCellIndices,
-      );
-    }
-    return undefined;
-  }
-
-  private writePivotOutput(
-    pivot: WorkbookPivotRecord,
-    rows: number,
-    cols: number,
-    values: readonly CellValue[],
-    changedCellIndices: number[],
-  ): number[] {
-    const sheet = this.workbook.getOrCreateSheet(pivot.sheetName);
-    const owner = parseCellAddress(pivot.address, pivot.sheetName);
-    const ownerKey = pivotKey(pivot.sheetName, pivot.address);
-    const changedSeen = new Set(changedCellIndices);
-
-    for (let rowOffset = 0; rowOffset < rows; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < cols; colOffset += 1) {
-        const valueIndex = rowOffset * cols + colOffset;
-        const cellValue = values[valueIndex] ?? emptyValue();
-        const cellIndex = this.ensureCellTrackedByCoords(
-          sheet.id,
-          owner.row + rowOffset,
-          owner.col + colOffset,
-        );
-        if (this.setPivotOutputCellValue(cellIndex, cellValue, ownerKey)) {
-          if (!changedSeen.has(cellIndex)) {
-            changedSeen.add(cellIndex);
-            changedCellIndices.push(cellIndex);
-          }
-        }
-      }
-    }
-
-    if (pivot.rows !== rows || pivot.cols !== cols) {
-      this.applyDerivedOp({
-        kind: "upsertPivotTable",
-        name: pivot.name,
-        sheetName: pivot.sheetName,
-        address: pivot.address,
-        source: { ...pivot.source },
-        groupBy: [...pivot.groupBy],
-        values: pivot.values.map((value) => Object.assign({}, value)),
-        rows,
-        cols,
-      });
-    }
-    return changedCellIndices;
-  }
-
   private clearOwnedPivot(pivot: WorkbookPivotRecord): number[] {
-    const changedCellIndices: number[] = [];
-    const ownerKey = pivotKey(pivot.sheetName, pivot.address);
-    const owner = parseCellAddress(pivot.address, pivot.sheetName);
-    for (let rowOffset = 0; rowOffset < pivot.rows; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < pivot.cols; colOffset += 1) {
-        const cellIndex = this.workbook.getCellIndex(
-          pivot.sheetName,
-          formatAddress(owner.row + rowOffset, owner.col + colOffset),
-        );
-        if (cellIndex === undefined || this.pivotOutputOwners.get(cellIndex) !== ownerKey) {
-          continue;
-        }
-        if (this.clearPivotOutputCell(cellIndex)) {
-          changedCellIndices.push(cellIndex);
-        }
-      }
-    }
-    return changedCellIndices;
+    return runEngineEffect(this.runtime.pivot.clearOwnedPivot(pivot));
   }
 
   private clearPivotForCell(cellIndex: number): number[] {
-    const ownerKey = this.pivotOutputOwners.get(cellIndex);
-    if (!ownerKey) {
-      return [];
-    }
-    const pivot = this.workbook.getPivotByKey(ownerKey);
-    if (!pivot) {
-      this.pivotOutputOwners.delete(cellIndex);
-      return [];
-    }
-    return this.applyDerivedOp({
-      kind: "deletePivotTable",
-      sheetName: pivot.sheetName,
-      address: pivot.address,
-    });
-  }
-
-  private clearPivotOutputCell(cellIndex: number): boolean {
-    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
-    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-    if (currentValue.tag === ValueTag.Empty && (currentFlags & CellFlags.PivotOutput) === 0) {
-      this.pivotOutputOwners.delete(cellIndex);
-      return false;
-    }
-    this.pivotOutputOwners.delete(cellIndex);
-    this.workbook.cellStore.setValue(cellIndex, emptyValue());
-    this.workbook.cellStore.flags[cellIndex] =
-      currentFlags &
-      ~(
-        CellFlags.HasFormula |
-        CellFlags.JsOnly |
-        CellFlags.InCycle |
-        CellFlags.SpillChild |
-        CellFlags.PivotOutput
-      );
-    return true;
-  }
-
-  private setPivotOutputCellValue(cellIndex: number, value: CellValue, ownerKey: string): boolean {
-    const currentFlags = this.workbook.cellStore.flags[cellIndex] ?? 0;
-    const currentValue = this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-    const nextFlags =
-      (currentFlags &
-        ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild)) |
-      CellFlags.PivotOutput;
-    if (
-      areCellValuesEqual(currentValue, value) &&
-      currentFlags === nextFlags &&
-      this.pivotOutputOwners.get(cellIndex) === ownerKey
-    ) {
-      return false;
-    }
-    this.workbook.cellStore.setValue(
-      cellIndex,
-      value,
-      value.tag === ValueTag.String ? this.strings.intern(value.value) : 0,
-    );
-    this.workbook.cellStore.flags[cellIndex] = nextFlags;
-    this.pivotOutputOwners.set(cellIndex, ownerKey);
-    return true;
+    return runEngineEffect(this.runtime.pivot.clearPivotForCell(cellIndex));
   }
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {

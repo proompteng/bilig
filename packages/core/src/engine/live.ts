@@ -14,6 +14,10 @@ import {
   type EngineMutationService,
 } from "./services/mutation-service.js";
 import {
+  createEnginePivotService,
+  type EnginePivotService,
+} from "./services/pivot-service.js";
+import {
   createEngineReplicaSyncService,
   type EngineReplicaSyncService,
 } from "./services/replica-sync-service.js";
@@ -31,6 +35,7 @@ export interface EngineServiceRuntime {
   readonly selection: EngineSelectionService;
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
+  readonly pivot: EnginePivotService;
   readonly snapshot: EngineSnapshotService;
   readonly sync: EngineReplicaSyncService;
 }
@@ -47,6 +52,28 @@ export function createEngineServiceRuntime(args: {
     source: "local" | "restore" | "history",
     potentialNewCells?: number,
   ) => void;
+  readonly pivotState: {
+    readonly pivotOutputOwners: Map<number, string>;
+  };
+  readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number;
+  readonly forEachSheetCell: (
+    sheetId: number,
+    fn: (cellIndex: number, row: number, col: number) => void,
+  ) => void;
+  readonly scheduleWasmProgramSync: () => void;
+  readonly flushWasmProgramSync: () => void;
+  readonly applyDerivedOp: (
+    op: Extract<
+      import("@bilig/workbook-domain").EngineOp,
+      {
+        kind:
+          | "upsertSpillRange"
+          | "deleteSpillRange"
+          | "upsertPivotTable"
+          | "deletePivotTable";
+      }
+    >,
+  ) => number[];
   readonly applyRemoteBatchNow: (batch: import("@bilig/workbook-domain").EngineOpBatch) => void;
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
 }): EngineServiceRuntime {
@@ -61,6 +88,21 @@ export function createEngineServiceRuntime(args: {
       state: args.state,
       buildInverseOps: args.buildInverseOps,
       applyBatchNow: args.applyBatchNow,
+    }),
+    pivot: createEnginePivotService({
+      state: {
+        workbook: args.state.workbook,
+        strings: args.state.strings,
+        formulas: args.state.formulas,
+        ranges: args.state.ranges,
+        wasm: args.state.wasm,
+        pivotOutputOwners: args.pivotState.pivotOutputOwners,
+      },
+      ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
+      forEachSheetCell: args.forEachSheetCell,
+      scheduleWasmProgramSync: args.scheduleWasmProgramSync,
+      flushWasmProgramSync: args.flushWasmProgramSync,
+      applyDerivedOp: args.applyDerivedOp,
     }),
     snapshot: createEngineSnapshotService({
       state: args.state,
