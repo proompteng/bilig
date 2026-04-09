@@ -10,6 +10,10 @@ import {
   type EngineFormulaBindingService,
 } from "./services/formula-binding-service.js";
 import {
+  createEngineFormulaGraphService,
+  type EngineFormulaGraphService,
+} from "./services/formula-graph-service.js";
+import {
   createEngineHistoryService,
   type EngineHistoryService,
 } from "./services/history-service.js";
@@ -50,6 +54,7 @@ export interface EngineServiceRuntime {
   readonly events: EngineEventService;
   readonly selection: EngineSelectionService;
   readonly binding: EngineFormulaBindingService;
+  readonly graph: EngineFormulaGraphService;
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
   readonly pivot: EnginePivotService;
@@ -86,6 +91,7 @@ export function createEngineServiceRuntime(args: {
     address: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
   readonly formulaBinding: Parameters<typeof createEngineFormulaBindingService>[0];
+  readonly formulaGraph: Parameters<typeof createEngineFormulaGraphService>[0];
   readonly readRangeCells: (
     range: import("@bilig/protocol").CellRangeRef,
   ) => CellSnapshot[][];
@@ -172,6 +178,7 @@ export function createEngineServiceRuntime(args: {
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
 }): EngineServiceRuntime {
   const binding = createEngineFormulaBindingService(args.formulaBinding);
+  const graph = createEngineFormulaGraphService(args.formulaGraph);
   const structure = createEngineStructureService({
     state: {
       workbook: args.state.workbook,
@@ -220,6 +227,7 @@ export function createEngineServiceRuntime(args: {
     events: createEngineEventService(args.state),
     selection: createEngineSelectionService(args.state),
     binding,
+    graph,
     history: createEngineHistoryService({
       state: args.state,
       executeTransaction: args.executeHistoryTransaction,

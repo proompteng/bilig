@@ -6,7 +6,6 @@ import {
   type CellStylePatch,
   type CellStyleRecord,
   ErrorCode,
-  FormulaMode,
   MAX_COLS,
   MAX_ROWS,
   ValueTag,
@@ -289,7 +288,6 @@ export class SpreadsheetEngine {
         ensureCellTrackedByCoords: (sheetId, row, col) =>
           this.ensureCellTrackedByCoords(sheetId, row, col),
         forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
-        scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
         markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
         resolveStructuredReference: (tableName, columnName) =>
           this.resolveStructuredReference(tableName, columnName),
@@ -326,6 +324,92 @@ export class SpreadsheetEngine {
         getSymbolicRangeBindings: () => this.symbolicRangeBindings,
         setSymbolicRangeBindings: (next) => {
           this.symbolicRangeBindings = next;
+        },
+        scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
+      },
+      formulaGraph: {
+        state: this.state,
+        cycleDetector: this.cycleDetector,
+        edgeArena: this.edgeArena,
+        programArena: this.programArena,
+        constantArena: this.constantArena,
+        rangeListArena: this.rangeListArena,
+        reverseState: {
+          reverseCellEdges: this.reverseCellEdges,
+          reverseRangeEdges: this.reverseRangeEdges,
+        },
+        getTopoIndegree: () => this.topoIndegree,
+        setTopoIndegree: (next) => {
+          this.topoIndegree = next;
+        },
+        getTopoQueue: () => this.topoQueue,
+        setTopoQueue: (next) => {
+          this.topoQueue = next;
+        },
+        getTopoFormulaBuffer: () => this.topoFormulaBuffer,
+        setTopoFormulaBuffer: (next) => {
+          this.topoFormulaBuffer = next;
+        },
+        getTopoEntityQueue: () => this.topoEntityQueue,
+        setTopoEntityQueue: (next) => {
+          this.topoEntityQueue = next;
+        },
+        getTopoFormulaSeenEpoch: () => this.topoFormulaSeenEpoch,
+        setTopoFormulaSeenEpoch: (next) => {
+          this.topoFormulaSeenEpoch = next;
+        },
+        getTopoRangeSeenEpoch: () => this.topoRangeSeenEpoch,
+        setTopoRangeSeenEpoch: (next) => {
+          this.topoRangeSeenEpoch = next;
+        },
+        getTopoFormulaSeen: () => this.topoFormulaSeen,
+        setTopoFormulaSeen: (next) => {
+          this.topoFormulaSeen = next;
+        },
+        getTopoRangeSeen: () => this.topoRangeSeen,
+        setTopoRangeSeen: (next) => {
+          this.topoRangeSeen = next;
+        },
+        getWasmProgramTargets: () => this.wasmProgramTargets,
+        setWasmProgramTargets: (next) => {
+          this.wasmProgramTargets = next;
+        },
+        getWasmProgramOffsets: () => this.wasmProgramOffsets,
+        setWasmProgramOffsets: (next) => {
+          this.wasmProgramOffsets = next;
+        },
+        getWasmProgramLengths: () => this.wasmProgramLengths,
+        setWasmProgramLengths: (next) => {
+          this.wasmProgramLengths = next;
+        },
+        getWasmConstantOffsets: () => this.wasmConstantOffsets,
+        setWasmConstantOffsets: (next) => {
+          this.wasmConstantOffsets = next;
+        },
+        getWasmConstantLengths: () => this.wasmConstantLengths,
+        setWasmConstantLengths: (next) => {
+          this.wasmConstantLengths = next;
+        },
+        getWasmRangeOffsets: () => this.wasmRangeOffsets,
+        setWasmRangeOffsets: (next) => {
+          this.wasmRangeOffsets = next;
+        },
+        getWasmRangeLengths: () => this.wasmRangeLengths,
+        setWasmRangeLengths: (next) => {
+          this.wasmRangeLengths = next;
+        },
+        getWasmRangeRowCounts: () => this.wasmRangeRowCounts,
+        setWasmRangeRowCounts: (next) => {
+          this.wasmRangeRowCounts = next;
+        },
+        getWasmRangeColCounts: () => this.wasmRangeColCounts,
+        setWasmRangeColCounts: (next) => {
+          this.wasmRangeColCounts = next;
+        },
+        getBatchMutationDepth: () => this.batchMutationDepth,
+        getWasmProgramSyncPending: () => this.wasmProgramSyncPending,
+        setWasmProgramSyncPending: (next) => {
+          this.wasmProgramSyncPending = next;
         },
       },
       readRangeCells: (range) => this.readRangeCells(range),
@@ -1825,75 +1909,11 @@ export class SpreadsheetEngine {
   }
 
   private rebuildTopoRanks(): void {
-    const requiredCellCapacity = this.workbook.cellStore.size + 1;
-    const requiredEntityCapacity = this.workbook.cellStore.size + this.ranges.size + 1;
-    this.ensureTopoScratchCapacity(
-      requiredCellCapacity,
-      requiredEntityCapacity,
-      this.ranges.size + 1,
-    );
-
-    let queueLength = 0;
-    this.formulas.forEach((_formula, cellIndex) => {
-      this.topoIndegree[cellIndex] = 0;
-      this.workbook.cellStore.topoRanks[cellIndex] = 0;
-    });
-    this.formulas.forEach((formula, cellIndex) => {
-      for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
-        const dependency = formula.dependencyIndices[index]!;
-        if ((this.workbook.cellStore.formulaIds[dependency] ?? 0) !== 0) {
-          this.topoIndegree[cellIndex] = (this.topoIndegree[cellIndex] ?? 0) + 1;
-        }
-      }
-    });
-    this.formulas.forEach((_formula, cellIndex) => {
-      if ((this.topoIndegree[cellIndex] ?? 0) === 0) {
-        this.topoQueue[queueLength] = cellIndex;
-        queueLength += 1;
-      }
-    });
-
-    let rank = 0;
-    for (let queueIndex = 0; queueIndex < queueLength; queueIndex += 1) {
-      const cellIndex = this.topoQueue[queueIndex]!;
-      this.workbook.cellStore.topoRanks[cellIndex] = rank++;
-      const dependentCount = this.collectFormulaDependentsForEntityInto(makeCellEntity(cellIndex));
-      for (let dependentIndex = 0; dependentIndex < dependentCount; dependentIndex += 1) {
-        const dependent = this.topoFormulaBuffer[dependentIndex]!;
-        if ((this.workbook.cellStore.formulaIds[dependent] ?? 0) === 0) {
-          continue;
-        }
-        const next = (this.topoIndegree[dependent] ?? 0) - 1;
-        this.topoIndegree[dependent] = next;
-        if (next === 0) {
-          this.topoQueue[queueLength] = dependent;
-          queueLength += 1;
-        }
-      }
-    }
+    runEngineEffect(this.runtime.graph.rebuildTopoRanks());
   }
 
   private detectCycles(): void {
-    const result = this.cycleDetector.detect(
-      this.formulas.keys(),
-      this.workbook.cellStore.size + 1,
-      (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
-      (cellIndex) => this.formulas.has(cellIndex),
-    );
-
-    this.formulas.forEach((_formula, cellIndex) => {
-      this.workbook.cellStore.flags[cellIndex] =
-        (this.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.InCycle;
-      this.workbook.cellStore.cycleGroupIds[cellIndex] = -1;
-    });
-
-    for (let index = 0; index < result.cycleMemberCount; index += 1) {
-      const cellIndex = result.cycleMembers[index]!;
-      this.workbook.cellStore.flags[cellIndex] =
-        (this.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.InCycle;
-      this.workbook.cellStore.cycleGroupIds[cellIndex] = result.cycleGroups[cellIndex] ?? -1;
-      this.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle));
-    }
+    runEngineEffect(this.runtime.graph.detectCycles());
   }
 
   private recalculate(
@@ -1942,57 +1962,6 @@ export class SpreadsheetEngine {
     }
     if (size > this.impactedFormulaBuffer.length) {
       this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
-    }
-  }
-
-  private ensureWasmProgramScratchCapacity(formulaSize: number, rangeSize: number): void {
-    if (formulaSize > this.wasmProgramTargets.length) {
-      this.wasmProgramTargets = growUint32(this.wasmProgramTargets, formulaSize);
-    }
-    if (formulaSize > this.wasmProgramOffsets.length) {
-      this.wasmProgramOffsets = growUint32(this.wasmProgramOffsets, formulaSize);
-    }
-    if (formulaSize > this.wasmProgramLengths.length) {
-      this.wasmProgramLengths = growUint32(this.wasmProgramLengths, formulaSize);
-    }
-    if (formulaSize > this.wasmConstantOffsets.length) {
-      this.wasmConstantOffsets = growUint32(this.wasmConstantOffsets, formulaSize);
-    }
-    if (formulaSize > this.wasmConstantLengths.length) {
-      this.wasmConstantLengths = growUint32(this.wasmConstantLengths, formulaSize);
-    }
-    if (rangeSize > this.wasmRangeOffsets.length) {
-      this.wasmRangeOffsets = growUint32(this.wasmRangeOffsets, rangeSize);
-    }
-    if (rangeSize > this.wasmRangeLengths.length) {
-      this.wasmRangeLengths = growUint32(this.wasmRangeLengths, rangeSize);
-    }
-    if (rangeSize > this.wasmRangeRowCounts.length) {
-      this.wasmRangeRowCounts = growUint32(this.wasmRangeRowCounts, rangeSize);
-    }
-    if (rangeSize > this.wasmRangeColCounts.length) {
-      this.wasmRangeColCounts = growUint32(this.wasmRangeColCounts, rangeSize);
-    }
-  }
-
-  private ensureTopoScratchCapacity(cellSize: number, entitySize: number, rangeSize: number): void {
-    if (cellSize > this.topoIndegree.length) {
-      this.topoIndegree = growUint32(this.topoIndegree, cellSize);
-    }
-    if (cellSize > this.topoQueue.length) {
-      this.topoQueue = growUint32(this.topoQueue, cellSize);
-    }
-    if (cellSize > this.topoFormulaBuffer.length) {
-      this.topoFormulaBuffer = growUint32(this.topoFormulaBuffer, cellSize);
-    }
-    if (cellSize > this.topoFormulaSeen.length) {
-      this.topoFormulaSeen = growUint32(this.topoFormulaSeen, cellSize);
-    }
-    if (entitySize > this.topoEntityQueue.length) {
-      this.topoEntityQueue = growUint32(this.topoEntityQueue, entitySize);
-    }
-    if (rangeSize > this.topoRangeSeen.length) {
-      this.topoRangeSeen = growUint32(this.topoRangeSeen, rangeSize);
     }
   }
 
@@ -2195,104 +2164,12 @@ export class SpreadsheetEngine {
     return values;
   }
 
-  private syncWasmPrograms(): void {
-    this.programArena.reset();
-    this.constantArena.reset();
-    this.rangeListArena.reset();
-
-    let wasmFormulaCount = 0;
-    this.formulas.forEach((formula) => {
-      if (formula.compiled.mode === FormulaMode.WasmFastPath) {
-        wasmFormulaCount += 1;
-      }
-    });
-    this.ensureWasmProgramScratchCapacity(
-      Math.max(wasmFormulaCount, 1),
-      Math.max(this.ranges.size, 1),
-    );
-
-    let formulaIndex = 0;
-    this.formulas.forEach((formula) => {
-      if (formula.compiled.mode !== FormulaMode.WasmFastPath) {
-        return;
-      }
-      const programSlice = this.programArena.append(formula.runtimeProgram);
-      const constantSlice = this.constantArena.append(formula.constants);
-      const rangeSlice = this.rangeListArena.append(formula.rangeDependencies);
-
-      formula.programOffset = programSlice.offset;
-      formula.programLength = programSlice.length;
-      formula.constNumberOffset = constantSlice.offset;
-      formula.constNumberLength = constantSlice.length;
-      formula.rangeListOffset = rangeSlice.offset;
-      formula.rangeListLength = rangeSlice.length;
-      formula.compiled.programOffset = programSlice.offset;
-      formula.compiled.programLength = programSlice.length;
-      formula.compiled.constNumberOffset = constantSlice.offset;
-      formula.compiled.constNumberLength = constantSlice.length;
-      formula.compiled.rangeListOffset = rangeSlice.offset;
-      formula.compiled.rangeListLength = rangeSlice.length;
-      formula.compiled.depsPtr = formula.dependencyEntities.ptr;
-      formula.compiled.depsLen = formula.dependencyEntities.len;
-
-      this.wasmProgramTargets[formulaIndex] = formula.cellIndex;
-      this.wasmProgramOffsets[formulaIndex] = programSlice.offset;
-      this.wasmProgramLengths[formulaIndex] = programSlice.length;
-      this.wasmConstantOffsets[formulaIndex] = constantSlice.offset;
-      this.wasmConstantLengths[formulaIndex] = constantSlice.length;
-      formulaIndex += 1;
-    });
-
-    this.wasm.uploadFormulas({
-      targets: this.wasmProgramTargets.subarray(0, wasmFormulaCount),
-      programs: this.programArena.view(),
-      programOffsets: this.wasmProgramOffsets.subarray(0, wasmFormulaCount),
-      programLengths: this.wasmProgramLengths.subarray(0, wasmFormulaCount),
-      constants: this.constantArena.view(),
-      constantOffsets: this.wasmConstantOffsets.subarray(0, wasmFormulaCount),
-      constantLengths: this.wasmConstantLengths.subarray(0, wasmFormulaCount),
-    });
-
-    const rangeCapacity = Math.max(this.ranges.size, 1);
-    if (this.ranges.size === 0) {
-      this.wasmRangeOffsets[0] = 0;
-      this.wasmRangeLengths[0] = 0;
-      this.wasmRangeRowCounts[0] = 0;
-      this.wasmRangeColCounts[0] = 0;
-    }
-    for (let rangeIndex = 0; rangeIndex < this.ranges.size; rangeIndex += 1) {
-      const descriptor = this.ranges.getDescriptor(rangeIndex);
-      this.wasmRangeOffsets[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersOffset : 0;
-      this.wasmRangeLengths[rangeIndex] = descriptor.refCount > 0 ? descriptor.membersLength : 0;
-      this.wasmRangeRowCounts[rangeIndex] =
-        descriptor.refCount > 0 ? descriptor.row2 - descriptor.row1 + 1 : 0;
-      this.wasmRangeColCounts[rangeIndex] =
-        descriptor.refCount > 0 ? descriptor.col2 - descriptor.col1 + 1 : 0;
-    }
-
-    this.wasm.uploadRanges({
-      members: this.ranges.getMemberPoolView(),
-      offsets: this.wasmRangeOffsets.subarray(0, rangeCapacity),
-      lengths: this.wasmRangeLengths.subarray(0, rangeCapacity),
-      rowCounts: this.wasmRangeRowCounts.subarray(0, rangeCapacity),
-      colCounts: this.wasmRangeColCounts.subarray(0, rangeCapacity),
-    });
-  }
-
   private scheduleWasmProgramSync(): void {
-    if (this.batchMutationDepth > 0) {
-      this.wasmProgramSyncPending = true;
-      return;
-    }
-    this.syncWasmPrograms();
+    runEngineEffect(this.runtime.graph.scheduleWasmProgramSync());
   }
 
   private flushWasmProgramSync(): void {
-    if (!this.wasmProgramSyncPending) {
-      return;
-    }
-    this.wasmProgramSyncPending = false;
-    this.syncWasmPrograms();
+    runEngineEffect(this.runtime.graph.flushWasmProgramSync());
   }
 
   private emitBatch(batch: EngineOpBatch): void {
@@ -3002,7 +2879,7 @@ export class SpreadsheetEngine {
     };
     this.wasmProgramSyncPending = false;
     this.materializedCellCount = 0;
-    this.syncWasmPrograms();
+    this.scheduleWasmProgramSync();
   }
 
   private resetMaterializedCellScratch(expectedSize: number): void {
