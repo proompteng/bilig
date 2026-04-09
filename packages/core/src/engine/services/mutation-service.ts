@@ -1,6 +1,10 @@
 import { Effect } from "effect";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
+import { cloneCellStyleRecord } from "../../engine-style-utils.js";
+import { restoreFormatRangeOps, restoreStyleRangeOps } from "../../engine-range-format-ops.js";
+import { sheetMetadataToOps } from "../../engine-snapshot-utils.js";
 import { createBatch } from "../../replica-state.js";
+import type { WorkbookStore } from "../../workbook-store.js";
 import type { CommitOp, EngineRuntimeState, TransactionRecord } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 
@@ -40,14 +44,429 @@ export function createEngineMutationService(args: {
     | "redoStack"
     | "getTransactionReplayDepth"
     | "setTransactionReplayDepth"
-  >;
-  readonly buildInverseOps: (ops: EngineOp[]) => EngineOp[];
+  > & {
+    readonly workbook: WorkbookStore;
+  };
+  readonly captureSheetCellState: (sheetName: string) => EngineOp[];
+  readonly captureRowRangeCellState: (sheetName: string, start: number, count: number) => EngineOp[];
+  readonly captureColumnRangeCellState: (
+    sheetName: string,
+    start: number,
+    count: number,
+  ) => EngineOp[];
+  readonly restoreCellOps: (sheetName: string, address: string) => EngineOp[];
   readonly applyBatchNow: (
     batch: EngineOpBatch,
     source: "local" | "restore" | "history",
     potentialNewCells?: number,
   ) => void;
 }): EngineMutationService {
+  const inverseOpsFor = (op: EngineOp): EngineOp[] => {
+    switch (op.kind) {
+      case "upsertWorkbook":
+        return [{ kind: "upsertWorkbook", name: args.state.workbook.workbookName }];
+      case "setWorkbookMetadata": {
+        const existing = args.state.workbook.getWorkbookProperty(op.key);
+        return [{ kind: "setWorkbookMetadata", key: op.key, value: existing?.value ?? null }];
+      }
+      case "setCalculationSettings":
+        return [
+          { kind: "setCalculationSettings", settings: args.state.workbook.getCalculationSettings() },
+        ];
+      case "setVolatileContext":
+        return [{ kind: "setVolatileContext", context: args.state.workbook.getVolatileContext() }];
+      case "upsertSheet": {
+        const existing = args.state.workbook.getSheet(op.name);
+        if (!existing) {
+          return [{ kind: "deleteSheet", name: op.name }];
+        }
+        return [{ kind: "upsertSheet", name: existing.name, order: existing.order }];
+      }
+      case "renameSheet": {
+        const existing = args.state.workbook.getSheet(op.newName);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "renameSheet", oldName: op.newName, newName: op.oldName }];
+      }
+      case "deleteSheet": {
+        const sheet = args.state.workbook.getSheet(op.name);
+        if (!sheet) {
+          return [];
+        }
+        const restoredOps: EngineOp[] = [
+          { kind: "upsertSheet", name: sheet.name, order: sheet.order },
+        ];
+        restoredOps.push(...sheetMetadataToOps(args.state.workbook, sheet.name));
+        args.state.workbook
+          .listTables()
+          .filter((table) => table.sheetName === sheet.name)
+          .forEach((table) => {
+            restoredOps.push({
+              kind: "upsertTable",
+              table: {
+                name: table.name,
+                sheetName: table.sheetName,
+                startAddress: table.startAddress,
+                endAddress: table.endAddress,
+                columnNames: [...table.columnNames],
+                headerRow: table.headerRow,
+                totalsRow: table.totalsRow,
+              },
+            });
+          });
+        args.state.workbook
+          .listSpills()
+          .filter((spill) => spill.sheetName === sheet.name)
+          .forEach((spill) => {
+            restoredOps.push({
+              kind: "upsertSpillRange",
+              sheetName: spill.sheetName,
+              address: spill.address,
+              rows: spill.rows,
+              cols: spill.cols,
+            });
+          });
+        args.state.workbook
+          .listPivots()
+          .filter((pivot) => pivot.sheetName === sheet.name)
+          .forEach((pivot) => {
+            restoredOps.push({
+              kind: "upsertPivotTable",
+              name: pivot.name,
+              sheetName: pivot.sheetName,
+              address: pivot.address,
+              source: { ...pivot.source },
+              groupBy: [...pivot.groupBy],
+              values: pivot.values.map((value) => Object.assign({}, value)),
+              rows: pivot.rows,
+              cols: pivot.cols,
+            });
+          });
+        restoredOps.push(...args.captureSheetCellState(sheet.name));
+        return restoredOps;
+      }
+      case "insertRows":
+        return [{ kind: "deleteRows", sheetName: op.sheetName, start: op.start, count: op.count }];
+      case "deleteRows": {
+        const entries = args.state.workbook.materializeRowAxisEntries(op.sheetName, op.start, op.count);
+        return [
+          {
+            kind: "insertRows",
+            sheetName: op.sheetName,
+            start: op.start,
+            count: op.count,
+            entries,
+          },
+          ...args.captureRowRangeCellState(op.sheetName, op.start, op.count),
+        ];
+      }
+      case "moveRows":
+        return [
+          {
+            kind: "moveRows",
+            sheetName: op.sheetName,
+            start: op.target,
+            count: op.count,
+            target: op.start,
+          },
+        ];
+      case "insertColumns":
+        return [
+          { kind: "deleteColumns", sheetName: op.sheetName, start: op.start, count: op.count },
+        ];
+      case "deleteColumns": {
+        const entries = args.state.workbook.materializeColumnAxisEntries(
+          op.sheetName,
+          op.start,
+          op.count,
+        );
+        return [
+          {
+            kind: "insertColumns",
+            sheetName: op.sheetName,
+            start: op.start,
+            count: op.count,
+            entries,
+          },
+          ...args.captureColumnRangeCellState(op.sheetName, op.start, op.count),
+        ];
+      }
+      case "moveColumns":
+        return [
+          {
+            kind: "moveColumns",
+            sheetName: op.sheetName,
+            start: op.target,
+            count: op.count,
+            target: op.start,
+          },
+        ];
+      case "updateRowMetadata": {
+        const existing = args.state.workbook.getRowMetadata(op.sheetName, op.start, op.count);
+        return [
+          {
+            kind: "updateRowMetadata",
+            sheetName: op.sheetName,
+            start: op.start,
+            count: op.count,
+            size: existing?.size ?? null,
+            hidden: existing?.hidden ?? null,
+          },
+        ];
+      }
+      case "updateColumnMetadata": {
+        const existing = args.state.workbook.getColumnMetadata(op.sheetName, op.start, op.count);
+        return [
+          {
+            kind: "updateColumnMetadata",
+            sheetName: op.sheetName,
+            start: op.start,
+            count: op.count,
+            size: existing?.size ?? null,
+            hidden: existing?.hidden ?? null,
+          },
+        ];
+      }
+      case "setFreezePane": {
+        const existing = args.state.workbook.getFreezePane(op.sheetName);
+        if (!existing) {
+          return [{ kind: "clearFreezePane", sheetName: op.sheetName }];
+        }
+        return [
+          {
+            kind: "setFreezePane",
+            sheetName: op.sheetName,
+            rows: existing.rows,
+            cols: existing.cols,
+          },
+        ];
+      }
+      case "clearFreezePane": {
+        const existing = args.state.workbook.getFreezePane(op.sheetName);
+        if (!existing) {
+          return [];
+        }
+        return [
+          {
+            kind: "setFreezePane",
+            sheetName: op.sheetName,
+            rows: existing.rows,
+            cols: existing.cols,
+          },
+        ];
+      }
+      case "setFilter": {
+        const existing = args.state.workbook.getFilter(op.sheetName, op.range);
+        if (!existing) {
+          return [{ kind: "clearFilter", sheetName: op.sheetName, range: { ...op.range } }];
+        }
+        return [{ kind: "setFilter", sheetName: op.sheetName, range: { ...existing.range } }];
+      }
+      case "clearFilter": {
+        const existing = args.state.workbook.getFilter(op.sheetName, op.range);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "setFilter", sheetName: op.sheetName, range: { ...existing.range } }];
+      }
+      case "setSort": {
+        const existing = args.state.workbook.getSort(op.sheetName, op.range);
+        if (!existing) {
+          return [{ kind: "clearSort", sheetName: op.sheetName, range: { ...op.range } }];
+        }
+        return [
+          {
+            kind: "setSort",
+            sheetName: op.sheetName,
+            range: { ...existing.range },
+            keys: existing.keys.map((key) => Object.assign({}, key)),
+          },
+        ];
+      }
+      case "clearSort": {
+        const existing = args.state.workbook.getSort(op.sheetName, op.range);
+        if (!existing) {
+          return [];
+        }
+        return [
+          {
+            kind: "setSort",
+            sheetName: op.sheetName,
+            range: { ...existing.range },
+            keys: existing.keys.map((key) => Object.assign({}, key)),
+          },
+        ];
+      }
+      case "setCellValue":
+      case "setCellFormula":
+      case "clearCell":
+        return args.restoreCellOps(op.sheetName, op.address);
+      case "setCellFormat": {
+        const cellIndex = args.state.workbook.getCellIndex(op.sheetName, op.address);
+        return [
+          {
+            kind: "setCellFormat",
+            sheetName: op.sheetName,
+            address: op.address,
+            format:
+              cellIndex === undefined
+                ? null
+                : (args.state.workbook.getCellFormat(cellIndex) ?? null),
+          },
+        ];
+      }
+      case "upsertCellStyle": {
+        const existing = args.state.workbook.getCellStyle(op.style.id);
+        if (!existing || existing.id !== op.style.id) {
+          return [];
+        }
+        return [{ kind: "upsertCellStyle", style: cloneCellStyleRecord(existing) }];
+      }
+      case "upsertCellNumberFormat": {
+        const existing = args.state.workbook.getCellNumberFormat(op.format.id);
+        if (!existing || existing.id !== op.format.id) {
+          return [];
+        }
+        return [{ kind: "upsertCellNumberFormat", format: { ...existing } }];
+      }
+      case "setStyleRange":
+        return restoreStyleRangeOps(args.state.workbook, op.range);
+      case "setFormatRange":
+        return restoreFormatRangeOps(args.state.workbook, op.range);
+      case "upsertDefinedName": {
+        const existing = args.state.workbook.getDefinedName(op.name);
+        if (!existing) {
+          return [{ kind: "deleteDefinedName", name: op.name }];
+        }
+        return [{ kind: "upsertDefinedName", name: existing.name, value: existing.value }];
+      }
+      case "deleteDefinedName": {
+        const existing = args.state.workbook.getDefinedName(op.name);
+        if (!existing) {
+          return [];
+        }
+        return [{ kind: "upsertDefinedName", name: existing.name, value: existing.value }];
+      }
+      case "upsertTable": {
+        const existing = args.state.workbook.getTable(op.table.name);
+        if (!existing) {
+          return [{ kind: "deleteTable", name: op.table.name }];
+        }
+        return [
+          {
+            kind: "upsertTable",
+            table: {
+              name: existing.name,
+              sheetName: existing.sheetName,
+              startAddress: existing.startAddress,
+              endAddress: existing.endAddress,
+              columnNames: [...existing.columnNames],
+              headerRow: existing.headerRow,
+              totalsRow: existing.totalsRow,
+            },
+          },
+        ];
+      }
+      case "deleteTable": {
+        const existing = args.state.workbook.getTable(op.name);
+        if (!existing) {
+          return [];
+        }
+        return [
+          {
+            kind: "upsertTable",
+            table: {
+              name: existing.name,
+              sheetName: existing.sheetName,
+              startAddress: existing.startAddress,
+              endAddress: existing.endAddress,
+              columnNames: [...existing.columnNames],
+              headerRow: existing.headerRow,
+              totalsRow: existing.totalsRow,
+            },
+          },
+        ];
+      }
+      case "upsertSpillRange": {
+        const existing = args.state.workbook.getSpill(op.sheetName, op.address);
+        if (!existing) {
+          return [{ kind: "deleteSpillRange", sheetName: op.sheetName, address: op.address }];
+        }
+        return [
+          {
+            kind: "upsertSpillRange",
+            sheetName: existing.sheetName,
+            address: existing.address,
+            rows: existing.rows,
+            cols: existing.cols,
+          },
+        ];
+      }
+      case "deleteSpillRange": {
+        const existing = args.state.workbook.getSpill(op.sheetName, op.address);
+        if (!existing) {
+          return [];
+        }
+        return [
+          {
+            kind: "upsertSpillRange",
+            sheetName: existing.sheetName,
+            address: existing.address,
+            rows: existing.rows,
+            cols: existing.cols,
+          },
+        ];
+      }
+      case "upsertPivotTable": {
+        const existing = args.state.workbook.getPivot(op.sheetName, op.address);
+        if (!existing) {
+          return [{ kind: "deletePivotTable", sheetName: op.sheetName, address: op.address }];
+        }
+        return [
+          {
+            kind: "upsertPivotTable",
+            name: existing.name,
+            sheetName: existing.sheetName,
+            address: existing.address,
+            source: { ...existing.source },
+            groupBy: [...existing.groupBy],
+            values: existing.values.map((v) => Object.assign({}, v)),
+            rows: existing.rows,
+            cols: existing.cols,
+          },
+        ];
+      }
+      case "deletePivotTable": {
+        const existing = args.state.workbook.getPivot(op.sheetName, op.address);
+        if (!existing) {
+          return [];
+        }
+        return [
+          {
+            kind: "upsertPivotTable",
+            name: existing.name,
+            sheetName: existing.sheetName,
+            address: existing.address,
+            source: { ...existing.source },
+            groupBy: [...existing.groupBy],
+            values: existing.values.map((value) => Object.assign({}, value)),
+            rows: existing.rows,
+            cols: existing.cols,
+          },
+        ];
+      }
+    }
+  };
+
+  const buildInverseOps = (ops: readonly EngineOp[]): EngineOp[] => {
+    const inverseOps: EngineOp[] = [];
+    for (let index = ops.length - 1; index >= 0; index -= 1) {
+      inverseOps.push(...inverseOpsFor(ops[index]!));
+    }
+    return inverseOps;
+  };
+
   const executeTransactionNow = (
     record: TransactionRecord,
     source: "local" | "restore" | "history",
@@ -81,7 +500,7 @@ export function createEngineMutationService(args: {
           const forward: TransactionRecord =
             potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
           const inverse: TransactionRecord = {
-            ops: args.buildInverseOps(ops),
+            ops: buildInverseOps(ops),
             potentialNewCells: ops.length,
           };
           executeTransactionNow(forward, "local");

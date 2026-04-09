@@ -46,7 +46,23 @@ export function createEngineServiceRuntime(args: {
   readonly resetWorkbook: () => void;
   readonly executeRestoreTransaction: (transaction: TransactionRecord) => void;
   readonly executeHistoryTransaction: (transaction: TransactionRecord, source: "history") => void;
-  readonly buildInverseOps: (ops: import("@bilig/workbook-domain").EngineOp[]) => import("@bilig/workbook-domain").EngineOp[];
+  readonly captureSheetCellState: (
+    sheetName: string,
+  ) => import("@bilig/workbook-domain").EngineOp[];
+  readonly captureRowRangeCellState: (
+    sheetName: string,
+    start: number,
+    count: number,
+  ) => import("@bilig/workbook-domain").EngineOp[];
+  readonly captureColumnRangeCellState: (
+    sheetName: string,
+    start: number,
+    count: number,
+  ) => import("@bilig/workbook-domain").EngineOp[];
+  readonly restoreCellOps: (
+    sheetName: string,
+    address: string,
+  ) => import("@bilig/workbook-domain").EngineOp[];
   readonly applyBatchNow: (
     batch: import("@bilig/workbook-domain").EngineOpBatch,
     source: "local" | "restore" | "history",
@@ -86,7 +102,10 @@ export function createEngineServiceRuntime(args: {
     }),
     mutation: createEngineMutationService({
       state: args.state,
-      buildInverseOps: args.buildInverseOps,
+      captureSheetCellState: args.captureSheetCellState,
+      captureRowRangeCellState: args.captureRowRangeCellState,
+      captureColumnRangeCellState: args.captureColumnRangeCellState,
+      restoreCellOps: args.restoreCellOps,
       applyBatchNow: args.applyBatchNow,
     }),
     pivot: createEnginePivotService({
