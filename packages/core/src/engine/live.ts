@@ -80,10 +80,87 @@ export interface EngineServiceRuntime {
   readonly sync: EngineReplicaSyncService;
 }
 
+type EngineMutationSupportRuntimeConfig = Omit<
+  Parameters<typeof createEngineMutationSupportService>[0],
+  "removeFormula" | "rebindFormulasForSheet" | "applyDerivedOp" | "scheduleWasmProgramSync"
+>;
+
 type EngineFormulaBindingRuntimeConfig = Omit<
   Parameters<typeof createEngineFormulaBindingService>[0],
-  "resolveStructuredReference" | "resolveSpillReference"
+  | "ensureCellTracked"
+  | "ensureCellTrackedByCoords"
+  | "markFormulaChanged"
+  | "resolveStructuredReference"
+  | "resolveSpillReference"
+  | "scheduleWasmProgramSync"
 >;
+
+type EngineRecalcRuntimeConfig = Omit<
+  Parameters<typeof createEngineRecalcService>[0],
+  | "beginMutationCollection"
+  | "markInputChanged"
+  | "markFormulaChanged"
+  | "markExplicitChanged"
+  | "composeMutationRoots"
+  | "composeEventChanges"
+  | "unionChangedSets"
+  | "composeChangedRootsAndOrdered"
+  | "emptyChangedSet"
+  | "getChangedInputBuffer"
+  | "materializeSpill"
+  | "clearOwnedSpill"
+  | "evaluateUnsupportedFormula"
+  | "materializePivot"
+>;
+
+type EnginePivotRuntimeConfig = Omit<
+  Parameters<typeof createEnginePivotService>[0],
+  "ensureCellTrackedByCoords" | "scheduleWasmProgramSync" | "flushWasmProgramSync" | "applyDerivedOp"
+>;
+
+type EngineOperationRuntimeConfig = Omit<
+  Parameters<typeof createEngineOperationService>[0],
+  | "getSelectionState"
+  | "setSelection"
+  | "rewriteCellFormulasForSheetRename"
+  | "rebindDefinedNameDependents"
+  | "rebindTableDependents"
+  | "rebindFormulaCells"
+  | "rebindFormulasForSheet"
+  | "removeSheetRuntime"
+  | "applyStructuralAxisOp"
+  | "clearOwnedSpill"
+  | "clearPivotForCell"
+  | "clearOwnedPivot"
+  | "removeFormula"
+  | "bindFormula"
+  | "setInvalidFormulaValue"
+  | "beginMutationCollection"
+  | "markInputChanged"
+  | "markFormulaChanged"
+  | "markVolatileFormulasChanged"
+  | "markSpillRootsChanged"
+  | "markPivotRootsChanged"
+  | "markExplicitChanged"
+  | "composeMutationRoots"
+  | "composeEventChanges"
+  | "getChangedInputBuffer"
+  | "ensureCellTracked"
+  | "resetMaterializedCellScratch"
+  | "syncDynamicRanges"
+  | "rebuildTopoRanks"
+  | "detectCycles"
+  | "recalculate"
+  | "reconcilePivotOutputs"
+  | "flushWasmProgramSync"
+>;
+
+function requireService<Service>(service: Service | undefined, name: string): Service {
+  if (service === undefined) {
+    throw new Error(`Engine service ${name} is not initialized`);
+  }
+  return service;
+}
 
 export function createEngineServiceRuntime(args: {
   readonly state: EngineRuntimeState;
@@ -91,8 +168,7 @@ export function createEngineServiceRuntime(args: {
   readonly exportSnapshot: () => import("@bilig/protocol").WorkbookSnapshot;
   readonly importSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly resetWorkbook: () => void;
-  readonly evaluation: Parameters<typeof createEngineFormulaEvaluationService>[0];
-  readonly mutationSupport: Parameters<typeof createEngineMutationSupportService>[0];
+  readonly mutationSupport: EngineMutationSupportRuntimeConfig;
   readonly captureSheetCellState: (
     sheetName: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
@@ -112,6 +188,9 @@ export function createEngineServiceRuntime(args: {
   ) => import("@bilig/workbook-domain").EngineOp[];
   readonly formulaBinding: EngineFormulaBindingRuntimeConfig;
   readonly formulaGraph: Parameters<typeof createEngineFormulaGraphService>[0];
+  readonly recalc: EngineRecalcRuntimeConfig;
+  readonly pivot: EnginePivotRuntimeConfig;
+  readonly operation: EngineOperationRuntimeConfig;
   readonly readRangeCells: (
     range: import("@bilig/protocol").CellRangeRef,
   ) => CellSnapshot[][];
@@ -131,65 +210,58 @@ export function createEngineServiceRuntime(args: {
   readonly pivotState: {
     readonly pivotOutputOwners: Map<number, string>;
   };
-  readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number;
   readonly forEachSheetCell: (
     sheetId: number,
     fn: (cellIndex: number, row: number, col: number) => void,
   ) => void;
-  readonly beginMutationCollection: () => void;
-  readonly markInputChanged: (cellIndex: number, count: number) => number;
-  readonly markFormulaChanged: (cellIndex: number, count: number) => number;
-  readonly markExplicitChanged: (cellIndex: number, count: number) => number;
-  readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => import("./runtime-state.js").U32;
-  readonly composeEventChanges: (
-    recalculated: import("./runtime-state.js").U32,
-    explicitChangedCount: number,
-  ) => import("./runtime-state.js").U32;
-  readonly getChangedInputBuffer: () => import("./runtime-state.js").U32;
-  readonly unionChangedSets: (
-    ...sets: Array<readonly number[] | import("./runtime-state.js").U32>
-  ) => import("./runtime-state.js").U32;
-  readonly composeChangedRootsAndOrdered: (
-    changedRoots: readonly number[] | import("./runtime-state.js").U32,
-    ordered: import("./runtime-state.js").U32,
-    orderedCount: number,
-  ) => import("./runtime-state.js").U32;
-  readonly emptyChangedSet: () => import("./runtime-state.js").U32;
-  readonly ensureRecalcScratchCapacity: (size: number) => void;
-  readonly getPendingKernelSync: () => import("./runtime-state.js").U32;
-  readonly getWasmBatch: () => import("./runtime-state.js").U32;
-  readonly materializeSpill: (
-    cellIndex: number,
-    arrayValue: {
-      values: import("@bilig/protocol").CellValue[];
-      rows: number;
-      cols: number;
-    },
-  ) => import("./runtime-state.js").SpillMaterialization;
-  readonly clearOwnedSpill: (cellIndex: number) => number[];
   readonly getEntityDependents: (entityId: number) => Uint32Array;
-  readonly clearOwnedPivot: (
-    pivot: import("../workbook-store.js").WorkbookPivotRecord,
-  ) => number[];
-  readonly clearPivotForCell: (cellIndex: number) => number[];
-  readonly materializePivot: (
-    pivot: import("../workbook-store.js").WorkbookPivotRecord,
-  ) => number[];
-  readonly scheduleWasmProgramSync: () => void;
-  readonly flushWasmProgramSync: () => void;
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
-  readonly operation: Parameters<typeof createEngineOperationService>[0];
 }): EngineServiceRuntime {
-  const evaluation = createEngineFormulaEvaluationService(args.evaluation);
-  const support = createEngineMutationSupportService(args.mutationSupport);
-  const binding = createEngineFormulaBindingService({
+  const graph = createEngineFormulaGraphService(args.formulaGraph);
+  let binding: EngineFormulaBindingService | undefined;
+  let operations: EngineOperationService | undefined;
+  let pivot: EnginePivotService | undefined;
+  let recalc: EngineRecalcService | undefined;
+  const selection = createEngineSelectionService(args.state);
+  const support = createEngineMutationSupportService({
+    ...args.mutationSupport,
+    removeFormula: (cellIndex) => runEngineEffect(requireService(binding, "binding").clearFormula(cellIndex)),
+    rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
+      runEngineEffect(
+        requireService(binding, "binding").rebindFormulasForSheet(
+          sheetName,
+          formulaChangedCount,
+          candidates,
+        ),
+      ),
+    applyDerivedOp: (op) =>
+      runEngineEffect(requireService(operations, "operations").applyDerivedOp(op)),
+    scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
+  });
+  const evaluation = createEngineFormulaEvaluationService({
+    state: args.state,
+    materializeSpill: (cellIndex, arrayValue) =>
+      runEngineEffect(support.materializeSpill(cellIndex, arrayValue)),
+    clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),
+    resolvePivotData: (sheetName, address, dataField, filters) =>
+      runEngineEffect(
+        requireService(pivot, "pivot").resolvePivotData(sheetName, address, dataField, filters),
+      ),
+  });
+  binding = createEngineFormulaBindingService({
     ...args.formulaBinding,
+    ensureCellTracked: (sheetName, address) =>
+      runEngineEffect(support.ensureCellTracked(sheetName, address)),
+    ensureCellTrackedByCoords: (sheetId, row, col) =>
+      runEngineEffect(support.ensureCellTrackedByCoords(sheetId, row, col)),
+    markFormulaChanged: (cellIndex, count) =>
+      runEngineEffect(support.markFormulaChanged(cellIndex, count)),
     resolveStructuredReference: (tableName, columnName) =>
       runEngineEffect(evaluation.resolveStructuredReference(tableName, columnName)),
     resolveSpillReference: (currentSheetName, sheetName, address) =>
       runEngineEffect(evaluation.resolveSpillReference(currentSheetName, sheetName, address)),
+    scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
-  const graph = createEngineFormulaGraphService(args.formulaGraph);
   const structure = createEngineStructureService({
     state: {
       workbook: args.state.workbook,
@@ -199,7 +271,8 @@ export function createEngineServiceRuntime(args: {
     getCellByIndex: args.getCellByIndex,
     toCellStateOps: args.toCellStateOps,
     removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
-    clearOwnedPivot: (pivot) => args.clearOwnedPivot(pivot),
+    clearOwnedPivot: (pivotRecord) =>
+      runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
     rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
   });
   const read = createEngineReadService({
@@ -209,32 +282,98 @@ export function createEngineServiceRuntime(args: {
     cellToCsvValue: args.cellToCsvValue,
     serializeCsv: args.serializeCsv,
   });
-  const recalc = createEngineRecalcService({
-    state: args.state,
-    getCellByIndex: args.getCellByIndex,
-    exportSnapshot: args.exportSnapshot,
-    importSnapshot: args.importSnapshot,
-    beginMutationCollection: args.beginMutationCollection,
-    markInputChanged: args.markInputChanged,
-    markFormulaChanged: args.markFormulaChanged,
-    markExplicitChanged: args.markExplicitChanged,
-    composeMutationRoots: args.composeMutationRoots,
-    composeEventChanges: args.composeEventChanges,
-    unionChangedSets: args.unionChangedSets,
-    composeChangedRootsAndOrdered: args.composeChangedRootsAndOrdered,
-    emptyChangedSet: args.emptyChangedSet,
-    ensureRecalcScratchCapacity: args.ensureRecalcScratchCapacity,
-    getPendingKernelSync: args.getPendingKernelSync,
-    getWasmBatch: args.getWasmBatch,
-    getChangedInputBuffer: args.getChangedInputBuffer,
-    materializeSpill: args.materializeSpill,
-    clearOwnedSpill: args.clearOwnedSpill,
+  recalc = createEngineRecalcService({
+    ...args.recalc,
+    beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
+    markInputChanged: (cellIndex, count) => runEngineEffect(support.markInputChanged(cellIndex, count)),
+    markFormulaChanged: (cellIndex, count) =>
+      runEngineEffect(support.markFormulaChanged(cellIndex, count)),
+    markExplicitChanged: (cellIndex, count) =>
+      runEngineEffect(support.markExplicitChanged(cellIndex, count)),
+    composeMutationRoots: (changedInputCount, formulaChangedCount) =>
+      runEngineEffect(support.composeMutationRoots(changedInputCount, formulaChangedCount)),
+    composeEventChanges: (recalculated, explicitChangedCount) =>
+      runEngineEffect(support.composeEventChanges(recalculated, explicitChangedCount)),
+    unionChangedSets: (...sets) => runEngineEffect(support.unionChangedSets(...sets)),
+    composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
+      runEngineEffect(support.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount)),
+    emptyChangedSet: () => runEngineEffect(support.unionChangedSets()),
+    getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
+    materializeSpill: (cellIndex, arrayValue) =>
+      runEngineEffect(support.materializeSpill(cellIndex, arrayValue)),
+    clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),
     evaluateUnsupportedFormula: (cellIndex) =>
       runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
-    materializePivot: (pivot) => args.materializePivot(pivot),
+    materializePivot: (pivotRecord) =>
+      runEngineEffect(requireService(pivot, "pivot").materializePivot(pivotRecord)),
     getEntityDependents: args.getEntityDependents,
   });
-  const operations = createEngineOperationService(args.operation);
+  operations = createEngineOperationService({
+    ...args.operation,
+    getSelectionState: () => runEngineEffect(selection.getSelectionState()),
+    setSelection: (sheetName, address) =>
+      runEngineEffect(selection.setSelection(sheetName, address)),
+    rewriteCellFormulasForSheetRename: (oldSheetName, newSheetName, formulaChangedCount) =>
+      runEngineEffect(
+        binding.rewriteCellFormulasForSheetRename(
+          oldSheetName,
+          newSheetName,
+          formulaChangedCount,
+        ),
+      ),
+    rebindDefinedNameDependents: (names, formulaChangedCount) =>
+      runEngineEffect(binding.rebindDefinedNameDependents(names, formulaChangedCount)),
+    rebindTableDependents: (tableNames, formulaChangedCount) =>
+      runEngineEffect(binding.rebindTableDependents(tableNames, formulaChangedCount)),
+    rebindFormulaCells: (candidates, formulaChangedCount) =>
+      runEngineEffect(binding.rebindFormulaCells(candidates, formulaChangedCount)),
+    rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
+      runEngineEffect(binding.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates)),
+    removeSheetRuntime: (sheetName, explicitChangedCount) =>
+      runEngineEffect(support.removeSheetRuntime(sheetName, explicitChangedCount)),
+    applyStructuralAxisOp: (op) => runEngineEffect(structure.applyStructuralAxisOp(op)),
+    clearOwnedSpill: (cellIndex) => runEngineEffect(support.clearOwnedSpill(cellIndex)),
+    clearPivotForCell: (cellIndex) =>
+      runEngineEffect(requireService(pivot, "pivot").clearPivotForCell(cellIndex)),
+    clearOwnedPivot: (pivotRecord) =>
+      runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
+    removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
+    bindFormula: (cellIndex, ownerSheetName, source) =>
+      runEngineEffect(binding.bindFormula(cellIndex, ownerSheetName, source)),
+    setInvalidFormulaValue: (cellIndex) => runEngineEffect(binding.invalidateFormula(cellIndex)),
+    beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
+    markInputChanged: (cellIndex, count) => runEngineEffect(support.markInputChanged(cellIndex, count)),
+    markFormulaChanged: (cellIndex, count) =>
+      runEngineEffect(support.markFormulaChanged(cellIndex, count)),
+    markVolatileFormulasChanged: (count) =>
+      runEngineEffect(support.markVolatileFormulasChanged(count)),
+    markSpillRootsChanged: (cellIndices, count) =>
+      runEngineEffect(support.markSpillRootsChanged(cellIndices, count)),
+    markPivotRootsChanged: (cellIndices, count) =>
+      runEngineEffect(support.markPivotRootsChanged(cellIndices, count)),
+    markExplicitChanged: (cellIndex, count) =>
+      runEngineEffect(support.markExplicitChanged(cellIndex, count)),
+    composeMutationRoots: (changedInputCount, formulaChangedCount) =>
+      runEngineEffect(support.composeMutationRoots(changedInputCount, formulaChangedCount)),
+    composeEventChanges: (recalculated, explicitChangedCount) =>
+      runEngineEffect(support.composeEventChanges(recalculated, explicitChangedCount)),
+    getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
+    ensureCellTracked: (sheetName, address) =>
+      runEngineEffect(support.ensureCellTracked(sheetName, address)),
+    resetMaterializedCellScratch: (expectedSize) =>
+      runEngineEffect(support.resetMaterializedCellScratch(expectedSize)),
+    syncDynamicRanges: (formulaChangedCount) =>
+      runEngineEffect(support.syncDynamicRanges(formulaChangedCount)),
+    rebuildTopoRanks: () => runEngineEffect(graph.rebuildTopoRanks()),
+    detectCycles: () => runEngineEffect(graph.detectCycles()),
+    recalculate: (changedRoots, kernelSyncRoots) =>
+      runEngineEffect(requireService(recalc, "recalc").recalculate(changedRoots, kernelSyncRoots)),
+    reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
+      runEngineEffect(
+        requireService(recalc, "recalc").reconcilePivotOutputs(baseChanged, forceAllPivots),
+      ),
+    flushWasmProgramSync: () => runEngineEffect(graph.flushWasmProgramSync()),
+  });
   const mutation = createEngineMutationService({
     state: args.state,
     captureSheetCellState: args.captureSheetCellState,
@@ -251,19 +390,13 @@ export function createEngineServiceRuntime(args: {
     executeTransaction: (transaction, source) =>
       runEngineEffect(mutation.executeTransaction(transaction, source)),
   });
-  const pivot = createEnginePivotService({
-    state: {
-      workbook: args.state.workbook,
-      strings: args.state.strings,
-      formulas: args.state.formulas,
-      ranges: args.state.ranges,
-      wasm: args.state.wasm,
-      pivotOutputOwners: args.pivotState.pivotOutputOwners,
-    },
-    ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
+  pivot = createEnginePivotService({
+    ...args.pivot,
+    ensureCellTrackedByCoords: (sheetId, row, col) =>
+      runEngineEffect(support.ensureCellTrackedByCoords(sheetId, row, col)),
     forEachSheetCell: args.forEachSheetCell,
-    scheduleWasmProgramSync: args.scheduleWasmProgramSync,
-    flushWasmProgramSync: args.flushWasmProgramSync,
+    scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
+    flushWasmProgramSync: () => runEngineEffect(graph.flushWasmProgramSync()),
     applyDerivedOp: (op) => runEngineEffect(operations.applyDerivedOp(op)),
   });
   const snapshot = createEngineSnapshotService({
@@ -282,7 +415,7 @@ export function createEngineServiceRuntime(args: {
   return {
     events: createEngineEventService(args.state),
     evaluation,
-    selection: createEngineSelectionService(args.state),
+    selection,
     binding,
     graph,
     history,

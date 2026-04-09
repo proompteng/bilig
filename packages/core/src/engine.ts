@@ -69,7 +69,6 @@ import {
   type WorkbookCalculationSettingsRecord,
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
-  type WorkbookPivotRecord,
   type WorkbookPropertyRecord,
   type WorkbookSortRecord,
   type WorkbookSpillRecord,
@@ -89,7 +88,6 @@ import {
   type PivotTableInput,
   type RuntimeFormula,
   type SpreadsheetEngineOptions,
-  type SpillMaterialization,
   type TransactionLogEntry,
   type U32,
 } from "./engine/runtime-state.js";
@@ -236,13 +234,6 @@ export class SpreadsheetEngine {
       exportSnapshot: () => this.exportSnapshot(),
       importSnapshot: (snapshot) => this.importSnapshot(snapshot),
       resetWorkbook: () => this.resetWorkbook(),
-      evaluation: {
-        state: this.state,
-        materializeSpill: (cellIndex, arrayValue) => this.materializeSpill(cellIndex, arrayValue),
-        clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
-        resolvePivotData: (sheetName, address, dataField, filters) =>
-          this.resolvePivotData(sheetName, address, dataField, filters),
-      },
       mutationSupport: {
         state: this.state,
         edgeArena: this.edgeArena,
@@ -250,13 +241,8 @@ export class SpreadsheetEngine {
           reverseCellEdges: this.reverseCellEdges,
           reverseRangeEdges: this.reverseRangeEdges,
         },
-        removeFormula: (cellIndex) => this.removeFormula(cellIndex),
-        rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
-          this.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates),
         getSelectionState: () => this.getSelectionState(),
         setSelection: (sheetName, address) => this.setSelection(sheetName, address),
-        applyDerivedOp: (op) => this.applyDerivedOp(op),
-        scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
         ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
         collectFormulaDependentsForEntityInto: (entityId) =>
           this.collectFormulaDependentsForEntityInto(entityId),
@@ -353,11 +339,7 @@ export class SpreadsheetEngine {
           reverseTableEdges: this.reverseTableEdges,
           reverseSpillEdges: this.reverseSpillEdges,
         },
-        ensureCellTracked: (sheetName, address) => this.ensureCellTracked(sheetName, address),
-        ensureCellTrackedByCoords: (sheetId, row, col) =>
-          this.ensureCellTrackedByCoords(sheetId, row, col),
         forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
-        markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
         getDependencyBuildEpoch: () => this.dependencyBuildEpoch,
         setDependencyBuildEpoch: (next) => {
           this.dependencyBuildEpoch = next;
@@ -390,7 +372,6 @@ export class SpreadsheetEngine {
         setSymbolicRangeBindings: (next) => {
           this.symbolicRangeBindings = next;
         },
-        scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
       },
       formulaGraph: {
         state: this.state,
@@ -486,33 +467,29 @@ export class SpreadsheetEngine {
       pivotState: {
         pivotOutputOwners: this.pivotOutputOwners,
       },
-      ensureCellTrackedByCoords: (sheetId, row, col) =>
-        this.ensureCellTrackedByCoords(sheetId, row, col),
       forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
-      beginMutationCollection: () => this.beginMutationCollection(),
-      markInputChanged: (cellIndex, count) => this.markInputChanged(cellIndex, count),
-      markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
-      markExplicitChanged: (cellIndex, count) => this.markExplicitChanged(cellIndex, count),
-      composeMutationRoots: (changedInputCount, formulaChangedCount) =>
-        this.composeMutationRoots(changedInputCount, formulaChangedCount),
-      composeEventChanges: (recalculated, explicitChangedCount) =>
-        this.composeEventChanges(recalculated, explicitChangedCount),
-      getChangedInputBuffer: () => this.changedInputBuffer,
-      unionChangedSets: (...sets) => this.unionChangedSets(...sets),
-      composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
-        this.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount),
-      emptyChangedSet: () => this.changedUnion.subarray(0, 0),
-      ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
-      getPendingKernelSync: () => this.pendingKernelSync,
-      getWasmBatch: () => this.wasmBatch,
-      materializeSpill: (cellIndex, arrayValue) => this.materializeSpill(cellIndex, arrayValue),
-      clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
+      recalc: {
+        state: this.state,
+        getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
+        exportSnapshot: () => this.exportSnapshot(),
+        importSnapshot: (snapshot) => this.importSnapshot(snapshot),
+        ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
+        getPendingKernelSync: () => this.pendingKernelSync,
+        getWasmBatch: () => this.wasmBatch,
+        getEntityDependents: (entityId) => this.getEntityDependents(entityId),
+      },
       getEntityDependents: (entityId) => this.getEntityDependents(entityId),
-      clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
-      clearPivotForCell: (cellIndex) => this.clearPivotForCell(cellIndex),
-      materializePivot: (pivot) => this.materializePivot(pivot),
-      scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
-      flushWasmProgramSync: () => this.flushWasmProgramSync(),
+      pivot: {
+        state: {
+          workbook: this.state.workbook,
+          strings: this.state.strings,
+          formulas: this.state.formulas,
+          ranges: this.state.ranges,
+          wasm: this.state.wasm,
+          pivotOutputOwners: this.pivotOutputOwners,
+        },
+        forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
+      },
       applyRemoteSnapshot: (snapshot) => {
         this.importSnapshot(snapshot);
       },
@@ -521,60 +498,9 @@ export class SpreadsheetEngine {
         reverseState: {
           reverseSpillEdges: this.reverseSpillEdges,
         },
-        getSelectionState: () => this.getSelectionState(),
-        setSelection: (sheetName, address) => this.setSelection(sheetName, address),
         rewriteDefinedNamesForSheetRename: (oldSheetName, newSheetName) =>
           this.rewriteDefinedNamesForSheetRename(oldSheetName, newSheetName),
-        rewriteCellFormulasForSheetRename: (oldSheetName, newSheetName, formulaChangedCount) =>
-          this.rewriteCellFormulasForSheetRename(
-            oldSheetName,
-            newSheetName,
-            formulaChangedCount,
-          ),
-        rebindDefinedNameDependents: (names, formulaChangedCount) =>
-          this.rebindDefinedNameDependents(names, formulaChangedCount),
-        rebindTableDependents: (tableNames, formulaChangedCount) =>
-          this.rebindTableDependents(tableNames, formulaChangedCount),
-        rebindFormulaCells: (candidates, formulaChangedCount) =>
-          this.rebindFormulaCells(candidates, formulaChangedCount),
-        rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
-          this.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates),
-        removeSheetRuntime: (sheetName, explicitChangedCount) =>
-          this.removeSheetRuntime(sheetName, explicitChangedCount),
-        applyStructuralAxisOp: (op) => this.applyStructuralAxisOp(op),
-        clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
-        clearPivotForCell: (cellIndex) => this.clearPivotForCell(cellIndex),
-        clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
-        removeFormula: (cellIndex) => this.removeFormula(cellIndex),
-        bindFormula: (cellIndex, ownerSheetName, source) =>
-          this.bindFormula(cellIndex, ownerSheetName, source),
-        setInvalidFormulaValue: (cellIndex) => this.setInvalidFormulaValue(cellIndex),
-        beginMutationCollection: () => this.beginMutationCollection(),
-        markInputChanged: (cellIndex, count) => this.markInputChanged(cellIndex, count),
-        markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
-        markVolatileFormulasChanged: (count) => this.markVolatileFormulasChanged(count),
-        markSpillRootsChanged: (cellIndices, count) =>
-          this.markSpillRootsChanged(cellIndices, count),
-        markPivotRootsChanged: (cellIndices, count) =>
-          this.markPivotRootsChanged(cellIndices, count),
-        markExplicitChanged: (cellIndex, count) => this.markExplicitChanged(cellIndex, count),
-        composeMutationRoots: (changedInputCount, formulaChangedCount) =>
-          this.composeMutationRoots(changedInputCount, formulaChangedCount),
-        composeEventChanges: (recalculated, explicitChangedCount) =>
-          this.composeEventChanges(recalculated, explicitChangedCount),
-        getChangedInputBuffer: () => this.changedInputBuffer,
-        ensureCellTracked: (sheetName, address) => this.ensureCellTracked(sheetName, address),
         estimatePotentialNewCells: (ops) => this.estimatePotentialNewCells(ops),
-        resetMaterializedCellScratch: (expectedSize) =>
-          this.resetMaterializedCellScratch(expectedSize),
-        syncDynamicRanges: (formulaChangedCount) => this.syncDynamicRanges(formulaChangedCount),
-        rebuildTopoRanks: () => this.rebuildTopoRanks(),
-        detectCycles: () => this.detectCycles(),
-        recalculate: (changedRoots, kernelSyncRoots) =>
-          this.recalculate(changedRoots, kernelSyncRoots),
-        reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
-          this.reconcilePivotOutputs(baseChanged, forceAllPivots),
-        flushWasmProgramSync: () => this.flushWasmProgramSync(),
         getBatchMutationDepth: () => this.batchMutationDepth,
         setBatchMutationDepth: (next) => {
           this.batchMutationDepth = next;
@@ -1144,23 +1070,6 @@ export class SpreadsheetEngine {
     );
   }
 
-  private applyStructuralAxisOp(
-    op: Extract<
-      EngineOp,
-      {
-        kind:
-          | "insertRows"
-          | "deleteRows"
-          | "moveRows"
-          | "insertColumns"
-          | "deleteColumns"
-          | "moveColumns";
-      }
-    >,
-  ): { changedCellIndices: number[]; formulaCellIndices: number[] } {
-    return runEngineEffect(this.runtime.structure.applyStructuralAxisOp(op));
-  }
-
   private rewriteDefinedNamesForSheetRename(oldSheetName: string, newSheetName: string): void {
     this.workbook.listDefinedNames().forEach((record) => {
       const nextValue = renameDefinedNameValueSheet(record.value, oldSheetName, newSheetName);
@@ -1168,71 +1077,6 @@ export class SpreadsheetEngine {
         this.workbook.setDefinedName(record.name, nextValue);
       }
     });
-  }
-
-  private rewriteCellFormulasForSheetRename(
-    oldSheetName: string,
-    newSheetName: string,
-    formulaChangedCount: number,
-  ): number {
-    return runEngineEffect(
-      this.runtime.binding.rewriteCellFormulasForSheetRename(
-        oldSheetName,
-        newSheetName,
-        formulaChangedCount,
-      ),
-    );
-  }
-
-  private rebindFormulaCells(candidates: readonly number[], formulaChangedCount: number): number {
-    return runEngineEffect(this.runtime.binding.rebindFormulaCells(candidates, formulaChangedCount));
-  }
-
-  private rebindDefinedNameDependents(
-    names: readonly string[],
-    formulaChangedCount: number,
-  ): number {
-    return runEngineEffect(
-      this.runtime.binding.rebindDefinedNameDependents(names, formulaChangedCount),
-    );
-  }
-
-  private rebindTableDependents(
-    tableNames: readonly string[],
-    formulaChangedCount: number,
-  ): number {
-    return runEngineEffect(
-      this.runtime.binding.rebindTableDependents(tableNames, formulaChangedCount),
-    );
-  }
-
-  private bindFormula(cellIndex: number, ownerSheetName: string, source: string): void {
-    runEngineEffect(this.runtime.binding.bindFormula(cellIndex, ownerSheetName, source));
-  }
-
-  private reconcilePivotOutputs(baseChanged: U32, forceAllPivots = false): U32 {
-    return runEngineEffect(this.runtime.recalc.reconcilePivotOutputs(baseChanged, forceAllPivots));
-  }
-
-  private materializePivot(pivot: WorkbookPivotRecord): number[] {
-    return runEngineEffect(this.runtime.pivot.materializePivot(pivot));
-  }
-
-  private resolvePivotData(
-    sheetName: string,
-    address: string,
-    dataField: string,
-    filters: ReadonlyArray<{ field: string; item: CellValue }>,
-  ): CellValue {
-    return runEngineEffect(this.runtime.pivot.resolvePivotData(sheetName, address, dataField, filters));
-  }
-
-  private clearOwnedPivot(pivot: WorkbookPivotRecord): number[] {
-    return runEngineEffect(this.runtime.pivot.clearOwnedPivot(pivot));
-  }
-
-  private clearPivotForCell(cellIndex: number): number[] {
-    return runEngineEffect(this.runtime.pivot.clearPivotForCell(cellIndex));
   }
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {
@@ -1273,15 +1117,6 @@ export class SpreadsheetEngine {
     potentialNewCells?: number,
   ): readonly EngineOp[] | null {
     return runEngineEffect(this.runtime.mutation.executeLocal(ops, potentialNewCells));
-  }
-
-  private applyDerivedOp(
-    op: Extract<
-      EngineOp,
-      { kind: "upsertSpillRange" | "deleteSpillRange" | "upsertPivotTable" | "deletePivotTable" }
-    >,
-  ): number[] {
-    return runEngineEffect(this.runtime.operations.applyDerivedOp(op));
   }
 
   private restoreCellOps(sheetName: string, address: string): EngineOp[] {
@@ -1367,29 +1202,6 @@ export class SpreadsheetEngine {
     return translateFormulaReferences(formula, target.row - source.row, target.col - source.col);
   }
 
-  private setInvalidFormulaValue(cellIndex: number): void {
-    runEngineEffect(this.runtime.binding.invalidateFormula(cellIndex));
-  }
-
-  private removeFormula(cellIndex: number): boolean {
-    return runEngineEffect(this.runtime.binding.clearFormula(cellIndex));
-  }
-
-  private rebuildTopoRanks(): void {
-    runEngineEffect(this.runtime.graph.rebuildTopoRanks());
-  }
-
-  private detectCycles(): void {
-    runEngineEffect(this.runtime.graph.detectCycles());
-  }
-
-  private recalculate(
-    changedRoots: readonly number[] | U32,
-    kernelSyncRoots: readonly number[] | U32 = changedRoots,
-  ): Uint32Array {
-    return runEngineEffect(this.runtime.recalc.recalculate(changedRoots, kernelSyncRoots));
-  }
-
   private ensureRecalcScratchCapacity(size: number): void {
     if (size > this.mutationRoots.length) {
       this.mutationRoots = growUint32(this.mutationRoots, size);
@@ -1430,14 +1242,6 @@ export class SpreadsheetEngine {
     if (size > this.impactedFormulaBuffer.length) {
       this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
     }
-  }
-
-  private scheduleWasmProgramSync(): void {
-    runEngineEffect(this.runtime.graph.scheduleWasmProgramSync());
-  }
-
-  private flushWasmProgramSync(): void {
-    runEngineEffect(this.runtime.graph.flushWasmProgramSync());
   }
 
   private estimatePotentialNewCells(ops: readonly EngineOp[]): number {
@@ -1517,94 +1321,6 @@ export class SpreadsheetEngine {
     }
   }
 
-  private removeSheetRuntime(
-    sheetName: string,
-    explicitChangedCount: number,
-  ): { changedInputCount: number; formulaChangedCount: number; explicitChangedCount: number } {
-    return runEngineEffect(this.runtime.support.removeSheetRuntime(sheetName, explicitChangedCount));
-  }
-
-  private rebindFormulasForSheet(
-    sheetName: string,
-    formulaChangedCount: number,
-    candidates?: readonly number[] | U32,
-  ): number {
-    return runEngineEffect(
-      this.runtime.binding.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates),
-    );
-  }
-
-  private beginMutationCollection(): void {
-    runEngineEffect(this.runtime.support.beginMutationCollection());
-  }
-
-  private markInputChanged(cellIndex: number, count: number): number {
-    return runEngineEffect(this.runtime.support.markInputChanged(cellIndex, count));
-  }
-
-  private markFormulaChanged(cellIndex: number, count: number): number {
-    return runEngineEffect(this.runtime.support.markFormulaChanged(cellIndex, count));
-  }
-
-  private markVolatileFormulasChanged(count: number): number {
-    return runEngineEffect(this.runtime.support.markVolatileFormulasChanged(count));
-  }
-
-  private markSpillRootsChanged(cellIndices: readonly number[], count: number): number {
-    return runEngineEffect(this.runtime.support.markSpillRootsChanged(cellIndices, count));
-  }
-
-  private markPivotRootsChanged(cellIndices: readonly number[], count: number): number {
-    return runEngineEffect(this.runtime.support.markPivotRootsChanged(cellIndices, count));
-  }
-
-  private markExplicitChanged(cellIndex: number, count: number): number {
-    return runEngineEffect(this.runtime.support.markExplicitChanged(cellIndex, count));
-  }
-
-  private composeMutationRoots(changedInputCount: number, formulaChangedCount: number): U32 {
-    return runEngineEffect(
-      this.runtime.support.composeMutationRoots(changedInputCount, formulaChangedCount),
-    );
-  }
-
-  private composeEventChanges(recalculated: U32, explicitChangedCount: number): U32 {
-    return runEngineEffect(this.runtime.support.composeEventChanges(recalculated, explicitChangedCount));
-  }
-
-  private unionChangedSets(...sets: Array<readonly number[] | U32>): U32 {
-    return runEngineEffect(this.runtime.support.unionChangedSets(...sets));
-  }
-
-  private composeChangedRootsAndOrdered(
-    changedRoots: readonly number[] | U32,
-    ordered: U32,
-    orderedCount: number,
-  ): U32 {
-    return runEngineEffect(
-      this.runtime.support.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount),
-    );
-  }
-
-  private ensureCellTracked(sheetName: string, address: string): number {
-    return runEngineEffect(this.runtime.support.ensureCellTracked(sheetName, address));
-  }
-
-  private ensureCellTrackedByCoords(sheetId: number, row: number, col: number): number {
-    return runEngineEffect(this.runtime.support.ensureCellTrackedByCoords(sheetId, row, col));
-  }
-
-  private clearOwnedSpill(cellIndex: number): number[] {
-    return runEngineEffect(this.runtime.support.clearOwnedSpill(cellIndex));
-  }
-
-  private materializeSpill(
-    cellIndex: number,
-    arrayValue: { values: CellValue[]; rows: number; cols: number },
-  ): SpillMaterialization {
-    return runEngineEffect(this.runtime.support.materializeSpill(cellIndex, arrayValue));
-  }
-
   private forEachSheetCell(
     sheetId: number,
     fn: (cellIndex: number, row: number, col: number) => void,
@@ -1616,10 +1332,6 @@ export class SpreadsheetEngine {
     sheet.grid.forEachCellEntry((cellIndex, row, col) => {
       fn(cellIndex, row, col);
     });
-  }
-
-  private syncDynamicRanges(formulaChangedCount: number): number {
-    return runEngineEffect(this.runtime.support.syncDynamicRanges(formulaChangedCount));
   }
 
   private resetWorkbook(workbookName = "Workbook"): void {
@@ -1658,11 +1370,7 @@ export class SpreadsheetEngine {
     };
     this.wasmProgramSyncPending = false;
     this.materializedCellCount = 0;
-    this.scheduleWasmProgramSync();
-  }
-
-  private resetMaterializedCellScratch(expectedSize: number): void {
-    runEngineEffect(this.runtime.support.resetMaterializedCellScratch(expectedSize));
+    runEngineEffect(this.runtime.graph.scheduleWasmProgramSync());
   }
 }
 
