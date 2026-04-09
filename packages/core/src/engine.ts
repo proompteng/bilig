@@ -477,6 +477,9 @@ export class SpreadsheetEngine {
         getPendingKernelSync: () => this.pendingKernelSync,
         getWasmBatch: () => this.wasmBatch,
         getEntityDependents: (entityId) => this.getEntityDependents(entityId),
+        now: () => new Date(),
+        random: () => Math.random(),
+        performanceNow: () => performance.now(),
       },
       getEntityDependents: (entityId) => this.getEntityDependents(entityId),
       pivot: {

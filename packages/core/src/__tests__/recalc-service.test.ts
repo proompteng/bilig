@@ -1,6 +1,7 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FormulaMode, ValueTag } from "@bilig/protocol";
+import { utcDateToExcelSerial } from "@bilig/formula";
 import { SpreadsheetEngine } from "../engine.js";
 import type { EngineRecalcService } from "../engine/services/recalc-service.js";
 import type { RuntimeFormula } from "../engine/runtime-state.js";
@@ -92,5 +93,34 @@ describe("EngineRecalcService", () => {
 
     expect(changed).toContain(b1Index);
     expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 50 });
+  });
+
+  it("recalculates volatile formulas from the current clock and random inputs", async () => {
+    vi.useFakeTimers();
+    const randomSpy = vi.spyOn(Math, "random");
+    vi.setSystemTime(new Date("2026-02-03T00:00:00Z"));
+    randomSpy.mockReturnValue(0.125);
+
+    const engine = new SpreadsheetEngine({ workbookName: "recalc-volatile" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellFormula("Sheet1", "A1", "TODAY()");
+    engine.setCellFormula("Sheet1", "B1", "RAND()");
+
+    vi.setSystemTime(new Date("2026-02-04T00:00:00Z"));
+    randomSpy.mockReturnValue(0.75);
+
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow());
+
+    expect(changed).toContain(engine.workbook.getCellIndex("Sheet1", "A1"));
+    expect(changed).toContain(engine.workbook.getCellIndex("Sheet1", "B1"));
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({
+      tag: ValueTag.Number,
+      value: utcDateToExcelSerial(new Date("2026-02-04T00:00:00Z")),
+    });
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({
+      tag: ValueTag.Number,
+      value: 0.75,
+    });
   });
 });

@@ -34,26 +34,34 @@ export interface EngineRecalcService {
   ) => Effect.Effect<U32, EngineRecalcError>;
 }
 
-function createRecalcVolatileState(): RecalcVolatileState {
+function createRecalcVolatileState(now: () => Date): RecalcVolatileState {
   return {
-    nowSerial: utcDateToExcelSerial(new Date()),
+    nowSerial: utcDateToExcelSerial(now()),
     randomValues: [],
     randomCursor: 0,
   };
 }
 
-function ensureVolatileRandomValues(state: RecalcVolatileState, count: number): void {
+function ensureVolatileRandomValues(
+  state: RecalcVolatileState,
+  count: number,
+  random: () => number,
+): void {
   const needed = state.randomCursor + count - state.randomValues.length;
   if (needed <= 0) {
     return;
   }
   for (let index = 0; index < needed; index += 1) {
-    state.randomValues.push(Math.random());
+    state.randomValues.push(random());
   }
 }
 
-function consumeVolatileRandomValues(state: RecalcVolatileState, count: number): Float64Array {
-  ensureVolatileRandomValues(state, count);
+function consumeVolatileRandomValues(
+  state: RecalcVolatileState,
+  count: number,
+  random: () => number,
+): Float64Array {
+  ensureVolatileRandomValues(state, count, random);
   const values = state.randomValues.slice(state.randomCursor, state.randomCursor + count);
   state.randomCursor += count;
   return Float64Array.from(values);
@@ -92,6 +100,9 @@ export function createEngineRecalcService(args: {
   readonly getPendingKernelSync: () => U32;
   readonly getWasmBatch: () => U32;
   readonly getChangedInputBuffer: () => U32;
+  readonly now: () => Date;
+  readonly random: () => number;
+  readonly performanceNow: () => number;
   readonly materializeSpill: (
     cellIndex: number,
     arrayValue: { values: import("@bilig/protocol").CellValue[]; rows: number; cols: number },
@@ -162,7 +173,7 @@ export function createEngineRecalcService(args: {
     changedRoots: readonly number[] | U32,
     kernelSyncRoots: readonly number[] | U32 = changedRoots,
   ): U32 => {
-    const started = performance.now();
+    const started = args.performanceNow();
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1);
     let pendingKernelSync = args.getPendingKernelSync();
     let wasmBatch = args.getWasmBatch();
@@ -181,7 +192,7 @@ export function createEngineRecalcService(args: {
     let wasmCount = 0;
     let jsCount = 0;
     let pendingKernelSyncCount = 0;
-    const volatileState = createRecalcVolatileState();
+    const volatileState = createRecalcVolatileState(args.now);
 
     const flushWasmBatch = (batchCount: number, hasVolatile: boolean, randCount: number): number => {
       if (batchCount === 0) {
@@ -195,7 +206,7 @@ export function createEngineRecalcService(args: {
       if (hasVolatile) {
         args.state.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
         args.state.wasm.uploadVolatileRandomValues(
-          consumeVolatileRandomValues(volatileState, randCount),
+          consumeVolatileRandomValues(volatileState, randCount, args.random),
         );
       }
       const batchIndices = wasmBatch.subarray(0, batchCount);
@@ -269,7 +280,11 @@ export function createEngineRecalcService(args: {
         if (formula.compiled.volatile) {
           args.state.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
           args.state.wasm.uploadVolatileRandomValues(
-            consumeVolatileRandomValues(volatileState, formula.compiled.randCallCount),
+            consumeVolatileRandomValues(
+              volatileState,
+              formula.compiled.randCallCount,
+              args.random,
+            ),
           );
         }
         const batchIndices = Uint32Array.of(cellIndex);
@@ -368,7 +383,7 @@ export function createEngineRecalcService(args: {
     lastMetrics.jsFormulaCount = jsCount;
     lastMetrics.wasmFormulaCount = wasmCount;
     lastMetrics.rangeNodeVisits = totalRangeNodeVisits;
-    lastMetrics.recalcMs = performance.now() - started;
+    lastMetrics.recalcMs = args.performanceNow() - started;
     args.state.setLastMetrics(lastMetrics);
     if (singlePassOrdered !== null) {
       return totalOrderedCount === 0 && allChangedRoots.length === 0
