@@ -105,7 +105,7 @@ import {
   type WorkbookTableRecord,
   type WorkbookVolatileContextRecord,
 } from "./workbook-store.js";
-import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
+import { cellToCsvValue, serializeCsv } from "./csv.js";
 import {
   createEngineRuntimeState,
   createInitialRecalcMetrics,
@@ -280,6 +280,7 @@ export class SpreadsheetEngine {
       captureColumnRangeCellState: (sheetName, start, count) =>
         this.captureColumnRangeCellState(sheetName, start, count),
       restoreCellOps: (sheetName, address) => this.restoreCellOps(sheetName, address),
+      readRangeCells: (range) => this.readRangeCells(range),
       toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
         this.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
       forEachFormulaDependencyCell: (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
@@ -796,199 +797,31 @@ export class SpreadsheetEngine {
   }
 
   setRangeValues(range: CellRangeRef, values: readonly (readonly LiteralInput[])[]): void {
-    const bounds = normalizeRange(range);
-    const expectedHeight = bounds.endRow - bounds.startRow + 1;
-    const expectedWidth = bounds.endCol - bounds.startCol + 1;
-    if (values.length !== expectedHeight || values.some((row) => row.length !== expectedWidth)) {
-      throw new Error(
-        "setRangeValues requires a value matrix that exactly matches the target range",
-      );
-    }
-
-    const opCount = expectedHeight * expectedWidth;
-    const ops = Array.from<EngineOp>({ length: opCount });
-    let opIndex = 0;
-    for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
-        ops[opIndex] = {
-          kind: "setCellValue",
-          sheetName: range.sheetName,
-          address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
-          value: values[rowOffset]![colOffset] ?? null,
-        };
-        opIndex += 1;
-      }
-    }
-    this.executeLocalTransaction(ops, opCount);
+    runEngineEffect(this.runtime.mutation.setRangeValues(range, values));
   }
 
   setRangeFormulas(range: CellRangeRef, formulas: readonly (readonly string[])[]): void {
-    const bounds = normalizeRange(range);
-    const expectedHeight = bounds.endRow - bounds.startRow + 1;
-    const expectedWidth = bounds.endCol - bounds.startCol + 1;
-    if (
-      formulas.length !== expectedHeight ||
-      formulas.some((row) => row.length !== expectedWidth)
-    ) {
-      throw new Error(
-        "setRangeFormulas requires a formula matrix that exactly matches the target range",
-      );
-    }
-
-    const opCount = expectedHeight * expectedWidth;
-    const ops = Array.from<EngineOp>({ length: opCount });
-    let opIndex = 0;
-    for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
-        ops[opIndex] = {
-          kind: "setCellFormula",
-          sheetName: range.sheetName,
-          address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
-          formula: formulas[rowOffset]![colOffset] ?? "",
-        };
-        opIndex += 1;
-      }
-    }
-    this.executeLocalTransaction(ops, opCount);
+    runEngineEffect(this.runtime.mutation.setRangeFormulas(range, formulas));
   }
 
   clearRange(range: CellRangeRef): void {
-    const bounds = normalizeRange(range);
-    const opCount = (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
-    const ops = Array.from<EngineOp>({ length: opCount });
-    let opIndex = 0;
-    for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
-      for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
-        ops[opIndex] = {
-          kind: "clearCell",
-          sheetName: range.sheetName,
-          address: formatAddress(row, col),
-        };
-        opIndex += 1;
-      }
-    }
-    this.executeLocalTransaction(ops, opCount);
+    runEngineEffect(this.runtime.mutation.clearRange(range));
   }
 
   fillRange(source: CellRangeRef, target: CellRangeRef): void {
-    const sourceMatrix = this.readRangeCells(source);
-    const targetBounds = normalizeRange(target);
-    const sourceBounds = normalizeRange(source);
-    const sourceHeight = sourceMatrix.length;
-    const sourceWidth = sourceMatrix[0]?.length ?? 0;
-    if (sourceHeight === 0 || sourceWidth === 0) {
-      return;
-    }
-
-    const ops: EngineOp[] = [];
-    for (let row = targetBounds.startRow; row <= targetBounds.endRow; row += 1) {
-      for (let col = targetBounds.startCol; col <= targetBounds.endCol; col += 1) {
-        const sourceRowOffset = (row - targetBounds.startRow) % sourceHeight;
-        const sourceColOffset = (col - targetBounds.startCol) % sourceWidth;
-        const sourceCell = sourceMatrix[sourceRowOffset]![sourceColOffset]!;
-        const sourceAddress = formatAddress(
-          sourceBounds.startRow + sourceRowOffset,
-          sourceBounds.startCol + sourceColOffset,
-        );
-        ops.push(
-          ...this.toCellStateOps(
-            target.sheetName,
-            formatAddress(row, col),
-            sourceCell,
-            source.sheetName,
-            sourceAddress,
-          ),
-        );
-      }
-    }
-    this.executeLocalTransaction(ops, ops.length);
+    runEngineEffect(this.runtime.mutation.fillRange(source, target));
   }
 
   copyRange(source: CellRangeRef, target: CellRangeRef): void {
-    const sourceMatrix = this.readRangeCells(source);
-    const targetBounds = normalizeRange(target);
-    const sourceBounds = normalizeRange(source);
-    const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1;
-    const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1;
-    const targetHeight = targetBounds.endRow - targetBounds.startRow + 1;
-    const targetWidth = targetBounds.endCol - targetBounds.startCol + 1;
-    if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
-      throw new Error("copyRange requires source and target dimensions to match exactly");
-    }
-
-    const ops: EngineOp[] = [];
-    for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
-        const nextAddress = formatAddress(
-          targetBounds.startRow + rowOffset,
-          targetBounds.startCol + colOffset,
-        );
-        const sourceAddress = formatAddress(
-          sourceBounds.startRow + rowOffset,
-          sourceBounds.startCol + colOffset,
-        );
-        ops.push(
-          ...this.toCellStateOps(
-            target.sheetName,
-            nextAddress,
-            sourceMatrix[rowOffset]![colOffset]!,
-            source.sheetName,
-            sourceAddress,
-          ),
-        );
-      }
-    }
-    this.executeLocalTransaction(ops, ops.length);
+    runEngineEffect(this.runtime.mutation.copyRange(source, target));
   }
 
   moveRange(source: CellRangeRef, target: CellRangeRef): void {
-    const sourceMatrix = this.readRangeCells(source);
-    const targetBounds = normalizeRange(target);
-    const sourceBounds = normalizeRange(source);
-    const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1;
-    const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1;
-    const targetHeight = targetBounds.endRow - targetBounds.startRow + 1;
-    const targetWidth = targetBounds.endCol - targetBounds.startCol + 1;
-    if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
-      throw new Error("moveRange requires source and target dimensions to match exactly");
-    }
-
-    const ops: EngineOp[] = [];
-    for (let row = sourceBounds.startRow; row <= sourceBounds.endRow; row += 1) {
-      for (let col = sourceBounds.startCol; col <= sourceBounds.endCol; col += 1) {
-        ops.push({
-          kind: "clearCell",
-          sheetName: source.sheetName,
-          address: formatAddress(row, col),
-        });
-      }
-    }
-    for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
-      for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
-        const nextAddress = formatAddress(
-          targetBounds.startRow + rowOffset,
-          targetBounds.startCol + colOffset,
-        );
-        const sourceAddress = formatAddress(
-          sourceBounds.startRow + rowOffset,
-          sourceBounds.startCol + colOffset,
-        );
-        ops.push(
-          ...this.toCellStateOps(
-            target.sheetName,
-            nextAddress,
-            sourceMatrix[rowOffset]![colOffset]!,
-            source.sheetName,
-            sourceAddress,
-          ),
-        );
-      }
-    }
-    this.executeLocalTransaction(ops, ops.length);
+    runEngineEffect(this.runtime.mutation.moveRange(source, target));
   }
 
   pasteRange(source: CellRangeRef, target: CellRangeRef): void {
-    this.copyRange(source, target);
+    runEngineEffect(this.runtime.mutation.copyRange(source, target));
   }
 
   undo(): boolean {
@@ -1004,35 +837,7 @@ export class SpreadsheetEngine {
   }
 
   importSheetCsv(sheetName: string, csv: string): void {
-    const rows = parseCsv(csv);
-    const existingSheet = this.workbook.getSheet(sheetName);
-    const order = existingSheet?.order ?? this.workbook.sheetsByName.size;
-    const ops: EngineOp[] = [];
-    let potentialNewCells = 0;
-
-    if (existingSheet) {
-      ops.push({ kind: "deleteSheet", name: sheetName });
-    }
-    ops.push({ kind: "upsertSheet", name: sheetName, order });
-
-    rows.forEach((row, rowIndex) => {
-      row.forEach((raw, colIndex) => {
-        const parsed = parseCsvCellInput(raw);
-        if (!parsed) {
-          return;
-        }
-        const address = formatAddress(rowIndex, colIndex);
-        if (parsed.formula !== undefined) {
-          ops.push({ kind: "setCellFormula", sheetName, address, formula: parsed.formula });
-          potentialNewCells += 1;
-          return;
-        }
-        ops.push({ kind: "setCellValue", sheetName, address, value: parsed.value ?? null });
-        potentialNewCells += 1;
-      });
-    });
-
-    this.executeLocalTransaction(ops, potentialNewCells);
+    runEngineEffect(this.runtime.mutation.importSheetCsv(sheetName, csv));
   }
 
   getCellValue(sheetName: string, address: string): CellValue {

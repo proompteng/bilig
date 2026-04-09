@@ -1,12 +1,20 @@
 import { Effect } from "effect";
+import { formatAddress } from "@bilig/formula";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
+import type { CellRangeRef, CellSnapshot, LiteralInput } from "@bilig/protocol";
+import { normalizeRange } from "../../engine-range-utils.js";
 import { cloneCellStyleRecord } from "../../engine-style-utils.js";
 import { restoreFormatRangeOps, restoreStyleRangeOps } from "../../engine-range-format-ops.js";
 import { sheetMetadataToOps } from "../../engine-snapshot-utils.js";
+import { parseCsv, parseCsvCellInput } from "../../csv.js";
 import { createBatch } from "../../replica-state.js";
 import type { WorkbookStore } from "../../workbook-store.js";
 import type { CommitOp, EngineRuntimeState, TransactionRecord } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
+
+function mutationErrorMessage(message: string, cause: unknown): string {
+  return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
+}
 
 export interface EngineMutationService {
   readonly executeTransaction: (
@@ -33,6 +41,31 @@ export interface EngineMutationService {
     },
     EngineMutationError
   >;
+  readonly setRangeValues: (
+    range: CellRangeRef,
+    values: readonly (readonly LiteralInput[])[],
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly setRangeFormulas: (
+    range: CellRangeRef,
+    formulas: readonly (readonly string[])[],
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly clearRange: (range: CellRangeRef) => Effect.Effect<void, EngineMutationError>;
+  readonly fillRange: (
+    source: CellRangeRef,
+    target: CellRangeRef,
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly copyRange: (
+    source: CellRangeRef,
+    target: CellRangeRef,
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly moveRange: (
+    source: CellRangeRef,
+    target: CellRangeRef,
+  ) => Effect.Effect<void, EngineMutationError>;
+  readonly importSheetCsv: (
+    sheetName: string,
+    csv: string,
+  ) => Effect.Effect<void, EngineMutationError>;
   readonly renderCommit: (ops: CommitOp[]) => Effect.Effect<void, EngineMutationError>;
 }
 
@@ -55,6 +88,14 @@ export function createEngineMutationService(args: {
     count: number,
   ) => EngineOp[];
   readonly restoreCellOps: (sheetName: string, address: string) => EngineOp[];
+  readonly readRangeCells: (range: CellRangeRef) => CellSnapshot[][];
+  readonly toCellStateOps: (
+    sheetName: string,
+    address: string,
+    snapshot: CellSnapshot,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ) => EngineOp[];
   readonly applyBatchNow: (
     batch: EngineOpBatch,
     source: "local" | "restore" | "history",
@@ -564,6 +605,287 @@ export function createEngineMutationService(args: {
         catch: (cause) =>
           new EngineMutationError({
             message: "Failed to capture undo ops",
+            cause,
+          }),
+      });
+    },
+    setRangeValues(range, values) {
+      return Effect.try({
+        try: () => {
+          const bounds = normalizeRange(range);
+          const expectedHeight = bounds.endRow - bounds.startRow + 1;
+          const expectedWidth = bounds.endCol - bounds.startCol + 1;
+          if (values.length !== expectedHeight || values.some((row) => row.length !== expectedWidth)) {
+            throw new Error(
+              "setRangeValues requires a value matrix that exactly matches the target range",
+            );
+          }
+
+          const opCount = expectedHeight * expectedWidth;
+          const ops = Array.from<EngineOp>({ length: opCount });
+          let opIndex = 0;
+          for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
+            for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
+              ops[opIndex] = {
+                kind: "setCellValue",
+                sheetName: range.sheetName,
+                address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
+                value: values[rowOffset]![colOffset] ?? null,
+              };
+              opIndex += 1;
+            }
+          }
+          Effect.runSync(this.executeLocal(ops, opCount));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to set range values", cause),
+            cause,
+          }),
+      });
+    },
+    setRangeFormulas(range, formulas) {
+      return Effect.try({
+        try: () => {
+          const bounds = normalizeRange(range);
+          const expectedHeight = bounds.endRow - bounds.startRow + 1;
+          const expectedWidth = bounds.endCol - bounds.startCol + 1;
+          if (
+            formulas.length !== expectedHeight ||
+            formulas.some((row) => row.length !== expectedWidth)
+          ) {
+            throw new Error(
+              "setRangeFormulas requires a formula matrix that exactly matches the target range",
+            );
+          }
+
+          const opCount = expectedHeight * expectedWidth;
+          const ops = Array.from<EngineOp>({ length: opCount });
+          let opIndex = 0;
+          for (let rowOffset = 0; rowOffset < expectedHeight; rowOffset += 1) {
+            for (let colOffset = 0; colOffset < expectedWidth; colOffset += 1) {
+              ops[opIndex] = {
+                kind: "setCellFormula",
+                sheetName: range.sheetName,
+                address: formatAddress(bounds.startRow + rowOffset, bounds.startCol + colOffset),
+                formula: formulas[rowOffset]![colOffset] ?? "",
+              };
+              opIndex += 1;
+            }
+          }
+          Effect.runSync(this.executeLocal(ops, opCount));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to set range formulas", cause),
+            cause,
+          }),
+      });
+    },
+    clearRange(range) {
+      return Effect.try({
+        try: () => {
+          const bounds = normalizeRange(range);
+          const opCount =
+            (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+          const ops = Array.from<EngineOp>({ length: opCount });
+          let opIndex = 0;
+          for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
+            for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
+              ops[opIndex] = {
+                kind: "clearCell",
+                sheetName: range.sheetName,
+                address: formatAddress(row, col),
+              };
+              opIndex += 1;
+            }
+          }
+          Effect.runSync(this.executeLocal(ops, opCount));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to clear range", cause),
+            cause,
+          }),
+      });
+    },
+    fillRange(source, target) {
+      return Effect.try({
+        try: () => {
+          const sourceMatrix = args.readRangeCells(source);
+          const targetBounds = normalizeRange(target);
+          const sourceBounds = normalizeRange(source);
+          const sourceHeight = sourceMatrix.length;
+          const sourceWidth = sourceMatrix[0]?.length ?? 0;
+          if (sourceHeight === 0 || sourceWidth === 0) {
+            return;
+          }
+
+          const ops: EngineOp[] = [];
+          for (let row = targetBounds.startRow; row <= targetBounds.endRow; row += 1) {
+            for (let col = targetBounds.startCol; col <= targetBounds.endCol; col += 1) {
+              const sourceRowOffset = (row - targetBounds.startRow) % sourceHeight;
+              const sourceColOffset = (col - targetBounds.startCol) % sourceWidth;
+              const sourceCell = sourceMatrix[sourceRowOffset]![sourceColOffset]!;
+              const sourceAddress = formatAddress(
+                sourceBounds.startRow + sourceRowOffset,
+                sourceBounds.startCol + sourceColOffset,
+              );
+              ops.push(
+                ...args.toCellStateOps(
+                  target.sheetName,
+                  formatAddress(row, col),
+                  sourceCell,
+                  source.sheetName,
+                  sourceAddress,
+                ),
+              );
+            }
+          }
+          Effect.runSync(this.executeLocal(ops, ops.length));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to fill range", cause),
+            cause,
+          }),
+      });
+    },
+    copyRange(source, target) {
+      return Effect.try({
+        try: () => {
+          const sourceMatrix = args.readRangeCells(source);
+          const targetBounds = normalizeRange(target);
+          const sourceBounds = normalizeRange(source);
+          const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1;
+          const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1;
+          const targetHeight = targetBounds.endRow - targetBounds.startRow + 1;
+          const targetWidth = targetBounds.endCol - targetBounds.startCol + 1;
+          if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
+            throw new Error("copyRange requires source and target dimensions to match exactly");
+          }
+
+          const ops: EngineOp[] = [];
+          for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
+            for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
+              const nextAddress = formatAddress(
+                targetBounds.startRow + rowOffset,
+                targetBounds.startCol + colOffset,
+              );
+              const sourceAddress = formatAddress(
+                sourceBounds.startRow + rowOffset,
+                sourceBounds.startCol + colOffset,
+              );
+              ops.push(
+                ...args.toCellStateOps(
+                  target.sheetName,
+                  nextAddress,
+                  sourceMatrix[rowOffset]![colOffset]!,
+                  source.sheetName,
+                  sourceAddress,
+                ),
+              );
+            }
+          }
+          Effect.runSync(this.executeLocal(ops, ops.length));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to copy range", cause),
+            cause,
+          }),
+      });
+    },
+    moveRange(source, target) {
+      return Effect.try({
+        try: () => {
+          const sourceMatrix = args.readRangeCells(source);
+          const targetBounds = normalizeRange(target);
+          const sourceBounds = normalizeRange(source);
+          const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1;
+          const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1;
+          const targetHeight = targetBounds.endRow - targetBounds.startRow + 1;
+          const targetWidth = targetBounds.endCol - targetBounds.startCol + 1;
+          if (sourceHeight !== targetHeight || sourceWidth !== targetWidth) {
+            throw new Error("moveRange requires source and target dimensions to match exactly");
+          }
+
+          const ops: EngineOp[] = [];
+          for (let row = sourceBounds.startRow; row <= sourceBounds.endRow; row += 1) {
+            for (let col = sourceBounds.startCol; col <= sourceBounds.endCol; col += 1) {
+              ops.push({
+                kind: "clearCell",
+                sheetName: source.sheetName,
+                address: formatAddress(row, col),
+              });
+            }
+          }
+          for (let rowOffset = 0; rowOffset < targetHeight; rowOffset += 1) {
+            for (let colOffset = 0; colOffset < targetWidth; colOffset += 1) {
+              const nextAddress = formatAddress(
+                targetBounds.startRow + rowOffset,
+                targetBounds.startCol + colOffset,
+              );
+              const sourceAddress = formatAddress(
+                sourceBounds.startRow + rowOffset,
+                sourceBounds.startCol + colOffset,
+              );
+              ops.push(
+                ...args.toCellStateOps(
+                  target.sheetName,
+                  nextAddress,
+                  sourceMatrix[rowOffset]![colOffset]!,
+                  source.sheetName,
+                  sourceAddress,
+                ),
+              );
+            }
+          }
+          Effect.runSync(this.executeLocal(ops, ops.length));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to move range", cause),
+            cause,
+          }),
+      });
+    },
+    importSheetCsv(sheetName, csv) {
+      return Effect.try({
+        try: () => {
+          const rows = parseCsv(csv);
+          const existingSheet = args.state.workbook.getSheet(sheetName);
+          const order = existingSheet?.order ?? args.state.workbook.sheetsByName.size;
+          const ops: EngineOp[] = [];
+          let potentialNewCells = 0;
+
+          if (existingSheet) {
+            ops.push({ kind: "deleteSheet", name: sheetName });
+          }
+          ops.push({ kind: "upsertSheet", name: sheetName, order });
+
+          rows.forEach((row, rowIndex) => {
+            row.forEach((raw, colIndex) => {
+              const parsed = parseCsvCellInput(raw);
+              if (!parsed) {
+                return;
+              }
+              const address = formatAddress(rowIndex, colIndex);
+              if (parsed.formula !== undefined) {
+                ops.push({ kind: "setCellFormula", sheetName, address, formula: parsed.formula });
+                potentialNewCells += 1;
+                return;
+              }
+              ops.push({ kind: "setCellValue", sheetName, address, value: parsed.value ?? null });
+              potentialNewCells += 1;
+            });
+          });
+
+          Effect.runSync(this.executeLocal(ops, potentialNewCells));
+        },
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage("Failed to import sheet CSV", cause),
             cause,
           }),
       });

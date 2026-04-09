@@ -80,6 +80,9 @@ export function createEngineServiceRuntime(args: {
     sheetName: string,
     address: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
+  readonly readRangeCells: (
+    range: import("@bilig/protocol").CellRangeRef,
+  ) => CellSnapshot[][];
   readonly toCellStateOps: (
     sheetName: string,
     address: string,
@@ -224,6 +227,8 @@ export function createEngineServiceRuntime(args: {
       captureRowRangeCellState: args.captureRowRangeCellState,
       captureColumnRangeCellState: args.captureColumnRangeCellState,
       restoreCellOps: args.restoreCellOps,
+      readRangeCells: args.readRangeCells,
+      toCellStateOps: args.toCellStateOps,
       applyBatchNow: args.applyBatchNow,
     }),
     pivot: createEnginePivotService({

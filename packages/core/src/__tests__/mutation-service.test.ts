@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
+import { ValueTag } from "@bilig/protocol";
 import { createReplicaState } from "../replica-state.js";
 import { SpreadsheetEngine } from "../engine.js";
 import { createEngineMutationService } from "../engine/services/mutation-service.js";
@@ -13,6 +14,8 @@ function isEngineMutationService(value: unknown): value is EngineMutationService
   return (
     typeof Reflect.get(value, "executeLocal") === "function" &&
     typeof Reflect.get(value, "captureUndoOps") === "function" &&
+    typeof Reflect.get(value, "copyRange") === "function" &&
+    typeof Reflect.get(value, "importSheetCsv") === "function" &&
     typeof Reflect.get(value, "renderCommit") === "function"
   );
 }
@@ -242,5 +245,44 @@ describe("EngineMutationService", () => {
       address: "B2",
       formula: "A2*3",
     });
+  });
+
+  it("copies ranges through the service and rewrites relative formulas", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "copy-range-service" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 5);
+    engine.setCellValue("Sheet1", "A2", 9);
+    engine.setCellFormula("Sheet1", "B1", "A1*2");
+
+    Effect.runSync(
+      getMutationService(engine).copyRange(
+        { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+        { sheetName: "Sheet1", startAddress: "B2", endAddress: "B2" },
+      ),
+    );
+
+    expect(engine.getCell("Sheet1", "B2").formula).toBe("A2*2");
+    expect(engine.getCellValue("Sheet1", "B2")).toEqual({ tag: ValueTag.Number, value: 18 });
+  });
+
+  it("imports csv through the service and replaces prior sheet contents", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "csv-import-service" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 1);
+    engine.setCellValue("Sheet1", "C3", 99);
+
+    Effect.runSync(getMutationService(engine).importSheetCsv("Sheet1", '7,=A1*2\n"alpha,beta",'));
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Number, value: 7 });
+    expect(engine.getCell("Sheet1", "B1").formula).toBe("A1*2");
+    expect(engine.getCellValue("Sheet1", "B1")).toEqual({ tag: ValueTag.Number, value: 14 });
+    expect(engine.getCell("Sheet1", "A2").value).toEqual({
+      tag: ValueTag.String,
+      value: "alpha,beta",
+      stringId: 1,
+    });
+    expect(engine.getCellValue("Sheet1", "C3")).toEqual({ tag: ValueTag.Empty });
   });
 });
