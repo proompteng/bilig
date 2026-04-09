@@ -7,6 +7,7 @@ import {
   type CellRangeRef,
   type CellSnapshot,
   type LiteralInput,
+  type WorkbookDefinedNameSnapshot,
 } from "@bilig/protocol";
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from "./workbook-sync.js";
 
@@ -200,10 +201,26 @@ export function clampSelectionMovement(
 export function parseSelectionTarget(
   input: string,
   fallbackSheet: string,
+  definedNames?: readonly WorkbookDefinedNameSnapshot[],
 ): { sheetName: string; address: string } | null {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
     return null;
+  }
+
+  const matchingDefinedName = definedNames?.find(
+    (entry) => entry.name.trim().toUpperCase() === trimmed.toUpperCase(),
+  );
+  if (
+    matchingDefinedName?.value &&
+    typeof matchingDefinedName.value === "object" &&
+    "kind" in matchingDefinedName.value &&
+    matchingDefinedName.value.kind === "cell-ref"
+  ) {
+    return {
+      sheetName: matchingDefinedName.value.sheetName,
+      address: matchingDefinedName.value.address.toUpperCase(),
+    };
   }
 
   const bangIndex = trimmed.lastIndexOf("!");

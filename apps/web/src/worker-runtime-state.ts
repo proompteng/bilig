@@ -1,5 +1,5 @@
 import type { SpreadsheetEngine } from "@bilig/core";
-import type { RecalcMetrics, SyncState } from "@bilig/protocol";
+import type { RecalcMetrics, SyncState, WorkbookDefinedNameSnapshot } from "@bilig/protocol";
 import type { WorkerEngine } from "./worker-runtime-support.js";
 
 export const EMPTY_RUNTIME_METRICS: RecalcMetrics = {
@@ -35,17 +35,20 @@ export function cloneRuntimeMetrics(metrics: RecalcMetrics = EMPTY_RUNTIME_METRI
 export function cloneWorkerRuntimeState(input: {
   workbookName: string;
   sheetNames: readonly string[];
+  definedNames: readonly WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
 }): {
   workbookName: string;
   sheetNames: string[];
+  definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
 } {
   return {
     workbookName: input.workbookName,
     sheetNames: [...input.sheetNames],
+    definedNames: input.definedNames.map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(input.metrics),
     syncState: input.syncState,
   };
@@ -55,6 +58,7 @@ export function withExternalSyncState(
   state: {
     workbookName: string;
     sheetNames: readonly string[];
+    definedNames: readonly WorkbookDefinedNameSnapshot[];
     metrics: RecalcMetrics;
     syncState: SyncState;
   },
@@ -62,6 +66,7 @@ export function withExternalSyncState(
 ): {
   workbookName: string;
   sheetNames: string[];
+  definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
 } {
@@ -73,15 +78,18 @@ export function withExternalSyncState(
 export function buildWorkerRuntimeStateFromBootstrap(input: {
   workbookName: string;
   sheetNames: readonly string[];
+  definedNames?: readonly WorkbookDefinedNameSnapshot[];
 }): {
   workbookName: string;
   sheetNames: string[];
+  definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
 } {
   return {
     workbookName: input.workbookName,
     sheetNames: [...input.sheetNames],
+    definedNames: (input.definedNames ?? []).map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(),
     syncState: "syncing",
   };
@@ -90,12 +98,14 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
 export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & WorkerEngine): {
   workbookName: string;
   sheetNames: string[];
+  definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
 } {
   return {
     workbookName: engine.workbook.workbookName,
     sheetNames: listOrderedSheetNames(engine.workbook),
+    definedNames: engine.getDefinedNames().map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(engine.getLastMetrics()),
     syncState: engine.getSyncState(),
   };

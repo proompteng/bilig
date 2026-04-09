@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ErrorCode, ValueTag } from "@bilig/protocol";
 import {
   emptyCellSnapshot,
+  parseSelectionTarget,
   parsedEditorInputFromSnapshot,
   parsedEditorInputMatchesSnapshot,
   sameCellContent,
@@ -78,5 +79,23 @@ describe("worker workbook app model", () => {
 
     expect(sameCellContent(baseCell, styleOnlyUpdate)).toBe(true);
     expect(sameCellContent(baseCell, contentChange)).toBe(false);
+  });
+
+  it("resolves cell-ref defined names in the name box", () => {
+    expect(
+      parseSelectionTarget("TaxRate", "Sheet1", [
+        {
+          name: "TaxRate",
+          value: {
+            kind: "cell-ref",
+            sheetName: "Sheet2",
+            address: "C4",
+          },
+        },
+      ]),
+    ).toEqual({
+      sheetName: "Sheet2",
+      address: "C4",
+    });
   });
 });

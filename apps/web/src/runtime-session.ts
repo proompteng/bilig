@@ -99,6 +99,7 @@ function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnaps
   return {
     workbookName: documentId,
     sheetNames: ["Sheet1"],
+    definedNames: [],
     metrics: EMPTY_METRICS,
     syncState: "syncing",
   };
@@ -116,6 +117,7 @@ function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerS
     typeof value["workbookName"] === "string" &&
     Array.isArray(value["sheetNames"]) &&
     value["sheetNames"].every((sheetName) => typeof sheetName === "string") &&
+    Array.isArray(value["definedNames"]) &&
     typeof value["metrics"] === "object" &&
     value["metrics"] !== null &&
     typeof value["syncState"] === "string"

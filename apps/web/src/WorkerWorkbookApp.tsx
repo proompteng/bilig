@@ -103,10 +103,15 @@ function WorkerWorkbookAppInner({
               editorValue={app.visibleEditorValue}
               editorSelectionBehavior={app.editorSelectionBehavior}
               engine={app.workerHandle.viewportStore}
+              definedNames={app.definedNames}
               isEditing={Boolean(app.writesAllowed && app.isEditing)}
               isEditingCell={Boolean(app.writesAllowed && app.isEditingCell)}
               onAddressCommit={(input) => {
-                const nextTarget = parseSelectionTarget(input, app.selection.sheetName);
+                const nextTarget = parseSelectionTarget(
+                  input,
+                  app.selection.sheetName,
+                  app.definedNames,
+                );
                 if (nextTarget) {
                   app.selectAddress(nextTarget.sheetName, nextTarget.address);
                 }

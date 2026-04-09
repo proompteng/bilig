@@ -1703,6 +1703,53 @@ test("web app supports F2 edit in the product shell", async ({ page }) => {
   await expect(formulaInput).toHaveValue("seed!");
 });
 
+test("web app offers formula autocomplete and inserts a function with Tab", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkbookReady(page);
+
+  const nameBox = page.getByTestId("name-box");
+  const formulaInput = page.getByTestId("formula-input");
+  const autocomplete = page.getByTestId("formula-autocomplete");
+  const argHint = page.getByTestId("formula-arg-hint");
+  const resolvedValue = page.getByTestId("formula-resolved-value");
+
+  await clickProductCell(page, 0, 0);
+  await expect(page.getByTestId("status-selection")).toHaveText("Sheet1!A1");
+
+  await formulaInput.focus();
+  await page.keyboard.type("=su");
+  await expect(autocomplete).toBeVisible();
+  await expect(autocomplete).toContainText("SUM");
+
+  await page.keyboard.press("Tab");
+  await expect(formulaInput).toHaveValue("=SUM()");
+  await expect(argHint).toContainText("number1");
+
+  await page.keyboard.type("7");
+  await expect(formulaInput).toHaveValue("=SUM(7)");
+  await page.keyboard.press("Enter");
+
+  await nameBox.fill("A1");
+  await nameBox.press("Enter");
+  await expect(formulaInput).toHaveValue("=SUM(7)");
+  await expect(resolvedValue).toHaveText("7");
+});
+
+test("web app shows formula argument hints while typing", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkbookReady(page);
+
+  const formulaInput = page.getByTestId("formula-input");
+  const argHint = page.getByTestId("formula-arg-hint");
+
+  await clickProductCell(page, 0, 0);
+  await formulaInput.focus();
+  await page.keyboard.type("=IF(A1,");
+
+  await expect(argHint).toBeVisible();
+  await expect(argHint).toContainText("value_if_true");
+});
+
 test("web app double-click edits the exact clicked cell", async ({ page }) => {
   await page.goto("/");
   await waitForWorkbookReady(page);

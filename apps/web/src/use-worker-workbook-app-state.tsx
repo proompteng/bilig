@@ -480,6 +480,7 @@ export function useWorkerWorkbookAppState(input: {
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
   );
+  const definedNames = useMemo(() => [...(runtimeState?.definedNames ?? [])], [runtimeState]);
   const getAgentContext = useCallback(
     () => ({
       selection: selectionRef.current,
@@ -602,6 +603,7 @@ export function useWorkerWorkbookAppState(input: {
     copySelectionRange,
     createSheet,
     changesPanel,
+    definedNames,
     editorConflictBanner,
     editorSelectionBehavior,
     fillSelectionRange,

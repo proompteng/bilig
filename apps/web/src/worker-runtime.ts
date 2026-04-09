@@ -30,6 +30,7 @@ import {
   type EngineEvent,
   type RecalcMetrics,
   type SyncState,
+  type WorkbookDefinedNameSnapshot,
   type WorkbookSnapshot,
   formatCellDisplayValue,
 } from "@bilig/protocol";
@@ -90,6 +91,7 @@ export interface WorkbookWorkerBootstrapOptions {
 export interface WorkbookWorkerStateSnapshot {
   workbookName: string;
   sheetNames: string[];
+  definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
 }
@@ -275,6 +277,7 @@ export class WorkbookWorkerRuntime {
       return {
         workbookName: cachedState.workbookName,
         sheetNames: [...cachedState.sheetNames],
+        definedNames: cachedState.definedNames.map((entry) => structuredClone(entry)),
         metrics: { ...cachedState.metrics },
         syncState: this.externalSyncState ?? cachedState.syncState,
       };

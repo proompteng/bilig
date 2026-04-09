@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import type { CellSnapshot, Viewport } from "@bilig/protocol";
+import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
 import { WorkbookSheetTabs } from "./WorkbookSheetTabs.js";
@@ -17,6 +17,7 @@ interface WorkbookViewProps {
   sheetName: string;
   selectedAddr: string;
   selectedCellSnapshot: CellSnapshot;
+  definedNames?: readonly WorkbookDefinedNameSnapshot[];
   editorValue: string;
   editorSelectionBehavior: EditSelectionBehavior;
   resolvedValue: string;
@@ -99,6 +100,7 @@ export function WorkbookView({
   sheetName,
   selectedAddr,
   selectedCellSnapshot,
+  definedNames,
   editorValue,
   editorSelectionBehavior,
   resolvedValue,
@@ -186,6 +188,7 @@ export function WorkbookView({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <FormulaBar
             address={selectedAddr}
+            {...(definedNames ? { definedNames } : {})}
             isEditing={isEditing}
             onBeginEdit={onBeginFormulaEdit}
             onAddressCommit={onAddressCommit}

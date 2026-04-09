@@ -1,4 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { WorkbookDefinedNameSnapshot } from "@bilig/protocol";
+import { FormulaArgumentHint } from "./FormulaArgumentHint.js";
+import { FormulaAutocomplete } from "./FormulaAutocomplete.js";
+import {
+  applyFormulaSuggestion,
+  resolveFormulaAssistState,
+  type FormulaSuggestion,
+} from "./formulaAssist.js";
+import { NameBox } from "./NameBox.js";
 
 interface FormulaBarProps {
   sheetName: string;
@@ -6,6 +15,7 @@ interface FormulaBarProps {
   value: string;
   resolvedValue: string;
   isEditing: boolean;
+  definedNames?: readonly WorkbookDefinedNameSnapshot[];
   onBeginEdit(this: void, seed?: string): void;
   onAddressCommit(this: void, next: string): void;
   onChange(this: void, next: string): void;
@@ -19,109 +29,228 @@ export function FormulaBar({
   value,
   resolvedValue,
   isEditing,
+  definedNames,
   onBeginEdit,
   onAddressCommit,
   onChange,
   onCommit,
   onCancel,
 }: FormulaBarProps) {
-  const [addressValue, setAddressValue] = useState(address);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [formulaCaret, setFormulaCaret] = useState(value.length);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0);
+  const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null);
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
-    setAddressValue(address);
-  }, [address, sheetName]);
+    setFormulaCaret((current) => Math.min(value.length, current === 0 ? value.length : current));
+    if (dismissedAutocompleteValue !== null && dismissedAutocompleteValue !== value) {
+      setDismissedAutocompleteValue(null);
+    }
+  }, [dismissedAutocompleteValue, value]);
+
+  useEffect(() => {
+    const pending = pendingSelectionRef.current;
+    if (!pending) {
+      return;
+    }
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+    input.focus();
+    input.setSelectionRange(pending.start, pending.end);
+    pendingSelectionRef.current = null;
+  }, [value]);
+
+  const assistState = useMemo(
+    () =>
+      resolveFormulaAssistState({
+        value,
+        caret: formulaCaret,
+        ...(definedNames ? { definedNames } : {}),
+      }),
+    [definedNames, formulaCaret, value],
+  );
+  const showAutocomplete =
+    isEditing && assistState.suggestions.length > 0 && dismissedAutocompleteValue !== value;
+
+  useEffect(() => {
+    setHighlightedSuggestionIndex((current) =>
+      Math.min(current, Math.max(assistState.suggestions.length - 1, 0)),
+    );
+  }, [assistState.suggestions.length]);
+
+  const activeSuggestion = showAutocomplete
+    ? (assistState.suggestions[highlightedSuggestionIndex] ?? assistState.suggestions[0] ?? null)
+    : null;
+
+  const commitSuggestion = (suggestion: FormulaSuggestion) => {
+    if (assistState.tokenStart === null || assistState.tokenEnd === null) {
+      return;
+    }
+    const next = applyFormulaSuggestion({
+      value,
+      tokenStart: assistState.tokenStart,
+      tokenEnd: assistState.tokenEnd,
+      suggestion,
+    });
+    if (!isEditing) {
+      onBeginEdit(value);
+    }
+    pendingSelectionRef.current = { start: next.caret, end: next.caret };
+    setFormulaCaret(next.caret);
+    setDismissedAutocompleteValue(null);
+    onChange(next.value);
+  };
 
   return (
     <div
-      className="formula-bar flex items-center gap-2 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 font-sans"
+      className="formula-bar flex items-start gap-2 border-b border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 py-1.5 font-sans"
       data-testid="formula-bar"
     >
-      <div className="w-[92px] shrink-0">
-        <label className="sr-only" htmlFor="name-box-input">
-          Name
-        </label>
-        <input
-          aria-label="Name box"
-          className="box-border h-8 w-full rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-2.5 text-[12px] font-medium leading-none text-[var(--wb-text)] outline-none transition-[border-color,box-shadow,background-color] focus:border-[var(--wb-accent)] focus:bg-[var(--wb-surface)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
-          data-testid="name-box"
-          id="name-box-input"
-          value={addressValue}
-          onBlur={() => setAddressValue(address)}
-          onChange={(event) => setAddressValue(event.target.value.toUpperCase())}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === "Enter") {
-              event.preventDefault();
-              const nextValue = event.currentTarget.value.toUpperCase();
-              setAddressValue(nextValue);
-              onAddressCommit(nextValue);
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              event.currentTarget.value = address;
-              setAddressValue(address);
-            }
-          }}
-        />
-      </div>
+      <NameBox
+        address={address}
+        onCommit={onAddressCommit}
+        sheetName={sheetName}
+        {...(definedNames ? { definedNames } : {})}
+      />
       <div className="min-w-0 flex-1">
         <label className="sr-only" htmlFor="formula-input">
           Formula
         </label>
-        <div
-          className="box-border flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]"
-          data-testid="formula-input-frame"
-        >
-          <span
-            aria-hidden="true"
-            className="inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[11px] font-semibold uppercase tracking-[0.1em] leading-none text-[var(--wb-text-subtle)]"
+        <div className="relative">
+          <div
+            className="box-border flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)]"
+            data-testid="formula-input-frame"
           >
-            fx
-          </span>
-          <input
-            aria-label="Formula"
-            className="h-full min-w-0 flex-1 border-0 bg-[var(--wb-surface)] px-3 text-[12px] leading-none text-[var(--wb-text)] outline-none"
-            data-testid="formula-input"
-            id="formula-input"
-            placeholder="Type a literal or =formula"
-            value={value}
-            onBlur={(event) => {
-              const nextTarget = event.relatedTarget;
-              if (
-                nextTarget instanceof Node &&
-                event.currentTarget.closest(".formula-bar")?.contains(nextTarget)
-              ) {
-                return;
+            <span
+              aria-hidden="true"
+              className="inline-flex h-full w-8 shrink-0 items-center justify-center border-r border-[var(--wb-border)] bg-[var(--wb-surface-muted)] text-[11px] font-semibold uppercase tracking-[0.1em] leading-none text-[var(--wb-text-subtle)]"
+            >
+              fx
+            </span>
+            <input
+              aria-activedescendant={
+                showAutocomplete
+                  ? `formula-autocomplete-option-${highlightedSuggestionIndex}`
+                  : undefined
               }
-              if (isEditing) {
-                onCommit();
-              }
-            }}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              if (!isEditing) {
-                onBeginEdit(nextValue);
-              }
-              onChange(nextValue);
-            }}
-            onFocus={() => {
-              if (!isEditing) {
-                onBeginEdit(value);
-              }
-            }}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onCommit();
-              }
-              if (event.key === "Escape") {
-                event.preventDefault();
-                onCancel();
-              }
-            }}
-          />
+              aria-controls={showAutocomplete ? "formula-autocomplete" : undefined}
+              aria-expanded={showAutocomplete ? "true" : "false"}
+              aria-label="Formula"
+              className="h-full min-w-0 flex-1 border-0 bg-[var(--wb-surface)] px-3 text-[12px] leading-none text-[var(--wb-text)] outline-none"
+              data-testid="formula-input"
+              id="formula-input"
+              placeholder="Type a literal or =formula"
+              ref={inputRef}
+              role="combobox"
+              value={value}
+              onBlur={(event) => {
+                const nextTarget = event.relatedTarget;
+                if (
+                  nextTarget instanceof Node &&
+                  event.currentTarget.closest(".formula-bar")?.contains(nextTarget)
+                ) {
+                  return;
+                }
+                if (isEditing) {
+                  onCommit();
+                }
+              }}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                if (!isEditing) {
+                  onBeginEdit(nextValue);
+                }
+                setFormulaCaret(event.target.selectionStart ?? nextValue.length);
+                onChange(nextValue);
+              }}
+              onClick={(event) => {
+                setFormulaCaret(
+                  event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                );
+              }}
+              onFocus={(event) => {
+                setFormulaCaret(
+                  event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                );
+                if (!isEditing) {
+                  onBeginEdit(value);
+                }
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (showAutocomplete && event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setHighlightedSuggestionIndex((current) =>
+                    Math.min(current + 1, assistState.suggestions.length - 1),
+                  );
+                  return;
+                }
+                if (showAutocomplete && event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setHighlightedSuggestionIndex((current) => Math.max(current - 1, 0));
+                  return;
+                }
+                if (
+                  activeSuggestion &&
+                  showAutocomplete &&
+                  (event.key === "Enter" || event.key === "Tab")
+                ) {
+                  event.preventDefault();
+                  commitSuggestion(activeSuggestion);
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onCommit();
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  if (showAutocomplete) {
+                    setDismissedAutocompleteValue(value);
+                    return;
+                  }
+                  onCancel();
+                }
+              }}
+              onKeyUp={(event) => {
+                setFormulaCaret(
+                  event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                );
+              }}
+              onSelect={(event) => {
+                setFormulaCaret(
+                  event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                );
+              }}
+            />
+          </div>
+          {showAutocomplete ? (
+            <FormulaAutocomplete
+              highlightedIndex={highlightedSuggestionIndex}
+              suggestions={assistState.suggestions}
+              onSelect={(index) => {
+                const suggestion = assistState.suggestions[index];
+                if (!suggestion) {
+                  return;
+                }
+                setHighlightedSuggestionIndex(index);
+                commitSuggestion(suggestion);
+              }}
+            />
+          ) : null}
         </div>
+        {isEditing && assistState.activeFunction ? (
+          <div className="mt-1.5">
+            <FormulaArgumentHint
+              activeArgumentIndex={assistState.activeFunction.activeArgumentIndex}
+              entry={assistState.activeFunction.entry}
+            />
+          </div>
+        ) : null}
       </div>
       <span className="sr-only" data-testid="formula-resolved-value">
         {resolvedValue || "∅"}
