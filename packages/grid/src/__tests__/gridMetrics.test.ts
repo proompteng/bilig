@@ -126,4 +126,28 @@ describe("gridMetrics", () => {
     ).toBe(2);
     expect(getResolvedRowHeight(rowHeights, 3, PRODUCT_ROW_HEIGHT)).toBe(PRODUCT_ROW_HEIGHT);
   });
+
+  test("skips collapsed hidden axes during pointer resolution", () => {
+    expect(
+      resolveColumnAtClientX(
+        46 + PRODUCT_COLUMN_WIDTH,
+        { x: 0, width: 4 },
+        46,
+        16384,
+        { 1: 0, 2: 0 },
+        PRODUCT_COLUMN_WIDTH,
+      ),
+    ).toBe(3);
+
+    expect(
+      resolveRowAtClientY(
+        57 + PRODUCT_ROW_HEIGHT,
+        { y: 0, height: 4 },
+        57,
+        1_048_576,
+        { 1: 0, 2: 0 },
+        PRODUCT_ROW_HEIGHT,
+      ),
+    ).toBe(3);
+  });
 });

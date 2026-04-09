@@ -51,19 +51,19 @@ function createPatch(styleId?: string): ViewportPatch {
   };
 }
 
-function createColumnPatch(size: number): ViewportPatch {
+function createColumnPatch(size: number, hidden = false): ViewportPatch {
   return {
     ...createPatch(),
     cells: [],
-    columns: [{ index: 0, size, hidden: false }],
+    columns: [{ index: 0, size, hidden }],
   };
 }
 
-function createRowPatch(size: number): ViewportPatch {
+function createRowPatch(size: number, hidden = false): ViewportPatch {
   return {
     ...createPatch(),
     cells: [],
-    rows: [{ index: 0, size, hidden: false }],
+    rows: [{ index: 0, size, hidden }],
   };
 }
 
@@ -374,5 +374,33 @@ describe("ProjectedViewportStore", () => {
     cache.applyViewportPatch(createRowPatch(22));
 
     expect(cache.getRowHeights("Sheet1")[0]).toBe(22);
+  });
+
+  it("preserves hidden column metadata and collapses hidden columns from the visible axis map", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.applyViewportPatch(createColumnPatch(93, true));
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(0);
+    expect(cache.getHiddenColumns("Sheet1")[0]).toBe(true);
+
+    cache.applyViewportPatch(createColumnPatch(93, false));
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(93);
+    expect(cache.getHiddenColumns("Sheet1")[0]).toBeUndefined();
+  });
+
+  it("preserves hidden row metadata and collapses hidden rows from the visible axis map", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.applyViewportPatch(createRowPatch(44, true));
+
+    expect(cache.getRowHeights("Sheet1")[0]).toBe(0);
+    expect(cache.getHiddenRows("Sheet1")[0]).toBe(true);
+
+    cache.applyViewportPatch(createRowPatch(44, false));
+
+    expect(cache.getRowHeights("Sheet1")[0]).toBe(44);
+    expect(cache.getHiddenRows("Sheet1")[0]).toBeUndefined();
   });
 });

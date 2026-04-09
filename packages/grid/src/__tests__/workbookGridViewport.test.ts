@@ -49,4 +49,25 @@ describe("workbookGridViewport", () => {
       ty: 10,
     });
   });
+
+  test("skips collapsed hidden rows when resolving the scroll anchor", () => {
+    const gridMetrics = getGridMetrics();
+
+    expect(
+      resolveVisibleRegionFromScroll({
+        scrollLeft: 0,
+        scrollTop: gridMetrics.rowHeight,
+        viewportWidth: 320,
+        viewportHeight: 140,
+        columnWidths: {},
+        rowHeights: { 1: 0, 2: 0 },
+        gridMetrics,
+      }),
+    ).toMatchObject({
+      range: {
+        y: 3,
+      },
+      ty: 0,
+    });
+  });
 });
