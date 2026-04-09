@@ -180,8 +180,16 @@ describe("SpreadsheetEngine", () => {
 
     const differential = engine.recalculateDifferential();
 
-    expect(differential.drift).toEqual(["Sheet1!B1: Calculated in JS but MISSING in WASM"]);
-    expect(differential.wasm).toEqual([]);
+    expect(differential.drift).toEqual([]);
+    expect(differential.wasm).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Sheet1",
+          address: "B1",
+          value: { tag: ValueTag.Number, value: 24 },
+        }),
+      ]),
+    );
     expect(differential.js).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

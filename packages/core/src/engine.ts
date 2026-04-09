@@ -39,7 +39,6 @@ import {
   parseRangeAddress,
   renameFormulaSheetReferences,
   translateFormulaReferences,
-  utcDateToExcelSerial,
 } from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
@@ -93,7 +92,6 @@ import { StringPool } from "./string-pool.js";
 import { WasmKernelFacade } from "./wasm-facade.js";
 import {
   WorkbookStore,
-  makeCellKey,
   normalizeDefinedName,
   pivotKey,
   type WorkbookAxisMetadataRecord,
@@ -119,7 +117,6 @@ import {
   type EngineSyncClientConnection,
   type MaterializedDependencies,
   type PivotTableInput,
-  type RecalcVolatileState,
   type RuntimeFormula,
   type SpreadsheetEngineOptions,
   type SpillMaterialization,
@@ -272,6 +269,8 @@ export class SpreadsheetEngine {
     this.runtime = createEngineServiceRuntime({
       state: this.state,
       getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
+      exportSnapshot: () => this.exportSnapshot(),
+      importSnapshot: (snapshot) => this.importSnapshot(snapshot),
       resetWorkbook: () => this.resetWorkbook(),
       executeRestoreTransaction: (transaction) => this.executeTransactionNow(transaction, "restore"),
       executeHistoryTransaction: (transaction, source) => this.executeTransactionNow(transaction, source),
@@ -292,8 +291,29 @@ export class SpreadsheetEngine {
       ensureCellTrackedByCoords: (sheetId, row, col) =>
         this.ensureCellTrackedByCoords(sheetId, row, col),
       forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
+      beginMutationCollection: () => this.beginMutationCollection(),
+      markInputChanged: (cellIndex, count) => this.markInputChanged(cellIndex, count),
+      markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
+      markExplicitChanged: (cellIndex, count) => this.markExplicitChanged(cellIndex, count),
+      composeMutationRoots: (changedInputCount, formulaChangedCount) =>
+        this.composeMutationRoots(changedInputCount, formulaChangedCount),
+      composeEventChanges: (recalculated, explicitChangedCount) =>
+        this.composeEventChanges(recalculated, explicitChangedCount),
+      unionChangedSets: (...sets) => this.unionChangedSets(...sets),
+      composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
+        this.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount),
+      emptyChangedSet: () => this.changedUnion.subarray(0, 0),
+      ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
+      getPendingKernelSync: () => this.pendingKernelSync,
+      getWasmBatch: () => this.wasmBatch,
+      getChangedInputBuffer: () => this.changedInputBuffer,
+      materializeSpill: (cellIndex, arrayValue) => this.materializeSpill(cellIndex, arrayValue),
+      clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
+      evaluateUnsupportedFormula: (cellIndex) => this.evaluateUnsupportedFormula(cellIndex),
+      getEntityDependents: (entityId) => this.getEntityDependents(entityId),
       removeFormula: (cellIndex) => this.removeFormula(cellIndex),
       clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
+      materializePivot: (pivot) => this.materializePivot(pivot),
       rebuildAllFormulaBindings: () => this.rebuildAllFormulaBindings(),
       scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
       flushWasmProgramSync: () => this.flushWasmProgramSync(),
@@ -492,86 +512,11 @@ export class SpreadsheetEngine {
   }
 
   recalculateNow(): number[] {
-    this.workbook.setVolatileContext({
-      recalcEpoch: this.workbook.getVolatileContext().recalcEpoch + 1,
-    });
-    let formulaChangedCount = 0;
-    let explicitChangedCount = 0;
-    this.formulas.forEach((_formula, cellIndex) => {
-      formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-      explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-    });
-    const recalculated = this.reconcilePivotOutputs(
-      this.recalculate(
-        this.composeMutationRoots(0, formulaChangedCount),
-        this.changedInputBuffer.subarray(0, 0),
-      ),
-      true,
-    );
-    const changed = this.composeEventChanges(recalculated, explicitChangedCount);
-    this.lastMetrics.batchId += 1;
-    this.lastMetrics.changedInputCount = formulaChangedCount;
-    this.events.emit(
-      {
-        kind: "batch",
-        invalidation: "cells",
-        changedCellIndices: changed,
-        invalidatedRanges: [],
-        invalidatedRows: [],
-        invalidatedColumns: [],
-        metrics: this.lastMetrics,
-      },
-      changed,
-      (cellIndex) => this.workbook.getQualifiedAddress(cellIndex),
-    );
-    return Array.from(changed);
+    return runEngineEffect(this.runtime.recalc.recalculateNow());
   }
 
   recalculateDifferential(): { js: CellSnapshot[]; wasm: CellSnapshot[]; drift: string[] } {
-    // 1. Snapshot original state
-    const originalSnapshot = this.exportSnapshot();
-
-    // 2. JS Only Recalc
-    this.formulas.forEach((f) => {
-      f.compiled.mode = FormulaMode.JsOnly;
-    });
-    const jsChanged = this.recalculateNow();
-    const jsResults = jsChanged.map((idx) => this.getCellByIndex(idx));
-
-    // 3. Restore and rerun using the engine's normal compiled formula modes.
-    this.importSnapshot(originalSnapshot);
-    const wasmChanged = this.recalculateNow();
-    const wasmResults = wasmChanged.map((idx) => this.getCellByIndex(idx));
-
-    // 4. Compare
-    const drift: string[] = [];
-    const jsMap = new Map(
-      jsResults.map((result) => [`${result.sheetName}!${result.address}`, result]),
-    );
-    const wasmMap = new Map(
-      wasmResults.map((result) => [`${result.sheetName}!${result.address}`, result]),
-    );
-
-    for (const [addr, jsCell] of jsMap) {
-      const wasmCell = wasmMap.get(addr);
-      if (!wasmCell) {
-        drift.push(`${addr}: Calculated in JS but MISSING in WASM`);
-        continue;
-      }
-      if (JSON.stringify(jsCell.value) !== JSON.stringify(wasmCell.value)) {
-        drift.push(
-          `${addr}: JS=${JSON.stringify(jsCell.value)} WASM=${JSON.stringify(wasmCell.value)}`,
-        );
-      }
-    }
-
-    for (const addr of wasmMap.keys()) {
-      if (!jsMap.has(addr)) {
-        drift.push(`${addr}: Calculated in WASM but MISSING in JS`);
-      }
-    }
-
-    return { js: jsResults, wasm: wasmResults, drift };
+    return runEngineEffect(this.runtime.recalc.recalculateDifferential());
   }
 
   recalculateDirty(
@@ -583,50 +528,7 @@ export class SpreadsheetEngine {
       colEnd: number;
     }>,
   ): number[] {
-    this.beginMutationCollection();
-    let changedInputCount = 0;
-    let formulaChangedCount = 0;
-    let explicitChangedCount = 0;
-
-    for (const region of dirtyRegions) {
-      const sheet = this.workbook.getSheet(region.sheetName);
-      if (!sheet) continue;
-
-      for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
-        for (let col = region.colStart; col <= region.colEnd; col += 1) {
-          const cellIndex = this.workbook.cellKeyToIndex.get(makeCellKey(sheet.id, row, col));
-          if (cellIndex !== undefined) {
-            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
-            explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-          }
-        }
-      }
-    }
-
-    const recalculated = this.reconcilePivotOutputs(
-      this.recalculate(
-        this.composeMutationRoots(changedInputCount, formulaChangedCount),
-        this.changedInputBuffer.subarray(0, changedInputCount),
-      ),
-      false,
-    );
-    const changed = this.composeEventChanges(recalculated, explicitChangedCount);
-    this.lastMetrics.batchId += 1;
-    this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
-    this.events.emit(
-      {
-        kind: "batch",
-        invalidation: "cells",
-        changedCellIndices: changed,
-        invalidatedRanges: [],
-        invalidatedRows: [],
-        invalidatedColumns: [],
-        metrics: this.lastMetrics,
-      },
-      changed,
-      (cellIndex) => this.workbook.getQualifiedAddress(cellIndex),
-    );
-    return Array.from(changed);
+    return runEngineEffect(this.runtime.recalc.recalculateDirty(dirtyRegions));
   }
 
   updateRowMetadata(
@@ -1477,80 +1379,7 @@ export class SpreadsheetEngine {
   }
 
   private reconcilePivotOutputs(baseChanged: U32, forceAllPivots = false): U32 {
-    let aggregate = baseChanged;
-    let pending = baseChanged;
-    let forceAll = forceAllPivots;
-
-    for (let iteration = 0; iteration < 4; iteration += 1) {
-      const pivotChanged = this.refreshPivotOutputs(pending, forceAll);
-      if (pivotChanged.length === 0) {
-        break;
-      }
-      aggregate =
-        aggregate.length === 0 ? pivotChanged : this.unionChangedSets(aggregate, pivotChanged);
-      pending = this.recalculate(pivotChanged, pivotChanged);
-      aggregate = pending.length === 0 ? aggregate : this.unionChangedSets(aggregate, pending);
-      forceAll = false;
-    }
-
-    return aggregate;
-  }
-
-  private refreshPivotOutputs(changed: readonly number[] | U32, forceAll: boolean): U32 {
-    const pivots = this.workbook.listPivots();
-    if (pivots.length === 0 || (!forceAll && changed.length === 0)) {
-      return this.changedUnion.subarray(0, 0);
-    }
-
-    const changedCellIndices: number[] = [];
-    const changedSeen = new Set<number>();
-    for (let index = 0; index < pivots.length; index += 1) {
-      const pivot = pivots[index]!;
-      if (!forceAll && !this.shouldRefreshPivot(pivot, changed)) {
-        continue;
-      }
-      const pivotChanges = this.materializePivot(pivot);
-      for (let changeIndex = 0; changeIndex < pivotChanges.length; changeIndex += 1) {
-        const cellIndex = pivotChanges[changeIndex]!;
-        if (changedSeen.has(cellIndex)) {
-          continue;
-        }
-        changedSeen.add(cellIndex);
-        changedCellIndices.push(cellIndex);
-      }
-    }
-
-    return changedCellIndices.length === 0
-      ? this.changedUnion.subarray(0, 0)
-      : Uint32Array.from(changedCellIndices);
-  }
-
-  private shouldRefreshPivot(
-    pivot: WorkbookPivotRecord,
-    changed: readonly number[] | U32,
-  ): boolean {
-    const bounds = normalizeRange(pivot.source);
-    for (let index = 0; index < changed.length; index += 1) {
-      const cellIndex = changed[index]!;
-      const sheetId = this.workbook.cellStore.sheetIds[cellIndex];
-      if (sheetId === undefined) {
-        continue;
-      }
-      if (this.workbook.getSheetNameById(sheetId) !== pivot.source.sheetName) {
-        continue;
-      }
-      const row = this.workbook.cellStore.rows[cellIndex] ?? 0;
-      const col = this.workbook.cellStore.cols[cellIndex] ?? 0;
-      if (
-        row >= bounds.startRow &&
-        row <= bounds.endRow &&
-        col >= bounds.startCol &&
-        col <= bounds.endCol
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return runEngineEffect(this.runtime.recalc.reconcilePivotOutputs(baseChanged, forceAllPivots));
   }
 
   private materializePivot(pivot: WorkbookPivotRecord): number[] {
@@ -2706,239 +2535,7 @@ export class SpreadsheetEngine {
     changedRoots: readonly number[] | U32,
     kernelSyncRoots: readonly number[] | U32 = changedRoots,
   ): Uint32Array {
-    const started = performance.now();
-    this.ensureRecalcScratchCapacity(this.workbook.cellStore.size + 1);
-    if (this.wasm.ready) {
-      this.wasm.syncStringPool(this.strings.exportLayout());
-    }
-
-    const allChangedRoots = [...changedRoots];
-    const allOrdered: number[] = [];
-    let singlePassOrdered: U32 | null = null;
-    let singlePassOrderedCount = 0;
-    let passRoots = [...changedRoots];
-    let passKernelRoots = [...kernelSyncRoots];
-    let totalOrderedCount = 0;
-    let totalRangeNodeVisits = 0;
-    let wasmCount = 0;
-    let jsCount = 0;
-    let pendingKernelSyncCount = 0;
-    const volatileState = this.createRecalcVolatileState();
-
-    const flushWasmBatch = (
-      batchCount: number,
-      hasVolatile: boolean,
-      randCount: number,
-    ): number => {
-      if (batchCount === 0) {
-        return 0;
-      }
-      this.wasm.syncFromStore(
-        this.workbook.cellStore,
-        this.pendingKernelSync.subarray(0, pendingKernelSyncCount),
-      );
-      pendingKernelSyncCount = 0;
-      if (hasVolatile) {
-        this.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
-        this.wasm.uploadVolatileRandomValues(
-          this.consumeVolatileRandomValues(volatileState, randCount),
-        );
-      }
-      const batchIndices = this.wasmBatch.subarray(0, batchCount);
-      this.wasm.evalBatch(batchIndices);
-      this.wasm.syncToStore(this.workbook.cellStore, batchIndices, this.strings);
-      return batchCount;
-    };
-
-    while (passRoots.length > 0) {
-      const scheduled = this.scheduler.collectDirty(
-        passRoots,
-        { getDependents: (entityId) => this.getEntityDependents(entityId) },
-        this.workbook.cellStore,
-        (cellIndex) => this.formulas.has(cellIndex),
-        this.ranges.size,
-      );
-      const ordered = scheduled.orderedFormulaCellIndices;
-      const orderedCount = scheduled.orderedFormulaCount;
-      totalOrderedCount += orderedCount;
-      totalRangeNodeVisits += scheduled.rangeNodeVisits;
-      if (singlePassOrdered === null && allOrdered.length === 0) {
-        singlePassOrdered = ordered;
-        singlePassOrderedCount = orderedCount;
-      } else {
-        if (singlePassOrdered !== null) {
-          const orderedChunk = singlePassOrdered;
-          for (let orderedIndex = 0; orderedIndex < singlePassOrderedCount; orderedIndex += 1) {
-            const cellIndex = orderedChunk[orderedIndex];
-            if (cellIndex === undefined) {
-              continue;
-            }
-            allOrdered.push(cellIndex);
-          }
-          singlePassOrdered = null;
-          singlePassOrderedCount = 0;
-        }
-        for (let orderedIndex = 0; orderedIndex < orderedCount; orderedIndex += 1) {
-          allOrdered.push(ordered[orderedIndex]!);
-        }
-      }
-
-      pendingKernelSyncCount = 0;
-      for (let index = 0; index < passKernelRoots.length; index += 1) {
-        this.pendingKernelSync[pendingKernelSyncCount] = passKernelRoots[index]!;
-        pendingKernelSyncCount += 1;
-      }
-
-      let wasmBatchCount = 0;
-      let wasmBatchHasVolatile = false;
-      let wasmBatchRandCount = 0;
-      const spillChangedRoots: number[] = [];
-      const spillChangedSeen = new Set<number>();
-      const noteSpillChanges = (changedCellIndices: readonly number[]): void => {
-        for (let spillIndex = 0; spillIndex < changedCellIndices.length; spillIndex += 1) {
-          const changedCellIndex = changedCellIndices[spillIndex]!;
-          if (spillChangedSeen.has(changedCellIndex)) {
-            continue;
-          }
-          spillChangedSeen.add(changedCellIndex);
-          spillChangedRoots.push(changedCellIndex);
-        }
-      };
-      const queueKernelSync = (cellIndex: number): void => {
-        this.pendingKernelSync[pendingKernelSyncCount] = cellIndex;
-        pendingKernelSyncCount += 1;
-      };
-      const evaluateWasmSpillFormula = (cellIndex: number, formula: RuntimeFormula): number => {
-        this.wasm.syncFromStore(
-          this.workbook.cellStore,
-          this.pendingKernelSync.subarray(0, pendingKernelSyncCount),
-        );
-        pendingKernelSyncCount = 0;
-        if (formula.compiled.volatile) {
-          this.wasm.uploadVolatileNowSerial(volatileState.nowSerial);
-          this.wasm.uploadVolatileRandomValues(
-            this.consumeVolatileRandomValues(volatileState, formula.compiled.randCallCount),
-          );
-        }
-        const batchIndices = Uint32Array.of(cellIndex);
-        this.wasm.evalBatch(batchIndices);
-        this.wasm.syncToStore(this.workbook.cellStore, batchIndices, this.strings);
-        const spill = this.wasm.readSpill(cellIndex, this.strings);
-        const spillMaterialization = spill
-          ? this.materializeSpill(cellIndex, {
-              rows: spill.rows,
-              cols: spill.cols,
-              values: spill.values,
-            })
-          : {
-              changedCellIndices: this.clearOwnedSpill(cellIndex),
-              ownerValue: this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id)),
-            };
-        const currentFlags =
-          (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-          ~(CellFlags.SpillChild | CellFlags.PivotOutput);
-        this.workbook.cellStore.setValue(
-          cellIndex,
-          spillMaterialization.ownerValue,
-          spillMaterialization.ownerValue.tag === ValueTag.String
-            ? this.strings.intern(spillMaterialization.ownerValue.value)
-            : 0,
-        );
-        this.workbook.cellStore.flags[cellIndex] = currentFlags;
-        queueKernelSync(cellIndex);
-        for (
-          let spillIndex = 0;
-          spillIndex < spillMaterialization.changedCellIndices.length;
-          spillIndex += 1
-        ) {
-          queueKernelSync(spillMaterialization.changedCellIndices[spillIndex]!);
-        }
-        noteSpillChanges(spillMaterialization.changedCellIndices);
-        return 1;
-      };
-      for (let index = 0; index < orderedCount; index += 1) {
-        const cellIndex = ordered[index]!;
-        const formula = this.formulas.get(cellIndex);
-        if (!formula) {
-          continue;
-        }
-        if (((this.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
-          continue;
-        }
-        if (formula.compiled.mode === FormulaMode.WasmFastPath && this.wasm.ready) {
-          if (formula.compiled.producesSpill) {
-            wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
-            wasmBatchCount = 0;
-            wasmBatchHasVolatile = false;
-            wasmBatchRandCount = 0;
-            wasmCount += evaluateWasmSpillFormula(cellIndex, formula);
-            continue;
-          }
-          this.wasmBatch[wasmBatchCount] = cellIndex;
-          wasmBatchCount += 1;
-          wasmBatchHasVolatile = wasmBatchHasVolatile || formula.compiled.volatile;
-          wasmBatchRandCount += formula.compiled.randCallCount;
-          continue;
-        }
-        wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
-        wasmBatchCount = 0;
-        wasmBatchHasVolatile = false;
-        wasmBatchRandCount = 0;
-        jsCount += 1;
-        const spillChanges = this.evaluateUnsupportedFormula(cellIndex);
-        noteSpillChanges(spillChanges);
-        queueKernelSync(cellIndex);
-      }
-
-      wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount);
-      if (pendingKernelSyncCount > 0) {
-        this.wasm.syncFromStore(
-          this.workbook.cellStore,
-          this.pendingKernelSync.subarray(0, pendingKernelSyncCount),
-        );
-      }
-
-      if (spillChangedRoots.length === 0) {
-        break;
-      }
-      if (singlePassOrdered !== null) {
-        const orderedChunk = singlePassOrdered;
-        for (let orderedIndex = 0; orderedIndex < singlePassOrderedCount; orderedIndex += 1) {
-          const cellIndex = orderedChunk[orderedIndex];
-          if (cellIndex === undefined) {
-            continue;
-          }
-          allOrdered.push(cellIndex);
-        }
-        singlePassOrdered = null;
-        singlePassOrderedCount = 0;
-      }
-      allChangedRoots.push(...spillChangedRoots);
-      passRoots = spillChangedRoots;
-      passKernelRoots = spillChangedRoots;
-    }
-
-    this.lastMetrics.dirtyFormulaCount = totalOrderedCount;
-    this.lastMetrics.jsFormulaCount = jsCount;
-    this.lastMetrics.wasmFormulaCount = wasmCount;
-    this.lastMetrics.rangeNodeVisits = totalRangeNodeVisits;
-    this.lastMetrics.recalcMs = performance.now() - started;
-    if (singlePassOrdered !== null) {
-      return totalOrderedCount === 0 && allChangedRoots.length === 0
-        ? this.changedUnion.subarray(0, 0)
-        : this.composeChangedRootsAndOrdered(
-            allChangedRoots,
-            singlePassOrdered,
-            singlePassOrderedCount,
-          );
-    }
-    return totalOrderedCount === 0 && allChangedRoots.length === 0
-      ? this.changedUnion.subarray(0, 0)
-      : this.composeChangedRootsAndOrdered(
-          allChangedRoots,
-          Uint32Array.from(allOrdered),
-          allOrdered.length,
-        );
+    return runEngineEffect(this.runtime.recalc.recalculate(changedRoots, kernelSyncRoots));
   }
 
   private ensureRecalcScratchCapacity(size: number): void {
@@ -3067,32 +2664,6 @@ export class SpreadsheetEngine {
     if (rangeSize > this.topoRangeSeen.length) {
       this.topoRangeSeen = growUint32(this.topoRangeSeen, rangeSize);
     }
-  }
-
-  private createRecalcVolatileState(): RecalcVolatileState {
-    return {
-      nowSerial: utcDateToExcelSerial(new Date()),
-      randomValues: [],
-      randomCursor: 0,
-    };
-  }
-
-  private ensureVolatileRandomValues(state: RecalcVolatileState, count: number): void {
-    const required = state.randomCursor + count;
-    while (state.randomValues.length < required) {
-      state.randomValues.push(Math.random());
-    }
-  }
-
-  private consumeVolatileRandomValues(state: RecalcVolatileState, count: number): Float64Array {
-    if (count === 0) {
-      return new Float64Array();
-    }
-    this.ensureVolatileRandomValues(state, count);
-    const end = state.randomCursor + count;
-    const slice = state.randomValues.slice(state.randomCursor, end);
-    state.randomCursor = end;
-    return Float64Array.from(slice);
   }
 
   private evaluateUnsupportedFormula(cellIndex: number): number[] {

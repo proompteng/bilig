@@ -22,6 +22,10 @@ import {
   type EngineReplicaSyncService,
 } from "./services/replica-sync-service.js";
 import {
+  createEngineRecalcService,
+  type EngineRecalcService,
+} from "./services/recalc-service.js";
+import {
   createEngineSelectionService,
   type EngineSelectionService,
 } from "./services/selection-service.js";
@@ -40,6 +44,7 @@ export interface EngineServiceRuntime {
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
   readonly pivot: EnginePivotService;
+  readonly recalc: EngineRecalcService;
   readonly structure: EngineStructureService;
   readonly snapshot: EngineSnapshotService;
   readonly sync: EngineReplicaSyncService;
@@ -48,6 +53,8 @@ export interface EngineServiceRuntime {
 export function createEngineServiceRuntime(args: {
   readonly state: EngineRuntimeState;
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
+  readonly exportSnapshot: () => import("@bilig/protocol").WorkbookSnapshot;
+  readonly importSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly resetWorkbook: () => void;
   readonly executeRestoreTransaction: (transaction: TransactionRecord) => void;
   readonly executeHistoryTransaction: (transaction: TransactionRecord, source: "history") => void;
@@ -88,8 +95,44 @@ export function createEngineServiceRuntime(args: {
     sheetId: number,
     fn: (cellIndex: number, row: number, col: number) => void,
   ) => void;
+  readonly beginMutationCollection: () => void;
+  readonly markInputChanged: (cellIndex: number, count: number) => number;
+  readonly markFormulaChanged: (cellIndex: number, count: number) => number;
+  readonly markExplicitChanged: (cellIndex: number, count: number) => number;
+  readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => import("./runtime-state.js").U32;
+  readonly composeEventChanges: (
+    recalculated: import("./runtime-state.js").U32,
+    explicitChangedCount: number,
+  ) => import("./runtime-state.js").U32;
+  readonly unionChangedSets: (
+    ...sets: Array<readonly number[] | import("./runtime-state.js").U32>
+  ) => import("./runtime-state.js").U32;
+  readonly composeChangedRootsAndOrdered: (
+    changedRoots: readonly number[] | import("./runtime-state.js").U32,
+    ordered: import("./runtime-state.js").U32,
+    orderedCount: number,
+  ) => import("./runtime-state.js").U32;
+  readonly emptyChangedSet: () => import("./runtime-state.js").U32;
+  readonly ensureRecalcScratchCapacity: (size: number) => void;
+  readonly getPendingKernelSync: () => import("./runtime-state.js").U32;
+  readonly getWasmBatch: () => import("./runtime-state.js").U32;
+  readonly getChangedInputBuffer: () => import("./runtime-state.js").U32;
+  readonly materializeSpill: (
+    cellIndex: number,
+    arrayValue: {
+      values: import("@bilig/protocol").CellValue[];
+      rows: number;
+      cols: number;
+    },
+  ) => import("./runtime-state.js").SpillMaterialization;
+  readonly clearOwnedSpill: (cellIndex: number) => number[];
+  readonly evaluateUnsupportedFormula: (cellIndex: number) => number[];
+  readonly getEntityDependents: (entityId: number) => Uint32Array;
   readonly removeFormula: (cellIndex: number) => boolean;
   readonly clearOwnedPivot: (
+    pivot: import("../workbook-store.js").WorkbookPivotRecord,
+  ) => number[];
+  readonly materializePivot: (
     pivot: import("../workbook-store.js").WorkbookPivotRecord,
   ) => number[];
   readonly rebuildAllFormulaBindings: () => number[];
@@ -122,6 +165,30 @@ export function createEngineServiceRuntime(args: {
     clearOwnedPivot: (pivot) => args.clearOwnedPivot(pivot),
     rebuildAllFormulaBindings: () => args.rebuildAllFormulaBindings(),
   });
+  const recalc = createEngineRecalcService({
+    state: args.state,
+    getCellByIndex: args.getCellByIndex,
+    exportSnapshot: args.exportSnapshot,
+    importSnapshot: args.importSnapshot,
+    beginMutationCollection: args.beginMutationCollection,
+    markInputChanged: args.markInputChanged,
+    markFormulaChanged: args.markFormulaChanged,
+    markExplicitChanged: args.markExplicitChanged,
+    composeMutationRoots: args.composeMutationRoots,
+    composeEventChanges: args.composeEventChanges,
+    unionChangedSets: args.unionChangedSets,
+    composeChangedRootsAndOrdered: args.composeChangedRootsAndOrdered,
+    emptyChangedSet: args.emptyChangedSet,
+    ensureRecalcScratchCapacity: args.ensureRecalcScratchCapacity,
+    getPendingKernelSync: args.getPendingKernelSync,
+    getWasmBatch: args.getWasmBatch,
+    getChangedInputBuffer: args.getChangedInputBuffer,
+    materializeSpill: args.materializeSpill,
+    clearOwnedSpill: args.clearOwnedSpill,
+    evaluateUnsupportedFormula: args.evaluateUnsupportedFormula,
+    materializePivot: (pivot) => args.materializePivot(pivot),
+    getEntityDependents: args.getEntityDependents,
+  });
 
   return {
     events: createEngineEventService(args.state),
@@ -130,6 +197,7 @@ export function createEngineServiceRuntime(args: {
       state: args.state,
       executeTransaction: args.executeHistoryTransaction,
     }),
+    recalc,
     structure,
     mutation: createEngineMutationService({
       state: args.state,
