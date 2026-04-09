@@ -124,6 +124,102 @@ export const BorderPresetMenu = memo(function BorderPresetMenu({
   );
 });
 
+export const StructureActionsMenu = memo(function StructureActionsMenu({
+  disabled = false,
+  canHideCurrentRow,
+  canHideCurrentColumn,
+  canUnhideCurrentRow,
+  canUnhideCurrentColumn,
+  onHideCurrentRow,
+  onHideCurrentColumn,
+  onUnhideCurrentRow,
+  onUnhideCurrentColumn,
+}: {
+  disabled?: boolean;
+  canHideCurrentRow: boolean;
+  canHideCurrentColumn: boolean;
+  canUnhideCurrentRow: boolean;
+  canUnhideCurrentColumn: boolean;
+  onHideCurrentRow(this: void): void;
+  onHideCurrentColumn(this: void): void;
+  onUnhideCurrentRow(this: void): void;
+  onUnhideCurrentColumn(this: void): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const actions = [
+    {
+      key: "hide-row",
+      label: "Hide row",
+      disabled: !canHideCurrentRow,
+      onSelect: onHideCurrentRow,
+    },
+    {
+      key: "unhide-row",
+      label: "Unhide row",
+      disabled: !canUnhideCurrentRow,
+      onSelect: onUnhideCurrentRow,
+    },
+    {
+      key: "hide-column",
+      label: "Hide column",
+      disabled: !canHideCurrentColumn,
+      onSelect: onHideCurrentColumn,
+    },
+    {
+      key: "unhide-column",
+      label: "Unhide column",
+      disabled: !canUnhideCurrentColumn,
+      onSelect: onUnhideCurrentColumn,
+    },
+  ] as const;
+  const triggerDisabled = disabled || actions.every((action) => action.disabled);
+
+  const runAction = useCallback((action: () => void) => {
+    action();
+    setOpen(false);
+  }, []);
+
+  return (
+    <Popover.Root modal={false} open={open} onOpenChange={setOpen}>
+      <Popover.Trigger
+        aria-label="Structure"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={classNames(TOOLBAR_BUTTON_CLASS, "gap-1 px-2")}
+        disabled={triggerDisabled}
+        title="Structure"
+        type="button"
+      >
+        <span className="text-[11px] font-semibold">Structure</span>
+        <ChevronDown className="h-3 w-3 shrink-0 stroke-[1.75] text-[var(--wb-text-muted)]" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner align="start" className="z-[1000]" side="bottom" sideOffset={8}>
+          <Popover.Popup
+            aria-label="Structure actions"
+            className={classNames(TOOLBAR_POPUP_CLASS, "w-[176px] p-1")}
+          >
+            <div className="grid gap-1">
+              {actions.map((action) => (
+                <button
+                  aria-label={action.label}
+                  className="inline-flex h-8 items-center rounded-[4px] border border-transparent px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:border-[var(--wb-accent)] focus-visible:bg-[var(--wb-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={action.disabled}
+                  key={action.key}
+                  onClick={() => runAction(action.onSelect)}
+                  type="button"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+});
+
 export const ToolbarSelect = memo(function ToolbarSelect({
   ariaLabel,
   disabled = false,

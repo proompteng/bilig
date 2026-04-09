@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { flushSync } from "react-dom";
+import { PRODUCT_COLUMN_WIDTH, PRODUCT_ROW_HEIGHT } from "@bilig/grid";
 import type { WorkerHandle, WorkerRuntimeSessionController } from "./runtime-session.js";
 import {
   buildZeroWorkbookMutation,
@@ -410,6 +411,54 @@ export function useWorkbookSync(input: {
     [invokeMutation, workerHandleRef],
   );
 
+  const invokeColumnVisibilityMutation = useCallback(
+    async (sheetName: string, columnIndex: number, hidden: boolean): Promise<void> => {
+      const viewportStore = workerHandleRef.current?.viewportStore;
+      const previousHidden = viewportStore?.getHiddenColumns(sheetName)[columnIndex] === true;
+      const previousSize =
+        viewportStore?.getColumnSizes(sheetName)[columnIndex] ??
+        viewportStore?.getColumnWidths(sheetName)[columnIndex];
+      const nextSize = previousSize ?? PRODUCT_COLUMN_WIDTH;
+      if (viewportStore) {
+        viewportStore.setColumnHidden(sheetName, columnIndex, hidden, nextSize);
+      }
+      try {
+        await invokeMutation("updateColumnMetadata", sheetName, columnIndex, 1, null, hidden);
+      } catch (error) {
+        viewportStore?.rollbackColumnHidden(sheetName, columnIndex, {
+          hidden: previousHidden,
+          size: previousSize,
+        });
+        throw error;
+      }
+    },
+    [invokeMutation, workerHandleRef],
+  );
+
+  const invokeRowVisibilityMutation = useCallback(
+    async (sheetName: string, rowIndex: number, hidden: boolean): Promise<void> => {
+      const viewportStore = workerHandleRef.current?.viewportStore;
+      const previousHidden = viewportStore?.getHiddenRows(sheetName)[rowIndex] === true;
+      const previousSize =
+        viewportStore?.getRowSizes(sheetName)[rowIndex] ??
+        viewportStore?.getRowHeights(sheetName)[rowIndex];
+      const nextSize = previousSize ?? PRODUCT_ROW_HEIGHT;
+      if (viewportStore) {
+        viewportStore.setRowHidden(sheetName, rowIndex, hidden, nextSize);
+      }
+      try {
+        await invokeMutation("updateRowMetadata", sheetName, rowIndex, 1, null, hidden);
+      } catch (error) {
+        viewportStore?.rollbackRowHidden(sheetName, rowIndex, {
+          hidden: previousHidden,
+          size: previousSize,
+        });
+        throw error;
+      }
+    },
+    [invokeMutation, workerHandleRef],
+  );
+
   useEffect(() => {
     if (!runtimeController || !canAttemptRemoteSync(connectionStateName)) {
       return;
@@ -420,6 +469,8 @@ export function useWorkbookSync(input: {
   return {
     invokeMutation,
     invokeColumnWidthMutation,
+    invokeColumnVisibilityMutation,
     invokeRowHeightMutation,
+    invokeRowVisibilityMutation,
   };
 }

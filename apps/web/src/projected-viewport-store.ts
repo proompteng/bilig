@@ -137,8 +137,10 @@ export class ProjectedViewportStore implements GridEngineLike {
   ]);
   private readonly cellSubscriptions = new Set<CellSubscription>();
   private readonly listeners = new Set<() => void>();
+  private readonly columnSizesBySheet = new Map<string, Record<number, number>>();
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>();
   private readonly pendingColumnWidthsBySheet = new Map<string, Record<number, number>>();
+  private readonly rowSizesBySheet = new Map<string, Record<number, number>>();
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>();
   private readonly pendingRowHeightsBySheet = new Map<string, Record<number, number>>();
   private readonly hiddenColumnsBySheet = new Map<string, Record<number, true>>();
@@ -164,8 +166,16 @@ export class ProjectedViewportStore implements GridEngineLike {
     return this.columnWidthsBySheet.get(sheetName) ?? EMPTY_WIDTHS;
   }
 
+  getColumnSizes(sheetName: string): Readonly<Record<number, number>> {
+    return this.columnSizesBySheet.get(sheetName) ?? EMPTY_WIDTHS;
+  }
+
   getRowHeights(sheetName: string): Readonly<Record<number, number>> {
     return this.rowHeightsBySheet.get(sheetName) ?? EMPTY_HEIGHTS;
+  }
+
+  getRowSizes(sheetName: string): Readonly<Record<number, number>> {
+    return this.rowSizesBySheet.get(sheetName) ?? EMPTY_HEIGHTS;
   }
 
   getHiddenColumns(sheetName: string): Readonly<Record<number, true>> {
@@ -211,8 +221,11 @@ export class ProjectedViewportStore implements GridEngineLike {
       return;
     }
     this.knownSheets.add(sheetName);
+    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
+    sizes[columnIndex] = width;
+    this.columnSizesBySheet.set(sheetName, sizes);
     const widths = { ...this.columnWidthsBySheet.get(sheetName) };
-    widths[columnIndex] = width;
+    widths[columnIndex] = this.hiddenColumnsBySheet.get(sheetName)?.[columnIndex] ? 0 : width;
     this.columnWidthsBySheet.set(sheetName, widths);
     const pending = { ...this.pendingColumnWidthsBySheet.get(sheetName) };
     pending[columnIndex] = width;
@@ -235,11 +248,23 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   rollbackColumnWidth(sheetName: string, columnIndex: number, width: number | undefined): void {
+    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
+    if (width === undefined) {
+      delete sizes[columnIndex];
+    } else {
+      sizes[columnIndex] = width;
+    }
+    if (Object.keys(sizes).length === 0) {
+      this.columnSizesBySheet.delete(sheetName);
+    } else {
+      this.columnSizesBySheet.set(sheetName, sizes);
+    }
+
     const widths = { ...this.columnWidthsBySheet.get(sheetName) };
     if (width === undefined) {
       delete widths[columnIndex];
     } else {
-      widths[columnIndex] = width;
+      widths[columnIndex] = this.hiddenColumnsBySheet.get(sheetName)?.[columnIndex] ? 0 : width;
     }
     if (Object.keys(widths).length === 0) {
       this.columnWidthsBySheet.delete(sheetName);
@@ -257,14 +282,84 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.listeners.forEach((listener) => listener());
   }
 
+  setColumnHidden(sheetName: string, columnIndex: number, hidden: boolean, size: number): void {
+    this.knownSheets.add(sheetName);
+    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
+    sizes[columnIndex] = size;
+    this.columnSizesBySheet.set(sheetName, sizes);
+
+    const hiddenColumns = { ...this.hiddenColumnsBySheet.get(sheetName) };
+    if (hidden) {
+      hiddenColumns[columnIndex] = true;
+    } else {
+      delete hiddenColumns[columnIndex];
+    }
+    if (Object.keys(hiddenColumns).length === 0) {
+      this.hiddenColumnsBySheet.delete(sheetName);
+    } else {
+      this.hiddenColumnsBySheet.set(sheetName, hiddenColumns);
+    }
+
+    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
+    widths[columnIndex] = hidden ? 0 : size;
+    this.columnWidthsBySheet.set(sheetName, widths);
+    this.listeners.forEach((listener) => listener());
+  }
+
+  rollbackColumnHidden(
+    sheetName: string,
+    columnIndex: number,
+    previous: { hidden: boolean; size: number | undefined },
+  ): void {
+    const sizes = { ...this.columnSizesBySheet.get(sheetName) };
+    if (previous.size === undefined) {
+      delete sizes[columnIndex];
+    } else {
+      sizes[columnIndex] = previous.size;
+    }
+    if (Object.keys(sizes).length === 0) {
+      this.columnSizesBySheet.delete(sheetName);
+    } else {
+      this.columnSizesBySheet.set(sheetName, sizes);
+    }
+
+    const hiddenColumns = { ...this.hiddenColumnsBySheet.get(sheetName) };
+    if (previous.hidden) {
+      hiddenColumns[columnIndex] = true;
+    } else {
+      delete hiddenColumns[columnIndex];
+    }
+    if (Object.keys(hiddenColumns).length === 0) {
+      this.hiddenColumnsBySheet.delete(sheetName);
+    } else {
+      this.hiddenColumnsBySheet.set(sheetName, hiddenColumns);
+    }
+
+    const widths = { ...this.columnWidthsBySheet.get(sheetName) };
+    if (previous.size === undefined) {
+      delete widths[columnIndex];
+    } else {
+      widths[columnIndex] = previous.hidden ? 0 : previous.size;
+    }
+    if (Object.keys(widths).length === 0) {
+      this.columnWidthsBySheet.delete(sheetName);
+    } else {
+      this.columnWidthsBySheet.set(sheetName, widths);
+    }
+    this.listeners.forEach((listener) => listener());
+  }
+
   setRowHeight(sheetName: string, rowIndex: number, height: number): void {
     const currentHeight = this.rowHeightsBySheet.get(sheetName)?.[rowIndex];
     if (currentHeight === height) {
       return;
     }
     this.knownSheets.add(sheetName);
+    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
+    sizes[rowIndex] = height;
+    this.rowSizesBySheet.set(sheetName, sizes);
     const heights = { ...this.rowHeightsBySheet.get(sheetName) };
-    heights[rowIndex] = height;
+    heights[rowIndex] = this.hiddenRowsBySheet.get(sheetName)?.[rowIndex] ? 0 : height;
     this.rowHeightsBySheet.set(sheetName, heights);
     const pending = { ...this.pendingRowHeightsBySheet.get(sheetName) };
     pending[rowIndex] = height;
@@ -287,11 +382,23 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   rollbackRowHeight(sheetName: string, rowIndex: number, height: number | undefined): void {
+    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
+    if (height === undefined) {
+      delete sizes[rowIndex];
+    } else {
+      sizes[rowIndex] = height;
+    }
+    if (Object.keys(sizes).length === 0) {
+      this.rowSizesBySheet.delete(sheetName);
+    } else {
+      this.rowSizesBySheet.set(sheetName, sizes);
+    }
+
     const heights = { ...this.rowHeightsBySheet.get(sheetName) };
     if (height === undefined) {
       delete heights[rowIndex];
     } else {
-      heights[rowIndex] = height;
+      heights[rowIndex] = this.hiddenRowsBySheet.get(sheetName)?.[rowIndex] ? 0 : height;
     }
     if (Object.keys(heights).length === 0) {
       this.rowHeightsBySheet.delete(sheetName);
@@ -305,6 +412,73 @@ export class ProjectedViewportStore implements GridEngineLike {
       this.pendingRowHeightsBySheet.delete(sheetName);
     } else {
       this.pendingRowHeightsBySheet.set(sheetName, pendingHeights);
+    }
+    this.listeners.forEach((listener) => listener());
+  }
+
+  setRowHidden(sheetName: string, rowIndex: number, hidden: boolean, size: number): void {
+    this.knownSheets.add(sheetName);
+    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
+    sizes[rowIndex] = size;
+    this.rowSizesBySheet.set(sheetName, sizes);
+
+    const hiddenRows = { ...this.hiddenRowsBySheet.get(sheetName) };
+    if (hidden) {
+      hiddenRows[rowIndex] = true;
+    } else {
+      delete hiddenRows[rowIndex];
+    }
+    if (Object.keys(hiddenRows).length === 0) {
+      this.hiddenRowsBySheet.delete(sheetName);
+    } else {
+      this.hiddenRowsBySheet.set(sheetName, hiddenRows);
+    }
+
+    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
+    heights[rowIndex] = hidden ? 0 : size;
+    this.rowHeightsBySheet.set(sheetName, heights);
+    this.listeners.forEach((listener) => listener());
+  }
+
+  rollbackRowHidden(
+    sheetName: string,
+    rowIndex: number,
+    previous: { hidden: boolean; size: number | undefined },
+  ): void {
+    const sizes = { ...this.rowSizesBySheet.get(sheetName) };
+    if (previous.size === undefined) {
+      delete sizes[rowIndex];
+    } else {
+      sizes[rowIndex] = previous.size;
+    }
+    if (Object.keys(sizes).length === 0) {
+      this.rowSizesBySheet.delete(sheetName);
+    } else {
+      this.rowSizesBySheet.set(sheetName, sizes);
+    }
+
+    const hiddenRows = { ...this.hiddenRowsBySheet.get(sheetName) };
+    if (previous.hidden) {
+      hiddenRows[rowIndex] = true;
+    } else {
+      delete hiddenRows[rowIndex];
+    }
+    if (Object.keys(hiddenRows).length === 0) {
+      this.hiddenRowsBySheet.delete(sheetName);
+    } else {
+      this.hiddenRowsBySheet.set(sheetName, hiddenRows);
+    }
+
+    const heights = { ...this.rowHeightsBySheet.get(sheetName) };
+    if (previous.size === undefined) {
+      delete heights[rowIndex];
+    } else {
+      heights[rowIndex] = previous.hidden ? 0 : previous.size;
+    }
+    if (Object.keys(heights).length === 0) {
+      this.rowHeightsBySheet.delete(sheetName);
+    } else {
+      this.rowHeightsBySheet.set(sheetName, heights);
     }
     this.listeners.forEach((listener) => listener());
   }
@@ -446,11 +620,13 @@ export class ProjectedViewportStore implements GridEngineLike {
 
     let axisChanged = false;
     if (patch.columns.length > 0) {
+      const sizes = { ...this.columnSizesBySheet.get(patch.viewport.sheetName) };
       const widths = { ...this.columnWidthsBySheet.get(patch.viewport.sheetName) };
       const pendingWidths = { ...this.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) };
       const hiddenColumns = { ...this.hiddenColumnsBySheet.get(patch.viewport.sheetName) };
       patch.columns.forEach((column: { index: number; size: number; hidden: boolean }) => {
         const wasHidden = hiddenColumns[column.index] === true;
+        sizes[column.index] = column.size;
         const pending = pendingWidths[column.index];
         if (column.hidden) {
           hiddenColumns[column.index] = true;
@@ -468,6 +644,7 @@ export class ProjectedViewportStore implements GridEngineLike {
         widths[column.index] = column.size;
         axisChanged = true;
       });
+      this.columnSizesBySheet.set(patch.viewport.sheetName, sizes);
       this.columnWidthsBySheet.set(patch.viewport.sheetName, widths);
       this.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, pendingWidths);
       if (Object.keys(hiddenColumns).length === 0) {
@@ -478,11 +655,13 @@ export class ProjectedViewportStore implements GridEngineLike {
     }
 
     if (patch.rows.length > 0) {
+      const sizes = { ...this.rowSizesBySheet.get(patch.viewport.sheetName) };
       const heights = { ...this.rowHeightsBySheet.get(patch.viewport.sheetName) };
       const pendingHeights = { ...this.pendingRowHeightsBySheet.get(patch.viewport.sheetName) };
       const hiddenRows = { ...this.hiddenRowsBySheet.get(patch.viewport.sheetName) };
       patch.rows.forEach((row: { index: number; size: number; hidden: boolean }) => {
         const wasHidden = hiddenRows[row.index] === true;
+        sizes[row.index] = row.size;
         const pending = pendingHeights[row.index];
         if (row.hidden) {
           hiddenRows[row.index] = true;
@@ -500,6 +679,7 @@ export class ProjectedViewportStore implements GridEngineLike {
         heights[row.index] = row.size;
         axisChanged = true;
       });
+      this.rowSizesBySheet.set(patch.viewport.sheetName, sizes);
       this.rowHeightsBySheet.set(patch.viewport.sheetName, heights);
       this.pendingRowHeightsBySheet.set(patch.viewport.sheetName, pendingHeights);
       if (Object.keys(hiddenRows).length === 0) {
@@ -581,8 +761,10 @@ export class ProjectedViewportStore implements GridEngineLike {
       this.cellSnapshots.delete(key);
     });
     this.cellKeysBySheet.delete(sheetName);
+    this.columnSizesBySheet.delete(sheetName);
     this.columnWidthsBySheet.delete(sheetName);
     this.pendingColumnWidthsBySheet.delete(sheetName);
+    this.rowSizesBySheet.delete(sheetName);
     this.rowHeightsBySheet.delete(sheetName);
     this.pendingRowHeightsBySheet.delete(sheetName);
     this.hiddenColumnsBySheet.delete(sheetName);

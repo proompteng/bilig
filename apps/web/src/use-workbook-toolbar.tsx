@@ -42,6 +42,14 @@ export function useWorkbookToolbar(input: {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  canHideCurrentRow: boolean;
+  canHideCurrentColumn: boolean;
+  canUnhideCurrentRow: boolean;
+  canUnhideCurrentColumn: boolean;
+  onHideCurrentRow: () => void;
+  onHideCurrentColumn: () => void;
+  onUnhideCurrentRow: () => void;
+  onUnhideCurrentColumn: () => void;
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>;
   selectionRange: CellRangeRef;
   selection: { sheetName: string };
@@ -60,6 +68,14 @@ export function useWorkbookToolbar(input: {
     canRedo,
     onUndo,
     onRedo,
+    canHideCurrentRow,
+    canHideCurrentColumn,
+    canUnhideCurrentRow,
+    canUnhideCurrentColumn,
+    onHideCurrentRow,
+    onHideCurrentColumn,
+    onUnhideCurrentRow,
+    onUnhideCurrentColumn,
     invokeMutation,
     selectionRange,
     selection,
@@ -393,6 +409,10 @@ export function useWorkbookToolbar(input: {
     () => (
       <WorkbookToolbar
         canRedo={canRedo}
+        canHideCurrentColumn={canHideCurrentColumn}
+        canHideCurrentRow={canHideCurrentRow}
+        canUnhideCurrentColumn={canUnhideCurrentColumn}
+        canUnhideCurrentRow={canUnhideCurrentRow}
         canUndo={canUndo}
         currentFillColor={currentFillColor}
         currentNumberFormatKind={currentNumberFormat.kind}
@@ -423,6 +443,8 @@ export function useWorkbookToolbar(input: {
             },
           });
         }}
+        onHideCurrentColumn={onHideCurrentColumn}
+        onHideCurrentRow={onHideCurrentRow}
         onNumberFormatChange={(value) => {
           void setNumberFormatPreset(value);
         }}
@@ -447,6 +469,8 @@ export function useWorkbookToolbar(input: {
           });
         }}
         onUndo={onUndo}
+        onUnhideCurrentColumn={onUnhideCurrentColumn}
+        onUnhideCurrentRow={onUnhideCurrentRow}
         recentFillColors={visibleRecentFillColors}
         recentTextColors={visibleRecentTextColors}
         selectedFontSize={selectedFontSize}
@@ -460,6 +484,10 @@ export function useWorkbookToolbar(input: {
       applyTextColor,
       clearRangeStyleFields,
       canRedo,
+      canHideCurrentColumn,
+      canHideCurrentRow,
+      canUnhideCurrentColumn,
+      canUnhideCurrentRow,
       canUndo,
       currentFillColor,
       currentNumberFormat.kind,
@@ -470,7 +498,11 @@ export function useWorkbookToolbar(input: {
       isUnderlineActive,
       isWrapActive,
       onRedo,
+      onHideCurrentColumn,
+      onHideCurrentRow,
       onUndo,
+      onUnhideCurrentColumn,
+      onUnhideCurrentRow,
       resetFillColor,
       resetTextColor,
       selectedFontSize,

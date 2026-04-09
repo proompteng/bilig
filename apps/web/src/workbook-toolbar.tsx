@@ -20,6 +20,7 @@ import { ColorPaletteButton } from "./workbook-color-picker.js";
 import {
   BorderPresetMenu,
   RibbonIconButton,
+  StructureActionsMenu,
   type BorderPreset,
   ToolbarSelect,
 } from "./workbook-toolbar-primitives.js";
@@ -62,6 +63,14 @@ export interface WorkbookToolbarProps {
   onTextColorReset(this: void): void;
   onHorizontalAlignmentChange(this: void, alignment: "left" | "center" | "right"): void;
   onApplyBorderPreset(this: void, preset: BorderPreset): void;
+  canHideCurrentRow: boolean;
+  canHideCurrentColumn: boolean;
+  canUnhideCurrentRow: boolean;
+  canUnhideCurrentColumn: boolean;
+  onHideCurrentRow(this: void): void;
+  onHideCurrentColumn(this: void): void;
+  onUnhideCurrentRow(this: void): void;
+  onUnhideCurrentColumn(this: void): void;
   onToggleWrap(this: void): void;
   onClearStyle(this: void): void;
   onUndo(this: void): void;
@@ -94,6 +103,14 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   onTextColorReset,
   onHorizontalAlignmentChange,
   onApplyBorderPreset,
+  canHideCurrentRow,
+  canHideCurrentColumn,
+  canUnhideCurrentRow,
+  canUnhideCurrentColumn,
+  onHideCurrentRow,
+  onHideCurrentColumn,
+  onUnhideCurrentRow,
+  onUnhideCurrentColumn,
   onToggleWrap,
   onClearStyle,
   onUndo,
@@ -232,6 +249,22 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
 
         <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
           <BorderPresetMenu disabled={!writesAllowed} onApplyPreset={onApplyBorderPreset} />
+        </Toolbar.Group>
+
+        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+
+        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+          <StructureActionsMenu
+            canHideCurrentColumn={canHideCurrentColumn}
+            canHideCurrentRow={canHideCurrentRow}
+            canUnhideCurrentColumn={canUnhideCurrentColumn}
+            canUnhideCurrentRow={canUnhideCurrentRow}
+            disabled={!writesAllowed}
+            onHideCurrentColumn={onHideCurrentColumn}
+            onHideCurrentRow={onHideCurrentRow}
+            onUnhideCurrentColumn={onUnhideCurrentColumn}
+            onUnhideCurrentRow={onUnhideCurrentRow}
+          />
         </Toolbar.Group>
 
         <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />

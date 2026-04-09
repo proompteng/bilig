@@ -195,6 +195,24 @@ export function useWorkerWorkbookAppState(input: {
     () => workerHandle?.viewportStore.getRowHeights(selection.sheetName),
   );
 
+  const hiddenColumns = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => workerHandle?.viewportStore.getHiddenColumns(selection.sheetName) ?? {},
+    () => workerHandle?.viewportStore.getHiddenColumns(selection.sheetName) ?? {},
+  );
+
+  const hiddenRows = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => workerHandle?.viewportStore.getHiddenRows(selection.sheetName) ?? {},
+    () => workerHandle?.viewportStore.getHiddenRows(selection.sheetName) ?? {},
+  );
+
   const selectedCell = useSyncExternalStore(
     useCallback(
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
@@ -218,7 +236,13 @@ export function useWorkerWorkbookAppState(input: {
   const clearRuntimeError = useCallback(() => {
     runtimeActorRef.send({ type: "error.clear" });
   }, [runtimeActorRef]);
-  const { invokeMutation, invokeColumnWidthMutation, invokeRowHeightMutation } = useWorkbookSync({
+  const {
+    invokeMutation,
+    invokeColumnVisibilityMutation,
+    invokeColumnWidthMutation,
+    invokeRowHeightMutation,
+    invokeRowVisibilityMutation,
+  } = useWorkbookSync({
     documentId,
     connectionStateName: connectionState.name,
     connectionStateRef,
@@ -534,6 +558,10 @@ export function useWorkerWorkbookAppState(input: {
 
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId);
   const selectionRange = parseSelectionRangeLabel(selectionLabel, selection.sheetName);
+  const selectedPosition = useMemo(
+    () => parseCellAddress(selection.address, selection.sheetName),
+    [selection.address, selection.sheetName],
+  );
 
   const {
     headerStatus: toolbarHeaderStatus,
@@ -548,9 +576,33 @@ export function useWorkerWorkbookAppState(input: {
     zeroHealthReady,
     canRedo,
     canUndo,
+    canHideCurrentColumn: hiddenColumns[selectedPosition.col] !== true,
+    canHideCurrentRow: hiddenRows[selectedPosition.row] !== true,
+    canUnhideCurrentColumn: hiddenColumns[selectedPosition.col] === true,
+    canUnhideCurrentRow: hiddenRows[selectedPosition.row] === true,
     invokeMutation,
+    onHideCurrentColumn: () => {
+      void invokeColumnVisibilityMutation(selection.sheetName, selectedPosition.col, true).catch(
+        reportRuntimeError,
+      );
+    },
+    onHideCurrentRow: () => {
+      void invokeRowVisibilityMutation(selection.sheetName, selectedPosition.row, true).catch(
+        reportRuntimeError,
+      );
+    },
     onRedo: redoLatestChange,
     onUndo: undoLatestChange,
+    onUnhideCurrentColumn: () => {
+      void invokeColumnVisibilityMutation(selection.sheetName, selectedPosition.col, false).catch(
+        reportRuntimeError,
+      );
+    },
+    onUnhideCurrentRow: () => {
+      void invokeRowVisibilityMutation(selection.sheetName, selectedPosition.row, false).catch(
+        reportRuntimeError,
+      );
+    },
     selectionRange,
     selection,
     selectionLabel,
@@ -618,6 +670,8 @@ export function useWorkerWorkbookAppState(input: {
     cancelEditor,
     clearSelectedCell,
     columnWidths,
+    hiddenColumns,
+    hiddenRows,
     rowHeights,
     commitEditor,
     copySelectionRange,
@@ -630,8 +684,10 @@ export function useWorkerWorkbookAppState(input: {
     handleEditorChange,
     headerStatus,
     handleVisibleViewportChange,
+    invokeColumnVisibilityMutation,
     invokeColumnWidthMutation,
     invokeRowHeightMutation,
+    invokeRowVisibilityMutation,
     isEditing,
     isEditingCell,
     moveSelectionRange,

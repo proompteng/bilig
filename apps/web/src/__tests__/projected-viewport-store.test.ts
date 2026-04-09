@@ -382,6 +382,7 @@ describe("ProjectedViewportStore", () => {
     cache.applyViewportPatch(createColumnPatch(93, true));
 
     expect(cache.getColumnWidths("Sheet1")[0]).toBe(0);
+    expect(cache.getColumnSizes("Sheet1")[0]).toBe(93);
     expect(cache.getHiddenColumns("Sheet1")[0]).toBe(true);
 
     cache.applyViewportPatch(createColumnPatch(93, false));
@@ -396,11 +397,46 @@ describe("ProjectedViewportStore", () => {
     cache.applyViewportPatch(createRowPatch(44, true));
 
     expect(cache.getRowHeights("Sheet1")[0]).toBe(0);
+    expect(cache.getRowSizes("Sheet1")[0]).toBe(44);
     expect(cache.getHiddenRows("Sheet1")[0]).toBe(true);
 
     cache.applyViewportPatch(createRowPatch(44, false));
 
     expect(cache.getRowHeights("Sheet1")[0]).toBe(44);
+    expect(cache.getHiddenRows("Sheet1")[0]).toBeUndefined();
+  });
+
+  it("supports optimistic column hide and rollback using preserved raw sizes", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.applyViewportPatch(createColumnPatch(93));
+    cache.setColumnHidden("Sheet1", 0, true, 93);
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(0);
+    expect(cache.getColumnSizes("Sheet1")[0]).toBe(93);
+    expect(cache.getHiddenColumns("Sheet1")[0]).toBe(true);
+
+    cache.rollbackColumnHidden("Sheet1", 0, { hidden: false, size: 93 });
+
+    expect(cache.getColumnWidths("Sheet1")[0]).toBe(93);
+    expect(cache.getColumnSizes("Sheet1")[0]).toBe(93);
+    expect(cache.getHiddenColumns("Sheet1")[0]).toBeUndefined();
+  });
+
+  it("supports optimistic row hide and rollback using preserved raw sizes", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.applyViewportPatch(createRowPatch(44));
+    cache.setRowHidden("Sheet1", 0, true, 44);
+
+    expect(cache.getRowHeights("Sheet1")[0]).toBe(0);
+    expect(cache.getRowSizes("Sheet1")[0]).toBe(44);
+    expect(cache.getHiddenRows("Sheet1")[0]).toBe(true);
+
+    cache.rollbackRowHidden("Sheet1", 0, { hidden: false, size: 44 });
+
+    expect(cache.getRowHeights("Sheet1")[0]).toBe(44);
+    expect(cache.getRowSizes("Sheet1")[0]).toBe(44);
     expect(cache.getHiddenRows("Sheet1")[0]).toBeUndefined();
   });
 });
