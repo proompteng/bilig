@@ -37,7 +37,7 @@ export function createEngineSnapshotService(args: {
     | "sheetDeleteVersions"
   >;
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
-  readonly resetWorkbook: () => void;
+  readonly resetWorkbook: (workbookName?: string) => void;
   readonly executeRestoreTransaction: (transaction: TransactionRecord) => void;
 }): EngineSnapshotService {
   return {

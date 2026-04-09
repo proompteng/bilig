@@ -28,3 +28,5 @@ export class EngineFormulaEvaluationError extends Data.TaggedError("EngineFormul
 export class EngineCellStateError extends Data.TaggedError("EngineCellStateError")<EngineServiceErrorDetails> {}
 
 export class EngineTraversalError extends Data.TaggedError("EngineTraversalError")<EngineServiceErrorDetails> {}
+
+export class EngineMaintenanceError extends Data.TaggedError("EngineMaintenanceError")<EngineServiceErrorDetails> {}

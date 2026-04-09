@@ -26,6 +26,10 @@ import {
   type EngineHistoryService,
 } from "./services/history-service.js";
 import {
+  createEngineMaintenanceService,
+  type EngineMaintenanceService,
+} from "./services/maintenance-service.js";
+import {
   createEngineMutationService,
   type EngineMutationService,
 } from "./services/mutation-service.js";
@@ -72,6 +76,7 @@ import {
 
 export interface EngineServiceRuntime {
   readonly cellState: EngineCellStateService;
+  readonly maintenance: EngineMaintenanceService;
   readonly traversal: EngineTraversalService;
   readonly events: EngineEventService;
   readonly evaluation: EngineFormulaEvaluationService;
@@ -134,6 +139,14 @@ type EngineRecalcRuntimeConfig = Omit<
   | "materializePivot"
 >;
 
+type EngineMaintenanceRuntimeConfig = Omit<
+  Parameters<typeof createEngineMaintenanceService>[0],
+  | "captureSheetCellState"
+  | "captureRowRangeCellState"
+  | "captureColumnRangeCellState"
+  | "scheduleWasmProgramSync"
+>;
+
 type EnginePivotRuntimeConfig = Omit<
   Parameters<typeof createEnginePivotService>[0],
   | "ensureCellTrackedByCoords"
@@ -147,7 +160,9 @@ type EngineOperationRuntimeConfig = Omit<
   Parameters<typeof createEngineOperationService>[0],
   | "getSelectionState"
   | "setSelection"
+  | "rewriteDefinedNamesForSheetRename"
   | "rewriteCellFormulasForSheetRename"
+  | "estimatePotentialNewCells"
   | "rebindDefinedNameDependents"
   | "rebindTableDependents"
   | "rebindFormulaCells"
@@ -194,21 +209,8 @@ export function createEngineServiceRuntime(args: {
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
   readonly exportSnapshot: () => import("@bilig/protocol").WorkbookSnapshot;
   readonly importSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
-  readonly resetWorkbook: () => void;
+  readonly maintenance: EngineMaintenanceRuntimeConfig;
   readonly mutationSupport: EngineMutationSupportRuntimeConfig;
-  readonly captureSheetCellState: (
-    sheetName: string,
-  ) => import("@bilig/workbook-domain").EngineOp[];
-  readonly captureRowRangeCellState: (
-    sheetName: string,
-    start: number,
-    count: number,
-  ) => import("@bilig/workbook-domain").EngineOp[];
-  readonly captureColumnRangeCellState: (
-    sheetName: string,
-    start: number,
-    count: number,
-  ) => import("@bilig/workbook-domain").EngineOp[];
   readonly formulaBinding: EngineFormulaBindingRuntimeConfig;
   readonly formulaGraph: EngineFormulaGraphRuntimeConfig;
   readonly recalc: EngineRecalcRuntimeConfig;
@@ -310,6 +312,16 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
     rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
   });
+  const maintenance = createEngineMaintenanceService({
+    ...args.maintenance,
+    captureSheetCellState: (sheetName) =>
+      runEngineEffect(structure.captureSheetCellState(sheetName)),
+    captureRowRangeCellState: (sheetName, start, count) =>
+      runEngineEffect(structure.captureRowRangeCellState(sheetName, start, count)),
+    captureColumnRangeCellState: (sheetName, start, count) =>
+      runEngineEffect(structure.captureColumnRangeCellState(sheetName, start, count)),
+    scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
+  });
   recalc = createEngineRecalcService({
     ...args.recalc,
     beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
@@ -341,6 +353,10 @@ export function createEngineServiceRuntime(args: {
     getSelectionState: () => runEngineEffect(selection.getSelectionState()),
     setSelection: (sheetName, address) =>
       runEngineEffect(selection.setSelection(sheetName, address)),
+    rewriteDefinedNamesForSheetRename: (oldSheetName, newSheetName) =>
+      runEngineEffect(
+        maintenance.rewriteDefinedNamesForSheetRename(oldSheetName, newSheetName),
+      ),
     rewriteCellFormulasForSheetRename: (oldSheetName, newSheetName, formulaChangedCount) =>
       runEngineEffect(
         binding.rewriteCellFormulasForSheetRename(
@@ -386,6 +402,8 @@ export function createEngineServiceRuntime(args: {
     composeEventChanges: (recalculated, explicitChangedCount) =>
       runEngineEffect(support.composeEventChanges(recalculated, explicitChangedCount)),
     getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
+    estimatePotentialNewCells: (ops) =>
+      runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
     ensureCellTracked: (sheetName, address) =>
       runEngineEffect(support.ensureCellTracked(sheetName, address)),
     resetMaterializedCellScratch: (expectedSize) =>
@@ -404,9 +422,12 @@ export function createEngineServiceRuntime(args: {
   });
   const mutation = createEngineMutationService({
     state: args.state,
-    captureSheetCellState: args.captureSheetCellState,
-    captureRowRangeCellState: args.captureRowRangeCellState,
-    captureColumnRangeCellState: args.captureColumnRangeCellState,
+    captureSheetCellState: (sheetName) =>
+      runEngineEffect(maintenance.captureSheetCellState(sheetName)),
+    captureRowRangeCellState: (sheetName, start, count) =>
+      runEngineEffect(maintenance.captureRowRangeCellState(sheetName, start, count)),
+    captureColumnRangeCellState: (sheetName, start, count) =>
+      runEngineEffect(maintenance.captureColumnRangeCellState(sheetName, start, count)),
     restoreCellOps: (sheetName, address) =>
       runEngineEffect(cellState.restoreCellOps(sheetName, address)),
     readRangeCells: (range) => runEngineEffect(cellState.readRangeCells(range)),
@@ -440,7 +461,7 @@ export function createEngineServiceRuntime(args: {
   const snapshot = createEngineSnapshotService({
     state: args.state,
     getCellByIndex: args.getCellByIndex,
-    resetWorkbook: args.resetWorkbook,
+    resetWorkbook: (workbookName) => runEngineEffect(maintenance.resetWorkbook(workbookName)),
     executeRestoreTransaction: (transaction) =>
       runEngineEffect(mutation.executeTransaction(transaction, "restore")),
   });
@@ -452,6 +473,7 @@ export function createEngineServiceRuntime(args: {
 
   return {
     cellState,
+    maintenance,
     traversal,
     events: createEngineEventService(args.state),
     evaluation,

@@ -34,7 +34,6 @@ import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 import { growUint32 } from "./engine-buffer-utils.js";
 import {
   definedNameValuesEqual,
-  renameDefinedNameValueSheet,
 } from "./engine-metadata-utils.js";
 import {
   buildFormatClearOps,
@@ -219,7 +218,24 @@ export class SpreadsheetEngine {
       getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
       exportSnapshot: () => this.exportSnapshot(),
       importSnapshot: (snapshot) => this.importSnapshot(snapshot),
-      resetWorkbook: () => this.resetWorkbook(),
+      maintenance: {
+        state: this.state,
+        edgeArena: this.edgeArena,
+        reverseState: {
+          reverseCellEdges: this.reverseCellEdges,
+          reverseRangeEdges: this.reverseRangeEdges,
+          reverseDefinedNameEdges: this.reverseDefinedNameEdges,
+          reverseTableEdges: this.reverseTableEdges,
+          reverseSpillEdges: this.reverseSpillEdges,
+        },
+        pivotOutputOwners: this.pivotOutputOwners,
+        setWasmProgramSyncPending: (next) => {
+          this.wasmProgramSyncPending = next;
+        },
+        setMaterializedCellCount: (next) => {
+          this.materializedCellCount = next;
+        },
+      },
       mutationSupport: {
         state: this.state,
         edgeArena: this.edgeArena,
@@ -303,11 +319,6 @@ export class SpreadsheetEngine {
           this.impactedFormulaBuffer = next;
         },
       },
-      captureSheetCellState: (sheetName) => this.captureSheetCellState(sheetName),
-      captureRowRangeCellState: (sheetName, start, count) =>
-        this.captureRowRangeCellState(sheetName, start, count),
-      captureColumnRangeCellState: (sheetName, start, count) =>
-        this.captureColumnRangeCellState(sheetName, start, count),
       formulaBinding: {
         state: this.state,
         edgeArena: this.edgeArena,
@@ -453,9 +464,6 @@ export class SpreadsheetEngine {
         reverseState: {
           reverseSpillEdges: this.reverseSpillEdges,
         },
-        rewriteDefinedNamesForSheetRename: (oldSheetName, newSheetName) =>
-          this.rewriteDefinedNamesForSheetRename(oldSheetName, newSheetName),
-        estimatePotentialNewCells: (ops) => this.estimatePotentialNewCells(ops),
         getBatchMutationDepth: () => this.batchMutationDepth,
         setBatchMutationDepth: (next) => {
           this.batchMutationDepth = next;
@@ -1011,29 +1019,6 @@ export class SpreadsheetEngine {
     runEngineEffect(this.runtime.snapshot.importWorkbook(snapshot));
   }
 
-  private captureSheetCellState(sheetName: string): EngineOp[] {
-    return runEngineEffect(this.runtime.structure.captureSheetCellState(sheetName));
-  }
-
-  private captureRowRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
-    return runEngineEffect(this.runtime.structure.captureRowRangeCellState(sheetName, start, count));
-  }
-
-  private captureColumnRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
-    return runEngineEffect(
-      this.runtime.structure.captureColumnRangeCellState(sheetName, start, count),
-    );
-  }
-
-  private rewriteDefinedNamesForSheetRename(oldSheetName: string, newSheetName: string): void {
-    this.workbook.listDefinedNames().forEach((record) => {
-      const nextValue = renameDefinedNameValueSheet(record.value, oldSheetName, newSheetName);
-      if (!definedNameValuesEqual(record.value, nextValue)) {
-        this.workbook.setDefinedName(record.name, nextValue);
-      }
-    });
-  }
-
   exportReplicaSnapshot(): EngineReplicaSnapshot {
     return runEngineEffect(this.runtime.snapshot.exportReplica());
   }
@@ -1114,60 +1099,6 @@ export class SpreadsheetEngine {
     if (size > this.impactedFormulaBuffer.length) {
       this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
     }
-  }
-
-  private estimatePotentialNewCells(ops: readonly EngineOp[]): number {
-    let count = 0;
-    for (let index = 0; index < ops.length; index += 1) {
-      const op = ops[index]!;
-      if (
-        op.kind === "setCellValue" ||
-        op.kind === "setCellFormula" ||
-        op.kind === "setCellFormat"
-      ) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
-  private resetWorkbook(workbookName = "Workbook"): void {
-    const previousBatchId = this.lastMetrics.batchId;
-    this.workbook.reset(workbookName);
-    this.formulas.clear();
-    this.reverseCellEdges.length = 0;
-    this.reverseRangeEdges.length = 0;
-    this.reverseDefinedNameEdges.clear();
-    this.reverseTableEdges.clear();
-    this.reverseSpillEdges.clear();
-    this.pivotOutputOwners.clear();
-    this.ranges.reset();
-    this.edgeArena.reset();
-    this.entityVersions.clear();
-    this.sheetDeleteVersions.clear();
-    this.undoStack.length = 0;
-    this.redoStack.length = 0;
-    this.selection = {
-      sheetName: "Sheet1",
-      address: "A1",
-      anchorAddress: "A1",
-      range: { startAddress: "A1", endAddress: "A1" },
-      editMode: "idle",
-    };
-    this.syncState = "local-only";
-    this.lastMetrics = {
-      batchId: previousBatchId,
-      changedInputCount: 0,
-      dirtyFormulaCount: 0,
-      wasmFormulaCount: 0,
-      jsFormulaCount: 0,
-      rangeNodeVisits: 0,
-      recalcMs: 0,
-      compileMs: 0,
-    };
-    this.wasmProgramSyncPending = false;
-    this.materializedCellCount = 0;
-    runEngineEffect(this.runtime.graph.scheduleWasmProgramSync());
   }
 }
 
