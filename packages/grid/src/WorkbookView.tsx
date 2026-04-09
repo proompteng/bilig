@@ -69,6 +69,7 @@ interface WorkbookViewProps {
   selectionStatus?: React.ReactNode;
   headerStatus?: React.ReactNode;
   sideRail?: React.ReactNode;
+  sideRailId?: string | undefined;
   sideRailWidth?: number | undefined;
   onSideRailWidthChange?: ((width: number) => void) | undefined;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
@@ -127,6 +128,7 @@ export function WorkbookView({
   selectionStatus,
   headerStatus,
   sideRail,
+  sideRailId,
   sideRailWidth,
   onSideRailWidthChange,
   subscribeViewport,
@@ -241,6 +243,7 @@ export function WorkbookView({
           <aside
             className="relative flex h-full shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-app-bg)]"
             data-testid="workbook-side-rail"
+            id={sideRailId}
             style={{
               flexBasis: `${resolvedSideRailWidth}px`,
               width: `${resolvedSideRailWidth}px`,

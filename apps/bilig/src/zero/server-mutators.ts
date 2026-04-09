@@ -851,7 +851,7 @@ export async function handleServerMutator(
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
-        session,
+        ...(session ? { session } : {}),
         ...(parsed.clientMutationId !== undefined
           ? { clientMutationId: parsed.clientMutationId }
           : {}),
@@ -884,7 +884,7 @@ export async function handleServerMutator(
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
-        session,
+        ...(session ? { session } : {}),
         ...(parsed.clientMutationId !== undefined
           ? { clientMutationId: parsed.clientMutationId }
           : {}),
@@ -917,7 +917,7 @@ export async function handleServerMutator(
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
-        session,
+        ...(session ? { session } : {}),
         ...(parsed.clientMutationId !== undefined
           ? { clientMutationId: parsed.clientMutationId }
           : {}),

@@ -80,6 +80,7 @@ describe("workbook layout", () => {
           onMoveRange={() => {}}
           onPaste={() => {}}
           onSideRailWidthChange={() => {}}
+          sideRailId="workbook-side-rail-doc-1"
           sideRail={<div data-testid="assistant-rail">Assistant rail</div>}
           sideRailWidth={384}
         />,
@@ -89,6 +90,7 @@ describe("workbook layout", () => {
     const sideRail = host.querySelector("[data-testid='workbook-side-rail']");
     const gridSurface = host.querySelector("[data-testid='grid-surface']");
     expect(sideRail).not.toBeNull();
+    expect(sideRail?.getAttribute("id")).toBe("workbook-side-rail-doc-1");
     expect(sideRail?.textContent).toContain("Assistant rail");
     expect(sideRail instanceof HTMLElement ? sideRail.style.width : null).toBe("384px");
     expect(host.querySelector("[data-testid='workbook-side-rail-resize-handle']")).not.toBeNull();

@@ -16,6 +16,7 @@ type WorkbookAgentPreviewBundle = (
 
 export function useWorkbookAppPanels(input: {
   documentId: string;
+  currentUserId: string;
   replicaId: string;
   selection: WorkerRuntimeSelection;
   sheetNames: readonly string[];
@@ -33,6 +34,7 @@ export function useWorkbookAppPanels(input: {
   const {
     changeCount,
     changesPanel,
+    currentUserId,
     documentId,
     getAgentContext,
     previewAgentBundle,
@@ -90,9 +92,11 @@ export function useWorkbookAppPanels(input: {
     toggleSideRail,
   } = useWorkbookShellLayout({
     documentId,
+    persistenceKey: `${documentId}:${currentUserId}`,
     availableTabs: sideRailTabs.map((tab) => tab.value),
-    defaultTab: "assistant",
+    defaultTab: null,
   });
+  const sideRailId = `workbook-side-rail-${documentId}`;
 
   const sideRailToggleControls = useMemo(
     () => (
@@ -104,6 +108,8 @@ export function useWorkbookAppPanels(input: {
           const active = isSideRailOpen && activeSideRailTab === tab.value;
           return (
             <button
+              aria-controls={sideRailId}
+              aria-expanded={active}
               aria-pressed={active}
               className={[
                 "inline-flex h-7 items-center gap-1.5 rounded-[calc(var(--wb-radius-control)-1px)] px-2.5 text-[12px] font-medium transition-colors",
@@ -129,7 +135,7 @@ export function useWorkbookAppPanels(input: {
         })}
       </div>
     ),
-    [activeSideRailTab, isSideRailOpen, sideRailTabs, toggleSideRail],
+    [activeSideRailTab, isSideRailOpen, sideRailId, sideRailTabs, toggleSideRail],
   );
 
   const headerStatus = useMemo(
@@ -154,7 +160,6 @@ export function useWorkbookAppPanels(input: {
     () =>
       isSideRailOpen && activeSideRailTab ? (
         <WorkbookSideRailTabs
-          defaultValue="assistant"
           tabs={sideRailTabs}
           value={activeSideRailTab}
           onValueChange={setActiveSideRailTab}
@@ -170,6 +175,7 @@ export function useWorkbookAppPanels(input: {
     headerStatus,
     pendingCommandCount,
     previewRanges,
+    sideRailId,
     sideRail,
     setSideRailWidth,
     sideRailWidth,

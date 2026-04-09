@@ -11,7 +11,6 @@ function ShellLayoutHarness(props: { documentId: string }) {
   const layout = useWorkbookShellLayout({
     documentId: props.documentId,
     availableTabs: ["assistant", "changes"],
-    defaultTab: "assistant",
   });
 
   return (
@@ -38,15 +37,38 @@ function ShellLayoutHarness(props: { documentId: string }) {
 
 describe("workbook shell layout", () => {
   beforeEach(() => {
-    window.localStorage.clear();
+    const backingStore = new Map<string, string>();
+    const storage = {
+      clear() {
+        backingStore.clear();
+      },
+      getItem(key: string) {
+        return backingStore.get(key) ?? null;
+      },
+      key(index: number) {
+        return [...backingStore.keys()][index] ?? null;
+      },
+      removeItem(key: string) {
+        backingStore.delete(key);
+      },
+      setItem(key: string, value: string) {
+        backingStore.set(key, value);
+      },
+      get length() {
+        return backingStore.size;
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: storage,
+    });
   });
 
   afterEach(() => {
     document.body.innerHTML = "";
-    window.localStorage.clear();
   });
 
-  it("defaults to a collapsed side rail with the assistant remembered as the fallback tab", async () => {
+  it("defaults to a collapsed side rail with no implicit active tab", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -61,7 +83,7 @@ describe("workbook shell layout", () => {
 
     const state = host.querySelector("[data-testid='shell-layout-state']");
     expect(state?.getAttribute("data-open")).toBe("false");
-    expect(state?.getAttribute("data-tab")).toBe("assistant");
+    expect(state?.getAttribute("data-tab")).toBe("");
     expect(state?.getAttribute("data-width")).toBe(String(DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH));
 
     await act(async () => {
@@ -138,6 +160,79 @@ describe("workbook shell layout", () => {
 
     await act(async () => {
       root.unmount();
+    });
+  });
+
+  it("isolates persisted layout state per explicit persistence key", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+
+    function ScopedShellLayoutHarness(props: { documentId: string; persistenceKey: string }) {
+      const layout = useWorkbookShellLayout({
+        documentId: props.documentId,
+        persistenceKey: props.persistenceKey,
+        availableTabs: ["assistant", "changes"],
+      });
+
+      return (
+        <div
+          data-open={String(layout.isSideRailOpen)}
+          data-tab={layout.activeSideRailTab ?? ""}
+          data-testid="scoped-shell-layout-state"
+          data-width={String(layout.sideRailWidth)}
+        >
+          <button
+            data-testid="scoped-toggle-assistant"
+            type="button"
+            onClick={() => layout.toggleSideRail("assistant")}
+          />
+          <button
+            data-testid="scoped-set-width"
+            type="button"
+            onClick={() => layout.setSideRailWidth(432)}
+          />
+        </div>
+      );
+    }
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+
+    const firstRoot = createRoot(host);
+    await act(async () => {
+      firstRoot.render(
+        <ScopedShellLayoutHarness documentId="doc-4" persistenceKey="doc-4:user-a" />,
+      );
+    });
+
+    await act(async () => {
+      host
+        .querySelector("[data-testid='scoped-toggle-assistant']")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      host
+        .querySelector("[data-testid='scoped-set-width']")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      firstRoot.unmount();
+    });
+
+    const secondRoot = createRoot(host);
+    await act(async () => {
+      secondRoot.render(
+        <ScopedShellLayoutHarness documentId="doc-4" persistenceKey="doc-4:user-b" />,
+      );
+    });
+
+    const state = host.querySelector("[data-testid='scoped-shell-layout-state']");
+    expect(state?.getAttribute("data-open")).toBe("false");
+    expect(state?.getAttribute("data-tab")).toBe("");
+    expect(state?.getAttribute("data-width")).toBe(String(DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH));
+
+    await act(async () => {
+      secondRoot.unmount();
     });
   });
 });

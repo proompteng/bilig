@@ -30,7 +30,6 @@ export function isPendingWorkbookMutationReadyForSubmission(
 }
 
 function transitionMutation(
-  mutation: PendingWorkbookMutation,
   transition: () => PendingWorkbookMutation,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
   return Effect.try({
@@ -48,7 +47,7 @@ export function recordPendingWorkbookMutationAttempt(
   mutation: PendingWorkbookMutation,
   attemptedAtUnixMs: number,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
-  return transitionMutation(mutation, () => {
+  return transitionMutation(() => {
     if (mutation.status === "submitted" || mutation.status === "acked") {
       throw new MutationJournalTransitionError({
         message: `Cannot record an additional submission attempt for ${mutation.status} mutation ${mutation.id}`,
@@ -75,7 +74,7 @@ export function markPendingWorkbookMutationSubmitted(
   mutation: PendingWorkbookMutation,
   submittedAtUnixMs: number,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
-  return transitionMutation(mutation, () => {
+  return transitionMutation(() => {
     if (
       mutation.status !== "local" &&
       mutation.status !== "rebased" &&
@@ -99,7 +98,7 @@ export function markPendingWorkbookMutationRebased(
   mutation: PendingWorkbookMutation,
   rebasedAtUnixMs: number,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
-  return transitionMutation(mutation, () => {
+  return transitionMutation(() => {
     if (mutation.status === "acked" || mutation.status === "failed") {
       if (mutation.status === "failed") {
         return clonePendingWorkbookMutation(mutation);
@@ -121,7 +120,7 @@ export function markPendingWorkbookMutationFailed(
   failureMessage: string,
   failedAtUnixMs: number,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
-  return transitionMutation(mutation, () => {
+  return transitionMutation(() => {
     if (mutation.status === "acked") {
       throw new MutationJournalTransitionError({
         message: `Cannot fail acked mutation ${mutation.id}`,
@@ -139,7 +138,7 @@ export function markPendingWorkbookMutationFailed(
 export function queuePendingWorkbookMutationRetry(
   mutation: PendingWorkbookMutation,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
-  return transitionMutation(mutation, () => {
+  return transitionMutation(() => {
     if (mutation.status !== "failed") {
       throw new MutationJournalTransitionError({
         message: `Cannot retry ${mutation.status} mutation ${mutation.id}`,
@@ -159,7 +158,7 @@ export function markPendingWorkbookMutationAcked(
   mutation: PendingWorkbookMutation,
   ackedAtUnixMs: number,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {
-  return transitionMutation(mutation, () => {
+  return transitionMutation(() => {
     if (mutation.status === "acked") {
       throw new MutationJournalTransitionError({
         message: `Mutation ${mutation.id} has already been acked`,

@@ -18,8 +18,8 @@ interface WorkbookShellLayoutState {
   sideRailWidth: number;
 }
 
-function storageKey(documentId: string): string {
-  return `${STORAGE_KEY_PREFIX}${documentId}`;
+function storageKey(scope: string): string {
+  return `${STORAGE_KEY_PREFIX}${scope}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,12 +56,12 @@ function normalizeStoredWorkbookShellLayout(
 }
 
 export function loadPersistedWorkbookShellLayout(
-  documentId: string,
+  scope: string,
   availableTabs: readonly string[],
   defaultTab: string | null,
 ): WorkbookShellLayoutState {
   try {
-    const raw = window.localStorage.getItem(storageKey(documentId));
+    const raw = window.localStorage.getItem(storageKey(scope));
     if (!raw) {
       return normalizeStoredWorkbookShellLayout(null, availableTabs, defaultTab);
     }
@@ -72,10 +72,7 @@ export function loadPersistedWorkbookShellLayout(
   }
 }
 
-export function persistWorkbookShellLayout(
-  documentId: string,
-  layout: WorkbookShellLayoutState,
-): void {
+export function persistWorkbookShellLayout(scope: string, layout: WorkbookShellLayoutState): void {
   try {
     const stored: StoredWorkbookShellLayout = {
       sideRailOpen: layout.isSideRailOpen,
@@ -84,7 +81,7 @@ export function persistWorkbookShellLayout(
     if (layout.activeSideRailTab !== null) {
       stored.sideRailTab = layout.activeSideRailTab;
     }
-    window.localStorage.setItem(storageKey(documentId), JSON.stringify(stored));
+    window.localStorage.setItem(storageKey(scope), JSON.stringify(stored));
   } catch {
     // Ignore storage failures and keep the shell usable.
   }
@@ -92,15 +89,20 @@ export function persistWorkbookShellLayout(
 
 export function useWorkbookShellLayout(input: {
   documentId: string;
+  persistenceKey?: string;
   availableTabs: readonly string[];
-  defaultTab?: string;
+  defaultTab?: string | null;
 }) {
-  const { documentId, availableTabs, defaultTab } = input;
+  const { availableTabs, defaultTab, documentId, persistenceKey } = input;
+  const resolvedPersistenceKey = persistenceKey ?? documentId;
   const resolvedDefaultTab = useMemo(() => {
     if (availableTabs.length === 0) {
       return null;
     }
-    return defaultTab && availableTabs.includes(defaultTab) ? defaultTab : availableTabs[0]!;
+    if (defaultTab === null) {
+      return null;
+    }
+    return defaultTab === undefined ? null : availableTabs.includes(defaultTab) ? defaultTab : null;
   }, [availableTabs, defaultTab]);
   const [layout, setLayout] = useState<WorkbookShellLayoutState>(() =>
     typeof window === "undefined"
@@ -109,7 +111,7 @@ export function useWorkbookShellLayout(input: {
           activeSideRailTab: resolvedDefaultTab,
           sideRailWidth: DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH,
         }
-      : loadPersistedWorkbookShellLayout(documentId, availableTabs, resolvedDefaultTab),
+      : loadPersistedWorkbookShellLayout(resolvedPersistenceKey, availableTabs, resolvedDefaultTab),
   );
 
   useEffect(() => {
@@ -138,8 +140,8 @@ export function useWorkbookShellLayout(input: {
     if (typeof window === "undefined") {
       return;
     }
-    persistWorkbookShellLayout(documentId, layout);
-  }, [documentId, layout]);
+    persistWorkbookShellLayout(resolvedPersistenceKey, layout);
+  }, [layout, resolvedPersistenceKey]);
 
   const setActiveSideRailTab = useCallback(
     (nextTab: string) => {

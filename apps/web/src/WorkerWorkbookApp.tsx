@@ -164,6 +164,7 @@ function WorkerWorkbookAppInner({
               subscribeViewport={app.subscribeViewport}
               columnWidths={app.columnWidths}
               onSideRailWidthChange={app.setSideRailWidth}
+              sideRailId={app.sideRailId}
               sideRail={app.sideRail}
               sideRailWidth={app.sideRailWidth}
             />
