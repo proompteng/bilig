@@ -6,6 +6,10 @@ import {
   type EngineEventService,
 } from "./services/event-service.js";
 import {
+  createEngineFormulaEvaluationService,
+  type EngineFormulaEvaluationService,
+} from "./services/formula-evaluation-service.js";
+import {
   createEngineFormulaBindingService,
   type EngineFormulaBindingService,
 } from "./services/formula-binding-service.js";
@@ -60,6 +64,7 @@ import {
 
 export interface EngineServiceRuntime {
   readonly events: EngineEventService;
+  readonly evaluation: EngineFormulaEvaluationService;
   readonly selection: EngineSelectionService;
   readonly binding: EngineFormulaBindingService;
   readonly graph: EngineFormulaGraphService;
@@ -75,12 +80,18 @@ export interface EngineServiceRuntime {
   readonly sync: EngineReplicaSyncService;
 }
 
+type EngineFormulaBindingRuntimeConfig = Omit<
+  Parameters<typeof createEngineFormulaBindingService>[0],
+  "resolveStructuredReference" | "resolveSpillReference"
+>;
+
 export function createEngineServiceRuntime(args: {
   readonly state: EngineRuntimeState;
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
   readonly exportSnapshot: () => import("@bilig/protocol").WorkbookSnapshot;
   readonly importSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly resetWorkbook: () => void;
+  readonly evaluation: Parameters<typeof createEngineFormulaEvaluationService>[0];
   readonly mutationSupport: Parameters<typeof createEngineMutationSupportService>[0];
   readonly captureSheetCellState: (
     sheetName: string,
@@ -99,7 +110,7 @@ export function createEngineServiceRuntime(args: {
     sheetName: string,
     address: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
-  readonly formulaBinding: Parameters<typeof createEngineFormulaBindingService>[0];
+  readonly formulaBinding: EngineFormulaBindingRuntimeConfig;
   readonly formulaGraph: Parameters<typeof createEngineFormulaGraphService>[0];
   readonly readRangeCells: (
     range: import("@bilig/protocol").CellRangeRef,
@@ -156,7 +167,6 @@ export function createEngineServiceRuntime(args: {
     },
   ) => import("./runtime-state.js").SpillMaterialization;
   readonly clearOwnedSpill: (cellIndex: number) => number[];
-  readonly evaluateUnsupportedFormula: (cellIndex: number) => number[];
   readonly getEntityDependents: (entityId: number) => Uint32Array;
   readonly clearOwnedPivot: (
     pivot: import("../workbook-store.js").WorkbookPivotRecord,
@@ -170,8 +180,15 @@ export function createEngineServiceRuntime(args: {
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly operation: Parameters<typeof createEngineOperationService>[0];
 }): EngineServiceRuntime {
+  const evaluation = createEngineFormulaEvaluationService(args.evaluation);
   const support = createEngineMutationSupportService(args.mutationSupport);
-  const binding = createEngineFormulaBindingService(args.formulaBinding);
+  const binding = createEngineFormulaBindingService({
+    ...args.formulaBinding,
+    resolveStructuredReference: (tableName, columnName) =>
+      runEngineEffect(evaluation.resolveStructuredReference(tableName, columnName)),
+    resolveSpillReference: (currentSheetName, sheetName, address) =>
+      runEngineEffect(evaluation.resolveSpillReference(currentSheetName, sheetName, address)),
+  });
   const graph = createEngineFormulaGraphService(args.formulaGraph);
   const structure = createEngineStructureService({
     state: {
@@ -212,7 +229,8 @@ export function createEngineServiceRuntime(args: {
     getChangedInputBuffer: args.getChangedInputBuffer,
     materializeSpill: args.materializeSpill,
     clearOwnedSpill: args.clearOwnedSpill,
-    evaluateUnsupportedFormula: args.evaluateUnsupportedFormula,
+    evaluateUnsupportedFormula: (cellIndex) =>
+      runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     materializePivot: (pivot) => args.materializePivot(pivot),
     getEntityDependents: args.getEntityDependents,
   });
@@ -263,6 +281,7 @@ export function createEngineServiceRuntime(args: {
 
   return {
     events: createEngineEventService(args.state),
+    evaluation,
     selection: createEngineSelectionService(args.state),
     binding,
     graph,

@@ -5,7 +5,6 @@ import {
   type CellStyleField,
   type CellStylePatch,
   type CellStyleRecord,
-  ErrorCode,
   ValueTag,
   type CellSnapshot,
   type CellValue,
@@ -25,12 +24,8 @@ import {
   type WorkbookSnapshot,
 } from "@bilig/protocol";
 import {
-  type FormulaNode,
-  evaluatePlanResult,
   formatAddress,
-  isArrayValue,
   parseCellAddress,
-  parseRangeAddress,
   translateFormulaReferences,
 } from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
@@ -40,13 +35,11 @@ import {
   type OpOrder,
   type ReplicaState,
 } from "./replica-state.js";
-import { CellFlags } from "./cell-store.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
 import { entityPayload, isRangeEntity } from "./entity-ids.js";
 import { growUint32 } from "./engine-buffer-utils.js";
 import {
-  definedNameValueToCellValue,
   definedNameValuesEqual,
   renameDefinedNameValueSheet,
 } from "./engine-metadata-utils.js";
@@ -57,7 +50,6 @@ import {
   buildStyleClearOps,
   buildStylePatchOps,
 } from "./engine-range-format-ops.js";
-import { emptyValue, errorValue } from "./engine-value-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
 import { RangeRegistry } from "./range-registry.js";
@@ -244,6 +236,13 @@ export class SpreadsheetEngine {
       exportSnapshot: () => this.exportSnapshot(),
       importSnapshot: (snapshot) => this.importSnapshot(snapshot),
       resetWorkbook: () => this.resetWorkbook(),
+      evaluation: {
+        state: this.state,
+        materializeSpill: (cellIndex, arrayValue) => this.materializeSpill(cellIndex, arrayValue),
+        clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
+        resolvePivotData: (sheetName, address, dataField, filters) =>
+          this.resolvePivotData(sheetName, address, dataField, filters),
+      },
       mutationSupport: {
         state: this.state,
         edgeArena: this.edgeArena,
@@ -359,10 +358,6 @@ export class SpreadsheetEngine {
           this.ensureCellTrackedByCoords(sheetId, row, col),
         forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
         markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
-        resolveStructuredReference: (tableName, columnName) =>
-          this.resolveStructuredReference(tableName, columnName),
-        resolveSpillReference: (currentSheetName, sheetName, address) =>
-          this.resolveSpillReference(currentSheetName, sheetName, address),
         getDependencyBuildEpoch: () => this.dependencyBuildEpoch,
         setDependencyBuildEpoch: (next) => {
           this.dependencyBuildEpoch = next;
@@ -512,7 +507,6 @@ export class SpreadsheetEngine {
       getWasmBatch: () => this.wasmBatch,
       materializeSpill: (cellIndex, arrayValue) => this.materializeSpill(cellIndex, arrayValue),
       clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
-      evaluateUnsupportedFormula: (cellIndex) => this.evaluateUnsupportedFormula(cellIndex),
       getEntityDependents: (entityId) => this.getEntityDependents(entityId),
       clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
       clearPivotForCell: (cellIndex) => this.clearPivotForCell(cellIndex),
@@ -1233,155 +1227,6 @@ export class SpreadsheetEngine {
     return runEngineEffect(this.runtime.pivot.resolvePivotData(sheetName, address, dataField, filters));
   }
 
-  private resolveMultipleOperations(request: {
-    formulaSheetName: string;
-    formulaAddress: string;
-    rowCellSheetName: string;
-    rowCellAddress: string;
-    rowReplacementSheetName: string;
-    rowReplacementAddress: string;
-    columnCellSheetName?: string;
-    columnCellAddress?: string;
-    columnReplacementSheetName?: string;
-    columnReplacementAddress?: string;
-  }): CellValue {
-    const replacements = new Map<string, { sheetName: string; address: string }>();
-    replacements.set(
-      this.referenceReplacementKey(request.rowCellSheetName, request.rowCellAddress),
-      {
-        sheetName: request.rowReplacementSheetName,
-        address: request.rowReplacementAddress,
-      },
-    );
-    if (
-      request.columnCellSheetName &&
-      request.columnCellAddress &&
-      request.columnReplacementSheetName &&
-      request.columnReplacementAddress
-    ) {
-      replacements.set(
-        this.referenceReplacementKey(request.columnCellSheetName, request.columnCellAddress),
-        {
-          sheetName: request.columnReplacementSheetName,
-          address: request.columnReplacementAddress,
-        },
-      );
-    }
-    return this.evaluateCellWithReferenceReplacements(
-      request.formulaSheetName,
-      request.formulaAddress,
-      replacements,
-      new Set<string>(),
-    );
-  }
-
-  private referenceReplacementKey(sheetName: string, address: string): string {
-    return `${sheetName.trim().toUpperCase()}!${address.trim().toUpperCase()}`;
-  }
-
-  private evaluateCellWithReferenceReplacements(
-    sheetName: string,
-    address: string,
-    replacements: ReadonlyMap<string, { sheetName: string; address: string }>,
-    visiting: Set<string>,
-  ): CellValue {
-    const replacementKey = this.referenceReplacementKey(sheetName, address);
-    const replacement = replacements.get(replacementKey);
-    if (replacement) {
-      return this.evaluateCellWithReferenceReplacements(
-        replacement.sheetName,
-        replacement.address,
-        replacements,
-        visiting,
-      );
-    }
-
-    const visitKey = this.referenceReplacementKey(sheetName, address);
-    if (visiting.has(visitKey)) {
-      return errorValue(ErrorCode.Cycle);
-    }
-
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      return emptyValue();
-    }
-
-    const formula = this.formulas.get(cellIndex);
-    if (!formula) {
-      return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-    }
-
-    visiting.add(visitKey);
-    const evaluationContext = {
-      sheetName,
-      currentAddress: address,
-      resolveCell: (targetSheetName, targetAddress) =>
-        this.evaluateCellWithReferenceReplacements(
-          targetSheetName,
-          targetAddress,
-          replacements,
-          visiting,
-        ),
-      resolveRange: (targetSheetName, start, end, refKind) => {
-        if (refKind !== "cells") {
-          return [];
-        }
-        const range = parseRangeAddress(`${start}:${end}`, targetSheetName);
-        if (range.kind !== "cells") {
-          return [];
-        }
-        const values: CellValue[] = [];
-        for (let row = range.start.row; row <= range.end.row; row += 1) {
-          for (let col = range.start.col; col <= range.end.col; col += 1) {
-            values.push(
-              this.evaluateCellWithReferenceReplacements(
-                targetSheetName,
-                formatAddress(row, col),
-                replacements,
-                visiting,
-              ),
-            );
-          }
-        }
-        return values;
-      },
-      resolveName: (name) => {
-        const definedName = this.workbook.getDefinedName(name);
-        if (!definedName) {
-          return errorValue(ErrorCode.Name);
-        }
-        return definedNameValueToCellValue(definedName.value, this.strings);
-      },
-      resolveFormula: (targetSheetName: string, targetAddress: string) =>
-        this.getCell(targetSheetName, targetAddress).formula,
-      resolvePivotData: ({
-        dataField,
-        sheetName: pivotSheetName,
-        address: pivotAddress,
-        filters,
-      }) => this.resolvePivotData(pivotSheetName, pivotAddress, dataField, filters),
-      resolveMultipleOperations: (nested: {
-        formulaSheetName: string;
-        formulaAddress: string;
-        rowCellSheetName: string;
-        rowCellAddress: string;
-        rowReplacementSheetName: string;
-        rowReplacementAddress: string;
-        columnCellSheetName?: string;
-        columnCellAddress?: string;
-        columnReplacementSheetName?: string;
-        columnReplacementAddress?: string;
-      }) => this.resolveMultipleOperations(nested),
-      listSheetNames: () =>
-        [...this.workbook.sheetsByName.values()]
-          .toSorted((left, right) => left.order - right.order)
-          .map((sheet) => sheet.name),
-    } as Parameters<typeof evaluatePlanResult>[1];
-    const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
-    visiting.delete(visitKey);
-    return isArrayValue(result) ? (result.values[0] ?? emptyValue()) : result;
-  }
-
   private clearOwnedPivot(pivot: WorkbookPivotRecord): number[] {
     return runEngineEffect(this.runtime.pivot.clearOwnedPivot(pivot));
   }
@@ -1585,205 +1430,6 @@ export class SpreadsheetEngine {
     if (size > this.impactedFormulaBuffer.length) {
       this.impactedFormulaBuffer = growUint32(this.impactedFormulaBuffer, size);
     }
-  }
-
-  private evaluateUnsupportedFormula(cellIndex: number): number[] {
-    const formula = this.formulas.get(cellIndex);
-    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-    if (!formula || !sheetName) {
-      return [];
-    }
-
-    const evaluationContext = {
-      sheetName,
-      currentAddress: this.workbook.getAddress(cellIndex),
-      resolveCell: (targetSheetName, address) => this.readCellValue(targetSheetName, address),
-      resolveRange: (targetSheetName, start, end, refKind) =>
-        this.readRangeValues(targetSheetName, start, end, refKind),
-      resolveName: (name) => {
-        const definedName = this.workbook.getDefinedName(name);
-        if (!definedName) {
-          return errorValue(ErrorCode.Name);
-        }
-        return definedNameValueToCellValue(definedName.value, this.strings);
-      },
-      resolveFormula: (targetSheetName: string, address: string) =>
-        this.getCell(targetSheetName, address).formula,
-      resolvePivotData: ({ dataField, sheetName: pivotSheetName, address, filters }) =>
-        this.resolvePivotData(pivotSheetName, address, dataField, filters),
-      resolveMultipleOperations: ({
-        formulaSheetName,
-        formulaAddress,
-        rowCellSheetName,
-        rowCellAddress,
-        rowReplacementSheetName,
-        rowReplacementAddress,
-        columnCellSheetName,
-        columnCellAddress,
-        columnReplacementSheetName,
-        columnReplacementAddress,
-      }: {
-        formulaSheetName: string;
-        formulaAddress: string;
-        rowCellSheetName: string;
-        rowCellAddress: string;
-        rowReplacementSheetName: string;
-        rowReplacementAddress: string;
-        columnCellSheetName?: string;
-        columnCellAddress?: string;
-        columnReplacementSheetName?: string;
-        columnReplacementAddress?: string;
-      }) =>
-        this.resolveMultipleOperations({
-          formulaSheetName,
-          formulaAddress,
-          rowCellSheetName,
-          rowCellAddress,
-          rowReplacementSheetName,
-          rowReplacementAddress,
-          ...(columnCellSheetName ? { columnCellSheetName } : {}),
-          ...(columnCellAddress ? { columnCellAddress } : {}),
-          ...(columnReplacementSheetName ? { columnReplacementSheetName } : {}),
-          ...(columnReplacementAddress ? { columnReplacementAddress } : {}),
-        }),
-      listSheetNames: () =>
-        [...this.workbook.sheetsByName.values()]
-          .toSorted((left, right) => left.order - right.order)
-          .map((sheet) => sheet.name),
-    } as Parameters<typeof evaluatePlanResult>[1];
-    const result = evaluatePlanResult(formula.compiled.jsPlan, evaluationContext);
-
-    const materialization = isArrayValue(result)
-      ? this.materializeSpill(cellIndex, result)
-      : {
-          changedCellIndices: this.clearOwnedSpill(cellIndex),
-          ownerValue: result,
-        };
-
-    this.workbook.cellStore.flags[cellIndex] =
-      (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-      ~(CellFlags.SpillChild | CellFlags.PivotOutput);
-    this.workbook.cellStore.setValue(
-      cellIndex,
-      materialization.ownerValue,
-      materialization.ownerValue.tag === ValueTag.String
-        ? this.strings.intern(materialization.ownerValue.value)
-        : 0,
-    );
-    return materialization.changedCellIndices;
-  }
-
-  private resolveStructuredReference(
-    tableName: string,
-    columnName: string,
-  ): FormulaNode | undefined {
-    const table = this.workbook.getTable(tableName);
-    if (!table) {
-      return undefined;
-    }
-    const columnIndex = table.columnNames.findIndex(
-      (name) => name.trim().toUpperCase() === columnName.trim().toUpperCase(),
-    );
-    if (columnIndex === -1) {
-      return undefined;
-    }
-    const start = parseCellAddress(table.startAddress, table.sheetName);
-    const end = parseCellAddress(table.endAddress, table.sheetName);
-    const startRow = start.row + (table.headerRow ? 1 : 0);
-    const endRow = end.row - (table.totalsRow ? 1 : 0);
-    if (endRow < startRow) {
-      return { kind: "ErrorLiteral", code: ErrorCode.Ref };
-    }
-    const column = start.col + columnIndex;
-    return {
-      kind: "RangeRef",
-      refKind: "cells",
-      sheetName: table.sheetName,
-      start: formatAddress(startRow, column),
-      end: formatAddress(endRow, column),
-    };
-  }
-
-  private resolveSpillReference(
-    currentSheetName: string,
-    sheetName: string | undefined,
-    address: string,
-  ): FormulaNode | undefined {
-    const targetSheetName = sheetName ?? currentSheetName;
-    const spill = this.workbook.getSpill(targetSheetName, address);
-    if (!spill) {
-      return undefined;
-    }
-    const owner = parseCellAddress(address, targetSheetName);
-    return {
-      kind: "RangeRef",
-      refKind: "cells",
-      sheetName: targetSheetName,
-      start: owner.text,
-      end: formatAddress(owner.row + spill.rows - 1, owner.col + spill.cols - 1),
-    };
-  }
-
-  private readCellValue(sheetName: string, address: string): CellValue {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      return emptyValue();
-    }
-    return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-  }
-
-  private readRangeValueMatrix(range: CellRangeRef): CellValue[][] {
-    const bounds = normalizeRange(range);
-    const width = bounds.endCol - bounds.startCol + 1;
-    const height = bounds.endRow - bounds.startRow + 1;
-    const rows = Array.from<CellValue[]>({ length: height });
-    const sheet = this.workbook.getSheet(range.sheetName);
-
-    for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
-      const row = bounds.startRow + rowOffset;
-      const values = Array.from<CellValue>({ length: width });
-      for (let colOffset = 0; colOffset < width; colOffset += 1) {
-        const col = bounds.startCol + colOffset;
-        const cellIndex = sheet?.grid.get(row, col) ?? -1;
-        values[colOffset] =
-          cellIndex === -1
-            ? emptyValue()
-            : this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
-      }
-      rows[rowOffset] = values;
-    }
-
-    return rows;
-  }
-
-  private readRangeValues(
-    sheetName: string,
-    start: string,
-    end: string,
-    refKind: "cells" | "rows" | "cols",
-  ): CellValue[] {
-    if (refKind !== "cells") {
-      return [];
-    }
-    const range = parseRangeAddress(`${start}:${end}`, sheetName);
-    if (range.kind !== "cells") {
-      return [];
-    }
-    const rows = this.readRangeValueMatrix({
-      sheetName,
-      startAddress: start,
-      endAddress: end,
-    });
-    const values = Array.from<CellValue>({ length: rows.length * (rows[0]?.length ?? 0) });
-    let valueIndex = 0;
-    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-      const row = rows[rowIndex]!;
-      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-        values[valueIndex] = row[colIndex]!;
-        valueIndex += 1;
-      }
-    }
-    return values;
   }
 
   private scheduleWasmProgramSync(): void {
