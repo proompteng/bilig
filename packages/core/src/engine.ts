@@ -292,8 +292,12 @@ export class SpreadsheetEngine {
       state: this.state,
       getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
       resetWorkbook: () => this.resetWorkbook(),
-      executeRestoreTransaction: (transaction) => this.executeTransaction(transaction, "restore"),
-      executeHistoryTransaction: (transaction, source) => this.executeTransaction(transaction, source),
+      executeRestoreTransaction: (transaction) => this.executeTransactionNow(transaction, "restore"),
+      executeHistoryTransaction: (transaction, source) => this.executeTransactionNow(transaction, source),
+      buildInverseOps: (ops) => this.buildInverseOps(ops),
+      applyBatchNow: (batch, source, potentialNewCells) => {
+        this.applyBatch(batch, source, potentialNewCells);
+      },
       applyRemoteBatchNow: (batch) => this.applyBatch(batch, "remote"),
       applyRemoteSnapshot: (snapshot) => {
         this.importSnapshot(snapshot);
@@ -2447,65 +2451,7 @@ export class SpreadsheetEngine {
   }
 
   renderCommit(ops: CommitOp[]): void {
-    const engineOps: EngineOp[] = [];
-    let potentialNewCells = 0;
-    ops.forEach((op) => {
-      switch (op.kind) {
-        case "upsertWorkbook":
-          if (op.name) engineOps.push({ kind: "upsertWorkbook", name: op.name });
-          break;
-        case "upsertSheet":
-          if (op.name) engineOps.push({ kind: "upsertSheet", name: op.name, order: op.order ?? 0 });
-          break;
-        case "renameSheet":
-          if (op.oldName && op.newName) {
-            engineOps.push({ kind: "renameSheet", oldName: op.oldName, newName: op.newName });
-          }
-          break;
-        case "deleteSheet":
-          if (op.name) engineOps.push({ kind: "deleteSheet", name: op.name });
-          break;
-        case "upsertCell":
-          if (!op.sheetName || !op.addr) break;
-          if (op.formula !== undefined) {
-            engineOps.push({
-              kind: "setCellFormula",
-              sheetName: op.sheetName,
-              address: op.addr,
-              formula: op.formula,
-            });
-          } else {
-            engineOps.push({
-              kind: "setCellValue",
-              sheetName: op.sheetName,
-              address: op.addr,
-              value: op.value ?? null,
-            });
-          }
-          potentialNewCells += 1;
-          if (op.format !== undefined) {
-            engineOps.push({
-              kind: "setCellFormat",
-              sheetName: op.sheetName,
-              address: op.addr,
-              format: op.format,
-            });
-          }
-          break;
-        case "deleteCell":
-          if (op.sheetName && op.addr) {
-            engineOps.push({ kind: "clearCell", sheetName: op.sheetName, address: op.addr });
-            engineOps.push({
-              kind: "setCellFormat",
-              sheetName: op.sheetName,
-              address: op.addr,
-              format: null,
-            });
-          }
-          break;
-      }
-    });
-    this.executeLocalTransaction(engineOps, potentialNewCells);
+    runEngineEffect(this.runtime.mutation.renderCommit(ops));
   }
 
   applyRemoteBatch(batch: EngineOpBatch): boolean {
@@ -2516,21 +2462,7 @@ export class SpreadsheetEngine {
     result: T;
     undoOps: readonly EngineOp[] | null;
   } {
-    const previousUndoDepth = this.undoStack.length;
-    const result = mutate();
-    if (this.undoStack.length === previousUndoDepth) {
-      return {
-        result,
-        undoOps: null,
-      };
-    }
-    if (this.undoStack.length === previousUndoDepth + 1) {
-      return {
-        result,
-        undoOps: structuredClone(this.undoStack.at(-1)?.inverse.ops ?? null),
-      };
-    }
-    throw new Error("Expected a single local transaction while capturing undo ops");
+    return runEngineEffect(this.runtime.mutation.captureUndoOps(mutate));
   }
 
   applyOps(
@@ -2540,44 +2472,17 @@ export class SpreadsheetEngine {
       potentialNewCells?: number;
     } = {},
   ): readonly EngineOp[] | null {
-    const nextOps = structuredClone([...ops]);
-    if (nextOps.length === 0) {
-      return null;
-    }
-    if (options.captureUndo) {
-      return this.executeLocalTransaction(nextOps, options.potentialNewCells);
-    }
-    this.executeTransaction(
-      options.potentialNewCells === undefined
-        ? { ops: nextOps }
-        : { ops: nextOps, potentialNewCells: options.potentialNewCells },
-      "restore",
-    );
-    return null;
+    return runEngineEffect(this.runtime.mutation.applyOps(ops, options));
   }
 
   private executeLocalTransaction(
     ops: EngineOp[],
     potentialNewCells?: number,
   ): readonly EngineOp[] | null {
-    if (ops.length === 0) {
-      return null;
-    }
-    const forward: TransactionRecord =
-      potentialNewCells === undefined ? { ops } : { ops, potentialNewCells };
-    const inverse: TransactionRecord = {
-      ops: this.buildInverseOps(ops),
-      potentialNewCells: ops.length,
-    };
-    this.executeTransaction(forward, "local");
-    if (this.transactionReplayDepth === 0) {
-      this.undoStack.push({ forward, inverse });
-      this.redoStack.length = 0;
-    }
-    return structuredClone(inverse.ops);
+    return runEngineEffect(this.runtime.mutation.executeLocal(ops, potentialNewCells));
   }
 
-  private executeTransaction(
+  private executeTransactionNow(
     record: TransactionRecord,
     source: "local" | "restore" | "history",
   ): void {

@@ -10,6 +10,10 @@ import {
   type EngineHistoryService,
 } from "./services/history-service.js";
 import {
+  createEngineMutationService,
+  type EngineMutationService,
+} from "./services/mutation-service.js";
+import {
   createEngineReplicaSyncService,
   type EngineReplicaSyncService,
 } from "./services/replica-sync-service.js";
@@ -26,6 +30,7 @@ export interface EngineServiceRuntime {
   readonly events: EngineEventService;
   readonly selection: EngineSelectionService;
   readonly history: EngineHistoryService;
+  readonly mutation: EngineMutationService;
   readonly snapshot: EngineSnapshotService;
   readonly sync: EngineReplicaSyncService;
 }
@@ -36,6 +41,12 @@ export function createEngineServiceRuntime(args: {
   readonly resetWorkbook: () => void;
   readonly executeRestoreTransaction: (transaction: TransactionRecord) => void;
   readonly executeHistoryTransaction: (transaction: TransactionRecord, source: "history") => void;
+  readonly buildInverseOps: (ops: import("@bilig/workbook-domain").EngineOp[]) => import("@bilig/workbook-domain").EngineOp[];
+  readonly applyBatchNow: (
+    batch: import("@bilig/workbook-domain").EngineOpBatch,
+    source: "local" | "restore" | "history",
+    potentialNewCells?: number,
+  ) => void;
   readonly applyRemoteBatchNow: (batch: import("@bilig/workbook-domain").EngineOpBatch) => void;
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
 }): EngineServiceRuntime {
@@ -45,6 +56,11 @@ export function createEngineServiceRuntime(args: {
     history: createEngineHistoryService({
       state: args.state,
       executeTransaction: args.executeHistoryTransaction,
+    }),
+    mutation: createEngineMutationService({
+      state: args.state,
+      buildInverseOps: args.buildInverseOps,
+      applyBatchNow: args.applyBatchNow,
     }),
     snapshot: createEngineSnapshotService({
       state: args.state,
