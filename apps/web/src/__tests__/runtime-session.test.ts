@@ -63,7 +63,7 @@ function createMemoryLocalStoreFactory(seed?: {
   pendingMutations?: readonly WorkbookLocalMutationRecord[];
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
-  let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
+  let currentMutationJournal = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
   let currentEngine: TestSpreadsheetEngine | null = null;
   const loadCurrentEngine = async (): Promise<TestSpreadsheetEngine | null> => {
     if (!currentState) {
@@ -79,9 +79,11 @@ function createMemoryLocalStoreFactory(seed?: {
       currentEngine.importSnapshot(currentState.snapshot);
     }
     const engine = currentEngine;
-    currentPendingMutations.forEach((mutation) => {
-      applyPendingWorkbookMutationToEngine(engine, mutation);
-    });
+    currentMutationJournal
+      .filter((mutation) => mutation.status !== "acked")
+      .forEach((mutation) => {
+        applyPendingWorkbookMutationToEngine(engine, mutation);
+      });
     return engine;
   };
   return {
@@ -129,31 +131,40 @@ function createMemoryLocalStoreFactory(seed?: {
         },
         async ingestAuthoritativeDelta(input) {
           currentState = structuredClone(input.state);
-          await loadCurrentEngine();
           if ((input.removePendingMutationIds?.length ?? 0) > 0) {
             const removedIds = new Set(input.removePendingMutationIds);
-            currentPendingMutations = currentPendingMutations.filter(
-              (mutation) => !removedIds.has(mutation.id),
+            currentMutationJournal = currentMutationJournal.map((mutation) =>
+              removedIds.has(mutation.id)
+                ? {
+                    ...cloneMutationRecord(mutation),
+                    ackedAtUnixMs: Date.now(),
+                    status: "acked",
+                  }
+                : mutation,
             );
           }
+          await loadCurrentEngine();
         },
         async listPendingMutations() {
-          return currentPendingMutations.map(cloneMutationRecord);
+          return currentMutationJournal
+            .filter((mutation) => mutation.status !== "acked")
+            .map(cloneMutationRecord);
+        },
+        async listMutationJournalEntries() {
+          return currentMutationJournal.map(cloneMutationRecord);
         },
         async appendPendingMutation(mutation) {
-          currentPendingMutations.push(cloneMutationRecord(mutation));
+          currentMutationJournal.push(cloneMutationRecord(mutation));
           await loadCurrentEngine();
         },
         async updatePendingMutation(mutation) {
-          currentPendingMutations = currentPendingMutations.map((entry) =>
+          currentMutationJournal = currentMutationJournal.map((entry) =>
             entry.id === mutation.id ? cloneMutationRecord(mutation) : entry,
           );
           await loadCurrentEngine();
         },
         async removePendingMutation(id) {
-          currentPendingMutations = currentPendingMutations.filter(
-            (mutation) => mutation.id !== id,
-          );
+          currentMutationJournal = currentMutationJournal.filter((mutation) => mutation.id !== id);
           await loadCurrentEngine();
         },
         readViewportProjection(sheetName, viewport) {
@@ -299,7 +310,7 @@ function expectPendingMutationId(value: unknown): string {
 
 function expectPendingMutationSummaries(
   value: unknown,
-): Array<{ id: string; status: "pending" | "submitted" }> {
+): Array<{ id: string; status: "local" | "submitted" | "rebased" | "failed" }> {
   if (!Array.isArray(value)) {
     throw new Error("Expected a pending mutation list");
   }
@@ -307,7 +318,10 @@ function expectPendingMutationSummaries(
     if (
       !isRecord(entry) ||
       typeof entry["id"] !== "string" ||
-      (entry["status"] !== "pending" && entry["status"] !== "submitted")
+      (entry["status"] !== "local" &&
+        entry["status"] !== "submitted" &&
+        entry["status"] !== "rebased" &&
+        entry["status"] !== "failed")
     ) {
       throw new Error("Expected a pending mutation summary");
     }
@@ -449,7 +463,13 @@ describe("createWorkerRuntimeSessionController", () => {
             args: ["Sheet1", "A1", 17],
             enqueuedAtUnixMs: 1,
             submittedAtUnixMs: null,
-            status: "pending",
+            lastAttemptedAtUnixMs: null,
+            ackedAtUnixMs: null,
+            rebasedAtUnixMs: null,
+            failedAtUnixMs: null,
+            attemptCount: 0,
+            failureMessage: null,
+            status: "local",
           },
         ],
       }),

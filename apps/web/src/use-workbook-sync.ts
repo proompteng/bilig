@@ -15,6 +15,7 @@ import {
   type PendingWorkbookMutationInput,
   type WorkbookMutationMethod,
 } from "./workbook-sync.js";
+import { isPendingWorkbookMutationReadyForSubmission } from "./workbook-mutation-journal.js";
 import {
   assert,
   canAttemptRemoteSync,
@@ -168,14 +169,20 @@ export function useWorkbookSync(input: {
         return;
       }
 
-      if (mutation.status === "submitted") {
+      if (!isPendingWorkbookMutationReadyForSubmission(mutation)) {
         await drainBatch(pendingMutations, index + 1);
         return;
       }
 
+      await runtimeController.invoke("recordPendingMutationAttempt", mutation.id);
       const remoteResult = await runZeroMutation(mutation);
       if (!remoteResult.ok) {
         if (!remoteResult.retryable) {
+          await runtimeController.invoke(
+            "markPendingMutationFailed",
+            mutation.id,
+            remoteResult.error.message,
+          );
           throw remoteResult.error;
         }
         return;

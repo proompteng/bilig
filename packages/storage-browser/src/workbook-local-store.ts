@@ -53,7 +53,13 @@ export interface WorkbookLocalMutationRecord {
   readonly args: unknown[];
   readonly enqueuedAtUnixMs: number;
   readonly submittedAtUnixMs: number | null;
-  readonly status: "pending" | "submitted";
+  readonly lastAttemptedAtUnixMs: number | null;
+  readonly ackedAtUnixMs: number | null;
+  readonly rebasedAtUnixMs: number | null;
+  readonly failedAtUnixMs: number | null;
+  readonly attemptCount: number;
+  readonly failureMessage: string | null;
+  readonly status: "local" | "submitted" | "acked" | "rebased" | "failed";
 }
 
 export interface WorkbookLocalStore {
@@ -71,6 +77,7 @@ export interface WorkbookLocalStore {
     readonly removePendingMutationIds?: readonly string[];
   }): Promise<void>;
   listPendingMutations(): Promise<WorkbookLocalMutationRecord[]>;
+  listMutationJournalEntries(): Promise<WorkbookLocalMutationRecord[]>;
   appendPendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
   updatePendingMutation(mutation: WorkbookLocalMutationRecord): Promise<void>;
   removePendingMutation(id: string): Promise<void>;
@@ -195,7 +202,18 @@ function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutation
     !Array.isArray(value["args"]) ||
     typeof value["enqueuedAtUnixMs"] !== "number" ||
     (value["submittedAtUnixMs"] !== null && typeof value["submittedAtUnixMs"] !== "number") ||
-    (value["status"] !== "pending" && value["status"] !== "submitted")
+    (value["lastAttemptedAtUnixMs"] !== null &&
+      typeof value["lastAttemptedAtUnixMs"] !== "number") ||
+    (value["ackedAtUnixMs"] !== null && typeof value["ackedAtUnixMs"] !== "number") ||
+    (value["rebasedAtUnixMs"] !== null && typeof value["rebasedAtUnixMs"] !== "number") ||
+    (value["failedAtUnixMs"] !== null && typeof value["failedAtUnixMs"] !== "number") ||
+    typeof value["attemptCount"] !== "number" ||
+    (value["failureMessage"] !== null && typeof value["failureMessage"] !== "string") ||
+    (value["status"] !== "local" &&
+      value["status"] !== "submitted" &&
+      value["status"] !== "acked" &&
+      value["status"] !== "rebased" &&
+      value["status"] !== "failed")
   ) {
     return null;
   }
@@ -207,6 +225,12 @@ function parseWorkbookLocalMutationRecord(value: unknown): WorkbookLocalMutation
     args: [...value["args"]],
     enqueuedAtUnixMs: value["enqueuedAtUnixMs"],
     submittedAtUnixMs: value["submittedAtUnixMs"] ?? null,
+    lastAttemptedAtUnixMs: value["lastAttemptedAtUnixMs"] ?? null,
+    ackedAtUnixMs: value["ackedAtUnixMs"] ?? null,
+    rebasedAtUnixMs: value["rebasedAtUnixMs"] ?? null,
+    failedAtUnixMs: value["failedAtUnixMs"] ?? null,
+    attemptCount: value["attemptCount"],
+    failureMessage: value["failureMessage"] ?? null,
     status: value["status"],
   };
 }
@@ -422,15 +446,25 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
   }): Promise<void> {
     this.db.transaction((db) => {
       if ((input.removePendingMutationIds?.length ?? 0) > 0) {
-        const deletePendingMutation = db.prepare("DELETE FROM pending_op WHERE op_id = ?");
+        const ackPendingMutation = db.prepare(
+          `
+            UPDATE pending_op
+               SET status = 'acked',
+                   acked_at_ms = ?,
+                   failed_at_ms = NULL,
+                   failure_message = NULL
+             WHERE op_id = ?
+          `,
+        );
+        const ackedAtUnixMs = Date.now();
         try {
           input.removePendingMutationIds?.forEach((id) => {
-            deletePendingMutation.bind([id]);
-            deletePendingMutation.step();
-            deletePendingMutation.reset();
+            ackPendingMutation.bind([ackedAtUnixMs, id]);
+            ackPendingMutation.step();
+            ackPendingMutation.reset();
           });
         } finally {
-          deletePendingMutation.finalize();
+          ackPendingMutation.finalize();
         }
       }
       writeWorkbookAuthoritativeDelta(db, input.authoritativeDelta);
@@ -470,8 +504,7 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
   }
 
   async listPendingMutations(): Promise<WorkbookLocalMutationRecord[]> {
-    const rows: Record<string, SqlValue>[] = [];
-    const statement = this.db.prepare(
+    return this.readMutationRows(
       `
         SELECT op_id AS id,
                local_seq AS localSeq,
@@ -480,11 +513,46 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
                args_json AS argsJson,
                enqueued_at_ms AS enqueuedAtUnixMs,
                submitted_at_ms AS submittedAtUnixMs,
+               last_attempted_at_ms AS lastAttemptedAtUnixMs,
+               acked_at_ms AS ackedAtUnixMs,
+               rebased_at_ms AS rebasedAtUnixMs,
+               failed_at_ms AS failedAtUnixMs,
+               attempt_count AS attemptCount,
+               failure_message AS failureMessage,
+               status
+          FROM pending_op
+         WHERE status != 'acked'
+         ORDER BY local_seq ASC
+      `,
+    );
+  }
+
+  async listMutationJournalEntries(): Promise<WorkbookLocalMutationRecord[]> {
+    return this.readMutationRows(
+      `
+        SELECT op_id AS id,
+               local_seq AS localSeq,
+               base_revision AS baseRevision,
+               method,
+               args_json AS argsJson,
+               enqueued_at_ms AS enqueuedAtUnixMs,
+               submitted_at_ms AS submittedAtUnixMs,
+               last_attempted_at_ms AS lastAttemptedAtUnixMs,
+               acked_at_ms AS ackedAtUnixMs,
+               rebased_at_ms AS rebasedAtUnixMs,
+               failed_at_ms AS failedAtUnixMs,
+               attempt_count AS attemptCount,
+               failure_message AS failureMessage,
                status
           FROM pending_op
          ORDER BY local_seq ASC
       `,
     );
+  }
+
+  private readMutationRows(sql: string): WorkbookLocalMutationRecord[] {
+    const rows: Record<string, SqlValue>[] = [];
+    const statement = this.db.prepare(sql);
     try {
       while (statement.step()) {
         rows.push(statement.get({}));
@@ -521,9 +589,15 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
             args_json,
             enqueued_at_ms,
             submitted_at_ms,
+            last_attempted_at_ms,
+            acked_at_ms,
+            rebased_at_ms,
+            failed_at_ms,
+            attempt_count,
+            failure_message,
             status
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         {
           bind: [
@@ -534,6 +608,12 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
             JSON.stringify(mutation.args),
             mutation.enqueuedAtUnixMs,
             mutation.submittedAtUnixMs,
+            mutation.lastAttemptedAtUnixMs,
+            mutation.ackedAtUnixMs,
+            mutation.rebasedAtUnixMs,
+            mutation.failedAtUnixMs,
+            mutation.attemptCount,
+            mutation.failureMessage,
             mutation.status,
           ],
         },
@@ -550,6 +630,12 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
                args_json = ?,
                enqueued_at_ms = ?,
                submitted_at_ms = ?,
+               last_attempted_at_ms = ?,
+               acked_at_ms = ?,
+               rebased_at_ms = ?,
+               failed_at_ms = ?,
+               attempt_count = ?,
+               failure_message = ?,
                status = ?
          WHERE op_id = ?
       `,
@@ -560,6 +646,12 @@ class SqliteWorkbookLocalStore implements WorkbookLocalStore {
           JSON.stringify(mutation.args),
           mutation.enqueuedAtUnixMs,
           mutation.submittedAtUnixMs,
+          mutation.lastAttemptedAtUnixMs,
+          mutation.ackedAtUnixMs,
+          mutation.rebasedAtUnixMs,
+          mutation.failedAtUnixMs,
+          mutation.attemptCount,
+          mutation.failureMessage,
           mutation.status,
           mutation.id,
         ],

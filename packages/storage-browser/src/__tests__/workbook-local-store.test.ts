@@ -3,6 +3,7 @@ import { ValueTag } from "@bilig/protocol";
 import {
   createMemoryWorkbookLocalStoreFactory,
   type WorkbookLocalAuthoritativeBase,
+  type WorkbookLocalMutationRecord,
   type WorkbookLocalProjectionOverlay,
 } from "../index.js";
 
@@ -74,6 +75,28 @@ function createOverlay(value: number): WorkbookLocalProjectionOverlay {
   };
 }
 
+function createMutation(
+  overrides: Partial<WorkbookLocalMutationRecord> = {},
+): WorkbookLocalMutationRecord {
+  return {
+    id: "memory-doc:pending:1",
+    localSeq: 1,
+    baseRevision: 0,
+    method: "setCellValue",
+    args: ["Sheet1", "A1", 17],
+    enqueuedAtUnixMs: 100,
+    submittedAtUnixMs: null,
+    lastAttemptedAtUnixMs: null,
+    ackedAtUnixMs: null,
+    rebasedAtUnixMs: null,
+    failedAtUnixMs: null,
+    attemptCount: 0,
+    failureMessage: null,
+    status: "local",
+    ...overrides,
+  };
+}
+
 describe("memory workbook local store", () => {
   it("persists runtime state and normalized projection data across reopen", async () => {
     const factory = createMemoryWorkbookLocalStoreFactory();
@@ -121,5 +144,27 @@ describe("memory workbook local store", () => {
         },
       ],
     });
+  });
+
+  it("keeps acked mutations in the journal while filtering them from the active list", async () => {
+    const factory = createMemoryWorkbookLocalStoreFactory();
+    const store = await factory.open("memory-doc");
+    const local = createMutation();
+    const acked = {
+      ...local,
+      submittedAtUnixMs: 120,
+      lastAttemptedAtUnixMs: 120,
+      ackedAtUnixMs: 180,
+      attemptCount: 1,
+      status: "acked" as const,
+    };
+
+    await store.appendPendingMutation(local);
+    await store.updatePendingMutation(acked);
+    store.close();
+
+    const reopened = await factory.open("memory-doc");
+    await expect(reopened.listPendingMutations()).resolves.toEqual([]);
+    await expect(reopened.listMutationJournalEntries()).resolves.toEqual([acked]);
   });
 });

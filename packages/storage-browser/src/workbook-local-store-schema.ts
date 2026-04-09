@@ -43,6 +43,111 @@ function ensureColumn(
   }
 }
 
+function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
+  return Boolean(
+    readSingleObjectRow(
+      db,
+      `
+        SELECT 1 AS present
+          FROM pragma_table_info(?)
+         WHERE name = ?
+      `,
+      [tableName, columnName],
+    ),
+  );
+}
+
+function tableExists(db: Database, tableName: string): boolean {
+  return Boolean(
+    readSingleObjectRow(
+      db,
+      `
+        SELECT 1 AS present
+          FROM sqlite_master
+         WHERE type = 'table'
+           AND name = ?
+      `,
+      [tableName],
+    ),
+  );
+}
+
+function createPendingOpTable(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pending_op (
+      op_id TEXT PRIMARY KEY,
+      local_seq INTEGER NOT NULL UNIQUE,
+      base_revision INTEGER NOT NULL,
+      method TEXT NOT NULL,
+      args_json TEXT NOT NULL,
+      enqueued_at_ms INTEGER NOT NULL,
+      submitted_at_ms INTEGER,
+      last_attempted_at_ms INTEGER,
+      acked_at_ms INTEGER,
+      rebased_at_ms INTEGER,
+      failed_at_ms INTEGER,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      failure_message TEXT,
+      status TEXT NOT NULL CHECK (status IN ('local', 'submitted', 'acked', 'rebased', 'failed'))
+    )
+  `);
+}
+
+function migratePendingOpTable(db: Database): void {
+  if (!tableExists(db, "pending_op")) {
+    createPendingOpTable(db);
+    return;
+  }
+  if (tableHasColumn(db, "pending_op", "attempt_count")) {
+    return;
+  }
+
+  db.exec("ALTER TABLE pending_op RENAME TO pending_op_legacy");
+  createPendingOpTable(db);
+  db.exec(`
+    INSERT INTO pending_op (
+      op_id,
+      local_seq,
+      base_revision,
+      method,
+      args_json,
+      enqueued_at_ms,
+      submitted_at_ms,
+      last_attempted_at_ms,
+      acked_at_ms,
+      rebased_at_ms,
+      failed_at_ms,
+      attempt_count,
+      failure_message,
+      status
+    )
+    SELECT
+      op_id,
+      local_seq,
+      base_revision,
+      method,
+      args_json,
+      enqueued_at_ms,
+      submitted_at_ms,
+      submitted_at_ms,
+      NULL,
+      NULL,
+      NULL,
+      CASE
+        WHEN submitted_at_ms IS NULL THEN 0
+        ELSE 1
+      END,
+      NULL,
+      CASE status
+        WHEN 'pending' THEN 'local'
+        WHEN 'submitted' THEN 'submitted'
+        ELSE 'local'
+      END
+    FROM pending_op_legacy
+  `);
+  db.exec("DROP TABLE pending_op_legacy");
+}
+
 function parseSheetIdsFromSnapshotJson(snapshotJson: string | null): Map<string, number> {
   if (typeof snapshotJson !== "string") {
     return new Map();
@@ -242,20 +347,6 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
       updated_at_ms INTEGER NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS pending_op (
-      op_id TEXT PRIMARY KEY,
-      local_seq INTEGER NOT NULL UNIQUE,
-      base_revision INTEGER NOT NULL,
-      method TEXT NOT NULL,
-      args_json TEXT NOT NULL,
-      enqueued_at_ms INTEGER NOT NULL,
-      submitted_at_ms INTEGER,
-      status TEXT NOT NULL CHECK (status IN ('pending', 'submitted'))
-    );
-
-    CREATE INDEX IF NOT EXISTS pending_op_local_seq_idx
-      ON pending_op(local_seq);
-
     CREATE TABLE IF NOT EXISTS authoritative_sheet (
       name TEXT PRIMARY KEY,
       sheet_id INTEGER NOT NULL UNIQUE,
@@ -358,9 +449,17 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
     );
   `);
 
+  migratePendingOpTable(db);
+
   ensureColumn(db, "runtime_state", "applied_pending_local_seq", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(db, "runtime_state", "workbook_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "pending_op", "submitted_at_ms", "INTEGER");
+  ensureColumn(db, "pending_op", "last_attempted_at_ms", "INTEGER");
+  ensureColumn(db, "pending_op", "acked_at_ms", "INTEGER");
+  ensureColumn(db, "pending_op", "rebased_at_ms", "INTEGER");
+  ensureColumn(db, "pending_op", "failed_at_ms", "INTEGER");
+  ensureColumn(db, "pending_op", "attempt_count", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "pending_op", "failure_message", "TEXT");
   ensureColumn(db, "authoritative_sheet", "sheet_id", "INTEGER");
   ensureColumn(db, "authoritative_cell_input", "sheet_id", "INTEGER");
   ensureColumn(db, "authoritative_cell_render", "sheet_id", "INTEGER");
@@ -374,6 +473,9 @@ export function initializeWorkbookLocalStoreSchema(db: Database): void {
   backfillWorkbookName(db);
 
   db.exec(`
+    CREATE INDEX IF NOT EXISTS pending_op_local_seq_idx
+      ON pending_op(local_seq);
+
     CREATE UNIQUE INDEX IF NOT EXISTS authoritative_sheet_sheet_id_idx
       ON authoritative_sheet(sheet_id);
 

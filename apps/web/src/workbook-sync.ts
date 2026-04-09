@@ -33,7 +33,13 @@ export interface PendingWorkbookMutation extends PendingWorkbookMutationInput {
   readonly baseRevision: number;
   readonly enqueuedAtUnixMs: number;
   readonly submittedAtUnixMs: number | null;
-  readonly status: "pending" | "submitted";
+  readonly lastAttemptedAtUnixMs: number | null;
+  readonly ackedAtUnixMs: number | null;
+  readonly rebasedAtUnixMs: number | null;
+  readonly failedAtUnixMs: number | null;
+  readonly attemptCount: number;
+  readonly failureMessage: string | null;
+  readonly status: "local" | "submitted" | "acked" | "rebased" | "failed";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -91,7 +97,18 @@ export function isPendingWorkbookMutation(value: unknown): value is PendingWorkb
     typeof value["baseRevision"] === "number" &&
     typeof value["enqueuedAtUnixMs"] === "number" &&
     (value["submittedAtUnixMs"] === null || typeof value["submittedAtUnixMs"] === "number") &&
-    (value["status"] === "pending" || value["status"] === "submitted") &&
+    (value["lastAttemptedAtUnixMs"] === null ||
+      typeof value["lastAttemptedAtUnixMs"] === "number") &&
+    (value["ackedAtUnixMs"] === null || typeof value["ackedAtUnixMs"] === "number") &&
+    (value["rebasedAtUnixMs"] === null || typeof value["rebasedAtUnixMs"] === "number") &&
+    (value["failedAtUnixMs"] === null || typeof value["failedAtUnixMs"] === "number") &&
+    typeof value["attemptCount"] === "number" &&
+    (value["failureMessage"] === null || typeof value["failureMessage"] === "string") &&
+    (value["status"] === "local" ||
+      value["status"] === "submitted" ||
+      value["status"] === "acked" ||
+      value["status"] === "rebased" ||
+      value["status"] === "failed") &&
     isPendingWorkbookMutationInput(value)
   );
 }

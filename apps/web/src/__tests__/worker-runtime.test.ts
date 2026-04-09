@@ -246,7 +246,7 @@ function createMemoryLocalStoreFactory(seed?: {
   projectionOverlay?: TestProjectionOverlay;
 }): WorkbookLocalStoreFactory {
   let currentState = seed?.state ? structuredClone(seed.state) : null;
-  let currentPendingMutations = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
+  let currentMutationJournal = (seed?.pendingMutations ?? []).map(cloneMutationRecord);
   let currentAuthoritativeBase = seed?.authoritativeBase
     ? structuredClone(seed.authoritativeBase)
     : null;
@@ -323,27 +323,36 @@ function createMemoryLocalStoreFactory(seed?: {
           currentProjectionOverlay = structuredClone(input.projectionOverlay);
           if ((input.removePendingMutationIds?.length ?? 0) > 0) {
             const removedIds = new Set(input.removePendingMutationIds);
-            currentPendingMutations = currentPendingMutations.filter(
-              (mutation) => !removedIds.has(mutation.id),
+            currentMutationJournal = currentMutationJournal.map((mutation) =>
+              removedIds.has(mutation.id)
+                ? {
+                    ...cloneMutationRecord(mutation),
+                    ackedAtUnixMs: Date.now(),
+                    status: "acked",
+                  }
+                : mutation,
             );
           }
           await seed?.onIngestAuthoritativeDelta?.(input.state, input.authoritativeDelta);
         },
         async listPendingMutations() {
-          return currentPendingMutations.map(cloneMutationRecord);
+          return currentMutationJournal
+            .filter((mutation) => mutation.status !== "acked")
+            .map(cloneMutationRecord);
+        },
+        async listMutationJournalEntries() {
+          return currentMutationJournal.map(cloneMutationRecord);
         },
         async appendPendingMutation(mutation) {
-          currentPendingMutations.push(cloneMutationRecord(mutation));
+          currentMutationJournal.push(cloneMutationRecord(mutation));
         },
         async updatePendingMutation(mutation) {
-          currentPendingMutations = currentPendingMutations.map((entry) =>
+          currentMutationJournal = currentMutationJournal.map((entry) =>
             entry.id === mutation.id ? cloneMutationRecord(mutation) : entry,
           );
         },
         async removePendingMutation(id) {
-          currentPendingMutations = currentPendingMutations.filter(
-            (mutation) => mutation.id !== id,
-          );
+          currentMutationJournal = currentMutationJournal.filter((mutation) => mutation.id !== id);
         },
         readViewportProjection(sheetName, viewport) {
           const authoritativeBase = currentAuthoritativeBase;
@@ -569,6 +578,9 @@ describe("WorkbookWorkerRuntime", () => {
             async listPendingMutations() {
               return [];
             },
+            async listMutationJournalEntries() {
+              return [];
+            },
             async appendPendingMutation() {},
             async updatePendingMutation() {},
             async removePendingMutation() {},
@@ -657,6 +669,9 @@ describe("WorkbookWorkerRuntime", () => {
             async persistProjectionState() {},
             async ingestAuthoritativeDelta() {},
             async listPendingMutations() {
+              return [];
+            },
+            async listMutationJournalEntries() {
               return [];
             },
             async appendPendingMutation() {},
@@ -834,7 +849,13 @@ describe("WorkbookWorkerRuntime", () => {
             args: ["Sheet1", "A1", 17],
             enqueuedAtUnixMs: 1,
             submittedAtUnixMs: null,
-            status: "pending",
+            lastAttemptedAtUnixMs: null,
+            ackedAtUnixMs: null,
+            rebasedAtUnixMs: null,
+            failedAtUnixMs: null,
+            attemptCount: 0,
+            failureMessage: null,
+            status: "local",
           },
         ],
         onReadViewportProjection() {
@@ -990,6 +1011,14 @@ describe("WorkbookWorkerRuntime", () => {
 
     await reloaded.ackPendingMutation(pending.id);
     expect(reloaded.listPendingMutations()).toEqual([]);
+    expect(reloaded.listMutationJournalEntries()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        ackedAtUnixMs: expect.any(Number),
+        status: "acked",
+      },
+    ]);
 
     const afterAck = new WorkbookWorkerRuntime({ localStoreFactory });
     await afterAck.bootstrap({
@@ -1128,6 +1157,124 @@ describe("WorkbookWorkerRuntime", () => {
     });
   });
 
+  it("marks unsent pending mutations as rebased when authoritative events replay over them", async () => {
+    const localStoreFactory = createMemoryLocalStoreFactory();
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "rebased-local-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const pending = await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+
+    await runtime.applyAuthoritativeEvents(
+      [
+        {
+          revision: 1,
+          clientMutationId: null,
+          payload: {
+            kind: "setCellValue",
+            sheetName: "Sheet1",
+            address: "B1",
+            value: 101,
+          },
+        },
+      ],
+      1,
+    );
+
+    expect(runtime.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        rebasedAtUnixMs: expect.any(Number),
+        status: "rebased",
+      },
+    ]);
+
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
+    await reloaded.bootstrap({
+      documentId: "rebased-local-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        rebasedAtUnixMs: expect.any(Number),
+        status: "rebased",
+      },
+    ]);
+    expect(reloaded.getCell("Sheet1", "A1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 17,
+    });
+    expect(reloaded.getCell("Sheet1", "B1").value).toEqual({
+      tag: ValueTag.Number,
+      value: 101,
+    });
+  });
+
+  it("persists failed mutations until they are explicitly retried", async () => {
+    const localStoreFactory = createMemoryLocalStoreFactory();
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory });
+    await runtime.bootstrap({
+      documentId: "failed-journal-doc",
+      replicaId: "browser:test",
+      persistState: true,
+    });
+
+    const pending = await runtime.enqueuePendingMutation({
+      method: "setCellValue",
+      args: ["Sheet1", "A1", 17],
+    });
+
+    await runtime.markPendingMutationFailed(pending.id, "mutation rejected by server");
+
+    expect(runtime.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        failedAtUnixMs: expect.any(Number),
+        failureMessage: "mutation rejected by server",
+        status: "failed",
+      },
+    ]);
+
+    const reloaded = new WorkbookWorkerRuntime({ localStoreFactory });
+    await reloaded.bootstrap({
+      documentId: "failed-journal-doc",
+      replicaId: "browser:reloaded",
+      persistState: true,
+    });
+
+    expect(reloaded.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        failedAtUnixMs: expect.any(Number),
+        failureMessage: "mutation rejected by server",
+        status: "failed",
+      },
+    ]);
+
+    await reloaded.retryPendingMutation(pending.id);
+
+    expect(reloaded.listPendingMutations()).toEqual([
+      {
+        ...pending,
+        args: [...pending.args],
+        status: "local",
+      },
+    ]);
+  });
+
   it("ingests narrow authoritative event batches through delta persistence", async () => {
     const persistProjectionState = vi.fn(async () => {});
     const ingestAuthoritativeDelta = vi.fn(async () => {});
@@ -1257,7 +1404,13 @@ describe("WorkbookWorkerRuntime", () => {
           args: ["Sheet1", "A1", 17],
           enqueuedAtUnixMs: 1,
           submittedAtUnixMs: null,
-          status: "pending",
+          lastAttemptedAtUnixMs: null,
+          ackedAtUnixMs: null,
+          rebasedAtUnixMs: null,
+          failedAtUnixMs: null,
+          attemptCount: 0,
+          failureMessage: null,
+          status: "local",
         },
       ],
     });
