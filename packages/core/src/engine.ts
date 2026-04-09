@@ -20,8 +20,6 @@ import {
   type RecalcMetrics,
   type SyncState,
   type SelectionState,
-  type SheetFormatRangeSnapshot,
-  type SheetStyleRangeSnapshot,
   type WorkbookAxisEntrySnapshot,
   type WorkbookCalculationSettingsSnapshot,
   type WorkbookDefinedNameValueSnapshot,
@@ -40,10 +38,6 @@ import {
   parseCellAddress,
   parseRangeAddress,
   renameFormulaSheetReferences,
-  rewriteAddressForStructuralTransform,
-  rewriteFormulaForStructuralTransform,
-  rewriteRangeForStructuralTransform,
-  type StructuralAxisTransform,
   translateFormulaReferences,
   utcDateToExcelSerial,
 } from "@bilig/formula";
@@ -85,11 +79,6 @@ import {
   errorValue,
   literalToValue,
 } from "./engine-value-utils.js";
-import {
-  mapStructuralAxisIndex,
-  mapStructuralBoundary,
-  structuralTransformForOp,
-} from "./engine-structural-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
 import { RangeRegistry } from "./range-registry.js";
@@ -286,26 +275,14 @@ export class SpreadsheetEngine {
       resetWorkbook: () => this.resetWorkbook(),
       executeRestoreTransaction: (transaction) => this.executeTransactionNow(transaction, "restore"),
       executeHistoryTransaction: (transaction, source) => this.executeTransactionNow(transaction, source),
-      captureSheetCellState: (sheetName) => {
-        const sheet = this.workbook.getSheet(sheetName);
-        if (!sheet) {
-          return [];
-        }
-        const captured: Array<{ cellIndex: number; row: number; col: number }> = [];
-        sheet.grid.forEachCellEntry((cellIndex, row, col) => {
-          captured.push({ cellIndex, row, col });
-        });
-        return captured
-          .toSorted((left, right) => left.row - right.row || left.col - right.col)
-          .flatMap(({ cellIndex }) =>
-            this.toCellStateOps(sheetName, this.workbook.getAddress(cellIndex), this.getCellByIndex(cellIndex)),
-          );
-      },
+      captureSheetCellState: (sheetName) => this.captureSheetCellState(sheetName),
       captureRowRangeCellState: (sheetName, start, count) =>
         this.captureRowRangeCellState(sheetName, start, count),
       captureColumnRangeCellState: (sheetName, start, count) =>
         this.captureColumnRangeCellState(sheetName, start, count),
       restoreCellOps: (sheetName, address) => this.restoreCellOps(sheetName, address),
+      toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
+        this.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
       applyBatchNow: (batch, source, potentialNewCells) => {
         this.applyBatch(batch, source, potentialNewCells);
       },
@@ -315,6 +292,9 @@ export class SpreadsheetEngine {
       ensureCellTrackedByCoords: (sheetId, row, col) =>
         this.ensureCellTrackedByCoords(sheetId, row, col),
       forEachSheetCell: (sheetId, fn) => this.forEachSheetCell(sheetId, fn),
+      removeFormula: (cellIndex) => this.removeFormula(cellIndex),
+      clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
+      rebuildAllFormulaBindings: () => this.rebuildAllFormulaBindings(),
       scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
       flushWasmProgramSync: () => this.flushWasmProgramSync(),
       applyDerivedOp: (op) => this.applyDerivedOp(op),
@@ -1338,36 +1318,18 @@ export class SpreadsheetEngine {
     runEngineEffect(this.runtime.snapshot.importWorkbook(snapshot));
   }
 
+  private captureSheetCellState(sheetName: string): EngineOp[] {
+    return runEngineEffect(this.runtime.structure.captureSheetCellState(sheetName));
+  }
+
   private captureRowRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
-    return this.captureAxisRangeCellState(sheetName, "row", start, count);
+    return runEngineEffect(this.runtime.structure.captureRowRangeCellState(sheetName, start, count));
   }
 
   private captureColumnRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
-    return this.captureAxisRangeCellState(sheetName, "column", start, count);
-  }
-
-  private captureAxisRangeCellState(
-    sheetName: string,
-    axis: "row" | "column",
-    start: number,
-    count: number,
-  ): EngineOp[] {
-    const sheet = this.workbook.getSheet(sheetName);
-    if (!sheet) {
-      return [];
-    }
-    const captured: Array<{ cellIndex: number; row: number; col: number }> = [];
-    sheet.grid.forEachCellEntry((cellIndex, row, col) => {
-      const index = axis === "row" ? row : col;
-      if (index >= start && index < start + count) {
-        captured.push({ cellIndex, row, col });
-      }
-    });
-    return captured
-      .toSorted((left, right) => left.row - right.row || left.col - right.col)
-      .flatMap(({ cellIndex, row, col }) =>
-        this.toCellStateOps(sheetName, formatAddress(row, col), this.getCellByIndex(cellIndex)),
-      );
+    return runEngineEffect(
+      this.runtime.structure.captureColumnRangeCellState(sheetName, start, count),
+    );
   }
 
   private applyStructuralAxisOp(
@@ -1384,83 +1346,7 @@ export class SpreadsheetEngine {
       }
     >,
   ): { changedCellIndices: number[]; formulaCellIndices: number[] } {
-    const axis = op.kind.includes("Rows") ? "row" : "column";
-    const transform = structuralTransformForOp(op);
-    const sheetName = op.sheetName;
-
-    this.rewriteDefinedNamesForStructuralTransform(sheetName, transform);
-    this.rewriteCellFormulasForStructuralTransform(sheetName, transform);
-    this.rewriteWorkbookMetadataForStructuralTransform(sheetName, transform);
-
-    switch (op.kind) {
-      case "insertRows":
-        this.workbook.insertRows(sheetName, op.start, op.count, op.entries);
-        break;
-      case "deleteRows":
-        this.workbook.deleteRows(sheetName, op.start, op.count);
-        break;
-      case "moveRows":
-        this.workbook.moveRows(sheetName, op.start, op.count, op.target);
-        break;
-      case "insertColumns":
-        this.workbook.insertColumns(sheetName, op.start, op.count, op.entries);
-        break;
-      case "deleteColumns":
-        this.workbook.deleteColumns(sheetName, op.start, op.count);
-        break;
-      case "moveColumns":
-        this.workbook.moveColumns(sheetName, op.start, op.count, op.target);
-        break;
-      default:
-        return assertNever(op);
-    }
-
-    const remapped = this.workbook.remapSheetCells(sheetName, axis, (index) =>
-      mapStructuralAxisIndex(index, transform),
-    );
-    remapped.removedCellIndices.forEach((cellIndex) => {
-      this.clearDerivedCellArtifacts(cellIndex);
-      this.removeFormula(cellIndex);
-      this.workbook.setCellFormat(cellIndex, null);
-      this.workbook.cellStore.setValue(cellIndex, emptyValue());
-      this.workbook.cellStore.flags[cellIndex] =
-        (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-        ~(
-          CellFlags.HasFormula |
-          CellFlags.JsOnly |
-          CellFlags.InCycle |
-          CellFlags.SpillChild |
-          CellFlags.PivotOutput
-        );
-    });
-
-    this.clearAllSpillMetadata();
-    this.clearPivotOutputsForSheet(sheetName);
-    const formulaCellIndices = this.rebuildAllFormulaBindings();
-    return {
-      changedCellIndices: [...remapped.changedCellIndices, ...remapped.removedCellIndices],
-      formulaCellIndices,
-    };
-  }
-
-  private rewriteDefinedNamesForStructuralTransform(
-    sheetName: string,
-    transform: StructuralAxisTransform,
-  ): void {
-    this.workbook.listDefinedNames().forEach((record) => {
-      if (typeof record.value !== "string" || !record.value.startsWith("=")) {
-        return;
-      }
-      const nextFormula = rewriteFormulaForStructuralTransform(
-        record.value.slice(1),
-        sheetName,
-        sheetName,
-        transform,
-      );
-      if (`=${nextFormula}` !== record.value) {
-        this.workbook.setDefinedName(record.name, `=${nextFormula}`);
-      }
-    });
+    return runEngineEffect(this.runtime.structure.applyStructuralAxisOp(op));
   }
 
   private rewriteDefinedNamesForSheetRename(oldSheetName: string, newSheetName: string): void {
@@ -1469,23 +1355,6 @@ export class SpreadsheetEngine {
       if (!definedNameValuesEqual(record.value, nextValue)) {
         this.workbook.setDefinedName(record.name, nextValue);
       }
-    });
-  }
-
-  private rewriteCellFormulasForStructuralTransform(
-    sheetName: string,
-    transform: StructuralAxisTransform,
-  ): void {
-    this.formulas.forEach((formula, cellIndex) => {
-      const ownerSheetName = this.workbook.getSheetNameById(
-        this.workbook.cellStore.sheetIds[cellIndex]!,
-      );
-      formula.source = rewriteFormulaForStructuralTransform(
-        formula.source,
-        ownerSheetName,
-        sheetName,
-        transform,
-      );
     });
   }
 
@@ -1514,169 +1383,6 @@ export class SpreadsheetEngine {
       formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
     });
     return formulaChangedCount;
-  }
-
-  private rewriteWorkbookMetadataForStructuralTransform(
-    sheetName: string,
-    transform: StructuralAxisTransform,
-  ): void {
-    this.workbook
-      .listTables()
-      .filter((table) => table.sheetName === sheetName)
-      .forEach((table) => {
-        const range = rewriteRangeForStructuralTransform(
-          table.startAddress,
-          table.endAddress,
-          transform,
-        );
-        if (!range) {
-          this.workbook.deleteTable(table.name);
-          return;
-        }
-        this.workbook.setTable({
-          ...table,
-          startAddress: range.startAddress,
-          endAddress: range.endAddress,
-        });
-      });
-    this.workbook.listFilters(sheetName).forEach((filter) => {
-      const range = rewriteRangeForStructuralTransform(
-        filter.range.startAddress,
-        filter.range.endAddress,
-        transform,
-      );
-      this.workbook.deleteFilter(sheetName, filter.range);
-      if (range) {
-        this.workbook.setFilter(sheetName, {
-          ...filter.range,
-          startAddress: range.startAddress,
-          endAddress: range.endAddress,
-        });
-      }
-    });
-    this.workbook.listSorts(sheetName).forEach((sort) => {
-      const range = rewriteRangeForStructuralTransform(
-        sort.range.startAddress,
-        sort.range.endAddress,
-        transform,
-      );
-      this.workbook.deleteSort(sheetName, sort.range);
-      if (!range) {
-        return;
-      }
-      this.workbook.setSort(
-        sheetName,
-        { ...sort.range, startAddress: range.startAddress, endAddress: range.endAddress },
-        sort.keys.map((key) => ({
-          ...key,
-          keyAddress:
-            rewriteAddressForStructuralTransform(key.keyAddress, transform) ?? key.keyAddress,
-        })),
-      );
-    });
-    const rewrittenStyleRanges: SheetStyleRangeSnapshot[] = [];
-    const rewrittenFormatRanges: SheetFormatRangeSnapshot[] = [];
-    this.workbook.listStyleRanges(sheetName).forEach((record) => {
-      const range = rewriteRangeForStructuralTransform(
-        record.range.startAddress,
-        record.range.endAddress,
-        transform,
-      );
-      if (!range) {
-        return;
-      }
-      rewrittenStyleRanges.push({
-        range: {
-          ...record.range,
-          startAddress: range.startAddress,
-          endAddress: range.endAddress,
-        },
-        styleId: record.styleId,
-      });
-    });
-    this.workbook.setStyleRanges(sheetName, rewrittenStyleRanges);
-    this.workbook.listFormatRanges(sheetName).forEach((record) => {
-      const range = rewriteRangeForStructuralTransform(
-        record.range.startAddress,
-        record.range.endAddress,
-        transform,
-      );
-      if (!range) {
-        return;
-      }
-      rewrittenFormatRanges.push({
-        range: {
-          ...record.range,
-          startAddress: range.startAddress,
-          endAddress: range.endAddress,
-        },
-        formatId: record.formatId,
-      });
-    });
-    this.workbook.setFormatRanges(sheetName, rewrittenFormatRanges);
-    const freezePane = this.workbook.getFreezePane(sheetName);
-    if (freezePane) {
-      const nextRows =
-        transform.axis === "row"
-          ? mapStructuralBoundary(freezePane.rows, transform)
-          : freezePane.rows;
-      const nextCols =
-        transform.axis === "column"
-          ? mapStructuralBoundary(freezePane.cols, transform)
-          : freezePane.cols;
-      if (nextRows <= 0 && nextCols <= 0) {
-        this.workbook.clearFreezePane(sheetName);
-      } else {
-        this.workbook.setFreezePane(sheetName, nextRows, nextCols);
-      }
-    }
-    this.workbook.listPivots().forEach((pivot) => {
-      const nextAddress =
-        pivot.sheetName === sheetName
-          ? rewriteAddressForStructuralTransform(pivot.address, transform)
-          : pivot.address;
-      const nextSource =
-        pivot.source.sheetName === sheetName
-          ? rewriteRangeForStructuralTransform(
-              pivot.source.startAddress,
-              pivot.source.endAddress,
-              transform,
-            )
-          : { startAddress: pivot.source.startAddress, endAddress: pivot.source.endAddress };
-      if (!nextAddress || !nextSource) {
-        this.clearOwnedPivot(pivot);
-        this.workbook.deletePivot(pivot.sheetName, pivot.address);
-        return;
-      }
-      this.workbook.setPivot({
-        ...pivot,
-        address: nextAddress,
-        source: {
-          ...pivot.source,
-          startAddress: nextSource.startAddress,
-          endAddress: nextSource.endAddress,
-        },
-      });
-    });
-  }
-
-  private clearAllSpillMetadata(): void {
-    this.workbook.listSpills().forEach((spill) => {
-      this.workbook.deleteSpill(spill.sheetName, spill.address);
-    });
-  }
-
-  private clearPivotOutputsForSheet(sheetName: string): void {
-    this.workbook
-      .listPivots()
-      .filter((pivot) => pivot.sheetName === sheetName)
-      .forEach((pivot) => {
-        this.clearOwnedPivot(pivot);
-      });
-  }
-
-  private clearDerivedCellArtifacts(cellIndex: number): void {
-    this.pivotOutputOwners.delete(cellIndex);
   }
 
   private rebuildAllFormulaBindings(): number[] {
