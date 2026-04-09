@@ -45,6 +45,20 @@ describe("workbook event guards", () => {
         cols: 2,
       }),
     ).toBe(true);
+
+    expect(
+      isWorkbookEventPayload({
+        kind: "redoChange",
+        targetRevision: 12,
+        targetSummary: "Updated Sheet1!A1",
+        sheetName: "Sheet1",
+        address: "A1",
+        appliedBundle: {
+          kind: "engineOps",
+          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }],
+        },
+      }),
+    ).toBe(true);
   });
 
   it("rejects engine undo bundles with malformed engine ops", () => {

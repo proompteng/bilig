@@ -3,6 +3,8 @@ import {
   appendWorkbookChange,
   backfillWorkbookChanges,
   buildWorkbookChangeDescriptor,
+  loadLatestRedoableWorkbookChange,
+  loadLatestUndoableWorkbookChange,
   loadWorkbookChange,
 } from "../workbook-change-store.js";
 import type { QueryResultRow, Queryable } from "../store.js";
@@ -253,6 +255,35 @@ describe("workbook-change-store", () => {
         endAddress: "A1",
       },
     });
+
+    expect(
+      buildWorkbookChangeDescriptor({
+        kind: "redoChange",
+        targetRevision: 41,
+        targetSummary: "Updated Sheet1!A1",
+        sheetName: "Sheet1",
+        address: "A1",
+        range: {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+        appliedBundle: {
+          kind: "engineOps",
+          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }],
+        },
+      }),
+    ).toEqual({
+      eventKind: "redoChange",
+      summary: "Redid r41: Updated Sheet1!A1",
+      sheetName: "Sheet1",
+      anchorAddress: "A1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A1",
+      },
+    });
   });
 
   it("records revert changes with target metadata and marks the original revision as reverted", async () => {
@@ -371,6 +402,81 @@ describe("workbook-change-store", () => {
       revertedByRevision: 13,
       revertsRevision: null,
       createdAtUnixMs: 123_000,
+    });
+  });
+
+  it("loads latest undoable and redoable changes for an actor", async () => {
+    const queryable = new FakeQueryable([
+      (text, values) => {
+        if (!text.includes("FROM workbook_change")) {
+          return null;
+        }
+        if (text.includes("event_kind = 'revertChange'")) {
+          return [
+            {
+              revision: 14,
+              actorUserId: "alex@example.com",
+              clientMutationId: "mutation-14",
+              eventKind: "revertChange",
+              summary: "Reverted r13: Updated Sheet1!A1",
+              sheetId: 1,
+              sheetName: "Sheet1",
+              anchorAddress: "A1",
+              rangeJson: { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+              undoBundleJson: {
+                kind: "engineOps",
+                ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 5 }],
+              },
+              revertedByRevision: null,
+              revertsRevision: 13,
+              createdAtUnixMs: 123_460,
+            } satisfies QueryResultRow,
+          ];
+        }
+        if (values?.[1] === "alex@example.com") {
+          return [
+            {
+              revision: 13,
+              actorUserId: "alex@example.com",
+              clientMutationId: "mutation-13",
+              eventKind: "setCellValue",
+              summary: "Updated Sheet1!A1",
+              sheetId: 1,
+              sheetName: "Sheet1",
+              anchorAddress: "A1",
+              rangeJson: { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+              undoBundleJson: {
+                kind: "engineOps",
+                ops: [{ kind: "clearCell", sheetName: "Sheet1", address: "A1" }],
+              },
+              revertedByRevision: null,
+              revertsRevision: null,
+              createdAtUnixMs: 123_456,
+            } satisfies QueryResultRow,
+          ];
+        }
+        return null;
+      },
+    ]);
+
+    await expect(
+      loadLatestUndoableWorkbookChange(queryable, {
+        documentId: "doc-1",
+        actorUserId: "alex@example.com",
+      }),
+    ).resolves.toMatchObject({
+      revision: 13,
+      eventKind: "setCellValue",
+    });
+
+    await expect(
+      loadLatestRedoableWorkbookChange(queryable, {
+        documentId: "doc-1",
+        actorUserId: "alex@example.com",
+      }),
+    ).resolves.toMatchObject({
+      revision: 14,
+      eventKind: "revertChange",
     });
   });
 });

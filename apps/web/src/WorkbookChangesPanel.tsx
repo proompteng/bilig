@@ -34,6 +34,7 @@ const CHANGE_EVENT_TONES: Record<string, "neutral" | "danger"> = {
   renderCommit: "neutral",
   restoreVersion: "neutral",
   revertChange: "danger",
+  redoChange: "neutral",
   applyBatch: "neutral",
 };
 
@@ -64,6 +65,8 @@ function formatEventLabel(eventKind: string): string {
       return "Version";
     case "revertChange":
       return "Revert";
+    case "redoChange":
+      return "Redo";
     case "applyBatch":
       return "Sync";
     default:

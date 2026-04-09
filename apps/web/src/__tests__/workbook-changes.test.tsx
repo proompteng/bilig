@@ -53,23 +53,30 @@ function createMockZeroChangeHarness(initialValue: unknown): MockZeroChangeHarne
 }
 
 function ChangesHarness(props: {
+  currentUserId: string;
   documentId: string;
   sheetNames: readonly string[];
   zero: MockZeroChangeHarness["zero"];
   enabled: boolean;
   onJump: (sheetName: string, address: string) => void;
 }) {
-  const { changeCount, changesPanel } = useWorkbookChangesPane({
-    documentId: props.documentId,
-    sheetNames: props.sheetNames,
-    zero: props.zero,
-    enabled: props.enabled,
-    onJump: props.onJump,
-  });
+  const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } =
+    useWorkbookChangesPane({
+      documentId: props.documentId,
+      currentUserId: props.currentUserId,
+      sheetNames: props.sheetNames,
+      zero: props.zero,
+      enabled: props.enabled,
+      onJump: props.onJump,
+    });
 
   return (
     <div>
       <div data-testid="workbook-changes-count">{String(changeCount)}</div>
+      <div data-testid="workbook-can-undo">{String(canUndo)}</div>
+      <div data-testid="workbook-can-redo">{String(canRedo)}</div>
+      <button data-testid="workbook-undo-latest" type="button" onClick={undoLatestChange} />
+      <button data-testid="workbook-redo-latest" type="button" onClick={redoLatestChange} />
       {changesPanel}
     </div>
   );
@@ -125,6 +132,7 @@ describe("workbook changes", () => {
     await act(async () => {
       root.render(
         <ChangesHarness
+          currentUserId="alex@example.com"
           documentId="doc-1"
           enabled
           onJump={onJump}
@@ -162,6 +170,7 @@ describe("workbook changes", () => {
     await act(async () => {
       root.render(
         <ChangesHarness
+          currentUserId="alex@example.com"
           documentId="doc-1"
           enabled
           onJump={() => {}}
@@ -234,6 +243,7 @@ describe("workbook changes", () => {
     await act(async () => {
       root.render(
         <ChangesHarness
+          currentUserId="alex@example.com"
           documentId="doc-1"
           enabled
           onJump={() => {}}
@@ -250,6 +260,99 @@ describe("workbook changes", () => {
     });
 
     expect(changes.mutations).toHaveLength(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("exposes undo and redo availability from the current user's authoritative history", async () => {
+    const changes = createMockZeroChangeHarness([
+      {
+        revision: 31,
+        actorUserId: "alex@example.com",
+        clientMutationId: "mutation-31",
+        eventKind: "revertChange",
+        summary: "Reverted r30: Updated Sheet1!A1",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        anchorAddress: "A1",
+        rangeJson: { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+        undoBundleJson: {
+          kind: "engineOps",
+          ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 1 }],
+        },
+        revertedByRevision: null,
+        revertsRevision: 30,
+        createdAt: Date.parse("2026-04-06T13:30:00.000Z"),
+      },
+      {
+        revision: 30,
+        actorUserId: "alex@example.com",
+        clientMutationId: "mutation-30",
+        eventKind: "setCellValue",
+        summary: "Updated Sheet1!A1",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        anchorAddress: "A1",
+        rangeJson: { sheetName: "Sheet1", startAddress: "A1", endAddress: "A1" },
+        undoBundleJson: {
+          kind: "engineOps",
+          ops: [{ kind: "clearCell", sheetName: "Sheet1", address: "A1" }],
+        },
+        revertedByRevision: 31,
+        revertsRevision: null,
+        createdAt: Date.parse("2026-04-06T13:25:00.000Z"),
+      },
+      {
+        revision: 29,
+        actorUserId: "alex@example.com",
+        clientMutationId: "mutation-29",
+        eventKind: "setCellValue",
+        summary: "Updated Sheet1!B1",
+        sheetId: 1,
+        sheetName: "Sheet1",
+        anchorAddress: "B1",
+        rangeJson: { sheetName: "Sheet1", startAddress: "B1", endAddress: "B1" },
+        undoBundleJson: {
+          kind: "engineOps",
+          ops: [{ kind: "clearCell", sheetName: "Sheet1", address: "B1" }],
+        },
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAt: Date.parse("2026-04-06T13:20:00.000Z"),
+      },
+    ]);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ChangesHarness
+          currentUserId="alex@example.com"
+          documentId="doc-1"
+          enabled
+          onJump={() => {}}
+          sheetNames={["Sheet1"]}
+          zero={changes.zero}
+        />,
+      );
+    });
+
+    expect(host.querySelector("[data-testid='workbook-can-undo']")?.textContent).toBe("true");
+    expect(host.querySelector("[data-testid='workbook-can-redo']")?.textContent).toBe("true");
+
+    await act(async () => {
+      host
+        .querySelector("[data-testid='workbook-undo-latest']")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      host
+        .querySelector("[data-testid='workbook-redo-latest']")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(changes.mutations).toHaveLength(2);
 
     await act(async () => {
       root.unmount();

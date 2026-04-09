@@ -35,6 +35,7 @@ import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useZeroHealthReady } from "./use-zero-health-ready.js";
 import { useWorkbookAppPanels } from "./use-workbook-app-panels.js";
+import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookSheetActions } from "./use-workbook-sheet-actions.js";
 import { useWorkbookSelectionActions } from "./use-workbook-selection-actions.js";
 import { useWorkbookEditorConflict } from "./use-workbook-editor-conflict.js";
@@ -487,6 +488,18 @@ export function useWorkerWorkbookAppState(input: {
     [],
   );
 
+  const { canRedo, canUndo, changeCount, changesPanel, redoLatestChange, undoLatestChange } =
+    useWorkbookChangesPane({
+      documentId,
+      currentUserId: runtimeConfig.currentUserId,
+      sheetNames,
+      zero: zeroSource,
+      enabled: runtimeReady && zeroConfigured,
+      onJump: (sheetName, address) => {
+        selectAddress(sheetName, address);
+      },
+    });
+
   const previewAgentBundle = useCallback(
     async (bundle: WorkbookAgentCommandBundle) => {
       if (!runtimeController || !isWorkbookAgentCommandBundle(bundle)) {
@@ -515,7 +528,11 @@ export function useWorkerWorkbookAppState(input: {
     remoteSyncAvailable,
     zeroConfigured,
     zeroHealthReady,
+    canRedo,
+    canUndo,
     invokeMutation,
+    onRedo: redoLatestChange,
+    onUndo: undoLatestChange,
     selectionRange,
     selection,
     selectionLabel,
@@ -528,7 +545,6 @@ export function useWorkerWorkbookAppState(input: {
     agentError,
     clearAgentError,
     agentPanel,
-    changesPanel,
     headerStatus,
     previewRanges,
     setSideRailWidth,
@@ -543,6 +559,8 @@ export function useWorkerWorkbookAppState(input: {
     runtimeReady,
     zeroConfigured,
     remoteSyncAvailable,
+    changeCount,
+    changesPanel,
     toolbarHeaderStatus,
     selectAddress,
     getAgentContext,

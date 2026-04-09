@@ -36,8 +36,16 @@ export interface WorkbookChangeEntry {
   readonly createdAt: number;
   readonly isJumpable: boolean;
   readonly canRevert: boolean;
+  readonly canRedo: boolean;
   readonly revertedByRevision: number | null;
   readonly revertsRevision: number | null;
+}
+
+export interface WorkbookHistoryState {
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly undoRevision: number | null;
+  readonly redoRevision: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -167,8 +175,30 @@ export function selectWorkbookChangeEntries(input: {
         row.undoBundleJson !== null &&
         row.revertedByRevision === null &&
         row.eventKind !== "revertChange",
+      canRedo:
+        row.undoBundleJson !== null &&
+        row.revertedByRevision === null &&
+        row.eventKind === "revertChange",
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
     } satisfies WorkbookChangeEntry;
   });
+}
+
+export function selectWorkbookHistoryState(input: {
+  readonly entries: readonly WorkbookChangeEntry[];
+  readonly currentUserId: string;
+}): WorkbookHistoryState {
+  const ownEntries = input.entries.filter((entry) => entry.actorUserId === input.currentUserId);
+  const latestOwnHistoryAction = ownEntries.find(
+    (entry) => entry.canRedo || entry.canRevert || entry.eventKind === "redoChange",
+  );
+  const latestUndoableChange = ownEntries.find((entry) => entry.canRevert);
+
+  return {
+    canUndo: latestUndoableChange !== undefined,
+    canRedo: latestOwnHistoryAction?.canRedo === true,
+    undoRevision: latestUndoableChange?.revision ?? null,
+    redoRevision: latestOwnHistoryAction?.canRedo ? latestOwnHistoryAction.revision : null,
+  };
 }

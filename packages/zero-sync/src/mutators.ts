@@ -255,6 +255,10 @@ export const revertWorkbookChangeArgsSchema = baseMutationArgsSchema.extend({
   revision: z.number().int().positive(),
 });
 
+export const undoLatestWorkbookChangeArgsSchema = baseMutationArgsSchema;
+
+export const redoLatestWorkbookChangeArgsSchema = baseMutationArgsSchema;
+
 export const applyAgentCommandBundleArgsSchema = baseMutationArgsSchema.extend({
   bundle: z.custom<WorkbookAgentCommandBundle>(
     isWorkbookAgentCommandBundle,
@@ -337,6 +341,8 @@ export const mutators = defineMutators({
     clearRangeNumberFormat: defineMutator(clearRangeNumberFormatArgsSchema, noop),
     updatePresence: defineMutator(updatePresenceArgsSchema, noop),
     revertChange: defineMutator(revertWorkbookChangeArgsSchema, noop),
+    undoLatestChange: defineMutator(undoLatestWorkbookChangeArgsSchema, noop),
+    redoLatestChange: defineMutator(redoLatestWorkbookChangeArgsSchema, noop),
   },
 });
 

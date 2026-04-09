@@ -38,6 +38,10 @@ export function useWorkbookToolbar(input: {
   remoteSyncAvailable: boolean;
   zeroConfigured: boolean;
   zeroHealthReady: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>;
   selectionRange: CellRangeRef;
   selection: { sheetName: string };
@@ -52,6 +56,10 @@ export function useWorkbookToolbar(input: {
     remoteSyncAvailable,
     zeroConfigured,
     zeroHealthReady,
+    canUndo,
+    canRedo,
+    onUndo,
+    onRedo,
     invokeMutation,
     selectionRange,
     selection,
@@ -295,6 +303,19 @@ export function useWorkbookToolbar(input: {
       }
 
       const normalizedKey = event.key.toLowerCase();
+      if (!event.shiftKey && normalizedKey === "z") {
+        event.preventDefault();
+        onUndo();
+        return;
+      }
+      if (
+        (event.shiftKey && normalizedKey === "z") ||
+        (!event.metaKey && event.ctrlKey && !event.shiftKey && normalizedKey === "y")
+      ) {
+        event.preventDefault();
+        onRedo();
+        return;
+      }
       if (!event.shiftKey && normalizedKey === "b") {
         event.preventDefault();
         void applyRangeStyle({ font: { bold: !isBoldActive } });
@@ -362,6 +383,8 @@ export function useWorkbookToolbar(input: {
     isBoldActive,
     isItalicActive,
     isUnderlineActive,
+    onRedo,
+    onUndo,
     setNumberFormatPreset,
     writesAllowed,
   ]);
@@ -369,6 +392,8 @@ export function useWorkbookToolbar(input: {
   const ribbon = useMemo(
     () => (
       <WorkbookToolbar
+        canRedo={canRedo}
+        canUndo={canUndo}
         currentFillColor={currentFillColor}
         currentNumberFormatKind={currentNumberFormat.kind}
         currentTextColor={currentTextColor}
@@ -381,6 +406,7 @@ export function useWorkbookToolbar(input: {
         onClearStyle={() => {
           void clearRangeStyleFields();
         }}
+        onRedo={onRedo}
         onFillColorReset={() => {
           void resetFillColor();
         }}
@@ -420,6 +446,7 @@ export function useWorkbookToolbar(input: {
             alignment: { wrap: !isWrapActive },
           });
         }}
+        onUndo={onUndo}
         recentFillColors={visibleRecentFillColors}
         recentTextColors={visibleRecentTextColors}
         selectedFontSize={selectedFontSize}
@@ -432,6 +459,8 @@ export function useWorkbookToolbar(input: {
       applyRangeStyle,
       applyTextColor,
       clearRangeStyleFields,
+      canRedo,
+      canUndo,
       currentFillColor,
       currentNumberFormat.kind,
       currentTextColor,
@@ -440,6 +469,8 @@ export function useWorkbookToolbar(input: {
       isItalicActive,
       isUnderlineActive,
       isWrapActive,
+      onRedo,
+      onUndo,
       resetFillColor,
       resetTextColor,
       selectedFontSize,

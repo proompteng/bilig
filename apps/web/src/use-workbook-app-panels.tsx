@@ -3,13 +3,11 @@ import type { WorkbookAgentCommandBundle } from "@bilig/agent-api";
 import type { WorkerRuntimeSelection } from "./runtime-session.js";
 import { WorkbookPresenceBar } from "./WorkbookPresenceBar.js";
 import { WorkbookSideRailTabs } from "./WorkbookSideRailTabs.js";
-import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookAgentPane } from "./use-workbook-agent-pane.js";
 import { useWorkbookPresence } from "./use-workbook-presence.js";
 import { useWorkbookShellLayout } from "./use-workbook-shell-layout.js";
 
-type WorkbookPanelsZeroSource = Parameters<typeof useWorkbookPresence>[0]["zero"] &
-  Parameters<typeof useWorkbookChangesPane>[0]["zero"];
+type WorkbookPanelsZeroSource = Parameters<typeof useWorkbookPresence>[0]["zero"];
 
 type WorkbookAgentContextGetter = Parameters<typeof useWorkbookAgentPane>[0]["getContext"];
 type WorkbookAgentPreviewBundle = (
@@ -25,12 +23,16 @@ export function useWorkbookAppPanels(input: {
   runtimeReady: boolean;
   zeroConfigured: boolean;
   remoteSyncAvailable: boolean;
+  changeCount: number;
+  changesPanel: ReactNode;
   toolbarHeaderStatus: ReactNode;
   selectAddress: (sheetName: string, address: string) => void;
   getAgentContext: WorkbookAgentContextGetter;
   previewAgentBundle: WorkbookAgentPreviewBundle;
 }) {
   const {
+    changeCount,
+    changesPanel,
     documentId,
     getAgentContext,
     previewAgentBundle,
@@ -52,16 +54,6 @@ export function useWorkbookAppPanels(input: {
     sheetNames,
     zero,
     enabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
-  });
-
-  const { changeCount, changesPanel } = useWorkbookChangesPane({
-    documentId,
-    sheetNames,
-    zero,
-    enabled: runtimeReady && zeroConfigured,
-    onJump: (sheetName, address) => {
-      selectAddress(sheetName, address);
-    },
   });
 
   const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges } =
@@ -174,8 +166,6 @@ export function useWorkbookAppPanels(input: {
   return {
     agentError,
     agentPanel,
-    changeCount,
-    changesPanel,
     clearAgentError,
     headerStatus,
     pendingCommandCount,

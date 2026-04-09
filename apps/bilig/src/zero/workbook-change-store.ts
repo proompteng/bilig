@@ -175,7 +175,8 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
     eventKind !== "setRangeNumberFormat" &&
     eventKind !== "clearRangeNumberFormat" &&
     eventKind !== "restoreVersion" &&
-    eventKind !== "revertChange"
+    eventKind !== "revertChange" &&
+    eventKind !== "redoChange"
   ) {
     return null;
   }
@@ -593,6 +594,14 @@ export function buildWorkbookChangeDescriptor(
         anchorAddress: payload.address ?? payload.range?.startAddress ?? null,
         range: payload.range ? normalizeRange(payload.range) : null,
       };
+    case "redoChange":
+      return {
+        eventKind: payload.kind,
+        summary: `Redid r${payload.targetRevision}: ${payload.targetSummary}`,
+        sheetName: payload.sheetName ?? payload.range?.sheetName ?? null,
+        anchorAddress: payload.address ?? payload.range?.startAddress ?? null,
+        range: payload.range ? normalizeRange(payload.range) : null,
+      };
     case "applyBatch":
       return {
         eventKind: payload.kind,
@@ -726,10 +735,13 @@ export async function appendWorkbookChange(
     clientMutationId: input.clientMutationId,
     descriptor: buildWorkbookChangeDescriptor(input.payload),
     undoBundle: input.undoBundle,
-    revertsRevision: input.payload.kind === "revertChange" ? input.payload.targetRevision : null,
+    revertsRevision:
+      input.payload.kind === "revertChange" || input.payload.kind === "redoChange"
+        ? input.payload.targetRevision
+        : null,
     createdAtUnixMs: input.createdAtUnixMs,
   });
-  if (input.payload.kind === "revertChange") {
+  if (input.payload.kind === "revertChange" || input.payload.kind === "redoChange") {
     await markWorkbookChangeReverted(db, {
       documentId: input.documentId,
       revision: input.payload.targetRevision,
@@ -767,6 +779,79 @@ export async function loadWorkbookChange(
   );
   const row = result.rows[0];
   return row ? normalizeWorkbookChangeRecord(row) : null;
+}
+
+async function loadWorkbookChangeFromWhere(
+  db: Queryable,
+  input: {
+    readonly documentId: string;
+    readonly whereClause: string;
+    readonly values: readonly unknown[];
+  },
+): Promise<WorkbookChangeRecord | null> {
+  const result = await db.query<WorkbookChangeSelectRow>(
+    `
+      SELECT revision AS "revision",
+             actor_user_id AS "actorUserId",
+             client_mutation_id AS "clientMutationId",
+             event_kind AS "eventKind",
+             summary AS "summary",
+             sheet_id AS "sheetId",
+             sheet_name AS "sheetName",
+             anchor_address AS "anchorAddress",
+             range_json AS "rangeJson",
+             undo_bundle_json AS "undoBundleJson",
+             reverted_by_revision AS "revertedByRevision",
+             reverts_revision AS "revertsRevision",
+             created_at AS "createdAtUnixMs"
+        FROM workbook_change
+       WHERE workbook_id = $1
+         AND ${input.whereClause}
+       ORDER BY revision DESC
+       LIMIT 1
+    `,
+    [input.documentId, ...input.values],
+  );
+  const row = result.rows[0];
+  return row ? normalizeWorkbookChangeRecord(row) : null;
+}
+
+export async function loadLatestUndoableWorkbookChange(
+  db: Queryable,
+  input: {
+    readonly documentId: string;
+    readonly actorUserId: string;
+  },
+): Promise<WorkbookChangeRecord | null> {
+  return await loadWorkbookChangeFromWhere(db, {
+    documentId: input.documentId,
+    whereClause: `
+      actor_user_id = $2
+      AND undo_bundle_json IS NOT NULL
+      AND reverted_by_revision IS NULL
+      AND event_kind <> 'revertChange'
+    `,
+    values: [input.actorUserId],
+  });
+}
+
+export async function loadLatestRedoableWorkbookChange(
+  db: Queryable,
+  input: {
+    readonly documentId: string;
+    readonly actorUserId: string;
+  },
+): Promise<WorkbookChangeRecord | null> {
+  return await loadWorkbookChangeFromWhere(db, {
+    documentId: input.documentId,
+    whereClause: `
+      actor_user_id = $2
+      AND undo_bundle_json IS NOT NULL
+      AND reverted_by_revision IS NULL
+      AND event_kind = 'revertChange'
+    `,
+    values: [input.actorUserId],
+  });
 }
 
 export async function backfillWorkbookChanges(db: Queryable): Promise<void> {

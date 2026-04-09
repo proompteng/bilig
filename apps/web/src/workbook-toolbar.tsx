@@ -7,7 +7,9 @@ import {
   Bold,
   Italic,
   PaintBucket,
+  Redo2,
   RemoveFormatting,
+  Undo2,
   Underline,
   WrapText,
 } from "lucide-react";
@@ -36,6 +38,8 @@ export type { BorderPreset } from "./workbook-toolbar-primitives.js";
 
 export interface WorkbookToolbarProps {
   writesAllowed: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   currentNumberFormatKind: string;
   selectedFontSize: string;
   isBoldActive: boolean;
@@ -60,10 +64,14 @@ export interface WorkbookToolbarProps {
   onApplyBorderPreset(this: void, preset: BorderPreset): void;
   onToggleWrap(this: void): void;
   onClearStyle(this: void): void;
+  onUndo(this: void): void;
+  onRedo(this: void): void;
 }
 
 export const WorkbookToolbar = memo(function WorkbookToolbar({
   writesAllowed,
+  canUndo,
+  canRedo,
   currentNumberFormatKind,
   selectedFontSize,
   isBoldActive,
@@ -88,10 +96,35 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   onApplyBorderPreset,
   onToggleWrap,
   onClearStyle,
+  onUndo,
+  onRedo,
 }: WorkbookToolbarProps) {
   return (
     <div className={TOOLBAR_ROOT_CLASS}>
       <Toolbar.Root aria-label="Formatting toolbar" className={TOOLBAR_ROW_CLASS}>
+        <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
+          <div className={TOOLBAR_SEGMENTED_CLASS} role="group" aria-label="History">
+            <RibbonIconButton
+              ariaLabel="Undo"
+              disabled={!writesAllowed || !canUndo}
+              shortcut="⌘/Ctrl+Z"
+              onClick={onUndo}
+            >
+              <Undo2 className={TOOLBAR_ICON_CLASS} />
+            </RibbonIconButton>
+            <RibbonIconButton
+              ariaLabel="Redo"
+              disabled={!writesAllowed || !canRedo}
+              shortcut="⇧⌘/Ctrl+Z"
+              onClick={onRedo}
+            >
+              <Redo2 className={TOOLBAR_ICON_CLASS} />
+            </RibbonIconButton>
+          </div>
+        </Toolbar.Group>
+
+        <Toolbar.Separator className={TOOLBAR_SEPARATOR_CLASS} />
+
         <Toolbar.Group className={TOOLBAR_GROUP_CLASS}>
           <ToolbarSelect
             ariaLabel="Number format"

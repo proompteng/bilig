@@ -151,6 +151,15 @@ export type WorkbookEventPayload =
       address?: string;
       range?: CellRangeRef;
       appliedBundle: WorkbookChangeUndoBundle;
+    }
+  | {
+      kind: "redoChange";
+      targetRevision: number;
+      targetSummary: string;
+      sheetName?: string;
+      address?: string;
+      range?: CellRangeRef;
+      appliedBundle: WorkbookChangeUndoBundle;
     };
 
 export interface WorkbookEventRecord {
@@ -281,6 +290,7 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
         isWorkbookSnapshot(value["snapshot"])
       );
     case "revertChange":
+    case "redoChange":
       return (
         typeof value["targetRevision"] === "number" &&
         typeof value["targetSummary"] === "string" &&
@@ -367,6 +377,7 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "setFreezePane":
     case "restoreVersion":
     case "revertChange":
+    case "redoChange":
       return null;
     default: {
       const exhaustive: never = payload;
@@ -447,6 +458,7 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       engine.importSnapshot(payload.snapshot);
       return;
     case "revertChange":
+    case "redoChange":
       if (payload.appliedBundle.kind === "engineOps") {
         engine.applyOps(payload.appliedBundle.ops);
         return;

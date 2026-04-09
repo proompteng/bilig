@@ -110,6 +110,36 @@ describe("workbook events", () => {
     ).toBeNull();
   });
 
+  it("replays redoChange events from persisted redo bundles", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "event-test",
+    });
+    await engine.ready();
+
+    applyWorkbookEvent(engine, {
+      kind: "redoChange",
+      targetRevision: 2,
+      targetSummary: "Updated Sheet1!A1",
+      sheetName: "Sheet1",
+      address: "A1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A1",
+      },
+      appliedBundle: {
+        kind: "engineOps",
+        ops: [{ kind: "setCellValue", sheetName: "Sheet1", address: "A1", value: 5 }],
+      },
+    });
+
+    expect(engine.getCellValue("Sheet1", "A1")).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    });
+  });
+
   it("derives focused dirty regions for common source edits", () => {
     expect(
       deriveDirtyRegions({

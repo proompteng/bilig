@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { mutators } from "@bilig/zero-sync";
 import { WorkbookChangesPanel } from "./WorkbookChangesPanel.js";
 import { useWorkbookChanges, type ZeroWorkbookChangeQuerySource } from "./use-workbook-changes.js";
-import type { WorkbookChangeEntry } from "./workbook-changes-model.js";
+import { selectWorkbookHistoryState, type WorkbookChangeEntry } from "./workbook-changes-model.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -22,12 +22,13 @@ export interface ZeroWorkbookChangeSource extends ZeroWorkbookChangeQuerySource 
 
 export function useWorkbookChangesPane(input: {
   readonly documentId: string;
+  readonly currentUserId: string;
   readonly sheetNames: readonly string[];
   readonly zero: ZeroWorkbookChangeSource;
   readonly enabled: boolean;
   readonly onJump: (sheetName: string, address: string) => void;
 }) {
-  const { documentId, enabled, onJump, sheetNames, zero } = input;
+  const { currentUserId, documentId, enabled, onJump, sheetNames, zero } = input;
   const changes = useWorkbookChanges({
     documentId,
     sheetNames,
@@ -35,7 +36,13 @@ export function useWorkbookChangesPane(input: {
     enabled,
   });
   const [pendingRevisions, setPendingRevisions] = useState<readonly number[]>([]);
+  const [isUndoPending, setIsUndoPending] = useState(false);
+  const [isRedoPending, setIsRedoPending] = useState(false);
   const changeCount = changes.length;
+  const historyState = useMemo(
+    () => selectWorkbookHistoryState({ entries: changes, currentUserId }),
+    [changes, currentUserId],
+  );
 
   const revertChange = useCallback(
     (change: WorkbookChangeEntry) => {
@@ -72,8 +79,46 @@ export function useWorkbookChangesPane(input: {
     [changes, onJump, pendingRevisions, revertChange],
   );
 
+  const undoLatestChange = useCallback(() => {
+    if (!enabled || isUndoPending || historyState.undoRevision === null) {
+      return;
+    }
+    setIsUndoPending(true);
+    const observer = observeZeroMutationResult(
+      zero.mutate(
+        mutators.workbook.undoLatestChange({
+          documentId,
+        }),
+      ),
+    );
+    void (observer ?? Promise.resolve()).finally(() => {
+      setIsUndoPending(false);
+    });
+  }, [documentId, enabled, historyState.undoRevision, isUndoPending, zero]);
+
+  const redoLatestChange = useCallback(() => {
+    if (!enabled || isRedoPending || historyState.redoRevision === null) {
+      return;
+    }
+    setIsRedoPending(true);
+    const observer = observeZeroMutationResult(
+      zero.mutate(
+        mutators.workbook.redoLatestChange({
+          documentId,
+        }),
+      ),
+    );
+    void (observer ?? Promise.resolve()).finally(() => {
+      setIsRedoPending(false);
+    });
+  }, [documentId, enabled, historyState.redoRevision, isRedoPending, zero]);
+
   return {
+    canRedo: historyState.canRedo && !isRedoPending,
+    canUndo: historyState.canUndo && !isUndoPending,
     changeCount,
     changesPanel,
+    redoLatestChange,
+    undoLatestChange,
   };
 }

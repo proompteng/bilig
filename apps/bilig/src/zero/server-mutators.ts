@@ -19,6 +19,7 @@ import {
   clearCellArgsSchema,
   parseApplyBatchArgs,
   parseRenderCommitArgs,
+  redoLatestWorkbookChangeArgsSchema,
   rangeMutationArgsSchema,
   revertWorkbookChangeArgsSchema,
   setCellFormulaArgsSchema,
@@ -26,6 +27,7 @@ import {
   setFreezePaneArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  undoLatestWorkbookChangeArgsSchema,
   updateColumnMetadataArgsSchema,
   updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
@@ -41,7 +43,11 @@ import { acquireWorkbookMutationLock } from "./workbook-runtime-store.js";
 import { ensureWorkbookDocumentExists } from "./workbook-migration-store.js";
 import { persistWorkbookMutation } from "./workbook-mutation-store.js";
 import { upsertWorkbookPresence } from "./presence-store.js";
-import { loadWorkbookChange } from "./workbook-change-store.js";
+import {
+  loadLatestRedoableWorkbookChange,
+  loadLatestUndoableWorkbookChange,
+  loadWorkbookChange,
+} from "./workbook-change-store.js";
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -300,6 +306,69 @@ async function commitWorkbookMutation(
         revision: result.revision,
         updatedAt: result.updatedAt,
       };
+    } catch (error) {
+      runtimeManager.invalidate(documentId);
+      throw error;
+    }
+  });
+}
+
+async function commitWorkbookHistoryMutation(input: {
+  documentId: string;
+  serverTx: ServerTransactionLike;
+  runtimeManager: WorkbookRuntimeManager;
+  session?: SessionIdentity;
+  clientMutationId?: string;
+  targetChange: {
+    revision: number;
+    summary: string;
+    sheetName: string | null;
+    anchorAddress: string | null;
+    range: import("./workbook-change-store.js").WorkbookChangeRange | null;
+    undoBundle: WorkbookChangeUndoBundle;
+  };
+  eventKind: "revertChange" | "redoChange";
+}): Promise<void> {
+  const {
+    clientMutationId,
+    documentId,
+    eventKind,
+    runtimeManager,
+    serverTx,
+    session,
+    targetChange,
+  } = input;
+  await runtimeManager.runExclusive(documentId, async () => {
+    const db = serverTx.dbTransaction.wrappedTransaction;
+    await acquireWorkbookMutationLock(db, documentId);
+    const state = await runtimeManager.loadRuntime(db, documentId);
+    const eventPayload: WorkbookEventPayload = {
+      kind: eventKind,
+      targetRevision: targetChange.revision,
+      targetSummary: targetChange.summary,
+      ...(targetChange.sheetName ? { sheetName: targetChange.sheetName } : {}),
+      ...(targetChange.anchorAddress ? { address: targetChange.anchorAddress } : {}),
+      ...(targetChange.range ? { range: targetChange.range } : {}),
+      appliedBundle: targetChange.undoBundle,
+    };
+    try {
+      const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle);
+      const ownerUserId = resolveOwnerUserId(state, session);
+      const result = await persistWorkbookMutation(db, documentId, {
+        previousState: state,
+        nextEngine: state.engine,
+        updatedBy: session?.userID ?? "system",
+        ownerUserId,
+        eventPayload,
+        undoBundle,
+        ...(clientMutationId !== undefined ? { clientMutationId } : {}),
+      });
+      runtimeManager.commitMutation(documentId, {
+        projectionCommit: result.projectionCommit,
+        headRevision: result.revision,
+        calculatedRevision: result.calculatedRevision,
+        ownerUserId,
+      });
     } catch (error) {
       runtimeManager.invalidate(documentId);
       throw error;
@@ -762,58 +831,105 @@ export async function handleServerMutator(
 
     case "workbook.revertChange": {
       const parsed = revertWorkbookChangeArgsSchema.parse(args);
-      await runtimeManager.runExclusive(parsed.documentId, async () => {
-        const db = serverTx.dbTransaction.wrappedTransaction;
-        await acquireWorkbookMutationLock(db, parsed.documentId);
-        const state = await runtimeManager.loadRuntime(db, parsed.documentId);
-        const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision);
-        if (!targetChange) {
-          throw new Error("Workbook change was not found");
-        }
-        if (!targetChange.undoBundle) {
-          throw new Error("Workbook change is not revertible");
-        }
-        if (targetChange.revertedByRevision !== null) {
-          throw new Error(
-            `Workbook change was already reverted in r${targetChange.revertedByRevision}`,
-          );
-        }
-        if (targetChange.eventKind === "revertChange" || targetChange.revertsRevision !== null) {
-          throw new Error("Reverting a revert change is not supported");
-        }
-        const eventPayload: WorkbookEventPayload = {
-          kind: "revertChange",
-          targetRevision: targetChange.revision,
-          targetSummary: targetChange.summary,
-          ...(targetChange.sheetName ? { sheetName: targetChange.sheetName } : {}),
-          ...(targetChange.anchorAddress ? { address: targetChange.anchorAddress } : {}),
-          ...(targetChange.range ? { range: targetChange.range } : {}),
-          appliedBundle: targetChange.undoBundle,
-        };
-        try {
-          const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle);
-          const ownerUserId = resolveOwnerUserId(state, session);
-          const result = await persistWorkbookMutation(db, parsed.documentId, {
-            previousState: state,
-            nextEngine: state.engine,
-            updatedBy: session?.userID ?? "system",
-            ownerUserId,
-            eventPayload,
-            undoBundle,
-            ...(parsed.clientMutationId !== undefined
-              ? { clientMutationId: parsed.clientMutationId }
-              : {}),
-          });
-          runtimeManager.commitMutation(parsed.documentId, {
-            projectionCommit: result.projectionCommit,
-            headRevision: result.revision,
-            calculatedRevision: result.calculatedRevision,
-            ownerUserId,
-          });
-        } catch (error) {
-          runtimeManager.invalidate(parsed.documentId);
-          throw error;
-        }
+      const db = serverTx.dbTransaction.wrappedTransaction;
+      const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision);
+      if (!targetChange) {
+        throw new Error("Workbook change was not found");
+      }
+      if (!targetChange.undoBundle) {
+        throw new Error("Workbook change is not revertible");
+      }
+      if (targetChange.revertedByRevision !== null) {
+        throw new Error(
+          `Workbook change was already reverted in r${targetChange.revertedByRevision}`,
+        );
+      }
+      if (targetChange.eventKind === "revertChange" || targetChange.revertsRevision !== null) {
+        throw new Error("Reverting a revert change is not supported");
+      }
+      await commitWorkbookHistoryMutation({
+        documentId: parsed.documentId,
+        serverTx,
+        runtimeManager,
+        session,
+        ...(parsed.clientMutationId !== undefined
+          ? { clientMutationId: parsed.clientMutationId }
+          : {}),
+        targetChange: {
+          revision: targetChange.revision,
+          summary: targetChange.summary,
+          sheetName: targetChange.sheetName,
+          anchorAddress: targetChange.anchorAddress,
+          range: targetChange.range,
+          undoBundle: targetChange.undoBundle,
+        },
+        eventKind: "revertChange",
+      });
+      return;
+    }
+
+    case "workbook.undoLatestChange": {
+      const parsed = undoLatestWorkbookChangeArgsSchema.parse(args);
+      const targetChange = await loadLatestUndoableWorkbookChange(
+        serverTx.dbTransaction.wrappedTransaction,
+        {
+          documentId: parsed.documentId,
+          actorUserId: session?.userID ?? "system",
+        },
+      );
+      if (!targetChange?.undoBundle) {
+        throw new Error("No undoable workbook change was found");
+      }
+      await commitWorkbookHistoryMutation({
+        documentId: parsed.documentId,
+        serverTx,
+        runtimeManager,
+        session,
+        ...(parsed.clientMutationId !== undefined
+          ? { clientMutationId: parsed.clientMutationId }
+          : {}),
+        targetChange: {
+          revision: targetChange.revision,
+          summary: targetChange.summary,
+          sheetName: targetChange.sheetName,
+          anchorAddress: targetChange.anchorAddress,
+          range: targetChange.range,
+          undoBundle: targetChange.undoBundle,
+        },
+        eventKind: "revertChange",
+      });
+      return;
+    }
+
+    case "workbook.redoLatestChange": {
+      const parsed = redoLatestWorkbookChangeArgsSchema.parse(args);
+      const targetChange = await loadLatestRedoableWorkbookChange(
+        serverTx.dbTransaction.wrappedTransaction,
+        {
+          documentId: parsed.documentId,
+          actorUserId: session?.userID ?? "system",
+        },
+      );
+      if (!targetChange?.undoBundle) {
+        throw new Error("No redoable workbook change was found");
+      }
+      await commitWorkbookHistoryMutation({
+        documentId: parsed.documentId,
+        serverTx,
+        runtimeManager,
+        session,
+        ...(parsed.clientMutationId !== undefined
+          ? { clientMutationId: parsed.clientMutationId }
+          : {}),
+        targetChange: {
+          revision: targetChange.revision,
+          summary: targetChange.summary,
+          sheetName: targetChange.sheetName,
+          anchorAddress: targetChange.anchorAddress,
+          range: targetChange.range,
+          undoBundle: targetChange.undoBundle,
+        },
+        eventKind: "redoChange",
       });
       return;
     }
