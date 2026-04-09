@@ -2,6 +2,10 @@ import { Effect, Exit, Cause } from "effect";
 import type { CellSnapshot } from "@bilig/protocol";
 import type { EngineRuntimeState } from "./runtime-state.js";
 import {
+  createEngineCellStateService,
+  type EngineCellStateService,
+} from "./services/cell-state-service.js";
+import {
   createEngineEventService,
   type EngineEventService,
 } from "./services/event-service.js";
@@ -63,6 +67,7 @@ import {
 } from "./services/structure-service.js";
 
 export interface EngineServiceRuntime {
+  readonly cellState: EngineCellStateService;
   readonly events: EngineEventService;
   readonly evaluation: EngineFormulaEvaluationService;
   readonly selection: EngineSelectionService;
@@ -182,25 +187,11 @@ export function createEngineServiceRuntime(args: {
     start: number,
     count: number,
   ) => import("@bilig/workbook-domain").EngineOp[];
-  readonly restoreCellOps: (
-    sheetName: string,
-    address: string,
-  ) => import("@bilig/workbook-domain").EngineOp[];
   readonly formulaBinding: EngineFormulaBindingRuntimeConfig;
   readonly formulaGraph: Parameters<typeof createEngineFormulaGraphService>[0];
   readonly recalc: EngineRecalcRuntimeConfig;
   readonly pivot: EnginePivotRuntimeConfig;
   readonly operation: EngineOperationRuntimeConfig;
-  readonly readRangeCells: (
-    range: import("@bilig/protocol").CellRangeRef,
-  ) => CellSnapshot[][];
-  readonly toCellStateOps: (
-    sheetName: string,
-    address: string,
-    snapshot: CellSnapshot,
-    sourceSheetName?: string,
-    sourceAddress?: string,
-  ) => import("@bilig/workbook-domain").EngineOp[];
   readonly forEachFormulaDependencyCell: (
     cellIndex: number,
     fn: (dependencyCellIndex: number) => void,
@@ -262,25 +253,39 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(evaluation.resolveSpillReference(currentSheetName, sheetName, address)),
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
-  const structure = createEngineStructureService({
-    state: {
-      workbook: args.state.workbook,
-      formulas: args.state.formulas,
-      pivotOutputOwners: args.pivotState.pivotOutputOwners,
-    },
-    getCellByIndex: args.getCellByIndex,
-    toCellStateOps: args.toCellStateOps,
-    removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
-    clearOwnedPivot: (pivotRecord) =>
-      runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
-    rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
-  });
   const read = createEngineReadService({
     state: args.state,
     forEachFormulaDependencyCell: args.forEachFormulaDependencyCell,
     getEntityDependents: args.getEntityDependents,
     cellToCsvValue: args.cellToCsvValue,
     serializeCsv: args.serializeCsv,
+  });
+  const cellState = createEngineCellStateService({
+    state: args.state,
+    getCell: (sheetName, address) => runEngineEffect(read.getCell(sheetName, address)),
+    getCellByIndex: (cellIndex) => runEngineEffect(read.getCellByIndex(cellIndex)),
+  });
+  const structure = createEngineStructureService({
+    state: {
+      workbook: args.state.workbook,
+      formulas: args.state.formulas,
+      pivotOutputOwners: args.pivotState.pivotOutputOwners,
+    },
+    getCellByIndex: (cellIndex) => runEngineEffect(read.getCellByIndex(cellIndex)),
+    toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
+      runEngineEffect(
+        cellState.toCellStateOps(
+          sheetName,
+          address,
+          snapshot,
+          sourceSheetName,
+          sourceAddress,
+        ),
+      ),
+    removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
+    clearOwnedPivot: (pivotRecord) =>
+      runEngineEffect(requireService(pivot, "pivot").clearOwnedPivot(pivotRecord)),
+    rebuildAllFormulaBindings: () => runEngineEffect(binding.rebuildAllFormulaBindings()),
   });
   recalc = createEngineRecalcService({
     ...args.recalc,
@@ -379,9 +384,19 @@ export function createEngineServiceRuntime(args: {
     captureSheetCellState: args.captureSheetCellState,
     captureRowRangeCellState: args.captureRowRangeCellState,
     captureColumnRangeCellState: args.captureColumnRangeCellState,
-    restoreCellOps: args.restoreCellOps,
-    readRangeCells: args.readRangeCells,
-    toCellStateOps: args.toCellStateOps,
+    restoreCellOps: (sheetName, address) =>
+      runEngineEffect(cellState.restoreCellOps(sheetName, address)),
+    readRangeCells: (range) => runEngineEffect(cellState.readRangeCells(range)),
+    toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
+      runEngineEffect(
+        cellState.toCellStateOps(
+          sheetName,
+          address,
+          snapshot,
+          sourceSheetName,
+          sourceAddress,
+        ),
+      ),
     applyBatchNow: (batch, source, potentialNewCells) =>
       runEngineEffect(operations.applyBatch(batch, source, potentialNewCells)),
   });
@@ -413,6 +428,7 @@ export function createEngineServiceRuntime(args: {
   });
 
   return {
+    cellState,
     events: createEngineEventService(args.state),
     evaluation,
     selection,

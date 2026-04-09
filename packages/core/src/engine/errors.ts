@@ -24,3 +24,5 @@ export class EngineFormulaBindingError extends Data.TaggedError("EngineFormulaBi
 export class EngineFormulaGraphError extends Data.TaggedError("EngineFormulaGraphError")<EngineServiceErrorDetails> {}
 
 export class EngineFormulaEvaluationError extends Data.TaggedError("EngineFormulaEvaluationError")<EngineServiceErrorDetails> {}
+
+export class EngineCellStateError extends Data.TaggedError("EngineCellStateError")<EngineServiceErrorDetails> {}

@@ -1,33 +1,27 @@
-import {
-  type CellNumberFormatInput,
-  type CellNumberFormatRecord,
-  type CellRangeRef,
-  type CellStyleField,
-  type CellStylePatch,
-  type CellStyleRecord,
-  ValueTag,
-  type CellSnapshot,
-  type CellValue,
-  type DependencySnapshot,
-  type EngineEvent,
-  type ExplainCellSnapshot,
-  type LiteralInput,
-  type RecalcMetrics,
-  type SyncState,
-  type SelectionState,
-  type WorkbookAxisEntrySnapshot,
-  type WorkbookCalculationSettingsSnapshot,
-  type WorkbookDefinedNameValueSnapshot,
-  type WorkbookFreezePaneSnapshot,
-  type WorkbookPivotSnapshot,
-  type WorkbookSortSnapshot,
-  type WorkbookSnapshot,
+import type {
+  CellNumberFormatInput,
+  CellNumberFormatRecord,
+  CellRangeRef,
+  CellStyleField,
+  CellStylePatch,
+  CellStyleRecord,
+  CellSnapshot,
+  CellValue,
+  DependencySnapshot,
+  EngineEvent,
+  ExplainCellSnapshot,
+  LiteralInput,
+  RecalcMetrics,
+  SelectionState,
+  SyncState,
+  WorkbookAxisEntrySnapshot,
+  WorkbookCalculationSettingsSnapshot,
+  WorkbookDefinedNameValueSnapshot,
+  WorkbookFreezePaneSnapshot,
+  WorkbookPivotSnapshot,
+  WorkbookSortSnapshot,
+  WorkbookSnapshot,
 } from "@bilig/protocol";
-import {
-  formatAddress,
-  parseCellAddress,
-  translateFormulaReferences,
-} from "@bilig/formula";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import {
@@ -43,7 +37,6 @@ import {
   definedNameValuesEqual,
   renameDefinedNameValueSheet,
 } from "./engine-metadata-utils.js";
-import { normalizeRange } from "./engine-range-utils.js";
 import {
   buildFormatClearOps,
   buildFormatPatchOps,
@@ -325,7 +318,6 @@ export class SpreadsheetEngine {
         this.captureRowRangeCellState(sheetName, start, count),
       captureColumnRangeCellState: (sheetName, start, count) =>
         this.captureColumnRangeCellState(sheetName, start, count),
-      restoreCellOps: (sheetName, address) => this.restoreCellOps(sheetName, address),
       formulaBinding: {
         state: this.state,
         edgeArena: this.edgeArena,
@@ -458,9 +450,6 @@ export class SpreadsheetEngine {
           this.wasmProgramSyncPending = next;
         },
       },
-      readRangeCells: (range) => this.readRangeCells(range),
-      toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
-        this.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
       forEachFormulaDependencyCell: (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
       cellToCsvValue: (cell) => cellToCsvValue(cell),
       serializeCsv: (rows) => serializeCsv(rows),
@@ -1120,89 +1109,6 @@ export class SpreadsheetEngine {
     potentialNewCells?: number,
   ): readonly EngineOp[] | null {
     return runEngineEffect(this.runtime.mutation.executeLocal(ops, potentialNewCells));
-  }
-
-  private restoreCellOps(sheetName: string, address: string): EngineOp[] {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      return [{ kind: "clearCell", sheetName, address }];
-    }
-    return this.toCellStateOps(sheetName, address, this.getCellByIndex(cellIndex)).filter(
-      (op) => op.kind !== "setCellFormat",
-    );
-  }
-
-  private readRangeCells(range: CellRangeRef): CellSnapshot[][] {
-    const bounds = normalizeRange(range);
-    const rows: CellSnapshot[][] = [];
-    for (let row = bounds.startRow; row <= bounds.endRow; row += 1) {
-      const cells: CellSnapshot[] = [];
-      for (let col = bounds.startCol; col <= bounds.endCol; col += 1) {
-        cells.push(this.getCell(range.sheetName, formatAddress(row, col)));
-      }
-      rows.push(cells);
-    }
-    return rows;
-  }
-
-  private toCellStateOps(
-    sheetName: string,
-    address: string,
-    snapshot: CellSnapshot,
-    sourceSheetName?: string,
-    sourceAddress?: string,
-  ): EngineOp[] {
-    const ops: EngineOp[] = [];
-    if (snapshot.formula !== undefined) {
-      const translatedFormula =
-        sourceSheetName && sourceAddress
-          ? this.translateFormulaForTarget(
-              snapshot.formula,
-              sourceSheetName,
-              sourceAddress,
-              sheetName,
-              address,
-            )
-          : snapshot.formula;
-      ops.push({ kind: "setCellFormula", sheetName, address, formula: translatedFormula });
-    } else {
-      switch (snapshot.value.tag) {
-        case ValueTag.Empty:
-          ops.push({ kind: "clearCell", sheetName, address });
-          break;
-        case ValueTag.Number:
-          ops.push({ kind: "setCellValue", sheetName, address, value: snapshot.value.value });
-          break;
-        case ValueTag.Boolean:
-          ops.push({ kind: "setCellValue", sheetName, address, value: snapshot.value.value });
-          break;
-        case ValueTag.String:
-          ops.push({ kind: "setCellValue", sheetName, address, value: snapshot.value.value });
-          break;
-        case ValueTag.Error:
-          ops.push({ kind: "clearCell", sheetName, address });
-          break;
-      }
-    }
-    ops.push({
-      kind: "setCellFormat",
-      sheetName,
-      address,
-      format: snapshot.format ?? null,
-    });
-    return ops;
-  }
-
-  private translateFormulaForTarget(
-    formula: string,
-    sourceSheetName: string,
-    sourceAddress: string,
-    targetSheetName: string,
-    targetAddress: string,
-  ): string {
-    const source = parseCellAddress(sourceAddress, sourceSheetName);
-    const target = parseCellAddress(targetAddress, targetSheetName);
-    return translateFormulaReferences(formula, target.row - source.row, target.col - source.col);
   }
 
   private ensureRecalcScratchCapacity(size: number): void {
