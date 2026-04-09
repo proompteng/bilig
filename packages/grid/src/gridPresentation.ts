@@ -46,6 +46,8 @@ export function getGridTheme(options?: {
   textSurfaceEnabled?: boolean;
 }) {
   void options;
+  const fontFamily =
+    '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif';
   return {
     accentColor: "#1f7a43",
     accentFg: "#ffffff",
@@ -60,8 +62,8 @@ export function getGridTheme(options?: {
     cellVerticalPadding: 4,
     drilldownBorder: "#dadce0",
     editorFontSize: "12px",
-    fontFamily: '"JetBrainsMono Nerd Font","JetBrains Mono",monospace',
-    headerFontStyle: '500 11px "JetBrainsMono Nerd Font", "JetBrains Mono", monospace',
+    fontFamily,
+    headerFontStyle: `600 11px ${fontFamily}`,
     horizontalBorderColor: "#eceff1",
     lineHeight: 1.2,
     textDark: "#202124",

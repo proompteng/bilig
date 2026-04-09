@@ -23,7 +23,10 @@ const CHANGE_EVENT_TONES: Record<string, "neutral" | "danger"> = {
   fillRange: "neutral",
   copyRange: "neutral",
   moveRange: "neutral",
+  updateRowMetadata: "neutral",
+  updateColumnMetadata: "neutral",
   updateColumnWidth: "neutral",
+  setFreezePane: "neutral",
   setRangeStyle: "neutral",
   clearRangeStyle: "neutral",
   setRangeNumberFormat: "neutral",
@@ -45,7 +48,10 @@ function formatEventLabel(eventKind: string): string {
     case "copyRange":
     case "moveRange":
       return "Range";
+    case "updateRowMetadata":
+    case "updateColumnMetadata":
     case "updateColumnWidth":
+    case "setFreezePane":
       return "Layout";
     case "setRangeStyle":
     case "clearRangeStyle":

@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe("workbook layout", () => {
-  it("renders the assistant as a docked right-side rail beside the spreadsheet", async () => {
+  it("renders the side rail beside the spreadsheet using the controlled rail width", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -79,7 +79,9 @@ describe("workbook layout", () => {
           onCopyRange={() => {}}
           onMoveRange={() => {}}
           onPaste={() => {}}
+          onSideRailWidthChange={() => {}}
           sideRail={<div data-testid="assistant-rail">Assistant rail</div>}
+          sideRailWidth={384}
         />,
       );
     });
@@ -88,6 +90,8 @@ describe("workbook layout", () => {
     const gridSurface = host.querySelector("[data-testid='grid-surface']");
     expect(sideRail).not.toBeNull();
     expect(sideRail?.textContent).toContain("Assistant rail");
+    expect(sideRail instanceof HTMLElement ? sideRail.style.width : null).toBe("384px");
+    expect(host.querySelector("[data-testid='workbook-side-rail-resize-handle']")).not.toBeNull();
     expect(gridSurface instanceof Node).toBe(true);
     expect(sideRail instanceof Node).toBe(true);
     expect(

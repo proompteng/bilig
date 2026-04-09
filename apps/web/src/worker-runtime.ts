@@ -610,17 +610,58 @@ export class WorkbookWorkerRuntime {
     (await this.getProjectionEngine()).moveRange(source, target);
   }
 
-  async updateColumnWidth(sheetName: string, columnIndex: number, width: number): Promise<number> {
+  async updateRowMetadata(
+    sheetName: string,
+    startRow: number,
+    count: number,
+    height: number | null,
+    hidden: boolean | null,
+  ): Promise<void> {
     this.markProjectionDivergedFromLocalStore();
-    const clamped = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
+    const normalizedHeight = height === null ? null : Math.max(1, Math.round(height));
+    (await this.getProjectionEngine()).updateRowMetadata(
+      sheetName,
+      startRow,
+      count,
+      normalizedHeight,
+      hidden,
+    );
+  }
+
+  async updateColumnMetadata(
+    sheetName: string,
+    startCol: number,
+    count: number,
+    width: number | null,
+    hidden: boolean | null,
+  ): Promise<number | null> {
+    this.markProjectionDivergedFromLocalStore();
+    const normalizedWidth =
+      width === null
+        ? null
+        : Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
     (await this.getProjectionEngine()).updateColumnMetadata(
       sheetName,
-      columnIndex,
-      1,
-      clamped,
-      null,
+      startCol,
+      count,
+      normalizedWidth,
+      hidden,
     );
-    return clamped;
+    return normalizedWidth;
+  }
+
+  async updateColumnWidth(sheetName: string, columnIndex: number, width: number): Promise<number> {
+    const normalizedWidth = await this.updateColumnMetadata(sheetName, columnIndex, 1, width, null);
+    return normalizedWidth ?? width;
+  }
+
+  async setFreezePane(sheetName: string, rows: number, cols: number): Promise<void> {
+    this.markProjectionDivergedFromLocalStore();
+    (await this.getProjectionEngine()).setFreezePane(
+      sheetName,
+      Math.max(0, Math.round(rows)),
+      Math.max(0, Math.round(cols)),
+    );
   }
 
   async autofitColumn(sheetName: string, columnIndex: number): Promise<number> {

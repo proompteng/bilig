@@ -3,6 +3,7 @@ import {
   buildCalculationSettingsRowFromEngine,
   buildSheetCellSourceRowsFromEngine,
   buildSheetColumnMetadataRowsFromEngine,
+  buildSheetRowMetadataRowsFromEngine,
   buildSingleCellSourceRowFromEngine,
   buildWorkbookHeaderRowFromEngine,
   buildWorkbookNumberFormatRowsFromEngine,
@@ -16,6 +17,7 @@ import {
   isColumnMetadataEventPayload,
   isFocusedCellEventPayload,
   isNumberFormatRangeEventPayload,
+  isRowMetadataEventPayload,
   isStyleRangeEventPayload,
   nowIso,
 } from "./store-support.js";
@@ -53,6 +55,13 @@ function buildSheetColumnMetadataRowsFromProjection(
   sheetName: string,
 ): readonly import("./projection.js").AxisMetadataSourceRow[] {
   return projection.columnMetadata.filter((entry) => entry.sheetName === sheetName);
+}
+
+function buildSheetRowMetadataRowsFromProjection(
+  projection: PersistWorkbookMutationOptions["previousState"]["projection"],
+  sheetName: string,
+): readonly import("./projection.js").AxisMetadataSourceRow[] {
+  return projection.rowMetadata.filter((entry) => entry.sheetName === sheetName);
 }
 
 async function appendWorkbookEvent(
@@ -289,6 +298,30 @@ export async function persistWorkbookMutation(
       calculationSettings: nextCalculationSettings,
       sheetName: options.eventPayload.sheetName,
       columnMetadata: nextColumnMetadataRows,
+    };
+  } else if (isRowMetadataEventPayload(options.eventPayload)) {
+    const nextRowMetadataRows = buildSheetRowMetadataRowsFromEngine(
+      documentId,
+      options.nextEngine,
+      options.eventPayload.sheetName,
+      nextProjectionOptions,
+    );
+    await applyCalculationSettings(db, nextCalculationSettings);
+    await applyAxisMetadataDiff(
+      db,
+      "row_metadata",
+      buildSheetRowMetadataRowsFromProjection(
+        options.previousState.projection,
+        options.eventPayload.sheetName,
+      ),
+      nextRowMetadataRows,
+    );
+    projectionCommit = {
+      kind: "row-metadata",
+      workbook: nextWorkbookRow,
+      calculationSettings: nextCalculationSettings,
+      sheetName: options.eventPayload.sheetName,
+      rowMetadata: nextRowMetadataRows,
     };
   } else {
     const nextProjection = buildWorkbookSourceProjectionFromEngine(

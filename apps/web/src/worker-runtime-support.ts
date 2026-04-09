@@ -63,6 +63,13 @@ export interface WorkerEngine {
   fillRange(source: CellRangeRef, target: CellRangeRef): void;
   copyRange(source: CellRangeRef, target: CellRangeRef): void;
   moveRange(source: CellRangeRef, target: CellRangeRef): void;
+  updateRowMetadata(
+    sheetName: string,
+    start: number,
+    count: number,
+    size: number | null,
+    hidden: boolean | null,
+  ): unknown;
   updateColumnMetadata(
     sheetName: string,
     start: number,
@@ -70,6 +77,7 @@ export interface WorkerEngine {
     size: number | null,
     hidden: boolean | null,
   ): unknown;
+  setFreezePane(sheetName: string, rows: number, cols: number): unknown;
   exportSnapshot(): WorkbookSnapshot;
   exportReplicaSnapshot(): EngineReplicaSnapshot;
   importSnapshot(snapshot: WorkbookSnapshot): void;

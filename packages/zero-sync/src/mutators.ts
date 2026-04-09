@@ -192,10 +192,32 @@ export const rangeMutationArgsSchema = baseMutationArgsSchema.extend({
   target: cellRangeRefSchema,
 });
 
+export const updateRowMetadataArgsSchema = baseMutationArgsSchema.extend({
+  sheetName: z.string().min(1),
+  startRow: z.number().int().nonnegative(),
+  count: z.number().int().positive(),
+  height: z.number().int().positive().nullable(),
+  hidden: z.boolean().nullable(),
+});
+
+export const updateColumnMetadataArgsSchema = baseMutationArgsSchema.extend({
+  sheetName: z.string().min(1),
+  startCol: z.number().int().nonnegative(),
+  count: z.number().int().positive(),
+  width: z.number().int().positive().nullable(),
+  hidden: z.boolean().nullable(),
+});
+
 export const updateColumnWidthArgsSchema = baseMutationArgsSchema.extend({
   sheetName: z.string().min(1),
   columnIndex: z.number().int().nonnegative(),
   width: z.number().int().positive(),
+});
+
+export const setFreezePaneArgsSchema = baseMutationArgsSchema.extend({
+  sheetName: z.string().min(1),
+  rows: z.number().int().nonnegative(),
+  cols: z.number().int().nonnegative(),
 });
 
 export const setRangeStyleArgsSchema = baseMutationArgsSchema.extend({
@@ -305,7 +327,10 @@ export const mutators = defineMutators({
     fillRange: defineMutator(rangeMutationArgsSchema, noop),
     copyRange: defineMutator(rangeMutationArgsSchema, noop),
     moveRange: defineMutator(rangeMutationArgsSchema, noop),
+    updateRowMetadata: defineMutator(updateRowMetadataArgsSchema, noop),
+    updateColumnMetadata: defineMutator(updateColumnMetadataArgsSchema, noop),
     updateColumnWidth: defineMutator(updateColumnWidthArgsSchema, noop),
+    setFreezePane: defineMutator(setFreezePaneArgsSchema, noop),
     setRangeStyle: defineMutator(setRangeStyleArgsSchema, noop),
     clearRangeStyle: defineMutator(clearRangeStyleArgsSchema, noop),
     setRangeNumberFormat: defineMutator(setRangeNumberFormatArgsSchema, noop),

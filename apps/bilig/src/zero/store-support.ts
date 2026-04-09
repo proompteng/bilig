@@ -41,8 +41,10 @@ export type NumberFormatRangeEventPayload = Extract<
 
 export type ColumnMetadataEventPayload = Extract<
   WorkbookEventPayload,
-  { kind: "updateColumnWidth" }
+  { kind: "updateColumnWidth" | "updateColumnMetadata" }
 >;
+
+export type RowMetadataEventPayload = Extract<WorkbookEventPayload, { kind: "updateRowMetadata" }>;
 
 export function createEmptyWorkbookSnapshot(documentId: string): WorkbookSnapshot {
   return {
@@ -142,7 +144,13 @@ export function isNumberFormatRangeEventPayload(
 export function isColumnMetadataEventPayload(
   payload: WorkbookEventPayload,
 ): payload is ColumnMetadataEventPayload {
-  return payload.kind === "updateColumnWidth";
+  return payload.kind === "updateColumnWidth" || payload.kind === "updateColumnMetadata";
+}
+
+export function isRowMetadataEventPayload(
+  payload: WorkbookEventPayload,
+): payload is RowMetadataEventPayload {
+  return payload.kind === "updateRowMetadata";
 }
 
 export function eventRequiresRecalc(payload: WorkbookEventPayload): boolean {
@@ -151,7 +159,10 @@ export function eventRequiresRecalc(payload: WorkbookEventPayload): boolean {
     payload.kind === "clearRangeStyle" ||
     payload.kind === "setRangeNumberFormat" ||
     payload.kind === "clearRangeNumberFormat" ||
-    payload.kind === "updateColumnWidth"
+    payload.kind === "updateRowMetadata" ||
+    payload.kind === "updateColumnMetadata" ||
+    payload.kind === "updateColumnWidth" ||
+    payload.kind === "setFreezePane"
   );
 }
 

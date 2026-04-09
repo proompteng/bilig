@@ -59,6 +59,17 @@ function collectImpactedSheetIdsFromPayloads(
 ): Set<number> {
   const sheetIds = new Set<number>();
   payloads.forEach((payload) => {
+    if (
+      payload.kind === "updateRowMetadata" ||
+      payload.kind === "updateColumnMetadata" ||
+      payload.kind === "setFreezePane"
+    ) {
+      const sheetId = engine.workbook.getSheet(payload.sheetName)?.id;
+      if (sheetId !== undefined) {
+        sheetIds.add(sheetId);
+      }
+      return;
+    }
     if (payload.kind === "updateColumnWidth") {
       const sheetId = engine.workbook.getSheet(payload.sheetName)?.id;
       if (sheetId !== undefined) {

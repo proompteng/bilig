@@ -103,6 +103,13 @@ export type WorkbookProjectionCommit =
       calculationSettings: CalculationSettingsSourceRow;
       sheetName: string;
       columnMetadata: readonly AxisMetadataSourceRow[];
+    }
+  | {
+      kind: "row-metadata";
+      workbook: WorkbookSourceProjection["workbook"];
+      calculationSettings: CalculationSettingsSourceRow;
+      sheetName: string;
+      rowMetadata: readonly AxisMetadataSourceRow[];
     };
 
 export interface PersistWorkbookMutationOptions {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useRef, useState } from "react";
 import type { CellSnapshot, Viewport } from "@bilig/protocol";
 import { FormulaBar } from "./FormulaBar.js";
 import type { GridEngineLike } from "./grid-engine.js";
@@ -68,6 +68,8 @@ interface WorkbookViewProps {
   selectionStatus?: React.ReactNode;
   headerStatus?: React.ReactNode;
   sideRail?: React.ReactNode;
+  sideRailWidth?: number | undefined;
+  onSideRailWidthChange?: ((width: number) => void) | undefined;
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   columnWidths?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
@@ -82,6 +84,13 @@ interface WorkbookViewProps {
         readonly viewport: Viewport;
       }
     | undefined;
+}
+
+const MIN_SIDE_RAIL_WIDTH = 304;
+const MAX_SIDE_RAIL_WIDTH = 520;
+
+function clampSideRailWidth(width: number): number {
+  return Math.min(MAX_SIDE_RAIL_WIDTH, Math.max(MIN_SIDE_RAIL_WIDTH, Math.round(width)));
 }
 
 export function WorkbookView({
@@ -116,6 +125,8 @@ export function WorkbookView({
   selectionStatus,
   headerStatus,
   sideRail,
+  sideRailWidth,
+  onSideRailWidthChange,
   subscribeViewport,
   columnWidths,
   onColumnWidthChange,
@@ -124,6 +135,38 @@ export function WorkbookView({
   previewRanges,
   restoreViewportTarget,
 }: WorkbookViewProps) {
+  const resizeStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const [isResizingSideRail, setIsResizingSideRail] = useState(false);
+  const resolvedSideRailWidth = clampSideRailWidth(sideRailWidth ?? 344);
+
+  const handleSideRailPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState || event.pointerId !== resizeState.pointerId || !onSideRailWidthChange) {
+        return;
+      }
+      const nextWidth = resizeState.startWidth + (resizeState.startX - event.clientX);
+      onSideRailWidthChange(clampSideRailWidth(nextWidth));
+    },
+    [onSideRailWidthChange],
+  );
+
+  const finishSideRailResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const resizeState = resizeStateRef.current;
+    if (!resizeState || event.pointerId !== resizeState.pointerId) {
+      return;
+    }
+    resizeStateRef.current = null;
+    setIsResizingSideRail(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
   return (
     <section
       className="flex h-screen flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
@@ -193,9 +236,40 @@ export function WorkbookView({
         </div>
         {sideRail ? (
           <aside
-            className="flex h-full w-[20.5rem] shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-app-bg)] xl:w-[21.5rem]"
+            className="relative flex h-full shrink-0 border-l border-[var(--wb-border)] bg-[var(--wb-app-bg)]"
             data-testid="workbook-side-rail"
+            style={{
+              flexBasis: `${resolvedSideRailWidth}px`,
+              width: `${resolvedSideRailWidth}px`,
+            }}
           >
+            {onSideRailWidthChange ? (
+              <div
+                aria-label="Resize workbook side rail"
+                aria-orientation="vertical"
+                className={[
+                  "absolute inset-y-0 left-0 z-10 w-3 -translate-x-1.5 cursor-col-resize touch-none",
+                  "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--wb-border)]",
+                  isResizingSideRail
+                    ? "after:bg-[var(--wb-accent)]"
+                    : "hover:after:bg-[var(--wb-border-strong)]",
+                ].join(" ")}
+                data-testid="workbook-side-rail-resize-handle"
+                role="separator"
+                onPointerCancel={finishSideRailResize}
+                onPointerDown={(event) => {
+                  resizeStateRef.current = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startWidth: resolvedSideRailWidth,
+                  };
+                  setIsResizingSideRail(true);
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={handleSideRailPointerMove}
+                onPointerUp={finishSideRailResize}
+              />
+            ) : null}
             {sideRail}
           </aside>
         ) : null}

@@ -166,7 +166,10 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
     eventKind !== "fillRange" &&
     eventKind !== "copyRange" &&
     eventKind !== "moveRange" &&
+    eventKind !== "updateRowMetadata" &&
+    eventKind !== "updateColumnMetadata" &&
     eventKind !== "updateColumnWidth" &&
+    eventKind !== "setFreezePane" &&
     eventKind !== "setRangeStyle" &&
     eventKind !== "clearRangeStyle" &&
     eventKind !== "setRangeNumberFormat" &&
@@ -201,6 +204,24 @@ function rangeLabel(range: WorkbookChangeRange): string {
 
 function columnLabel(columnIndex: number): string {
   return formatAddress(0, columnIndex).replace(/[0-9]+$/u, "");
+}
+
+function rowLabel(rowIndex: number): string {
+  return String(rowIndex + 1);
+}
+
+function rowRangeLabel(startRow: number, count: number): string {
+  if (count <= 1) {
+    return rowLabel(startRow);
+  }
+  return `${rowLabel(startRow)}:${rowLabel(startRow + count - 1)}`;
+}
+
+function columnRangeLabel(startCol: number, count: number): string {
+  if (count <= 1) {
+    return columnLabel(startCol);
+  }
+  return `${columnLabel(startCol)}:${columnLabel(startCol + count - 1)}`;
 }
 
 function rangeFromAddresses(
@@ -450,6 +471,34 @@ export function buildWorkbookChangeDescriptor(
         range,
       };
     }
+    case "updateRowMetadata": {
+      const anchorAddress = formatAddress(payload.startRow, 0);
+      return {
+        eventKind: payload.kind,
+        summary: `Updated rows ${rowRangeLabel(payload.startRow, payload.count)} on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress,
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: anchorAddress,
+          endAddress: formatAddress(payload.startRow + payload.count - 1, 0),
+        },
+      };
+    }
+    case "updateColumnMetadata": {
+      const anchorAddress = formatAddress(0, payload.startCol);
+      return {
+        eventKind: payload.kind,
+        summary: `Updated columns ${columnRangeLabel(payload.startCol, payload.count)} on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress,
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: anchorAddress,
+          endAddress: formatAddress(0, payload.startCol + payload.count - 1),
+        },
+      };
+    }
     case "updateColumnWidth": {
       const anchorAddress = formatAddress(0, payload.columnIndex);
       return {
@@ -464,6 +513,21 @@ export function buildWorkbookChangeDescriptor(
         },
       };
     }
+    case "setFreezePane":
+      return {
+        eventKind: payload.kind,
+        summary:
+          payload.rows === 0 && payload.cols === 0
+            ? `Cleared freeze panes on ${payload.sheetName}`
+            : `Set freeze panes on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress: "A1",
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: "A1",
+          endAddress: "A1",
+        },
+      };
     case "setRangeStyle": {
       const range = normalizeRange(payload.range);
       return {

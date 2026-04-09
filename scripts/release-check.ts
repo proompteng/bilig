@@ -1,16 +1,21 @@
 #!/usr/bin/env bun
 
 import { gzipSync } from "node:zlib";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
 const budgets = {
   mainJsGzipBytes: 350 * 1024,
   runtimeWasmGzipBytes: 250 * 1024,
   sqliteWasmGzipBytes: 400 * 1024,
+  cssGzipBytes: 32 * 1024,
+  startupFontGzipBytes: 0,
+  startupShellGzipBytes: 390 * 1024,
+  startupFontFileCount: 0,
 };
 
 async function findAssets() {
+  const distDir = resolve("apps/web/dist");
   const assetDir = resolve("apps/web/dist/assets");
   const entries = await readdir(assetDir, { withFileTypes: true });
   const files = entries
@@ -18,17 +23,28 @@ async function findAssets() {
     .map((entry) => resolve(assetDir, entry.name));
 
   const jsAssets = files.filter((file) => file.endsWith(".js"));
+  const cssAssets = files.filter((file) => file.endsWith(".css"));
   const wasmAssets = files.filter((file) => file.endsWith(".wasm"));
 
   if (jsAssets.length === 0) {
     throw new Error("No built JavaScript assets were found in apps/web/dist/assets");
   }
 
+  if (cssAssets.length === 0) {
+    throw new Error("No built CSS assets were found in apps/web/dist/assets");
+  }
+
   if (wasmAssets.length === 0) {
     throw new Error("No built WASM assets were found in apps/web/dist/assets");
   }
 
-  return { jsAssets, wasmAssets };
+  return {
+    cssAssets,
+    distDir,
+    indexHtml: resolve(distDir, "index.html"),
+    jsAssets,
+    wasmAssets,
+  };
 }
 
 async function measureAsset(file) {
@@ -46,14 +62,55 @@ function assertBudget(label, actual, budget) {
   }
 }
 
+function normalizeAssetReference(reference) {
+  return reference.trim().replace(/^['"]|['"]$/g, "");
+}
+
+function parseStartupAssetReferences(indexHtml) {
+  const stylesheetRefs = [
+    ...indexHtml.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/g),
+  ].map((match) => normalizeAssetReference(match[1] ?? ""));
+  const modulePreloadRefs = [
+    ...indexHtml.matchAll(/<link[^>]+rel=["']modulepreload["'][^>]+href=["']([^"']+)["']/g),
+  ].map((match) => normalizeAssetReference(match[1] ?? ""));
+  const moduleScriptRefs = [
+    ...indexHtml.matchAll(/<script[^>]+type=["']module["'][^>]+src=["']([^"']+)["']/g),
+  ].map((match) => normalizeAssetReference(match[1] ?? ""));
+  return {
+    stylesheetRefs,
+    startupScriptRefs: [...new Set([...modulePreloadRefs, ...moduleScriptRefs])],
+  };
+}
+
+function resolveBuiltAsset(distDir, reference) {
+  if (!reference || reference.startsWith("http://") || reference.startsWith("https://")) {
+    return null;
+  }
+  if (reference.startsWith("data:")) {
+    return null;
+  }
+  const normalized = reference.startsWith("/") ? reference.slice(1) : reference;
+  return resolve(distDir, normalized);
+}
+
+function parseCssFontReferences(css) {
+  return [...css.matchAll(/url\(([^)]+)\)/g)]
+    .map((match) => normalizeAssetReference(match[1] ?? ""))
+    .filter((reference) => /\.(woff2?|ttf|otf)$/i.test(reference));
+}
+
 function isSqliteWasmAsset(file) {
   return basename(file).startsWith("sqlite3-");
 }
 
-const { jsAssets, wasmAssets } = await findAssets();
+const { cssAssets, distDir, indexHtml, jsAssets, wasmAssets } = await findAssets();
 const jsMeasurements = await Promise.all(jsAssets.map((file) => measureAsset(file)));
+const cssMeasurements = await Promise.all(cssAssets.map((file) => measureAsset(file)));
 const wasmMeasurements = await Promise.all(wasmAssets.map((file) => measureAsset(file)));
 const largestJs = jsMeasurements.reduce((largest, entry) =>
+  entry.gzipBytes > largest.gzipBytes ? entry : largest,
+);
+const largestCss = cssMeasurements.reduce((largest, entry) =>
   entry.gzipBytes > largest.gzipBytes ? entry : largest,
 );
 const runtimeWasmMeasurements = wasmMeasurements.filter((entry) => !isSqliteWasmAsset(entry.file));
@@ -73,20 +130,105 @@ const largestRuntimeWasm = runtimeWasmMeasurements.reduce((largest, entry) =>
 const largestSqliteWasm = sqliteWasmMeasurements.reduce((largest, entry) =>
   entry.gzipBytes > largest.gzipBytes ? entry : largest,
 );
+const indexHtmlBytes = new Uint8Array(await readFile(indexHtml));
+const indexHtmlMeasurement = {
+  file: indexHtml,
+  rawBytes: indexHtmlBytes.byteLength,
+  gzipBytes: gzipSync(indexHtmlBytes).byteLength,
+};
+const startupRefs = parseStartupAssetReferences(await Bun.file(indexHtml).text());
+const startupCssFiles = [...new Set(startupRefs.stylesheetRefs)]
+  .map((reference) => resolveBuiltAsset(distDir, reference))
+  .flatMap((file) => (file ? [file] : []));
+const startupScriptFiles = [...new Set(startupRefs.startupScriptRefs)]
+  .map((reference) => resolveBuiltAsset(distDir, reference))
+  .flatMap((file) => (file ? [file] : []));
+const startupFontFiles = new Set(
+  (
+    await Promise.all(
+      startupCssFiles.map(async (cssFile) => {
+        const css = await Bun.file(cssFile).text();
+        return parseCssFontReferences(css)
+          .map((reference) => resolveBuiltAsset(distDir, reference))
+          .flatMap((file) => (file ? [file] : []));
+      }),
+    )
+  ).flat(),
+);
+
+const [missingScriptFile, missingCssFile, missingFontFile] = await Promise.all([
+  findMissingStartupAsset(startupScriptFiles),
+  findMissingStartupAsset(startupCssFiles),
+  findMissingStartupAsset([...startupFontFiles]),
+]);
+
+if (missingScriptFile) {
+  throw new Error(`Startup script asset was not found: ${missingScriptFile}`);
+}
+
+if (missingCssFile) {
+  throw new Error(`Startup stylesheet asset was not found: ${missingCssFile}`);
+}
+
+if (missingFontFile) {
+  throw new Error(`Startup font asset was not found: ${missingFontFile}`);
+}
+
+const startupCssMeasurements = await Promise.all(startupCssFiles.map((file) => measureAsset(file)));
+const startupScriptMeasurements = await Promise.all(
+  startupScriptFiles.map((file) => measureAsset(file)),
+);
+const startupFontMeasurements = await Promise.all(
+  [...startupFontFiles].map((file) => measureAsset(file)),
+);
+const startupFontGzipBytes = startupFontMeasurements.reduce(
+  (sum, entry) => sum + entry.gzipBytes,
+  0,
+);
+const startupShellGzipBytes =
+  indexHtmlMeasurement.gzipBytes +
+  startupCssMeasurements.reduce((sum, entry) => sum + entry.gzipBytes, 0) +
+  startupScriptMeasurements.reduce((sum, entry) => sum + entry.gzipBytes, 0) +
+  startupFontGzipBytes;
 
 assertBudget("Main JavaScript gzip size", largestJs.gzipBytes, budgets.mainJsGzipBytes);
 assertBudget("Runtime WASM gzip size", largestRuntimeWasm.gzipBytes, budgets.runtimeWasmGzipBytes);
 assertBudget("SQLite WASM gzip size", largestSqliteWasm.gzipBytes, budgets.sqliteWasmGzipBytes);
+assertBudget("Largest CSS gzip size", largestCss.gzipBytes, budgets.cssGzipBytes);
+assertBudget("Startup font gzip size", startupFontGzipBytes, budgets.startupFontGzipBytes);
+assertBudget("Startup shell gzip size", startupShellGzipBytes, budgets.startupShellGzipBytes);
+assertBudget(
+  "Startup font file count",
+  startupFontMeasurements.length,
+  budgets.startupFontFileCount,
+);
 
 console.log(
   JSON.stringify(
     {
       budgets,
+      indexHtmlMeasurement,
       largestJs,
+      largestCss,
       largestRuntimeWasm,
       largestSqliteWasm,
+      startupCssMeasurements,
+      startupFontMeasurements,
+      startupFontFileCount: startupFontMeasurements.length,
+      startupScriptMeasurements,
+      startupShellGzipBytes,
     },
     null,
     2,
   ),
 );
+
+async function findMissingStartupAsset(files: readonly string[]): Promise<string | null> {
+  const existResults = await Promise.all(
+    files.map(async (file) => ({
+      file,
+      exists: await Bun.file(file).exists(),
+    })),
+  );
+  return existResults.find((result) => !result.exists)?.file ?? null;
+}

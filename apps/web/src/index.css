@@ -2,56 +2,35 @@
 @source "./";
 @source "../../../packages/grid/src";
 
-@font-face {
-  font-family: "JetBrainsMono Nerd Font";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "JetBrainsMono Nerd Font";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/JetBrainsMonoNerdFont-Medium.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "JetBrainsMono Nerd Font";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/JetBrainsMonoNerdFont-Bold.ttf") format("truetype");
-}
-
 @theme {
-  --font-sans: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
-  --font-mono: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  --font-sans:
+    "Inter", "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "SFMono-Regular", "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono",
+    monospace;
 }
 
 @layer base {
   :root {
-    --wb-app-bg: var(--color-mauve-50);
+    --wb-app-bg: #f7f7f4;
     --wb-surface: #ffffff;
-    --wb-surface-subtle: var(--color-mauve-50);
-    --wb-surface-muted: var(--color-mauve-100);
-    --wb-border: var(--color-mauve-200);
-    --wb-border-strong: var(--color-mauve-300);
-    --wb-grid-border: var(--color-mauve-100);
-    --wb-text: var(--color-mauve-950);
-    --wb-text-muted: var(--color-mauve-700);
-    --wb-text-subtle: var(--color-mauve-600);
-    --wb-accent: var(--color-mauve-800);
-    --wb-accent-soft: var(--color-mauve-100);
-    --wb-accent-ring: var(--color-mauve-200);
-    --wb-hover: var(--color-mauve-100);
+    --wb-surface-subtle: #f3f2ee;
+    --wb-surface-muted: #ece9e1;
+    --wb-border: #ddd8cc;
+    --wb-border-strong: #cac3b4;
+    --wb-grid-border: #ece9e1;
+    --wb-text: #1f2933;
+    --wb-text-muted: #52606d;
+    --wb-text-subtle: #7b8794;
+    --wb-accent: #21563a;
+    --wb-accent-soft: #e8f1eb;
+    --wb-accent-ring: #bfd5c4;
+    --wb-hover: #f1efe8;
     --wb-shadow-sm: 0 1px 1px rgba(15, 23, 42, 0.05);
-    --wb-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.1);
-    --wb-shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.12);
-    --wb-radius-control: 5px;
-    --wb-radius-panel: 6px;
+    --wb-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.08);
+    --wb-shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.1);
+    --wb-radius-control: 6px;
+    --wb-radius-panel: 8px;
   }
 
   html,

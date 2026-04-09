@@ -25,6 +25,28 @@ describe("workbook event guards", () => {
     ).toBe(false);
   });
 
+  it("accepts structural metadata payloads", () => {
+    expect(
+      isWorkbookEventPayload({
+        kind: "updateRowMetadata",
+        sheetName: "Sheet1",
+        startRow: 1,
+        count: 2,
+        height: 32,
+        hidden: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      isWorkbookEventPayload({
+        kind: "setFreezePane",
+        sheetName: "Sheet1",
+        rows: 1,
+        cols: 2,
+      }),
+    ).toBe(true);
+  });
+
   it("rejects engine undo bundles with malformed engine ops", () => {
     expect(
       isWorkbookChangeUndoBundle({

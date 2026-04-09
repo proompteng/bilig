@@ -72,6 +72,42 @@ export function applyPendingWorkbookMutationToEngine(
       }
       return;
     }
+    case "updateRowMetadata": {
+      const [sheetName, startRow, count, height, hidden] = args;
+      if (
+        typeof sheetName === "string" &&
+        typeof startRow === "number" &&
+        typeof count === "number" &&
+        (height === null || typeof height === "number") &&
+        (hidden === null || typeof hidden === "boolean")
+      ) {
+        engine.updateRowMetadata(
+          sheetName,
+          startRow,
+          count,
+          height === null ? null : Math.max(1, Math.round(height)),
+          hidden,
+        );
+      }
+      return;
+    }
+    case "updateColumnMetadata": {
+      const [sheetName, startCol, count, width, hidden] = args;
+      if (
+        typeof sheetName === "string" &&
+        typeof startCol === "number" &&
+        typeof count === "number" &&
+        (width === null || typeof width === "number") &&
+        (hidden === null || typeof hidden === "boolean")
+      ) {
+        const clampedWidth =
+          width === null
+            ? null
+            : Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
+        engine.updateColumnMetadata(sheetName, startCol, count, clampedWidth, hidden);
+      }
+      return;
+    }
     case "updateColumnWidth": {
       const [sheetName, columnIndex, width] = args;
       if (
@@ -81,6 +117,17 @@ export function applyPendingWorkbookMutationToEngine(
       ) {
         const clamped = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
         engine.updateColumnMetadata(sheetName, columnIndex, 1, clamped, null);
+      }
+      return;
+    }
+    case "setFreezePane": {
+      const [sheetName, rows, cols] = args;
+      if (typeof sheetName === "string" && typeof rows === "number" && typeof cols === "number") {
+        engine.setFreezePane(
+          sheetName,
+          Math.max(0, Math.round(rows)),
+          Math.max(0, Math.round(cols)),
+        );
       }
       return;
     }

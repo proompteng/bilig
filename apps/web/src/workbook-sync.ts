@@ -13,7 +13,10 @@ export type WorkbookMutationMethod =
   | "fillRange"
   | "copyRange"
   | "moveRange"
+  | "updateRowMetadata"
+  | "updateColumnMetadata"
   | "updateColumnWidth"
+  | "setFreezePane"
   | "setRangeStyle"
   | "clearRangeStyle"
   | "setRangeNumberFormat"
@@ -61,7 +64,10 @@ export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutat
     value === "fillRange" ||
     value === "copyRange" ||
     value === "moveRange" ||
+    value === "updateRowMetadata" ||
+    value === "updateColumnMetadata" ||
     value === "updateColumnWidth" ||
+    value === "setFreezePane" ||
     value === "setRangeStyle" ||
     value === "clearRangeStyle" ||
     value === "setRangeNumberFormat" ||
@@ -165,6 +171,48 @@ export function buildZeroWorkbookMutation(
       }
       return mutators.workbook[method]({ documentId, clientMutationId, source, target });
     }
+    case "updateRowMetadata": {
+      const [sheetName, startRow, count, height, hidden] = args;
+      if (
+        typeof sheetName !== "string" ||
+        typeof startRow !== "number" ||
+        typeof count !== "number" ||
+        (height !== null && typeof height !== "number") ||
+        (hidden !== null && typeof hidden !== "boolean")
+      ) {
+        throw new Error("Invalid updateRowMetadata args");
+      }
+      return mutators.workbook.updateRowMetadata({
+        documentId,
+        clientMutationId,
+        sheetName,
+        startRow,
+        count,
+        height,
+        hidden,
+      });
+    }
+    case "updateColumnMetadata": {
+      const [sheetName, startCol, count, width, hidden] = args;
+      if (
+        typeof sheetName !== "string" ||
+        typeof startCol !== "number" ||
+        typeof count !== "number" ||
+        (width !== null && typeof width !== "number") ||
+        (hidden !== null && typeof hidden !== "boolean")
+      ) {
+        throw new Error("Invalid updateColumnMetadata args");
+      }
+      return mutators.workbook.updateColumnMetadata({
+        documentId,
+        clientMutationId,
+        sheetName,
+        startCol,
+        count,
+        width,
+        hidden,
+      });
+    }
     case "updateColumnWidth": {
       const [sheetName, columnIndex, width] = args;
       if (
@@ -180,6 +228,19 @@ export function buildZeroWorkbookMutation(
         sheetName,
         columnIndex,
         width,
+      });
+    }
+    case "setFreezePane": {
+      const [sheetName, rows, cols] = args;
+      if (typeof sheetName !== "string" || typeof rows !== "number" || typeof cols !== "number") {
+        throw new Error("Invalid setFreezePane args");
+      }
+      return mutators.workbook.setFreezePane({
+        documentId,
+        clientMutationId,
+        sheetName,
+        rows,
+        cols,
       });
     }
     case "setRangeStyle": {

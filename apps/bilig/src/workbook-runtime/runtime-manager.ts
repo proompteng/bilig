@@ -226,6 +226,15 @@ export class WorkbookRuntimeManager {
           commit.columnMetadata,
         );
         return;
+      case "row-metadata":
+        session.projection.workbook = commit.workbook;
+        session.projection.calculationSettings = commit.calculationSettings;
+        session.projection.rowMetadata = withReplacedProjectionRowMetadata(
+          session.projection.rowMetadata,
+          commit.sheetName,
+          commit.rowMetadata,
+        );
+        return;
       default: {
         const exhaustive: never = commit;
         throw new Error(`Unhandled projection commit: ${JSON.stringify(exhaustive)}`);
@@ -319,6 +328,21 @@ function withReplacedProjectionCellsInRange(
 }
 
 function withReplacedProjectionColumnMetadata(
+  current: readonly AxisMetadataSourceRow[],
+  sheetName: string,
+  nextRows: readonly AxisMetadataSourceRow[],
+): AxisMetadataSourceRow[] {
+  const rows = current.slice();
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (rows[index]!.sheetName === sheetName) {
+      rows.splice(index, 1);
+    }
+  }
+  rows.push(...nextRows);
+  return rows;
+}
+
+function withReplacedProjectionRowMetadata(
   current: readonly AxisMetadataSourceRow[],
   sheetName: string,
   nextRows: readonly AxisMetadataSourceRow[],

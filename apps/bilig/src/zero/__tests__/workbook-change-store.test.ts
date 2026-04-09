@@ -213,6 +213,48 @@ describe("workbook-change-store", () => {
     });
   });
 
+  it("summarizes structural metadata changes with layout labels", () => {
+    expect(
+      buildWorkbookChangeDescriptor({
+        kind: "updateRowMetadata",
+        sheetName: "Sheet1",
+        startRow: 2,
+        count: 2,
+        height: 48,
+        hidden: false,
+      }),
+    ).toEqual({
+      eventKind: "updateRowMetadata",
+      summary: "Updated rows 3:4 on Sheet1",
+      sheetName: "Sheet1",
+      anchorAddress: "A3",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A3",
+        endAddress: "A4",
+      },
+    });
+
+    expect(
+      buildWorkbookChangeDescriptor({
+        kind: "setFreezePane",
+        sheetName: "Sheet1",
+        rows: 1,
+        cols: 2,
+      }),
+    ).toEqual({
+      eventKind: "setFreezePane",
+      summary: "Set freeze panes on Sheet1",
+      sheetName: "Sheet1",
+      anchorAddress: "A1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A1",
+        endAddress: "A1",
+      },
+    });
+  });
+
   it("records revert changes with target metadata and marks the original revision as reverted", async () => {
     const queryable = new FakeQueryable([
       (text) =>

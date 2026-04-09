@@ -253,6 +253,32 @@ export function useWorkbookSync(input: {
           mutation = { method, args: [source, target] };
           break;
         }
+        case "updateRowMetadata": {
+          const [sheetName, startRow, count, height, hidden] = args;
+          assert(
+            typeof sheetName === "string" &&
+              typeof startRow === "number" &&
+              typeof count === "number" &&
+              (height === null || typeof height === "number") &&
+              (hidden === null || typeof hidden === "boolean"),
+            "Invalid updateRowMetadata args",
+          );
+          mutation = { method, args: [sheetName, startRow, count, height, hidden] };
+          break;
+        }
+        case "updateColumnMetadata": {
+          const [sheetName, startCol, count, width, hidden] = args;
+          assert(
+            typeof sheetName === "string" &&
+              typeof startCol === "number" &&
+              typeof count === "number" &&
+              (width === null || typeof width === "number") &&
+              (hidden === null || typeof hidden === "boolean"),
+            "Invalid updateColumnMetadata args",
+          );
+          mutation = { method, args: [sheetName, startCol, count, width, hidden] };
+          break;
+        }
         case "updateColumnWidth": {
           const [sheetName, columnIndex, width] = args;
           assert(
@@ -262,6 +288,15 @@ export function useWorkbookSync(input: {
             "Invalid updateColumnWidth args",
           );
           mutation = { method, args: [sheetName, columnIndex, width] };
+          break;
+        }
+        case "setFreezePane": {
+          const [sheetName, rows, cols] = args;
+          assert(
+            typeof sheetName === "string" && typeof rows === "number" && typeof cols === "number",
+            "Invalid setFreezePane args",
+          );
+          mutation = { method, args: [sheetName, rows, cols] };
           break;
         }
         case "setRangeStyle": {

@@ -89,10 +89,32 @@ export type WorkbookEventPayload =
       target: CellRangeRef;
     }
   | {
+      kind: "updateRowMetadata";
+      sheetName: string;
+      startRow: number;
+      count: number;
+      height: number | null;
+      hidden: boolean | null;
+    }
+  | {
+      kind: "updateColumnMetadata";
+      sheetName: string;
+      startCol: number;
+      count: number;
+      width: number | null;
+      hidden: boolean | null;
+    }
+  | {
       kind: "updateColumnWidth";
       sheetName: string;
       columnIndex: number;
       width: number;
+    }
+  | {
+      kind: "setFreezePane";
+      sheetName: string;
+      rows: number;
+      cols: number;
     }
   | {
       kind: "setRangeStyle";
@@ -207,11 +229,33 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
     case "copyRange":
     case "moveRange":
       return isCellRangeRef(value["source"]) && isCellRangeRef(value["target"]);
+    case "updateRowMetadata":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["startRow"] === "number" &&
+        typeof value["count"] === "number" &&
+        (typeof value["height"] === "number" || value["height"] === null) &&
+        (typeof value["hidden"] === "boolean" || value["hidden"] === null)
+      );
+    case "updateColumnMetadata":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["startCol"] === "number" &&
+        typeof value["count"] === "number" &&
+        (typeof value["width"] === "number" || value["width"] === null) &&
+        (typeof value["hidden"] === "boolean" || value["hidden"] === null)
+      );
     case "updateColumnWidth":
       return (
         typeof value["sheetName"] === "string" &&
         typeof value["columnIndex"] === "number" &&
         typeof value["width"] === "number"
+      );
+    case "setFreezePane":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["rows"] === "number" &&
+        typeof value["cols"] === "number"
       );
     case "setRangeStyle":
       return isCellRangeRef(value["range"]) && typeof value["patch"] === "object";
@@ -317,7 +361,10 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "applyBatch":
     case "applyAgentCommandBundle":
     case "renderCommit":
+    case "updateRowMetadata":
+    case "updateColumnMetadata":
     case "updateColumnWidth":
+    case "setFreezePane":
     case "restoreVersion":
     case "revertChange":
       return null;
@@ -360,8 +407,29 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
     case "moveRange":
       engine.moveRange(payload.source, payload.target);
       return;
+    case "updateRowMetadata":
+      engine.updateRowMetadata(
+        payload.sheetName,
+        payload.startRow,
+        payload.count,
+        payload.height,
+        payload.hidden,
+      );
+      return;
+    case "updateColumnMetadata":
+      engine.updateColumnMetadata(
+        payload.sheetName,
+        payload.startCol,
+        payload.count,
+        payload.width,
+        payload.hidden,
+      );
+      return;
     case "updateColumnWidth":
       engine.updateColumnMetadata(payload.sheetName, payload.columnIndex, 1, payload.width, null);
+      return;
+    case "setFreezePane":
+      engine.setFreezePane(payload.sheetName, payload.rows, payload.cols);
       return;
     case "setRangeStyle":
       engine.setRangeStyle(payload.range, payload.patch);

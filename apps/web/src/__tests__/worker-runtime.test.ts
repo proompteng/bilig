@@ -930,6 +930,39 @@ describe("WorkbookWorkerRuntime", () => {
     expect(patch?.columns).toEqual([{ index: 1, size: 160, hidden: false }]);
   });
 
+  it("patches only affected axis entries for row metadata edits", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    await runtime.bootstrap({
+      documentId: "row-axis-doc",
+      replicaId: "browser:test",
+      persistState: false,
+    });
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>();
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: "Sheet1",
+        rowStart: 0,
+        rowEnd: 3,
+        colStart: 0,
+        colEnd: 2,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes));
+      },
+    );
+
+    await runtime.updateRowMetadata("Sheet1", 2, 1, 42, true);
+
+    const patch = received.at(-1);
+    expect(patch?.full).toBe(false);
+    expect(patch?.cells).toHaveLength(0);
+    expect(patch?.columns).toHaveLength(0);
+    expect(patch?.rows).toEqual([{ index: 2, size: 42, hidden: true }]);
+  });
+
   it("persists pending workbook mutations across bootstraps and removes them on ack", async () => {
     const localStoreFactory = createMemoryLocalStoreFactory();
     const runtime = new WorkbookWorkerRuntime({ localStoreFactory });

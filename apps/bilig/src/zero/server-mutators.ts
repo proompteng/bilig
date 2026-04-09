@@ -23,10 +23,13 @@ import {
   revertWorkbookChangeArgsSchema,
   setCellFormulaArgsSchema,
   setCellValueArgsSchema,
+  setFreezePaneArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  updateColumnMetadataArgsSchema,
   updatePresenceArgsSchema,
   updateColumnWidthArgsSchema,
+  updateRowMetadataArgsSchema,
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
 } from "@bilig/zero-sync";
@@ -534,6 +537,68 @@ export async function handleServerMutator(
       return;
     }
 
+    case "workbook.updateRowMetadata": {
+      const parsed = updateRowMetadataArgsSchema.parse(args);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "updateRowMetadata",
+          sheetName: parsed.sheetName,
+          startRow: parsed.startRow,
+          count: parsed.count,
+          height: parsed.height,
+          hidden: parsed.hidden,
+        },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.updateRowMetadata(
+              parsed.sheetName,
+              parsed.startRow,
+              parsed.count,
+              parsed.height,
+              parsed.hidden,
+            );
+          });
+        },
+        parsed.clientMutationId,
+        session,
+      );
+      return;
+    }
+
+    case "workbook.updateColumnMetadata": {
+      const parsed = updateColumnMetadataArgsSchema.parse(args);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "updateColumnMetadata",
+          sheetName: parsed.sheetName,
+          startCol: parsed.startCol,
+          count: parsed.count,
+          width: parsed.width,
+          hidden: parsed.hidden,
+        },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.updateColumnMetadata(
+              parsed.sheetName,
+              parsed.startCol,
+              parsed.count,
+              parsed.width,
+              parsed.hidden,
+            );
+          });
+        },
+        parsed.clientMutationId,
+        session,
+      );
+      return;
+    }
+
     case "workbook.updateColumnWidth": {
       const parsed = updateColumnWidthArgsSchema.parse(args);
       await commitWorkbookMutation(
@@ -549,6 +614,29 @@ export async function handleServerMutator(
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
             draft.updateColumnMetadata(parsed.sheetName, parsed.columnIndex, 1, parsed.width, null);
+          });
+        },
+        parsed.clientMutationId,
+        session,
+      );
+      return;
+    }
+
+    case "workbook.setFreezePane": {
+      const parsed = setFreezePaneArgsSchema.parse(args);
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind: "setFreezePane",
+          sheetName: parsed.sheetName,
+          rows: parsed.rows,
+          cols: parsed.cols,
+        },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.setFreezePane(parsed.sheetName, parsed.rows, parsed.cols);
           });
         },
         parsed.clientMutationId,

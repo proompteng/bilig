@@ -51,6 +51,8 @@ const railCountBadgeClass = cva(
 export function WorkbookSideRailTabs(props: {
   readonly tabs: readonly WorkbookSideRailTabDefinition[];
   readonly defaultValue?: string;
+  readonly value?: string | null;
+  readonly onValueChange?: ((nextValue: string) => void) | undefined;
 }) {
   const tabs = useMemo(() => props.tabs.filter((tab) => tab.panel != null), [props.tabs]);
   const resolvedDefaultValue = useMemo(() => {
@@ -61,17 +63,22 @@ export function WorkbookSideRailTabs(props: {
       ? (props.defaultValue ?? tabs[0]!.value)
       : tabs[0]!.value;
   }, [props.defaultValue, tabs]);
-  const [value, setValue] = useState<string | null>(resolvedDefaultValue);
+  const isControlled = props.value !== undefined;
+  const [uncontrolledValue, setUncontrolledValue] = useState<string | null>(resolvedDefaultValue);
+  const value = isControlled ? (props.value ?? null) : uncontrolledValue;
 
   useEffect(() => {
+    if (isControlled) {
+      return;
+    }
     if (resolvedDefaultValue === null) {
-      setValue(null);
+      setUncontrolledValue(null);
       return;
     }
     if (!tabs.some((tab) => tab.value === value)) {
-      setValue(resolvedDefaultValue);
+      setUncontrolledValue(resolvedDefaultValue);
     }
-  }, [resolvedDefaultValue, tabs, value]);
+  }, [isControlled, resolvedDefaultValue, tabs, value]);
 
   if (value === null || tabs.length === 0) {
     return null;
@@ -82,7 +89,11 @@ export function WorkbookSideRailTabs(props: {
       className={railRootClass()}
       value={value}
       onValueChange={(nextValue) => {
-        setValue(String(nextValue));
+        const resolvedNextValue = String(nextValue);
+        if (!isControlled) {
+          setUncontrolledValue(resolvedNextValue);
+        }
+        props.onValueChange?.(resolvedNextValue);
       }}
     >
       <Tabs.List aria-label="Workbook panels" className={railListClass()}>

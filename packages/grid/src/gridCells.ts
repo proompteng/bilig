@@ -8,7 +8,8 @@ import {
 } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
 
-const DEFAULT_FONT_FALLBACK = '"JetBrainsMono Nerd Font","JetBrains Mono",monospace';
+const DEFAULT_FONT_FALLBACK =
+  '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif';
 const DEFAULT_TEXT_COLOR = "#202124";
 const TRANSPARENT_TEXT = "rgba(32, 33, 36, 0)";
 

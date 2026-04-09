@@ -68,6 +68,48 @@ describe("workbook events", () => {
     expect(engine.getCellValue("Sheet1", "A1")).toEqual({ tag: ValueTag.Empty });
   });
 
+  it("replays structural metadata events onto a warm engine", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "event-test",
+    });
+    await engine.ready();
+
+    applyWorkbookEvent(engine, {
+      kind: "updateRowMetadata",
+      sheetName: "Sheet1",
+      startRow: 2,
+      count: 1,
+      height: 36,
+      hidden: true,
+    });
+    applyWorkbookEvent(engine, {
+      kind: "setFreezePane",
+      sheetName: "Sheet1",
+      rows: 1,
+      cols: 2,
+    });
+
+    expect(engine.getRowMetadata("Sheet1")).toEqual([
+      {
+        count: 1,
+        hidden: true,
+        sheetName: "Sheet1",
+        size: 36,
+        start: 2,
+      },
+    ]);
+    expect(engine.getFreezePane("Sheet1")).toEqual({ sheetName: "Sheet1", rows: 1, cols: 2 });
+    expect(
+      deriveDirtyRegions({
+        kind: "setFreezePane",
+        sheetName: "Sheet1",
+        rows: 1,
+        cols: 2,
+      }),
+    ).toBeNull();
+  });
+
   it("derives focused dirty regions for common source edits", () => {
     expect(
       deriveDirtyRegions({

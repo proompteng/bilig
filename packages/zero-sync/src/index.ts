@@ -16,8 +16,11 @@ export {
   setRangeStyleArgsSchema,
   parseApplyBatchArgs,
   parseRenderCommitArgs,
+  setFreezePaneArgsSchema,
   updateColumnWidthArgsSchema,
+  updateColumnMetadataArgsSchema,
   updatePresenceArgsSchema,
+  updateRowMetadataArgsSchema,
 } from "./mutators.js";
 export {
   queries,

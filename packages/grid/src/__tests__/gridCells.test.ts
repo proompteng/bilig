@@ -95,7 +95,7 @@ describe("gridCells", () => {
       underline: true,
     });
     expect(renderCell.font).toBe(
-      'italic 400 15px "JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      'italic 400 15px "Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif',
     );
 
     expect(
@@ -124,7 +124,8 @@ describe("gridCells", () => {
     expect(cellStyleToThemeOverride(fontAndFillStyle)).toEqual({
       textDark: "#202124",
       baseFontStyle: "400 12px",
-      fontFamily: '"JetBrainsMono Nerd Font","JetBrains Mono",monospace',
+      fontFamily:
+        '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif',
     });
   });
 
