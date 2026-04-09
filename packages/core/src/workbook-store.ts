@@ -23,6 +23,12 @@ import {
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { SheetGrid } from "./sheet-grid.js";
 import { CellStore } from "./cell-store.js";
+import {
+  cloneWorkbookRangeRecords,
+  findWorkbookRangeRecord,
+  overlayWorkbookRangeRecords,
+  replaceWorkbookRangeRecords,
+} from "./workbook-range-records.js";
 
 const SHEET_STRIDE = MAX_ROWS * MAX_COLS;
 
@@ -474,30 +480,27 @@ export class WorkbookStore {
       throw new Error(`Unknown cell style: ${styleId}`);
     }
     const sheet = this.getOrCreateSheet(range.sheetName);
-    const normalizedRange = normalizeRangeRef(range);
-    sheet.styleRanges = sheet.styleRanges.flatMap((record) =>
-      subtractRangeRecord(record.range, normalizedRange).map((remainder) => ({
-        range: remainder,
-        styleId: record.styleId,
-      })),
-    );
     const stored: WorkbookStyleRangeRecord = {
-      range: normalizedRange,
+      range: { ...range },
       styleId,
     };
-    if (styleId !== WorkbookStore.defaultStyleId) {
-      sheet.styleRanges.push(stored);
-    }
+    sheet.styleRanges = overlayWorkbookRangeRecords(
+      sheet.styleRanges,
+      stored,
+      (nextRange, record) => ({
+        range: nextRange,
+        styleId: record.styleId,
+      }),
+      (record) => record.styleId === WorkbookStore.defaultStyleId,
+    );
     return stored;
   }
 
   listStyleRanges(sheetName: string): WorkbookStyleRangeRecord[] {
-    return (
-      this.getSheet(sheetName)?.styleRanges.map((record) => ({
-        range: { ...record.range },
-        styleId: record.styleId,
-      })) ?? []
-    );
+    return cloneWorkbookRangeRecords(this.getSheet(sheetName)?.styleRanges ?? [], (range, record) => ({
+      range,
+      styleId: record.styleId,
+    }));
   }
 
   setStyleRanges(
@@ -505,15 +508,22 @@ export class WorkbookStore {
     ranges: readonly SheetStyleRangeSnapshot[],
   ): WorkbookStyleRangeRecord[] {
     const sheet = this.getOrCreateSheet(sheetName);
-    sheet.styleRanges = ranges.map((entry) => ({
-      range: { ...entry.range },
-      styleId: entry.styleId,
-    }));
-    sheet.styleRanges.forEach((entry) => {
-      if (!this.cellStyles.has(entry.styleId)) {
-        throw new Error(`Unknown cell style: ${entry.styleId}`);
-      }
-    });
+    const nextRanges = replaceWorkbookRangeRecords(
+      ranges.map((entry) => ({
+        range: { ...entry.range },
+        styleId: entry.styleId,
+      })),
+      (range, record) => ({
+        range,
+        styleId: record.styleId,
+      }),
+      (entry) => {
+        if (!this.cellStyles.has(entry.styleId)) {
+          throw new Error(`Unknown cell style: ${entry.styleId}`);
+        }
+      },
+    );
+    sheet.styleRanges = nextRanges;
     return this.listStyleRanges(sheetName);
   }
 
@@ -522,13 +532,10 @@ export class WorkbookStore {
     if (!sheet) {
       return WorkbookStore.defaultStyleId;
     }
-    for (let index = sheet.styleRanges.length - 1; index >= 0; index -= 1) {
-      const record = sheet.styleRanges[index]!;
-      if (rangeContainsCell(record.range, row, col)) {
-        return record.styleId;
-      }
-    }
-    return WorkbookStore.defaultStyleId;
+    return (
+      findWorkbookRangeRecord(sheet.styleRanges, row, col)?.styleId ??
+      WorkbookStore.defaultStyleId
+    );
   }
 
   setFormatRange(range: CellRangeRef, formatId: string): WorkbookFormatRangeRecord {
@@ -536,29 +543,29 @@ export class WorkbookStore {
       throw new Error(`Unknown cell number format: ${formatId}`);
     }
     const sheet = this.getOrCreateSheet(range.sheetName);
-    const normalizedRange = normalizeRangeRef(range);
-    sheet.formatRanges = sheet.formatRanges.flatMap((record) =>
-      subtractRangeRecord(record.range, normalizedRange).map((remainder) => ({
-        range: remainder,
-        formatId: record.formatId,
-      })),
-    );
     const stored: WorkbookFormatRangeRecord = {
-      range: normalizedRange,
+      range: { ...range },
       formatId,
     };
-    if (formatId !== WorkbookStore.defaultFormatId) {
-      sheet.formatRanges.push(stored);
-    }
+    sheet.formatRanges = overlayWorkbookRangeRecords(
+      sheet.formatRanges,
+      stored,
+      (nextRange, record) => ({
+        range: nextRange,
+        formatId: record.formatId,
+      }),
+      (record) => record.formatId === WorkbookStore.defaultFormatId,
+    );
     return stored;
   }
 
   listFormatRanges(sheetName: string): WorkbookFormatRangeRecord[] {
-    return (
-      this.getSheet(sheetName)?.formatRanges.map((record) => ({
-        range: { ...record.range },
+    return cloneWorkbookRangeRecords(
+      this.getSheet(sheetName)?.formatRanges ?? [],
+      (range, record) => ({
+        range,
         formatId: record.formatId,
-      })) ?? []
+      }),
     );
   }
 
@@ -567,15 +574,22 @@ export class WorkbookStore {
     ranges: readonly SheetFormatRangeSnapshot[],
   ): WorkbookFormatRangeRecord[] {
     const sheet = this.getOrCreateSheet(sheetName);
-    sheet.formatRanges = ranges.map((entry) => ({
-      range: { ...entry.range },
-      formatId: entry.formatId,
-    }));
-    sheet.formatRanges.forEach((entry) => {
-      if (!this.cellNumberFormats.has(entry.formatId)) {
-        throw new Error(`Unknown cell number format: ${entry.formatId}`);
-      }
-    });
+    const nextRanges = replaceWorkbookRangeRecords(
+      ranges.map((entry) => ({
+        range: { ...entry.range },
+        formatId: entry.formatId,
+      })),
+      (range, record) => ({
+        range,
+        formatId: record.formatId,
+      }),
+      (entry) => {
+        if (!this.cellNumberFormats.has(entry.formatId)) {
+          throw new Error(`Unknown cell number format: ${entry.formatId}`);
+        }
+      },
+    );
+    sheet.formatRanges = nextRanges;
     return this.listFormatRanges(sheetName);
   }
 
@@ -584,13 +598,10 @@ export class WorkbookStore {
     if (!sheet) {
       return WorkbookStore.defaultFormatId;
     }
-    for (let index = sheet.formatRanges.length - 1; index >= 0; index -= 1) {
-      const record = sheet.formatRanges[index]!;
-      if (rangeContainsCell(record.range, row, col)) {
-        return record.formatId;
-      }
-    }
-    return WorkbookStore.defaultFormatId;
+    return (
+      findWorkbookRangeRecord(sheet.formatRanges, row, col)?.formatId ??
+      WorkbookStore.defaultFormatId
+    );
   }
 
   setWorkbookProperty(key: string, value: LiteralInput): WorkbookPropertyRecord | undefined {
@@ -1642,68 +1653,6 @@ function cellNumberFormatIdForCode(code: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return `format-${(hash >>> 0).toString(16)}`;
-}
-
-function rangeContainsCell(range: CellRangeRef, row: number, col: number): boolean {
-  const { startRow, endRow, startCol, endCol } = normalizeRangeRef(range);
-  return row >= startRow && row <= endRow && col >= startCol && col <= endCol;
-}
-
-function normalizeRangeRef(range: CellRangeRef): CellRangeRef & {
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-} {
-  const start = parseCellAddress(range.startAddress, range.sheetName);
-  const end = parseCellAddress(range.endAddress, range.sheetName);
-  const startRow = Math.min(start.row, end.row);
-  const endRow = Math.max(start.row, end.row);
-  const startCol = Math.min(start.col, end.col);
-  const endCol = Math.max(start.col, end.col);
-  return {
-    sheetName: range.sheetName,
-    startAddress: formatAddress(startRow, startCol),
-    endAddress: formatAddress(endRow, endCol),
-    startRow,
-    endRow,
-    startCol,
-    endCol,
-  };
-}
-
-function subtractRangeRecord(existing: CellRangeRef, cut: CellRangeRef): CellRangeRef[] {
-  if (existing.sheetName !== cut.sheetName) {
-    return [{ ...existing }];
-  }
-  const source = normalizeRangeRef(existing);
-  const removal = normalizeRangeRef(cut);
-  const startRow = Math.max(source.startRow, removal.startRow);
-  const endRow = Math.min(source.endRow, removal.endRow);
-  const startCol = Math.max(source.startCol, removal.startCol);
-  const endCol = Math.min(source.endCol, removal.endCol);
-  if (startRow > endRow || startCol > endCol) {
-    return [{ ...source }];
-  }
-
-  const remainders: CellRangeRef[] = [];
-  const pushRemainder = (rowStart: number, rowEnd: number, colStart: number, colEnd: number) => {
-    if (rowStart > rowEnd || colStart > colEnd) {
-      return;
-    }
-    remainders.push({
-      sheetName: source.sheetName,
-      startAddress: formatAddress(rowStart, colStart),
-      endAddress: formatAddress(rowEnd, colEnd),
-    });
-  };
-
-  pushRemainder(source.startRow, startRow - 1, source.startCol, source.endCol);
-  pushRemainder(endRow + 1, source.endRow, source.startCol, source.endCol);
-  pushRemainder(startRow, endRow, source.startCol, startCol - 1);
-  pushRemainder(startRow, endRow, endCol + 1, source.endCol);
-
-  return remainders;
 }
 
 function normalizeMetadataKey(key: string): string {
