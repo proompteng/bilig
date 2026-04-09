@@ -1,6 +1,6 @@
 import { Effect, Exit, Cause } from "effect";
 import type { CellSnapshot } from "@bilig/protocol";
-import type { EngineRuntimeState, TransactionRecord } from "./runtime-state.js";
+import type { EngineRuntimeState } from "./runtime-state.js";
 import {
   createEngineEventService,
   type EngineEventService,
@@ -21,6 +21,10 @@ import {
   createEngineMutationService,
   type EngineMutationService,
 } from "./services/mutation-service.js";
+import {
+  createEngineOperationService,
+  type EngineOperationService,
+} from "./services/operation-service.js";
 import {
   createEnginePivotService,
   type EnginePivotService,
@@ -57,6 +61,7 @@ export interface EngineServiceRuntime {
   readonly graph: EngineFormulaGraphService;
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
+  readonly operations: EngineOperationService;
   readonly pivot: EnginePivotService;
   readonly read: EngineReadService;
   readonly recalc: EngineRecalcService;
@@ -71,8 +76,6 @@ export function createEngineServiceRuntime(args: {
   readonly exportSnapshot: () => import("@bilig/protocol").WorkbookSnapshot;
   readonly importSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
   readonly resetWorkbook: () => void;
-  readonly executeRestoreTransaction: (transaction: TransactionRecord) => void;
-  readonly executeHistoryTransaction: (transaction: TransactionRecord, source: "history") => void;
   readonly captureSheetCellState: (
     sheetName: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
@@ -108,11 +111,6 @@ export function createEngineServiceRuntime(args: {
   ) => void;
   readonly cellToCsvValue: (cell: CellSnapshot) => string;
   readonly serializeCsv: (rows: string[][]) => string;
-  readonly applyBatchNow: (
-    batch: import("@bilig/workbook-domain").EngineOpBatch,
-    source: "local" | "restore" | "history",
-    potentialNewCells?: number,
-  ) => void;
   readonly pivotState: {
     readonly pivotOutputOwners: Map<number, string>;
   };
@@ -130,6 +128,7 @@ export function createEngineServiceRuntime(args: {
     recalculated: import("./runtime-state.js").U32,
     explicitChangedCount: number,
   ) => import("./runtime-state.js").U32;
+  readonly getChangedInputBuffer: () => import("./runtime-state.js").U32;
   readonly unionChangedSets: (
     ...sets: Array<readonly number[] | import("./runtime-state.js").U32>
   ) => import("./runtime-state.js").U32;
@@ -142,7 +141,6 @@ export function createEngineServiceRuntime(args: {
   readonly ensureRecalcScratchCapacity: (size: number) => void;
   readonly getPendingKernelSync: () => import("./runtime-state.js").U32;
   readonly getWasmBatch: () => import("./runtime-state.js").U32;
-  readonly getChangedInputBuffer: () => import("./runtime-state.js").U32;
   readonly materializeSpill: (
     cellIndex: number,
     arrayValue: {
@@ -157,25 +155,14 @@ export function createEngineServiceRuntime(args: {
   readonly clearOwnedPivot: (
     pivot: import("../workbook-store.js").WorkbookPivotRecord,
   ) => number[];
+  readonly clearPivotForCell: (cellIndex: number) => number[];
   readonly materializePivot: (
     pivot: import("../workbook-store.js").WorkbookPivotRecord,
   ) => number[];
   readonly scheduleWasmProgramSync: () => void;
   readonly flushWasmProgramSync: () => void;
-  readonly applyDerivedOp: (
-    op: Extract<
-      import("@bilig/workbook-domain").EngineOp,
-      {
-        kind:
-          | "upsertSpillRange"
-          | "deleteSpillRange"
-          | "upsertPivotTable"
-          | "deletePivotTable";
-      }
-    >,
-  ) => number[];
-  readonly applyRemoteBatchNow: (batch: import("@bilig/workbook-domain").EngineOpBatch) => void;
   readonly applyRemoteSnapshot: (snapshot: import("@bilig/protocol").WorkbookSnapshot) => void;
+  readonly operation: Parameters<typeof createEngineOperationService>[0];
 }): EngineServiceRuntime {
   const binding = createEngineFormulaBindingService(args.formulaBinding);
   const graph = createEngineFormulaGraphService(args.formulaGraph);
@@ -222,55 +209,65 @@ export function createEngineServiceRuntime(args: {
     materializePivot: (pivot) => args.materializePivot(pivot),
     getEntityDependents: args.getEntityDependents,
   });
+  const operations = createEngineOperationService(args.operation);
+  const mutation = createEngineMutationService({
+    state: args.state,
+    captureSheetCellState: args.captureSheetCellState,
+    captureRowRangeCellState: args.captureRowRangeCellState,
+    captureColumnRangeCellState: args.captureColumnRangeCellState,
+    restoreCellOps: args.restoreCellOps,
+    readRangeCells: args.readRangeCells,
+    toCellStateOps: args.toCellStateOps,
+    applyBatchNow: (batch, source, potentialNewCells) =>
+      runEngineEffect(operations.applyBatch(batch, source, potentialNewCells)),
+  });
+  const history = createEngineHistoryService({
+    state: args.state,
+    executeTransaction: (transaction, source) =>
+      runEngineEffect(mutation.executeTransaction(transaction, source)),
+  });
+  const pivot = createEnginePivotService({
+    state: {
+      workbook: args.state.workbook,
+      strings: args.state.strings,
+      formulas: args.state.formulas,
+      ranges: args.state.ranges,
+      wasm: args.state.wasm,
+      pivotOutputOwners: args.pivotState.pivotOutputOwners,
+    },
+    ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
+    forEachSheetCell: args.forEachSheetCell,
+    scheduleWasmProgramSync: args.scheduleWasmProgramSync,
+    flushWasmProgramSync: args.flushWasmProgramSync,
+    applyDerivedOp: (op) => runEngineEffect(operations.applyDerivedOp(op)),
+  });
+  const snapshot = createEngineSnapshotService({
+    state: args.state,
+    getCellByIndex: args.getCellByIndex,
+    resetWorkbook: args.resetWorkbook,
+    executeRestoreTransaction: (transaction) =>
+      runEngineEffect(mutation.executeTransaction(transaction, "restore")),
+  });
+  const sync = createEngineReplicaSyncService({
+    state: args.state,
+    applyRemoteBatchNow: (batch) => runEngineEffect(operations.applyBatch(batch, "remote")),
+    applyRemoteSnapshot: args.applyRemoteSnapshot,
+  });
 
   return {
     events: createEngineEventService(args.state),
     selection: createEngineSelectionService(args.state),
     binding,
     graph,
-    history: createEngineHistoryService({
-      state: args.state,
-      executeTransaction: args.executeHistoryTransaction,
-    }),
+    history,
     read,
     recalc,
     structure,
-    mutation: createEngineMutationService({
-      state: args.state,
-      captureSheetCellState: args.captureSheetCellState,
-      captureRowRangeCellState: args.captureRowRangeCellState,
-      captureColumnRangeCellState: args.captureColumnRangeCellState,
-      restoreCellOps: args.restoreCellOps,
-      readRangeCells: args.readRangeCells,
-      toCellStateOps: args.toCellStateOps,
-      applyBatchNow: args.applyBatchNow,
-    }),
-    pivot: createEnginePivotService({
-      state: {
-        workbook: args.state.workbook,
-        strings: args.state.strings,
-        formulas: args.state.formulas,
-        ranges: args.state.ranges,
-        wasm: args.state.wasm,
-        pivotOutputOwners: args.pivotState.pivotOutputOwners,
-      },
-      ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
-      forEachSheetCell: args.forEachSheetCell,
-      scheduleWasmProgramSync: args.scheduleWasmProgramSync,
-      flushWasmProgramSync: args.flushWasmProgramSync,
-      applyDerivedOp: args.applyDerivedOp,
-    }),
-    snapshot: createEngineSnapshotService({
-      state: args.state,
-      getCellByIndex: args.getCellByIndex,
-      resetWorkbook: args.resetWorkbook,
-      executeRestoreTransaction: args.executeRestoreTransaction,
-    }),
-    sync: createEngineReplicaSyncService({
-      state: args.state,
-      applyRemoteBatchNow: args.applyRemoteBatchNow,
-      applyRemoteSnapshot: args.applyRemoteSnapshot,
-    }),
+    mutation,
+    operations,
+    pivot,
+    snapshot,
+    sync,
   };
 }
 

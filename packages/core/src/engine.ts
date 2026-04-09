@@ -38,11 +38,7 @@ import {
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import {
-  batchOpOrder,
-  compareOpOrder,
-  createBatch,
   createReplicaState,
-  markBatchApplied,
   type OpOrder,
   type ReplicaState,
 } from "./replica-state.js";
@@ -55,8 +51,6 @@ import {
   definedNameValueToCellValue,
   definedNameValuesEqual,
   renameDefinedNameValueSheet,
-  spillDependencyKey,
-  tableDependencyKey,
 } from "./engine-metadata-utils.js";
 import { normalizeRange } from "./engine-range-utils.js";
 import {
@@ -69,7 +63,6 @@ import {
   areCellValuesEqual,
   emptyValue,
   errorValue,
-  literalToValue,
 } from "./engine-value-utils.js";
 import { EngineEventBus } from "./events.js";
 import { FormulaTable } from "./formula-table.js";
@@ -86,7 +79,6 @@ import { WasmKernelFacade } from "./wasm-facade.js";
 import {
   WorkbookStore,
   normalizeDefinedName,
-  pivotKey,
   type WorkbookAxisMetadataRecord,
   type WorkbookCalculationSettingsRecord,
   type WorkbookDefinedNameRecord,
@@ -113,7 +105,6 @@ import {
   type SpreadsheetEngineOptions,
   type SpillMaterialization,
   type TransactionLogEntry,
-  type TransactionRecord,
   type U32,
 } from "./engine/runtime-state.js";
 import {
@@ -130,10 +121,6 @@ export type {
   EngineSyncClientConnection,
   SpreadsheetEngineOptions,
 } from "./engine/runtime-state.js";
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected value: ${String(value)}`);
-}
 
 export class SpreadsheetEngine {
   readonly workbook: WorkbookStore;
@@ -263,8 +250,6 @@ export class SpreadsheetEngine {
       exportSnapshot: () => this.exportSnapshot(),
       importSnapshot: (snapshot) => this.importSnapshot(snapshot),
       resetWorkbook: () => this.resetWorkbook(),
-      executeRestoreTransaction: (transaction) => this.executeTransactionNow(transaction, "restore"),
-      executeHistoryTransaction: (transaction, source) => this.executeTransactionNow(transaction, source),
       captureSheetCellState: (sheetName) => this.captureSheetCellState(sheetName),
       captureRowRangeCellState: (sheetName, start, count) =>
         this.captureRowRangeCellState(sheetName, start, count),
@@ -418,9 +403,6 @@ export class SpreadsheetEngine {
       forEachFormulaDependencyCell: (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
       cellToCsvValue: (cell) => cellToCsvValue(cell),
       serializeCsv: (rows) => serializeCsv(rows),
-      applyBatchNow: (batch, source, potentialNewCells) => {
-        this.applyBatch(batch, source, potentialNewCells);
-      },
       pivotState: {
         pivotOutputOwners: this.pivotOutputOwners,
       },
@@ -435,6 +417,7 @@ export class SpreadsheetEngine {
         this.composeMutationRoots(changedInputCount, formulaChangedCount),
       composeEventChanges: (recalculated, explicitChangedCount) =>
         this.composeEventChanges(recalculated, explicitChangedCount),
+      getChangedInputBuffer: () => this.changedInputBuffer,
       unionChangedSets: (...sets) => this.unionChangedSets(...sets),
       composeChangedRootsAndOrdered: (changedRoots, ordered, orderedCount) =>
         this.composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount),
@@ -442,19 +425,81 @@ export class SpreadsheetEngine {
       ensureRecalcScratchCapacity: (size) => this.ensureRecalcScratchCapacity(size),
       getPendingKernelSync: () => this.pendingKernelSync,
       getWasmBatch: () => this.wasmBatch,
-      getChangedInputBuffer: () => this.changedInputBuffer,
       materializeSpill: (cellIndex, arrayValue) => this.materializeSpill(cellIndex, arrayValue),
       clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
       evaluateUnsupportedFormula: (cellIndex) => this.evaluateUnsupportedFormula(cellIndex),
       getEntityDependents: (entityId) => this.getEntityDependents(entityId),
       clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
+      clearPivotForCell: (cellIndex) => this.clearPivotForCell(cellIndex),
       materializePivot: (pivot) => this.materializePivot(pivot),
       scheduleWasmProgramSync: () => this.scheduleWasmProgramSync(),
       flushWasmProgramSync: () => this.flushWasmProgramSync(),
-      applyDerivedOp: (op) => this.applyDerivedOp(op),
-      applyRemoteBatchNow: (batch) => this.applyBatch(batch, "remote"),
       applyRemoteSnapshot: (snapshot) => {
         this.importSnapshot(snapshot);
+      },
+      operation: {
+        state: this.state,
+        reverseState: {
+          reverseSpillEdges: this.reverseSpillEdges,
+        },
+        getSelectionState: () => this.getSelectionState(),
+        setSelection: (sheetName, address) => this.setSelection(sheetName, address),
+        rewriteDefinedNamesForSheetRename: (oldSheetName, newSheetName) =>
+          this.rewriteDefinedNamesForSheetRename(oldSheetName, newSheetName),
+        rewriteCellFormulasForSheetRename: (oldSheetName, newSheetName, formulaChangedCount) =>
+          this.rewriteCellFormulasForSheetRename(
+            oldSheetName,
+            newSheetName,
+            formulaChangedCount,
+          ),
+        rebindDefinedNameDependents: (names, formulaChangedCount) =>
+          this.rebindDefinedNameDependents(names, formulaChangedCount),
+        rebindTableDependents: (tableNames, formulaChangedCount) =>
+          this.rebindTableDependents(tableNames, formulaChangedCount),
+        rebindFormulaCells: (candidates, formulaChangedCount) =>
+          this.rebindFormulaCells(candidates, formulaChangedCount),
+        rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
+          this.rebindFormulasForSheet(sheetName, formulaChangedCount, candidates),
+        removeSheetRuntime: (sheetName, explicitChangedCount) =>
+          this.removeSheetRuntime(sheetName, explicitChangedCount),
+        applyStructuralAxisOp: (op) => this.applyStructuralAxisOp(op),
+        clearOwnedSpill: (cellIndex) => this.clearOwnedSpill(cellIndex),
+        clearPivotForCell: (cellIndex) => this.clearPivotForCell(cellIndex),
+        clearOwnedPivot: (pivot) => this.clearOwnedPivot(pivot),
+        removeFormula: (cellIndex) => this.removeFormula(cellIndex),
+        bindFormula: (cellIndex, ownerSheetName, source) =>
+          this.bindFormula(cellIndex, ownerSheetName, source),
+        setInvalidFormulaValue: (cellIndex) => this.setInvalidFormulaValue(cellIndex),
+        beginMutationCollection: () => this.beginMutationCollection(),
+        markInputChanged: (cellIndex, count) => this.markInputChanged(cellIndex, count),
+        markFormulaChanged: (cellIndex, count) => this.markFormulaChanged(cellIndex, count),
+        markVolatileFormulasChanged: (count) => this.markVolatileFormulasChanged(count),
+        markSpillRootsChanged: (cellIndices, count) =>
+          this.markSpillRootsChanged(cellIndices, count),
+        markPivotRootsChanged: (cellIndices, count) =>
+          this.markPivotRootsChanged(cellIndices, count),
+        markExplicitChanged: (cellIndex, count) => this.markExplicitChanged(cellIndex, count),
+        composeMutationRoots: (changedInputCount, formulaChangedCount) =>
+          this.composeMutationRoots(changedInputCount, formulaChangedCount),
+        composeEventChanges: (recalculated, explicitChangedCount) =>
+          this.composeEventChanges(recalculated, explicitChangedCount),
+        getChangedInputBuffer: () => this.changedInputBuffer,
+        ensureCellTracked: (sheetName, address) => this.ensureCellTracked(sheetName, address),
+        estimatePotentialNewCells: (ops) => this.estimatePotentialNewCells(ops),
+        resetMaterializedCellScratch: (expectedSize) =>
+          this.resetMaterializedCellScratch(expectedSize),
+        syncDynamicRanges: (formulaChangedCount) => this.syncDynamicRanges(formulaChangedCount),
+        rebuildTopoRanks: () => this.rebuildTopoRanks(),
+        detectCycles: () => this.detectCycles(),
+        recalculate: (changedRoots, kernelSyncRoots) =>
+          this.recalculate(changedRoots, kernelSyncRoots),
+        reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
+          this.reconcilePivotOutputs(baseChanged, forceAllPivots),
+        flushWasmProgramSync: () => this.flushWasmProgramSync(),
+        getBatchMutationDepth: () => this.batchMutationDepth,
+        setBatchMutationDepth: (next) => {
+          this.batchMutationDepth = next;
+        },
       },
     });
     void this.wasm.init();
@@ -1060,19 +1105,6 @@ export class SpreadsheetEngine {
     );
   }
 
-  private collectTrackedDependents(
-    registry: Map<string, Set<number>>,
-    keys: readonly string[],
-  ): number[] {
-    const candidates = new Set<number>();
-    keys.forEach((key) => {
-      registry.get(key)?.forEach((cellIndex) => {
-        candidates.add(cellIndex);
-      });
-    });
-    return [...candidates];
-  }
-
   private rebindFormulaCells(candidates: readonly number[], formulaChangedCount: number): number {
     return runEngineEffect(this.runtime.binding.rebindFormulaCells(candidates, formulaChangedCount));
   }
@@ -1313,508 +1345,13 @@ export class SpreadsheetEngine {
     return runEngineEffect(this.runtime.mutation.executeLocal(ops, potentialNewCells));
   }
 
-  private executeTransactionNow(
-    record: TransactionRecord,
-    source: "local" | "restore" | "history",
-  ): void {
-    if (record.ops.length === 0) {
-      return;
-    }
-    const batch = createBatch(this.replicaState, record.ops);
-    this.applyBatch(batch, source, record.potentialNewCells);
-  }
-
   private applyDerivedOp(
     op: Extract<
       EngineOp,
       { kind: "upsertSpillRange" | "deleteSpillRange" | "upsertPivotTable" | "deletePivotTable" }
     >,
   ): number[] {
-    const batch = createBatch(this.replicaState, [op]);
-    const order = batchOpOrder(batch, 0);
-    switch (op.kind) {
-      case "upsertSpillRange":
-      case "deleteSpillRange": {
-        const candidates = this.applySpillRangeOp(op, order);
-        this.rebindFormulaCells(candidates, 0);
-        return candidates;
-      }
-      case "upsertPivotTable":
-        this.applyPivotUpsertOp(op, order);
-        return [];
-      case "deletePivotTable":
-        return this.applyPivotDeleteOp(op, order);
-      default:
-        return assertNever(op);
-    }
-  }
-
-  private applySpillRangeOp(
-    op: Extract<EngineOp, { kind: "upsertSpillRange" | "deleteSpillRange" }>,
-    order: OpOrder,
-  ): number[] {
-    if (op.kind === "upsertSpillRange") {
-      this.workbook.setSpill(op.sheetName, op.address, op.rows, op.cols);
-    } else {
-      this.workbook.deleteSpill(op.sheetName, op.address);
-    }
-    this.entityVersions.set(this.entityKeyForOp(op), order);
-    const spillKey = spillDependencyKey(op.sheetName, op.address);
-    return this.collectTrackedDependents(this.reverseSpillEdges, [spillKey]);
-  }
-
-  private applyPivotUpsertOp(
-    op: Extract<EngineOp, { kind: "upsertPivotTable" }>,
-    order: OpOrder,
-  ): void {
-    this.workbook.setPivot({
-      name: op.name,
-      sheetName: op.sheetName,
-      address: op.address,
-      source: op.source,
-      groupBy: op.groupBy,
-      values: op.values,
-      rows: op.rows,
-      cols: op.cols,
-    });
-    this.entityVersions.set(this.entityKeyForOp(op), order);
-  }
-
-  private applyPivotDeleteOp(
-    op: Extract<EngineOp, { kind: "deletePivotTable" }>,
-    order: OpOrder,
-  ): number[] {
-    const pivot = this.workbook.getPivot(op.sheetName, op.address);
-    if (!pivot) {
-      this.entityVersions.set(this.entityKeyForOp(op), order);
-      return [];
-    }
-    const changedPivotOutputs = this.clearOwnedPivot(pivot);
-    this.workbook.deletePivot(op.sheetName, op.address);
-    this.entityVersions.set(this.entityKeyForOp(op), order);
-    return changedPivotOutputs;
-  }
-
-  private applyBatch(
-    batch: EngineOpBatch,
-    source: "local" | "remote" | "restore" | "history",
-    potentialNewCells?: number,
-  ): void {
-    this.beginMutationCollection();
-    let changedInputCount = 0;
-    let formulaChangedCount = 0;
-    let explicitChangedCount = 0;
-    let topologyChanged = false;
-    let sheetDeleted = false;
-    let structuralInvalidation = false;
-    const invalidatedRanges: CellRangeRef[] = [];
-    const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = [];
-    const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = [];
-    let refreshAllPivots = false;
-    let appliedOps = 0;
-    const canSkipOrderChecks = source !== "remote";
-
-    const reservedNewCells = potentialNewCells ?? this.estimatePotentialNewCells(batch.ops);
-    this.workbook.cellStore.ensureCapacity(this.workbook.cellStore.size + reservedNewCells);
-    this.resetMaterializedCellScratch(reservedNewCells);
-
-    this.batchMutationDepth += 1;
-    try {
-      batch.ops.forEach((op, opIndex) => {
-        const order = batchOpOrder(batch, opIndex);
-        if (!canSkipOrderChecks && !this.shouldApplyOp(op, order)) {
-          return;
-        }
-
-        switch (op.kind) {
-          case "upsertWorkbook":
-            this.workbook.workbookName = op.name;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setWorkbookMetadata":
-            this.workbook.setWorkbookProperty(op.key, op.value);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setCalculationSettings":
-            this.workbook.setCalculationSettings(op.settings);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setVolatileContext":
-            this.workbook.setVolatileContext(op.context);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "upsertSheet":
-            this.workbook.createSheet(op.name, op.order, op.id);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            const tombstone = this.sheetDeleteVersions.get(op.name);
-            if (!tombstone || compareOpOrder(order, tombstone) > 0) {
-              this.sheetDeleteVersions.delete(op.name);
-            }
-            const sheetReboundCount = formulaChangedCount;
-            formulaChangedCount = this.rebindFormulasForSheet(op.name, formulaChangedCount);
-            topologyChanged = topologyChanged || formulaChangedCount !== sheetReboundCount;
-            refreshAllPivots = true;
-            break;
-          case "renameSheet": {
-            const renamedSheet = this.workbook.renameSheet(op.oldName, op.newName);
-            this.entityVersions.set(`sheet:${op.oldName}`, order);
-            this.entityVersions.set(`sheet:${op.newName}`, order);
-            this.sheetDeleteVersions.set(op.oldName, order);
-            const renamedTombstone = this.sheetDeleteVersions.get(op.newName);
-            if (!renamedTombstone || compareOpOrder(order, renamedTombstone) > 0) {
-              this.sheetDeleteVersions.delete(op.newName);
-            }
-            if (!renamedSheet) {
-              break;
-            }
-            if (this.selection.sheetName === op.oldName) {
-              this.setSelection(op.newName, this.selection.address);
-            }
-            this.rewriteDefinedNamesForSheetRename(op.oldName, op.newName);
-            formulaChangedCount = this.rewriteCellFormulasForSheetRename(
-              op.oldName,
-              op.newName,
-              formulaChangedCount,
-            );
-            topologyChanged = true;
-            sheetDeleted = true;
-            structuralInvalidation = true;
-            refreshAllPivots = true;
-            break;
-          }
-          case "deleteSheet":
-            const removal = this.removeSheetRuntime(op.name, explicitChangedCount);
-            changedInputCount += removal.changedInputCount;
-            formulaChangedCount += removal.formulaChangedCount;
-            explicitChangedCount = removal.explicitChangedCount;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            this.sheetDeleteVersions.set(op.name, order);
-            topologyChanged = true;
-            sheetDeleted = true;
-            structuralInvalidation = true;
-            refreshAllPivots = true;
-            break;
-          case "insertRows":
-          case "deleteRows":
-          case "moveRows":
-          case "insertColumns":
-          case "deleteColumns":
-          case "moveColumns": {
-            const structural = this.applyStructuralAxisOp(op);
-            structural.changedCellIndices.forEach((cellIndex) => {
-              explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-            });
-            structural.formulaCellIndices.forEach((cellIndex) => {
-              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-            });
-            topologyChanged = true;
-            structuralInvalidation = true;
-            refreshAllPivots = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "updateRowMetadata":
-            this.workbook.setRowMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
-            invalidatedRows.push({
-              sheetName: op.sheetName,
-              startIndex: op.start,
-              endIndex: op.start + op.count - 1,
-            });
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "updateColumnMetadata":
-            this.workbook.setColumnMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
-            invalidatedColumns.push({
-              sheetName: op.sheetName,
-              startIndex: op.start,
-              endIndex: op.start + op.count - 1,
-            });
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setFreezePane":
-            this.workbook.setFreezePane(op.sheetName, op.rows, op.cols);
-            structuralInvalidation = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "clearFreezePane":
-            this.workbook.clearFreezePane(op.sheetName);
-            structuralInvalidation = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setFilter":
-            this.workbook.setFilter(op.sheetName, op.range);
-            structuralInvalidation = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "clearFilter":
-            this.workbook.deleteFilter(op.sheetName, op.range);
-            structuralInvalidation = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setSort":
-            this.workbook.setSort(op.sheetName, op.range, op.keys);
-            structuralInvalidation = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "clearSort":
-            this.workbook.deleteSort(op.sheetName, op.range);
-            structuralInvalidation = true;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "upsertTable":
-            this.workbook.setTable(op.table);
-            {
-              const tableReboundCount = formulaChangedCount;
-              formulaChangedCount = this.rebindTableDependents(
-                [tableDependencyKey(op.table.name)],
-                formulaChangedCount,
-              );
-              topologyChanged = topologyChanged || formulaChangedCount !== tableReboundCount;
-            }
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "deleteTable":
-            this.workbook.deleteTable(op.name);
-            {
-              const tableReboundCount = formulaChangedCount;
-              formulaChangedCount = this.rebindTableDependents(
-                [tableDependencyKey(op.name)],
-                formulaChangedCount,
-              );
-              topologyChanged = topologyChanged || formulaChangedCount !== tableReboundCount;
-            }
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "upsertSpillRange":
-            {
-              const spillReboundCount = formulaChangedCount;
-              formulaChangedCount = this.rebindFormulaCells(
-                this.applySpillRangeOp(op, order),
-                formulaChangedCount,
-              );
-              topologyChanged = topologyChanged || formulaChangedCount !== spillReboundCount;
-            }
-            break;
-          case "deleteSpillRange":
-            {
-              const spillReboundCount = formulaChangedCount;
-              formulaChangedCount = this.rebindFormulaCells(
-                this.applySpillRangeOp(op, order),
-                formulaChangedCount,
-              );
-              topologyChanged = topologyChanged || formulaChangedCount !== spillReboundCount;
-            }
-            break;
-          case "setCellValue": {
-            const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
-            if (existingIndex !== undefined) {
-              changedInputCount = this.markPivotRootsChanged(
-                this.clearPivotForCell(existingIndex),
-                changedInputCount,
-              );
-            }
-            const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
-            changedInputCount = this.markSpillRootsChanged(
-              this.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
-            topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
-            const value = literalToValue(op.value, this.strings);
-            this.workbook.cellStore.setValue(
-              cellIndex,
-              value,
-              value.tag === ValueTag.String ? value.stringId : 0,
-            );
-            this.workbook.cellStore.flags[cellIndex] =
-              (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(
-                CellFlags.HasFormula |
-                CellFlags.JsOnly |
-                CellFlags.InCycle |
-                CellFlags.SpillChild |
-                CellFlags.PivotOutput
-              );
-            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
-            explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "setCellFormula": {
-            const existingIndex = this.workbook.getCellIndex(op.sheetName, op.address);
-            if (existingIndex !== undefined) {
-              changedInputCount = this.markPivotRootsChanged(
-                this.clearPivotForCell(existingIndex),
-                changedInputCount,
-              );
-            }
-            const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
-            changedInputCount = this.markSpillRootsChanged(
-              this.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
-            const compileStarted = performance.now();
-            try {
-              this.bindFormula(cellIndex, op.sheetName, op.formula);
-              this.lastMetrics.compileMs = performance.now() - compileStarted;
-              formulaChangedCount = this.markFormulaChanged(cellIndex, formulaChangedCount);
-              topologyChanged = true;
-            } catch {
-              this.lastMetrics.compileMs = performance.now() - compileStarted;
-              topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
-              this.setInvalidFormulaValue(cellIndex);
-              changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
-            }
-            explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "setCellFormat": {
-            const cellIndex = this.ensureCellTracked(op.sheetName, op.address);
-            this.workbook.setCellFormat(cellIndex, op.format);
-            explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "upsertCellStyle":
-            this.workbook.upsertCellStyle(op.style);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "upsertCellNumberFormat":
-            this.workbook.upsertCellNumberFormat(op.format);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setStyleRange":
-            this.workbook.setStyleRange(op.range, op.styleId);
-            invalidatedRanges.push(op.range);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "setFormatRange":
-            this.workbook.setFormatRange(op.range, op.formatId);
-            invalidatedRanges.push(op.range);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          case "clearCell": {
-            const cellIndex = this.workbook.getCellIndex(op.sheetName, op.address);
-            if (cellIndex === undefined) {
-              this.entityVersions.set(this.entityKeyForOp(op), order);
-              break;
-            }
-            changedInputCount = this.markPivotRootsChanged(
-              this.clearPivotForCell(cellIndex),
-              changedInputCount,
-            );
-            changedInputCount = this.markSpillRootsChanged(
-              this.clearOwnedSpill(cellIndex),
-              changedInputCount,
-            );
-            topologyChanged = this.removeFormula(cellIndex) || topologyChanged;
-            this.workbook.cellStore.setValue(cellIndex, emptyValue());
-            this.workbook.cellStore.flags[cellIndex] =
-              (this.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(
-                CellFlags.HasFormula |
-                CellFlags.JsOnly |
-                CellFlags.InCycle |
-                CellFlags.SpillChild |
-                CellFlags.PivotOutput
-              );
-            changedInputCount = this.markInputChanged(cellIndex, changedInputCount);
-            explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "upsertDefinedName": {
-            const normalizedName = normalizeDefinedName(op.name);
-            this.workbook.setDefinedName(op.name, op.value);
-            const nameReboundCount = formulaChangedCount;
-            formulaChangedCount = this.rebindDefinedNameDependents(
-              [normalizedName],
-              formulaChangedCount,
-            );
-            topologyChanged = topologyChanged || formulaChangedCount !== nameReboundCount;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "deleteDefinedName": {
-            const normalizedName = normalizeDefinedName(op.name);
-            this.workbook.deleteDefinedName(op.name);
-            const nameReboundCount = formulaChangedCount;
-            formulaChangedCount = this.rebindDefinedNameDependents(
-              [normalizedName],
-              formulaChangedCount,
-            );
-            topologyChanged = topologyChanged || formulaChangedCount !== nameReboundCount;
-            this.entityVersions.set(this.entityKeyForOp(op), order);
-            break;
-          }
-          case "upsertPivotTable": {
-            this.applyPivotUpsertOp(op, order);
-            refreshAllPivots = true;
-            break;
-          }
-          case "deletePivotTable": {
-            const changedPivotOutputs = this.applyPivotDeleteOp(op, order);
-            changedInputCount = this.markPivotRootsChanged(changedPivotOutputs, changedInputCount);
-            changedPivotOutputs.forEach((cellIndex) => {
-              explicitChangedCount = this.markExplicitChanged(cellIndex, explicitChangedCount);
-            });
-            refreshAllPivots = true;
-            break;
-          }
-        }
-        appliedOps += 1;
-      });
-
-      const reboundCount = formulaChangedCount;
-      formulaChangedCount = this.syncDynamicRanges(formulaChangedCount);
-      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount;
-    } finally {
-      this.batchMutationDepth -= 1;
-      this.flushWasmProgramSync();
-    }
-
-    markBatchApplied(this.replicaState, batch);
-    if (appliedOps === 0) {
-      if (source === "local") {
-        this.emitBatch(batch);
-      }
-      return;
-    }
-
-    if (topologyChanged) {
-      this.rebuildTopoRanks();
-      this.detectCycles();
-    }
-    formulaChangedCount = this.markVolatileFormulasChanged(formulaChangedCount);
-    const changedInputArray = this.changedInputBuffer.subarray(0, changedInputCount);
-    let recalculated = this.recalculate(
-      this.composeMutationRoots(changedInputCount, formulaChangedCount),
-      changedInputArray,
-    );
-    recalculated = this.reconcilePivotOutputs(recalculated, refreshAllPivots);
-    const changed = this.composeEventChanges(recalculated, explicitChangedCount);
-    this.lastMetrics.batchId += 1;
-    this.lastMetrics.changedInputCount = changedInputCount + formulaChangedCount;
-    const event = {
-      kind: "batch",
-      invalidation: sheetDeleted || structuralInvalidation ? "full" : "cells",
-      changedCellIndices: changed,
-      invalidatedRanges,
-      invalidatedRows,
-      invalidatedColumns,
-      metrics: this.lastMetrics,
-    } satisfies EngineEvent;
-    if (event.invalidation === "full") {
-      this.events.emitAllWatched(event);
-    } else {
-      this.events.emit(event, changed, (cellIndex) => this.workbook.getQualifiedAddress(cellIndex));
-    }
-    if (source === "local") {
-      void this.syncClientConnection?.send(batch);
-      this.emitBatch(batch);
-    } else if (source === "remote" && this.redoStack.length > 0) {
-      this.redoStack.length = 0;
-    }
+    return runEngineEffect(this.runtime.operations.applyDerivedOp(op));
   }
 
   private restoreCellOps(sheetName: string, address: string): EngineOp[] {
@@ -2172,10 +1709,6 @@ export class SpreadsheetEngine {
     runEngineEffect(this.runtime.graph.flushWasmProgramSync());
   }
 
-  private emitBatch(batch: EngineOpBatch): void {
-    this.batchListeners.forEach((listener) => listener(batch));
-  }
-
   private estimatePotentialNewCells(ops: readonly EngineOp[]): number {
     let count = 0;
     for (let index = 0; index < ops.length; index += 1) {
@@ -2264,138 +1797,6 @@ export class SpreadsheetEngine {
     }
     for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
       fn(formula.dependencyIndices[index]!);
-    }
-  }
-
-  private shouldApplyOp(op: EngineOp, order: OpOrder): boolean {
-    const sheetDeleteOrder = this.sheetDeleteBarrierForOp(op);
-    if (sheetDeleteOrder && compareOpOrder(order, sheetDeleteOrder) <= 0) {
-      return false;
-    }
-    const existingOrder = this.entityVersions.get(this.entityKeyForOp(op));
-    if (existingOrder && compareOpOrder(order, existingOrder) <= 0) {
-      return false;
-    }
-    return true;
-  }
-
-  private entityKeyForOp(op: EngineOp): string {
-    switch (op.kind) {
-      case "upsertWorkbook":
-        return "workbook";
-      case "setWorkbookMetadata":
-        return `workbook-meta:${op.key}`;
-      case "setCalculationSettings":
-        return "workbook-calc";
-      case "setVolatileContext":
-        return "workbook-volatile";
-      case "upsertSheet":
-      case "deleteSheet":
-        return `sheet:${op.name}`;
-      case "renameSheet":
-        return `sheet:${op.oldName}`;
-      case "insertRows":
-      case "deleteRows":
-      case "moveRows":
-        return `row-structure:${op.sheetName}`;
-      case "insertColumns":
-      case "deleteColumns":
-      case "moveColumns":
-        return `column-structure:${op.sheetName}`;
-      case "updateRowMetadata":
-        return `row-meta:${op.sheetName}:${op.start}:${op.count}`;
-      case "updateColumnMetadata":
-        return `column-meta:${op.sheetName}:${op.start}:${op.count}`;
-      case "setFreezePane":
-      case "clearFreezePane":
-        return `freeze:${op.sheetName}`;
-      case "setFilter":
-      case "clearFilter":
-        return `filter:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
-      case "setSort":
-      case "clearSort":
-        return `sort:${op.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
-      case "setCellFormat":
-        return `format:${op.sheetName}!${op.address}`;
-      case "upsertCellStyle":
-        return `style:${op.style.id}`;
-      case "upsertCellNumberFormat":
-        return `number-format:${op.format.id}`;
-      case "setStyleRange":
-        return `style-range:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
-      case "setFormatRange":
-        return `format-range:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`;
-      case "setCellValue":
-      case "setCellFormula":
-      case "clearCell":
-        return `cell:${op.sheetName}!${op.address}`;
-      case "upsertDefinedName":
-      case "deleteDefinedName":
-        return `defined-name:${normalizeDefinedName(op.name)}`;
-      case "upsertTable":
-        return `table:${normalizeDefinedName(op.table.name)}`;
-      case "deleteTable":
-        return `table:${normalizeDefinedName(op.name)}`;
-      case "upsertSpillRange":
-      case "deleteSpillRange":
-        return `spill:${op.sheetName}!${op.address}`;
-      case "upsertPivotTable":
-      case "deletePivotTable":
-        return `pivot:${pivotKey(op.sheetName, op.address)}`;
-    }
-    return assertNever(op);
-  }
-
-  private sheetDeleteBarrierForOp(op: EngineOp): OpOrder | undefined {
-    switch (op.kind) {
-      case "upsertWorkbook":
-      case "setWorkbookMetadata":
-      case "setCalculationSettings":
-      case "setVolatileContext":
-      case "deleteSheet":
-      case "upsertDefinedName":
-      case "deleteDefinedName":
-      case "upsertTable":
-      case "deleteTable":
-        return undefined;
-      case "updateRowMetadata":
-      case "updateColumnMetadata":
-      case "insertRows":
-      case "deleteRows":
-      case "moveRows":
-      case "insertColumns":
-      case "deleteColumns":
-      case "moveColumns":
-      case "setFreezePane":
-      case "clearFreezePane":
-      case "setFilter":
-      case "clearFilter":
-      case "setSort":
-      case "clearSort":
-      case "setCellFormat":
-      case "setCellValue":
-      case "setCellFormula":
-      case "clearCell":
-      case "upsertSpillRange":
-      case "deleteSpillRange":
-      case "deletePivotTable":
-        return this.sheetDeleteVersions.get(op.sheetName);
-      case "setStyleRange":
-      case "setFormatRange":
-        return this.sheetDeleteVersions.get(op.range.sheetName);
-      case "upsertCellNumberFormat":
-        return undefined;
-      case "upsertCellStyle":
-        return undefined;
-      case "upsertSheet":
-        return this.sheetDeleteVersions.get(op.name);
-      case "renameSheet":
-        return this.sheetDeleteVersions.get(op.oldName);
-      case "upsertPivotTable":
-        return (
-          this.sheetDeleteVersions.get(op.sheetName) ??
-          this.sheetDeleteVersions.get(op.source.sheetName)
-        );
     }
   }
 
