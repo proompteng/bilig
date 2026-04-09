@@ -54,13 +54,8 @@ import {
   compareOpOrder,
   createBatch,
   createReplicaState,
-  exportReplicaSnapshot as exportReplicaStateSnapshot,
-  hydrateReplicaState,
   markBatchApplied,
-  shouldApplyBatch,
   type OpOrder,
-  type ReplicaSnapshot,
-  type ReplicaVersionSnapshot,
   type ReplicaState,
 } from "./replica-state.js";
 import { CellFlags } from "./cell-store.js";
@@ -86,7 +81,7 @@ import {
   restoreFormatRangeOps,
   restoreStyleRangeOps,
 } from "./engine-range-format-ops.js";
-import { exportSheetMetadata, sheetMetadataToOps } from "./engine-snapshot-utils.js";
+import { sheetMetadataToOps } from "./engine-snapshot-utils.js";
 import { cloneCellStyleRecord } from "./engine-style-utils.js";
 import {
   areCellValuesEqual,
@@ -132,106 +127,40 @@ import {
   type WorkbookVolatileContextRecord,
 } from "./workbook-store.js";
 import { cellToCsvValue, parseCsv, parseCsvCellInput, serializeCsv } from "./csv.js";
+import {
+  createEngineRuntimeState,
+  createInitialRecalcMetrics,
+  createInitialSelectionState,
+  type CommitOp,
+  type EngineReplicaSnapshot,
+  type EngineRuntimeState,
+  type EngineSyncClient,
+  type EngineSyncClientConnection,
+  type MaterializedDependencies,
+  type PivotTableInput,
+  type RecalcVolatileState,
+  type RuntimeFormula,
+  type SpreadsheetEngineOptions,
+  type SpillMaterialization,
+  type TransactionLogEntry,
+  type TransactionRecord,
+  UNRESOLVED_WASM_OPERAND,
+  type U32,
+} from "./engine/runtime-state.js";
+import {
+  createEngineServiceRuntime,
+  runEngineEffect,
+  runEngineEffectPromise,
+  type EngineServiceRuntime,
+} from "./engine/live.js";
 
-export interface CommitOp {
-  kind:
-    | "upsertWorkbook"
-    | "upsertSheet"
-    | "renameSheet"
-    | "deleteSheet"
-    | "upsertCell"
-    | "deleteCell";
-  name?: string;
-  oldName?: string;
-  newName?: string;
-  order?: number;
-  sheetName?: string;
-  addr?: string;
-  value?: LiteralInput;
-  formula?: string;
-  format?: string;
-}
-
-export interface SpreadsheetEngineOptions {
-  workbookName?: string;
-  replicaId?: string;
-}
-
-export interface EngineSyncClientConnection {
-  send(batch: EngineOpBatch): void | Promise<void>;
-  disconnect(): void | Promise<void>;
-}
-
-export interface EngineSyncClient {
-  connect(handlers: {
-    applyRemoteBatch(batch: EngineOpBatch): boolean;
-    applyRemoteSnapshot?(snapshot: WorkbookSnapshot): void;
-    setState(state: SyncState): void;
-  }): EngineSyncClientConnection | Promise<EngineSyncClientConnection>;
-}
-
-export interface EngineReplicaSnapshot {
-  replica: ReplicaSnapshot;
-  entityVersions: ReplicaVersionSnapshot[];
-  sheetDeleteVersions: Array<{ sheetName: string; order: OpOrder }>;
-}
-
-interface TransactionRecord {
-  ops: EngineOp[];
-  potentialNewCells?: number;
-}
-
-interface TransactionLogEntry {
-  forward: TransactionRecord;
-  inverse: TransactionRecord;
-}
-
-interface RuntimeFormula {
-  cellIndex: number;
-  source: string;
-  compiled: ReturnType<typeof compileFormula>;
-  dependencyIndices: Uint32Array;
-  dependencyEntities: EdgeSlice;
-  rangeDependencies: Uint32Array;
-  runtimeProgram: Uint32Array;
-  constants: Float64Array;
-  programOffset: number;
-  programLength: number;
-  constNumberOffset: number;
-  constNumberLength: number;
-  rangeListOffset: number;
-  rangeListLength: number;
-}
-
-type U32 = Uint32Array;
-
-const UNRESOLVED_WASM_OPERAND = 0x00ff_ffff;
-
-interface MaterializedDependencies {
-  dependencyIndices: Uint32Array;
-  dependencyEntities: Uint32Array;
-  rangeDependencies: Uint32Array;
-  symbolicRangeIndices: U32;
-  symbolicRangeCount: number;
-  newRangeIndices: U32;
-  newRangeCount: number;
-}
-
-interface SpillMaterialization {
-  changedCellIndices: number[];
-  ownerValue: CellValue;
-}
-
-export type PivotTableInput = Omit<
-  WorkbookPivotSnapshot,
-  "sheetName" | "address" | "rows" | "cols"
->;
-
-interface RecalcVolatileState {
-  nowSerial: number;
-  randomValues: number[];
-  randomCursor: number;
-}
+export type {
+  CommitOp,
+  EngineReplicaSnapshot,
+  EngineSyncClient,
+  EngineSyncClientConnection,
+  SpreadsheetEngineOptions,
+} from "./engine/runtime-state.js";
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected value: ${String(value)}`);
@@ -262,13 +191,7 @@ export class SpreadsheetEngine {
   private readonly selectionListeners = new Set<() => void>();
   private readonly entityVersions = new Map<string, OpOrder>();
   private readonly sheetDeleteVersions = new Map<string, OpOrder>();
-  private selection: SelectionState = {
-    sheetName: "Sheet1",
-    address: "A1",
-    anchorAddress: "A1",
-    range: { startAddress: "A1", endAddress: "A1" },
-    editMode: "idle",
-  };
+  private selection: SelectionState = createInitialSelectionState();
   private syncState: SyncState = "local-only";
   private syncClientConnection: EngineSyncClientConnection | null = null;
   private readonly undoStack: TransactionLogEntry[] = [];
@@ -321,21 +244,61 @@ export class SpreadsheetEngine {
   private topoRangeSeen: U32 = new Uint32Array(128);
   private batchMutationDepth = 0;
   private wasmProgramSyncPending = false;
-  private lastMetrics: RecalcMetrics = {
-    batchId: 0,
-    changedInputCount: 0,
-    dirtyFormulaCount: 0,
-    wasmFormulaCount: 0,
-    jsFormulaCount: 0,
-    rangeNodeVisits: 0,
-    recalcMs: 0,
-    compileMs: 0,
-  };
+  private lastMetrics: RecalcMetrics = createInitialRecalcMetrics();
+  private readonly state: EngineRuntimeState;
+  private readonly runtime: EngineServiceRuntime;
 
   constructor(options: SpreadsheetEngineOptions = {}) {
     this.workbook = new WorkbookStore(options.workbookName ?? "Workbook");
     this.formulas = new FormulaTable(this.workbook.cellStore);
     this.replicaState = createReplicaState(options.replicaId ?? "local");
+    this.state = createEngineRuntimeState({
+      workbook: this.workbook,
+      strings: this.strings,
+      events: this.events,
+      ranges: this.ranges,
+      scheduler: this.scheduler,
+      wasm: this.wasm,
+      formulas: this.formulas,
+      replicaState: this.replicaState,
+      entityVersions: this.entityVersions,
+      sheetDeleteVersions: this.sheetDeleteVersions,
+      batchListeners: this.batchListeners,
+      selectionListeners: this.selectionListeners,
+      undoStack: this.undoStack,
+      redoStack: this.redoStack,
+      getSelection: () => this.selection,
+      setSelection: (selection) => {
+        this.selection = selection;
+      },
+      getSyncState: () => this.syncState,
+      setSyncState: (state) => {
+        this.syncState = state;
+      },
+      getSyncClientConnection: () => this.syncClientConnection,
+      setSyncClientConnection: (connection) => {
+        this.syncClientConnection = connection;
+      },
+      getTransactionReplayDepth: () => this.transactionReplayDepth,
+      setTransactionReplayDepth: (depth) => {
+        this.transactionReplayDepth = depth;
+      },
+      getLastMetrics: () => this.lastMetrics,
+      setLastMetrics: (metrics) => {
+        this.lastMetrics = metrics;
+      },
+    });
+    this.runtime = createEngineServiceRuntime({
+      state: this.state,
+      getCellByIndex: (cellIndex) => this.getCellByIndex(cellIndex),
+      resetWorkbook: () => this.resetWorkbook(),
+      executeRestoreTransaction: (transaction) => this.executeTransaction(transaction, "restore"),
+      executeHistoryTransaction: (transaction, source) => this.executeTransaction(transaction, source),
+      applyRemoteBatchNow: (batch) => this.applyBatch(batch, "remote"),
+      applyRemoteSnapshot: (snapshot) => {
+        this.importSnapshot(snapshot);
+      },
+    });
     void this.wasm.init();
   }
 
@@ -344,15 +307,11 @@ export class SpreadsheetEngine {
   }
 
   subscribe(listener: (event: EngineEvent) => void): () => void {
-    return this.events.subscribe(listener);
+    return runEngineEffect(this.runtime.events.subscribe(listener));
   }
 
   subscribeCell(sheetName: string, address: string, listener: () => void): () => void {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex !== undefined) {
-      return this.events.subscribeCellIndex(cellIndex, listener);
-    }
-    return this.events.subscribeCellAddress(`${sheetName}!${address}`, listener);
+    return runEngineEffect(this.runtime.events.subscribeCell(sheetName, address, listener));
   }
 
   subscribeCells(
@@ -360,35 +319,19 @@ export class SpreadsheetEngine {
     addresses: readonly string[],
     listener: () => void,
   ): () => void {
-    const cellIndices: number[] = [];
-    const qualifiedAddresses: string[] = [];
-    addresses.forEach((address) => {
-      const cellIndex = this.workbook.getCellIndex(sheetName, address);
-      if (cellIndex !== undefined) {
-        cellIndices.push(cellIndex);
-        return;
-      }
-      qualifiedAddresses.push(`${sheetName}!${address}`);
-    });
-    return this.events.subscribeCells(cellIndices, qualifiedAddresses, listener);
+    return runEngineEffect(this.runtime.events.subscribeCells(sheetName, addresses, listener));
   }
 
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void {
-    this.batchListeners.add(listener);
-    return () => {
-      this.batchListeners.delete(listener);
-    };
+    return runEngineEffect(this.runtime.events.subscribeBatches(listener));
   }
 
   subscribeSelection(listener: () => void): () => void {
-    this.selectionListeners.add(listener);
-    return () => {
-      this.selectionListeners.delete(listener);
-    };
+    return runEngineEffect(this.runtime.selection.subscribe(listener));
   }
 
   getSelectionState(): SelectionState {
-    return this.selection;
+    return runEngineEffect(this.runtime.selection.getSelectionState());
   }
 
   setSelection(
@@ -400,27 +343,7 @@ export class SpreadsheetEngine {
       editMode?: SelectionState["editMode"];
     } = {},
   ): void {
-    const nextSelection: SelectionState = {
-      sheetName,
-      address,
-      anchorAddress: options.anchorAddress ?? address,
-      range: options.range ?? (address ? { startAddress: address, endAddress: address } : null),
-      editMode: options.editMode ?? this.selection.editMode,
-    };
-
-    if (
-      this.selection.sheetName === nextSelection.sheetName &&
-      this.selection.address === nextSelection.address &&
-      this.selection.anchorAddress === nextSelection.anchorAddress &&
-      this.selection.editMode === nextSelection.editMode &&
-      this.selection.range?.startAddress === nextSelection.range?.startAddress &&
-      this.selection.range?.endAddress === nextSelection.range?.endAddress
-    ) {
-      return;
-    }
-
-    this.selection = nextSelection;
-    this.selectionListeners.forEach((listener) => listener());
+    runEngineEffect(this.runtime.selection.setSelection(sheetName, address, options));
   }
 
   getLastMetrics(): RecalcMetrics {
@@ -432,36 +355,11 @@ export class SpreadsheetEngine {
   }
 
   async connectSyncClient(client: EngineSyncClient): Promise<void> {
-    await this.disconnectSyncClient();
-    this.setSyncState("syncing");
-    const connection = await client.connect({
-      applyRemoteBatch: (batch) => {
-        return this.applyRemoteBatch(batch);
-      },
-      applyRemoteSnapshot: (snapshot) => {
-        this.importSnapshot(snapshot);
-      },
-      setState: (state) => {
-        this.setSyncState(state);
-      },
-    });
-    this.syncClientConnection = connection;
-    if (this.syncState === "syncing") {
-      this.setSyncState("live");
-    }
+    await runEngineEffectPromise(this.runtime.sync.connectClient(client));
   }
 
   async disconnectSyncClient(): Promise<void> {
-    const connection = this.syncClientConnection;
-    this.syncClientConnection = null;
-    if (connection) {
-      await connection.disconnect();
-    }
-    this.setSyncState("local-only");
-  }
-
-  private setSyncState(state: SyncState): void {
-    this.syncState = state;
+    await runEngineEffectPromise(this.runtime.sync.disconnectClient());
   }
 
   createSheet(name: string): void {
@@ -1185,33 +1083,11 @@ export class SpreadsheetEngine {
   }
 
   undo(): boolean {
-    const entry = this.undoStack.pop();
-    if (!entry) {
-      return false;
-    }
-    this.transactionReplayDepth += 1;
-    try {
-      this.executeTransaction(entry.inverse, "history");
-    } finally {
-      this.transactionReplayDepth -= 1;
-    }
-    this.redoStack.push(entry);
-    return true;
+    return runEngineEffect(this.runtime.history.undo());
   }
 
   redo(): boolean {
-    const entry = this.redoStack.pop();
-    if (!entry) {
-      return false;
-    }
-    this.transactionReplayDepth += 1;
-    try {
-      this.executeTransaction(entry.forward, "history");
-    } finally {
-      this.transactionReplayDepth -= 1;
-    }
-    this.undoStack.push(entry);
-    return true;
+    return runEngineEffect(this.runtime.history.redo());
   }
 
   exportSheetCsv(sheetName: string): string {
@@ -1431,336 +1307,11 @@ export class SpreadsheetEngine {
   }
 
   exportSnapshot(): WorkbookSnapshot {
-    const workbook: WorkbookSnapshot["workbook"] = {
-      name: this.workbook.workbookName,
-    };
-    const properties = this.workbook
-      .listWorkbookProperties()
-      .map(({ key, value }) => ({ key, value }));
-    const definedNames = this.workbook
-      .listDefinedNames()
-      .map(({ name, value }) => ({ name, value }));
-    const calculationSettings = this.workbook.getCalculationSettings();
-    const volatileContext = this.workbook.getVolatileContext();
-    const tables = this.workbook.listTables().map((table) => ({
-      name: table.name,
-      sheetName: table.sheetName,
-      startAddress: table.startAddress,
-      endAddress: table.endAddress,
-      columnNames: [...table.columnNames],
-      headerRow: table.headerRow,
-      totalsRow: table.totalsRow,
-    }));
-    const spills = this.workbook
-      .listSpills()
-      .map(({ sheetName, address, rows, cols }) => ({ sheetName, address, rows, cols }));
-    const referencedStyleIds = new Set<string>();
-    const referencedFormatIds = new Set<string>();
-    this.workbook.sheetsByName.forEach((sheet) => {
-      sheet.styleRanges.forEach((record) => referencedStyleIds.add(record.styleId));
-      sheet.formatRanges.forEach((record) => referencedFormatIds.add(record.formatId));
-    });
-    for (let cellIndex = 0; cellIndex < this.workbook.cellStore.size; cellIndex += 1) {
-      const explicitFormat = this.workbook.getCellFormat(cellIndex);
-      if (explicitFormat !== undefined) {
-        referencedFormatIds.add(this.workbook.internCellNumberFormat(explicitFormat).id);
-      }
-    }
-    const styles = this.workbook
-      .listCellStyles()
-      .filter((style) => referencedStyleIds.has(style.id))
-      .map((style) => cloneCellStyleRecord(style));
-    const formats = this.workbook
-      .listCellNumberFormats()
-      .filter((format) => referencedFormatIds.has(format.id))
-      .map((format) => Object.assign({}, format));
-    const pivots = this.workbook.listPivots().map((pivot) => ({
-      name: pivot.name,
-      sheetName: pivot.sheetName,
-      address: pivot.address,
-      source: { ...pivot.source },
-      groupBy: [...pivot.groupBy],
-      values: pivot.values.map((value) => Object.assign({}, value)),
-      rows: pivot.rows,
-      cols: pivot.cols,
-    }));
-    if (
-      properties.length > 0 ||
-      definedNames.length > 0 ||
-      tables.length > 0 ||
-      spills.length > 0 ||
-      pivots.length > 0 ||
-      styles.length > 0 ||
-      formats.length > 0 ||
-      calculationSettings.mode !== "automatic" ||
-      calculationSettings.compatibilityMode !== "excel-modern" ||
-      volatileContext.recalcEpoch !== 0
-    ) {
-      workbook.metadata = {};
-      if (properties.length > 0) {
-        workbook.metadata.properties = properties;
-      }
-      if (definedNames.length > 0) {
-        workbook.metadata.definedNames = definedNames;
-      }
-      if (tables.length > 0) {
-        workbook.metadata.tables = tables;
-      }
-      if (spills.length > 0) {
-        workbook.metadata.spills = spills;
-      }
-      if (pivots.length > 0) {
-        workbook.metadata.pivots = pivots;
-      }
-      if (styles.length > 0) {
-        workbook.metadata.styles = styles;
-      }
-      if (formats.length > 0) {
-        workbook.metadata.formats = formats;
-      }
-      if (
-        calculationSettings.mode !== "automatic" ||
-        calculationSettings.compatibilityMode !== "excel-modern"
-      ) {
-        workbook.metadata.calculationSettings = calculationSettings;
-      }
-      if (volatileContext.recalcEpoch !== 0) {
-        workbook.metadata.volatileContext = volatileContext;
-      }
-    }
-
-    return {
-      version: 1,
-      workbook,
-      sheets: [...this.workbook.sheetsByName.values()]
-        .toSorted((left, right) => left.order - right.order)
-        .map((sheet) => {
-          const metadata = exportSheetMetadata(this.workbook, sheet.name);
-          const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
-          sheet.grid.forEachCell((cellIndex) => {
-            const snapshot = this.getCellByIndex(cellIndex);
-            if ((snapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
-              return;
-            }
-            const cell: WorkbookSnapshot["sheets"][number]["cells"][number] = {
-              address: snapshot.address,
-            };
-            if (snapshot.format !== undefined) {
-              cell.format = snapshot.format;
-            }
-            if (snapshot.formula) {
-              cell.formula = snapshot.formula;
-            } else if (snapshot.value.tag === ValueTag.Number) {
-              cell.value = snapshot.value.value;
-            } else if (snapshot.value.tag === ValueTag.Boolean) {
-              cell.value = snapshot.value.value;
-            } else if (snapshot.value.tag === ValueTag.String) {
-              cell.value = snapshot.value.value;
-            } else {
-              cell.value = null;
-            }
-            cells.push(cell);
-          });
-          return metadata
-            ? { id: sheet.id, name: sheet.name, order: sheet.order, metadata, cells }
-            : { id: sheet.id, name: sheet.name, order: sheet.order, cells };
-        }),
-    };
+    return runEngineEffect(this.runtime.snapshot.exportWorkbook());
   }
 
   importSnapshot(snapshot: WorkbookSnapshot): void {
-    this.resetWorkbook();
-    const ops: EngineOp[] = [{ kind: "upsertWorkbook", name: snapshot.workbook.name }];
-    snapshot.workbook.metadata?.properties?.forEach(({ key, value }) => {
-      ops.push({ kind: "setWorkbookMetadata", key, value });
-    });
-    if (snapshot.workbook.metadata?.calculationSettings) {
-      ops.push({
-        kind: "setCalculationSettings",
-        settings: { ...snapshot.workbook.metadata.calculationSettings },
-      });
-    }
-    if (snapshot.workbook.metadata?.volatileContext) {
-      ops.push({
-        kind: "setVolatileContext",
-        context: { ...snapshot.workbook.metadata.volatileContext },
-      });
-    }
-    snapshot.workbook.metadata?.definedNames?.forEach(({ name, value }) => {
-      ops.push({ kind: "upsertDefinedName", name, value });
-    });
-    snapshot.workbook.metadata?.styles?.forEach((style) => {
-      ops.push({ kind: "upsertCellStyle", style: cloneCellStyleRecord(style) });
-    });
-    snapshot.workbook.metadata?.formats?.forEach((format) => {
-      ops.push({ kind: "upsertCellNumberFormat", format: { ...format } });
-    });
-    snapshot.sheets.forEach((sheet) => {
-      ops.push({
-        kind: "upsertSheet",
-        name: sheet.name,
-        order: sheet.order,
-        ...(typeof sheet.id === "number" ? { id: sheet.id } : {}),
-      });
-    });
-    snapshot.sheets.forEach((sheet) => {
-      sheet.metadata?.rows?.forEach(({ index, id, size, hidden }) => {
-        const entry = { index, id } as WorkbookAxisEntrySnapshot;
-        if (size !== undefined) {
-          entry.size = size;
-        }
-        if (hidden !== undefined) {
-          entry.hidden = hidden;
-        }
-        ops.push({
-          kind: "insertRows",
-          sheetName: sheet.name,
-          start: index,
-          count: 1,
-          entries: [entry],
-        });
-      });
-      sheet.metadata?.columns?.forEach(({ index, id, size, hidden }) => {
-        const entry = { index, id } as WorkbookAxisEntrySnapshot;
-        if (size !== undefined) {
-          entry.size = size;
-        }
-        if (hidden !== undefined) {
-          entry.hidden = hidden;
-        }
-        ops.push({
-          kind: "insertColumns",
-          sheetName: sheet.name,
-          start: index,
-          count: 1,
-          entries: [entry],
-        });
-      });
-      sheet.metadata?.rowMetadata?.forEach(({ start, count, size, hidden }) => {
-        ops.push({
-          kind: "updateRowMetadata",
-          sheetName: sheet.name,
-          start,
-          count,
-          size: size ?? null,
-          hidden: hidden ?? null,
-        });
-      });
-      sheet.metadata?.columnMetadata?.forEach(({ start, count, size, hidden }) => {
-        ops.push({
-          kind: "updateColumnMetadata",
-          sheetName: sheet.name,
-          start,
-          count,
-          size: size ?? null,
-          hidden: hidden ?? null,
-        });
-      });
-      if (sheet.metadata?.freezePane) {
-        ops.push({
-          kind: "setFreezePane",
-          sheetName: sheet.name,
-          rows: sheet.metadata.freezePane.rows,
-          cols: sheet.metadata.freezePane.cols,
-        });
-      }
-      sheet.metadata?.styleRanges?.forEach((styleRange) => {
-        ops.push({
-          kind: "setStyleRange",
-          range: { ...styleRange.range },
-          styleId: styleRange.styleId,
-        });
-      });
-      sheet.metadata?.formatRanges?.forEach((formatRange) => {
-        ops.push({
-          kind: "setFormatRange",
-          range: { ...formatRange.range },
-          formatId: formatRange.formatId,
-        });
-      });
-      sheet.metadata?.filters?.forEach((range) => {
-        ops.push({ kind: "setFilter", sheetName: sheet.name, range: { ...range } });
-      });
-      sheet.metadata?.sorts?.forEach((sort) => {
-        ops.push({
-          kind: "setSort",
-          sheetName: sheet.name,
-          range: { ...sort.range },
-          keys: sort.keys.map((key) => Object.assign({}, key)),
-        });
-      });
-    });
-    snapshot.sheets.forEach((sheet) => {
-      sheet.cells.forEach((cell) => {
-        if (cell.formula !== undefined) {
-          ops.push({
-            kind: "setCellFormula",
-            sheetName: sheet.name,
-            address: cell.address,
-            formula: cell.formula,
-          });
-        } else {
-          ops.push({
-            kind: "setCellValue",
-            sheetName: sheet.name,
-            address: cell.address,
-            value: cell.value ?? null,
-          });
-        }
-        if (cell.format !== undefined) {
-          ops.push({
-            kind: "setCellFormat",
-            sheetName: sheet.name,
-            address: cell.address,
-            format: cell.format,
-          });
-        }
-      });
-    });
-    snapshot.workbook.metadata?.tables?.forEach((table) => {
-      ops.push({
-        kind: "upsertTable",
-        table: {
-          name: table.name,
-          sheetName: table.sheetName,
-          startAddress: table.startAddress,
-          endAddress: table.endAddress,
-          columnNames: [...table.columnNames],
-          headerRow: table.headerRow,
-          totalsRow: table.totalsRow,
-        },
-      });
-    });
-    snapshot.workbook.metadata?.spills?.forEach((spill) => {
-      ops.push({
-        kind: "upsertSpillRange",
-        sheetName: spill.sheetName,
-        address: spill.address,
-        rows: spill.rows,
-        cols: spill.cols,
-      });
-    });
-    snapshot.workbook.metadata?.pivots?.forEach((pivot) => {
-      ops.push({
-        kind: "upsertPivotTable",
-        name: pivot.name,
-        sheetName: pivot.sheetName,
-        address: pivot.address,
-        source: { ...pivot.source },
-        groupBy: [...pivot.groupBy],
-        values: pivot.values.map((value) => Object.assign({}, value)),
-        rows: pivot.rows,
-        cols: pivot.cols,
-      });
-    });
-    const potentialNewCells = snapshot.sheets.reduce(
-      (count, sheet) => count + sheet.cells.length,
-      0,
-    );
-    this.executeTransaction(
-      potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
-      "restore",
-    );
+    runEngineEffect(this.runtime.snapshot.importWorkbook(snapshot));
   }
 
   private captureRowRangeCellState(sheetName: string, start: number, count: number): EngineOp[] {
@@ -2888,29 +2439,11 @@ export class SpreadsheetEngine {
   }
 
   exportReplicaSnapshot(): EngineReplicaSnapshot {
-    return {
-      replica: exportReplicaStateSnapshot(this.replicaState),
-      entityVersions: [...this.entityVersions.entries()].map(([entityKey, order]) => ({
-        entityKey,
-        order,
-      })),
-      sheetDeleteVersions: [...this.sheetDeleteVersions.entries()].map(([sheetName, order]) => ({
-        sheetName,
-        order,
-      })),
-    };
+    return runEngineEffect(this.runtime.snapshot.exportReplica());
   }
 
   importReplicaSnapshot(snapshot: EngineReplicaSnapshot): void {
-    hydrateReplicaState(this.replicaState, snapshot.replica);
-    this.entityVersions.clear();
-    snapshot.entityVersions.forEach(({ entityKey, order }) => {
-      this.entityVersions.set(entityKey, order);
-    });
-    this.sheetDeleteVersions.clear();
-    snapshot.sheetDeleteVersions.forEach(({ sheetName, order }) => {
-      this.sheetDeleteVersions.set(sheetName, order);
-    });
+    runEngineEffect(this.runtime.snapshot.importReplica(snapshot));
   }
 
   renderCommit(ops: CommitOp[]): void {
@@ -2976,11 +2509,7 @@ export class SpreadsheetEngine {
   }
 
   applyRemoteBatch(batch: EngineOpBatch): boolean {
-    if (!shouldApplyBatch(this.replicaState, batch)) {
-      return false;
-    }
-    this.applyBatch(batch, "remote");
-    return true;
+    return runEngineEffect(this.runtime.sync.applyRemoteBatch(batch));
   }
 
   captureUndoOps<T>(mutate: () => T): {
