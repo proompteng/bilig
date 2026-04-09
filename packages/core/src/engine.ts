@@ -282,6 +282,9 @@ export class SpreadsheetEngine {
       restoreCellOps: (sheetName, address) => this.restoreCellOps(sheetName, address),
       toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
         this.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
+      forEachFormulaDependencyCell: (cellIndex, fn) => this.forEachFormulaDependencyCell(cellIndex, fn),
+      cellToCsvValue: (cell) => cellToCsvValue(cell),
+      serializeCsv: (rows) => serializeCsv(rows),
       applyBatchNow: (batch, source, potentialNewCells) => {
         this.applyBatch(batch, source, potentialNewCells);
       },
@@ -997,32 +1000,7 @@ export class SpreadsheetEngine {
   }
 
   exportSheetCsv(sheetName: string): string {
-    const sheet = this.workbook.getSheet(sheetName);
-    if (!sheet) {
-      return "";
-    }
-
-    let maxRow = -1;
-    let maxCol = -1;
-    const cells = new Map<string, string>();
-
-    sheet.grid.forEachCell((cellIndex) => {
-      const cell = this.getCellByIndex(cellIndex);
-      const parsed = parseCellAddress(cell.address, sheetName);
-      maxRow = Math.max(maxRow, parsed.row);
-      maxCol = Math.max(maxCol, parsed.col);
-      cells.set(`${parsed.row}:${parsed.col}`, cellToCsvValue(cell));
-    });
-
-    if (maxRow < 0 || maxCol < 0) {
-      return "";
-    }
-
-    const rows = Array.from({ length: maxRow + 1 }, (_rowEntry, row) =>
-      Array.from({ length: maxCol + 1 }, (_colEntry, col) => cells.get(`${row}:${col}`) ?? ""),
-    );
-
-    return serializeCsv(rows);
+    return runEngineEffect(this.runtime.read.exportSheetCsv(sheetName));
   }
 
   importSheetCsv(sheetName: string, csv: string): void {
@@ -1058,158 +1036,31 @@ export class SpreadsheetEngine {
   }
 
   getCellValue(sheetName: string, address: string): CellValue {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      return emptyValue();
-    }
-    return this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id));
+    return runEngineEffect(this.runtime.read.getCellValue(sheetName, address));
   }
 
   getRangeValues(range: CellRangeRef): CellValue[][] {
-    return this.readRangeValueMatrix(range);
+    return runEngineEffect(this.runtime.read.getRangeValues(range));
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      const parsed = parseCellAddress(address, sheetName);
-      const styleId = this.workbook.getStyleId(sheetName, parsed.row, parsed.col);
-      const numberFormatId = this.workbook.getRangeFormatId(sheetName, parsed.row, parsed.col);
-      const formatRecord = this.workbook.getCellNumberFormat(numberFormatId);
-      return {
-        sheetName,
-        address,
-        ...(styleId !== WorkbookStore.defaultStyleId ? { styleId } : {}),
-        ...(numberFormatId !== WorkbookStore.defaultFormatId ? { numberFormatId } : {}),
-        ...(formatRecord && numberFormatId !== WorkbookStore.defaultFormatId
-          ? { format: formatRecord.code }
-          : {}),
-        value: emptyValue(),
-        flags: 0,
-        version: 0,
-      };
-    }
-    return this.getCellByIndex(cellIndex);
+    return runEngineEffect(this.runtime.read.getCell(sheetName, address));
   }
 
   getCellByIndex(cellIndex: number): CellSnapshot {
-    const address = this.workbook.getAddress(cellIndex);
-    const sheetName = this.workbook.getSheetNameById(this.workbook.cellStore.sheetIds[cellIndex]!);
-    const snapshot: CellSnapshot = {
-      sheetName,
-      address,
-      value: this.workbook.cellStore.getValue(cellIndex, (id) => this.strings.get(id)),
-      flags: this.workbook.cellStore.flags[cellIndex]!,
-      version: this.workbook.cellStore.versions[cellIndex] ?? 0,
-    };
-    const styleId = this.workbook.getStyleId(
-      sheetName,
-      this.workbook.cellStore.rows[cellIndex]!,
-      this.workbook.cellStore.cols[cellIndex]!,
-    );
-    if (styleId !== WorkbookStore.defaultStyleId) {
-      snapshot.styleId = styleId;
-    }
-    const explicitFormat = this.workbook.getCellFormat(cellIndex);
-    const numberFormatId =
-      explicitFormat !== undefined
-        ? this.workbook.internCellNumberFormat(explicitFormat).id
-        : this.workbook.getRangeFormatId(
-            sheetName,
-            this.workbook.cellStore.rows[cellIndex]!,
-            this.workbook.cellStore.cols[cellIndex]!,
-          );
-    const formatRecord = this.workbook.getCellNumberFormat(numberFormatId);
-    if (numberFormatId !== WorkbookStore.defaultFormatId) {
-      snapshot.numberFormatId = numberFormatId;
-    }
-    if (explicitFormat !== undefined) {
-      snapshot.format = explicitFormat;
-    } else if (formatRecord && numberFormatId !== WorkbookStore.defaultFormatId) {
-      snapshot.format = formatRecord.code;
-    }
-    const formula = this.formulas.get(cellIndex)?.source;
-    if (formula !== undefined) {
-      snapshot.formula = formula;
-    }
-    return snapshot;
+    return runEngineEffect(this.runtime.read.getCellByIndex(cellIndex));
   }
 
   getDependencies(sheetName: string, address: string): DependencySnapshot {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) return { directDependents: [], directPrecedents: [] };
-    const directDependents = new Set<number>();
-    const directPrecedents: number[] = [];
-    this.forEachFormulaDependencyCell(cellIndex, (dependencyCellIndex) => {
-      directPrecedents.push(dependencyCellIndex);
-    });
-    const dependents = this.getEntityDependents(makeCellEntity(cellIndex));
-    for (let index = 0; index < dependents.length; index += 1) {
-      const dependent = dependents[index]!;
-      if (isRangeEntity(dependent)) {
-        const rangeDependents = this.getEntityDependents(dependent);
-        for (let rangeIndex = 0; rangeIndex < rangeDependents.length; rangeIndex += 1) {
-          const formulaEntity = rangeDependents[rangeIndex]!;
-          if (!isRangeEntity(formulaEntity)) {
-            directDependents.add(entityPayload(formulaEntity));
-          }
-        }
-        continue;
-      }
-      directDependents.add(entityPayload(dependent));
-    }
-    return {
-      directPrecedents: directPrecedents.map((dependencyCellIndex) =>
-        this.workbook.getQualifiedAddress(dependencyCellIndex),
-      ),
-      directDependents: [...directDependents].map((dependentCellIndex) =>
-        this.workbook.getQualifiedAddress(dependentCellIndex),
-      ),
-    };
+    return runEngineEffect(this.runtime.read.getDependencies(sheetName, address));
   }
 
   getDependents(sheetName: string, address: string): DependencySnapshot {
-    return this.getDependencies(sheetName, address);
+    return runEngineEffect(this.runtime.read.getDependents(sheetName, address));
   }
 
   explainCell(sheetName: string, address: string): ExplainCellSnapshot {
-    const cellIndex = this.workbook.getCellIndex(sheetName, address);
-    if (cellIndex === undefined) {
-      return {
-        sheetName,
-        address,
-        value: emptyValue(),
-        flags: 0,
-        version: 0,
-        inCycle: false,
-        directPrecedents: [],
-        directDependents: [],
-      };
-    }
-
-    const snapshot = this.getCellByIndex(cellIndex);
-    const formula = this.formulas.get(cellIndex);
-    const flags = this.workbook.cellStore.flags[cellIndex] ?? 0;
-    const isFormula = (flags & CellFlags.HasFormula) !== 0 && formula !== undefined;
-    const dependencies = this.getDependencies(sheetName, address);
-
-    const explanation: ExplainCellSnapshot = {
-      ...snapshot,
-      version: this.workbook.cellStore.versions[cellIndex] ?? 0,
-      inCycle: (flags & CellFlags.InCycle) !== 0,
-      directPrecedents: dependencies.directPrecedents,
-      directDependents: dependencies.directDependents,
-    };
-
-    if (formula?.source !== undefined) {
-      explanation.formula = formula.source;
-    }
-    if (isFormula) {
-      explanation.mode = formula.compiled.mode;
-      explanation.topoRank = this.workbook.cellStore.topoRanks[cellIndex] ?? 0;
-    }
-
-    return explanation;
+    return runEngineEffect(this.runtime.read.explainCell(sheetName, address));
   }
 
   exportSnapshot(): WorkbookSnapshot {

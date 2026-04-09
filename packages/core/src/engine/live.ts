@@ -22,6 +22,10 @@ import {
   type EngineReplicaSyncService,
 } from "./services/replica-sync-service.js";
 import {
+  createEngineReadService,
+  type EngineReadService,
+} from "./services/read-service.js";
+import {
   createEngineRecalcService,
   type EngineRecalcService,
 } from "./services/recalc-service.js";
@@ -44,6 +48,7 @@ export interface EngineServiceRuntime {
   readonly history: EngineHistoryService;
   readonly mutation: EngineMutationService;
   readonly pivot: EnginePivotService;
+  readonly read: EngineReadService;
   readonly recalc: EngineRecalcService;
   readonly structure: EngineStructureService;
   readonly snapshot: EngineSnapshotService;
@@ -82,6 +87,12 @@ export function createEngineServiceRuntime(args: {
     sourceSheetName?: string,
     sourceAddress?: string,
   ) => import("@bilig/workbook-domain").EngineOp[];
+  readonly forEachFormulaDependencyCell: (
+    cellIndex: number,
+    fn: (dependencyCellIndex: number) => void,
+  ) => void;
+  readonly cellToCsvValue: (cell: CellSnapshot) => string;
+  readonly serializeCsv: (rows: string[][]) => string;
   readonly applyBatchNow: (
     batch: import("@bilig/workbook-domain").EngineOpBatch,
     source: "local" | "restore" | "history",
@@ -165,6 +176,13 @@ export function createEngineServiceRuntime(args: {
     clearOwnedPivot: (pivot) => args.clearOwnedPivot(pivot),
     rebuildAllFormulaBindings: () => args.rebuildAllFormulaBindings(),
   });
+  const read = createEngineReadService({
+    state: args.state,
+    forEachFormulaDependencyCell: args.forEachFormulaDependencyCell,
+    getEntityDependents: args.getEntityDependents,
+    cellToCsvValue: args.cellToCsvValue,
+    serializeCsv: args.serializeCsv,
+  });
   const recalc = createEngineRecalcService({
     state: args.state,
     getCellByIndex: args.getCellByIndex,
@@ -197,6 +215,7 @@ export function createEngineServiceRuntime(args: {
       state: args.state,
       executeTransaction: args.executeHistoryTransaction,
     }),
+    read,
     recalc,
     structure,
     mutation: createEngineMutationService({
