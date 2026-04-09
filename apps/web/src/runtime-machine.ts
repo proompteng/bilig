@@ -110,6 +110,7 @@ function buildSessionCreateInput(
     replicaId: input.replicaId,
     persistState: input.persistState,
     initialSelection: input.initialSelection,
+    ...(input.perfSession ? { perfSession: input.perfSession } : {}),
     ...(input.zero ? { zero: input.zero } : {}),
     ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
     ...(input.createWorker ? { createWorker: input.createWorker } : {}),

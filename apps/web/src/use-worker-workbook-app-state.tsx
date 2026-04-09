@@ -39,6 +39,7 @@ import { useWorkbookChangesPane } from "./use-workbook-changes-pane.js";
 import { useWorkbookSheetActions } from "./use-workbook-sheet-actions.js";
 import { useWorkbookSelectionActions } from "./use-workbook-selection-actions.js";
 import { useWorkbookEditorConflict } from "./use-workbook-editor-conflict.js";
+import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
 
 const workerRuntimeMachine = createWorkerRuntimeMachine();
 
@@ -90,11 +91,18 @@ export function useWorkerWorkbookAppState(input: {
   );
   const replicaId = useMemo(() => `browser:${Math.random().toString(36).slice(2)}`, []);
   const initialSelection = useMemo(() => loadPersistedSelection(documentId), [documentId]);
+  const perfSession = useMemo(() => createWorkbookPerfSession({ documentId }), [documentId]);
+
+  useEffect(() => {
+    perfSession.markShellMounted();
+  }, [perfSession]);
+
   const runtimeActorRef = useActorRef(workerRuntimeMachine, {
     input: {
       documentId,
       replicaId,
       persistState: runtimeConfig.persistState,
+      perfSession,
       connectionStateName: connectionState.name,
       ...(zero ? { zero } : {}),
       initialSelection,

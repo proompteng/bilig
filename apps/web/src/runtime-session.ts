@@ -19,6 +19,7 @@ import type {
   WorkbookWorkerBootstrapResult,
   WorkbookWorkerStateSnapshot,
 } from "./worker-runtime.js";
+import type { WorkbookPerfSession } from "./perf/workbook-perf.js";
 import { ProjectedViewportStore } from "./projected-viewport-store.js";
 import {
   ZeroWorkbookRevisionSync,
@@ -59,6 +60,7 @@ export interface CreateWorkerRuntimeSessionInput {
   readonly replicaId: string;
   readonly persistState: boolean;
   readonly initialSelection: WorkerRuntimeSelection;
+  readonly perfSession?: WorkbookPerfSession;
   readonly zero?: ZeroWorkbookSyncSource;
   readonly fetchImpl?: typeof fetch;
   readonly createWorker?: () => WorkerSessionPort;
@@ -483,6 +485,7 @@ export async function createWorkerRuntimeSessionController(
       },
     );
     publishRuntimeState(bootstrap.runtimeState);
+    input.perfSession?.noteBootstrapResult(bootstrap);
     currentAuthoritativeRevision = await invokeWorkerMethod(
       client,
       "getAuthoritativeRevision",
@@ -514,6 +517,7 @@ export async function createWorkerRuntimeSessionController(
       queueAuthoritativeRebase(pendingRevisionState);
     }
     await applySelection(reconcileSelection(currentSelection, currentRuntimeState.sheetNames));
+    input.perfSession?.markFirstSelectionVisible();
   } catch (error) {
     liveSync?.dispose();
     client.dispose();

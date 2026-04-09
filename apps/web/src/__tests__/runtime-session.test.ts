@@ -441,6 +441,60 @@ describe("createWorkerRuntimeSessionController", () => {
     controller.dispose();
   });
 
+  it("reports startup perf milestones for a persisted local-ready bootstrap", async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: "phase0-doc", replicaId: "seed" });
+    seedEngine.createSheet("Sheet1");
+    seedEngine.setCellValue("Sheet1", "A1", 99);
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 0,
+          appliedPendingLocalSeq: 0,
+        },
+      }),
+    });
+    const perfSession = {
+      scope: "phase0-doc:perf",
+      markShellMounted: vi.fn(),
+      noteBootstrapResult: vi.fn(),
+      markFirstSelectionVisible: vi.fn(),
+    };
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: true,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => {
+          throw new Error("persisted local-ready bootstrap should not fetch");
+        }),
+        perfSession,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    expect(perfSession.noteBootstrapResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        restoredFromPersistence: true,
+        requiresAuthoritativeHydrate: false,
+      }),
+    );
+    expect(perfSession.markFirstSelectionVisible).toHaveBeenCalledTimes(1);
+
+    controller.dispose();
+  });
+
   it("keeps restored local pending projection state instead of blocking on snapshot hydrate", async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: "phase0-doc", replicaId: "seed" });
     seedEngine.createSheet("Sheet1");
