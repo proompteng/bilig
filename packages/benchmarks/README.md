@@ -14,6 +14,18 @@ npm install @bilig/benchmarks
 - Types: `./dist/index.d.ts`
 - Corpus: `./dist/workbook-corpus.js`
 
+## WorkPaper baseline
+
+The repo tracks a checked-in WorkPaper benchmark artifact at
+`packages/benchmarks/baselines/workpaper-baseline.json`.
+
+Refresh or validate it with:
+
+```bash
+pnpm workpaper:bench:generate
+pnpm workpaper:bench:check
+```
+
 ## Named giant-workbook corpus
 
 The package now ships deterministic named workbook cases for giant-data restore and warm-start

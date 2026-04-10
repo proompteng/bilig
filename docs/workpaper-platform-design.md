@@ -242,6 +242,10 @@ Shipped benchmark harness:
 
 - package benchmark entrypoint: `packages/benchmarks/src/benchmark-workpaper.ts`
 - repo command: `pnpm bench:workpaper`
+- checked-in baseline artifact: `packages/benchmarks/baselines/workpaper-baseline.json`
+- regeneration/check commands:
+  - `pnpm workpaper:bench:generate`
+  - `pnpm workpaper:bench:check`
 - covered scenarios:
   - workbook build from sheets
   - single-cell edit with downstream recalculation

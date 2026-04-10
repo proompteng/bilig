@@ -20,6 +20,7 @@ on:
       - "scripts/next-runtime-release-version.ts"
       - "scripts/runtime-package-set.ts"
       - "scripts/publish-runtime-package-set.ts"
+      - "scripts/gen-workpaper-benchmark-baseline.ts"
       - "scripts/workpaper-external-smoke.ts"
       - "tsconfig.base.json"
       - "tsconfig.json"
@@ -111,6 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           pnpm publish:runtime:check
+
+      - name: Check WorkPaper benchmark baseline shape
+        run: |
+          set -euo pipefail
+          pnpm workpaper:bench:check
 
       - name: Run WorkPaper external-consumer smoke test
         run: |

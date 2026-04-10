@@ -61,6 +61,8 @@
     "bench:contracts": "bun scripts/bench-contracts.ts",
     "workpaper:parity:generate": "bun scripts/gen-workpaper-hyperformula-audit.ts",
     "workpaper:parity:check": "bun scripts/gen-workpaper-hyperformula-audit.ts --check",
+    "workpaper:bench:generate": "bun scripts/gen-workpaper-benchmark-baseline.ts",
+    "workpaper:bench:check": "bun scripts/gen-workpaper-benchmark-baseline.ts --check",
     "workpaper:smoke:external": "bun scripts/workpaper-external-smoke.ts",
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "publish:runtime:next-version": "bun scripts/next-runtime-release-version.ts",
