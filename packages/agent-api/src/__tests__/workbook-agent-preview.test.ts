@@ -114,6 +114,50 @@ describe("workbook agent preview", () => {
     expect(preview.effectSummary.numberFormatChangeCount).toBe(1);
   });
 
+  it("captures structural row metadata previews without cell diffs", async () => {
+    const preview = await buildWorkbookAgentPreview({
+      snapshot: await createSnapshot(),
+      replicaId: "preview",
+      bundle: {
+        id: "bundle-rows",
+        documentId: "doc-1",
+        threadId: "thr-1",
+        turnId: "turn-1",
+        goalText: "Hide subtotal rows",
+        summary: "Hide subtotal rows",
+        scope: "sheet",
+        riskClass: "medium",
+        approvalMode: "preview",
+        baseRevision: 1,
+        createdAtUnixMs: 1,
+        context: null,
+        commands: [
+          {
+            kind: "updateRowMetadata",
+            sheetName: "Sheet1",
+            startRow: 1,
+            count: 2,
+            hidden: true,
+          },
+        ],
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "A2",
+            endAddress: "A3",
+            role: "target",
+          },
+        ],
+        estimatedAffectedCells: null,
+      },
+    });
+
+    expect(preview.structuralChanges).toEqual(["Hide rows 2-3 in Sheet1"]);
+    expect(preview.cellDiffs).toEqual([]);
+    expect(preview.effectSummary.structuralChangeCount).toBe(1);
+    expect(preview.effectSummary.displayedCellDiffCount).toBe(0);
+  });
+
   it("normalizes legacy preview payloads without dropping persisted runs", () => {
     const decoded = decodeWorkbookAgentPreviewSummary({
       ranges: [],

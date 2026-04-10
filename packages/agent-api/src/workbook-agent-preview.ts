@@ -2,6 +2,7 @@ import { SpreadsheetEngine } from "@bilig/core";
 import type { CellSnapshot, WorkbookSnapshot } from "@bilig/protocol";
 import {
   applyWorkbookAgentCommandBundle,
+  describeWorkbookAgentCommand,
   isWorkbookAgentCommandBundle,
   type WorkbookAgentCommandBundle,
   type WorkbookAgentPreviewCellDiff,
@@ -72,21 +73,19 @@ function collectTargetAddresses(bundle: WorkbookAgentCommandBundle): readonly {
   return addresses;
 }
 
-function buildStructuralChanges(
-  beforeSnapshot: WorkbookSnapshot,
-  afterSnapshot: WorkbookSnapshot,
-): string[] {
-  const beforeSheets = beforeSnapshot.sheets.map((sheet) => sheet.name);
-  const afterSheets = afterSnapshot.sheets.map((sheet) => sheet.name);
+function buildStructuralChanges(bundle: WorkbookAgentCommandBundle): string[] {
   const structuralChanges: string[] = [];
-  afterSheets.forEach((name) => {
-    if (!beforeSheets.includes(name)) {
-      structuralChanges.push(`Create sheet ${name}`);
-    }
-  });
-  beforeSheets.forEach((name) => {
-    if (!afterSheets.includes(name)) {
-      structuralChanges.push(`Remove or rename sheet ${name}`);
+  bundle.commands.forEach((command) => {
+    if (
+      command.kind === "createSheet" ||
+      command.kind === "renameSheet" ||
+      command.kind === "updateRowMetadata" ||
+      command.kind === "updateColumnMetadata"
+    ) {
+      const description = describeWorkbookAgentCommand(command);
+      if (!structuralChanges.includes(description)) {
+        structuralChanges.push(description);
+      }
     }
   });
   return structuralChanges;
@@ -126,7 +125,6 @@ export async function buildWorkbookAgentPreview(input: {
   await previewEngine.ready();
   previewEngine.importSnapshot(input.snapshot);
   applyWorkbookAgentCommandBundle(previewEngine, input.bundle);
-  const afterSnapshot = previewEngine.exportSnapshot();
   const beforeEngine = new SpreadsheetEngine({
     workbookName: input.snapshot.workbook.name,
     replicaId: `${input.replicaId}:agent-preview-base`,
@@ -142,7 +140,7 @@ export async function buildWorkbookAgentPreview(input: {
       return diff ? [diff] : [];
     })
     .slice(0, MAX_PREVIEW_DIFFS);
-  const structuralChanges = buildStructuralChanges(input.snapshot, afterSnapshot);
+  const structuralChanges = buildStructuralChanges(input.bundle);
   const truncatedCellDiffs = input.bundle.affectedRanges.some((range) => {
     if (range.role !== "target") {
       return false;

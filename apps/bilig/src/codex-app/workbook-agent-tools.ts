@@ -22,6 +22,8 @@ import {
   rangeMutationArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  updateColumnMetadataArgsSchema,
+  updateRowMetadataArgsSchema,
 } from "@bilig/zero-sync";
 import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts";
 import { z } from "zod";
@@ -89,6 +91,30 @@ const renameSheetToolArgsSchema = z.object({
   currentName: z.string().trim().min(1),
   nextName: z.string().trim().min(1),
 });
+
+const rowMetadataToolArgsSchema = z
+  .object({
+    sheetName: updateRowMetadataArgsSchema.shape.sheetName,
+    startRow: updateRowMetadataArgsSchema.shape.startRow,
+    count: updateRowMetadataArgsSchema.shape.count,
+    height: updateRowMetadataArgsSchema.shape.height.optional(),
+    hidden: updateRowMetadataArgsSchema.shape.hidden.optional(),
+  })
+  .refine((value) => value.height !== undefined || value.hidden !== undefined, {
+    message: "height or hidden is required",
+  });
+
+const columnMetadataToolArgsSchema = z
+  .object({
+    sheetName: updateColumnMetadataArgsSchema.shape.sheetName,
+    startCol: updateColumnMetadataArgsSchema.shape.startCol,
+    count: updateColumnMetadataArgsSchema.shape.count,
+    width: updateColumnMetadataArgsSchema.shape.width.optional(),
+    hidden: updateColumnMetadataArgsSchema.shape.hidden.optional(),
+  })
+  .refine((value) => value.width !== undefined || value.hidden !== undefined, {
+    message: "width or hidden is required",
+  });
 
 const clearRangeToolArgsSchema = clearRangeArgsSchema.pick({ range: true });
 const transferRangeToolArgsSchema = rangeMutationArgsSchema.pick({ source: true, target: true });
@@ -788,6 +814,48 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         },
       },
     },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata,
+      description:
+        "Hide, unhide, resize, or reset row metadata across a bounded row span on one sheet.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sheetName", "startRow", "count"],
+        properties: {
+          sheetName: { type: "string" },
+          startRow: { type: "number" },
+          count: { type: "number" },
+          height: {
+            oneOf: [{ type: "number" }, { type: "null" }],
+          },
+          hidden: {
+            oneOf: [{ type: "boolean" }, { type: "null" }],
+          },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.updateColumnMetadata,
+      description:
+        "Hide, unhide, resize, or reset column metadata across a bounded column span on one sheet.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["sheetName", "startCol", "count"],
+        properties: {
+          sheetName: { type: "string" },
+          startCol: { type: "number" },
+          count: { type: "number" },
+          width: {
+            oneOf: [{ type: "number" }, { type: "null" }],
+          },
+          hidden: {
+            oneOf: [{ type: "boolean" }, { type: "null" }],
+          },
+        },
+      },
+    },
   ] satisfies readonly CodexDynamicToolSpec[];
 }
 
@@ -1014,6 +1082,36 @@ export async function handleWorkbookAgentToolCall(
           kind: "renameSheet",
           currentName: args.currentName,
           nextName: args.nextName,
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata: {
+        const args = rowMetadataToolArgsSchema.parse(request.arguments);
+        return await stageCommandResult(context, {
+          kind: "updateRowMetadata",
+          sheetName: args.sheetName,
+          startRow: args.startRow,
+          count: args.count,
+          ...(args.height !== undefined
+            ? {
+                height: args.height === null ? null : Math.max(1, Math.round(args.height)),
+              }
+            : {}),
+          ...(args.hidden !== undefined ? { hidden: args.hidden } : {}),
+        });
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.updateColumnMetadata: {
+        const args = columnMetadataToolArgsSchema.parse(request.arguments);
+        return await stageCommandResult(context, {
+          kind: "updateColumnMetadata",
+          sheetName: args.sheetName,
+          startCol: args.startCol,
+          count: args.count,
+          ...(args.width !== undefined
+            ? {
+                width: args.width === null ? null : Math.max(1, Math.round(args.width)),
+              }
+            : {}),
+          ...(args.hidden !== undefined ? { hidden: args.hidden } : {}),
         });
       }
       default:

@@ -748,4 +748,88 @@ describe("workbook agent tools", () => {
       },
     });
   });
+
+  it("stages row metadata commands for hide and resize operations", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-4",
+        tool: "bilig_update_row_metadata",
+        arguments: {
+          sheetName: "Sheet1",
+          startRow: 1,
+          count: 2,
+          hidden: true,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "updateRowMetadata",
+      sheetName: "Sheet1",
+      startRow: 1,
+      count: 2,
+      hidden: true,
+    });
+  });
+
+  it("stages column metadata commands for resize operations", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+      createBundle(command),
+    );
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-5",
+        tool: "bilig_update_column_metadata",
+        arguments: {
+          sheetName: "Sheet1",
+          startCol: 0,
+          count: 2,
+          width: 120,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(stageCommand).toHaveBeenCalledWith({
+      kind: "updateColumnMetadata",
+      sheetName: "Sheet1",
+      startCol: 0,
+      count: 2,
+      width: 120,
+    });
+  });
 });

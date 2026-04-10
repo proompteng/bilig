@@ -113,6 +113,8 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
       WORKBOOK_AGENT_TOOL_NAMES.fillRange,
       WORKBOOK_AGENT_TOOL_NAMES.copyRange,
       WORKBOOK_AGENT_TOOL_NAMES.moveRange,
+      WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata,
+      WORKBOOK_AGENT_TOOL_NAMES.updateColumnMetadata,
       WORKBOOK_AGENT_TOOL_NAMES.createSheet,
       WORKBOOK_AGENT_TOOL_NAMES.renameSheet,
     ],

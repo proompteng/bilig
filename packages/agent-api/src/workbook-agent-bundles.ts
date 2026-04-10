@@ -5,6 +5,7 @@ import type {
   CellRangeRef,
   CellStylePatch,
   LiteralInput,
+  WorkbookAxisEntrySnapshot,
 } from "@bilig/protocol";
 
 export interface WorkbookAgentUiSelectionRef {
@@ -73,6 +74,22 @@ export type WorkbookAgentCommand =
       kind: "renameSheet";
       currentName: string;
       nextName: string;
+    }
+  | {
+      kind: "updateRowMetadata";
+      sheetName: string;
+      startRow: number;
+      count: number;
+      height?: number | null;
+      hidden?: boolean | null;
+    }
+  | {
+      kind: "updateColumnMetadata";
+      sheetName: string;
+      startCol: number;
+      count: number;
+      width?: number | null;
+      hidden?: boolean | null;
     };
 
 export type WorkbookAgentRiskClass = "low" | "medium" | "high";
@@ -438,6 +455,174 @@ function rangeLabel(range: WorkbookAgentPreviewRange): string {
     : `${range.sheetName}!${range.startAddress}:${range.endAddress}`;
 }
 
+function hasOwnProperty(value: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function formatColumnLabel(index: number): string {
+  return formatAddress(0, index).replace(/\d+/gu, "");
+}
+
+function formatRowSpanLabel(startRow: number, count: number): string {
+  const first = startRow + 1;
+  const last = startRow + count;
+  return count === 1 ? `row ${String(first)}` : `rows ${String(first)}-${String(last)}`;
+}
+
+function formatColumnSpanLabel(startCol: number, count: number): string {
+  const first = formatColumnLabel(startCol);
+  const last = formatColumnLabel(startCol + count - 1);
+  return count === 1 ? `column ${first}` : `columns ${first}-${last}`;
+}
+
+function describeAxisMetadataCommand(input: {
+  axis: "row" | "column";
+  sheetName: string;
+  spanLabel: string;
+  size?: number | null;
+  hidden?: boolean | null;
+}): string {
+  const sizeKey = input.axis === "row" ? "height" : "width";
+  const hasSize = hasOwnProperty(input, "size");
+  const hasHidden = hasOwnProperty(input, "hidden");
+
+  if (hasSize && !hasHidden) {
+    return input.size === null
+      ? `Reset ${input.axis} ${sizeKey} for ${input.spanLabel} in ${input.sheetName}`
+      : `Resize ${input.spanLabel} in ${input.sheetName}`;
+  }
+  if (!hasSize && hasHidden) {
+    if (input.hidden === true) {
+      return `Hide ${input.spanLabel} in ${input.sheetName}`;
+    }
+    if (input.hidden === false) {
+      return `Unhide ${input.spanLabel} in ${input.sheetName}`;
+    }
+    return `Reset ${input.axis} visibility metadata for ${input.spanLabel} in ${input.sheetName}`;
+  }
+  if (hasSize && hasHidden && input.size !== null) {
+    if (input.hidden === true) {
+      return `Resize and hide ${input.spanLabel} in ${input.sheetName}`;
+    }
+    if (input.hidden === false) {
+      return `Resize and unhide ${input.spanLabel} in ${input.sheetName}`;
+    }
+  }
+  return `Update ${input.axis} metadata for ${input.spanLabel} in ${input.sheetName}`;
+}
+
+function getConsistentAxisEntrySize(input: {
+  entries: readonly WorkbookAxisEntrySnapshot[];
+  start: number;
+  count: number;
+  spanLabel: string;
+  propertyLabel: string;
+}): number | null {
+  const entryByIndex = new Map(input.entries.map((entry) => [entry.index, entry]));
+  let resolved: number | null | undefined;
+  for (let index = input.start; index < input.start + input.count; index += 1) {
+    const next = entryByIndex.get(index)?.size;
+    const normalized = typeof next === "number" ? next : null;
+    if (resolved === undefined) {
+      resolved = normalized;
+      continue;
+    }
+    if (resolved !== normalized) {
+      throw new Error(
+        `Cannot preserve ${input.propertyLabel} for ${input.spanLabel} because the existing ${input.propertyLabel} state is mixed. Specify ${input.propertyLabel} explicitly.`,
+      );
+    }
+  }
+  return resolved ?? null;
+}
+
+function getConsistentAxisEntryHidden(input: {
+  entries: readonly WorkbookAxisEntrySnapshot[];
+  start: number;
+  count: number;
+  spanLabel: string;
+  propertyLabel: string;
+}): boolean | null {
+  const entryByIndex = new Map(input.entries.map((entry) => [entry.index, entry]));
+  let resolved: boolean | null | undefined;
+  for (let index = input.start; index < input.start + input.count; index += 1) {
+    const next = entryByIndex.get(index)?.hidden;
+    const normalized = typeof next === "boolean" ? next : null;
+    if (resolved === undefined) {
+      resolved = normalized;
+      continue;
+    }
+    if (resolved !== normalized) {
+      throw new Error(
+        `Cannot preserve ${input.propertyLabel} for ${input.spanLabel} because the existing ${input.propertyLabel} state is mixed. Specify ${input.propertyLabel} explicitly.`,
+      );
+    }
+  }
+  return resolved ?? null;
+}
+
+function resolveRowMetadataCommandState(
+  engine: SpreadsheetEngine,
+  command: Extract<WorkbookAgentCommand, { kind: "updateRowMetadata" }>,
+): {
+  height: number | null;
+  hidden: boolean | null;
+} {
+  const spanLabel = formatRowSpanLabel(command.startRow, command.count);
+  const entries = engine.getRowAxisEntries(command.sheetName);
+  return {
+    height: hasOwnProperty(command, "height")
+      ? (command.height ?? null)
+      : getConsistentAxisEntrySize({
+          entries,
+          start: command.startRow,
+          count: command.count,
+          spanLabel,
+          propertyLabel: "row height",
+        }),
+    hidden: hasOwnProperty(command, "hidden")
+      ? (command.hidden ?? null)
+      : getConsistentAxisEntryHidden({
+          entries,
+          start: command.startRow,
+          count: command.count,
+          spanLabel,
+          propertyLabel: "row visibility",
+        }),
+  };
+}
+
+function resolveColumnMetadataCommandState(
+  engine: SpreadsheetEngine,
+  command: Extract<WorkbookAgentCommand, { kind: "updateColumnMetadata" }>,
+): {
+  width: number | null;
+  hidden: boolean | null;
+} {
+  const spanLabel = formatColumnSpanLabel(command.startCol, command.count);
+  const entries = engine.getColumnAxisEntries(command.sheetName);
+  return {
+    width: hasOwnProperty(command, "width")
+      ? (command.width ?? null)
+      : getConsistentAxisEntrySize({
+          entries,
+          start: command.startCol,
+          count: command.count,
+          spanLabel,
+          propertyLabel: "column width",
+        }),
+    hidden: hasOwnProperty(command, "hidden")
+      ? (command.hidden ?? null)
+      : getConsistentAxisEntryHidden({
+          entries,
+          start: command.startCol,
+          count: command.count,
+          spanLabel,
+          propertyLabel: "column visibility",
+        }),
+  };
+}
+
 export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): string {
   switch (command.kind) {
     case "writeRange": {
@@ -458,6 +643,22 @@ export function describeWorkbookAgentCommand(command: WorkbookAgentCommand): str
       return `Create sheet ${command.name}`;
     case "renameSheet":
       return `Rename sheet ${command.currentName} to ${command.nextName}`;
+    case "updateRowMetadata":
+      return describeAxisMetadataCommand({
+        axis: "row",
+        sheetName: command.sheetName,
+        spanLabel: formatRowSpanLabel(command.startRow, command.count),
+        ...(hasOwnProperty(command, "height") ? { size: command.height ?? null } : {}),
+        ...(hasOwnProperty(command, "hidden") ? { hidden: command.hidden ?? null } : {}),
+      });
+    case "updateColumnMetadata":
+      return describeAxisMetadataCommand({
+        axis: "column",
+        sheetName: command.sheetName,
+        spanLabel: formatColumnSpanLabel(command.startCol, command.count),
+        ...(hasOwnProperty(command, "width") ? { size: command.width ?? null } : {}),
+        ...(hasOwnProperty(command, "hidden") ? { hidden: command.hidden ?? null } : {}),
+      });
     default: {
       const exhaustive: never = command;
       return String(exhaustive);
@@ -842,6 +1043,42 @@ export function isWorkbookAgentCommand(value: unknown): value is WorkbookAgentCo
         typeof value["nextName"] === "string" &&
         value["nextName"].trim().length > 0
       );
+    case "updateRowMetadata": {
+      const hasHeight = value["height"] !== undefined;
+      const hasHidden = value["hidden"] !== undefined;
+      return (
+        typeof value["sheetName"] === "string" &&
+        Number.isInteger(value["startRow"]) &&
+        Number(value["startRow"]) >= 0 &&
+        Number.isInteger(value["count"]) &&
+        Number(value["count"]) > 0 &&
+        (hasHeight || hasHidden) &&
+        (!hasHeight ||
+          value["height"] === null ||
+          (typeof value["height"] === "number" &&
+            Number.isFinite(value["height"]) &&
+            value["height"] > 0)) &&
+        (!hasHidden || value["hidden"] === null || typeof value["hidden"] === "boolean")
+      );
+    }
+    case "updateColumnMetadata": {
+      const hasWidth = value["width"] !== undefined;
+      const hasHidden = value["hidden"] !== undefined;
+      return (
+        typeof value["sheetName"] === "string" &&
+        Number.isInteger(value["startCol"]) &&
+        Number(value["startCol"]) >= 0 &&
+        Number.isInteger(value["count"]) &&
+        Number(value["count"]) > 0 &&
+        (hasWidth || hasHidden) &&
+        (!hasWidth ||
+          value["width"] === null ||
+          (typeof value["width"] === "number" &&
+            Number.isFinite(value["width"]) &&
+            value["width"] > 0)) &&
+        (!hasHidden || value["hidden"] === null || typeof value["hidden"] === "boolean")
+      );
+    }
     default:
       return false;
   }
@@ -969,6 +1206,8 @@ export function estimateWorkbookAgentCommandAffectedCells(
       return countRangeCells(command.target);
     case "createSheet":
     case "renameSheet":
+    case "updateRowMetadata":
+    case "updateColumnMetadata":
       return null;
     default: {
       const exhaustive: never = command;
@@ -1012,6 +1251,24 @@ export function deriveWorkbookAgentCommandPreviewRanges(
     case "createSheet":
     case "renameSheet":
       return [];
+    case "updateRowMetadata":
+      return [
+        {
+          sheetName: command.sheetName,
+          startAddress: formatAddress(command.startRow, 0),
+          endAddress: formatAddress(command.startRow + command.count - 1, 0),
+          role: "target",
+        },
+      ];
+    case "updateColumnMetadata":
+      return [
+        {
+          sheetName: command.sheetName,
+          startAddress: formatAddress(0, command.startCol),
+          endAddress: formatAddress(0, command.startCol + command.count - 1),
+          role: "target",
+        },
+      ];
     default: {
       const exhaustive: never = command;
       return exhaustive;
@@ -1088,6 +1345,28 @@ export function applyWorkbookAgentCommand(
         },
       ]);
       return;
+    case "updateRowMetadata": {
+      const resolved = resolveRowMetadataCommandState(engine, command);
+      engine.updateRowMetadata(
+        command.sheetName,
+        command.startRow,
+        command.count,
+        resolved.height,
+        resolved.hidden,
+      );
+      return;
+    }
+    case "updateColumnMetadata": {
+      const resolved = resolveColumnMetadataCommandState(engine, command);
+      engine.updateColumnMetadata(
+        command.sheetName,
+        command.startCol,
+        command.count,
+        resolved.width,
+        resolved.hidden,
+      );
+      return;
+    }
     default: {
       const exhaustive: never = command;
       throw new Error(`Unhandled workbook agent command: ${JSON.stringify(exhaustive)}`);

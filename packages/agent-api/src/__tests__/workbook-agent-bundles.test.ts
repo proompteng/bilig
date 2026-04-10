@@ -105,6 +105,44 @@ describe("workbook agent bundle semantics", () => {
     expect(bundle.approvalMode).toBe("preview");
   });
 
+  it("marks row metadata edits as sheet-scoped preview bundles", () => {
+    const bundle = appendWorkbookAgentCommandToBundle({
+      previousBundle: null,
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Hide the subtotal rows",
+      baseRevision: 3,
+      context: selectionContext,
+      command: {
+        kind: "updateRowMetadata",
+        sheetName: "Sheet1",
+        startRow: 1,
+        count: 2,
+        hidden: true,
+      },
+      now: 100,
+    });
+
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        summary: "Hide rows 2-3 in Sheet1",
+        riskClass: "medium",
+        scope: "sheet",
+        approvalMode: "preview",
+        estimatedAffectedCells: null,
+        affectedRanges: [
+          {
+            sheetName: "Sheet1",
+            startAddress: "A2",
+            endAddress: "A3",
+            role: "target",
+          },
+        ],
+      }),
+    );
+  });
+
   it("projects a scoped subset as its own preview/apply bundle", () => {
     const staged = appendWorkbookAgentCommandToBundle({
       previousBundle: appendWorkbookAgentCommandToBundle({

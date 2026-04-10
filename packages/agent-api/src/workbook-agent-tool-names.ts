@@ -17,6 +17,8 @@ export const WORKBOOK_AGENT_TOOL_NAMES = {
   moveRange: "bilig_move_range",
   createSheet: "bilig_create_sheet",
   renameSheet: "bilig_rename_sheet",
+  updateRowMetadata: "bilig_update_row_metadata",
+  updateColumnMetadata: "bilig_update_column_metadata",
 } as const;
 
 export type WorkbookAgentToolName =
@@ -41,6 +43,8 @@ const LEGACY_WORKBOOK_AGENT_TOOL_NAME_MAP: Record<string, WorkbookAgentToolName>
   "bilig.move_range": WORKBOOK_AGENT_TOOL_NAMES.moveRange,
   "bilig.create_sheet": WORKBOOK_AGENT_TOOL_NAMES.createSheet,
   "bilig.rename_sheet": WORKBOOK_AGENT_TOOL_NAMES.renameSheet,
+  "bilig.update_row_metadata": WORKBOOK_AGENT_TOOL_NAMES.updateRowMetadata,
+  "bilig.update_column_metadata": WORKBOOK_AGENT_TOOL_NAMES.updateColumnMetadata,
 };
 
 const workbookAgentToolNameSet = new Set<string>(Object.values(WORKBOOK_AGENT_TOOL_NAMES));
