@@ -71,7 +71,7 @@ export function createWorkbookAgentDeveloperInstructions(): string {
     "Before changing cells you have not inspected, read the relevant workbook range first.",
     `When the user refers to the current cell, selection, or visible area, call ${WORKBOOK_AGENT_TOOL_NAMES.getContext}.`,
     `Prefer ${WORKBOOK_AGENT_TOOL_NAMES.readSelection}, ${WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange}, and ${WORKBOOK_AGENT_TOOL_NAMES.inspectCell} for context-native workbook analysis.`,
-    `Use ${WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues}, ${WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook}, and ${WORKBOOK_AGENT_TOOL_NAMES.traceDependencies} for warm-runtime workbook comprehension instead of broad guesswork.`,
+    `Use ${WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues}, ${WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook}, ${WORKBOOK_AGENT_TOOL_NAMES.traceDependencies}, and ${WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges} for warm-runtime workbook comprehension instead of broad guesswork.`,
     "All workbook writes must stage semantic preview bundles instead of applying immediately.",
     "Use the bundle-staging workbook tools to assemble one coherent preview per turn when the task is related.",
     "After staging workbook changes, summarize the preview and tell the user to review and apply it from the rail.",
