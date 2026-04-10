@@ -261,6 +261,18 @@ export function useWorkbookSync(input: {
           mutation = { method, args: [source, target] };
           break;
         }
+        case "insertRows":
+        case "deleteRows":
+        case "insertColumns":
+        case "deleteColumns": {
+          const [sheetName, start, count] = args;
+          assert(
+            typeof sheetName === "string" && typeof start === "number" && typeof count === "number",
+            `Invalid ${method} args`,
+          );
+          mutation = { method, args: [sheetName, start, count] };
+          break;
+        }
         case "updateRowMetadata": {
           const [sheetName, startRow, count, height, hidden] = args;
           assert(

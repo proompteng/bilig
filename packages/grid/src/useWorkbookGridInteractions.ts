@@ -90,6 +90,10 @@ export function useWorkbookGridInteractions(
     | "hiddenRows"
     | "onSetColumnHidden"
     | "onSetRowHidden"
+    | "onInsertRows"
+    | "onDeleteRows"
+    | "onInsertColumns"
+    | "onDeleteColumns"
     | "onSelect"
     | "onSelectionLabelChange"
     | "onToggleBooleanCell"
@@ -118,6 +122,10 @@ export function useWorkbookGridInteractions(
     hiddenRows,
     onSetColumnHidden,
     onSetRowHidden,
+    onInsertRows,
+    onDeleteRows,
+    onInsertColumns,
+    onDeleteColumns,
     onSelect,
     onSelectionLabelChange,
     onToggleBooleanCell,
@@ -349,6 +357,10 @@ export function useWorkbookGridInteractions(
     onSelect,
     onSetColumnHidden,
     onSetRowHidden,
+    onInsertRows,
+    onDeleteRows,
+    onInsertColumns,
+    onDeleteColumns,
     resolveHeaderSelectionAtPointer,
     selectedCell: [selectedCell.col, selectedCell.row],
     setGridSelection,

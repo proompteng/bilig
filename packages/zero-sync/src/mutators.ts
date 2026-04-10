@@ -214,6 +214,12 @@ export const updateColumnWidthArgsSchema = baseMutationArgsSchema.extend({
   width: z.number().int().positive(),
 });
 
+export const structuralAxisMutationArgsSchema = baseMutationArgsSchema.extend({
+  sheetName: z.string().min(1),
+  start: z.number().int().nonnegative(),
+  count: z.number().int().positive(),
+});
+
 export const setFreezePaneArgsSchema = baseMutationArgsSchema.extend({
   sheetName: z.string().min(1),
   rows: z.number().int().nonnegative(),
@@ -334,6 +340,10 @@ export const mutators = defineMutators({
     updateRowMetadata: defineMutator(updateRowMetadataArgsSchema, noop),
     updateColumnMetadata: defineMutator(updateColumnMetadataArgsSchema, noop),
     updateColumnWidth: defineMutator(updateColumnWidthArgsSchema, noop),
+    insertRows: defineMutator(structuralAxisMutationArgsSchema, noop),
+    deleteRows: defineMutator(structuralAxisMutationArgsSchema, noop),
+    insertColumns: defineMutator(structuralAxisMutationArgsSchema, noop),
+    deleteColumns: defineMutator(structuralAxisMutationArgsSchema, noop),
     setFreezePane: defineMutator(setFreezePaneArgsSchema, noop),
     setRangeStyle: defineMutator(setRangeStyleArgsSchema, noop),
     clearRangeStyle: defineMutator(clearRangeStyleArgsSchema, noop),

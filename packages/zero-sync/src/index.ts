@@ -7,6 +7,7 @@ export {
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
   createRenderCommitArgs,
+  structuralAxisMutationArgsSchema,
   redoLatestWorkbookChangeArgsSchema,
   rangeMutationArgsSchema,
   renderCommitArgsSchema,

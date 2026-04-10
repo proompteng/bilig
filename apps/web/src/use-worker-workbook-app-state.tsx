@@ -661,6 +661,34 @@ export function useWorkerWorkbookAppState(input: {
     reportRuntimeError,
   });
 
+  const invokeInsertRowsMutation = useCallback(
+    async (sheetName: string, startRow: number, count: number): Promise<void> => {
+      await invokeMutation("insertRows", sheetName, startRow, count);
+    },
+    [invokeMutation],
+  );
+
+  const invokeDeleteRowsMutation = useCallback(
+    async (sheetName: string, startRow: number, count: number): Promise<void> => {
+      await invokeMutation("deleteRows", sheetName, startRow, count);
+    },
+    [invokeMutation],
+  );
+
+  const invokeInsertColumnsMutation = useCallback(
+    async (sheetName: string, startCol: number, count: number): Promise<void> => {
+      await invokeMutation("insertColumns", sheetName, startCol, count);
+    },
+    [invokeMutation],
+  );
+
+  const invokeDeleteColumnsMutation = useCallback(
+    async (sheetName: string, startCol: number, count: number): Promise<void> => {
+      await invokeMutation("deleteColumns", sheetName, startCol, count);
+    },
+    [invokeMutation],
+  );
+
   return {
     agentError,
     clearAgentError,
@@ -684,6 +712,10 @@ export function useWorkerWorkbookAppState(input: {
     handleEditorChange,
     headerStatus,
     handleVisibleViewportChange,
+    invokeDeleteColumnsMutation,
+    invokeDeleteRowsMutation,
+    invokeInsertColumnsMutation,
+    invokeInsertRowsMutation,
     invokeColumnVisibilityMutation,
     invokeColumnWidthMutation,
     invokeRowHeightMutation,

@@ -89,6 +89,30 @@ export type WorkbookEventPayload =
       target: CellRangeRef;
     }
   | {
+      kind: "insertRows";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
+      kind: "deleteRows";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
+      kind: "insertColumns";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
+      kind: "deleteColumns";
+      sheetName: string;
+      start: number;
+      count: number;
+    }
+  | {
       kind: "updateRowMetadata";
       sheetName: string;
       startRow: number;
@@ -238,6 +262,15 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
     case "copyRange":
     case "moveRange":
       return isCellRangeRef(value["source"]) && isCellRangeRef(value["target"]);
+    case "insertRows":
+    case "deleteRows":
+    case "insertColumns":
+    case "deleteColumns":
+      return (
+        typeof value["sheetName"] === "string" &&
+        typeof value["start"] === "number" &&
+        typeof value["count"] === "number"
+      );
     case "updateRowMetadata":
       return (
         typeof value["sheetName"] === "string" &&
@@ -371,6 +404,10 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case "applyBatch":
     case "applyAgentCommandBundle":
     case "renderCommit":
+    case "insertRows":
+    case "deleteRows":
+    case "insertColumns":
+    case "deleteColumns":
     case "updateRowMetadata":
     case "updateColumnMetadata":
     case "updateColumnWidth":
@@ -417,6 +454,18 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return;
     case "moveRange":
       engine.moveRange(payload.source, payload.target);
+      return;
+    case "insertRows":
+      engine.insertRows(payload.sheetName, payload.start, payload.count);
+      return;
+    case "deleteRows":
+      engine.deleteRows(payload.sheetName, payload.start, payload.count);
+      return;
+    case "insertColumns":
+      engine.insertColumns(payload.sheetName, payload.start, payload.count);
+      return;
+    case "deleteColumns":
+      engine.deleteColumns(payload.sheetName, payload.start, payload.count);
       return;
     case "updateRowMetadata":
       engine.updateRowMetadata(

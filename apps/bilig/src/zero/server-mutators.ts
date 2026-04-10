@@ -27,6 +27,7 @@ import {
   setFreezePaneArgsSchema,
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
+  structuralAxisMutationArgsSchema,
   undoLatestWorkbookChangeArgsSchema,
   updateColumnMetadataArgsSchema,
   updatePresenceArgsSchema,
@@ -629,6 +630,53 @@ export async function handleServerMutator(
               parsed.height,
               parsed.hidden,
             );
+          });
+        },
+        parsed.clientMutationId,
+        session,
+      );
+      return;
+    }
+
+    case "workbook.insertRows":
+    case "workbook.deleteRows":
+    case "workbook.insertColumns":
+    case "workbook.deleteColumns": {
+      const parsed = structuralAxisMutationArgsSchema.parse(args);
+      const kind =
+        name === "workbook.insertRows"
+          ? "insertRows"
+          : name === "workbook.deleteRows"
+            ? "deleteRows"
+            : name === "workbook.insertColumns"
+              ? "insertColumns"
+              : "deleteColumns";
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        {
+          kind,
+          sheetName: parsed.sheetName,
+          start: parsed.start,
+          count: parsed.count,
+        },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            switch (kind) {
+              case "insertRows":
+                draft.insertRows(parsed.sheetName, parsed.start, parsed.count);
+                break;
+              case "deleteRows":
+                draft.deleteRows(parsed.sheetName, parsed.start, parsed.count);
+                break;
+              case "insertColumns":
+                draft.insertColumns(parsed.sheetName, parsed.start, parsed.count);
+                break;
+              case "deleteColumns":
+                draft.deleteColumns(parsed.sheetName, parsed.start, parsed.count);
+                break;
+            }
           });
         },
         parsed.clientMutationId,

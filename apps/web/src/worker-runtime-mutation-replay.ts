@@ -72,6 +72,24 @@ export function applyPendingWorkbookMutationToEngine(
       }
       return;
     }
+    case "insertRows":
+    case "deleteRows":
+    case "insertColumns":
+    case "deleteColumns": {
+      const [sheetName, start, count] = args;
+      if (typeof sheetName === "string" && typeof start === "number" && typeof count === "number") {
+        if (method === "insertRows") {
+          engine.insertRows(sheetName, start, count);
+        } else if (method === "deleteRows") {
+          engine.deleteRows(sheetName, start, count);
+        } else if (method === "insertColumns") {
+          engine.insertColumns(sheetName, start, count);
+        } else {
+          engine.deleteColumns(sheetName, start, count);
+        }
+      }
+      return;
+    }
     case "updateRowMetadata": {
       const [sheetName, startRow, count, height, hidden] = args;
       if (

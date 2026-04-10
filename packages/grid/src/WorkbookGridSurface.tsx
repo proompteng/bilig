@@ -53,6 +53,10 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     hiddenRows: props.hiddenRows,
     onSetColumnHidden: props.onSetColumnHidden,
     onSetRowHidden: props.onSetRowHidden,
+    onInsertRows: props.onInsertRows,
+    onDeleteRows: props.onDeleteRows,
+    onInsertColumns: props.onInsertColumns,
+    onDeleteColumns: props.onDeleteColumns,
     onSelect: props.onSelect,
     onSelectionLabelChange: props.onSelectionLabelChange,
     onToggleBooleanCell: props.onToggleBooleanCell,
@@ -235,6 +239,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         <WorkbookGridContextMenu
           menuRef={interactions.contextMenu.menuRef}
           onClose={interactions.contextMenu.closeContextMenu}
+          onDeleteTarget={interactions.contextMenu.deleteTarget}
+          onInsertAfterTarget={interactions.contextMenu.insertAfterTarget}
+          onInsertBeforeTarget={interactions.contextMenu.insertBeforeTarget}
           onToggleTargetHidden={interactions.contextMenu.toggleTargetHidden}
           state={interactions.contextMenu.contextMenuState}
         />

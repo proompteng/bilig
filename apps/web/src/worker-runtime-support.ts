@@ -63,6 +63,10 @@ export interface WorkerEngine {
   fillRange(source: CellRangeRef, target: CellRangeRef): void;
   copyRange(source: CellRangeRef, target: CellRangeRef): void;
   moveRange(source: CellRangeRef, target: CellRangeRef): void;
+  insertRows(sheetName: string, start: number, count: number): void;
+  deleteRows(sheetName: string, start: number, count: number): void;
+  insertColumns(sheetName: string, start: number, count: number): void;
+  deleteColumns(sheetName: string, start: number, count: number): void;
   updateRowMetadata(
     sheetName: string,
     start: number,

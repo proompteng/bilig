@@ -13,6 +13,10 @@ export type WorkbookMutationMethod =
   | "fillRange"
   | "copyRange"
   | "moveRange"
+  | "insertRows"
+  | "deleteRows"
+  | "insertColumns"
+  | "deleteColumns"
   | "updateRowMetadata"
   | "updateColumnMetadata"
   | "setFreezePane"
@@ -71,6 +75,10 @@ export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutat
     value === "fillRange" ||
     value === "copyRange" ||
     value === "moveRange" ||
+    value === "insertRows" ||
+    value === "deleteRows" ||
+    value === "insertColumns" ||
+    value === "deleteColumns" ||
     value === "updateRowMetadata" ||
     value === "updateColumnMetadata" ||
     value === "setFreezePane" ||
@@ -195,6 +203,49 @@ export function buildZeroWorkbookMutation(
         throw new Error(`Invalid ${method} args`);
       }
       return mutators.workbook[method]({ documentId, clientMutationId, source, target });
+    }
+    case "insertRows":
+    case "deleteRows":
+    case "insertColumns":
+    case "deleteColumns": {
+      const [sheetName, start, count] = args;
+      if (typeof sheetName !== "string" || typeof start !== "number" || typeof count !== "number") {
+        throw new Error(`Invalid ${method} args`);
+      }
+      if (method === "insertRows") {
+        return mutators.workbook.insertRows({
+          documentId,
+          clientMutationId,
+          sheetName,
+          start,
+          count,
+        });
+      }
+      if (method === "deleteRows") {
+        return mutators.workbook.deleteRows({
+          documentId,
+          clientMutationId,
+          sheetName,
+          start,
+          count,
+        });
+      }
+      if (method === "insertColumns") {
+        return mutators.workbook.insertColumns({
+          documentId,
+          clientMutationId,
+          sheetName,
+          start,
+          count,
+        });
+      }
+      return mutators.workbook.deleteColumns({
+        documentId,
+        clientMutationId,
+        sheetName,
+        start,
+        count,
+      });
     }
     case "updateRowMetadata": {
       const [sheetName, startRow, count, height, hidden] = args;

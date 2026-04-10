@@ -147,9 +147,29 @@ function WorkerWorkbookAppInner({
                   .invokeColumnVisibilityMutation(app.selection.sheetName, columnIndex, hidden)
                   .catch(app.reportRuntimeError);
               }}
+              onInsertColumns={(startCol: number, count: number) => {
+                void app
+                  .invokeInsertColumnsMutation(app.selection.sheetName, startCol, count)
+                  .catch(app.reportRuntimeError);
+              }}
+              onDeleteColumns={(startCol: number, count: number) => {
+                void app
+                  .invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count)
+                  .catch(app.reportRuntimeError);
+              }}
               onSetRowHidden={(rowIndex: number, hidden: boolean) => {
                 void app
                   .invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden)
+                  .catch(app.reportRuntimeError);
+              }}
+              onInsertRows={(startRow: number, count: number) => {
+                void app
+                  .invokeInsertRowsMutation(app.selection.sheetName, startRow, count)
+                  .catch(app.reportRuntimeError);
+              }}
+              onDeleteRows={(startRow: number, count: number) => {
+                void app
+                  .invokeDeleteRowsMutation(app.selection.sheetName, startRow, count)
                   .catch(app.reportRuntimeError);
               }}
               onVisibleViewportChange={app.handleVisibleViewportChange}

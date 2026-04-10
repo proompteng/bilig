@@ -110,6 +110,44 @@ describe("workbook events", () => {
     ).toBeNull();
   });
 
+  it("replays structural insert and delete events onto a warm engine", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "event-test",
+    });
+    await engine.ready();
+    engine.updateRowMetadata("Sheet1", 1, 1, 30, false);
+    engine.updateColumnMetadata("Sheet1", 3, 1, 140, false);
+
+    applyWorkbookEvent(engine, {
+      kind: "insertRows",
+      sheetName: "Sheet1",
+      start: 1,
+      count: 2,
+    });
+    applyWorkbookEvent(engine, {
+      kind: "deleteColumns",
+      sheetName: "Sheet1",
+      start: 3,
+      count: 1,
+    });
+
+    expect(engine.getRowAxisEntries("Sheet1")).toEqual([
+      { id: "row-2", index: 1 },
+      { id: "row-3", index: 2 },
+      { id: "row-1", index: 3, size: 30, hidden: false },
+    ]);
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([]);
+    expect(
+      deriveDirtyRegions({
+        kind: "insertRows",
+        sheetName: "Sheet1",
+        start: 1,
+        count: 2,
+      }),
+    ).toBeNull();
+  });
+
   it("replays redoChange events from persisted redo bundles", async () => {
     const engine = new SpreadsheetEngine({
       workbookName: "doc-1",

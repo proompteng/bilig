@@ -48,6 +48,24 @@ describe("workbook event guards", () => {
 
     expect(
       isWorkbookEventPayload({
+        kind: "insertRows",
+        sheetName: "Sheet1",
+        start: 1,
+        count: 2,
+      }),
+    ).toBe(true);
+
+    expect(
+      isWorkbookEventPayload({
+        kind: "deleteColumns",
+        sheetName: "Sheet1",
+        start: 3,
+        count: 1,
+      }),
+    ).toBe(true);
+
+    expect(
+      isWorkbookEventPayload({
         kind: "redoChange",
         targetRevision: 12,
         targetSummary: "Updated Sheet1!A1",
