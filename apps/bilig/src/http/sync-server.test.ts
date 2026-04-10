@@ -71,6 +71,9 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async appendWorkbookAgentRun() {
       throw new Error("not used");
     },
+    async listWorkbookAgentThreadSummaries() {
+      return [];
+    },
     async loadWorkbookAgentThreadState() {
       return null;
     },
@@ -359,6 +362,94 @@ describe("sync-server authoritative events", () => {
 });
 
 describe("sync-server workbook agent", () => {
+  it("lists durable workbook agent threads through the monolith route", async () => {
+    const listThreads = vi.fn(async () => [
+      {
+        threadId: "thr-2",
+        scope: "shared" as const,
+        updatedAtUnixMs: 200,
+        entryCount: 3,
+        hasPendingBundle: false,
+      },
+      {
+        threadId: "thr-1",
+        scope: "private" as const,
+        updatedAtUnixMs: 100,
+        entryCount: 1,
+        hasPendingBundle: true,
+      },
+    ]);
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        async createSession() {
+          throw new Error("not used");
+        },
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        listThreads,
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v2/documents/doc-1/agent/threads",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(listThreads).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+        }),
+      );
+      expect(response.json()).toEqual([
+        {
+          threadId: "thr-2",
+          scope: "shared",
+          updatedAtUnixMs: 200,
+          entryCount: 3,
+          hasPendingBundle: false,
+        },
+        {
+          threadId: "thr-1",
+          scope: "private",
+          updatedAtUnixMs: 100,
+          entryCount: 1,
+          hasPendingBundle: true,
+        },
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("creates workbook agent sessions through the monolith route", async () => {
     const createSession = vi.fn(async () => createAgentSessionSnapshot());
 
@@ -384,6 +475,9 @@ describe("sync-server workbook agent", () => {
         },
         async replayExecutionRecord() {
           throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
         },
         getSnapshot() {
           throw new Error("not used");
@@ -467,6 +561,9 @@ describe("sync-server workbook agent", () => {
         async replayExecutionRecord() {
           throw new Error("not used");
         },
+        async listThreads() {
+          return [];
+        },
         getSnapshot() {
           throw new Error("not used");
         },
@@ -536,6 +633,9 @@ describe("sync-server workbook agent", () => {
         async replayExecutionRecord() {
           throw new Error("not used");
         },
+        async listThreads() {
+          return [];
+        },
         getSnapshot() {
           throw new Error("not used");
         },
@@ -594,6 +694,9 @@ describe("sync-server workbook agent", () => {
         dismissPendingBundle,
         async replayExecutionRecord() {
           throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
         },
         getSnapshot() {
           throw new Error("not used");
@@ -702,6 +805,9 @@ describe("sync-server workbook agent", () => {
           throw new Error("not used");
         },
         replayExecutionRecord,
+        async listThreads() {
+          return [];
+        },
         getSnapshot() {
           throw new Error("not used");
         },
@@ -763,6 +869,9 @@ describe("sync-server workbook agent", () => {
         },
         async replayExecutionRecord() {
           throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
         },
         getSnapshot() {
           throw createWorkbookAgentServiceError({

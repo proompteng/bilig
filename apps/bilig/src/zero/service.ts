@@ -52,11 +52,13 @@ import {
 } from "./workbook-agent-run-store.js";
 import {
   ensureWorkbookChatThreadSchema,
+  listWorkbookAgentThreadSummaries,
   loadWorkbookAgentThreadState,
   saveWorkbookAgentThreadState,
   type WorkbookAgentThreadStateRecord,
 } from "./workbook-chat-thread-store.js";
 import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
+import type { WorkbookAgentThreadSummary } from "@bilig/contracts";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 
 export interface ZeroSyncService {
@@ -82,6 +84,10 @@ export interface ZeroSyncService {
     limit?: number,
   ): Promise<WorkbookAgentExecutionRecord[]>;
   appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void>;
+  listWorkbookAgentThreadSummaries(
+    documentId: string,
+    actorUserId: string,
+  ): Promise<WorkbookAgentThreadSummary[]>;
   loadWorkbookAgentThreadState(
     documentId: string,
     actorUserId: string,
@@ -165,6 +171,10 @@ class DisabledZeroSyncService implements ZeroSyncService {
   }
 
   async appendWorkbookAgentRun(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async listWorkbookAgentThreadSummaries(): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
 
@@ -436,6 +446,16 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void> {
     await appendWorkbookAgentRun(this.pool, record);
+  }
+
+  async listWorkbookAgentThreadSummaries(
+    documentId: string,
+    actorUserId: string,
+  ): Promise<WorkbookAgentThreadSummary[]> {
+    return await listWorkbookAgentThreadSummaries(this.pool, {
+      documentId,
+      actorUserId,
+    });
   }
 
   async loadWorkbookAgentThreadState(

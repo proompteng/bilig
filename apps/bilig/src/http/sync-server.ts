@@ -320,6 +320,23 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     },
   );
 
+  app.get(
+    "/v2/documents/:documentId/agent/threads",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.listThreads({
+          documentId: request.params.documentId,
+          session,
+        });
+      });
+    },
+  );
+
   app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/context",
     async (

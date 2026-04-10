@@ -79,6 +79,9 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
     async appendWorkbookAgentRun() {
       throw new Error("not used");
     },
+    async listWorkbookAgentThreadSummaries() {
+      return [];
+    },
     async loadWorkbookAgentThreadState() {
       return null;
     },

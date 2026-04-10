@@ -1,6 +1,7 @@
 import type {
   WorkbookAgentSessionSnapshot,
   WorkbookAgentStreamEvent,
+  WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
 } from "@bilig/contracts";
@@ -150,6 +151,7 @@ interface WorkbookAgentSessionState {
   readonly sessionId: string;
   readonly documentId: string;
   readonly userId: string;
+  scope: "private" | "shared";
   threadId: string;
   snapshot: MutableWorkbookAgentSessionSnapshot;
   optimisticUserEntryIdByTurn: Map<string, string>;
@@ -214,6 +216,10 @@ export interface WorkbookAgentService {
     recordId: string;
     session: SessionIdentity;
   }): Promise<WorkbookAgentSessionSnapshot>;
+  listThreads(input: {
+    documentId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentThreadSummary[]>;
   getSnapshot(input: {
     documentId: string;
     sessionId: string;
@@ -251,6 +257,10 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   async replayExecutionRecord(): Promise<never> {
+    throw new Error("Workbook agent service is not configured");
+  }
+
+  async listThreads(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
@@ -299,7 +309,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       documentId: sessionState.documentId,
       threadId: sessionState.threadId,
       actorUserId: sessionState.userId,
-      scope: "private",
+      scope: sessionState.scope,
       context: sessionState.snapshot.context,
       entries: sessionState.snapshot.entries,
       pendingBundle: sessionState.snapshot.pendingBundle,
@@ -377,6 +387,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       sessionId,
       documentId: input.documentId,
       userId: input.session.userID,
+      scope: parsed.scope ?? durableThreadState?.scope ?? "private",
       threadId: thread.id,
       snapshot,
       optimisticUserEntryIdByTurn: new Map(),
@@ -651,6 +662,16 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.sessionId);
     return cloneSnapshot(sessionState.snapshot);
+  }
+
+  async listThreads(input: {
+    documentId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentThreadSummary[]> {
+    return await this.zeroSyncService.listWorkbookAgentThreadSummaries(
+      input.documentId,
+      input.session.userID,
+    );
   }
 
   getSnapshot(input: {

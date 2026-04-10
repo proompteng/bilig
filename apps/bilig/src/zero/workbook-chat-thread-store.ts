@@ -4,6 +4,7 @@ import {
   type WorkbookAgentCommandBundle,
 } from "@bilig/agent-api";
 import type {
+  WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentToolStatus,
   WorkbookAgentUiContext,
@@ -63,6 +64,14 @@ interface WorkbookPendingBundleRow extends QueryResultRow {
   readonly commandsJson?: unknown;
   readonly affectedRangesJson?: unknown;
   readonly estimatedAffectedCells?: unknown;
+}
+
+interface WorkbookChatThreadSummaryRow extends QueryResultRow {
+  readonly threadId?: unknown;
+  readonly scope?: unknown;
+  readonly updatedAtUnixMs?: unknown;
+  readonly entryCount?: unknown;
+  readonly hasPendingBundle?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -248,6 +257,29 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
       ON workbook_chat_thread (workbook_id, actor_user_id, updated_at_unix_ms DESC)
   `);
+}
+
+function normalizeThreadSummary(
+  row: WorkbookChatThreadSummaryRow,
+): WorkbookAgentThreadSummary | null {
+  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
+  const entryCount = parseNumericValue(row.entryCount);
+  if (
+    typeof row.threadId !== "string" ||
+    (row.scope !== "private" && row.scope !== "shared") ||
+    updatedAtUnixMs === null ||
+    entryCount === null ||
+    typeof row.hasPendingBundle !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    threadId: row.threadId,
+    scope: row.scope,
+    updatedAtUnixMs,
+    entryCount,
+    hasPendingBundle: row.hasPendingBundle,
+  };
 }
 
 export async function saveWorkbookAgentThreadState(
@@ -494,4 +526,42 @@ export async function loadWorkbookAgentThreadState(
     pendingBundle,
     updatedAtUnixMs,
   };
+}
+
+export async function listWorkbookAgentThreadSummaries(
+  db: Queryable,
+  input: {
+    documentId: string;
+    actorUserId: string;
+  },
+): Promise<WorkbookAgentThreadSummary[]> {
+  const result = await db.query<WorkbookChatThreadSummaryRow>(
+    `
+      SELECT
+        thread.thread_id AS "threadId",
+        thread.scope AS "scope",
+        thread.updated_at_unix_ms AS "updatedAtUnixMs",
+        COALESCE(item_counts.entry_count, 0) AS "entryCount",
+        pending.bundle_id IS NOT NULL AS "hasPendingBundle"
+      FROM workbook_chat_thread AS thread
+      LEFT JOIN (
+        SELECT workbook_id, thread_id, actor_user_id, COUNT(*)::integer AS entry_count
+        FROM workbook_chat_item
+        GROUP BY workbook_id, thread_id, actor_user_id
+      ) AS item_counts
+        ON item_counts.workbook_id = thread.workbook_id
+       AND item_counts.thread_id = thread.thread_id
+       AND item_counts.actor_user_id = thread.actor_user_id
+      LEFT JOIN workbook_pending_bundle AS pending
+        ON pending.workbook_id = thread.workbook_id
+       AND pending.thread_id = thread.thread_id
+       AND pending.actor_user_id = thread.actor_user_id
+      WHERE thread.workbook_id = $1 AND thread.actor_user_id = $2
+      ORDER BY thread.updated_at_unix_ms DESC
+    `,
+    [input.documentId, input.actorUserId],
+  );
+  return result.rows
+    .map((row) => normalizeThreadSummary(row))
+    .filter((row): row is WorkbookAgentThreadSummary => row !== null);
 }

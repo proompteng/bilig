@@ -90,6 +90,20 @@ export type WorkbookAgentSessionStatus = Schema.Schema.Type<
   typeof WorkbookAgentSessionStatusSchema
 >;
 
+export const WorkbookAgentThreadScopeSchema = Schema.Literal("private", "shared");
+export type WorkbookAgentThreadScope = Schema.Schema.Type<typeof WorkbookAgentThreadScopeSchema>;
+
+export const WorkbookAgentThreadSummarySchema = Schema.Struct({
+  threadId: Schema.String,
+  scope: WorkbookAgentThreadScopeSchema,
+  updatedAtUnixMs: Schema.Number,
+  entryCount: Schema.Number,
+  hasPendingBundle: Schema.Boolean,
+});
+export type WorkbookAgentThreadSummary = Schema.Schema.Type<
+  typeof WorkbookAgentThreadSummarySchema
+>;
+
 export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   sessionId: Schema.String,
   documentId: Schema.String,

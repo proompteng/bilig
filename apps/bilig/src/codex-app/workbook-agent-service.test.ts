@@ -111,6 +111,9 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
       return [];
     },
     async appendWorkbookAgentRun() {},
+    async listWorkbookAgentThreadSummaries() {
+      return [];
+    },
     async loadWorkbookAgentThreadState() {
       return null;
     },

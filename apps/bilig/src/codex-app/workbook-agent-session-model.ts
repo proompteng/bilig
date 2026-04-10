@@ -6,6 +6,7 @@ import { z } from "zod";
 export const createSessionBodySchema = z.object({
   sessionId: z.string().min(1).optional(),
   threadId: z.string().min(1).optional(),
+  scope: z.enum(["private", "shared"]).optional(),
   context: z
     .object({
       selection: z.object({

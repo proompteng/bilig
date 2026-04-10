@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  listWorkbookAgentThreadSummaries,
   loadWorkbookAgentThreadState,
   saveWorkbookAgentThreadState,
 } from "../workbook-chat-thread-store.js";
@@ -213,5 +214,51 @@ describe("workbook-chat-thread-store", () => {
     });
 
     expect(loaded).toEqual(state);
+  });
+
+  it("lists durable thread summaries ordered by most recent activity", async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes("FROM workbook_chat_thread AS thread")
+          ? [
+              {
+                threadId: "thr-2",
+                scope: "shared",
+                updatedAtUnixMs: 200,
+                entryCount: 3,
+                hasPendingBundle: false,
+              } satisfies QueryResultRow,
+              {
+                threadId: "thr-1",
+                scope: "private",
+                updatedAtUnixMs: 100,
+                entryCount: 1,
+                hasPendingBundle: true,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const summaries = await listWorkbookAgentThreadSummaries(queryable, {
+      documentId: "doc-1",
+      actorUserId: "alex@example.com",
+    });
+
+    expect(summaries).toEqual([
+      {
+        threadId: "thr-2",
+        scope: "shared",
+        updatedAtUnixMs: 200,
+        entryCount: 3,
+        hasPendingBundle: false,
+      },
+      {
+        threadId: "thr-1",
+        scope: "private",
+        updatedAtUnixMs: 100,
+        entryCount: 1,
+        hasPendingBundle: true,
+      },
+    ]);
   });
 });
