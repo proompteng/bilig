@@ -72,9 +72,7 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
 }
 
 function isWorkflowStepStatus(value: unknown): value is WorkbookAgentWorkflowStep["status"] {
-  return (
-    value === "pending" || value === "running" || value === "completed" || value === "failed"
-  );
+  return value === "pending" || value === "running" || value === "completed" || value === "failed";
 }
 
 function isWorkflowStep(value: unknown): value is WorkbookAgentWorkflowStep {
@@ -411,33 +409,35 @@ export async function upsertWorkbookWorkflowRun(
     `,
     [input.documentId, input.run.runId],
   );
-  for (const [stepOrder, step] of input.run.steps.entries()) {
-    await db.query(
-      `
-        INSERT INTO workbook_workflow_step (
-          workbook_id,
-          run_id,
-          step_id,
-          step_order,
-          label,
-          status,
-          summary,
-          updated_at_unix_ms
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `,
-      [
-        input.documentId,
-        input.run.runId,
-        step.stepId,
-        stepOrder,
-        step.label,
-        step.status,
-        step.summary,
-        step.updatedAtUnixMs,
-      ],
-    );
-  }
+  await Promise.all(
+    input.run.steps.map((step, stepOrder) =>
+      db.query(
+        `
+          INSERT INTO workbook_workflow_step (
+            workbook_id,
+            run_id,
+            step_id,
+            step_order,
+            label,
+            status,
+            summary,
+            updated_at_unix_ms
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
+        [
+          input.documentId,
+          input.run.runId,
+          step.stepId,
+          stepOrder,
+          step.label,
+          step.status,
+          step.summary,
+          step.updatedAtUnixMs,
+        ],
+      ),
+    ),
+  );
   if (input.run.artifact) {
     await db.query(
       `
