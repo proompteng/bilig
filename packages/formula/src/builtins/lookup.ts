@@ -5,9 +5,12 @@ import { createLookupArrayShapeBuiltins } from "./lookup-array-shape-builtins.js
 import { createLookupCriteriaBuiltins } from "./lookup-criteria-builtins.js";
 import { createLookupDatabaseBuiltins } from "./lookup-database-builtins.js";
 import { createLookupFinancialBuiltins } from "./lookup-financial-builtins.js";
+import { createLookupHypothesisBuiltins } from "./lookup-hypothesis-builtins.js";
+import { createLookupMatrixBuiltins } from "./lookup-matrix-builtins.js";
 import { createLookupOrderStatisticsBuiltins } from "./lookup-order-statistics-builtins.js";
 import { createLookupReferenceBuiltins } from "./lookup-reference-builtins.js";
 import { createLookupRegressionBuiltins } from "./lookup-regression-builtins.js";
+import { createLookupSortFilterBuiltins } from "./lookup-sort-filter-builtins.js";
 
 export interface RangeBuiltinArgument {
   kind: "range";
@@ -670,82 +673,6 @@ function tTestResult(
     : errorValue(ErrorCode.Value);
 }
 
-function determinantOf(matrix: number[][]): number {
-  const size = matrix.length;
-  const working = matrix.map((row) => [...row]);
-  let determinant = 1;
-  let sign = 1;
-  for (let pivot = 0; pivot < size; pivot += 1) {
-    let pivotRow = pivot;
-    while (pivotRow < size && working[pivotRow]![pivot] === 0) {
-      pivotRow += 1;
-    }
-    if (pivotRow === size) {
-      return 0;
-    }
-    if (pivotRow !== pivot) {
-      const pivotValues = working[pivot];
-      const swapValues = working[pivotRow];
-      if (!pivotValues || !swapValues) {
-        return 0;
-      }
-      [working[pivot], working[pivotRow]] = [swapValues, pivotValues];
-      sign *= -1;
-    }
-    const pivotValue = working[pivot]![pivot]!;
-    determinant *= pivotValue;
-    for (let row = pivot + 1; row < size; row += 1) {
-      const factor = working[row]![pivot]! / pivotValue;
-      for (let col = pivot; col < size; col += 1) {
-        working[row]![col] = working[row]![col]! - factor * working[pivot]![col]!;
-      }
-    }
-  }
-  return determinant * sign;
-}
-
-function inverseOf(matrix: number[][]): number[][] | undefined {
-  const size = matrix.length;
-  const augmented = matrix.map((row, rowIndex) => [
-    ...row,
-    ...Array.from({ length: size }, (_, colIndex) => (rowIndex === colIndex ? 1 : 0)),
-  ]);
-  for (let pivot = 0; pivot < size; pivot += 1) {
-    let pivotRow = pivot;
-    while (pivotRow < size && augmented[pivotRow]![pivot] === 0) {
-      pivotRow += 1;
-    }
-    if (pivotRow === size) {
-      return undefined;
-    }
-    if (pivotRow !== pivot) {
-      const pivotValues = augmented[pivot];
-      const swapValues = augmented[pivotRow];
-      if (!pivotValues || !swapValues) {
-        return undefined;
-      }
-      [augmented[pivot], augmented[pivotRow]] = [swapValues, pivotValues];
-    }
-    const pivotValue = augmented[pivot]![pivot]!;
-    if (pivotValue === 0) {
-      return undefined;
-    }
-    for (let col = 0; col < size * 2; col += 1) {
-      augmented[pivot]![col] = augmented[pivot]![col]! / pivotValue;
-    }
-    for (let row = 0; row < size; row += 1) {
-      if (row === pivot) {
-        continue;
-      }
-      const factor = augmented[row]![pivot]!;
-      for (let col = 0; col < size * 2; col += 1) {
-        augmented[row]![col] = augmented[row]![col]! - factor * augmented[pivot]![col]!;
-      }
-    }
-  }
-  return augmented.map((row) => row.slice(size));
-}
-
 function flattenNumbers(arg: LookupBuiltinArgument): number[] | CellValue {
   if (!isRangeArg(arg)) {
     const numeric = toNumber(arg);
@@ -762,52 +689,12 @@ function flattenNumbers(arg: LookupBuiltinArgument): number[] | CellValue {
   return values;
 }
 
-function sumOfNumbers(arg: LookupBuiltinArgument): number | CellValue {
-  const values = flattenNumbers(arg);
-  return Array.isArray(values) ? values.reduce((sum, value) => sum + value, 0) : values;
-}
-
 function pickRangeRow(range: RangeBuiltinArgument, row: number): CellValue[] {
   const values: CellValue[] = [];
   for (let col = 0; col < range.cols; col += 1) {
     values.push(getRangeValue(range, row, col));
   }
   return values;
-}
-
-function pickRangeCol(range: RangeBuiltinArgument, col: number): CellValue[] {
-  const values: CellValue[] = [];
-  for (let row = 0; row < range.rows; row += 1) {
-    values.push(getRangeValue(range, row, col));
-  }
-  return values;
-}
-
-function normalizeKeyValue(value: CellValue): CellValue {
-  if (value.tag !== ValueTag.String) {
-    return value;
-  }
-  return {
-    tag: ValueTag.String,
-    value: value.value.toUpperCase(),
-    stringId: value.stringId,
-  };
-}
-
-function rowKey(range: RangeBuiltinArgument, row: number): string | undefined {
-  const values = pickRangeRow(range, row);
-  if (values.some(isError)) {
-    return undefined;
-  }
-  return JSON.stringify(values.map(normalizeKeyValue));
-}
-
-function colKey(range: RangeBuiltinArgument, col: number): string | undefined {
-  const values = pickRangeCol(range, col);
-  if (values.some(isError)) {
-    return undefined;
-  }
-  return JSON.stringify(values.map(normalizeKeyValue));
 }
 
 function hasWildcardPattern(pattern: string): boolean {
@@ -929,6 +816,41 @@ const lookupFinancialBuiltins = createLookupFinancialBuiltins({
   collectNumericSeries,
 });
 
+const lookupHypothesisBuiltins = createLookupHypothesisBuiltins({
+  errorValue,
+  chiSquareTestResult,
+  fTestResult,
+  zTestResult,
+  tTestResult,
+});
+
+const lookupMatrixBuiltins = createLookupMatrixBuiltins({
+  errorValue,
+  numberResult,
+  arrayResult,
+  isRangeArg,
+  requireCellRange,
+  findFirstNonRange,
+  areRangeArgs,
+  toNumber,
+  toNumericMatrix,
+  flattenNumbers,
+});
+
+const lookupSortFilterBuiltins = createLookupSortFilterBuiltins({
+  errorValue,
+  arrayResult,
+  isError,
+  isRangeArg,
+  toBoolean,
+  toInteger,
+  requireCellRange,
+  toCellRange,
+  compareScalars,
+  getRangeValue,
+  pickRangeRow,
+});
+
 const lookupDatabaseBuiltins = createLookupDatabaseBuiltins({
   errorValue,
   numberResult,
@@ -986,536 +908,11 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
   ...lookupCriteriaBuiltins,
   ...lookupDatabaseBuiltins,
   ...lookupFinancialBuiltins,
+  ...lookupHypothesisBuiltins,
   ...lookupRegressionBuiltins,
-  "CHISQ.TEST": (actualArg, expectedArg) => {
-    return chiSquareTestResult(actualArg, expectedArg);
-  },
-  CHITEST: (actualArg, expectedArg) => {
-    return chiSquareTestResult(actualArg, expectedArg);
-  },
-  "LEGACY.CHITEST": (actualArg, expectedArg) => {
-    return chiSquareTestResult(actualArg, expectedArg);
-  },
-  "F.TEST": (firstArg, secondArg) => {
-    return fTestResult(firstArg, secondArg);
-  },
-  FTEST: (firstArg, secondArg) => {
-    return fTestResult(firstArg, secondArg);
-  },
-  "Z.TEST": (arrayArg, xArg, sigmaArg) => {
-    return zTestResult(arrayArg, xArg, sigmaArg);
-  },
-  ZTEST: (arrayArg, xArg, sigmaArg) => {
-    return zTestResult(arrayArg, xArg, sigmaArg);
-  },
-  "T.TEST": (firstArg, secondArg, tailsArg, typeArg) => {
-    return tTestResult(firstArg, secondArg, tailsArg, typeArg);
-  },
-  TTEST: (firstArg, secondArg, tailsArg, typeArg) => {
-    return tTestResult(firstArg, secondArg, tailsArg, typeArg);
-  },
   ...lookupOrderStatisticsBuiltins,
-  SORT: (arrayArg, sortIndexArg, sortOrderArg = { tag: ValueTag.Number, value: 1 }, byColArg) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(sortIndexArg) || isRangeArg(sortOrderArg) || isRangeArg(byColArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(sortOrderArg)) {
-      return sortOrderArg;
-    }
-    if (isError(byColArg)) {
-      return byColArg;
-    }
-
-    const sortByCol = byColArg === undefined ? false : toBoolean(byColArg);
-    const sortOrder = sortOrderArg ? toInteger(sortOrderArg) : 1;
-    const sortIndex = sortIndexArg === undefined ? 1 : toInteger(sortIndexArg);
-    if (sortOrder === undefined || ![1, -1].includes(sortOrder)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (sortIndex === undefined || sortIndex < 1) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    let sortError: CellValue | undefined;
-    if (array.rows === 1 || array.cols === 1) {
-      const values = [...array.values];
-      const order: number[] = Array.from({ length: values.length }, (_, index) => index);
-      order.sort((left, right) => {
-        const cmp = compareScalars(values[left]!, values[right]!);
-        if (cmp === undefined) {
-          sortError = errorValue(ErrorCode.Value);
-          return 0;
-        }
-        return cmp * sortOrder || left - right;
-      });
-      if (sortError) {
-        return sortError;
-      }
-      const sortedValues = order.map((index) => values[index]!);
-      return arrayResult(sortedValues, array.rows, array.cols);
-    }
-    if (sortByCol) {
-      if (sortIndex > array.rows) {
-        return errorValue(ErrorCode.Value);
-      }
-      const rowIndex = sortIndex - 1;
-      const colOrder = Array.from({ length: array.cols }, (_, col) => col);
-      colOrder.sort((left, right) => {
-        const cmp = compareScalars(
-          getRangeValue(array, rowIndex, left),
-          getRangeValue(array, rowIndex, right),
-        );
-        if (cmp === undefined) {
-          sortError = errorValue(ErrorCode.Value);
-          return 0;
-        }
-        return cmp * sortOrder || left - right;
-      });
-      if (sortError) {
-        return sortError;
-      }
-      const values: CellValue[] = [];
-      for (let row = 0; row < array.rows; row += 1) {
-        for (const col of colOrder) {
-          values.push(getRangeValue(array, row, col));
-        }
-      }
-      return arrayResult(values, array.rows, array.cols);
-    }
-    if (sortIndex > array.cols) {
-      return errorValue(ErrorCode.Value);
-    }
-    const columnIndex = sortIndex - 1;
-    const rowOrder = Array.from({ length: array.rows }, (_, row) => row);
-    rowOrder.sort((left, right) => {
-      const cmp = compareScalars(
-        getRangeValue(array, left, columnIndex),
-        getRangeValue(array, right, columnIndex),
-      );
-      if (cmp === undefined) {
-        sortError = errorValue(ErrorCode.Value);
-        return 0;
-      }
-      return cmp * sortOrder || left - right;
-    });
-    if (sortError) {
-      return sortError;
-    }
-    const values: CellValue[] = [];
-    for (const row of rowOrder) {
-      values.push(...pickRangeRow(array, row));
-    }
-    return arrayResult(values, array.rows, array.cols);
-  },
-  SORTBY: (arrayArg, ...criteriaArgs) => {
-    const array = toCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (array.rows > 1 && array.cols > 1) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (criteriaArgs.length === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const source = array.values;
-    const indexes = Array.from({ length: source.length }, (_, index) => index);
-    const criteria: { values: CellValue[]; order: number }[] = [];
-    for (let index = 0; index < criteriaArgs.length; index += 1) {
-      const criteriaArg = criteriaArgs[index]!;
-      const byRange = toCellRange(criteriaArg);
-      if (!isRangeArg(byRange)) {
-        return byRange;
-      }
-      const nextArg = criteriaArgs[index + 1];
-      if (nextArg !== undefined && !isRangeArg(nextArg) && !isError(nextArg)) {
-        const orderValue = toInteger(nextArg);
-        if (orderValue === undefined || ![1, -1].includes(orderValue)) {
-          return errorValue(ErrorCode.Value);
-        }
-        criteria.push({ values: byRange.values, order: orderValue });
-        index += 1;
-        continue;
-      }
-      criteria.push({ values: byRange.values, order: 1 });
-    }
-    const expectedLength = source.length;
-    if (
-      criteria.some(
-        (criterion) => criterion.values.length !== 1 && criterion.values.length !== expectedLength,
-      )
-    ) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    let sortError: CellValue | undefined;
-    indexes.sort((left, right) => {
-      if (left === right) {
-        return 0;
-      }
-      for (const criterion of criteria) {
-        const leftValue =
-          criterion.values.length === 1
-            ? (criterion.values[0] ?? array.values[0]!)
-            : criterion.values[left]!;
-        const rightValue =
-          criterion.values.length === 1
-            ? (criterion.values[0] ?? array.values[0]!)
-            : criterion.values[right]!;
-        const cmp = compareScalars(leftValue, rightValue);
-        if (cmp === undefined) {
-          sortError = errorValue(ErrorCode.Value);
-          return 0;
-        }
-        if (cmp !== 0) {
-          return cmp * criterion.order;
-        }
-      }
-      return left - right;
-    });
-    if (sortError) {
-      return sortError;
-    }
-    return arrayResult(
-      indexes.map((index) => array.values[index] ?? { tag: ValueTag.Empty }),
-      array.rows,
-      array.cols,
-    );
-  },
-  SUMPRODUCT: (...args) => {
-    if (args.length === 0) {
-      return errorValue(ErrorCode.Value);
-    }
-    const ranges = args.map((arg) => requireCellRange(arg));
-    const rangeError = findFirstNonRange(ranges);
-    if (rangeError) {
-      return rangeError;
-    }
-    if (!areRangeArgs(ranges)) {
-      return errorValue(ErrorCode.Value);
-    }
-    const typedRanges = ranges;
-    const expectedLength = typedRanges[0]!.values.length;
-    if (typedRanges.some((range) => range.values.length !== expectedLength)) {
-      return errorValue(ErrorCode.Value);
-    }
-    let sum = 0;
-    for (let index = 0; index < expectedLength; index += 1) {
-      let product = 1;
-      for (const range of typedRanges) {
-        product *= toNumber(range.values[index]!) ?? 0;
-      }
-      sum += product;
-    }
-    return { tag: ValueTag.Number, value: sum };
-  },
-  SUMX2MY2: (xArg, yArg) => {
-    const xValues = flattenNumbers(xArg);
-    const yValues = flattenNumbers(yArg);
-    if (!Array.isArray(xValues)) {
-      return xValues;
-    }
-    if (!Array.isArray(yValues)) {
-      return yValues;
-    }
-    if (xValues.length !== yValues.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    let sum = 0;
-    for (let index = 0; index < xValues.length; index += 1) {
-      sum += xValues[index]! ** 2 - yValues[index]! ** 2;
-    }
-    return { tag: ValueTag.Number, value: sum };
-  },
-  SUMX2PY2: (xArg, yArg) => {
-    const xValues = flattenNumbers(xArg);
-    const yValues = flattenNumbers(yArg);
-    if (!Array.isArray(xValues)) {
-      return xValues;
-    }
-    if (!Array.isArray(yValues)) {
-      return yValues;
-    }
-    if (xValues.length !== yValues.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    let sum = 0;
-    for (let index = 0; index < xValues.length; index += 1) {
-      sum += xValues[index]! ** 2 + yValues[index]! ** 2;
-    }
-    return { tag: ValueTag.Number, value: sum };
-  },
-  SUMXMY2: (xArg, yArg) => {
-    const xValues = flattenNumbers(xArg);
-    const yValues = flattenNumbers(yArg);
-    if (!Array.isArray(xValues)) {
-      return xValues;
-    }
-    if (!Array.isArray(yValues)) {
-      return yValues;
-    }
-    if (xValues.length !== yValues.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    let sum = 0;
-    for (let index = 0; index < xValues.length; index += 1) {
-      sum += (xValues[index]! - yValues[index]!) ** 2;
-    }
-    return { tag: ValueTag.Number, value: sum };
-  },
-  MDETERM: (matrixArg) => {
-    const matrix = toNumericMatrix(matrixArg);
-    if (!Array.isArray(matrix)) {
-      return matrix;
-    }
-    if (matrix.length === 0 || matrix.some((row) => row.length !== matrix.length)) {
-      return errorValue(ErrorCode.Value);
-    }
-    return { tag: ValueTag.Number, value: determinantOf(matrix) };
-  },
-  MINVERSE: (matrixArg) => {
-    const matrix = toNumericMatrix(matrixArg);
-    if (!Array.isArray(matrix)) {
-      return matrix;
-    }
-    if (matrix.length === 0 || matrix.some((row) => row.length !== matrix.length)) {
-      return errorValue(ErrorCode.Value);
-    }
-    const inverse = inverseOf(matrix);
-    if (!inverse) {
-      return errorValue(ErrorCode.Value);
-    }
-    return arrayResult(
-      inverse.flat().map((value) => ({ tag: ValueTag.Number, value })),
-      matrix.length,
-      matrix.length,
-    );
-  },
-  MMULT: (leftArg, rightArg) => {
-    const left = toNumericMatrix(leftArg);
-    const right = toNumericMatrix(rightArg);
-    if (!Array.isArray(left)) {
-      return left;
-    }
-    if (!Array.isArray(right)) {
-      return right;
-    }
-    if (left.length === 0 || right.length === 0 || left[0]!.length !== right.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    const rows = left.length;
-    const cols = right[0]!.length;
-    const inner = right.length;
-    const values: CellValue[] = [];
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        let sum = 0;
-        for (let index = 0; index < inner; index += 1) {
-          sum += left[row]![index]! * right[index]![col]!;
-        }
-        values.push({ tag: ValueTag.Number, value: sum });
-      }
-    }
-    return arrayResult(values, rows, cols);
-  },
-  PERCENTOF: (subsetArg, totalArg) => {
-    const subset = sumOfNumbers(subsetArg);
-    const total = sumOfNumbers(totalArg);
-    if (typeof subset !== "number") {
-      return subset;
-    }
-    if (typeof total !== "number") {
-      return total;
-    }
-    if (total === 0) {
-      return errorValue(ErrorCode.Div0);
-    }
-    return { tag: ValueTag.Number, value: subset / total };
-  },
-  FILTER: (arrayArg, includeArg, ifEmptyArg = { tag: ValueTag.Error, code: ErrorCode.Value }) => {
-    const array = requireCellRange(arrayArg);
-    const include = requireCellRange(includeArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (!isRangeArg(include)) {
-      return include;
-    }
-    if (include.rows === array.rows && include.cols === 1) {
-      const values: CellValue[] = [];
-      let keptRows = 0;
-      for (let row = 0; row < array.rows; row += 1) {
-        const includeValue = getRangeValue(include, row, 0);
-        if (isError(includeValue)) {
-          return includeValue;
-        }
-        const keep = toBoolean(includeValue);
-        if (keep === undefined) {
-          return errorValue(ErrorCode.Value);
-        }
-        if (!keep) {
-          continue;
-        }
-        values.push(...pickRangeRow(array, row));
-        keptRows += 1;
-      }
-      if (keptRows === 0) {
-        return isRangeArg(ifEmptyArg) ? errorValue(ErrorCode.Value) : ifEmptyArg;
-      }
-      return arrayResult(values, keptRows, array.cols);
-    }
-
-    if (include.cols === array.cols && include.rows === 1) {
-      const keptCols: number[] = [];
-      for (let col = 0; col < array.cols; col += 1) {
-        const includeValue = getRangeValue(include, 0, col);
-        if (isError(includeValue)) {
-          return includeValue;
-        }
-        const keep = toBoolean(includeValue);
-        if (keep === undefined) {
-          return errorValue(ErrorCode.Value);
-        }
-        if (keep) {
-          keptCols.push(col);
-        }
-      }
-      if (keptCols.length === 0) {
-        return isRangeArg(ifEmptyArg) ? errorValue(ErrorCode.Value) : ifEmptyArg;
-      }
-      const values: CellValue[] = [];
-      for (let row = 0; row < array.rows; row += 1) {
-        for (const col of keptCols) {
-          values.push(getRangeValue(array, row, col));
-        }
-      }
-      return arrayResult(values, array.rows, keptCols.length);
-    }
-
-    return errorValue(ErrorCode.Value);
-  },
-  UNIQUE: (
-    arrayArg,
-    byColArg = { tag: ValueTag.Boolean, value: false },
-    exactlyOnceArg = { tag: ValueTag.Boolean, value: false },
-  ) => {
-    const array = requireCellRange(arrayArg);
-    if (!isRangeArg(array)) {
-      return array;
-    }
-    if (isRangeArg(byColArg) || isRangeArg(exactlyOnceArg)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(byColArg)) {
-      return byColArg;
-    }
-    if (isError(exactlyOnceArg)) {
-      return exactlyOnceArg;
-    }
-    const byCol = toBoolean(byColArg);
-    const exactlyOnce = toBoolean(exactlyOnceArg);
-    if (byCol === undefined || exactlyOnce === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    if (array.rows === 1 || array.cols === 1) {
-      const counts = new Map<string, number>();
-      const keys: string[] = [];
-      for (const value of array.values) {
-        if (isError(value)) {
-          return value;
-        }
-        const key = JSON.stringify(
-          value.tag === ValueTag.String ? { ...value, value: value.value.toUpperCase() } : value,
-        );
-        keys.push(key);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-      const values: CellValue[] = [];
-      const seen = new Set<string>();
-      for (let index = 0; index < array.values.length; index += 1) {
-        const key = keys[index]!;
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        if (exactlyOnce && counts.get(key) !== 1) {
-          continue;
-        }
-        values.push(array.values[index]!);
-      }
-      return array.rows === 1
-        ? arrayResult(values, 1, values.length)
-        : arrayResult(values, values.length, 1);
-    }
-
-    if (byCol) {
-      const counts = new Map<string, number>();
-      const keys: string[] = [];
-      for (let col = 0; col < array.cols; col += 1) {
-        const key = colKey(array, col);
-        if (key === undefined) {
-          return errorValue(ErrorCode.Value);
-        }
-        keys.push(key);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-      const keptCols: number[] = [];
-      const seen = new Set<string>();
-      for (let col = 0; col < array.cols; col += 1) {
-        const key = keys[col]!;
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        if (exactlyOnce && counts.get(key) !== 1) {
-          continue;
-        }
-        keptCols.push(col);
-      }
-      const values: CellValue[] = [];
-      for (let row = 0; row < array.rows; row += 1) {
-        for (const col of keptCols) {
-          values.push(getRangeValue(array, row, col));
-        }
-      }
-      return arrayResult(values, array.rows, keptCols.length);
-    }
-
-    const counts = new Map<string, number>();
-    const keys: string[] = [];
-    for (let row = 0; row < array.rows; row += 1) {
-      const key = rowKey(array, row);
-      if (key === undefined) {
-        return errorValue(ErrorCode.Value);
-      }
-      keys.push(key);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    const keptRows: number[] = [];
-    const seen = new Set<string>();
-    for (let row = 0; row < array.rows; row += 1) {
-      const key = keys[row]!;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      if (exactlyOnce && counts.get(key) !== 1) {
-        continue;
-      }
-      keptRows.push(row);
-    }
-    const values: CellValue[] = [];
-    for (const row of keptRows) {
-      values.push(...pickRangeRow(array, row));
-    }
-    return arrayResult(values, keptRows.length, array.cols);
-  },
+  ...lookupMatrixBuiltins,
+  ...lookupSortFilterBuiltins,
   ...externalLookupBuiltins,
 };
 
