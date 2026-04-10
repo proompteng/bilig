@@ -165,4 +165,59 @@ describe("WorkbookStore", () => {
     expect(workbook.deletePivot("Sheet1", "c3")).toBe(true);
     expect(workbook.listPivots()).toEqual([]);
   });
+
+  it("renames sheet-scoped metadata through the store without leaving stale keys behind", () => {
+    const workbook = new WorkbookStore("rename-metadata");
+    workbook.createSheet("Source");
+    workbook.setFreezePane("Source", 1, 2);
+    workbook.setFilter("Source", {
+      sheetName: "Source",
+      startAddress: "C3",
+      endAddress: "A1",
+    });
+    workbook.setSpill("Source", "b2", 2, 3);
+    workbook.setPivot({
+      name: "RevenuePivot",
+      sheetName: "Source",
+      address: "c3",
+      source: { sheetName: "Source", startAddress: "b4", endAddress: "a1" },
+      groupBy: ["Region"],
+      values: [{ field: "Sales", summarizeBy: "sum" }],
+      rows: 3,
+      cols: 2,
+    });
+
+    expect(workbook.renameSheet("Source", "Renamed")?.name).toBe("Renamed");
+
+    expect(workbook.getFreezePane("Source")).toBeUndefined();
+    expect(workbook.getFreezePane("Renamed")).toEqual({
+      sheetName: "Renamed",
+      rows: 1,
+      cols: 2,
+    });
+    expect(workbook.getFilter("Renamed", {
+      sheetName: "Renamed",
+      startAddress: "A1",
+      endAddress: "C3",
+    })).toEqual({
+      sheetName: "Renamed",
+      range: { sheetName: "Renamed", startAddress: "A1", endAddress: "C3" },
+    });
+    expect(workbook.getSpill("Renamed", "B2")).toEqual({
+      sheetName: "Renamed",
+      address: "B2",
+      rows: 2,
+      cols: 3,
+    });
+    expect(workbook.getPivot("Renamed", "C3")).toEqual({
+      name: "RevenuePivot",
+      sheetName: "Renamed",
+      address: "C3",
+      source: { sheetName: "Renamed", startAddress: "A1", endAddress: "B4" },
+      groupBy: ["Region"],
+      values: [{ field: "Sales", summarizeBy: "sum" }],
+      rows: 3,
+      cols: 2,
+    });
+  });
 });
