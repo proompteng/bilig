@@ -779,6 +779,100 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("submits follow-up prompts through the durable thread route when a thread is already active", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        sessionId: "agent-session-1",
+        threadId: "thr-1",
+      }),
+    );
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/sessions")) {
+        return new Response(JSON.stringify(createSnapshot({ entries: [] })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/agent/threads/thr-1/turns")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              status: "inProgress",
+              activeTurnId: "turn-2",
+              entries: [
+                {
+                  id: "optimistic-user:turn-2",
+                  kind: "user",
+                  turnId: "turn-2",
+                  text: "Continue working",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["Continue working"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+        }),
+      );
+    });
+
+    const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/threads/thr-1/turns"),
+    );
+    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-1/turns");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("uses the composer button to interrupt an active turn", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

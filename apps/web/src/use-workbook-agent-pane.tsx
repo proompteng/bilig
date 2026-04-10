@@ -733,9 +733,12 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       setError(null);
-      const activeSession = await ensureSession();
+      const existingSession = sessionRef.current;
+      const activeSession = existingSession ?? (await ensureSession());
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/turns`,
+        existingSession
+          ? `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/turns`
+          : `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/turns`,
         {
           method: "POST",
           headers: {
