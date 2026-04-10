@@ -16,6 +16,7 @@ afterEach(() => {
 });
 
 function ContextMenuHarness(props: {
+  focusGrid?: (() => void) | undefined;
   headerSelection: HeaderSelection | null;
   hiddenColumns?: Readonly<Record<number, true>> | undefined;
   hiddenRows?: Readonly<Record<number, true>> | undefined;
@@ -28,7 +29,7 @@ function ContextMenuHarness(props: {
   setGridSelection?: ((selection: GridSelection) => void) | undefined;
 }) {
   const menu = useWorkbookGridContextMenu({
-    focusGrid() {},
+    focusGrid: props.focusGrid ?? (() => {}),
     isEditingCell: props.isEditingCell ?? false,
     onCommitEdit: props.onCommitEdit ?? (() => {}),
     onSelect: props.onSelect ?? (() => {}),
@@ -203,13 +204,18 @@ describe("workbook grid context menu", () => {
   });
 
   it("closes the context menu on escape", async () => {
+    const focusGrid = vi.fn();
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
 
     await act(async () => {
       root.render(
-        <ContextMenuHarness headerSelection={{ kind: "row", index: 1 }} onHideRow={vi.fn()} />,
+        <ContextMenuHarness
+          focusGrid={focusGrid}
+          headerSelection={{ kind: "row", index: 1 }}
+          onHideRow={vi.fn()}
+        />,
       );
     });
 
@@ -226,12 +232,59 @@ describe("workbook grid context menu", () => {
     });
 
     expect(host.querySelector("[data-testid='grid-context-menu']")).not.toBeNull();
+    expect(focusGrid).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
     });
 
     expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+    expect(focusGrid).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("moves focus into the menu on open and restores grid focus after outside close", async () => {
+    const focusGrid = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          focusGrid={focusGrid}
+          headerSelection={{ kind: "column", index: 2 }}
+          onHideColumn={vi.fn()}
+        />,
+      );
+    });
+
+    const target = host.querySelector("[data-testid='host']");
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 80,
+          clientY: 18,
+        }),
+      );
+    });
+
+    const menuAction = host.querySelector("[data-testid='grid-context-action-hide-column']");
+    expect(menuAction instanceof HTMLButtonElement).toBe(true);
+    expect(document.activeElement).toBe(menuAction);
+    expect(focusGrid).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+
+    expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+    expect(focusGrid).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       root.unmount();
