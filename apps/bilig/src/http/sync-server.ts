@@ -460,6 +460,49 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/apply",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; bundleId: string };
+        Body: {
+          appliedBy?: "user" | "auto";
+          commandIndexes?: number[];
+          preview?: unknown;
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        const commandIndexes =
+          request.body &&
+          typeof request.body === "object" &&
+          Array.isArray(request.body.commandIndexes)
+            ? request.body.commandIndexes
+            : undefined;
+        return await service.applyPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+          appliedBy: request.body && request.body.appliedBy === "auto" ? "auto" : "user",
+          ...(commandIndexes ? { commandIndexes } : {}),
+          preview:
+            request.body && typeof request.body === "object" && "preview" in request.body
+              ? (request.body.preview ?? null)
+              : null,
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/bundles/:bundleId/dismiss",
     async (
       request: FastifyRequest<{
@@ -479,6 +522,32 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/dismiss",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; bundleId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.dismissPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/runs/:recordId/replay",
     async (
       request: FastifyRequest<{
@@ -490,6 +559,32 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         return await service.replayExecutionRecord({
           documentId: request.params.documentId,
           sessionId: request.params.sessionId,
+          recordId: request.params.recordId,
+          session,
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/runs/:recordId/replay",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; recordId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.replayExecutionRecord({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
           recordId: request.params.recordId,
           session,
         });

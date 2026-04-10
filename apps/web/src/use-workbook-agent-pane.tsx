@@ -488,7 +488,7 @@ export function useWorkbookAgentPane(input: {
       try {
         setIsApplyingBundle(true);
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/bundles/${encodeURIComponent(pendingBundle.id)}/apply`,
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/apply`,
           {
             method: "POST",
             headers: {
@@ -798,7 +798,7 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/bundles/${encodeURIComponent(pendingBundle.id)}/dismiss`,
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/dismiss`,
         {
           method: "POST",
           headers: {
@@ -828,7 +828,7 @@ export function useWorkbookAgentPane(input: {
       const activeSession = await ensureSession();
       try {
         const response = await fetch(
-          `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/runs/${encodeURIComponent(recordId)}/replay`,
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/runs/${encodeURIComponent(recordId)}/replay`,
           {
             method: "POST",
           },
