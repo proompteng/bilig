@@ -5,6 +5,7 @@ import { createLookupCriteriaBuiltins } from "./lookup-criteria-builtins.js";
 import { createLookupDatabaseBuiltins } from "./lookup-database-builtins.js";
 import { createLookupFinancialBuiltins } from "./lookup-financial-builtins.js";
 import { createLookupOrderStatisticsBuiltins } from "./lookup-order-statistics-builtins.js";
+import { createLookupReferenceBuiltins } from "./lookup-reference-builtins.js";
 import { createLookupRegressionBuiltins } from "./lookup-regression-builtins.js";
 
 export interface RangeBuiltinArgument {
@@ -880,16 +881,6 @@ function colKey(range: RangeBuiltinArgument, col: number): string | undefined {
   return JSON.stringify(values.map(normalizeKeyValue));
 }
 
-function exactMatch(lookupValue: CellValue, range: RangeBuiltinArgument): number {
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = compareScalars(range.values[index]!, lookupValue);
-    if (comparison === 0) {
-      return index + 1;
-    }
-  }
-  return -1;
-}
-
 function hasWildcardPattern(pattern: string): boolean {
   for (let index = 0; index < pattern.length; index += 1) {
     const char = pattern[index];
@@ -957,38 +948,6 @@ function unescapeCriteriaPattern(pattern: string): string {
     unescaped += char;
   }
   return unescaped;
-}
-
-function approximateMatchAscending(lookupValue: CellValue, range: RangeBuiltinArgument): number {
-  let best = -1;
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = compareScalars(range.values[index]!, lookupValue);
-    if (comparison === undefined) {
-      return -1;
-    }
-    if (comparison <= 0) {
-      best = index + 1;
-    } else {
-      break;
-    }
-  }
-  return best;
-}
-
-function approximateMatchDescending(lookupValue: CellValue, range: RangeBuiltinArgument): number {
-  let best = -1;
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = compareScalars(range.values[index]!, lookupValue);
-    if (comparison === undefined) {
-      return -1;
-    }
-    if (comparison >= 0) {
-      best = index + 1;
-      continue;
-    }
-    break;
-  }
-  return best;
 }
 
 function firstLookupError(args: readonly LookupBuiltinArgument[]): CellValue | undefined {
@@ -1064,91 +1023,24 @@ const lookupCriteriaBuiltins = createLookupCriteriaBuiltins({
   numericAggregateCandidate,
 });
 
+const lookupReferenceBuiltins = createLookupReferenceBuiltins({
+  errorValue,
+  numberResult,
+  isError,
+  isRangeArg,
+  toBoolean,
+  toInteger,
+  requireCellVector,
+  toCellRange,
+  compareScalars,
+  getRangeValue,
+});
+
 export const lookupBuiltins: Record<string, LookupBuiltin> = {
+  ...lookupReferenceBuiltins,
   ...lookupCriteriaBuiltins,
   ...lookupDatabaseBuiltins,
   ...lookupFinancialBuiltins,
-  MATCH: (lookupValue, lookupArray, matchTypeValue = { tag: ValueTag.Number, value: 1 }) => {
-    if (isRangeArg(lookupValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isRangeArg(matchTypeValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(lookupValue)) {
-      return lookupValue;
-    }
-    if (isError(matchTypeValue)) {
-      return matchTypeValue;
-    }
-
-    const rangeOrError = requireCellVector(lookupArray);
-    if (!isRangeArg(rangeOrError)) {
-      return rangeOrError;
-    }
-
-    const matchType = toInteger(matchTypeValue);
-    if (matchType === undefined || ![-1, 0, 1].includes(matchType)) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const position =
-      matchType === 0
-        ? exactMatch(lookupValue, rangeOrError)
-        : matchType === 1
-          ? approximateMatchAscending(lookupValue, rangeOrError)
-          : approximateMatchDescending(lookupValue, rangeOrError);
-
-    return position === -1 ? errorValue(ErrorCode.NA) : { tag: ValueTag.Number, value: position };
-  },
-  LOOKUP: (lookupValue, lookupVectorArg, resultVectorArg = lookupVectorArg) => {
-    if (isRangeArg(lookupValue) || lookupValue === undefined || resultVectorArg === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const existingError = isError(lookupValue)
-      ? lookupValue
-      : isError(lookupVectorArg)
-        ? lookupVectorArg
-        : isError(resultVectorArg)
-          ? resultVectorArg
-          : undefined;
-    if (existingError) {
-      return existingError;
-    }
-
-    const lookupRangeOrError = toCellRange(lookupVectorArg);
-    const resultRangeOrError = toCellRange(resultVectorArg);
-    if (!isRangeArg(lookupRangeOrError)) {
-      return lookupRangeOrError;
-    }
-    if (!isRangeArg(resultRangeOrError)) {
-      return resultRangeOrError;
-    }
-
-    if (lookupRangeOrError.rows !== 1 && lookupRangeOrError.cols !== 1) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (resultRangeOrError.rows !== 1 && resultRangeOrError.cols !== 1) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (lookupRangeOrError.values.length !== resultRangeOrError.values.length) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const exactPosition = exactMatch(lookupValue, lookupRangeOrError);
-    const shouldApproximate = exactPosition === -1 && lookupValue.tag === ValueTag.Number;
-    const position = shouldApproximate
-      ? approximateMatchAscending(lookupValue, lookupRangeOrError)
-      : exactPosition;
-
-    if (position === -1) {
-      return errorValue(ErrorCode.NA);
-    }
-
-    const resultIndex = position - 1;
-    return resultRangeOrError.values[resultIndex] ?? errorValue(ErrorCode.NA);
-  },
   AREAS: (arrayArg) => {
     const range = requireCellRange(arrayArg);
     if (!isRangeArg(range)) {
@@ -1263,231 +1155,6 @@ export const lookupBuiltins: Record<string, LookupBuiltin> = {
     }
 
     return getRangeValue(array, rowNum - 1, colNum - 1);
-  },
-  VLOOKUP: (
-    lookupValue,
-    tableArray,
-    colIndexValue,
-    rangeLookupValue = { tag: ValueTag.Boolean, value: true },
-  ) => {
-    if (isRangeArg(lookupValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (!isRangeArg(tableArray) || tableArray.refKind !== "cells") {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isRangeArg(colIndexValue) || isRangeArg(rangeLookupValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(lookupValue)) {
-      return lookupValue;
-    }
-    if (isError(colIndexValue)) {
-      return colIndexValue;
-    }
-    if (isError(rangeLookupValue)) {
-      return rangeLookupValue;
-    }
-
-    const colIndex = toInteger(colIndexValue);
-    const rangeLookup = toBoolean(rangeLookupValue);
-    if (
-      colIndex === undefined ||
-      colIndex < 1 ||
-      colIndex > tableArray.cols ||
-      rangeLookup === undefined
-    ) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    let matchedRow = -1;
-    for (let row = 0; row < tableArray.rows; row += 1) {
-      const comparison = compareScalars(getRangeValue(tableArray, row, 0), lookupValue);
-      if (comparison === undefined) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (comparison === 0) {
-        matchedRow = row;
-        break;
-      }
-      if (rangeLookup && comparison < 0) {
-        matchedRow = row;
-        continue;
-      }
-      if (rangeLookup && comparison > 0) {
-        break;
-      }
-    }
-
-    if (matchedRow === -1) {
-      return errorValue(ErrorCode.NA);
-    }
-    return getRangeValue(tableArray, matchedRow, colIndex - 1);
-  },
-  HLOOKUP: (
-    lookupValue,
-    tableArray,
-    rowIndexValue,
-    rangeLookupValue = { tag: ValueTag.Boolean, value: true },
-  ) => {
-    if (isRangeArg(lookupValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (!isRangeArg(tableArray) || tableArray.refKind !== "cells") {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isRangeArg(rowIndexValue) || isRangeArg(rangeLookupValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(lookupValue)) {
-      return lookupValue;
-    }
-    if (isError(rowIndexValue)) {
-      return rowIndexValue;
-    }
-    if (isError(rangeLookupValue)) {
-      return rangeLookupValue;
-    }
-
-    const rowIndex = toInteger(rowIndexValue);
-    const rangeLookup = toBoolean(rangeLookupValue);
-    if (
-      rowIndex === undefined ||
-      rowIndex < 1 ||
-      rowIndex > tableArray.rows ||
-      rangeLookup === undefined
-    ) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    let matchedCol = -1;
-    for (let col = 0; col < tableArray.cols; col += 1) {
-      const comparison = compareScalars(getRangeValue(tableArray, 0, col), lookupValue);
-      if (comparison === undefined) {
-        return errorValue(ErrorCode.Value);
-      }
-      if (comparison === 0) {
-        matchedCol = col;
-        break;
-      }
-      if (rangeLookup && comparison < 0) {
-        matchedCol = col;
-        continue;
-      }
-      if (rangeLookup && comparison > 0) {
-        break;
-      }
-    }
-
-    if (matchedCol === -1) {
-      return errorValue(ErrorCode.NA);
-    }
-    return getRangeValue(tableArray, rowIndex - 1, matchedCol);
-  },
-  XLOOKUP: (
-    lookupValue,
-    lookupArray,
-    returnArray,
-    ifNotFound = { tag: ValueTag.Error, code: ErrorCode.NA },
-    matchMode = { tag: ValueTag.Number, value: 0 },
-    searchMode = { tag: ValueTag.Number, value: 1 },
-  ) => {
-    if (
-      isRangeArg(lookupValue) ||
-      isRangeArg(ifNotFound) ||
-      isRangeArg(matchMode) ||
-      isRangeArg(searchMode)
-    ) {
-      return errorValue(ErrorCode.Value);
-    }
-    const lookupRange = requireCellVector(lookupArray);
-    const returnRange = requireCellVector(returnArray);
-    if (!isRangeArg(lookupRange)) {
-      return lookupRange;
-    }
-    if (!isRangeArg(returnRange)) {
-      return returnRange;
-    }
-    if (lookupRange.values.length !== returnRange.values.length) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(lookupValue)) {
-      return lookupValue;
-    }
-    if (isError(matchMode)) {
-      return matchMode;
-    }
-    if (isError(searchMode)) {
-      return searchMode;
-    }
-
-    const matchModeNumber = toInteger(matchMode);
-    const searchModeNumber = toInteger(searchMode);
-    if ((matchModeNumber ?? 0) !== 0 || (searchModeNumber !== 1 && searchModeNumber !== -1)) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    if (searchModeNumber === -1) {
-      for (let index = lookupRange.values.length - 1; index >= 0; index -= 1) {
-        if (compareScalars(lookupRange.values[index]!, lookupValue) === 0) {
-          return returnRange.values[index] ?? errorValue(ErrorCode.NA);
-        }
-      }
-      return ifNotFound;
-    }
-
-    for (let index = 0; index < lookupRange.values.length; index += 1) {
-      if (compareScalars(lookupRange.values[index]!, lookupValue) === 0) {
-        return returnRange.values[index] ?? errorValue(ErrorCode.NA);
-      }
-    }
-    return ifNotFound;
-  },
-  XMATCH: (
-    lookupValue,
-    lookupArray,
-    matchModeValue = { tag: ValueTag.Number, value: 0 },
-    searchModeValue = { tag: ValueTag.Number, value: 1 },
-  ) => {
-    if (isRangeArg(lookupValue) || isRangeArg(matchModeValue) || isRangeArg(searchModeValue)) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (isError(lookupValue)) {
-      return lookupValue;
-    }
-    if (isError(matchModeValue)) {
-      return matchModeValue;
-    }
-    if (isError(searchModeValue)) {
-      return searchModeValue;
-    }
-    const rangeOrError = requireCellVector(lookupArray);
-    if (!isRangeArg(rangeOrError)) {
-      return rangeOrError;
-    }
-    const matchMode = toInteger(matchModeValue);
-    const searchMode = toInteger(searchModeValue);
-    if (matchMode === undefined || searchMode === undefined) {
-      return errorValue(ErrorCode.Value);
-    }
-    if (![0, -1, 1].includes(matchMode) || ![1, -1].includes(searchMode)) {
-      return errorValue(ErrorCode.Value);
-    }
-
-    const values = searchMode === -1 ? rangeOrError.values.toReversed() : rangeOrError.values;
-    const probe = searchMode === -1 ? { ...rangeOrError, values } : rangeOrError;
-    const position =
-      matchMode === 0
-        ? exactMatch(lookupValue, probe)
-        : matchMode === 1
-          ? approximateMatchAscending(lookupValue, probe)
-          : approximateMatchDescending(lookupValue, probe);
-    if (position === -1) {
-      return errorValue(ErrorCode.NA);
-    }
-    const normalizedPosition =
-      searchMode === -1 ? rangeOrError.values.length - position + 1 : position;
-    return { tag: ValueTag.Number, value: normalizedPosition };
   },
   OFFSET: (referenceArg, rowsArg, colsArg, heightArg, widthArg, areaNumberArg) => {
     if (
