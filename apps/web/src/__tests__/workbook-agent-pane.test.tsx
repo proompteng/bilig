@@ -396,6 +396,120 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts built-in workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "summarizeWorkbook",
+                  title: "Summarize Workbook",
+                  summary: "Summarized workbook structure across 1 sheet.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  artifact: {
+                    kind: "markdown",
+                    title: "Workbook Summary",
+                    text: "## Workbook Summary",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-summarizeWorkbook']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Workflow button not found");
+      }
+      button.click();
+    });
+
+    const createThreadCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/agent/threads") &&
+        requestMethod(requestInit) === "POST",
+    );
+    expect(requestBody(createThreadCall?.[1])).toEqual({
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+      scope: "private",
+    });
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+    );
+    expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-2/workflows");
+    expect(requestBody(workflowCall?.[1])).toEqual({
+      workflowTemplate: "summarizeWorkbook",
+    });
+    expect(host.textContent).toContain("Summarize Workbook");
+    expect(host.textContent).toContain("Workbook Summary");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("loads durable thread summaries into the assistant rail", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

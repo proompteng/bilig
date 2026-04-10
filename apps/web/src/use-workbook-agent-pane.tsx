@@ -20,43 +20,30 @@ import {
   type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
   type WorkbookAgentUiContext,
+  type WorkbookAgentWorkflowTemplate,
   type WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 import { Schema } from "effect";
 import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
-
-const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
-const DRAFT_STORAGE_KEY_PREFIX = "bilig:workbook-agent-drafts:";
+import {
+  clearStoredDraft,
+  clearStoredSession,
+  draftKey,
+  loadStoredDrafts,
+  loadStoredSession,
+  persistStoredDrafts,
+  persistStoredSession,
+  type StoredWorkbookAgentThreadRef,
+} from "./workbook-agent-pane-storage.js";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
-
-interface StoredWorkbookAgentThreadRef {
-  threadId: string;
-  sessionId?: string;
-}
 
 interface WorkbookAgentLiveSession {
   threadId: string;
 }
 
-function storageKey(documentId: string): string {
-  return `${STORAGE_KEY_PREFIX}${documentId}`;
-}
-
-function draftStorageKey(documentId: string): string {
-  return `${DRAFT_STORAGE_KEY_PREFIX}${documentId}`;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isStoredWorkbookAgentSession(value: unknown): value is StoredWorkbookAgentThreadRef {
-  return (
-    isRecord(value) &&
-    (value["sessionId"] === undefined || typeof value["sessionId"] === "string") &&
-    typeof value["threadId"] === "string"
-  );
 }
 
 function resolvePayloadMessage(payload: unknown, fallback: string): string {
@@ -67,73 +54,6 @@ function resolvePayloadMessage(payload: unknown, fallback: string): string {
 
 function readMessageEventData(event: Event): string | null {
   return event instanceof MessageEvent && typeof event.data === "string" ? event.data : null;
-}
-
-function loadStoredSession(documentId: string): StoredWorkbookAgentThreadRef | null {
-  try {
-    const raw = window.sessionStorage.getItem(storageKey(documentId));
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (isStoredWorkbookAgentSession(parsed)) {
-      return parsed;
-    }
-  } catch {}
-  return null;
-}
-
-function persistStoredSession(documentId: string, value: StoredWorkbookAgentThreadRef): void {
-  window.sessionStorage.setItem(storageKey(documentId), JSON.stringify(value));
-}
-
-function clearStoredSession(documentId: string): void {
-  window.sessionStorage.removeItem(storageKey(documentId));
-}
-
-function loadStoredDrafts(documentId: string): Record<string, string> {
-  try {
-    const raw = window.sessionStorage.getItem(draftStorageKey(documentId));
-    if (!raw) {
-      return {};
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) {
-      return {};
-    }
-    return Object.fromEntries(
-      Object.entries(parsed).flatMap(([key, value]) =>
-        typeof value === "string" ? ([[key, value]] as const) : [],
-      ),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function persistStoredDrafts(documentId: string, drafts: Record<string, string>): void {
-  const entries = Object.entries(drafts).filter((entry) => entry[1].length > 0);
-  if (entries.length === 0) {
-    window.sessionStorage.removeItem(draftStorageKey(documentId));
-    return;
-  }
-  window.sessionStorage.setItem(
-    draftStorageKey(documentId),
-    JSON.stringify(Object.fromEntries(entries)),
-  );
-}
-
-function clearStoredDraft(documentId: string, key: string): void {
-  const drafts = loadStoredDrafts(documentId);
-  if (!(key in drafts)) {
-    return;
-  }
-  delete drafts[key];
-  persistStoredDrafts(documentId, drafts);
-}
-
-function draftKey(threadId: string | null, scope: WorkbookAgentThreadScope): string {
-  return threadId ? `thread:${threadId}` : `new:${scope}`;
 }
 
 function createSessionResumeBody(
@@ -206,6 +126,7 @@ export function useWorkbookAgentPane(input: {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
+  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
   const [threadSummaries, setThreadSummaries] = useState<readonly WorkbookAgentThreadSummary[]>([]);
@@ -896,6 +817,43 @@ export function useWorkbookAgentPane(input: {
     [documentId, ensureSession, persistSessionSnapshot],
   );
 
+  const startWorkflow = useCallback(
+    async (workflowTemplate: WorkbookAgentWorkflowTemplate) => {
+      try {
+        setError(null);
+        setIsStartingWorkflow(true);
+        const activeSession = await ensureSession();
+        const response = await fetch(
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/workflows`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              workflowTemplate,
+            }),
+          },
+        );
+        const payload = (await response.json()) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            resolvePayloadMessage(
+              payload,
+              `Workbook agent request failed with status ${response.status}`,
+            ),
+          );
+        }
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      } finally {
+        setIsStartingWorkflow(false);
+      }
+    },
+    [documentId, ensureSession, persistSessionSnapshot],
+  );
+
   const clearAgentError = useCallback(() => {
     setError(null);
   }, []);
@@ -909,6 +867,7 @@ export function useWorkbookAgentPane(input: {
         executionRecords={executionRecords}
         isApplyingBundle={isApplyingBundle}
         isLoading={isLoading}
+        isStartingWorkflow={isStartingWorkflow}
         pendingBundle={pendingBundle}
         preview={preview}
         sharedApprovalOwnerUserId={
@@ -935,6 +894,9 @@ export function useWorkbookAgentPane(input: {
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
         }}
+        onStartWorkflow={(workflowTemplate) => {
+          void startWorkflow(workflowTemplate);
+        }}
         onSelectThread={(threadId) => {
           void selectThread(threadId);
         }}
@@ -953,11 +915,13 @@ export function useWorkbookAgentPane(input: {
       interrupt,
       isApplyingBundle,
       isLoading,
+      isStartingWorkflow,
       normalizedCommandIndexes,
       pendingBundle,
       preview,
       activeThreadSummary?.ownerUserId,
       replayExecutionRecord,
+      startWorkflow,
       sendPrompt,
       selectThread,
       snapshot,

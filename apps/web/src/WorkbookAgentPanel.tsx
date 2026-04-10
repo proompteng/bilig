@@ -29,6 +29,7 @@ import {
   workbookSurfaceClass,
 } from "./workbook-shell-chrome.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
+import { WorkflowActionStrip } from "./workbook-agent-panel-workflow-actions.js";
 import {
   ExecutionRecordRow,
   PreviewRangeList,
@@ -762,6 +763,7 @@ export function WorkbookAgentPanel(props: {
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
+  readonly isStartingWorkflow: boolean;
   readonly threadScope: WorkbookAgentThreadScope;
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly draft: string;
@@ -777,6 +779,7 @@ export function WorkbookAgentPanel(props: {
   readonly onStartNewThread: () => void;
   readonly onTogglePendingCommand: (commandIndex: number) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
+  readonly onStartWorkflow: (template: WorkbookAgentWorkflowRun["workflowTemplate"]) => void;
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -810,6 +813,11 @@ export function WorkbookAgentPanel(props: {
           activeThreadId={props.activeThreadId}
           threadSummaries={props.threadSummaries}
           onSelectThread={props.onSelectThread}
+        />
+        <WorkflowActionStrip
+          disabled={props.isLoading || isRunning}
+          isStartingWorkflow={props.isStartingWorkflow}
+          onStartWorkflow={props.onStartWorkflow}
         />
       </div>
       <div
