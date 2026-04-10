@@ -23,12 +23,10 @@
     "@bilig/zero-sync": "workspace:*",
     "@fastify/http-proxy": "^11.4.3",
     "@fastify/static": "^9.0.0",
-    "@fastify/websocket": "11.2.0",
     "@rocicorp/zero": "1.1.1",
     "effect": "3.21.0",
     "fastify": "5.8.4",
     "pg": "^8.20.0",
-    "ws": "8.20.0",
     "xstate": "5.30.0",
     "zod": "^4.3.6"
   }

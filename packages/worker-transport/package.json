@@ -42,7 +42,6 @@
   },
   "dependencies": {
     "@bilig/binary-protocol": "workspace:*",
-    "@bilig/core": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/workbook-domain": "workspace:*"
   },

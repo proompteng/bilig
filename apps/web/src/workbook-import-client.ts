@@ -7,6 +7,7 @@ import {
   type WorkbookLoadedResponse,
 } from "@bilig/agent-api";
 import type { ImportedWorkbookPreview } from "@bilig/excel-import";
+import { resolveWorkbookNavigationUrl } from "./workbook-navigation.js";
 
 interface WorkbookImportPreviewSuccess {
   type: "success";
@@ -177,8 +178,8 @@ export function resolveImportedWorkbookNavigationUrl(result: WorkbookLoadedRespo
   if (result.browserUrl) {
     return result.browserUrl;
   }
-  const url = new URL(window.location.href);
-  url.searchParams.set("document", result.documentId);
-  url.searchParams.set("server", result.serverUrl);
-  return url.toString();
+  return resolveWorkbookNavigationUrl({
+    documentId: result.documentId,
+    serverUrl: result.serverUrl,
+  });
 }
