@@ -11,6 +11,7 @@ import { createColumnSliceSelection, createRowSliceSelection } from "./gridSelec
 import type { HeaderSelection, VisibleRegionState } from "./gridPointer.js";
 import type { Item, GridSelection } from "./gridTypes.js";
 import type { WorkbookGridContextMenuState } from "./WorkbookGridContextMenu.js";
+import type { WorkbookGridContextMenuTarget } from "./workbookGridContextMenuTarget.js";
 
 export function useWorkbookGridContextMenu(input: {
   focusGrid(this: void): void;
@@ -93,6 +94,41 @@ export function useWorkbookGridContextMenu(input: {
     setContextMenuState(null);
   }, [contextMenuState, onSetColumnHidden, onSetRowHidden]);
 
+  const openContextMenuForTarget = useCallback(
+    ({ target, x, y }: WorkbookGridContextMenuTarget): boolean => {
+      const canOpen =
+        (target.kind === "row" && onSetRowHidden) ||
+        (target.kind === "column" && onSetColumnHidden);
+      if (!canOpen) {
+        return false;
+      }
+
+      if (isEditingCell) {
+        onCommitEdit();
+      }
+      focusGrid();
+      if (target.kind === "row") {
+        setGridSelection(createRowSliceSelection(selectedCell[0], target.index, target.index));
+        onSelect(formatAddress(target.index, selectedCell[0]));
+      } else {
+        setGridSelection(createColumnSliceSelection(target.index, target.index, selectedCell[1]));
+        onSelect(formatAddress(selectedCell[1], target.index));
+      }
+      setContextMenuState({ x, y, target });
+      return true;
+    },
+    [
+      focusGrid,
+      isEditingCell,
+      onCommitEdit,
+      onSelect,
+      onSetColumnHidden,
+      onSetRowHidden,
+      selectedCell,
+      setGridSelection,
+    ],
+  );
+
   const handleHostContextMenuCapture = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       const headerSelection = resolveHeaderSelectionAtPointer(
@@ -104,49 +140,20 @@ export function useWorkbookGridContextMenu(input: {
         setContextMenuState(null);
         return;
       }
-
-      const canOpen =
-        (headerSelection.kind === "row" && onSetRowHidden) ||
-        (headerSelection.kind === "column" && onSetColumnHidden);
-      if (!canOpen) {
+      if (
+        !openContextMenuForTarget({
+          target: headerSelection,
+          x: event.clientX,
+          y: event.clientY,
+        })
+      ) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
-      if (isEditingCell) {
-        onCommitEdit();
-      }
-      focusGrid();
-      if (headerSelection.kind === "row") {
-        setGridSelection(
-          createRowSliceSelection(selectedCell[0], headerSelection.index, headerSelection.index),
-        );
-        onSelect(formatAddress(headerSelection.index, selectedCell[0]));
-      } else {
-        setGridSelection(
-          createColumnSliceSelection(headerSelection.index, headerSelection.index, selectedCell[1]),
-        );
-        onSelect(formatAddress(selectedCell[1], headerSelection.index));
-      }
-      setContextMenuState({
-        x: event.clientX,
-        y: event.clientY,
-        target: headerSelection,
-      });
     },
-    [
-      focusGrid,
-      isEditingCell,
-      onCommitEdit,
-      onSelect,
-      onSetColumnHidden,
-      onSetRowHidden,
-      resolveHeaderSelectionAtPointer,
-      selectedCell,
-      setGridSelection,
-      visibleRegion,
-    ],
+    [openContextMenuForTarget, resolveHeaderSelectionAtPointer, visibleRegion],
   );
 
   return useMemo(
@@ -156,7 +163,14 @@ export function useWorkbookGridContextMenu(input: {
       handleHostContextMenuCapture,
       hideTarget,
       menuRef,
+      openContextMenuForTarget,
     }),
-    [closeContextMenu, contextMenuState, handleHostContextMenuCapture, hideTarget],
+    [
+      closeContextMenu,
+      contextMenuState,
+      handleHostContextMenuCapture,
+      hideTarget,
+      openContextMenuForTarget,
+    ],
   );
 }

@@ -9,6 +9,7 @@ import type {
 import type { GridSelection } from "../../../../packages/grid/src/gridTypes.js";
 import { WorkbookGridContextMenu } from "../../../../packages/grid/src/WorkbookGridContextMenu.js";
 import { useWorkbookGridContextMenu } from "../../../../packages/grid/src/useWorkbookGridContextMenu.js";
+import type { WorkbookGridContextMenuTarget } from "../../../../packages/grid/src/workbookGridContextMenuTarget.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -20,6 +21,7 @@ function ContextMenuHarness(props: {
   onCommitEdit?: (() => void) | undefined;
   onHideColumn?: ((columnIndex: number, hidden: boolean) => void) | undefined;
   onHideRow?: ((rowIndex: number, hidden: boolean) => void) | undefined;
+  openTarget?: WorkbookGridContextMenuTarget | undefined;
   onSelect?: ((addr: string) => void) | undefined;
   setGridSelection?: ((selection: GridSelection) => void) | undefined;
 }) {
@@ -44,6 +46,17 @@ function ContextMenuHarness(props: {
 
   return (
     <div data-testid="host" onContextMenuCapture={menu.handleHostContextMenuCapture}>
+      <button
+        data-testid="open-context-menu"
+        type="button"
+        onClick={() => {
+          if (props.openTarget) {
+            menu.openContextMenuForTarget(props.openTarget);
+          }
+        }}
+      >
+        Open
+      </button>
       {menu.contextMenuState ? (
         <WorkbookGridContextMenu
           menuRef={menu.menuRef}
@@ -172,6 +185,44 @@ describe("workbook grid context menu", () => {
     });
 
     expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("opens a context menu programmatically for keyboard-triggered header actions", async () => {
+    const onHideColumn = vi.fn();
+    const onSelect = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={null}
+          onHideColumn={onHideColumn}
+          onSelect={onSelect}
+          openTarget={{ target: { kind: "column", index: 2 }, x: 180, y: 24 }}
+        />,
+      );
+    });
+
+    const openButton = host.querySelector("[data-testid='open-context-menu']");
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.querySelector("[data-testid='grid-context-menu']")).not.toBeNull();
+    expect(onSelect).toHaveBeenCalledWith("C3");
+
+    const hideButton = host.querySelector("[data-testid='grid-context-action-hide-column']");
+    await act(async () => {
+      hideButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onHideColumn).toHaveBeenCalledWith(2, true);
 
     await act(async () => {
       root.unmount();
