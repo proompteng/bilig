@@ -80,7 +80,7 @@ export function parseInteger(value: unknown): number {
   return 0;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 

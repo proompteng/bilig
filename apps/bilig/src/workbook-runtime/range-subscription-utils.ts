@@ -38,7 +38,7 @@ export function iterateRange(range: CellRangeRef): string[] {
   return iterateRangeBounds(getRangeBounds(range));
 }
 
-export function splitAddress(address: string): [string, string] {
+function splitAddress(address: string): [string, string] {
   const match = /^([A-Z]+)(\d+)$/i.exec(address.trim());
   if (!match) {
     throw new Error(`Invalid cell address: ${address}`);
@@ -46,7 +46,7 @@ export function splitAddress(address: string): [string, string] {
   return [match[1]!.toUpperCase(), match[2]!];
 }
 
-export function decodeColumn(column: string): number {
+function decodeColumn(column: string): number {
   let value = 0;
   for (let index = 0; index < column.length; index += 1) {
     value = value * 26 + (column.charCodeAt(index) - 64);
@@ -54,7 +54,7 @@ export function decodeColumn(column: string): number {
   return value;
 }
 
-export function encodeColumn(value: number): string {
+function encodeColumn(value: number): string {
   let next = value;
   let output = "";
   while (next > 0) {

@@ -961,9 +961,3 @@ export function createWorkbookAgentService(
     ...options,
   });
 }
-
-export const WorkbookAgentRouteSchemas = {
-  createSessionBodySchema,
-  updateContextBodySchema,
-  startTurnBodySchema,
-};

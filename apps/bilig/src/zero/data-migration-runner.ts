@@ -40,7 +40,7 @@ interface ZeroDataMigrationLedgerRow extends QueryResultRow {
 
 const DATA_MIGRATION_LOCK_KEY = "bilig-zero-data-migrations";
 
-export const zeroDataMigrations = [
+const zeroDataMigrations = [
   {
     name: "sheet-id-repair",
     classification: "required",
@@ -96,7 +96,7 @@ export async function ensureZeroDataMigrationSchema(db: Queryable): Promise<void
   `);
 }
 
-export async function getZeroDataMigrationStatus(
+async function getZeroDataMigrationStatus(
   db: Queryable,
   migrations: readonly ZeroDataMigrationDefinition[] = zeroDataMigrations,
 ): Promise<ZeroDataMigrationStatus> {
@@ -184,7 +184,7 @@ export function resolveAllowPendingCleanupMigrations(
   return parseBooleanEnv(env["BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS"]);
 }
 
-export function resolveZeroDataMigrationCodeVersion(
+function resolveZeroDataMigrationCodeVersion(
   env: Record<string, string | undefined> = process.env,
 ): string {
   return (

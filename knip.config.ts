@@ -41,7 +41,9 @@ const config: KnipConfig = {
     "xstate",
   ],
   workspaces: {
+    "apps/bilig": {},
     "apps/web": {},
+    "packages/agent-api": {},
     "packages/core": {},
     "packages/formula": {},
     "packages/grid": {},

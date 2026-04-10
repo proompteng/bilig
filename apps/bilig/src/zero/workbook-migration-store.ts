@@ -25,7 +25,6 @@ import {
   upsertWorkbookHeader,
   type QueryResultRow,
   type Queryable,
-  type ReplaceWorkbookDocumentInput,
 } from "./store.js";
 import { persistCellEvalRows } from "./workbook-calculation-store.js";
 import { repairWorkbookSheetIds } from "./sheet-id-repair.js";
@@ -222,34 +221,6 @@ async function loadLegacyProjectionWorkbookIds(db: Queryable): Promise<Set<strin
     formatWorkbookIds.forEach((workbookId) => workbookIds.add(workbookId));
   }
   return workbookIds;
-}
-
-export async function replaceWorkbookDocument(
-  db: Queryable,
-  input: ReplaceWorkbookDocumentInput,
-): Promise<void> {
-  const updatedAt = input.updatedAt ?? nowIso();
-  const projection = buildWorkbookSourceProjection(input.documentId, input.snapshot, {
-    revision: input.revision,
-    calculatedRevision: input.calculatedRevision,
-    ownerUserId: input.ownerUserId,
-    updatedBy: input.updatedBy,
-    updatedAt,
-  });
-  await db.query(`DELETE FROM workbooks WHERE id = $1`, [input.documentId]);
-  await upsertWorkbookHeader(db, input.documentId, projection.workbook, input.snapshot, null);
-  await replaceWorkbookSourceProjectionForMigration(db, projection);
-  const engine = new SpreadsheetEngine({
-    workbookName: input.documentId,
-    replicaId: `replace-document:${input.documentId}:${input.revision}`,
-  });
-  await engine.ready();
-  engine.importSnapshot(input.snapshot);
-  await replaceCellEvalForMigration(
-    db,
-    input.documentId,
-    materializeCellEvalProjection(engine, input.documentId, input.calculatedRevision, updatedAt),
-  );
 }
 
 export async function ensureWorkbookDocumentExists(

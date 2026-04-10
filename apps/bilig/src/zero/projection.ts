@@ -181,7 +181,7 @@ export function diffProjectionRows<Row>(
   return { upserts, deletes };
 }
 
-export function buildWorkbookHeaderRow(
+function buildWorkbookHeaderRow(
   documentId: string,
   snapshot: WorkbookSnapshot,
   options: WorkbookProjectionOptions,
@@ -221,7 +221,7 @@ export function buildWorkbookHeaderRowFromEngine(
   };
 }
 
-export function buildCalculationSettingsRow(
+function buildCalculationSettingsRow(
   documentId: string,
   snapshot: WorkbookSnapshot,
 ): CalculationSettingsSourceRow {
@@ -357,21 +357,6 @@ function buildNumberFormatSourceRow(
   };
 }
 
-export function buildSingleCellSourceRow(
-  documentId: string,
-  snapshot: WorkbookSnapshot,
-  sheetName: string,
-  address: string,
-  options: WorkbookProjectionOptions,
-): CellSourceRow | null {
-  const sheet = snapshot.sheets.find((entry) => entry.name === sheetName);
-  const cell = sheet?.cells.find((entry) => entry.address === address);
-  if (!cell) {
-    return null;
-  }
-  return buildCellSourceRow(documentId, sheetName, cell, options);
-}
-
 export function buildSingleCellSourceRowFromEngine(
   documentId: string,
   engine: SpreadsheetEngine,
@@ -389,28 +374,6 @@ export function buildSingleCellSourceRowFromEngine(
     engine.getCell(sheetName, address),
     options,
   );
-}
-
-export function buildSheetColumnMetadataRows(
-  documentId: string,
-  snapshot: WorkbookSnapshot,
-  sheetName: string,
-  options: WorkbookProjectionOptions,
-): AxisMetadataSourceRow[] {
-  const rows: AxisMetadataSourceRow[] = [];
-  for (const entry of findSheet(snapshot, sheetName)?.metadata?.columnMetadata ?? []) {
-    rows.push({
-      workbookId: documentId,
-      sheetName,
-      startIndex: entry.start,
-      count: entry.count,
-      size: entry.size ?? null,
-      hidden: entry.hidden ?? null,
-      sourceRevision: options.revision,
-      updatedAt: options.updatedAt,
-    });
-  }
-  return rows;
 }
 
 export function buildSheetColumnMetadataRowsFromEngine(
@@ -449,7 +412,7 @@ export function buildSheetRowMetadataRowsFromEngine(
   }));
 }
 
-export function buildWorkbookStyleRows(
+function buildWorkbookStyleRows(
   documentId: string,
   snapshot: WorkbookSnapshot,
   options: WorkbookProjectionOptions,
@@ -479,7 +442,7 @@ export function buildWorkbookStyleRowsFromEngine(
     }));
 }
 
-export function buildWorkbookNumberFormatRows(
+function buildWorkbookNumberFormatRows(
   documentId: string,
   snapshot: WorkbookSnapshot,
   options: WorkbookProjectionOptions,

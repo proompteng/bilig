@@ -95,7 +95,7 @@ export function resolveRequestSession(request: FastifyRequest): BiligRequestSess
   };
 }
 
-export function persistRequestSession(reply: FastifyReply, session: BiligRequestSession): void {
+function persistRequestSession(reply: FastifyReply, session: BiligRequestSession): void {
   if (!session.setCookie) {
     return;
   }

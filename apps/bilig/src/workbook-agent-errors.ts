@@ -1,4 +1,4 @@
-export class WorkbookAgentServiceError extends Error {
+class WorkbookAgentServiceError extends Error {
   readonly code: string;
   readonly statusCode: number;
   readonly retryable: boolean;
@@ -12,7 +12,11 @@ export class WorkbookAgentServiceError extends Error {
   }
 }
 
-export function isWorkbookAgentServiceError(value: unknown): value is WorkbookAgentServiceError {
+export function isWorkbookAgentServiceError(value: unknown): value is Error & {
+  readonly code: string;
+  readonly statusCode: number;
+  readonly retryable: boolean;
+} {
   return value instanceof WorkbookAgentServiceError;
 }
 
@@ -21,6 +25,10 @@ export function createWorkbookAgentServiceError(input: {
   message: string;
   statusCode: number;
   retryable: boolean;
-}): WorkbookAgentServiceError {
+}): Error & {
+  readonly code: string;
+  readonly statusCode: number;
+  readonly retryable: boolean;
+} {
   return new WorkbookAgentServiceError(input);
 }
