@@ -1,5 +1,9 @@
 import { Effect } from "effect";
-import type { CellSnapshot, SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from "@bilig/protocol";
+import type {
+  CellSnapshot,
+  SheetFormatRangeSnapshot,
+  SheetStyleRangeSnapshot,
+} from "@bilig/protocol";
 import {
   formatAddress,
   rewriteAddressForStructuralTransform,
@@ -40,7 +44,9 @@ interface EngineStructureState {
 }
 
 export interface EngineStructureService {
-  readonly captureSheetCellState: (sheetName: string) => Effect.Effect<EngineOp[], EngineStructureError>;
+  readonly captureSheetCellState: (
+    sheetName: string,
+  ) => Effect.Effect<EngineOp[], EngineStructureError>;
   readonly captureRowRangeCellState: (
     sheetName: string,
     start: number,
@@ -51,9 +57,7 @@ export interface EngineStructureService {
     start: number,
     count: number,
   ) => Effect.Effect<EngineOp[], EngineStructureError>;
-  readonly applyStructuralAxisOp: (
-    op: StructuralAxisOp,
-  ) => Effect.Effect<
+  readonly applyStructuralAxisOp: (op: StructuralAxisOp) => Effect.Effect<
     {
       changedCellIndices: number[];
       formulaCellIndices: number[];
@@ -82,19 +86,14 @@ export function createEngineStructureService(args: {
     address: string,
     sourceSheetName?: string,
     sourceAddress?: string,
-  ): EngineOp[] => {
-    const ops = args.toCellStateOps(
+  ): EngineOp[] =>
+    args.toCellStateOps(
       sheetName,
       address,
       args.getCellByIndex(cellIndex),
       sourceSheetName,
       sourceAddress,
     );
-    if (args.state.workbook.getCellFormat(cellIndex) !== undefined) {
-      return ops;
-    }
-    return ops.filter((op) => op.kind !== "setCellFormat");
-  };
 
   const captureAxisRangeCellState = (
     sheetName: string,
@@ -132,11 +131,7 @@ export function createEngineStructureService(args: {
     return captured
       .toSorted((left, right) => left.row - right.row || left.col - right.col)
       .flatMap(({ cellIndex }) =>
-        captureStoredCellState(
-          cellIndex,
-          sheetName,
-          args.state.workbook.getAddress(cellIndex),
-        ),
+        captureStoredCellState(cellIndex, sheetName, args.state.workbook.getAddress(cellIndex)),
       );
   };
 

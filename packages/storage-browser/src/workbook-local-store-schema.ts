@@ -102,6 +102,17 @@ function migratePendingOpTable(db: Database): void {
     return;
   }
 
+  const hasSubmittedAtMs = tableHasColumn(db, "pending_op", "submitted_at_ms");
+  const submittedAtExpr = hasSubmittedAtMs ? "submitted_at_ms" : "NULL";
+  const attemptCountExpr = hasSubmittedAtMs
+    ? `
+      CASE
+        WHEN submitted_at_ms IS NULL THEN 0
+        ELSE 1
+      END
+    `
+    : "0";
+
   db.exec("ALTER TABLE pending_op RENAME TO pending_op_legacy");
   createPendingOpTable(db);
   db.exec(`
@@ -128,15 +139,12 @@ function migratePendingOpTable(db: Database): void {
       method,
       args_json,
       enqueued_at_ms,
-      submitted_at_ms,
-      submitted_at_ms,
+      ${submittedAtExpr},
+      ${submittedAtExpr},
       NULL,
       NULL,
       NULL,
-      CASE
-        WHEN submitted_at_ms IS NULL THEN 0
-        ELSE 1
-      END,
+      ${attemptCountExpr},
       NULL,
       CASE status
         WHEN 'pending' THEN 'local'

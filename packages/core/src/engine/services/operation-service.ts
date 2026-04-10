@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
 import { ValueTag, type CellRangeRef, type EngineEvent } from "@bilig/protocol";
+import { makeCellEntity } from "../../entity-ids.js";
 import {
   batchOpOrder,
   compareOpOrder,
@@ -11,11 +12,7 @@ import {
 import { CellFlags } from "../../cell-store.js";
 import { emptyValue, literalToValue } from "../../engine-value-utils.js";
 import { spillDependencyKey, tableDependencyKey } from "../../engine-metadata-utils.js";
-import {
-  normalizeDefinedName,
-  pivotKey,
-  type WorkbookPivotRecord,
-} from "../../workbook-store.js";
+import { normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from "../../workbook-store.js";
 import type { EngineRuntimeState, U32 } from "../runtime-state.js";
 import { EngineMutationError } from "../errors.js";
 
@@ -90,10 +87,7 @@ export function createEngineOperationService(args: {
   };
   readonly getSelectionState: () => import("@bilig/protocol").SelectionState;
   readonly setSelection: (sheetName: string, address: string) => void;
-  readonly rewriteDefinedNamesForSheetRename: (
-    oldSheetName: string,
-    newSheetName: string,
-  ) => void;
+  readonly rewriteDefinedNamesForSheetRename: (oldSheetName: string, newSheetName: string) => void;
   readonly rewriteCellFormulasForSheetRename: (
     oldSheetName: string,
     newSheetName: string,
@@ -120,9 +114,10 @@ export function createEngineOperationService(args: {
     sheetName: string,
     explicitChangedCount: number,
   ) => { changedInputCount: number; formulaChangedCount: number; explicitChangedCount: number };
-  readonly applyStructuralAxisOp: (
-    op: StructuralAxisOp,
-  ) => { changedCellIndices: number[]; formulaCellIndices: number[] };
+  readonly applyStructuralAxisOp: (op: StructuralAxisOp) => {
+    changedCellIndices: number[];
+    formulaCellIndices: number[];
+  };
   readonly clearOwnedSpill: (cellIndex: number) => number[];
   readonly clearPivotForCell: (cellIndex: number) => number[];
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[];
@@ -153,9 +148,17 @@ export function createEngineOperationService(args: {
   readonly flushWasmProgramSync: () => void;
   readonly getBatchMutationDepth: () => number;
   readonly setBatchMutationDepth: (next: number) => void;
+  readonly collectFormulaDependents: (entityId: number) => Uint32Array;
 }): EngineOperationService {
   const emitBatch = (batch: EngineOpBatch): void => {
     args.state.batchListeners.forEach((listener) => listener(batch));
+  };
+
+  const pruneCellIfOrphaned = (cellIndex: number): void => {
+    if (args.collectFormulaDependents(makeCellEntity(cellIndex)).length > 0) {
+      return;
+    }
+    args.state.workbook.pruneCellIfEmpty(cellIndex);
   };
 
   const entityKeyForOp = (op: EngineOp): string => {
@@ -379,7 +382,9 @@ export function createEngineOperationService(args: {
     const canSkipOrderChecks = source !== "remote";
 
     const reservedNewCells = potentialNewCells ?? args.estimatePotentialNewCells(batch.ops);
-    args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells);
+    args.state.workbook.cellStore.ensureCapacity(
+      args.state.workbook.cellStore.size + reservedNewCells,
+    );
     args.resetMaterializedCellScratch(reservedNewCells);
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1);
@@ -481,7 +486,13 @@ export function createEngineOperationService(args: {
             break;
           }
           case "updateRowMetadata":
-            args.state.workbook.setRowMetadata(op.sheetName, op.start, op.count, op.size, op.hidden);
+            args.state.workbook.setRowMetadata(
+              op.sheetName,
+              op.start,
+              op.count,
+              op.size,
+              op.hidden,
+            );
             invalidatedRows.push({
               sheetName: op.sheetName,
               startIndex: op.start,
@@ -595,7 +606,7 @@ export function createEngineOperationService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
-            args.state.workbook.pruneCellIfEmpty(cellIndex);
+            pruneCellIfOrphaned(cellIndex);
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
             args.state.entityVersions.set(entityKeyForOp(op), order);
@@ -639,7 +650,7 @@ export function createEngineOperationService(args: {
           case "setCellFormat": {
             const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
             args.state.workbook.setCellFormat(cellIndex, op.format);
-            args.state.workbook.pruneCellIfEmpty(cellIndex);
+            pruneCellIfOrphaned(cellIndex);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
             args.state.entityVersions.set(entityKeyForOp(op), order);
             break;
@@ -687,7 +698,7 @@ export function createEngineOperationService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
-            args.state.workbook.pruneCellIfEmpty(cellIndex);
+            pruneCellIfOrphaned(cellIndex);
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
             args.state.entityVersions.set(entityKeyForOp(op), order);

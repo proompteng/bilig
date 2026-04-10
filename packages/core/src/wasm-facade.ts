@@ -144,6 +144,24 @@ export class WasmKernelFacade {
     this.uploadedStringPoolSize = layout.lengths.length;
   }
 
+  resetStoreState(): void {
+    if (!this.kernel) {
+      return;
+    }
+    this.kernel.readTags().fill(0);
+    this.kernel.readNumbers().fill(0);
+    this.kernel.readStringIds().fill(0);
+    this.kernel.readErrors().fill(0);
+    this.kernel.readRangeOffsets().fill(0);
+    this.kernel.readRangeLengths().fill(0);
+    this.kernel.readRangeMembers().fill(0);
+    this.kernel.readProgramOffsets().fill(0);
+    this.kernel.readProgramLengths().fill(0);
+    this.kernel.readConstantOffsets().fill(0);
+    this.kernel.readConstantLengths().fill(0);
+    this.kernel.readConstants().fill(0);
+  }
+
   syncFromStore(store: CellStore, changedCellIndices?: readonly number[] | Uint32Array): void {
     if (!this.kernel) return;
     this.ensureCapacity(

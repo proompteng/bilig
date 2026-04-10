@@ -5,10 +5,7 @@ import {
   createEngineCellStateService,
   type EngineCellStateService,
 } from "./services/cell-state-service.js";
-import {
-  createEngineEventService,
-  type EngineEventService,
-} from "./services/event-service.js";
+import { createEngineEventService, type EngineEventService } from "./services/event-service.js";
 import {
   createEngineFormulaEvaluationService,
   type EngineFormulaEvaluationService,
@@ -41,25 +38,14 @@ import {
   createEngineOperationService,
   type EngineOperationService,
 } from "./services/operation-service.js";
-import {
-  createEnginePivotService,
-  type EnginePivotService,
-} from "./services/pivot-service.js";
+import { createEnginePivotService, type EnginePivotService } from "./services/pivot-service.js";
 import {
   createEngineReplicaSyncService,
   type EngineReplicaSyncService,
 } from "./services/replica-sync-service.js";
-import {
-  createEngineReadService,
-  type EngineReadService,
-} from "./services/read-service.js";
-import {
-  createEngineRecalcService,
-  type EngineRecalcService,
-} from "./services/recalc-service.js";
-import {
-  createEngineRuntimeScratchService,
-} from "./services/runtime-scratch-service.js";
+import { createEngineReadService, type EngineReadService } from "./services/read-service.js";
+import { createEngineRecalcService, type EngineRecalcService } from "./services/recalc-service.js";
+import { createEngineRuntimeScratchService } from "./services/runtime-scratch-service.js";
 import {
   createEngineSelectionService,
   type EngineSelectionService,
@@ -283,7 +269,8 @@ export function createEngineServiceRuntime(args: {
   const selection = createEngineSelectionService(args.state);
   const support = createEngineMutationSupportService({
     ...args.mutationSupport,
-    removeFormula: (cellIndex) => runEngineEffect(requireService(binding, "binding").clearFormula(cellIndex)),
+    removeFormula: (cellIndex) =>
+      runEngineEffect(requireService(binding, "binding").clearFormula(cellIndex)),
     rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
       runEngineEffect(
         requireService(binding, "binding").rebindFormulasForSheet(
@@ -417,13 +404,7 @@ export function createEngineServiceRuntime(args: {
     getCellByIndex: (cellIndex) => runEngineEffect(read.getCellByIndex(cellIndex)),
     toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
       runEngineEffect(
-        cellState.toCellStateOps(
-          sheetName,
-          address,
-          snapshot,
-          sourceSheetName,
-          sourceAddress,
-        ),
+        cellState.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
       ),
     removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
     clearOwnedPivot: (pivotRecord) =>
@@ -441,12 +422,16 @@ export function createEngineServiceRuntime(args: {
     setMaterializedCellCount: (next) => {
       scratch.setMaterializedCellCountNow(next);
     },
+    resetWasmState: () => {
+      args.state.wasm.resetStoreState();
+    },
     scheduleWasmProgramSync: () => runEngineEffect(graph.scheduleWasmProgramSync()),
   });
   recalc = createEngineRecalcService({
     ...args.recalc,
     beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
-    markInputChanged: (cellIndex, count) => runEngineEffect(support.markInputChanged(cellIndex, count)),
+    markInputChanged: (cellIndex, count) =>
+      runEngineEffect(support.markInputChanged(cellIndex, count)),
     markFormulaChanged: (cellIndex, count) =>
       runEngineEffect(support.markFormulaChanged(cellIndex, count)),
     markExplicitChanged: (cellIndex, count) =>
@@ -478,16 +463,10 @@ export function createEngineServiceRuntime(args: {
     setSelection: (sheetName, address) =>
       runEngineEffect(selection.setSelection(sheetName, address)),
     rewriteDefinedNamesForSheetRename: (oldSheetName, newSheetName) =>
-      runEngineEffect(
-        maintenance.rewriteDefinedNamesForSheetRename(oldSheetName, newSheetName),
-      ),
+      runEngineEffect(maintenance.rewriteDefinedNamesForSheetRename(oldSheetName, newSheetName)),
     rewriteCellFormulasForSheetRename: (oldSheetName, newSheetName, formulaChangedCount) =>
       runEngineEffect(
-        binding.rewriteCellFormulasForSheetRename(
-          oldSheetName,
-          newSheetName,
-          formulaChangedCount,
-        ),
+        binding.rewriteCellFormulasForSheetRename(oldSheetName, newSheetName, formulaChangedCount),
       ),
     rebindDefinedNameDependents: (names, formulaChangedCount) =>
       runEngineEffect(binding.rebindDefinedNameDependents(names, formulaChangedCount)),
@@ -510,7 +489,8 @@ export function createEngineServiceRuntime(args: {
       runEngineEffect(binding.bindFormula(cellIndex, ownerSheetName, source)),
     setInvalidFormulaValue: (cellIndex) => runEngineEffect(binding.invalidateFormula(cellIndex)),
     beginMutationCollection: () => runEngineEffect(support.beginMutationCollection()),
-    markInputChanged: (cellIndex, count) => runEngineEffect(support.markInputChanged(cellIndex, count)),
+    markInputChanged: (cellIndex, count) =>
+      runEngineEffect(support.markInputChanged(cellIndex, count)),
     markFormulaChanged: (cellIndex, count) =>
       runEngineEffect(support.markFormulaChanged(cellIndex, count)),
     markVolatileFormulasChanged: (count) =>
@@ -526,8 +506,7 @@ export function createEngineServiceRuntime(args: {
     composeEventChanges: (recalculated, explicitChangedCount) =>
       runEngineEffect(support.composeEventChanges(recalculated, explicitChangedCount)),
     getChangedInputBuffer: () => runEngineEffect(support.getChangedInputBuffer()),
-    estimatePotentialNewCells: (ops) =>
-      runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
+    estimatePotentialNewCells: (ops) => runEngineEffect(maintenance.estimatePotentialNewCells(ops)),
     ensureCellTracked: (sheetName, address) =>
       runEngineEffect(support.ensureCellTracked(sheetName, address)),
     resetMaterializedCellScratch: (expectedSize) =>
@@ -543,6 +522,7 @@ export function createEngineServiceRuntime(args: {
         requireService(recalc, "recalc").reconcilePivotOutputs(baseChanged, forceAllPivots),
       ),
     flushWasmProgramSync: () => runEngineEffect(graph.flushWasmProgramSync()),
+    collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
   });
   const mutation = createEngineMutationService({
     state: args.state,
@@ -557,13 +537,7 @@ export function createEngineServiceRuntime(args: {
     readRangeCells: (range) => runEngineEffect(cellState.readRangeCells(range)),
     toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
       runEngineEffect(
-        cellState.toCellStateOps(
-          sheetName,
-          address,
-          snapshot,
-          sourceSheetName,
-          sourceAddress,
-        ),
+        cellState.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
       ),
     applyBatchNow: (batch, source, potentialNewCells) =>
       runEngineEffect(operations.applyBatch(batch, source, potentialNewCells)),

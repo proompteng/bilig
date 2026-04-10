@@ -24,16 +24,10 @@ import type {
 } from "@bilig/protocol";
 import { Float64Arena, Uint32Arena } from "@bilig/formula/program-arena";
 import type { EngineOp, EngineOpBatch } from "@bilig/workbook-domain";
-import {
-  createReplicaState,
-  type OpOrder,
-  type ReplicaState,
-} from "./replica-state.js";
+import { createReplicaState, type OpOrder, type ReplicaState } from "./replica-state.js";
 import { CycleDetector } from "./cycle-detection.js";
 import { EdgeArena, type EdgeSlice } from "./edge-arena.js";
-import {
-  definedNameValuesEqual,
-} from "./engine-metadata-utils.js";
+import { definedNameValuesEqual } from "./engine-metadata-utils.js";
 import {
   buildFormatClearOps,
   buildFormatPatchOps,
@@ -211,6 +205,9 @@ export class SpreadsheetEngine {
         setWasmProgramSyncPending: (next) => {
           this.wasmProgramSyncPending = next;
         },
+        resetWasmState: () => {
+          this.wasm.resetStoreState();
+        },
       },
       mutationSupport: {
         state: this.state,
@@ -368,6 +365,7 @@ export class SpreadsheetEngine {
         setBatchMutationDepth: (next) => {
           this.batchMutationDepth = next;
         },
+        collectFormulaDependents: () => new Uint32Array(),
       },
     });
     void this.wasm.init();

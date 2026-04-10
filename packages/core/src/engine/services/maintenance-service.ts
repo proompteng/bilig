@@ -6,10 +6,7 @@ import {
   renameDefinedNameValueSheet,
 } from "../../engine-metadata-utils.js";
 import type { EngineRuntimeState } from "../runtime-state.js";
-import {
-  createInitialRecalcMetrics,
-  createInitialSelectionState,
-} from "../runtime-state.js";
+import { createInitialRecalcMetrics, createInitialSelectionState } from "../runtime-state.js";
 import { EngineMaintenanceError } from "../errors.js";
 
 function maintenanceErrorMessage(message: string, cause: unknown): string {
@@ -20,11 +17,7 @@ function estimatePotentialNewCells(ops: readonly EngineOp[]): number {
   let count = 0;
   for (let index = 0; index < ops.length; index += 1) {
     const op = ops[index]!;
-    if (
-      op.kind === "setCellValue" ||
-      op.kind === "setCellFormula" ||
-      op.kind === "setCellFormat"
-    ) {
+    if (op.kind === "setCellValue" || op.kind === "setCellFormula" || op.kind === "setCellFormat") {
       count += 1;
     }
   }
@@ -52,9 +45,7 @@ export interface EngineMaintenanceService {
   readonly estimatePotentialNewCells: (
     ops: readonly EngineOp[],
   ) => Effect.Effect<number, EngineMaintenanceError>;
-  readonly resetWorkbook: (
-    workbookName?: string,
-  ) => Effect.Effect<void, EngineMaintenanceError>;
+  readonly resetWorkbook: (workbookName?: string) => Effect.Effect<void, EngineMaintenanceError>;
 }
 
 export function createEngineMaintenanceService(args: {
@@ -95,6 +86,7 @@ export function createEngineMaintenanceService(args: {
   readonly setWasmProgramSyncPending: (next: boolean) => void;
   readonly setMaterializedCellCount: (next: number) => void;
   readonly scheduleWasmProgramSync: () => void;
+  readonly resetWasmState: () => void;
 }): EngineMaintenanceService {
   const rewriteDefinedNamesForSheetRenameNow = (
     oldSheetName: string,
@@ -132,6 +124,7 @@ export function createEngineMaintenanceService(args: {
     });
     args.setWasmProgramSyncPending(false);
     args.setMaterializedCellCount(0);
+    args.resetWasmState();
     args.scheduleWasmProgramSync();
   };
 
