@@ -73,6 +73,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     sessionId: "agent-session-1",
     documentId: "doc-1",
     threadId: "thr-1",
+    scope: "private",
     status: "idle",
     activeTurnId: null,
     lastError: null,
@@ -287,7 +288,7 @@ describe("workbook agent pane", () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     let sessionsRequestBody: unknown;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = requestUrl(input);
       if (url.endsWith("/agent/threads")) {
         return new Response(
@@ -311,6 +312,7 @@ describe("workbook agent pane", () => {
             createSnapshot({
               sessionId: "agent-session-2",
               threadId: "thr-2",
+              scope: "shared",
               entries: [],
             }),
           ),
@@ -348,6 +350,11 @@ describe("workbook agent pane", () => {
         .querySelector("[data-testid='workbook-agent-thread-thr-2']")
         ?.getAttribute("aria-pressed"),
     ).toBe("true");
+    expect(
+      host
+        .querySelector("[data-testid='workbook-agent-scope-shared']")
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(sessionsRequestBody).toEqual({
       threadId: "thr-2",
       context: {
@@ -373,8 +380,7 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    let sessionBody: unknown = null;
-    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = requestUrl(input);
       if (url.endsWith("/agent/threads")) {
         return new Response(JSON.stringify([]), {
@@ -383,7 +389,6 @@ describe("workbook agent pane", () => {
         });
       }
       if (url.endsWith("/agent/sessions")) {
-        sessionBody = requestBody(init);
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -476,7 +481,15 @@ describe("workbook agent pane", () => {
     });
 
     expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/agent/threads/thr-shared/events");
-    expect(sessionBody).toEqual({
+    const sessionCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestUrl(requestInput).endsWith("/agent/sessions") &&
+        typeof requestBody(requestInit) === "object" &&
+        requestBody(requestInit) !== null &&
+        "scope" in requestBody(requestInit) &&
+        requestBody(requestInit)["scope"] === "shared",
+    );
+    expect(requestBody(sessionCall?.[1])).toEqual({
       scope: "shared",
       context: {
         selection: {

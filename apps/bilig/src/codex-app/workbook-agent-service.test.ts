@@ -962,4 +962,112 @@ describe("workbook agent service", () => {
       await serviceB.close();
     }
   });
+
+  it("allows collaborators to reuse a shared thread session while persisting the canonical owner row", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    let durableThreadState: WorkbookAgentThreadStateRecord | null = {
+      documentId: "doc-1",
+      threadId: "thr-shared",
+      actorUserId: "alex@example.com",
+      scope: "shared",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      },
+      entries: [],
+      pendingBundle: null,
+      updatedAtUnixMs: 100,
+    };
+    const saveWorkbookAgentThreadState = vi.fn(async (record: WorkbookAgentThreadStateRecord) => {
+      durableThreadState = structuredClone(record);
+    });
+    const zeroSync = createZeroSyncStub({
+      async loadWorkbookAgentThreadState() {
+        return durableThreadState ? structuredClone(durableThreadState) : null;
+      },
+      saveWorkbookAgentThreadState,
+    });
+    const service = createWorkbookAgentService(zeroSync, {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodex,
+    });
+
+    try {
+      const alexSnapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared",
+          threadId: "thr-shared",
+        },
+      });
+
+      const caseySnapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-casey",
+          threadId: "thr-shared",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      expect(alexSnapshot.scope).toBe("shared");
+      expect(caseySnapshot.sessionId).toBe("agent-session-shared");
+      expect(caseySnapshot.scope).toBe("shared");
+      expect(caseySnapshot.context).toEqual(
+        expect.objectContaining({
+          selection: expect.objectContaining({
+            address: "B2",
+          }),
+        }),
+      );
+
+      await service.startTurn({
+        documentId: "doc-1",
+        sessionId: caseySnapshot.sessionId,
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          prompt: "Review this shared thread",
+        },
+      });
+
+      expect(saveWorkbookAgentThreadState).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          actorUserId: "alex@example.com",
+          scope: "shared",
+        }),
+      );
+    } finally {
+      await service.close();
+    }
+  });
 });

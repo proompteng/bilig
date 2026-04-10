@@ -151,6 +151,7 @@ interface WorkbookAgentSessionState {
   readonly sessionId: string;
   readonly documentId: string;
   readonly userId: string;
+  readonly storageActorUserId: string;
   scope: "private" | "shared";
   threadId: string;
   snapshot: MutableWorkbookAgentSessionSnapshot;
@@ -308,7 +309,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     await this.zeroSyncService.saveWorkbookAgentThreadState({
       documentId: sessionState.documentId,
       threadId: sessionState.threadId,
-      actorUserId: sessionState.userId,
+      actorUserId: sessionState.storageActorUserId,
       scope: sessionState.scope,
       context: sessionState.snapshot.context,
       entries: sessionState.snapshot.entries,
@@ -324,6 +325,23 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }): Promise<WorkbookAgentSessionSnapshot> {
     const parsed = createSessionBodySchema.parse(input.body);
     const sessionId = parsed.sessionId ?? crypto.randomUUID();
+    if (parsed.threadId !== undefined) {
+      const sharedSession = this.tryGetSessionByThreadId(parsed.threadId);
+      if (sharedSession) {
+        const accessibleSession = this.requireOwnedSession(
+          sharedSession,
+          input.documentId,
+          input.session.userID,
+        );
+        if (parsed.context) {
+          accessibleSession.snapshot.context = parsed.context;
+          await this.persistSessionState(accessibleSession);
+          this.emitSnapshot(accessibleSession.sessionId);
+        }
+        this.touch(accessibleSession);
+        return cloneSnapshot(accessibleSession.snapshot);
+      }
+    }
     const existing = this.sessions.get(sessionId);
     if (existing) {
       const sessionState = this.requireOwnedSession(
@@ -371,6 +389,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       sessionId,
       documentId: input.documentId,
       threadId: thread.id,
+      scope: durableThreadState?.scope ?? parsed.scope ?? "private",
       status: thread.turns.some((turn) => turn.status === "failed")
         ? "failed"
         : thread.turns.some((turn) => turn.status === "inProgress")
@@ -387,7 +406,8 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       sessionId,
       documentId: input.documentId,
       userId: input.session.userID,
-      scope: parsed.scope ?? durableThreadState?.scope ?? "private",
+      storageActorUserId: durableThreadState?.actorUserId ?? input.session.userID,
+      scope: durableThreadState?.scope ?? parsed.scope ?? "private",
       threadId: thread.id,
       snapshot,
       optimisticUserEntryIdByTurn: new Map(),
@@ -954,7 +974,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (sessionState.documentId !== documentId) {
       throw new Error("Workbook agent session document mismatch");
     }
-    if (sessionState.userId !== userId) {
+    if (sessionState.scope !== "shared" && sessionState.userId !== userId) {
       throw new Error("Workbook agent session user mismatch");
     }
     return sessionState;

@@ -440,21 +440,39 @@ export async function loadWorkbookAgentThreadState(
     actorUserId: string;
   },
 ): Promise<WorkbookAgentThreadStateRecord | null> {
-  const [threadResult, itemResult, pendingBundleResult] = await Promise.all([
-    db.query<WorkbookChatThreadRow>(
-      `
-        SELECT
-          workbook_id AS "workbookId",
-          thread_id AS "threadId",
-          actor_user_id AS "actorUserId",
-          scope AS "scope",
-          context_json AS "contextJson",
-          updated_at_unix_ms AS "updatedAtUnixMs"
-        FROM workbook_chat_thread
-        WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
-      `,
-      [input.documentId, input.threadId, input.actorUserId],
-    ),
+  const threadResult = await db.query<WorkbookChatThreadRow>(
+    `
+      SELECT
+        workbook_id AS "workbookId",
+        thread_id AS "threadId",
+        actor_user_id AS "actorUserId",
+        scope AS "scope",
+        context_json AS "contextJson",
+        updated_at_unix_ms AS "updatedAtUnixMs"
+      FROM workbook_chat_thread
+      WHERE workbook_id = $1
+        AND thread_id = $2
+        AND (actor_user_id = $3 OR scope = 'shared')
+      ORDER BY
+        CASE WHEN actor_user_id = $3 THEN 0 ELSE 1 END ASC,
+        updated_at_unix_ms DESC
+      LIMIT 1
+    `,
+    [input.documentId, input.threadId, input.actorUserId],
+  );
+  const thread = threadResult.rows[0];
+  const updatedAtUnixMs = parseNumericValue(thread?.updatedAtUnixMs);
+  if (
+    !thread ||
+    typeof thread.workbookId !== "string" ||
+    typeof thread.threadId !== "string" ||
+    typeof thread.actorUserId !== "string" ||
+    (thread.scope !== "private" && thread.scope !== "shared") ||
+    updatedAtUnixMs === null
+  ) {
+    return null;
+  }
+  const [itemResult, pendingBundleResult] = await Promise.all([
     db.query<WorkbookChatItemRow>(
       `
         SELECT
@@ -473,7 +491,7 @@ export async function loadWorkbookAgentThreadState(
         WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
         ORDER BY sort_order ASC
       `,
-      [input.documentId, input.threadId, input.actorUserId],
+      [thread.workbookId, thread.threadId, thread.actorUserId],
     ),
     db.query<WorkbookPendingBundleRow>(
       `
@@ -497,21 +515,9 @@ export async function loadWorkbookAgentThreadState(
         FROM workbook_pending_bundle
         WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
       `,
-      [input.documentId, input.threadId, input.actorUserId],
+      [thread.workbookId, thread.threadId, thread.actorUserId],
     ),
   ]);
-  const thread = threadResult.rows[0];
-  const updatedAtUnixMs = parseNumericValue(thread?.updatedAtUnixMs);
-  if (
-    !thread ||
-    typeof thread.workbookId !== "string" ||
-    typeof thread.threadId !== "string" ||
-    typeof thread.actorUserId !== "string" ||
-    (thread.scope !== "private" && thread.scope !== "shared") ||
-    updatedAtUnixMs === null
-  ) {
-    return null;
-  }
   const entries = itemResult.rows
     .map((row) => normalizeTimelineEntry(row))
     .filter((entry): entry is WorkbookAgentTimelineEntry => entry !== null);
@@ -543,7 +549,27 @@ export async function listWorkbookAgentThreadSummaries(
         thread.updated_at_unix_ms AS "updatedAtUnixMs",
         COALESCE(item_counts.entry_count, 0) AS "entryCount",
         pending.bundle_id IS NOT NULL AS "hasPendingBundle"
-      FROM workbook_chat_thread AS thread
+      FROM (
+        SELECT ranked.workbook_id, ranked.thread_id, ranked.actor_user_id, ranked.scope, ranked.updated_at_unix_ms
+        FROM (
+          SELECT
+            workbook_id,
+            thread_id,
+            actor_user_id,
+            scope,
+            updated_at_unix_ms,
+            ROW_NUMBER() OVER (
+              PARTITION BY thread_id
+              ORDER BY
+                CASE WHEN actor_user_id = $2 THEN 0 ELSE 1 END ASC,
+                updated_at_unix_ms DESC
+            ) AS row_rank
+          FROM workbook_chat_thread
+          WHERE workbook_id = $1
+            AND (actor_user_id = $2 OR scope = 'shared')
+        ) AS ranked
+        WHERE ranked.row_rank = 1
+      ) AS thread
       LEFT JOIN (
         SELECT workbook_id, thread_id, actor_user_id, COUNT(*)::integer AS entry_count
         FROM workbook_chat_item

@@ -294,6 +294,7 @@ export function useWorkbookAgentPane(input: {
   const persistSessionSnapshot = useCallback(
     (nextSnapshot: WorkbookAgentSessionSnapshot) => {
       setSnapshot(nextSnapshot);
+      setThreadScope(nextSnapshot.scope);
       persistStoredSession(documentId, {
         sessionId: nextSnapshot.sessionId,
         threadId: nextSnapshot.threadId,

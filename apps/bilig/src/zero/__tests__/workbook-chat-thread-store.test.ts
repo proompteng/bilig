@@ -216,10 +216,81 @@ describe("workbook-chat-thread-store", () => {
     expect(loaded).toEqual(state);
   });
 
+  it("falls back to a collaborator-owned shared thread when the current user has no local row", async () => {
+    const state = {
+      ...createThreadState(),
+      threadId: "thr-shared",
+      actorUserId: "alex@example.com",
+      scope: "shared" as const,
+    };
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes("FROM workbook_chat_thread") && values?.[2] === "casey@example.com"
+          ? [
+              {
+                workbookId: state.documentId,
+                threadId: state.threadId,
+                actorUserId: state.actorUserId,
+                scope: state.scope,
+                contextJson: state.context,
+                updatedAtUnixMs: state.updatedAtUnixMs,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_chat_item") && values?.[2] === "alex@example.com"
+          ? state.entries.map((entry, index) => ({
+              entryId: entry.id,
+              turnId: entry.turnId,
+              kind: entry.kind,
+              text: entry.text,
+              phase: entry.phase,
+              toolName: entry.toolName,
+              toolStatus: entry.toolStatus,
+              argumentsText: entry.argumentsText,
+              outputText: entry.outputText,
+              success: entry.success,
+              sortOrder: index,
+            }))
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_pending_bundle") && values?.[2] === "alex@example.com"
+          ? [
+              {
+                bundleId: state.pendingBundle?.id,
+                workbookId: state.pendingBundle?.documentId,
+                threadId: state.pendingBundle?.threadId,
+                actorUserId: state.actorUserId,
+                turnId: state.pendingBundle?.turnId,
+                goalText: state.pendingBundle?.goalText,
+                summary: state.pendingBundle?.summary,
+                scope: state.pendingBundle?.scope,
+                riskClass: state.pendingBundle?.riskClass,
+                approvalMode: state.pendingBundle?.approvalMode,
+                baseRevision: state.pendingBundle?.baseRevision,
+                createdAtUnixMs: state.pendingBundle?.createdAtUnixMs,
+                contextJson: state.pendingBundle?.context,
+                commandsJson: state.pendingBundle?.commands,
+                affectedRangesJson: state.pendingBundle?.affectedRanges,
+                estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const loaded = await loadWorkbookAgentThreadState(queryable, {
+      documentId: "doc-1",
+      threadId: "thr-shared",
+      actorUserId: "casey@example.com",
+    });
+
+    expect(loaded).toEqual(state);
+  });
+
   it("lists durable thread summaries ordered by most recent activity", async () => {
     const queryable = new FakeQueryable([
       (text) =>
-        text.includes("FROM workbook_chat_thread AS thread")
+        text.includes("ROW_NUMBER() OVER")
           ? [
               {
                 threadId: "thr-2",

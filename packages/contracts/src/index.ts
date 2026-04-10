@@ -108,6 +108,7 @@ export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   sessionId: Schema.String,
   documentId: Schema.String,
   threadId: Schema.String,
+  scope: WorkbookAgentThreadScopeSchema,
   status: WorkbookAgentSessionStatusSchema,
   activeTurnId: Schema.Union(Schema.String, Schema.Null),
   lastError: Schema.Union(Schema.String, Schema.Null),
