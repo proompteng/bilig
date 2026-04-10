@@ -149,6 +149,7 @@ As of this revision, the following are already proved in-repo:
 - HyperFormula public method/category and config-key parity by surface name is checked against the local checkout snapshot
 - external consumers can install the runtime tarballs into clean Node and Vite projects without monorepo context
 - the runtime package workflow verifies publishability, smoke installs, parity tests, and benchmark-baseline shape
+- a checked-in competitive benchmark artifact compares directly comparable workloads against HyperFormula `3.2.0` and labels leadership workloads unsupported where apples-to-apples timing is invalid
 - rebuild semantics, deterministic change ordering, adapter immutability, and documentation example usage all have direct tests
 
 The following are not yet proved and therefore must not be claimed as current fact:
@@ -162,7 +163,9 @@ The current state is therefore:
 - production-grade headless contract: shipped
 - HyperFormula surface parity by public API shape: shipped
 - stronger feature coverage in selected areas such as dynamic arrays and structured references: shipped
-- competitive-performance leadership over HyperFormula on matched workloads: not yet fully proved
+- workload-specific competitive benchmark evidence against HyperFormula: shipped
+- on the checked-in comparable microbenchmarks, HyperFormula currently wins raw throughput on this host
+- blanket `10x` superiority claim: still disallowed without a named workload reference
 
 ## WorkPaper Contract
 
@@ -311,7 +314,7 @@ WorkPaper is allowed to claim a `10x` win only when a benchmark and fixture suit
 
 ## Competitive Benchmark Program
 
-This is the missing proof program required before any broad superiority claim is acceptable.
+This proof program is now implemented in-repo.
 
 The comparison target must be explicit:
 
@@ -338,7 +341,10 @@ Workloads must be separated into three categories:
 
 Benchmark reporting requirements:
 
-- artifact path for future cross-engine output: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- artifact path: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- regeneration/check commands:
+  - `pnpm workpaper:bench:competitive:generate`
+  - `pnpm workpaper:bench:competitive:check`
 - every comparable workload must include:
   - exact fixture definition
   - warmup count and sample count
@@ -350,11 +356,12 @@ Benchmark reporting requirements:
   - the exact artifact path
   - the exact measured ratio
 
-Until `workpaper-vs-hyperformula.json` exists and is reviewed, the correct statement is:
+Because `workpaper-vs-hyperformula.json` now exists, the correct statement is:
 
 - WorkPaper has stronger feature coverage and stronger release/reliability gates than HyperFormula
-- WorkPaper has a benchmark harness and baseline discipline
-- WorkPaper does not yet have a checked-in cross-engine performance proof artifact
+- WorkPaper has a checked-in cross-engine benchmark artifact for named workloads
+- the current checked-in artifact does not prove general speed leadership for WorkPaper
+- WorkPaper still must not claim a blanket `10x` win without citing a specific workload ratio from that artifact
 
 ## What Exceeds HyperFormula Today
 
@@ -422,6 +429,7 @@ This design is not speculative. The repo work paired with it does the following:
 - generates and checks a HyperFormula surface snapshot from the local checkout
 - adds a CI-safe parity test against that generated snapshot
 - adds a WorkPaper benchmark suite and repo command
+- adds a WorkPaper-vs-HyperFormula benchmark suite and checked-in artifact
 - keeps `HeadlessWorkbook` working for compatibility
 
 ## Acceptance Criteria

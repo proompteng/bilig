@@ -276,9 +276,16 @@ importers:
       '@bilig/core':
         specifier: workspace:*
         version: link:../core
+      '@bilig/headless':
+        specifier: workspace:*
+        version: link:../headless
       '@bilig/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      hyperformula:
+        specifier: 3.2.0
+        version: 3.2.0
 
   packages/binary-protocol:
     dependencies:
@@ -2666,6 +2673,9 @@ packages:
     resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
     engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
+  chevrotain@6.5.0:
+    resolution: {integrity: sha512-BwqQ/AgmKJ8jcMEjaSnfMybnKMgGTrtDKowfTP3pX4jwVy0kNjRsT/AP6h+wC3+3NC+X8X15VWBnTCQlX+wQFg==}
+
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
     engines: {node: '>= 14.16.0'}
@@ -3103,6 +3113,9 @@ packages:
   human-signals@2.1.0:
     resolution: {integrity: sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==}
     engines: {node: '>=10.17.0'}
+
+  hyperformula@3.2.0:
+    resolution: {integrity: sha512-2vzQKKVMDPLsubZJb0JJWT/DhrkgIjsWj40Z9BIUVT6Jkl/YM5VtkLOP3agCieqW9HuqnXlWc+Vi+7XzQuC1Nw==}
 
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
@@ -3744,6 +3757,9 @@ packages:
     resolution: {integrity: sha512-/vxpCXddiX8NGfGO/mTafwjq4aFa/71pvamip0++IQk3zG8cbCj0fifNPrjjF1XMXUne91jL9OoxmdykoEtifQ==}
     engines: {node: '>= 10.13.0'}
 
+  regexp-to-ast@0.4.0:
+    resolution: {integrity: sha512-4qf/7IsIKfSNHQXSwial1IFmfM1Cc/whNBQqRwe0V2stPe7KmN1U0tWQiIx6JiirgSrisjE0eECdNf7Tav1Ntw==}
+
   regexp-tree@0.1.27:
     resolution: {integrity: sha512-iETxpjK6YoRWJG5o6hXLwvjYAoW+FEZn9os0PD/b6AP6xQwsa/Y7lCVgIixBbUPMfhu+i2LtdeAqVTgGlQarfA==}
     hasBin: true
@@ -3992,6 +4008,9 @@ packages:
   thread-stream@4.0.0:
     resolution: {integrity: sha512-4iMVL6HAINXWf1ZKZjIPcz5wYaOdPhtO8ATvZ+Xqp3BTdaqtAwQkNmKORqcIo5YkQqGXq5cwfswDwMqqQNrpJA==}
     engines: {node: '>=20'}
+
+  tiny-emitter@2.1.0:
+    resolution: {integrity: sha512-NB6Dk1A9xgQPMoGqC5CVXn123gWyte215ONT5Pp5a0yt4nlEoO1ZWeCwpncaekPHXO60i47ihFnZPiRPjRMq4Q==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -6356,6 +6375,10 @@ snapshots:
 
   chalk@5.6.2: {}
 
+  chevrotain@6.5.0:
+    dependencies:
+      regexp-to-ast: 0.4.0
+
   chokidar@4.0.3:
     dependencies:
       readdirp: 4.1.2
@@ -6829,6 +6852,11 @@ snapshots:
       - supports-color
 
   human-signals@2.1.0: {}
+
+  hyperformula@3.2.0:
+    dependencies:
+      chevrotain: 6.5.0
+      tiny-emitter: 2.1.0
 
   ieee754@1.2.1: {}
 
@@ -7520,6 +7548,8 @@ snapshots:
     dependencies:
       resolve: 1.22.11
 
+  regexp-to-ast@0.4.0: {}
+
   regexp-tree@0.1.27: {}
 
   require-directory@2.1.1: {}
@@ -7760,6 +7790,8 @@ snapshots:
   thread-stream@4.0.0:
     dependencies:
       real-require: 0.2.0
+
+  tiny-emitter@2.1.0: {}
 
   tinybench@2.9.0: {}
 

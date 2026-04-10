@@ -53,6 +53,9 @@
     "@bilig/headless": "workspace:*",
     "@bilig/protocol": "workspace:*"
   },
+  "devDependencies": {
+    "hyperformula": "3.2.0"
+  },
   "engines": {
     "node": ">=24.0.0"
   }

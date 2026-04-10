@@ -1,0 +1,941 @@
+{
+  "schemaVersion": 1,
+  "suite": "workpaper-vs-hyperformula",
+  "generatedAt": "2026-04-10T17:14:57.007Z",
+  "host": {
+    "arch": "arm64",
+    "nodeVersion": "v24.3.0",
+    "platform": "darwin"
+  },
+  "benchmark": {
+    "sampleCount": 5,
+    "warmupCount": 2
+  },
+  "engines": {
+    "workpaper": {
+      "packageName": "@bilig/headless",
+      "sourcePath": "/Users/gregkonush/github.com/bilig/packages/headless",
+      "version": "0.1.2"
+    },
+    "hyperformula": {
+      "commit": "6de904b8876f920f287b63a95934c479acf78307",
+      "licenseKey": "gpl-v3",
+      "metadataSource": "local-checkout",
+      "packageName": "hyperformula",
+      "sourcePath": "/Users/gregkonush/github.com/hyperformula",
+      "version": "3.2.0"
+    }
+  },
+  "results": [
+    {
+      "workload": "build-from-sheets",
+      "category": "directly-comparable",
+      "comparable": true,
+      "fixture": {
+        "cols": 24,
+        "materializedCells": 3840,
+        "rows": 160
+      },
+      "comparison": {
+        "fasterEngine": "hyperformula",
+        "meanSpeedup": 33.63290779805279,
+        "verificationEquivalent": true
+      },
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              123.75595800000008, 124.48466599999983, 124.66887499999996, 125.93437500000005,
+              139.10091699999992
+            ],
+            "min": 123.75595800000008,
+            "median": 124.66887499999996,
+            "p95": 139.10091699999992,
+            "max": 139.10091699999992,
+            "mean": 127.58895819999998
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [589824, 2211840, 2441216, 4046848, 7127040],
+              "min": 589824,
+              "median": 2441216,
+              "p95": 7127040,
+              "max": 7127040,
+              "mean": 3283353.6
+            },
+            "heapUsedBytes": {
+              "samples": [-52348265, -2458653, -688960, 445057, 1733813],
+              "min": -52348265,
+              "median": -688960,
+              "p95": 1733813,
+              "max": 1733813,
+              "mean": -10663401.6
+            },
+            "heapTotalBytes": {
+              "samples": [-14777344, -262144, 393216, 1261568, 27793408],
+              "min": -14777344,
+              "median": 393216,
+              "p95": 27793408,
+              "max": 27793408,
+              "mean": 2881740.8
+            },
+            "externalBytes": {
+              "samples": [-4175, 2181, 17612, 29212, 746075],
+              "min": -4175,
+              "median": 17612,
+              "p95": 746075,
+              "max": 746075,
+              "mean": 158181
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 89456],
+              "min": 0,
+              "median": 0,
+              "p95": 89456,
+              "max": 89456,
+              "mean": 17891.2
+            }
+          },
+          "verification": {
+            "dimensions": {
+              "width": 24,
+              "height": 160
+            },
+            "terminalValue": 3840
+          }
+        },
+        "hyperformula": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              3.4803750000000946, 3.5965000000001055, 3.7708330000000387, 3.9726670000000013,
+              4.147500000000036
+            ],
+            "min": 3.4803750000000946,
+            "median": 3.7708330000000387,
+            "p95": 4.147500000000036,
+            "max": 4.147500000000036,
+            "mean": 3.793575000000055
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [131072, 245760, 393216, 655360, 688128],
+              "min": 131072,
+              "median": 393216,
+              "p95": 688128,
+              "max": 688128,
+              "mean": 422707.2
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [65536, 933888, 983040, 999424, 1016832],
+              "min": 65536,
+              "median": 983040,
+              "p95": 1016832,
+              "max": 1016832,
+              "mean": 799744
+            },
+            "externalBytes": {
+              "samples": [62644, 87737, 92744, 94925, 156776],
+              "min": 62644,
+              "median": 92744,
+              "p95": 156776,
+              "max": 156776,
+              "mean": 98965.2
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "dimensions": {
+              "width": 24,
+              "height": 160
+            },
+            "terminalValue": 3840
+          }
+        }
+      }
+    },
+    {
+      "workload": "single-edit-recalc",
+      "category": "directly-comparable",
+      "comparable": true,
+      "fixture": {
+        "downstreamCount": 2000
+      },
+      "comparison": {
+        "fasterEngine": "hyperformula",
+        "meanSpeedup": 6.188700524118476,
+        "verificationEquivalent": true
+      },
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              9.483999999999924, 9.930333999999675, 10.34008300000005, 11.145082999999431,
+              11.478832999999213
+            ],
+            "min": 9.483999999999924,
+            "median": 10.34008300000005,
+            "p95": 11.478832999999213,
+            "max": 11.478832999999213,
+            "mean": 10.47566659999966
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 32768, 32768],
+              "min": 0,
+              "median": 0,
+              "p95": 32768,
+              "max": 32768,
+              "mean": 13107.2
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [-98304, -98304, -65536, -49152, 16384],
+              "min": -98304,
+              "median": -65536,
+              "p95": 16384,
+              "max": 16384,
+              "mean": -58982.4
+            },
+            "externalBytes": {
+              "samples": [10242, 22461, 22841, 38258, 56072],
+              "min": 10242,
+              "median": 22841,
+              "p95": 56072,
+              "max": 56072,
+              "mean": 29974.8
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 2001,
+            "terminalFormula": "=BXX1+1",
+            "terminalValue": 2099
+          }
+        },
+        "hyperformula": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              1.3379580000000715, 1.469833999999537, 1.769666999999572, 1.8974170000001322,
+              1.9886670000005324
+            ],
+            "min": 1.3379580000000715,
+            "median": 1.769666999999572,
+            "p95": 1.9886670000005324,
+            "max": 1.9886670000005324,
+            "mean": 1.692708599999969
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 16384, 65536, 114688, 557056],
+              "min": 0,
+              "median": 65536,
+              "p95": 557056,
+              "max": 557056,
+              "mean": 150732.8
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [-16384, -16384, -16384, -16384, -16384],
+              "min": -16384,
+              "median": -16384,
+              "p95": -16384,
+              "max": -16384,
+              "mean": -16384
+            },
+            "externalBytes": {
+              "samples": [-16893, -11148, 2084, 8606, 10760],
+              "min": -16893,
+              "median": 2084,
+              "p95": 10760,
+              "max": 10760,
+              "mean": -1318.2
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 2001,
+            "terminalFormula": "=BXX1+1",
+            "terminalValue": 2099
+          }
+        }
+      }
+    },
+    {
+      "workload": "batch-edit-recalc",
+      "category": "directly-comparable",
+      "comparable": true,
+      "fixture": {
+        "editCount": 500
+      },
+      "comparison": {
+        "fasterEngine": "hyperformula",
+        "meanSpeedup": 891.3710026491452,
+        "verificationEquivalent": true
+      },
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              839.5368750000016, 839.6173330000001, 844.0738330000004, 853.6109159999996,
+              857.9167090000001
+            ],
+            "min": 839.5368750000016,
+            "median": 844.0738330000004,
+            "p95": 857.9167090000001,
+            "max": 857.9167090000001,
+            "mean": 846.9511332000004
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 212992, 245760],
+              "min": 0,
+              "median": 0,
+              "p95": 245760,
+              "max": 245760,
+              "mean": 91750.4
+            },
+            "heapUsedBytes": {
+              "samples": [13772193, 15050671, 15822593, 16183207, 16899867],
+              "min": 13772193,
+              "median": 15822593,
+              "p95": 16899867,
+              "max": 16899867,
+              "mean": 15545706.2
+            },
+            "heapTotalBytes": {
+              "samples": [2080768, 2129920, 2195456, 2277376, 2424832],
+              "min": 2080768,
+              "median": 2195456,
+              "p95": 2424832,
+              "max": 2424832,
+              "mean": 2221670.4
+            },
+            "externalBytes": {
+              "samples": [-241251, 40240, 41460, 72960, 124652],
+              "min": -241251,
+              "median": 41460,
+              "p95": 124652,
+              "max": 124652,
+              "mean": 7612.2
+            },
+            "arrayBuffersBytes": {
+              "samples": [4208, 4208, 4208, 4208, 4208],
+              "min": 4208,
+              "median": 4208,
+              "p95": 4208,
+              "max": 4208,
+              "mean": 4208
+            }
+          },
+          "verification": {
+            "changeCount": 1000,
+            "sampleFormulaValue": 2994
+          }
+        },
+        "hyperformula": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              0.9102919999986625, 0.9241250000013679, 0.9431249999997817, 0.9851670000007289,
+              0.9881249999998545
+            ],
+            "min": 0.9102919999986625,
+            "median": 0.9431249999997817,
+            "p95": 0.9881249999998545,
+            "max": 0.9881249999998545,
+            "mean": 0.9501668000000791
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [147456, 163840, 163840, 180224, 196608],
+              "min": 147456,
+              "median": 163840,
+              "p95": 196608,
+              "max": 196608,
+              "mean": 170393.6
+            },
+            "externalBytes": {
+              "samples": [811, 900, 2691, 4761, 5345],
+              "min": 811,
+              "median": 2691,
+              "p95": 5345,
+              "max": 5345,
+              "mean": 2901.6
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 1000,
+            "sampleFormulaValue": 2994
+          }
+        }
+      }
+    },
+    {
+      "workload": "range-read",
+      "category": "directly-comparable",
+      "comparable": true,
+      "fixture": {
+        "cols": 24,
+        "materializedCells": 5760,
+        "rows": 240
+      },
+      "comparison": {
+        "fasterEngine": "hyperformula",
+        "meanSpeedup": 1.019302041848662,
+        "verificationEquivalent": true
+      },
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              0.18724999999903957, 0.19308300000011513, 0.2209579999998823, 0.22775000000001455,
+              0.23366700000042329
+            ],
+            "min": 0.18724999999903957,
+            "median": 0.2209579999998823,
+            "p95": 0.23366700000042329,
+            "max": 0.23366700000042329,
+            "mean": 0.21254159999989497
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 16384],
+              "min": 0,
+              "median": 0,
+              "p95": 16384,
+              "max": 16384,
+              "mean": 3276.8
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [-1376256, -1032192, -557056, -540672, -524288],
+              "min": -1376256,
+              "median": -557056,
+              "p95": -524288,
+              "max": -524288,
+              "mean": -806092.8
+            },
+            "externalBytes": {
+              "samples": [-2905, -1999, -1992, -1969, 1094],
+              "min": -2905,
+              "median": -1992,
+              "p95": 1094,
+              "max": 1094,
+              "mean": -1554.2
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "readCols": 24,
+            "readRows": 240,
+            "terminalValue": 5760,
+            "topLeftValue": 1
+          }
+        },
+        "hyperformula": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              0.18333300000085728, 0.18804199999976845, 0.19191700000010314, 0.20741699999962293,
+              0.2718750000003638
+            ],
+            "min": 0.18333300000085728,
+            "median": 0.19191700000010314,
+            "p95": 0.2718750000003638,
+            "max": 0.2718750000003638,
+            "mean": 0.2085168000001431
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [65536, 65536, 65536, 65536, 65536],
+              "min": 65536,
+              "median": 65536,
+              "p95": 65536,
+              "max": 65536,
+              "mean": 65536
+            },
+            "externalBytes": {
+              "samples": [290, 297, 298, 324, 1627],
+              "min": 290,
+              "median": 298,
+              "p95": 1627,
+              "max": 1627,
+              "mean": 567.2
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "readCols": 24,
+            "readRows": 240,
+            "terminalValue": 5760,
+            "topLeftValue": 1
+          }
+        }
+      }
+    },
+    {
+      "workload": "lookup-no-column-index",
+      "category": "directly-comparable",
+      "comparable": true,
+      "fixture": {
+        "rowCount": 5000,
+        "useColumnIndex": false
+      },
+      "comparison": {
+        "fasterEngine": "hyperformula",
+        "meanSpeedup": 79.49161589057441,
+        "verificationEquivalent": true
+      },
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              20.504667000001064, 21.25250000000233, 21.697416000002704, 21.806666999997105,
+              22.459666999995534
+            ],
+            "min": 20.504667000001064,
+            "median": 21.697416000002704,
+            "p95": 22.459666999995534,
+            "max": 22.459666999995534,
+            "mean": 21.544183399999746
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 49152],
+              "min": 0,
+              "median": 0,
+              "p95": 49152,
+              "max": 49152,
+              "mean": 9830.4
+            },
+            "heapUsedBytes": {
+              "samples": [-242977312, -39500129, -37571123, -33497671, -30881953],
+              "min": -242977312,
+              "median": -37571123,
+              "p95": -30881953,
+              "max": -30881953,
+              "mean": -76885637.6
+            },
+            "heapTotalBytes": {
+              "samples": [-1097728, -573440, -507904, -442368, 1458176],
+              "min": -1097728,
+              "median": -507904,
+              "p95": 1458176,
+              "max": 1458176,
+              "mean": -232652.8
+            },
+            "externalBytes": {
+              "samples": [7447, 7449, 7463, 7484, 67774],
+              "min": 7447,
+              "median": 7463,
+              "p95": 67774,
+              "max": 67774,
+              "mean": 19523.4
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 2,
+            "formulaValue": 5000
+          }
+        },
+        "hyperformula": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              0.241915999999037, 0.2571659999957774, 0.2739579999979469, 0.2779159999990952,
+              0.3041670000020531
+            ],
+            "min": 0.241915999999037,
+            "median": 0.2739579999979469,
+            "p95": 0.3041670000020531,
+            "max": 0.3041670000020531,
+            "mean": 0.2710245999987819
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [-16384, -16384, -16384, -16384, -16384],
+              "min": -16384,
+              "median": -16384,
+              "p95": -16384,
+              "max": -16384,
+              "mean": -16384
+            },
+            "externalBytes": {
+              "samples": [310, 330, 346, 364, 376],
+              "min": 310,
+              "median": 346,
+              "p95": 376,
+              "max": 376,
+              "mean": 345.2
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 2,
+            "formulaValue": 5000
+          }
+        }
+      }
+    },
+    {
+      "workload": "lookup-with-column-index",
+      "category": "directly-comparable",
+      "comparable": true,
+      "fixture": {
+        "rowCount": 5000,
+        "useColumnIndex": true
+      },
+      "comparison": {
+        "fasterEngine": "hyperformula",
+        "meanSpeedup": 134.7674388161547,
+        "verificationEquivalent": true
+      },
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              20.33895800000755, 21.13270800000464, 21.177958000000217, 21.470166999992216,
+              22.032208000004175
+            ],
+            "min": 20.33895800000755,
+            "median": 21.177958000000217,
+            "p95": 22.032208000004175,
+            "max": 22.032208000004175,
+            "mean": 21.23039980000176
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapUsedBytes": {
+              "samples": [-48331754, -39290415, -37234365, -36817263, -32834965],
+              "min": -48331754,
+              "median": -37234365,
+              "p95": -32834965,
+              "max": -32834965,
+              "mean": -38901752.4
+            },
+            "heapTotalBytes": {
+              "samples": [-868352, -540672, -524288, -507904, -409600],
+              "min": -868352,
+              "median": -524288,
+              "p95": -409600,
+              "max": -409600,
+              "mean": -570163.2
+            },
+            "externalBytes": {
+              "samples": [7448, 7456, 7486, 7513, 14947],
+              "min": 7448,
+              "median": 7486,
+              "p95": 14947,
+              "max": 14947,
+              "mean": 8970
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 2,
+            "formulaValue": 5000
+          }
+        },
+        "hyperformula": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              0.13083400001050904, 0.14004200001363643, 0.14729199999419507, 0.1542499999923166,
+              0.2152500000083819
+            ],
+            "min": 0.13083400001050904,
+            "median": 0.14729199999419507,
+            "p95": 0.2152500000083819,
+            "max": 0.2152500000083819,
+            "mean": 0.1575336000038078
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [-65536, -49152, -49152, -49152, -49152],
+              "min": -65536,
+              "median": -49152,
+              "p95": -49152,
+              "max": -49152,
+              "mean": -52428.8
+            },
+            "externalBytes": {
+              "samples": [-7060, -496, 321, 397, 408],
+              "min": -7060,
+              "median": 321,
+              "p95": 408,
+              "max": 408,
+              "mean": -1286
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 2,
+            "formulaValue": 5000
+          }
+        }
+      }
+    },
+    {
+      "workload": "dynamic-array-filter",
+      "category": "leadership",
+      "comparable": false,
+      "fixture": {
+        "rowCount": 750,
+        "formula": "=FILTER(A2:A751,A2:A751>B1)"
+      },
+      "note": "This workload demonstrates capability leadership and is not an apples-to-apples speed comparison.",
+      "engines": {
+        "workpaper": {
+          "status": "supported",
+          "elapsedMs": {
+            "samples": [
+              2.125207999997656, 2.2057499999937136, 2.358457999987877, 2.3676660000055563,
+              2.4191250000003492
+            ],
+            "min": 2.125207999997656,
+            "median": 2.358457999987877,
+            "p95": 2.4191250000003492,
+            "max": 2.4191250000003492,
+            "mean": 2.2952413999970305
+          },
+          "memoryDeltaBytes": {
+            "rssBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapUsedBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            },
+            "heapTotalBytes": {
+              "samples": [32768, 81920, 81920, 81920, 81920],
+              "min": 32768,
+              "median": 81920,
+              "p95": 81920,
+              "max": 81920,
+              "mean": 72089.6
+            },
+            "externalBytes": {
+              "samples": [157, 158, 696, 877, 1274],
+              "min": 157,
+              "median": 696,
+              "p95": 1274,
+              "max": 1274,
+              "mean": 632.4
+            },
+            "arrayBuffersBytes": {
+              "samples": [0, 0, 0, 0, 0],
+              "min": 0,
+              "median": 0,
+              "p95": 0,
+              "max": 0,
+              "mean": 0
+            }
+          },
+          "verification": {
+            "changeCount": 376,
+            "spillHeight": 751,
+            "spillIsArray": true,
+            "spillValue": 741
+          }
+        },
+        "hyperformula": {
+          "status": "unsupported",
+          "evidence": [
+            "/Users/gregkonush/github.com/hyperformula/docs/guide/known-limitations.md",
+            "/Users/gregkonush/github.com/hyperformula/src/HyperFormula.ts"
+          ],
+          "reason": "HyperFormula 3.2.0 documents dynamic arrays as unsupported."
+        }
+      }
+    }
+  ]
+}
