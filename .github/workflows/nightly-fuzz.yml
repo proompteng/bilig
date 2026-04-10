@@ -1,4 +1,4 @@
-name: github-nightly-fuzz
+name: github-nightly-correctness
 
 on:
   schedule:
@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  nightly-fuzz:
-    name: nightly-fuzz
+  nightly-correctness:
+    name: nightly-correctness
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -37,21 +37,21 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Install Chromium for nightly browser fuzz
+      - name: Install Chromium for deep correctness gate
         run: |
           set -eu
           pnpm exec playwright install --with-deps chromium
 
-      - name: Run nightly fuzz campaign
+      - name: Run deep correctness gate
         run: |
           set -eu
-          pnpm test:fuzz:nightly
+          pnpm test:correctness:deep
 
-      - name: Upload nightly fuzz artifacts
+      - name: Upload nightly correctness artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: bilig-nightly-fuzz-artifacts
+          name: bilig-nightly-correctness-artifacts
           path: |
             artifacts/fuzz
             playwright-report

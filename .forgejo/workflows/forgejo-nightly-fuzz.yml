@@ -1,4 +1,4 @@
-name: forgejo-nightly-fuzz
+name: forgejo-nightly-correctness
 
 on:
   schedule:
@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  nightly-fuzz:
-    name: nightly-fuzz
+  nightly-correctness:
+    name: nightly-correctness
     runs-on: docker
     timeout-minutes: 45
     container:
@@ -41,17 +41,17 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Run nightly fuzz campaign
+      - name: Run deep correctness gate
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          pnpm test:fuzz:nightly
+          pnpm test:correctness:deep
 
-      - name: Upload nightly fuzz artifacts
+      - name: Upload nightly correctness artifacts
         if: failure()
         uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
-          name: bilig-nightly-fuzz-artifacts
+          name: bilig-nightly-correctness-artifacts
           path: |
             artifacts/fuzz
             playwright-report

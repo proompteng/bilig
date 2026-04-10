@@ -151,12 +151,13 @@ export function createEngineSnapshotService(args: {
                 const cells: WorkbookSnapshot["sheets"][number]["cells"] = [];
                 sheet.grid.forEachCell((cellIndex) => {
                   const snapshot = args.getCellByIndex(cellIndex);
+                  const explicitFormat = args.state.workbook.getCellFormat(cellIndex);
                   if ((snapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
                     return;
                   }
                   if (
                     snapshot.formula === undefined &&
-                    snapshot.format === undefined &&
+                    explicitFormat === undefined &&
                     snapshot.version === 0 &&
                     (snapshot.value.tag === ValueTag.Empty || snapshot.value.tag === ValueTag.Error)
                   ) {
@@ -165,8 +166,8 @@ export function createEngineSnapshotService(args: {
                   const cell: WorkbookSnapshot["sheets"][number]["cells"][number] = {
                     address: snapshot.address,
                   };
-                  if (snapshot.format !== undefined) {
-                    cell.format = snapshot.format;
+                  if (explicitFormat !== undefined) {
+                    cell.format = explicitFormat;
                   }
                   if (snapshot.formula) {
                     cell.formula = snapshot.formula;

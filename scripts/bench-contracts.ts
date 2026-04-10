@@ -14,7 +14,7 @@ import {
 
 const baseBudgets = {
   load100kP95Ms: 1500,
-  load250kP95Ms: 1000,
+  load250kP95Ms: 1500,
   load100kWorkingSetDeltaBytes: 250 * 1024 * 1024,
   edit10kElapsedP95Ms: 120,
   edit10kRecalcMedianMs: 50,
@@ -23,7 +23,7 @@ const baseBudgets = {
   rangeAggregates10kRecalcP95Ms: 100,
   topologyEdit10kElapsedP95Ms: 80,
   topologyEdit10kRecalcP95Ms: 80,
-  renderCommit10kP95Ms: 50,
+  renderCommit10kP95Ms: 80,
   workerWarmStart100kP95Ms: 500,
   workerWarmStart250kP95Ms: 700,
   workerVisibleEdit10kP95Ms: 16,

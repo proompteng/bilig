@@ -415,6 +415,32 @@ describe("engine correctness", () => {
     expect(engine.exportSnapshot()).toEqual(initialSnapshot);
   });
 
+  it("does not materialize inherited format-range placeholders during snapshot roundtrip", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "correctness-snapshot-format-range",
+      replicaId: "correctness-snapshot-format-range",
+    });
+    await engine.ready();
+    engine.createSheet(sheetName);
+
+    engine.setCellFormula(sheetName, "A1", "C4+C3");
+    engine.setRangeNumberFormat(
+      { sheetName, startAddress: "B4", endAddress: "C4" },
+      "0.00",
+    );
+    engine.clearRange({ sheetName, startAddress: "B4", endAddress: "C4" });
+
+    const snapshot = engine.exportSnapshot();
+    const restored = new SpreadsheetEngine({
+      workbookName: snapshot.workbook.name,
+      replicaId: "correctness-snapshot-format-range-restored",
+    });
+    await restored.ready();
+    restored.importSnapshot(snapshot);
+
+    expect(restored.exportSnapshot()).toEqual(snapshot);
+  });
+
   it("reverses random local edit streams through undo and redo", async () => {
     await runProperty({
       suite: "core/undo-redo-reversibility",

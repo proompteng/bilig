@@ -390,6 +390,10 @@ function runPlaywright(args: string[]): void {
     env: {
       ...process.env,
       BILIG_BROWSER_STACK: browserStack,
+      BILIG_DEV_DISABLE_COMPOSE:
+        browserStack === "local" ? "1" : (process.env["BILIG_DEV_DISABLE_COMPOSE"] ?? "0"),
+      BILIG_E2E_REMOTE_SYNC:
+        browserStack === "local" ? "0" : (process.env["BILIG_E2E_REMOTE_SYNC"] ?? "1"),
       BILIG_E2E_WEB_PORT: e2eWebPort,
       BILIG_E2E_SYNC_SERVER_PORT: e2eSyncServerPort,
       BILIG_E2E_ZERO_PORT: e2eZeroPort,

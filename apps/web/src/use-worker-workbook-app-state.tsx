@@ -31,6 +31,12 @@ import {
   toEditorValue,
   toResolvedValue,
 } from "./worker-workbook-app-model.js";
+import {
+  readViewportColumnWidths,
+  readViewportHiddenColumns,
+  readViewportHiddenRows,
+  readViewportRowHeights,
+} from "./worker-workbook-view-state.js";
 import { useWorkbookSync } from "./use-workbook-sync.js";
 import { useWorkbookToolbar } from "./use-workbook-toolbar.js";
 import { useZeroHealthReady } from "./use-zero-health-ready.js";
@@ -182,8 +188,8 @@ export function useWorkerWorkbookAppState(input: {
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => workerHandle?.viewportStore.getColumnWidths(selection.sheetName),
-    () => workerHandle?.viewportStore.getColumnWidths(selection.sheetName),
+    () => readViewportColumnWidths(workerHandle, selection.sheetName),
+    () => readViewportColumnWidths(workerHandle, selection.sheetName),
   );
 
   const rowHeights = useSyncExternalStore(
@@ -191,8 +197,8 @@ export function useWorkerWorkbookAppState(input: {
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => workerHandle?.viewportStore.getRowHeights(selection.sheetName),
-    () => workerHandle?.viewportStore.getRowHeights(selection.sheetName),
+    () => readViewportRowHeights(workerHandle, selection.sheetName),
+    () => readViewportRowHeights(workerHandle, selection.sheetName),
   );
 
   const hiddenColumns = useSyncExternalStore(
@@ -200,8 +206,8 @@ export function useWorkerWorkbookAppState(input: {
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => workerHandle?.viewportStore.getHiddenColumns(selection.sheetName) ?? {},
-    () => workerHandle?.viewportStore.getHiddenColumns(selection.sheetName) ?? {},
+    () => readViewportHiddenColumns(workerHandle, selection.sheetName),
+    () => readViewportHiddenColumns(workerHandle, selection.sheetName),
   );
 
   const hiddenRows = useSyncExternalStore(
@@ -209,8 +215,8 @@ export function useWorkerWorkbookAppState(input: {
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
       [workerHandle],
     ),
-    () => workerHandle?.viewportStore.getHiddenRows(selection.sheetName) ?? {},
-    () => workerHandle?.viewportStore.getHiddenRows(selection.sheetName) ?? {},
+    () => readViewportHiddenRows(workerHandle, selection.sheetName),
+    () => readViewportHiddenRows(workerHandle, selection.sheetName),
   );
 
   const selectedCell = useSyncExternalStore(

@@ -1,6 +1,6 @@
 # Correctness Gates Program
 ## Date: 2026-04-09
-## Status: proposed
+## Status: implemented
 
 ## Why this document exists
 

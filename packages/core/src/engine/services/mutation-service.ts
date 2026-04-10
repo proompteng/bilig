@@ -16,6 +16,22 @@ function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message;
 }
 
+function getMatrixCell(
+  matrix: readonly (readonly CellSnapshot[])[],
+  rowIndex: number,
+  colIndex: number,
+): CellSnapshot {
+  const row = matrix[rowIndex];
+  if (row === undefined) {
+    throw new RangeError(`Missing source row at index ${rowIndex}`);
+  }
+  const cell = row[colIndex];
+  if (cell === undefined) {
+    throw new RangeError(`Missing source cell at row ${rowIndex}, column ${colIndex}`);
+  }
+  return cell;
+}
+
 export interface EngineMutationService {
   readonly executeTransaction: (
     record: TransactionRecord,
@@ -493,13 +509,20 @@ export function createEngineMutationService(args: {
           },
         ];
       }
+      default: {
+        const exhaustive: never = op;
+        return exhaustive;
+      }
     }
   };
 
   const buildInverseOps = (ops: readonly EngineOp[]): EngineOp[] => {
     const inverseOps: EngineOp[] = [];
     for (let index = ops.length - 1; index >= 0; index -= 1) {
-      inverseOps.push(...inverseOpsFor(ops[index]!));
+      const op = ops[index];
+      if (op !== undefined) {
+        inverseOps.push(...inverseOpsFor(op));
+      }
     }
     return inverseOps;
   };
@@ -753,7 +776,7 @@ export function createEngineMutationService(args: {
             for (let col = targetBounds.startCol; col <= targetBounds.endCol; col += 1) {
               const sourceRowOffset = (row - targetBounds.startRow) % sourceHeight;
               const sourceColOffset = (col - targetBounds.startCol) % sourceWidth;
-              const sourceCell = sourceMatrix[sourceRowOffset]![sourceColOffset]!;
+              const sourceCell = getMatrixCell(sourceMatrix, sourceRowOffset, sourceColOffset);
               const sourceAddress = formatAddress(
                 sourceBounds.startRow + sourceRowOffset,
                 sourceBounds.startCol + sourceColOffset,
@@ -807,7 +830,7 @@ export function createEngineMutationService(args: {
                 ...args.toCellStateOps(
                   target.sheetName,
                   nextAddress,
-                  sourceMatrix[rowOffset]![colOffset]!,
+                  getMatrixCell(sourceMatrix, rowOffset, colOffset),
                   source.sheetName,
                   sourceAddress,
                 ),
@@ -861,7 +884,7 @@ export function createEngineMutationService(args: {
                 ...args.toCellStateOps(
                   target.sheetName,
                   nextAddress,
-                  sourceMatrix[rowOffset]![colOffset]!,
+                  getMatrixCell(sourceMatrix, rowOffset, colOffset),
                   source.sheetName,
                   sourceAddress,
                 ),

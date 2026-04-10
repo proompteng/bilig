@@ -9,7 +9,7 @@ on:
 
 jobs:
   checks:
-    name: Checks
+    name: Fast Correctness + Repository Checks
     runs-on: docker
     timeout-minutes: 50
     env:
@@ -64,6 +64,12 @@ jobs:
           git diff --exit-code
           git diff --cached --exit-code
 
+      - name: Run fast correctness gate
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm test:correctness:fast
+
       - name: Run unit, coverage, and perf CI
         run: |
           set -eu
@@ -84,6 +90,67 @@ jobs:
             test-results
           if-no-files-found: ignore
 
+  medium-correctness:
+    name: Medium Correctness
+    runs-on: docker
+    needs:
+      - checks
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      BILIG_BENCH_TOLERANCE: "1.5"
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v6.0.2
+
+      - name: Log runner environment
+        run: |
+          set -eu
+          uname -a
+          pwd
+          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
+
+      - name: Verify Node baseline
+        run: |
+          set -eu
+          node --version
+          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
+
+      - name: Enable pnpm via Corepack
+        run: |
+          set -eu
+          corepack enable
+          pnpm --version
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Install latest Bun
+        run: |
+          set -eu
+          npm install -g bun
+          bun --version
+
+      - name: Install dependencies
+        run: |
+          set -eu
+          pnpm install --frozen-lockfile
+
+      - name: Run medium correctness gate
+        run: |
+          set -eu
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm test:correctness:medium
+
+      - name: Upload medium correctness artifacts on failure
+        if: failure()
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
+        with:
+          name: bilig-medium-correctness-artifacts
+          path: |
+            artifacts/fuzz
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
   browser-e2e:
     name: Browser E2E
     runs-on: docker
@@ -91,6 +158,7 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
     needs:
       - checks
+      - medium-correctness
     timeout-minutes: 45
     env:
       CI: "true"
