@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const STORAGE_KEY_PREFIX = "bilig:workbook-shell-layout:";
 
 export const DEFAULT_WORKBOOK_SIDE_RAIL_WIDTH = 344;
-export const MIN_WORKBOOK_SIDE_RAIL_WIDTH = 304;
-export const MAX_WORKBOOK_SIDE_RAIL_WIDTH = 520;
+const MIN_WORKBOOK_SIDE_RAIL_WIDTH = 304;
+const MAX_WORKBOOK_SIDE_RAIL_WIDTH = 520;
 
 interface StoredWorkbookShellLayout {
   sideRailOpen?: boolean;
@@ -26,7 +26,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function clampWorkbookSideRailWidth(width: number): number {
+function clampWorkbookSideRailWidth(width: number): number {
   return Math.min(
     MAX_WORKBOOK_SIDE_RAIL_WIDTH,
     Math.max(MIN_WORKBOOK_SIDE_RAIL_WIDTH, Math.round(width)),
@@ -55,7 +55,7 @@ function normalizeStoredWorkbookShellLayout(
   };
 }
 
-export function loadPersistedWorkbookShellLayout(
+function loadPersistedWorkbookShellLayout(
   scope: string,
   availableTabs: readonly string[],
   defaultTab: string | null,
@@ -72,7 +72,7 @@ export function loadPersistedWorkbookShellLayout(
   }
 }
 
-export function persistWorkbookShellLayout(scope: string, layout: WorkbookShellLayoutState): void {
+function persistWorkbookShellLayout(scope: string, layout: WorkbookShellLayoutState): void {
   try {
     const stored: StoredWorkbookShellLayout = {
       sideRailOpen: layout.isSideRailOpen,
