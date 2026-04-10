@@ -71,6 +71,19 @@ function createThreadState() {
         citations: [],
       },
       {
+        id: "tool-call-1",
+        kind: "tool" as const,
+        turnId: "turn-1",
+        text: null,
+        phase: null,
+        toolName: "bilig_read_workbook",
+        toolStatus: "completed" as const,
+        argumentsText: "{\"sheetName\":\"Sheet1\"}",
+        outputText: "{\"summary\":\"Loaded workbook\"}",
+        success: true,
+        citations: [],
+      },
+      {
         id: "system-preview:bundle-1",
         kind: "system" as const,
         turnId: "turn-1",
@@ -153,7 +166,11 @@ describe("workbook-chat-thread-store", () => {
     ).toBe(true);
     expect(
       queryable.calls.filter((call) => call.text.includes("INSERT INTO workbook_chat_item")).length,
-    ).toBe(2);
+    ).toBe(3);
+    expect(
+      queryable.calls.filter((call) => call.text.includes("INSERT INTO workbook_chat_tool_call"))
+        .length,
+    ).toBe(1);
     const bundleInsert = queryable.calls.find((call) =>
       call.text.includes("INSERT INTO workbook_pending_bundle"),
     );
@@ -176,6 +193,14 @@ describe("workbook-chat-thread-store", () => {
         },
       ]),
     );
+    const toolInsert = queryable.calls.find(
+      (call) =>
+        call.text.includes("INSERT INTO workbook_chat_tool_call") &&
+        call.values?.[3] === "tool-call-1",
+    );
+    expect(toolInsert?.values?.[6]).toBe("bilig_read_workbook");
+    expect(toolInsert?.values?.[8]).toBe("{\"sheetName\":\"Sheet1\"}");
+    expect(toolInsert?.values?.[9]).toBe("{\"summary\":\"Loaded workbook\"}");
   });
 
   it("loads a durable thread snapshot with entries and a pending bundle", async () => {
@@ -210,6 +235,21 @@ describe("workbook-chat-thread-store", () => {
               citationsJson: entry.citations,
               sortOrder: index,
             }))
+          : null,
+      (text) =>
+        text.includes("FROM workbook_chat_tool_call")
+          ? state.entries
+              .filter((entry) => entry.kind === "tool")
+              .map((entry, index) => ({
+                entryId: entry.id,
+                turnId: entry.turnId,
+                toolName: entry.toolName,
+                toolStatus: entry.toolStatus,
+                argumentsText: entry.argumentsText,
+                outputText: entry.outputText,
+                success: entry.success,
+                sortOrder: index,
+              }))
           : null,
       (text) =>
         text.includes("FROM workbook_pending_bundle")
@@ -285,6 +325,21 @@ describe("workbook-chat-thread-store", () => {
             }))
           : null,
       (text, values) =>
+        text.includes("FROM workbook_chat_tool_call") && values?.[2] === "alex@example.com"
+          ? state.entries
+              .filter((entry) => entry.kind === "tool")
+              .map((entry, index) => ({
+                entryId: entry.id,
+                turnId: entry.turnId,
+                toolName: entry.toolName,
+                toolStatus: entry.toolStatus,
+                argumentsText: entry.argumentsText,
+                outputText: entry.outputText,
+                success: entry.success,
+                sortOrder: index,
+              }))
+          : null,
+      (text, values) =>
         text.includes("FROM workbook_pending_bundle") && values?.[2] === "alex@example.com"
           ? [
               {
@@ -316,6 +371,90 @@ describe("workbook-chat-thread-store", () => {
     });
 
     expect(loaded).toEqual(state);
+  });
+
+  it("hydrates tool call state from dedicated durable tool call rows", async () => {
+    const state = createThreadState();
+    const toolEntry = state.entries.find((entry) => entry.id === "tool-call-1");
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes("FROM workbook_chat_thread")
+          ? [
+              {
+                workbookId: state.documentId,
+                threadId: state.threadId,
+                actorUserId: state.actorUserId,
+                scope: state.scope,
+                contextJson: state.context,
+                updatedAtUnixMs: state.updatedAtUnixMs,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text) =>
+        text.includes("FROM workbook_chat_item")
+          ? state.entries.map((entry, index) => ({
+              entryId: entry.id,
+              turnId: entry.turnId,
+              kind: entry.kind,
+              text: entry.text,
+              phase: entry.phase,
+              toolName: entry.id === "tool-call-1" ? null : entry.toolName,
+              toolStatus: entry.id === "tool-call-1" ? null : entry.toolStatus,
+              argumentsText: entry.id === "tool-call-1" ? null : entry.argumentsText,
+              outputText: entry.id === "tool-call-1" ? null : entry.outputText,
+              success: entry.id === "tool-call-1" ? null : entry.success,
+              citationsJson: entry.citations,
+              sortOrder: index,
+            }))
+          : null,
+      (text) =>
+        text.includes("FROM workbook_chat_tool_call") && toolEntry
+          ? [
+              {
+                entryId: toolEntry.id,
+                turnId: toolEntry.turnId,
+                toolName: toolEntry.toolName,
+                toolStatus: toolEntry.toolStatus,
+                argumentsText: toolEntry.argumentsText,
+                outputText: toolEntry.outputText,
+                success: toolEntry.success,
+                sortOrder: 1,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text) =>
+        text.includes("FROM workbook_pending_bundle")
+          ? [
+              {
+                bundleId: state.pendingBundle?.id,
+                workbookId: state.pendingBundle?.documentId,
+                threadId: state.pendingBundle?.threadId,
+                actorUserId: state.actorUserId,
+                turnId: state.pendingBundle?.turnId,
+                goalText: state.pendingBundle?.goalText,
+                summary: state.pendingBundle?.summary,
+                scope: state.pendingBundle?.scope,
+                riskClass: state.pendingBundle?.riskClass,
+                approvalMode: state.pendingBundle?.approvalMode,
+                baseRevision: state.pendingBundle?.baseRevision,
+                createdAtUnixMs: state.pendingBundle?.createdAtUnixMs,
+                contextJson: state.pendingBundle?.context,
+                commandsJson: state.pendingBundle?.commands,
+                affectedRangesJson: state.pendingBundle?.affectedRanges,
+                estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
+                sharedReviewJson: state.pendingBundle?.sharedReview,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const loaded = await loadWorkbookAgentThreadState(queryable, {
+      documentId: "doc-1",
+      threadId: "thr-1",
+      actorUserId: "alex@example.com",
+    });
+
+    expect(loaded?.entries.find((entry) => entry.id === "tool-call-1")).toEqual(toolEntry);
   });
 
   it("lists durable thread summaries ordered by most recent activity", async () => {

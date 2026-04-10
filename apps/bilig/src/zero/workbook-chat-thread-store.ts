@@ -50,6 +50,17 @@ interface WorkbookChatItemRow extends QueryResultRow {
   readonly sortOrder?: unknown;
 }
 
+interface WorkbookChatToolCallRow extends QueryResultRow {
+  readonly entryId?: unknown;
+  readonly turnId?: unknown;
+  readonly toolName?: unknown;
+  readonly toolStatus?: unknown;
+  readonly argumentsText?: unknown;
+  readonly outputText?: unknown;
+  readonly success?: unknown;
+  readonly sortOrder?: unknown;
+}
+
 interface WorkbookPendingBundleRow extends QueryResultRow {
   readonly bundleId?: unknown;
   readonly workbookId?: unknown;
@@ -175,6 +186,56 @@ function normalizeTimelineEntry(row: WorkbookChatItemRow): WorkbookAgentTimeline
     success: typeof row.success === "boolean" ? row.success : null,
     citations: Array.isArray(row.citationsJson) ? [...row.citationsJson] : [],
   };
+}
+
+function normalizeToolCallRow(row: WorkbookChatToolCallRow): {
+  readonly entryId: string;
+  readonly turnId: string | null;
+  readonly toolName: string | null;
+  readonly toolStatus: WorkbookAgentToolStatus;
+  readonly argumentsText: string | null;
+  readonly outputText: string | null;
+  readonly success: boolean | null;
+} | null {
+  if (
+    typeof row.entryId !== "string" ||
+    (row.turnId !== null && row.turnId !== undefined && typeof row.turnId !== "string") ||
+    (row.toolName !== null && row.toolName !== undefined && typeof row.toolName !== "string") ||
+    !isToolStatus(row.toolStatus ?? null) ||
+    (row.argumentsText !== null &&
+      row.argumentsText !== undefined &&
+      typeof row.argumentsText !== "string") ||
+    (row.outputText !== null &&
+      row.outputText !== undefined &&
+      typeof row.outputText !== "string") ||
+    (row.success !== null && row.success !== undefined && typeof row.success !== "boolean")
+  ) {
+    return null;
+  }
+  const toolStatus: WorkbookAgentToolStatus =
+    row.toolStatus === "inProgress" || row.toolStatus === "completed" || row.toolStatus === "failed"
+      ? row.toolStatus
+      : null;
+  return {
+    entryId: row.entryId,
+    turnId: typeof row.turnId === "string" ? row.turnId : null,
+    toolName: typeof row.toolName === "string" ? row.toolName : null,
+    toolStatus,
+    argumentsText: typeof row.argumentsText === "string" ? row.argumentsText : null,
+    outputText: typeof row.outputText === "string" ? row.outputText : null,
+    success: typeof row.success === "boolean" ? row.success : null,
+  };
+}
+
+function hasToolCallState(entry: WorkbookAgentTimelineEntry): boolean {
+  return (
+    entry.kind === "tool" ||
+    entry.toolName !== null ||
+    entry.toolStatus !== null ||
+    entry.argumentsText !== null ||
+    entry.outputText !== null ||
+    entry.success !== null
+  );
 }
 
 function normalizePendingBundle(row: WorkbookPendingBundleRow): WorkbookAgentCommandBundle | null {
@@ -313,6 +374,22 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
     )
   `);
   await db.query(`
+    CREATE TABLE IF NOT EXISTS workbook_chat_tool_call (
+      workbook_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      actor_user_id TEXT NOT NULL,
+      entry_id TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      turn_id TEXT,
+      tool_name TEXT,
+      tool_status TEXT,
+      arguments_text TEXT,
+      output_text TEXT,
+      success BOOLEAN,
+      PRIMARY KEY (workbook_id, thread_id, actor_user_id, entry_id)
+    )
+  `);
+  await db.query(`
     ALTER TABLE workbook_chat_item
       ADD COLUMN IF NOT EXISTS citations_json JSONB;
   `);
@@ -345,6 +422,10 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
       ON workbook_chat_thread (workbook_id, actor_user_id, updated_at_unix_ms DESC)
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS workbook_chat_tool_call_thread_order_idx
+      ON workbook_chat_tool_call (workbook_id, thread_id, actor_user_id, sort_order ASC)
   `);
 }
 
@@ -414,6 +495,13 @@ export async function saveWorkbookAgentThreadState(
     `,
     [record.documentId, record.threadId, record.actorUserId],
   );
+  await db.query(
+    `
+      DELETE FROM workbook_chat_tool_call
+      WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
+    `,
+    [record.documentId, record.threadId, record.actorUserId],
+  );
   await Promise.all(
     record.entries.map(async (entry, index) => {
       await db.query(
@@ -455,6 +543,42 @@ export async function saveWorkbookAgentThreadState(
           entry.outputText,
           entry.success,
           JSON.stringify(entry.citations),
+        ],
+      );
+      if (!hasToolCallState(entry)) {
+        return;
+      }
+      await db.query(
+        `
+          INSERT INTO workbook_chat_tool_call (
+            workbook_id,
+            thread_id,
+            actor_user_id,
+            entry_id,
+            sort_order,
+            turn_id,
+            tool_name,
+            tool_status,
+            arguments_text,
+            output_text,
+            success
+          )
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+          )
+        `,
+        [
+          record.documentId,
+          record.threadId,
+          record.actorUserId,
+          entry.id,
+          index,
+          entry.turnId,
+          entry.toolName,
+          entry.toolStatus,
+          entry.argumentsText,
+          entry.outputText,
+          entry.success,
         ],
       );
     }),
@@ -572,7 +696,7 @@ export async function loadWorkbookAgentThreadState(
   ) {
     return null;
   }
-  const [itemResult, pendingBundleResult] = await Promise.all([
+  const [itemResult, toolCallResult, pendingBundleResult] = await Promise.all([
     db.query<WorkbookChatItemRow>(
       `
         SELECT
@@ -589,6 +713,23 @@ export async function loadWorkbookAgentThreadState(
           citations_json AS "citationsJson",
           sort_order AS "sortOrder"
         FROM workbook_chat_item
+        WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
+        ORDER BY sort_order ASC
+      `,
+      [thread.workbookId, thread.threadId, thread.actorUserId],
+    ),
+    db.query<WorkbookChatToolCallRow>(
+      `
+        SELECT
+          entry_id AS "entryId",
+          turn_id AS "turnId",
+          tool_name AS "toolName",
+          tool_status AS "toolStatus",
+          arguments_text AS "argumentsText",
+          output_text AS "outputText",
+          success AS "success",
+          sort_order AS "sortOrder"
+        FROM workbook_chat_tool_call
         WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
         ORDER BY sort_order ASC
       `,
@@ -620,8 +761,19 @@ export async function loadWorkbookAgentThreadState(
       [thread.workbookId, thread.threadId, thread.actorUserId],
     ),
   ]);
+  const toolCallsByEntryId = new Map(
+    toolCallResult.rows.flatMap((row) => {
+      const normalized = normalizeToolCallRow(row);
+      return normalized ? [[normalized.entryId, normalized] as const] : [];
+    }),
+  );
   const entries = itemResult.rows
-    .map((row) => normalizeTimelineEntry(row))
+    .map((row) =>
+      normalizeTimelineEntry({
+        ...row,
+        ...(typeof row.entryId === "string" ? toolCallsByEntryId.get(row.entryId) : undefined),
+      }),
+    )
     .filter((entry): entry is WorkbookAgentTimelineEntry => entry !== null);
   const pendingBundle = normalizePendingBundle(pendingBundleResult.rows[0] ?? {});
   return {
