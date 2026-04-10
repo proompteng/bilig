@@ -104,6 +104,11 @@ function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnaps
     definedNames: [],
     metrics: EMPTY_METRICS,
     syncState: "syncing",
+    pendingMutationSummary: {
+      activeCount: 0,
+      failedCount: 0,
+      firstFailed: null,
+    },
   };
 }
 
@@ -550,6 +555,13 @@ export async function createWorkerRuntimeSessionController(
           );
         }
         const result = await client.invoke(method, ...args);
+        if (
+          method === "enqueuePendingMutation" ||
+          method === "markPendingMutationFailed" ||
+          method === "retryPendingMutation"
+        ) {
+          await refreshRuntimeState();
+        }
         if (method === "enqueuePendingMutation") {
           await refreshSelectedCellSnapshot();
         }

@@ -1315,4 +1315,62 @@ describe("createWorkerRuntimeSessionController", () => {
     unsubscribe();
     controller.dispose();
   });
+
+  it("publishes failed pending mutation summaries and clears them after retry", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: false,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    const pendingId = expectPendingMutationId(
+      await controller.invoke("enqueuePendingMutation", {
+        method: "setCellValue",
+        args: ["Sheet1", "A1", 17],
+      }),
+    );
+
+    await controller.invoke("markPendingMutationFailed", pendingId, "mutation rejected by server");
+
+    await vi.waitFor(() => {
+      expect(controller.runtimeState.pendingMutationSummary).toEqual({
+        activeCount: 1,
+        failedCount: 1,
+        firstFailed: {
+          id: pendingId,
+          method: "setCellValue",
+          failureMessage: "mutation rejected by server",
+          attemptCount: 0,
+        },
+      });
+    });
+
+    await controller.invoke("retryPendingMutation", pendingId);
+
+    await vi.waitFor(() => {
+      expect(controller.runtimeState.pendingMutationSummary).toEqual({
+        activeCount: 1,
+        failedCount: 0,
+        firstFailed: null,
+      });
+    });
+
+    controller.dispose();
+  });
 });

@@ -29,6 +29,8 @@ interface ZeroMutationSource {
   mutate(mutation: unknown): unknown;
 }
 
+type WorkbookSyncRuntimeController = Pick<WorkerRuntimeSessionController, "invoke">;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -45,7 +47,7 @@ export function useWorkbookSync(input: {
   documentId: string;
   connectionStateName: ZeroConnectionState["name"];
   connectionStateRef: MutableRefObject<ZeroConnectionState["name"]>;
-  runtimeController: WorkerRuntimeSessionController | null;
+  runtimeController: WorkbookSyncRuntimeController | null;
   workerHandleRef: MutableRefObject<WorkerHandle | null>;
   zeroRef: MutableRefObject<ZeroMutationSource>;
   reportRuntimeError: (error: unknown) => void;
@@ -184,7 +186,7 @@ export function useWorkbookSync(input: {
             mutation.id,
             remoteResult.error.message,
           );
-          throw remoteResult.error;
+          return;
         }
         return;
       }
@@ -467,11 +469,35 @@ export function useWorkbookSync(input: {
     void drainPendingMutations();
   }, [connectionStateName, drainPendingMutations, runtimeController]);
 
+  const retryPendingMutation = useCallback(
+    async (id: string): Promise<void> => {
+      if (!runtimeController) {
+        throw new Error("Workbook runtime is not ready");
+      }
+      await runSerializedLocalMutationTask(() =>
+        runtimeController.invoke("retryPendingMutation", id),
+      );
+      await runSerializedSyncTask(async () => {
+        if (canAttemptRemoteSync(connectionStateRef.current)) {
+          await drainPendingMutationsLocked();
+        }
+      });
+    },
+    [
+      connectionStateRef,
+      drainPendingMutationsLocked,
+      runSerializedLocalMutationTask,
+      runSerializedSyncTask,
+      runtimeController,
+    ],
+  );
+
   return {
     invokeMutation,
     invokeColumnWidthMutation,
     invokeColumnVisibilityMutation,
     invokeRowHeightMutation,
     invokeRowVisibilityMutation,
+    retryPendingMutation,
   };
 }

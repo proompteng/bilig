@@ -1,11 +1,21 @@
 import { cva } from "class-variance-authority";
 import { cn } from "./cn.js";
-import { workbookAlertClass, workbookSurfaceClass } from "./workbook-shell-chrome.js";
+import {
+  workbookAlertClass,
+  workbookButtonClass,
+  workbookSurfaceClass,
+} from "./workbook-shell-chrome.js";
+
+interface WorkbookToastAction {
+  readonly label: string;
+  readonly onAction: () => void;
+}
 
 export interface WorkbookToast {
   readonly id: string;
   readonly tone?: "error" | "neutral";
   readonly message: string;
+  readonly action?: WorkbookToastAction;
   readonly onDismiss?: () => void;
 }
 
@@ -44,6 +54,18 @@ const toastDismissClass = cva(
   },
 );
 
+const toastActionClass = cva("shrink-0", {
+  variants: {
+    tone: {
+      error: workbookButtonClass({ size: "sm", tone: "danger" }),
+      neutral: workbookButtonClass({ size: "sm", tone: "neutral" }),
+    },
+  },
+  defaultVariants: {
+    tone: "neutral",
+  },
+});
+
 export function WorkbookToastRegion(props: { readonly toasts: readonly WorkbookToast[] }) {
   if (props.toasts.length === 0) {
     return null;
@@ -56,9 +78,19 @@ export function WorkbookToastRegion(props: { readonly toasts: readonly WorkbookT
           className={cn(toastClass({ tone: toast.tone ?? "neutral" }))}
           data-testid={`workbook-toast-${toast.id}`}
           key={toast.id}
-          role="status"
+          role={toast.tone === "error" ? "alert" : "status"}
         >
           <div className="min-w-0 flex-1 break-words text-[12px] leading-5">{toast.message}</div>
+          {toast.action ? (
+            <button
+              className={cn(toastActionClass({ tone: toast.tone ?? "neutral" }))}
+              data-testid={`workbook-toast-${toast.id}-action`}
+              type="button"
+              onClick={toast.action.onAction}
+            >
+              {toast.action.label}
+            </button>
+          ) : null}
           {toast.onDismiss ? (
             <button
               aria-label="Dismiss"

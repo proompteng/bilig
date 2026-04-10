@@ -49,6 +49,10 @@ describe("workbook perf session", () => {
     session.markFirstSelectionVisible();
     session.markFirstAuthoritativePatchVisible();
     session.markFirstAuthoritativePatchVisible();
+    session.markFirstLocalEditApplied?.();
+    session.markFirstLocalEditApplied?.();
+    session.markFirstPasteApplied?.();
+    session.markFirstPasteApplied?.();
     session.markFirstReconcileStarted();
     session.markFirstReconcileStarted();
     session.markFirstReconcileSettled();
@@ -60,6 +64,8 @@ describe("workbook perf session", () => {
       "perf-doc:session:local-restore-ready",
       "perf-doc:session:first-selection-visible",
       "perf-doc:session:first-authoritative-patch-visible",
+      "perf-doc:session:first-local-edit-applied",
+      "perf-doc:session:first-paste-applied",
       "perf-doc:session:first-reconcile-started",
       "perf-doc:session:first-reconcile-settled",
     ]);
@@ -83,6 +89,16 @@ describe("workbook perf session", () => {
         name: "perf-doc:session:time-to-first-authoritative-patch-visible",
         start: "perf-doc:session:start",
         end: "perf-doc:session:first-authoritative-patch-visible",
+      },
+      {
+        name: "perf-doc:session:time-to-first-local-edit-applied",
+        start: "perf-doc:session:start",
+        end: "perf-doc:session:first-local-edit-applied",
+      },
+      {
+        name: "perf-doc:session:time-to-first-paste-applied",
+        start: "perf-doc:session:start",
+        end: "perf-doc:session:first-paste-applied",
       },
       {
         name: "perf-doc:session:time-to-first-reconcile-started",
@@ -142,6 +158,8 @@ describe("workbook perf session", () => {
         requiresAuthoritativeHydrate: true,
       });
       session.markFirstAuthoritativePatchVisible();
+      session.markFirstLocalEditApplied?.();
+      session.markFirstPasteApplied?.();
       session.markFirstReconcileStarted();
       session.markFirstReconcileSettled();
       session.markFirstSelectionVisible();

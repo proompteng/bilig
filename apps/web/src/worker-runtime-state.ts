@@ -2,6 +2,19 @@ import type { SpreadsheetEngine } from "@bilig/core";
 import type { RecalcMetrics, SyncState, WorkbookDefinedNameSnapshot } from "@bilig/protocol";
 import type { WorkerEngine } from "./worker-runtime-support.js";
 
+interface WorkbookFailedPendingMutationLike {
+  readonly id: string;
+  readonly method: string;
+  readonly failureMessage: string;
+  readonly attemptCount: number;
+}
+
+interface WorkbookPendingMutationSummaryLike {
+  readonly activeCount: number;
+  readonly failedCount: number;
+  readonly firstFailed: WorkbookFailedPendingMutationLike | null;
+}
+
 export const EMPTY_RUNTIME_METRICS: RecalcMetrics = {
   batchId: 0,
   changedInputCount: 0,
@@ -32,25 +45,49 @@ export function cloneRuntimeMetrics(metrics: RecalcMetrics = EMPTY_RUNTIME_METRI
   return { ...metrics };
 }
 
+function clonePendingMutationSummary(
+  summary: WorkbookPendingMutationSummaryLike | undefined,
+): WorkbookPendingMutationSummaryLike | undefined {
+  if (!summary) {
+    return undefined;
+  }
+  return {
+    activeCount: summary.activeCount,
+    failedCount: summary.failedCount,
+    firstFailed: summary.firstFailed
+      ? {
+          id: summary.firstFailed.id,
+          method: summary.firstFailed.method,
+          failureMessage: summary.firstFailed.failureMessage,
+          attemptCount: summary.firstFailed.attemptCount,
+        }
+      : null,
+  };
+}
+
 export function cloneWorkerRuntimeState(input: {
   workbookName: string;
   sheetNames: readonly string[];
   definedNames: readonly WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
+  pendingMutationSummary?: WorkbookPendingMutationSummaryLike;
 }): {
   workbookName: string;
   sheetNames: string[];
   definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
+  pendingMutationSummary?: WorkbookPendingMutationSummaryLike;
 } {
+  const pendingMutationSummary = clonePendingMutationSummary(input.pendingMutationSummary);
   return {
     workbookName: input.workbookName,
     sheetNames: [...input.sheetNames],
     definedNames: input.definedNames.map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(input.metrics),
     syncState: input.syncState,
+    ...(pendingMutationSummary ? { pendingMutationSummary } : {}),
   };
 }
 
@@ -61,6 +98,7 @@ export function withExternalSyncState(
     definedNames: readonly WorkbookDefinedNameSnapshot[];
     metrics: RecalcMetrics;
     syncState: SyncState;
+    pendingMutationSummary?: WorkbookPendingMutationSummaryLike;
   },
   externalSyncState: SyncState | null,
 ): {
@@ -69,6 +107,7 @@ export function withExternalSyncState(
   definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
+  pendingMutationSummary?: WorkbookPendingMutationSummaryLike;
 } {
   const nextState = cloneWorkerRuntimeState(state);
   nextState.syncState = externalSyncState ?? state.syncState;
@@ -85,6 +124,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
+  pendingMutationSummary?: WorkbookPendingMutationSummaryLike;
 } {
   return {
     workbookName: input.workbookName,
@@ -101,6 +141,7 @@ export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & Wo
   definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
+  pendingMutationSummary?: WorkbookPendingMutationSummaryLike;
 } {
   return {
     workbookName: engine.workbook.workbookName,

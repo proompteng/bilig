@@ -266,6 +266,7 @@ export function useWorkerWorkbookAppState(input: {
     invokeColumnWidthMutation,
     invokeRowHeightMutation,
     invokeRowVisibilityMutation,
+    retryPendingMutation,
   } = useWorkbookSync({
     documentId,
     connectionStateName: connectionState.name,
@@ -362,15 +363,18 @@ export function useWorkerWorkbookAppState(input: {
     async (sheetName: string, address: string, parsed: ParsedEditorInput) => {
       if (parsed.kind === "formula") {
         await invokeMutation("setCellFormula", sheetName, address, parsed.formula);
+        perfSession.markFirstLocalEditApplied?.();
         return;
       }
       if (parsed.kind === "clear") {
         await invokeMutation("clearCell", sheetName, address);
+        perfSession.markFirstLocalEditApplied?.();
         return;
       }
       await invokeMutation("setCellValue", sheetName, address, parsed.value);
+      perfSession.markFirstLocalEditApplied?.();
     },
-    [invokeMutation],
+    [invokeMutation, perfSession],
   );
 
   const commitEditor = useCallback(
@@ -464,6 +468,9 @@ export function useWorkerWorkbookAppState(input: {
     editingModeRef,
     invokeMutation,
     applyParsedInput,
+    onPasteApplied: () => {
+      perfSession.markFirstPasteApplied?.();
+    },
     resetEditorConflictTracking,
     reportRuntimeError,
     setEditorValue,
@@ -586,6 +593,7 @@ export function useWorkerWorkbookAppState(input: {
     () => parseCellAddress(selection.address, selection.sheetName),
     [selection.address, selection.sheetName],
   );
+  const failedPendingMutation = runtimeState?.pendingMutationSummary?.firstFailed ?? null;
 
   const {
     headerStatus: toolbarHeaderStatus,
@@ -720,6 +728,13 @@ export function useWorkerWorkbookAppState(input: {
     [invokeMutation],
   );
 
+  const retryFailedPendingMutation = useCallback(async (): Promise<void> => {
+    if (!failedPendingMutation) {
+      return;
+    }
+    await retryPendingMutation(failedPendingMutation.id);
+  }, [failedPendingMutation, retryPendingMutation]);
+
   return {
     agentError,
     clearAgentError,
@@ -741,6 +756,7 @@ export function useWorkerWorkbookAppState(input: {
     definedNames,
     editorConflictBanner,
     editorSelectionBehavior,
+    failedPendingMutation,
     fillSelectionRange,
     handleEditorChange,
     headerStatus,
@@ -766,6 +782,7 @@ export function useWorkerWorkbookAppState(input: {
     ribbon,
     runtimeError,
     runtimeReady,
+    retryFailedPendingMutation,
     selectAddress,
     selectedCell,
     selection,

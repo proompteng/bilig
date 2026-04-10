@@ -9,6 +9,10 @@ import { useWorkbookImportPane } from "./use-workbook-import-pane.js";
 import { useWorkbookShortcutDialog } from "./use-workbook-shortcut-dialog.js";
 import { useWorkerWorkbookAppState } from "./use-worker-workbook-app-state.js";
 
+function formatFailedPendingMutationMessage(input: { failureMessage: string }): string {
+  return `A local change could not be synced. ${input.failureMessage}`;
+}
+
 export function WorkerWorkbookApp(props: {
   config: BiligRuntimeConfig;
   connectionState: ZeroConnectionState;
@@ -49,23 +53,45 @@ function WorkerWorkbookAppInner({
     enabled: true,
   });
   const shortcuts = useWorkbookShortcutDialog();
+  const {
+    agentError,
+    clearAgentError,
+    clearRuntimeError,
+    failedPendingMutation,
+    reportRuntimeError,
+    retryFailedPendingMutation,
+    runtimeError,
+  } = app;
   const toasts = useMemo(
     () =>
       [
-        app.runtimeError
+        runtimeError
           ? {
               id: "runtime-error",
               tone: "error" as const,
-              message: app.runtimeError,
-              onDismiss: app.clearRuntimeError,
+              message: runtimeError,
+              onDismiss: clearRuntimeError,
             }
           : null,
-        app.agentError
+        failedPendingMutation
+          ? {
+              id: `pending-mutation-${failedPendingMutation.id}`,
+              tone: "error" as const,
+              message: formatFailedPendingMutationMessage(failedPendingMutation),
+              action: {
+                label: "Retry",
+                onAction: () => {
+                  void Promise.resolve(retryFailedPendingMutation()).catch(reportRuntimeError);
+                },
+              },
+            }
+          : null,
+        agentError
           ? {
               id: "agent-error",
               tone: "error" as const,
-              message: app.agentError,
-              onDismiss: app.clearAgentError,
+              message: agentError,
+              onDismiss: clearAgentError,
             }
           : null,
         importError
@@ -78,12 +104,15 @@ function WorkerWorkbookAppInner({
           : null,
       ].flatMap((toast) => (toast ? [toast] : [])),
     [
-      app.agentError,
-      app.clearAgentError,
-      app.clearRuntimeError,
-      app.runtimeError,
+      agentError,
+      clearAgentError,
+      clearRuntimeError,
+      failedPendingMutation,
       clearImportError,
       importError,
+      reportRuntimeError,
+      retryFailedPendingMutation,
+      runtimeError,
     ],
   );
 

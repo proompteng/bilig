@@ -83,6 +83,7 @@ export function useWorkbookSelectionActions(input: {
     address: string,
     parsed: ParsedEditorInput,
   ) => Promise<void>;
+  onPasteApplied?: () => void;
   resetEditorConflictTracking: (nextSelection?: WorkerRuntimeSelection) => void;
   reportRuntimeError: (error: unknown) => void;
   setEditorValue: Dispatch<SetStateAction<string>>;
@@ -95,6 +96,7 @@ export function useWorkbookSelectionActions(input: {
     editorTargetRef,
     editorValueRef,
     invokeMutation,
+    onPasteApplied,
     reportRuntimeError,
     resetEditorConflictTracking,
     selectionLabel,
@@ -206,12 +208,18 @@ export function useWorkbookSelectionActions(input: {
       if (ops.length === 0) {
         return;
       }
-      void invokeMutation("renderCommit", ops).catch(reportRuntimeError);
+      void invokeMutation("renderCommit", ops)
+        .then(() => {
+          onPasteApplied?.();
+          return undefined;
+        })
+        .catch(reportRuntimeError);
       resetEditingState();
       resetEditorConflictTracking();
     },
     [
       invokeMutation,
+      onPasteApplied,
       reportRuntimeError,
       resetEditingState,
       resetEditorConflictTracking,

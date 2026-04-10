@@ -105,6 +105,20 @@ export interface WorkbookWorkerStateSnapshot {
   definedNames: WorkbookDefinedNameSnapshot[];
   metrics: RecalcMetrics;
   syncState: SyncState;
+  pendingMutationSummary?: WorkbookPendingMutationSummarySnapshot;
+}
+
+export interface WorkbookFailedPendingMutationSnapshot {
+  readonly id: string;
+  readonly method: string;
+  readonly failureMessage: string;
+  readonly attemptCount: number;
+}
+
+export interface WorkbookPendingMutationSummarySnapshot {
+  readonly activeCount: number;
+  readonly failedCount: number;
+  readonly firstFailed: WorkbookFailedPendingMutationSnapshot | null;
 }
 
 export interface WorkbookWorkerBootstrapResult {
@@ -288,13 +302,17 @@ export class WorkbookWorkerRuntime {
   getRuntimeState(): WorkbookWorkerStateSnapshot {
     const cachedState = this.runtimeStateCache;
     if (cachedState) {
-      return {
-        workbookName: cachedState.workbookName,
-        sheetNames: [...cachedState.sheetNames],
-        definedNames: cachedState.definedNames.map((entry) => structuredClone(entry)),
-        metrics: { ...cachedState.metrics },
-        syncState: this.externalSyncState ?? cachedState.syncState,
-      };
+      return withExternalSyncState(
+        {
+          workbookName: cachedState.workbookName,
+          sheetNames: cachedState.sheetNames,
+          definedNames: cachedState.definedNames,
+          metrics: cachedState.metrics,
+          syncState: cachedState.syncState,
+          pendingMutationSummary: this.buildPendingMutationSummary(),
+        },
+        this.externalSyncState,
+      );
     }
     const engine = this.requireEngine();
     return this.storeRuntimeState({
@@ -866,8 +884,12 @@ export class WorkbookWorkerRuntime {
   }
 
   private storeRuntimeState(state: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot {
-    this.runtimeStateCache = cloneWorkerRuntimeState(state);
-    return withExternalSyncState(this.runtimeStateCache, this.externalSyncState);
+    this.runtimeStateCache = cloneWorkerRuntimeState({
+      ...state,
+      pendingMutationSummary: this.buildPendingMutationSummary(),
+    });
+    const cachedState = this.runtimeStateCache;
+    return withExternalSyncState(cachedState, this.externalSyncState);
   }
 
   private updateRuntimeStateFromEngine(
@@ -881,6 +903,25 @@ export class WorkbookWorkerRuntime {
       return cloneRuntimeMetrics(this.engine.getLastMetrics());
     }
     return cloneRuntimeMetrics(this.runtimeStateCache?.metrics ?? EMPTY_RUNTIME_METRICS);
+  }
+
+  private buildPendingMutationSummary(): WorkbookPendingMutationSummarySnapshot {
+    const firstFailed = this.mutationJournalEntries.find(
+      (mutation) => mutation.status === "failed" && mutation.failureMessage !== null,
+    );
+    return {
+      activeCount: this.pendingMutations.length,
+      failedCount: this.mutationJournalEntries.filter((mutation) => mutation.status === "failed")
+        .length,
+      firstFailed: firstFailed
+        ? {
+            id: firstFailed.id,
+            method: firstFailed.method,
+            failureMessage: firstFailed.failureMessage ?? "Mutation failed",
+            attemptCount: firstFailed.attemptCount,
+          }
+        : null,
+    };
   }
 
   private async getAuthoritativeStateInput(): Promise<{
