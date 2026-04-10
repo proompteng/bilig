@@ -1,3 +1,4 @@
+import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { FormulaMode, ValueTag, formatErrorCode } from "@bilig/protocol";
 import type { WorkbookRuntime } from "../workbook-runtime/runtime-manager.js";
 
@@ -79,6 +80,70 @@ export interface WorkbookDependencyTraceReport {
     readonly truncated: boolean;
   };
   readonly layers: readonly WorkbookDependencyTraceLayer[];
+}
+
+export interface WorkbookStructureSheetSummary {
+  readonly name: string;
+  readonly order: number;
+  readonly cellCount: number;
+  readonly formulaCellCount: number;
+  readonly usedRange: {
+    readonly startAddress: string;
+    readonly endAddress: string;
+  } | null;
+  readonly freezePane: {
+    readonly rows: number;
+    readonly cols: number;
+  } | null;
+  readonly filterCount: number;
+  readonly sortCount: number;
+  readonly tableCount: number;
+  readonly pivotCount: number;
+  readonly spillCount: number;
+  readonly rowMetadata: {
+    readonly regionCount: number;
+    readonly hiddenIndexCount: number;
+    readonly explicitSizeIndexCount: number;
+  };
+  readonly columnMetadata: {
+    readonly regionCount: number;
+    readonly hiddenIndexCount: number;
+    readonly explicitSizeIndexCount: number;
+  };
+  readonly tables: readonly {
+    readonly name: string;
+    readonly startAddress: string;
+    readonly endAddress: string;
+    readonly columnCount: number;
+  }[];
+  readonly pivots: readonly {
+    readonly name: string;
+    readonly address: string;
+    readonly source: string;
+    readonly groupBy: readonly string[];
+    readonly valueCount: number;
+  }[];
+  readonly spills: readonly {
+    readonly address: string;
+    readonly rows: number;
+    readonly cols: number;
+  }[];
+}
+
+export interface WorkbookStructureSummary {
+  readonly summary: {
+    readonly sheetCount: number;
+    readonly totalCellCount: number;
+    readonly totalFormulaCellCount: number;
+    readonly tableCount: number;
+    readonly pivotCount: number;
+    readonly spillCount: number;
+    readonly filterCount: number;
+    readonly sortCount: number;
+    readonly hiddenRowIndexCount: number;
+    readonly hiddenColumnIndexCount: number;
+  };
+  readonly sheets: readonly WorkbookStructureSheetSummary[];
 }
 
 interface FormulaIssueCache {
@@ -200,6 +265,166 @@ function describeTraceNode(
     valueText: valueToText(explanation.value),
     mode: modeToLabel(explanation.mode),
     inCycle: explanation.inCycle,
+  };
+}
+
+function summarizeAxisMetadata(
+  metadata: readonly {
+    count: number;
+    size: number | null;
+    hidden: boolean | null;
+  }[],
+): {
+  readonly regionCount: number;
+  readonly hiddenIndexCount: number;
+  readonly explicitSizeIndexCount: number;
+} {
+  let hiddenIndexCount = 0;
+  let explicitSizeIndexCount = 0;
+  for (const record of metadata) {
+    if (record.hidden === true) {
+      hiddenIndexCount += record.count;
+    }
+    if (record.size !== null) {
+      explicitSizeIndexCount += record.count;
+    }
+  }
+  return {
+    regionCount: metadata.length,
+    hiddenIndexCount,
+    explicitSizeIndexCount,
+  };
+}
+
+export function summarizeWorkbookStructure(runtime: WorkbookRuntime): WorkbookStructureSummary {
+  const snapshot = runtime.engine.exportSnapshot();
+  const tableBySheet = new Map<string, ReturnType<typeof runtime.engine.getTables>>();
+  for (const table of runtime.engine.getTables()) {
+    const entries = tableBySheet.get(table.sheetName) ?? [];
+    entries.push(table);
+    tableBySheet.set(table.sheetName, entries);
+  }
+  const pivotBySheet = new Map<string, ReturnType<typeof runtime.engine.getPivotTables>>();
+  for (const pivot of runtime.engine.getPivotTables()) {
+    const entries = pivotBySheet.get(pivot.sheetName) ?? [];
+    entries.push(pivot);
+    pivotBySheet.set(pivot.sheetName, entries);
+  }
+  const spillBySheet = new Map<string, ReturnType<typeof runtime.engine.getSpillRanges>>();
+  for (const spill of runtime.engine.getSpillRanges()) {
+    const entries = spillBySheet.get(spill.sheetName) ?? [];
+    entries.push(spill);
+    spillBySheet.set(spill.sheetName, entries);
+  }
+
+  let totalCellCount = 0;
+  let totalFormulaCellCount = 0;
+  let totalTableCount = 0;
+  let totalPivotCount = 0;
+  let totalSpillCount = 0;
+  let totalFilterCount = 0;
+  let totalSortCount = 0;
+  let totalHiddenRowIndexCount = 0;
+  let totalHiddenColumnIndexCount = 0;
+
+  const sheets = [...snapshot.sheets]
+    .toSorted((left, right) => left.order - right.order)
+    .map((sheet) => {
+      let minRow = Number.POSITIVE_INFINITY;
+      let maxRow = Number.NEGATIVE_INFINITY;
+      let minCol = Number.POSITIVE_INFINITY;
+      let maxCol = Number.NEGATIVE_INFINITY;
+      let formulaCellCount = 0;
+      for (const cell of sheet.cells) {
+        const parsed = parseCellAddress(cell.address, sheet.name);
+        minRow = Math.min(minRow, parsed.row);
+        maxRow = Math.max(maxRow, parsed.row);
+        minCol = Math.min(minCol, parsed.col);
+        maxCol = Math.max(maxCol, parsed.col);
+        if (cell.formula) {
+          formulaCellCount += 1;
+        }
+      }
+
+      const tables = tableBySheet.get(sheet.name) ?? [];
+      const pivots = pivotBySheet.get(sheet.name) ?? [];
+      const spills = spillBySheet.get(sheet.name) ?? [];
+      const filters = runtime.engine.getFilters(sheet.name);
+      const sorts = runtime.engine.getSorts(sheet.name);
+      const rowMetadata = summarizeAxisMetadata(runtime.engine.getRowMetadata(sheet.name));
+      const columnMetadata = summarizeAxisMetadata(runtime.engine.getColumnMetadata(sheet.name));
+      const freezePane = runtime.engine.getFreezePane(sheet.name);
+
+      totalCellCount += sheet.cells.length;
+      totalFormulaCellCount += formulaCellCount;
+      totalTableCount += tables.length;
+      totalPivotCount += pivots.length;
+      totalSpillCount += spills.length;
+      totalFilterCount += filters.length;
+      totalSortCount += sorts.length;
+      totalHiddenRowIndexCount += rowMetadata.hiddenIndexCount;
+      totalHiddenColumnIndexCount += columnMetadata.hiddenIndexCount;
+
+      return {
+        name: sheet.name,
+        order: sheet.order,
+        cellCount: sheet.cells.length,
+        formulaCellCount,
+        usedRange:
+          sheet.cells.length === 0
+            ? null
+            : {
+                startAddress: formatAddress(minRow, minCol),
+                endAddress: formatAddress(maxRow, maxCol),
+              },
+        freezePane: freezePane
+          ? {
+              rows: freezePane.rows,
+              cols: freezePane.cols,
+            }
+          : null,
+        filterCount: filters.length,
+        sortCount: sorts.length,
+        tableCount: tables.length,
+        pivotCount: pivots.length,
+        spillCount: spills.length,
+        rowMetadata,
+        columnMetadata,
+        tables: tables.map((table) => ({
+          name: table.name,
+          startAddress: table.startAddress,
+          endAddress: table.endAddress,
+          columnCount: table.columnNames.length,
+        })),
+        pivots: pivots.map((pivot) => ({
+          name: pivot.name,
+          address: pivot.address,
+          source: `${pivot.source.sheetName}!${pivot.source.startAddress}:${pivot.source.endAddress}`,
+          groupBy: [...pivot.groupBy],
+          valueCount: pivot.values.length,
+        })),
+        spills: spills.map((spill) => ({
+          address: spill.address,
+          rows: spill.rows,
+          cols: spill.cols,
+        })),
+      } satisfies WorkbookStructureSheetSummary;
+    });
+
+  return {
+    summary: {
+      sheetCount: sheets.length,
+      totalCellCount,
+      totalFormulaCellCount,
+      tableCount: totalTableCount,
+      pivotCount: totalPivotCount,
+      spillCount: totalSpillCount,
+      filterCount: totalFilterCount,
+      sortCount: totalSortCount,
+      hiddenRowIndexCount: totalHiddenRowIndexCount,
+      hiddenColumnIndexCount: totalHiddenColumnIndexCount,
+    },
+    sheets,
   };
 }
 

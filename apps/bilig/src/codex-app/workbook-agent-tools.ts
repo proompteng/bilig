@@ -30,6 +30,7 @@ import type { ZeroSyncService } from "../zero/service.js";
 import {
   findWorkbookFormulaIssues,
   searchWorkbook,
+  summarizeWorkbookStructure,
   traceWorkbookDependencies,
 } from "./workbook-agent-comprehension.js";
 
@@ -822,40 +823,11 @@ export async function handleWorkbookAgentToolCall(
       case WORKBOOK_AGENT_TOOL_NAMES.readWorkbook: {
         const summary = await context.zeroSyncService.inspectWorkbook(
           context.documentId,
-          (runtime) => {
-            const snapshot = runtime.engine.exportSnapshot();
-            return {
-              documentId: context.documentId,
-              context: context.uiContext,
-              sheets: [...snapshot.sheets]
-                .toSorted((left, right) => left.order - right.order)
-                .map((sheet) => {
-                  let minRow = Number.POSITIVE_INFINITY;
-                  let maxRow = Number.NEGATIVE_INFINITY;
-                  let minCol = Number.POSITIVE_INFINITY;
-                  let maxCol = Number.NEGATIVE_INFINITY;
-                  for (const cell of sheet.cells) {
-                    const parsed = parseCellAddress(cell.address, sheet.name);
-                    minRow = Math.min(minRow, parsed.row);
-                    maxRow = Math.max(maxRow, parsed.row);
-                    minCol = Math.min(minCol, parsed.col);
-                    maxCol = Math.max(maxCol, parsed.col);
-                  }
-                  return {
-                    name: sheet.name,
-                    order: sheet.order,
-                    cellCount: sheet.cells.length,
-                    usedRange:
-                      sheet.cells.length === 0
-                        ? null
-                        : {
-                            startAddress: formatAddress(minRow, minCol),
-                            endAddress: formatAddress(maxRow, maxCol),
-                          },
-                  };
-                }),
-            };
-          },
+          (runtime) => ({
+            documentId: context.documentId,
+            context: context.uiContext,
+            ...summarizeWorkbookStructure(runtime),
+          }),
         );
         return textToolResult(stringifyJson(summary));
       }

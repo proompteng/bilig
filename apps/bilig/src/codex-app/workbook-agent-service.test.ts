@@ -183,6 +183,9 @@ describe("workbook agent service", () => {
       ).toBe(true);
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("bilig workbook tools");
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
+        "bilig_read_workbook",
+      );
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
         "bilig_search_workbook",
       );
     } finally {

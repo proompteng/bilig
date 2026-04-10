@@ -73,6 +73,7 @@ export function createWorkbookAgentBaseInstructions(): string {
 export function createWorkbookAgentDeveloperInstructions(): string {
   return [
     "Before changing cells you have not inspected, read the relevant workbook range first.",
+    `Use ${WORKBOOK_AGENT_TOOL_NAMES.readWorkbook} first when the user asks for workbook-wide structure, important sheets, or a starting summary.`,
     `When the user refers to the current cell, selection, or visible area, call ${WORKBOOK_AGENT_TOOL_NAMES.getContext}.`,
     `Prefer ${WORKBOOK_AGENT_TOOL_NAMES.readSelection}, ${WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange}, and ${WORKBOOK_AGENT_TOOL_NAMES.inspectCell} for context-native workbook analysis.`,
     `Use ${WORKBOOK_AGENT_TOOL_NAMES.findFormulaIssues}, ${WORKBOOK_AGENT_TOOL_NAMES.searchWorkbook}, ${WORKBOOK_AGENT_TOOL_NAMES.traceDependencies}, and ${WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges} for warm-runtime workbook comprehension instead of broad guesswork.`,

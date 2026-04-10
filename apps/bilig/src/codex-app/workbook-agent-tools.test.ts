@@ -5,6 +5,7 @@ import { buildWorkbookSourceProjectionFromEngine } from "../zero/projection.js";
 import type { ZeroSyncService } from "../zero/service.js";
 import type { WorkbookRuntime } from "../workbook-runtime/runtime-manager.js";
 import { handleWorkbookAgentToolCall } from "./workbook-agent-tools.js";
+import { z } from "zod";
 
 async function createEngine(): Promise<SpreadsheetEngine> {
   const engine = new SpreadsheetEngine({
@@ -126,7 +127,142 @@ function createBundle(
   };
 }
 
+const workbookSummarySchema = z.object({
+  summary: z.object({
+    sheetCount: z.number(),
+    tableCount: z.number(),
+    pivotCount: z.number(),
+    spillCount: z.number(),
+    hiddenRowIndexCount: z.number(),
+    hiddenColumnIndexCount: z.number(),
+  }),
+  sheets: z.array(
+    z.object({
+      name: z.string(),
+      freezePane: z
+        .object({
+          rows: z.number(),
+          cols: z.number(),
+        })
+        .nullable(),
+      filterCount: z.number(),
+      sortCount: z.number(),
+      tableCount: z.number(),
+      pivotCount: z.number(),
+      spillCount: z.number(),
+      rowMetadata: z.object({
+        hiddenIndexCount: z.number(),
+        explicitSizeIndexCount: z.number(),
+      }),
+      columnMetadata: z.object({
+        hiddenIndexCount: z.number(),
+        explicitSizeIndexCount: z.number(),
+      }),
+    }),
+  ),
+});
+
 describe("workbook agent tools", () => {
+  it("reads workbook structure with sheet metadata for workbook-wide prompts", async () => {
+    const engine = await createEngine();
+    engine.updateRowMetadata("Sheet1", 1, 2, 24, true);
+    engine.updateColumnMetadata("Sheet1", 0, 1, 110, true);
+    engine.setFreezePane("Sheet1", 1, 0);
+    engine.setFilter("Sheet1", { sheetName: "Sheet1", startAddress: "A1", endAddress: "D3" });
+    engine.setSort("Sheet1", { sheetName: "Sheet1", startAddress: "A1", endAddress: "D3" }, [
+      { keyAddress: "B1", direction: "desc" },
+    ]);
+    engine.setTable({
+      name: "Sheet1Table",
+      sheetName: "Sheet1",
+      startAddress: "A1",
+      endAddress: "D3",
+      columnNames: ["Revenue", "Formula", "Error", "Length"],
+      headerRow: true,
+      totalsRow: false,
+    });
+    engine.setSpillRange("Sheet1", "F1", 2, 2);
+    engine.setPivotTable("Ops Search", "B2", {
+      name: "ImportPivot",
+      source: { sheetName: "Sheet1", startAddress: "A1", endAddress: "D3" },
+      groupBy: ["Revenue"],
+      values: [{ sourceColumn: "Formula", summarizeBy: "count" }],
+    });
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: {
+          selection: {
+            sheetName: "Sheet1",
+            address: "A1",
+          },
+          viewport: {
+            rowStart: 0,
+            rowEnd: 10,
+            colStart: 0,
+            colEnd: 5,
+          },
+        },
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: "createSheet", name: "unused" })),
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-read-workbook",
+        tool: "bilig_read_workbook",
+        arguments: {},
+      },
+    );
+
+    expect(response.success).toBe(true);
+    const textItem = response.contentItems[0];
+    expect(textItem?.type).toBe("inputText");
+    const payload = workbookSummarySchema.parse(
+      JSON.parse(textItem && "text" in textItem ? textItem.text : ""),
+    );
+    expect(payload.summary).toEqual(
+      expect.objectContaining({
+        sheetCount: 2,
+        tableCount: 1,
+        pivotCount: 1,
+        spillCount: 1,
+        hiddenRowIndexCount: 2,
+        hiddenColumnIndexCount: 1,
+      }),
+    );
+    expect(payload.sheets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Sheet1",
+          freezePane: { rows: 1, cols: 0 },
+          filterCount: 1,
+          sortCount: 1,
+          tableCount: 1,
+          spillCount: 1,
+          rowMetadata: expect.objectContaining({
+            hiddenIndexCount: 2,
+            explicitSizeIndexCount: 2,
+          }),
+          columnMetadata: expect.objectContaining({
+            hiddenIndexCount: 1,
+            explicitSizeIndexCount: 1,
+          }),
+        }),
+        expect.objectContaining({
+          name: "Ops Search",
+          pivotCount: 1,
+        }),
+      ]),
+    );
+  });
+
   it("reads the current browser selection through the attached workbook context", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);
