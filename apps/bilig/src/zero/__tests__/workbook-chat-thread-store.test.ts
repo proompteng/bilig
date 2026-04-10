@@ -133,6 +133,7 @@ function createThreadState() {
         },
       ],
       estimatedAffectedCells: 1,
+      sharedReview: null,
     },
     updatedAtUnixMs: 1234,
   };
@@ -158,6 +159,7 @@ describe("workbook-chat-thread-store", () => {
     );
     expect(bundleInsert?.values?.[3]).toBe("bundle-1");
     expect(bundleInsert?.values?.[7]).toBe("selection");
+    expect(bundleInsert?.values?.[16]).toBe(JSON.stringify(null));
     const itemInsert = queryable.calls.find(
       (call) =>
         call.text.includes("INSERT INTO workbook_chat_item") &&
@@ -229,6 +231,7 @@ describe("workbook-chat-thread-store", () => {
                 commandsJson: state.pendingBundle?.commands,
                 affectedRangesJson: state.pendingBundle?.affectedRanges,
                 estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
+                sharedReviewJson: state.pendingBundle?.sharedReview,
               } satisfies QueryResultRow,
             ]
           : null,

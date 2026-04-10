@@ -69,6 +69,10 @@ export const startWorkflowBodySchema = z.object({
   ]),
 });
 
+export const reviewPendingBundleBodySchema = z.object({
+  decision: z.enum(["approved", "rejected"]),
+});
+
 export function createWorkbookAgentBaseInstructions(): string {
   return [
     "You are the bilig workbook assistant embedded inside a spreadsheet product.",

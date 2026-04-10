@@ -1800,6 +1800,133 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("requires owner approval before applying shared medium/high-risk bundles", async () => {
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 6,
+      preview: createPreviewSummary(),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-shared",
+            actorUserId: "alex@example.com",
+            scope: "shared",
+            context: null,
+            entries: [],
+            pendingBundle: {
+              id: "bundle-shared-review",
+              documentId: "doc-1",
+              threadId: "thr-shared",
+              turnId: "turn-1",
+              goalText: "Normalize the workbook",
+              summary: "Normalize shared workbook structure",
+              scope: "workbook",
+              riskClass: "high",
+              approvalMode: "explicit",
+              baseRevision: 4,
+              createdAtUnixMs: 100,
+              context: null,
+              commands: [
+                {
+                  kind: "createSheet",
+                  name: "Summary",
+                },
+              ],
+              affectedRanges: [],
+              estimatedAffectedCells: 0,
+              sharedReview: {
+                ownerUserId: "alex@example.com",
+                status: "pending",
+                decidedByUserId: null,
+                decidedAtUnixMs: null,
+              },
+            },
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared-owner",
+          threadId: "thr-shared",
+        },
+      });
+
+      await expect(
+        service.applyPendingBundle({
+          documentId: "doc-1",
+          sessionId: snapshot.sessionId,
+          bundleId: "bundle-shared-review",
+          session: {
+            userID: "alex@example.com",
+            roles: ["editor"],
+          },
+          appliedBy: "user",
+          preview: createPreviewSummary(),
+        }),
+      ).rejects.toThrow(
+        "Shared medium/high-risk workbook bundles must be approved by the thread owner before apply.",
+      );
+
+      const reviewed = await service.reviewPendingBundle({
+        documentId: "doc-1",
+        sessionId: snapshot.sessionId,
+        bundleId: "bundle-shared-review",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          decision: "approved",
+        },
+      });
+
+      expect(reviewed.pendingBundle).toEqual(
+        expect.objectContaining({
+          sharedReview: expect.objectContaining({
+            status: "approved",
+            decidedByUserId: "alex@example.com",
+          }),
+        }),
+      );
+
+      const applied = await service.applyPendingBundle({
+        documentId: "doc-1",
+        sessionId: snapshot.sessionId,
+        bundleId: "bundle-shared-review",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        appliedBy: "user",
+        preview: createPreviewSummary(),
+      });
+
+      expect(applyAgentCommandBundle).toHaveBeenCalled();
+      expect(appendWorkbookAgentRun).toHaveBeenCalled();
+      expect(applied.pendingBundle).toBeNull();
+    } finally {
+      await service.close();
+    }
+  });
+
   it("loads only thread-scoped execution history for private threads", async () => {
     const threadExecutionRecord = {
       id: "run-private-1",

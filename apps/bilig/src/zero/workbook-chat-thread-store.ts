@@ -2,6 +2,7 @@ import {
   isWorkbookAgentCommand,
   isWorkbookAgentCommandBundle,
   type WorkbookAgentCommandBundle,
+  type WorkbookAgentSharedReviewState,
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentTimelineCitation,
@@ -66,6 +67,7 @@ interface WorkbookPendingBundleRow extends QueryResultRow {
   readonly commandsJson?: unknown;
   readonly affectedRangesJson?: unknown;
   readonly estimatedAffectedCells?: unknown;
+  readonly sharedReviewJson?: unknown;
 }
 
 interface WorkbookChatThreadSummaryRow extends QueryResultRow {
@@ -218,8 +220,24 @@ function normalizePendingBundle(row: WorkbookPendingBundleRow): WorkbookAgentCom
     commands: [...row.commandsJson],
     affectedRanges: [...row.affectedRangesJson],
     estimatedAffectedCells,
+    sharedReview: isSharedReviewState(row.sharedReviewJson) ? row.sharedReviewJson : null,
   } satisfies WorkbookAgentCommandBundle;
   return isWorkbookAgentCommandBundle(bundle) ? bundle : null;
+}
+
+function isSharedReviewState(value: unknown): value is WorkbookAgentSharedReviewState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "ownerUserId" in value &&
+    typeof value.ownerUserId === "string" &&
+    "status" in value &&
+    (value.status === "pending" || value.status === "approved" || value.status === "rejected") &&
+    "decidedByUserId" in value &&
+    (value.decidedByUserId === null || typeof value.decidedByUserId === "string") &&
+    "decidedAtUnixMs" in value &&
+    (value.decidedAtUnixMs === null || typeof value.decidedAtUnixMs === "number")
+  );
 }
 
 export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<void> {
@@ -276,8 +294,13 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       commands_json JSONB NOT NULL,
       affected_ranges_json JSONB NOT NULL,
       estimated_affected_cells BIGINT,
+      shared_review_json JSONB,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
     )
+  `);
+  await db.query(`
+    ALTER TABLE workbook_pending_bundle
+      ADD COLUMN IF NOT EXISTS shared_review_json JSONB;
   `);
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
@@ -415,10 +438,11 @@ export async function saveWorkbookAgentThreadState(
           context_json,
           commands_json,
           affected_ranges_json,
-          estimated_affected_cells
+          estimated_affected_cells,
+          shared_review_json
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16, $17::jsonb
         )
         ON CONFLICT (workbook_id, thread_id, actor_user_id)
         DO UPDATE SET
@@ -434,7 +458,8 @@ export async function saveWorkbookAgentThreadState(
           context_json = EXCLUDED.context_json,
           commands_json = EXCLUDED.commands_json,
           affected_ranges_json = EXCLUDED.affected_ranges_json,
-          estimated_affected_cells = EXCLUDED.estimated_affected_cells
+          estimated_affected_cells = EXCLUDED.estimated_affected_cells,
+          shared_review_json = EXCLUDED.shared_review_json
       `,
       [
         record.documentId,
@@ -453,6 +478,7 @@ export async function saveWorkbookAgentThreadState(
         JSON.stringify(record.pendingBundle.commands),
         JSON.stringify(record.pendingBundle.affectedRanges),
         record.pendingBundle.estimatedAffectedCells,
+        JSON.stringify(record.pendingBundle.sharedReview ?? null),
       ],
     );
   } else {
@@ -546,7 +572,8 @@ export async function loadWorkbookAgentThreadState(
           context_json AS "contextJson",
           commands_json AS "commandsJson",
           affected_ranges_json AS "affectedRangesJson",
-          estimated_affected_cells AS "estimatedAffectedCells"
+          estimated_affected_cells AS "estimatedAffectedCells",
+          shared_review_json AS "sharedReviewJson"
         FROM workbook_pending_bundle
         WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
       `,

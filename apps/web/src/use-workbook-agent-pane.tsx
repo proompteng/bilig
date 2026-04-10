@@ -241,6 +241,22 @@ export function useWorkbookAgentPane(input: {
     pendingBundle.riskClass !== "low" &&
     activeThreadSummary !== null &&
     activeThreadSummary.ownerUserId !== currentUserId;
+  const sharedReviewOwnerUserId =
+    snapshot?.scope === "shared" &&
+    pendingBundle?.riskClass !== undefined &&
+    pendingBundle.riskClass !== "low"
+      ? (pendingBundle.sharedReview?.ownerUserId ?? activeThreadSummary?.ownerUserId ?? null)
+      : null;
+  const sharedReviewStatus =
+    sharedReviewOwnerUserId !== null ? (pendingBundle?.sharedReview?.status ?? "pending") : null;
+  const sharedReviewDecidedByUserId =
+    sharedReviewOwnerUserId !== null
+      ? (pendingBundle?.sharedReview?.decidedByUserId ?? null)
+      : null;
+  const canReviewSharedBundle =
+    sharedReviewOwnerUserId !== null &&
+    sharedReviewOwnerUserId === currentUserId &&
+    !isApplyingBundle;
 
   const closeStream = useCallback(() => {
     eventSourceRef.current?.close();
@@ -455,6 +471,10 @@ export function useWorkbookAgentPane(input: {
         setError("Only the shared thread owner can approve medium/high-risk workbook changes.");
         return;
       }
+      if (sharedReviewStatus !== null && sharedReviewStatus !== "approved") {
+        setError("Approve the shared workbook changes before apply.");
+        return;
+      }
       try {
         setIsApplyingBundle(true);
         const response = await fetch(
@@ -497,6 +517,7 @@ export function useWorkbookAgentPane(input: {
       persistSessionSnapshot,
       preview,
       selectedPendingBundle,
+      sharedReviewStatus,
       sharedApplyRequiresOwnerApproval,
     ],
   );
@@ -789,6 +810,41 @@ export function useWorkbookAgentPane(input: {
     }
   }, [documentId, pendingBundle, persistSessionSnapshot]);
 
+  const reviewPendingBundle = useCallback(
+    async (decision: "approved" | "rejected") => {
+      const activeSession = sessionRef.current;
+      if (!activeSession || !pendingBundle) {
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/bundles/${encodeURIComponent(pendingBundle.id)}/review`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ decision }),
+          },
+        );
+        const payload = (await response.json()) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            resolvePayloadMessage(
+              payload,
+              `Workbook agent request failed with status ${response.status}`,
+            ),
+          );
+        }
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+        setError(null);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      }
+    },
+    [documentId, pendingBundle, persistSessionSnapshot],
+  );
+
   const replayExecutionRecord = useCallback(
     async (recordId: string) => {
       const activeSession = await ensureSession();
@@ -873,6 +929,10 @@ export function useWorkbookAgentPane(input: {
         sharedApprovalOwnerUserId={
           sharedApplyRequiresOwnerApproval ? (activeThreadSummary?.ownerUserId ?? null) : null
         }
+        sharedReviewOwnerUserId={sharedReviewOwnerUserId}
+        sharedReviewStatus={sharedReviewStatus}
+        sharedReviewDecidedByUserId={sharedReviewDecidedByUserId}
+        canReviewSharedBundle={canReviewSharedBundle}
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
         threadScope={threadScope}
@@ -884,6 +944,9 @@ export function useWorkbookAgentPane(input: {
         onDraftChange={setDraft}
         onDismissPendingBundle={() => {
           void dismissPendingBundle();
+        }}
+        onReviewPendingBundle={(decision) => {
+          void reviewPendingBundle(decision);
         }}
         onInterrupt={() => {
           void interrupt();
@@ -920,11 +983,16 @@ export function useWorkbookAgentPane(input: {
       pendingBundle,
       preview,
       activeThreadSummary?.ownerUserId,
+      canReviewSharedBundle,
       replayExecutionRecord,
+      reviewPendingBundle,
       startWorkflow,
       sendPrompt,
       selectThread,
       snapshot,
+      sharedReviewDecidedByUserId,
+      sharedReviewOwnerUserId,
+      sharedReviewStatus,
       sharedApplyRequiresOwnerApproval,
       selectAllPendingCommands,
       setThreadScope,

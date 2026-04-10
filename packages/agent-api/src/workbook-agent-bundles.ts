@@ -97,6 +97,7 @@ export type WorkbookAgentBundleScope = "selection" | "sheet" | "workbook";
 export type WorkbookAgentApprovalMode = "auto" | "preview" | "explicit";
 export type WorkbookAgentAppliedBy = "user" | "auto";
 export type WorkbookAgentAcceptedScope = "full" | "partial";
+export type WorkbookAgentSharedReviewStatus = "pending" | "approved" | "rejected";
 export type WorkbookAgentPreviewRangeRole = "target" | "source";
 export type WorkbookAgentPreviewChangeKind = "input" | "formula" | "style" | "numberFormat";
 
@@ -150,6 +151,14 @@ export interface WorkbookAgentCommandBundle {
   commands: WorkbookAgentCommand[];
   affectedRanges: WorkbookAgentPreviewRange[];
   estimatedAffectedCells: number | null;
+  sharedReview?: WorkbookAgentSharedReviewState | null;
+}
+
+export interface WorkbookAgentSharedReviewState {
+  ownerUserId: string;
+  status: WorkbookAgentSharedReviewStatus;
+  decidedByUserId: string | null;
+  decidedAtUnixMs: number | null;
 }
 
 export interface WorkbookAgentExecutionRecord {
@@ -216,6 +225,20 @@ function isApprovalMode(value: unknown): value is WorkbookAgentApprovalMode {
 
 function isAppliedBy(value: unknown): value is WorkbookAgentAppliedBy {
   return value === "user" || value === "auto";
+}
+
+function isSharedReviewStatus(value: unknown): value is WorkbookAgentSharedReviewStatus {
+  return value === "pending" || value === "approved" || value === "rejected";
+}
+
+function isSharedReviewState(value: unknown): value is WorkbookAgentSharedReviewState {
+  return (
+    isRecord(value) &&
+    typeof value["ownerUserId"] === "string" &&
+    isSharedReviewStatus(value["status"]) &&
+    (value["decidedByUserId"] === null || typeof value["decidedByUserId"] === "string") &&
+    (value["decidedAtUnixMs"] === null || typeof value["decidedAtUnixMs"] === "number")
+  );
 }
 
 function isAcceptedScope(value: unknown): value is WorkbookAgentAcceptedScope {
@@ -800,6 +823,7 @@ export function createWorkbookAgentCommandBundle(input: {
   context: WorkbookAgentContextRef | null;
   commands: readonly WorkbookAgentCommand[];
   now: number;
+  sharedReview?: WorkbookAgentSharedReviewState | null;
 }): WorkbookAgentCommandBundle {
   const commands = [...input.commands];
   const scope = deriveWorkbookAgentBundleScope(commands, input.context);
@@ -822,6 +846,7 @@ export function createWorkbookAgentCommandBundle(input: {
       commands.flatMap((command) => deriveWorkbookAgentCommandPreviewRanges(command)),
     ),
     estimatedAffectedCells: estimateWorkbookAgentAffectedCells(commands),
+    sharedReview: input.sharedReview ? structuredClone(input.sharedReview) : null,
   };
 }
 
@@ -852,6 +877,7 @@ export function appendWorkbookAgentCommandToBundle(input: {
     context: input.context,
     commands: [...(previousBundle?.commands ?? []), input.command],
     now: previousBundle ? previousBundle.createdAtUnixMs : input.now,
+    sharedReview: previousBundle?.sharedReview ?? null,
   });
 }
 
@@ -916,6 +942,7 @@ export function projectWorkbookAgentBundle(input: {
     context: input.bundle.context,
     commands: selectedIndexes.map((index) => input.bundle.commands[index]!),
     now: input.now ?? input.bundle.createdAtUnixMs,
+    sharedReview: input.bundle.sharedReview ?? null,
   });
 }
 
@@ -1106,6 +1133,9 @@ export function isWorkbookAgentCommandBundle(value: unknown): value is WorkbookA
     isCommandArray(value["commands"]) &&
     Array.isArray(value["affectedRanges"]) &&
     value["affectedRanges"].every((entry) => isWorkbookAgentPreviewRange(entry)) &&
+    (value["sharedReview"] === undefined ||
+      value["sharedReview"] === null ||
+      isSharedReviewState(value["sharedReview"])) &&
     (value["estimatedAffectedCells"] === null ||
       typeof value["estimatedAffectedCells"] === "number")
   );

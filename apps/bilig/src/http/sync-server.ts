@@ -598,6 +598,29 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/agent/sessions/:sessionId/bundles/:bundleId/review",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; sessionId: string; bundleId: string };
+        Body: {
+          decision?: "approved" | "rejected";
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.reviewPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/apply",
     async (
       request: FastifyRequest<{
@@ -635,6 +658,36 @@ export function createSyncServer(options: SyncServerOptions = {}) {
             request.body && typeof request.body === "object" && "preview" in request.body
               ? (request.body.preview ?? null)
               : null,
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/bundles/:bundleId/review",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string; bundleId: string };
+        Body: {
+          decision?: "approved" | "rejected";
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.reviewPendingBundle({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          bundleId: request.params.bundleId,
+          session,
+          body: request.body ?? {},
         });
       });
     },

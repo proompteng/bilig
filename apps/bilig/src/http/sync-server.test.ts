@@ -126,6 +126,9 @@ function createWorkbookAgentServiceStub(
     async applyPendingBundle() {
       throw new Error("not used");
     },
+    async reviewPendingBundle() {
+      throw new Error("not used");
+    },
     async dismissPendingBundle() {
       throw new Error("not used");
     },
@@ -920,6 +923,85 @@ describe("sync-server workbook agent", () => {
               workflowTemplate: "describeRecentChanges",
             }),
           ],
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("reviews workbook agent bundles through the durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const reviewPendingBundle = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+        pendingBundle: {
+          id: "bundle-1",
+          documentId: "doc-1",
+          threadId: "thr-2",
+          turnId: "turn-1",
+          goalText: "Normalize shared workbook",
+          summary: "Normalize shared workbook",
+          scope: "workbook",
+          riskClass: "high",
+          approvalMode: "explicit",
+          baseRevision: 4,
+          createdAtUnixMs: 10,
+          context: null,
+          commands: [],
+          affectedRanges: [],
+          estimatedAffectedCells: 0,
+          sharedReview: {
+            ownerUserId: "alex@example.com",
+            status: "approved",
+            decidedByUserId: "alex@example.com",
+            decidedAtUnixMs: 12,
+          },
+        },
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
+        reviewPendingBundle,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads/thr-2/bundles/bundle-1/review",
+        payload: {
+          decision: "approved",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(reviewPendingBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+          bundleId: "bundle-1",
+          body: {
+            decision: "approved",
+          },
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          pendingBundle: expect.objectContaining({
+            sharedReview: expect.objectContaining({
+              status: "approved",
+            }),
+          }),
         }),
       );
     } finally {

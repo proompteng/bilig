@@ -583,10 +583,15 @@ function PendingBundleCard(props: {
   readonly bundle: WorkbookAgentCommandBundle;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
+  readonly sharedReviewOwnerUserId: string | null;
+  readonly sharedReviewStatus: "pending" | "approved" | "rejected" | null;
+  readonly sharedReviewDecidedByUserId: string | null;
+  readonly canReviewSharedBundle: boolean;
   readonly selectedCommandIndexes: readonly number[];
   readonly isApplyingBundle: boolean;
   readonly onApply: () => void;
   readonly onDismiss: () => void;
+  readonly onReview: (decision: "approved" | "rejected") => void;
   readonly onSelectAll: () => void;
   readonly onToggleCommand: (commandIndex: number) => void;
 }) {
@@ -595,27 +600,34 @@ function PendingBundleCard(props: {
   const sharedApprovalOwnerLabel = props.sharedApprovalOwnerUserId
     ? formatWorkbookCollaboratorLabel(props.sharedApprovalOwnerUserId)
     : null;
+  const sharedReviewOwnerLabel = props.sharedReviewOwnerUserId
+    ? formatWorkbookCollaboratorLabel(props.sharedReviewOwnerUserId)
+    : null;
+  const sharedReviewDecisionLabel = props.sharedReviewDecidedByUserId
+    ? formatWorkbookCollaboratorLabel(props.sharedReviewDecidedByUserId)
+    : null;
   const canApply =
     props.preview !== null &&
     !props.isApplyingBundle &&
     selectedCount > 0 &&
-    sharedApprovalOwnerLabel === null;
+    sharedApprovalOwnerLabel === null &&
+    (props.sharedReviewStatus === null || props.sharedReviewStatus === "approved");
   const applyLabel =
     selectedCount > 0 && !hasFullSelection
       ? props.isApplyingBundle
         ? "Applying…"
         : "Apply"
-      : props.bundle.approvalMode === "explicit"
-        ? props.isApplyingBundle
-          ? "Applying…"
-          : "Approve"
-        : props.bundle.approvalMode === "auto"
-          ? props.isApplyingBundle
-            ? "Applying…"
-            : "Apply"
-          : props.isApplyingBundle
-            ? "Applying…"
-            : "Apply";
+      : props.sharedReviewStatus === "pending"
+        ? "Awaiting approval"
+        : props.sharedReviewStatus === "rejected"
+          ? "Rejected"
+          : props.bundle.approvalMode === "explicit"
+            ? props.isApplyingBundle
+              ? "Applying…"
+              : "Approve"
+            : props.isApplyingBundle
+              ? "Applying…"
+              : "Apply";
   return (
     <div
       className={cn(
@@ -702,6 +714,47 @@ function PendingBundleCard(props: {
           thread.
         </div>
       ) : null}
+      {sharedReviewOwnerLabel && props.sharedReviewStatus ? (
+        <div
+          className={cn(
+            workbookAlertClass({
+              tone:
+                props.sharedReviewStatus === "rejected" ? "danger" : "warning",
+            }),
+            "mt-2 border-[var(--wb-border-strong)] text-[11px] leading-5",
+          )}
+        >
+          {props.sharedReviewStatus === "pending"
+            ? `Awaiting ${sharedReviewOwnerLabel}'s approval before this shared bundle can be applied.`
+            : props.sharedReviewStatus === "approved"
+              ? `Approved by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`
+              : `Rejected by ${sharedReviewDecisionLabel ?? sharedReviewOwnerLabel}.`}
+        </div>
+      ) : null}
+      {props.canReviewSharedBundle && props.sharedReviewStatus !== null ? (
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <button
+            className={workbookButtonClass({ tone: "neutral" })}
+            data-testid="workbook-agent-review-reject"
+            type="button"
+            onClick={() => {
+              props.onReview("rejected");
+            }}
+          >
+            Reject
+          </button>
+          <button
+            className={workbookButtonClass({ tone: "accent" })}
+            data-testid="workbook-agent-review-approve"
+            type="button"
+            onClick={() => {
+              props.onReview("approved");
+            }}
+          >
+            Approve
+          </button>
+        </div>
+      ) : null}
       {props.preview?.cellDiffs?.length ? (
         <div className="mt-2 overflow-hidden rounded-[var(--wb-radius-control)] border border-[var(--wb-border)]">
           <div className="max-h-44 overflow-y-auto">
@@ -760,6 +813,10 @@ export function WorkbookAgentPanel(props: {
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly sharedApprovalOwnerUserId: string | null;
+  readonly sharedReviewOwnerUserId: string | null;
+  readonly sharedReviewStatus: "pending" | "approved" | "rejected" | null;
+  readonly sharedReviewDecidedByUserId: string | null;
+  readonly canReviewSharedBundle: boolean;
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
@@ -772,6 +829,7 @@ export function WorkbookAgentPanel(props: {
   readonly onApplyPendingBundle: () => void;
   readonly onDraftChange: (value: string) => void;
   readonly onDismissPendingBundle: () => void;
+  readonly onReviewPendingBundle: (decision: "approved" | "rejected") => void;
   readonly onInterrupt: () => void;
   readonly onSelectAllPendingCommands: () => void;
   readonly onSelectThreadScope: (scope: WorkbookAgentThreadScope) => void;
@@ -830,10 +888,15 @@ export function WorkbookAgentPanel(props: {
               bundle={props.pendingBundle}
               preview={props.preview}
               sharedApprovalOwnerUserId={props.sharedApprovalOwnerUserId}
+              sharedReviewOwnerUserId={props.sharedReviewOwnerUserId}
+              sharedReviewStatus={props.sharedReviewStatus}
+              sharedReviewDecidedByUserId={props.sharedReviewDecidedByUserId}
+              canReviewSharedBundle={props.canReviewSharedBundle}
               selectedCommandIndexes={props.selectedCommandIndexes}
               isApplyingBundle={props.isApplyingBundle}
               onApply={props.onApplyPendingBundle}
               onDismiss={props.onDismissPendingBundle}
+              onReview={props.onReviewPendingBundle}
               onSelectAll={props.onSelectAllPendingCommands}
               onToggleCommand={props.onTogglePendingCommand}
             />

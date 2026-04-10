@@ -2151,6 +2151,12 @@ describe("workbook agent pane", () => {
                   },
                 ],
                 estimatedAffectedCells: 20,
+                sharedReview: {
+                  ownerUserId: "alex@example.com",
+                  status: "pending",
+                  decidedByUserId: null,
+                  decidedAtUnixMs: null,
+                },
               },
             }),
           ),
@@ -2181,6 +2187,191 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain(
       "Only Alex can approve medium/high-risk changes on this shared thread.",
     );
+    expect(host.textContent).toContain("Awaiting Alex's approval before this shared bundle");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("lets the shared thread owner approve a medium-risk bundle before apply", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        threadId: "thr-shared",
+      }),
+    );
+    const preview = createPreviewSummary({
+      structuralChanges: ["Normalize selected range"],
+    });
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && (init?.method ?? "GET") === "GET") {
+        return new Response(
+          JSON.stringify([
+            createThreadSummary({
+              threadId: "thr-shared",
+              scope: "shared",
+              ownerUserId: "alex@example.com",
+              entryCount: 3,
+              hasPendingBundle: true,
+              latestEntryText: "Preview bundle staged",
+            }),
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-shared",
+              scope: "shared",
+              pendingBundle: {
+                id: "bundle-shared-owner",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-2",
+                goalText: "Normalize the imported sheet",
+                summary: "Normalize Sheet1!A1:A20",
+                scope: "sheet",
+                riskClass: "medium",
+                approvalMode: "explicit",
+                baseRevision: 4,
+                createdAtUnixMs: 20,
+                context: {
+                  selection: {
+                    sheetName: "Sheet1",
+                    address: "A1",
+                  },
+                  viewport: {
+                    rowStart: 0,
+                    rowEnd: 10,
+                    colStart: 0,
+                    colEnd: 5,
+                  },
+                },
+                commands: [
+                  {
+                    kind: "formatRange",
+                    range: {
+                      sheetName: "Sheet1",
+                      startAddress: "A1",
+                      endAddress: "A20",
+                    },
+                    patch: {
+                      font: {
+                        bold: true,
+                      },
+                    },
+                  },
+                ],
+                affectedRanges: [
+                  {
+                    sheetName: "Sheet1",
+                    startAddress: "A1",
+                    endAddress: "A20",
+                    role: "target",
+                  },
+                ],
+                estimatedAffectedCells: 20,
+                sharedReview: {
+                  ownerUserId: "alex@example.com",
+                  status: "pending",
+                  decidedByUserId: null,
+                  decidedAtUnixMs: null,
+                },
+              },
+            }),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/bundles/bundle-shared-owner/review")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-shared",
+              scope: "shared",
+              pendingBundle: {
+                id: "bundle-shared-owner",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-2",
+                goalText: "Normalize the imported sheet",
+                summary: "Normalize Sheet1!A1:A20",
+                scope: "sheet",
+                riskClass: "medium",
+                approvalMode: "explicit",
+                baseRevision: 4,
+                createdAtUnixMs: 20,
+                context: null,
+                commands: [
+                  {
+                    kind: "formatRange",
+                    range: {
+                      sheetName: "Sheet1",
+                      startAddress: "A1",
+                      endAddress: "A20",
+                    },
+                    patch: {
+                      font: {
+                        bold: true,
+                      },
+                    },
+                  },
+                ],
+                affectedRanges: [],
+                estimatedAffectedCells: 20,
+                sharedReview: {
+                  ownerUserId: "alex@example.com",
+                  status: "approved",
+                  decidedByUserId: "alex@example.com",
+                  decidedAtUnixMs: 25,
+                },
+              },
+            }),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness currentUserId="alex@example.com" previewBundle={vi.fn(async () => preview)} />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
+    const approveButton = host.querySelector("[data-testid='workbook-agent-review-approve']");
+    expect(applyButton instanceof HTMLButtonElement).toBe(true);
+    expect(approveButton instanceof HTMLButtonElement).toBe(true);
+    expect((applyButton as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      (approveButton as HTMLButtonElement).click();
+    });
+
+    const reviewCall = fetchSpy.mock.calls.find(([input]) =>
+      requestUrl(input).endsWith("/bundles/bundle-shared-owner/review"),
+    );
+    expect(requestBody(reviewCall?.[1])).toEqual({
+      decision: "approved",
+    });
+    expect(host.textContent).toContain("Approved by Alex.");
+    expect((host.querySelector("[data-testid='workbook-agent-apply-pending']") as HTMLButtonElement).disabled).toBe(false);
 
     await act(async () => {
       root.unmount();
