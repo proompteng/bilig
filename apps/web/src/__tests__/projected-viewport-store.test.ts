@@ -67,6 +67,63 @@ function createRowPatch(size: number, hidden = false): ViewportPatch {
   };
 }
 
+function columnLabel(columnIndex: number): string {
+  let index = columnIndex + 1;
+  let label = "";
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    index = Math.floor((index - 1) / 26);
+  }
+  return label;
+}
+
+function createLargePatch(rowCount: number, columnCount: number): ViewportPatch {
+  return {
+    version: 1,
+    full: false,
+    viewport: {
+      sheetName: "Sheet1",
+      rowStart: 0,
+      rowEnd: rowCount - 1,
+      colStart: 0,
+      colEnd: columnCount - 1,
+    },
+    metrics: TEST_METRICS,
+    styles: [],
+    cells: Array.from({ length: rowCount * columnCount }, (_, index) => {
+      const row = Math.floor(index / columnCount);
+      const col = index % columnCount;
+      return {
+        row,
+        col,
+        snapshot: {
+          sheetName: "Sheet1",
+          address: `${columnLabel(col)}${row + 1}`,
+          value: { tag: ValueTag.Number, value: index },
+          flags: 0,
+          version: 1,
+        },
+        displayText: String(index),
+        copyText: String(index),
+        editorText: String(index),
+        formatId: 0,
+        styleId: "style-0",
+      };
+    }),
+    columns: [],
+    rows: [],
+  };
+}
+
+function countSheetCells(cache: ProjectedViewportStore, sheetName: string): number {
+  let count = 0;
+  cache.workbook.getSheet(sheetName)?.grid.forEachCellEntry(() => {
+    count += 1;
+  });
+  return count;
+}
+
 describe("ProjectedViewportStore", () => {
   it("accepts equal-version empty snapshots that clear stale styling", () => {
     const cache = new ProjectedViewportStore();
@@ -438,5 +495,56 @@ describe("ProjectedViewportStore", () => {
     expect(cache.getRowHeights("Sheet1")[0]).toBe(44);
     expect(cache.getRowSizes("Sheet1")[0]).toBe(44);
     expect(cache.getHiddenRows("Sheet1")[0]).toBeUndefined();
+  });
+
+  it("prunes back to the cache cap after the last viewport unsubscribes", () => {
+    const cache = new ProjectedViewportStore({
+      invoke: async () => undefined,
+      ready: async () => undefined,
+      subscribe: () => () => undefined,
+      subscribeBatches: () => () => undefined,
+      subscribeViewportPatches: () => () => undefined,
+      dispose: () => undefined,
+    });
+
+    const unsubscribe = cache.subscribeViewport(
+      "Sheet1",
+      { rowStart: 0, rowEnd: 600, colStart: 0, colEnd: 9 },
+      () => undefined,
+    );
+
+    cache.applyViewportPatch(createLargePatch(601, 10));
+
+    expect(countSheetCells(cache, "Sheet1")).toBe(6010);
+
+    unsubscribe();
+
+    expect(countSheetCells(cache, "Sheet1")).toBe(6000);
+  });
+
+  it("keeps pinned cell subscriptions while pruning after viewport teardown", () => {
+    const cache = new ProjectedViewportStore({
+      invoke: async () => undefined,
+      ready: async () => undefined,
+      subscribe: () => () => undefined,
+      subscribeBatches: () => () => undefined,
+      subscribeViewportPatches: () => () => undefined,
+      dispose: () => undefined,
+    });
+
+    const unsubscribeViewport = cache.subscribeViewport(
+      "Sheet1",
+      { rowStart: 0, rowEnd: 600, colStart: 0, colEnd: 9 },
+      () => undefined,
+    );
+    const unsubscribeCell = cache.subscribeCells("Sheet1", ["A1"], () => undefined);
+
+    cache.applyViewportPatch(createLargePatch(601, 10));
+    unsubscribeViewport();
+
+    expect(cache.peekCell("Sheet1", "A1")).toBeDefined();
+    expect(countSheetCells(cache, "Sheet1")).toBe(6000);
+
+    unsubscribeCell();
   });
 });

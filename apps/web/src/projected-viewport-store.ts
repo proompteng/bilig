@@ -543,6 +543,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       if (nextSheetViewportKeys && nextSheetViewportKeys.size === 0) {
         this.activeViewportKeysBySheet.delete(sheetName);
       }
+      this.pruneSheetCache(sheetName);
     };
   }
 
@@ -713,12 +714,12 @@ export class ProjectedViewportStore implements GridEngineLike {
       return;
     }
     const activeViewportKeys = this.activeViewportKeysBySheet.get(sheetName);
-    if (!activeViewportKeys || activeViewportKeys.size === 0) {
-      return;
-    }
-    const activeViewports = [...activeViewportKeys]
-      .map((key) => this.activeViewports.get(key))
-      .filter((viewport): viewport is Viewport => viewport !== undefined);
+    const activeViewports =
+      activeViewportKeys && activeViewportKeys.size > 0
+        ? [...activeViewportKeys]
+            .map((key) => this.activeViewports.get(key))
+            .filter((viewport): viewport is Viewport => viewport !== undefined)
+        : [];
     const pinnedKeys = new Set<string>();
     this.cellSubscriptions.forEach((subscription) => {
       if (subscription.sheetName !== sheetName) {
