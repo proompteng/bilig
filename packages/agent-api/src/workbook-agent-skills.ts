@@ -18,8 +18,8 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "read",
     description: "Read the workbook structure and explain what each sheet appears to do.",
     prompt:
-      "Summarize this workbook, explain what each sheet appears to do, and call out any obvious hotspots or risks.",
-    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.readWorkbook],
+      "Summarize this workbook, explain what each sheet appears to do, and call out any obvious hotspots or risks. Prefer the built-in durable workflow when it matches.",
+    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.startWorkflow, WORKBOOK_AGENT_TOOL_NAMES.readWorkbook],
   },
   {
     id: "inspect-selection",
@@ -83,8 +83,11 @@ export const workbookAgentSkillDescriptors: readonly WorkbookAgentSkillDescripto
     focus: "read",
     description: "Read the latest durable workbook revisions and summarize what changed recently.",
     prompt:
-      "Describe the most recent workbook changes, highlight the highest-impact revisions first, and cite the affected sheets or ranges when possible.",
-    toolNames: [WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges],
+      "Describe the most recent workbook changes, highlight the highest-impact revisions first, and cite the affected sheets or ranges when possible. Prefer the built-in durable workflow when it matches.",
+    toolNames: [
+      WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
+      WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges,
+    ],
   },
   {
     id: "edit-selection",

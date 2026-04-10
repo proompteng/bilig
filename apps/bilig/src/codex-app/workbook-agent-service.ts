@@ -977,6 +977,31 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                 this.emitSnapshot(sessionState.threadId);
                 return bundle;
               },
+              startWorkflow: async (workflowTemplate) => {
+                const previousRunIds = new Set(
+                  sessionState.snapshot.workflowRuns.map((run) => run.runId),
+                );
+                const nextSnapshot = await this.startWorkflow({
+                  documentId: sessionState.documentId,
+                  sessionId: sessionState.sessionId,
+                  session: {
+                    userID: sessionState.userId,
+                    roles: ["editor"],
+                  },
+                  body: {
+                    workflowTemplate,
+                  },
+                });
+                const nextRun =
+                  nextSnapshot.workflowRuns.find((run) => !previousRunIds.has(run.runId)) ??
+                  nextSnapshot.workflowRuns.find(
+                    (run) => run.workflowTemplate === workflowTemplate,
+                  );
+                if (!nextRun) {
+                  throw new Error(`Workflow run not found after starting ${workflowTemplate}`);
+                }
+                return nextRun;
+              },
             },
             request,
           );

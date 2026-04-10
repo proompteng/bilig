@@ -175,6 +175,7 @@ describe("workbook agent service", () => {
         expect.arrayContaining([
           "bilig_read_selection",
           "bilig_read_visible_range",
+          "bilig_start_workflow",
           "bilig_inspect_cell",
           "bilig_find_formula_issues",
           "bilig_search_workbook",
@@ -191,6 +192,9 @@ describe("workbook agent service", () => {
       expect(fakeCodex.lastThreadStartInput?.baseInstructions).toContain("bilig workbook tools");
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
         "bilig_read_workbook",
+      );
+      expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
+        "bilig_start_workflow",
       );
       expect(fakeCodex.lastThreadStartInput?.developerInstructions).toContain(
         "bilig_search_workbook",
@@ -402,6 +406,110 @@ describe("workbook agent service", () => {
           }),
         ]),
       );
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("allows Codex dynamic tools to start durable workflows inside the active thread", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null };
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+          capturedOptions.current = options;
+          return fakeCodex;
+        },
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const result = await capturedOptions.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-start-workflow",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "summarizeWorkbook",
+        },
+      });
+
+      const snapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(result?.success).toBe(true);
+      expect(snapshot.workflowRuns).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            workflowTemplate: "summarizeWorkbook",
+            status: "completed",
+            artifact: expect.objectContaining({
+              title: "Workbook Summary",
+            }),
+          }),
+        ]),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Started workflow: Summarize Workbook",
+          }),
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Summarize Workbook",
+          }),
+        ]),
+      );
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
     } finally {
       await service.close();
     }

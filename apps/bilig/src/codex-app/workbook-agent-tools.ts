@@ -25,7 +25,12 @@ import {
   updateColumnMetadataArgsSchema,
   updateRowMetadataArgsSchema,
 } from "@bilig/zero-sync";
-import type { WorkbookAgentUiContext, WorkbookViewport } from "@bilig/contracts";
+import type {
+  WorkbookAgentUiContext,
+  WorkbookAgentWorkflowRun,
+  WorkbookAgentWorkflowTemplate,
+  WorkbookViewport,
+} from "@bilig/contracts";
 import { z } from "zod";
 import type { SessionIdentity } from "../http/session.js";
 import type { ZeroSyncService } from "../zero/service.js";
@@ -64,6 +69,9 @@ const formulaIssueToolArgsSchema = z.object({
 });
 const readRecentChangesToolArgsSchema = z.object({
   limit: z.number().int().positive().max(50).optional(),
+});
+const startWorkflowToolArgsSchema = z.object({
+  workflowTemplate: z.enum(["summarizeWorkbook", "describeRecentChanges"]),
 });
 const searchWorkbookToolArgsSchema = z.object({
   query: z.string().trim().min(1),
@@ -469,6 +477,9 @@ export interface WorkbookAgentToolContext {
   readonly uiContext: WorkbookAgentUiContext | null;
   readonly zeroSyncService: ZeroSyncService;
   readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle>;
+  readonly startWorkflow?: (
+    workflowTemplate: WorkbookAgentWorkflowTemplate,
+  ) => Promise<WorkbookAgentWorkflowRun>;
 }
 
 function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
@@ -536,6 +547,22 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         additionalProperties: false,
         properties: {
           limit: { type: "number" },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.startWorkflow,
+      description:
+        "Start a built-in durable workbook workflow for read/report tasks such as workbook summarization or recent-change summaries.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["workflowTemplate"],
+        properties: {
+          workflowTemplate: {
+            type: "string",
+            enum: ["summarizeWorkbook", "describeRecentChanges"],
+          },
         },
       },
     },
@@ -879,6 +906,23 @@ async function stageCommandResult(
   );
 }
 
+function workflowToolResult(run: WorkbookAgentWorkflowRun): CodexDynamicToolCallResult {
+  return textToolResult(
+    stringifyJson({
+      workflowRun: {
+        runId: run.runId,
+        workflowTemplate: run.workflowTemplate,
+        title: run.title,
+        summary: run.summary,
+        status: run.status,
+        completedAtUnixMs: run.completedAtUnixMs,
+        errorMessage: run.errorMessage,
+      },
+      artifact: run.artifact,
+    }),
+  );
+}
+
 export async function handleWorkbookAgentToolCall(
   context: WorkbookAgentToolContext,
   request: CodexDynamicToolCallRequest,
@@ -926,6 +970,13 @@ export async function handleWorkbookAgentToolCall(
             changes: changes.map((record) => summarizeWorkbookChangeRecord(record)),
           }),
         );
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.startWorkflow: {
+        const args = startWorkflowToolArgsSchema.parse(request.arguments);
+        if (!context.startWorkflow) {
+          throw new Error("Built-in workflow execution is not available in this session");
+        }
+        return workflowToolResult(await context.startWorkflow(args.workflowTemplate));
       }
       case WORKBOOK_AGENT_TOOL_NAMES.inspectCell: {
         const args = inspectCellToolArgsSchema.parse(request.arguments);

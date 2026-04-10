@@ -797,6 +797,61 @@ describe("workbook agent tools", () => {
     });
   });
 
+  it("starts built-in durable workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "summarizeWorkbook" as const,
+      title: "Summarize Workbook",
+      summary: "Summarized workbook structure across 2 sheets.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      artifact: {
+        kind: "markdown" as const,
+        title: "Workbook Summary",
+        text: "## Workbook Summary",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "summarizeWorkbook",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith("summarizeWorkbook");
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain('"runId": "wf-1"');
+    expect(output && "text" in output ? output.text : "").toContain('"title": "Workbook Summary"');
+  });
+
   it("stages column metadata commands for resize operations", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);
