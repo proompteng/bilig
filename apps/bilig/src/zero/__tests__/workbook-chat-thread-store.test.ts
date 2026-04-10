@@ -1,0 +1,217 @@
+import { describe, expect, it } from "vitest";
+import {
+  loadWorkbookAgentThreadState,
+  saveWorkbookAgentThreadState,
+} from "../workbook-chat-thread-store.js";
+import type { QueryResultRow, Queryable } from "../store.js";
+
+interface RecordedQuery {
+  readonly text: string;
+  readonly values: readonly unknown[] | undefined;
+}
+
+class FakeQueryable implements Queryable {
+  readonly calls: RecordedQuery[] = [];
+
+  constructor(
+    private readonly responders: readonly ((
+      text: string,
+      values: readonly unknown[] | undefined,
+    ) => QueryResultRow[] | null)[] = [],
+  ) {}
+
+  async query<T extends QueryResultRow = QueryResultRow>(
+    text: string,
+    values?: unknown[],
+  ): Promise<{ rows: T[] }> {
+    this.calls.push({ text, values });
+    for (const responder of this.responders) {
+      const rows = responder(text, values);
+      if (rows) {
+        return {
+          rows: rows.filter((row): row is T => row !== null),
+        };
+      }
+    }
+    return { rows: [] };
+  }
+}
+
+function createThreadState() {
+  return {
+    documentId: "doc-1",
+    threadId: "thr-1",
+    actorUserId: "alex@example.com",
+    scope: "private" as const,
+    context: {
+      selection: {
+        sheetName: "Sheet1",
+        address: "A1",
+      },
+      viewport: {
+        rowStart: 0,
+        rowEnd: 20,
+        colStart: 0,
+        colEnd: 8,
+      },
+    },
+    entries: [
+      {
+        id: "entry-user-1",
+        kind: "user" as const,
+        turnId: "turn-1",
+        text: "Summarize Sheet1",
+        phase: null,
+        toolName: null,
+        toolStatus: null,
+        argumentsText: null,
+        outputText: null,
+        success: null,
+      },
+      {
+        id: "system-preview:bundle-1",
+        kind: "system" as const,
+        turnId: "turn-1",
+        text: "Preview bundle staged",
+        phase: null,
+        toolName: null,
+        toolStatus: null,
+        argumentsText: null,
+        outputText: null,
+        success: null,
+      },
+    ],
+    pendingBundle: {
+      id: "bundle-1",
+      documentId: "doc-1",
+      threadId: "thr-1",
+      turnId: "turn-1",
+      goalText: "Normalize selection",
+      summary: "Write cells in Sheet1!B2",
+      scope: "selection" as const,
+      riskClass: "low" as const,
+      approvalMode: "preview" as const,
+      baseRevision: 12,
+      createdAtUnixMs: 100,
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 8,
+        },
+      },
+      commands: [
+        {
+          kind: "writeRange" as const,
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[42]],
+        },
+      ],
+      affectedRanges: [
+        {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          endAddress: "B2",
+          role: "target" as const,
+        },
+      ],
+      estimatedAffectedCells: 1,
+    },
+    updatedAtUnixMs: 1234,
+  };
+}
+
+describe("workbook-chat-thread-store", () => {
+  it("persists thread metadata, timeline items, and pending bundle rows", async () => {
+    const queryable = new FakeQueryable();
+
+    await saveWorkbookAgentThreadState(queryable, createThreadState());
+
+    expect(
+      queryable.calls.some((call) => call.text.includes("INSERT INTO workbook_chat_thread")),
+    ).toBe(true);
+    expect(
+      queryable.calls.some((call) => call.text.includes("DELETE FROM workbook_chat_item")),
+    ).toBe(true);
+    expect(
+      queryable.calls.filter((call) => call.text.includes("INSERT INTO workbook_chat_item")).length,
+    ).toBe(2);
+    const bundleInsert = queryable.calls.find((call) =>
+      call.text.includes("INSERT INTO workbook_pending_bundle"),
+    );
+    expect(bundleInsert?.values?.[3]).toBe("bundle-1");
+    expect(bundleInsert?.values?.[7]).toBe("selection");
+  });
+
+  it("loads a durable thread snapshot with entries and a pending bundle", async () => {
+    const state = createThreadState();
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes("FROM workbook_chat_thread")
+          ? [
+              {
+                workbookId: state.documentId,
+                threadId: state.threadId,
+                actorUserId: state.actorUserId,
+                scope: state.scope,
+                contextJson: state.context,
+                updatedAtUnixMs: state.updatedAtUnixMs,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text) =>
+        text.includes("FROM workbook_chat_item")
+          ? state.entries.map((entry, index) => ({
+              entryId: entry.id,
+              turnId: entry.turnId,
+              kind: entry.kind,
+              text: entry.text,
+              phase: entry.phase,
+              toolName: entry.toolName,
+              toolStatus: entry.toolStatus,
+              argumentsText: entry.argumentsText,
+              outputText: entry.outputText,
+              success: entry.success,
+              sortOrder: index,
+            }))
+          : null,
+      (text) =>
+        text.includes("FROM workbook_pending_bundle")
+          ? [
+              {
+                bundleId: state.pendingBundle?.id,
+                workbookId: state.pendingBundle?.documentId,
+                threadId: state.pendingBundle?.threadId,
+                actorUserId: state.actorUserId,
+                turnId: state.pendingBundle?.turnId,
+                goalText: state.pendingBundle?.goalText,
+                summary: state.pendingBundle?.summary,
+                scope: state.pendingBundle?.scope,
+                riskClass: state.pendingBundle?.riskClass,
+                approvalMode: state.pendingBundle?.approvalMode,
+                baseRevision: state.pendingBundle?.baseRevision,
+                createdAtUnixMs: state.pendingBundle?.createdAtUnixMs,
+                contextJson: state.pendingBundle?.context,
+                commandsJson: state.pendingBundle?.commands,
+                affectedRangesJson: state.pendingBundle?.affectedRanges,
+                estimatedAffectedCells: state.pendingBundle?.estimatedAffectedCells,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const loaded = await loadWorkbookAgentThreadState(queryable, {
+      documentId: "doc-1",
+      threadId: "thr-1",
+      actorUserId: "alex@example.com",
+    });
+
+    expect(loaded).toEqual(state);
+  });
+});

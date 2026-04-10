@@ -6,6 +6,7 @@ import {
 } from "@bilig/agent-api";
 import { describe, expect, it, vi } from "vitest";
 import type { ZeroSyncService } from "../zero/service.js";
+import type { WorkbookAgentThreadStateRecord } from "../zero/workbook-chat-thread-store.js";
 import type {
   CodexAppServerClientOptions,
   CodexAppServerTransport,
@@ -110,6 +111,10 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
       return [];
     },
     async appendWorkbookAgentRun() {},
+    async loadWorkbookAgentThreadState() {
+      return null;
+    },
+    async saveWorkbookAgentThreadState() {},
     async getWorkbookHeadRevision() {
       return 1;
     },
@@ -827,6 +832,131 @@ describe("workbook agent service", () => {
       );
     } finally {
       await service.close();
+    }
+  });
+
+  it("recovers durable pending bundle state after the service restarts", async () => {
+    let durableThreadState: WorkbookAgentThreadStateRecord | null = null;
+    const fakeCodexA = new FakeCodexTransport();
+    const capturedA: { current: CodexAppServerClientOptions | null } = { current: null };
+    const zeroSync = createZeroSyncStub({
+      async loadWorkbookAgentThreadState() {
+        return durableThreadState ? structuredClone(durableThreadState) : null;
+      },
+      async saveWorkbookAgentThreadState(record) {
+        durableThreadState = structuredClone(record);
+      },
+    });
+    const serviceA = createWorkbookAgentService(zeroSync, {
+      codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+        capturedA.current = options;
+        return fakeCodexA;
+      },
+    });
+
+    try {
+      await serviceA.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      });
+
+      await capturedA.current?.handleDynamicToolCall({
+        threadId: "thr-test",
+        turnId: "turn-1",
+        callId: "call-1",
+        tool: "bilig_write_range",
+        arguments: {
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[42]],
+        },
+      });
+
+      const pending = serviceA.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      }).pendingBundle;
+      if (!isWorkbookAgentCommandBundle(pending)) {
+        throw new Error("Expected a staged pending bundle before restart");
+      }
+      expect(durableThreadState).toEqual(
+        expect.objectContaining({
+          pendingBundle: expect.objectContaining({
+            id: pending.id,
+            summary: pending.summary,
+          }),
+        }),
+      );
+    } finally {
+      await serviceA.close();
+    }
+
+    const fakeCodexB = new FakeCodexTransport();
+    const serviceB = createWorkbookAgentService(zeroSync, {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+        fakeCodexB,
+    });
+
+    try {
+      const resumed = await serviceB.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-2",
+          threadId: "thr-test",
+        },
+      });
+
+      expect(resumed.context).toEqual(
+        expect.objectContaining({
+          selection: expect.objectContaining({
+            sheetName: "Sheet1",
+            address: "A1",
+          }),
+        }),
+      );
+      expect(resumed.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: expect.stringContaining("Write cells in Sheet1!B2"),
+          }),
+        ]),
+      );
+      expect(resumed.pendingBundle).toEqual(
+        expect.objectContaining({
+          documentId: "doc-1",
+          threadId: "thr-test",
+          summary: "Write cells in Sheet1!B2",
+        }),
+      );
+    } finally {
+      await serviceB.close();
     }
   });
 });

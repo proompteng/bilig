@@ -66,6 +66,24 @@ function removeEntry(
   return entries.filter((entry) => entry.id !== entryId);
 }
 
+function mergeTimelineEntries(
+  codexEntries: readonly WorkbookAgentTimelineEntry[],
+  durableEntries: readonly WorkbookAgentTimelineEntry[],
+): WorkbookAgentTimelineEntry[] {
+  const merged = [...codexEntries];
+  const indexById = new Map(merged.map((entry, index) => [entry.id, index]));
+  for (const entry of durableEntries) {
+    const existingIndex = indexById.get(entry.id);
+    if (existingIndex === undefined) {
+      indexById.set(entry.id, merged.length);
+      merged.push(entry);
+      continue;
+    }
+    merged[existingIndex] = entry;
+  }
+  return merged;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -276,6 +294,19 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     this.maxSessions = options.maxSessions ?? 64;
   }
 
+  private async persistSessionState(sessionState: WorkbookAgentSessionState): Promise<void> {
+    await this.zeroSyncService.saveWorkbookAgentThreadState({
+      documentId: sessionState.documentId,
+      threadId: sessionState.threadId,
+      actorUserId: sessionState.userId,
+      scope: "private",
+      context: sessionState.snapshot.context,
+      entries: sessionState.snapshot.entries,
+      pendingBundle: sessionState.snapshot.pendingBundle,
+      updatedAtUnixMs: this.now(),
+    });
+  }
+
   async createSession(input: {
     documentId: string;
     session: SessionIdentity;
@@ -292,6 +323,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       );
       if (parsed.context) {
         sessionState.snapshot.context = parsed.context;
+        await this.persistSessionState(sessionState);
         this.emitSnapshot(sessionId);
       }
       this.touch(sessionState);
@@ -318,6 +350,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
             baseInstructions: createWorkbookAgentBaseInstructions(),
             developerInstructions: createWorkbookAgentDeveloperInstructions(),
           });
+    const durableThreadState = await this.zeroSyncService.loadWorkbookAgentThreadState(
+      input.documentId,
+      input.session.userID,
+      thread.id,
+    );
+    const codexEntries = buildEntriesFromThread(thread);
 
     const snapshot: MutableWorkbookAgentSessionSnapshot = {
       sessionId,
@@ -330,9 +368,9 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           : "idle",
       activeTurnId: thread.turns.findLast((turn) => turn.status === "inProgress")?.id ?? null,
       lastError: thread.turns.findLast((turn) => turn.error?.message)?.error?.message ?? null,
-      context: parsed.context ?? null,
-      entries: buildEntriesFromThread(thread),
-      pendingBundle: null,
+      context: parsed.context ?? durableThreadState?.context ?? null,
+      entries: mergeTimelineEntries(codexEntries, durableThreadState?.entries ?? []),
+      pendingBundle: durableThreadState?.pendingBundle ?? null,
       executionRecords,
     };
     const sessionState: WorkbookAgentSessionState = {
@@ -348,6 +386,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     this.sessions.set(sessionId, sessionState);
     this.threadToSessionId.set(thread.id, sessionId);
     this.evictIfNeeded();
+    await this.persistSessionState(sessionState);
     return cloneSnapshot(snapshot);
   }
 
@@ -365,6 +404,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     sessionState.snapshot.context = parsed.context;
     this.touch(sessionState);
+    await this.persistSessionState(sessionState);
     this.emitSnapshot(input.sessionId);
     return cloneSnapshot(sessionState.snapshot);
   }
@@ -408,6 +448,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     sessionState.snapshot.status = "inProgress";
     sessionState.snapshot.lastError = null;
     this.touch(sessionState);
+    await this.persistSessionState(sessionState);
     this.emitSnapshot(input.sessionId);
     return cloneSnapshot(sessionState.snapshot);
   }
@@ -534,6 +575,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ),
     );
     this.touch(sessionState);
+    await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.sessionId);
     return cloneSnapshot(sessionState.snapshot);
   }
@@ -563,6 +605,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ),
     );
     this.touch(sessionState);
+    await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.sessionId);
     return cloneSnapshot(sessionState.snapshot);
   }
@@ -605,6 +648,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       ),
     );
     this.touch(sessionState);
+    await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.sessionId);
     return cloneSnapshot(sessionState.snapshot);
   }
@@ -698,6 +742,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                     describeWorkbookAgentBundle(bundle),
                   ),
                 );
+                await this.persistSessionState(sessionState);
                 this.emitSnapshot(sessionState.sessionId);
                 return bundle;
               },
@@ -708,13 +753,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       });
       await this.codexClient.ensureReady();
       this.unsubscribeCodex = this.codexClient.subscribe((notification) => {
-        this.handleCodexNotification(notification);
+        void this.handleCodexNotification(notification).catch((error: unknown) => {
+          console.error(error);
+        });
       });
     }
     return this.codexClient;
   }
 
-  private handleCodexNotification(notification: CodexServerNotification): void {
+  private async handleCodexNotification(notification: CodexServerNotification): Promise<void> {
     switch (notification.method) {
       case "thread/started":
         return;
@@ -738,6 +785,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         sessionState.snapshot.status =
           notification.params.turn.status === "failed" ? "failed" : "idle";
         sessionState.snapshot.lastError = notification.params.turn.error?.message ?? null;
+        await this.persistSessionState(sessionState);
         this.emitSnapshot(sessionState.sessionId);
         return;
       }
@@ -761,6 +809,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           sessionState.snapshot.entries,
           mapThreadItemToEntry(notification.params.item, notification.params.turnId),
         );
+        await this.persistSessionState(sessionState);
         this.emitSnapshot(sessionState.sessionId);
         return;
       }
@@ -826,19 +875,23 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       }
       case "error": {
         const message = normalizeCodexNotificationErrorMessage(notification.params);
-        this.sessions.forEach((sessionState) => {
-          sessionState.snapshot.lastError = message;
-          sessionState.snapshot.status = "failed";
-          sessionState.snapshot.entries = upsertEntry(
-            sessionState.snapshot.entries,
-            createSystemEntry(
-              `system-error:${this.now()}`,
-              sessionState.snapshot.activeTurnId,
-              message,
-            ),
-          );
-          this.emitSnapshot(sessionState.sessionId);
-        });
+        await Promise.all(
+          [...this.sessions.values()].map(async (sessionState) => {
+            sessionState.snapshot.lastError = message;
+            sessionState.snapshot.status = "failed";
+            sessionState.snapshot.entries = upsertEntry(
+              sessionState.snapshot.entries,
+              createSystemEntry(
+                `system-error:${this.now()}`,
+                sessionState.snapshot.activeTurnId,
+                message,
+              ),
+            );
+            await this.persistSessionState(sessionState);
+            this.emitSnapshot(sessionState.sessionId);
+          }),
+        );
+        return;
       }
     }
   }
