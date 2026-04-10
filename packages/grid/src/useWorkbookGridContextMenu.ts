@@ -61,7 +61,16 @@ export function useWorkbookGridContextMenu(input: {
 
   const closeContextMenu = useCallback(() => {
     setContextMenuState(null);
-  }, []);
+    focusGrid();
+  }, [focusGrid]);
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+    const firstMenuItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+    firstMenuItem?.focus();
+  }, [contextMenuState]);
 
   useEffect(() => {
     if (!contextMenuState) {
@@ -76,13 +85,13 @@ export function useWorkbookGridContextMenu(input: {
       ) {
         return;
       }
-      setContextMenuState(null);
+      closeContextMenu();
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        setContextMenuState(null);
+        closeContextMenu();
       }
     };
 
@@ -92,7 +101,7 @@ export function useWorkbookGridContextMenu(input: {
       window.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [contextMenuState]);
+  }, [closeContextMenu, contextMenuState]);
 
   const toggleTargetHidden = useCallback(() => {
     if (!contextMenuState) {
@@ -103,8 +112,8 @@ export function useWorkbookGridContextMenu(input: {
     } else {
       onSetColumnHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden);
     }
-    setContextMenuState(null);
-  }, [contextMenuState, onSetColumnHidden, onSetRowHidden]);
+    closeContextMenu();
+  }, [closeContextMenu, contextMenuState, onSetColumnHidden, onSetRowHidden]);
 
   const openContextMenuForTarget = useCallback(
     ({ target, x, y }: WorkbookGridContextMenuTarget): boolean => {
@@ -157,7 +166,7 @@ export function useWorkbookGridContextMenu(input: {
         visibleRegion,
       );
       if (!headerSelection) {
-        setContextMenuState(null);
+        closeContextMenu();
         return;
       }
       if (
@@ -173,7 +182,7 @@ export function useWorkbookGridContextMenu(input: {
       event.preventDefault();
       event.stopPropagation();
     },
-    [openContextMenuForTarget, resolveHeaderSelectionAtPointer, visibleRegion],
+    [closeContextMenu, openContextMenuForTarget, resolveHeaderSelectionAtPointer, visibleRegion],
   );
 
   return useMemo(
