@@ -658,6 +658,184 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("updates workbook agent context through a durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const updateContext = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        createSession,
+        updateContext,
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads/thr-2/context",
+        payload: {
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 1,
+              rowEnd: 11,
+              colStart: 1,
+              colEnd: 6,
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-2",
+          },
+        }),
+      );
+      expect(updateContext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+          body: {
+            context: {
+              selection: {
+                sheetName: "Sheet1",
+                address: "B2",
+              },
+              viewport: {
+                rowStart: 1,
+                rowEnd: 11,
+                colStart: 1,
+                colEnd: 6,
+              },
+            },
+          },
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("interrupts workbook agent turns through a durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const interruptTurn = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+        status: "idle",
+        activeTurnId: null,
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        createSession,
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        interruptTurn,
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads/thr-2/interrupt",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-2",
+          },
+        }),
+      );
+      expect(interruptTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("applies staged workbook bundles through the monolith route", async () => {
     const applyPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({

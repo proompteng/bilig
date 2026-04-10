@@ -874,9 +874,9 @@ describe("workbook agent pane", () => {
     });
 
     const interruptCall = fetchSpy.mock.calls.find(([input]) =>
-      requestUrl(input).endsWith("/agent/sessions/agent-session-1/interrupt"),
+      requestUrl(input).endsWith("/agent/threads/thr-1/interrupt"),
     );
-    expect(interruptCall?.[0]).toBe("/v2/documents/doc-1/agent/sessions/agent-session-1/interrupt");
+    expect(interruptCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-1/interrupt");
 
     await act(async () => {
       root.unmount();

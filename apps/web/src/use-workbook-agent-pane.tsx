@@ -709,7 +709,7 @@ export function useWorkbookAgentPane(input: {
         return;
       }
       void fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/context`,
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/context`,
         {
           method: "POST",
           headers: {
@@ -771,7 +771,7 @@ export function useWorkbookAgentPane(input: {
     }
     try {
       const response = await fetch(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(activeSession.sessionId)}/interrupt`,
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/interrupt`,
         {
           method: "POST",
         },

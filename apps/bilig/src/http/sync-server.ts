@@ -386,6 +386,33 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/context",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.updateContext({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/turns",
     async (
       request: FastifyRequest<{
@@ -417,6 +444,31 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         return await service.interruptTurn({
           documentId: request.params.documentId,
           sessionId: request.params.sessionId,
+          session,
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/interrupt",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.interruptTurn({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
           session,
         });
       });
