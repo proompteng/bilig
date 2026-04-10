@@ -6,6 +6,7 @@ export interface WorkbookGridContextMenuState {
   readonly target: {
     readonly kind: "row" | "column";
     readonly index: number;
+    readonly hidden: boolean;
   };
 }
 
@@ -13,10 +14,11 @@ export function WorkbookGridContextMenu(props: {
   state: WorkbookGridContextMenuState;
   menuRef: RefObject<HTMLDivElement | null>;
   onClose(this: void): void;
-  onHideTarget(this: void): void;
+  onToggleTargetHidden(this: void): void;
 }) {
-  const { state, menuRef, onClose, onHideTarget } = props;
-  const hideLabel = state.target.kind === "row" ? "Hide row" : "Hide column";
+  const { state, menuRef, onClose, onToggleTargetHidden } = props;
+  const targetAxisLabel = state.target.kind === "row" ? "row" : "column";
+  const actionLabel = `${state.target.hidden ? "Unhide" : "Hide"} ${targetAxisLabel}`;
   const style: CSSProperties = {
     left: Math.round(state.x),
     position: "fixed",
@@ -34,14 +36,14 @@ export function WorkbookGridContextMenu(props: {
       style={style}
     >
       <button
-        aria-label={hideLabel}
+        aria-label={actionLabel}
         className="flex h-8 w-full items-center rounded-[4px] px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:bg-[var(--wb-hover)]"
-        data-testid={`grid-context-action-${state.target.kind === "row" ? "hide-row" : "hide-column"}`}
-        onClick={onHideTarget}
+        data-testid={`grid-context-action-${state.target.hidden ? "unhide" : "hide"}-${targetAxisLabel}`}
+        onClick={onToggleTargetHidden}
         role="menuitem"
         type="button"
       >
-        {hideLabel}
+        {actionLabel}
       </button>
       <button
         aria-label="Close grid context menu"

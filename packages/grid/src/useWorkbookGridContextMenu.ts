@@ -15,6 +15,8 @@ import type { WorkbookGridContextMenuTarget } from "./workbookGridContextMenuTar
 
 export function useWorkbookGridContextMenu(input: {
   focusGrid(this: void): void;
+  hiddenColumnsByIndex?: Readonly<Record<number, true>> | undefined;
+  hiddenRowsByIndex?: Readonly<Record<number, true>> | undefined;
   isEditingCell: boolean;
   onCommitEdit(this: void): void;
   onSelect(this: void, addr: string): void;
@@ -32,6 +34,8 @@ export function useWorkbookGridContextMenu(input: {
 }) {
   const {
     focusGrid,
+    hiddenColumnsByIndex,
+    hiddenRowsByIndex,
     isEditingCell,
     onCommitEdit,
     onSelect,
@@ -46,6 +50,14 @@ export function useWorkbookGridContextMenu(input: {
     null,
   );
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const isTargetHidden = useCallback(
+    (target: { kind: "row" | "column"; index: number }) =>
+      target.kind === "row"
+        ? hiddenRowsByIndex?.[target.index] === true
+        : hiddenColumnsByIndex?.[target.index] === true,
+    [hiddenColumnsByIndex, hiddenRowsByIndex],
+  );
 
   const closeContextMenu = useCallback(() => {
     setContextMenuState(null);
@@ -82,14 +94,14 @@ export function useWorkbookGridContextMenu(input: {
     };
   }, [contextMenuState]);
 
-  const hideTarget = useCallback(() => {
+  const toggleTargetHidden = useCallback(() => {
     if (!contextMenuState) {
       return;
     }
     if (contextMenuState.target.kind === "row") {
-      onSetRowHidden?.(contextMenuState.target.index, true);
+      onSetRowHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden);
     } else {
-      onSetColumnHidden?.(contextMenuState.target.index, true);
+      onSetColumnHidden?.(contextMenuState.target.index, !contextMenuState.target.hidden);
     }
     setContextMenuState(null);
   }, [contextMenuState, onSetColumnHidden, onSetRowHidden]);
@@ -114,11 +126,19 @@ export function useWorkbookGridContextMenu(input: {
         setGridSelection(createColumnSliceSelection(target.index, target.index, selectedCell[1]));
         onSelect(formatAddress(selectedCell[1], target.index));
       }
-      setContextMenuState({ x, y, target });
+      setContextMenuState({
+        x,
+        y,
+        target: {
+          ...target,
+          hidden: isTargetHidden(target),
+        },
+      });
       return true;
     },
     [
       focusGrid,
+      isTargetHidden,
       isEditingCell,
       onCommitEdit,
       onSelect,
@@ -161,7 +181,7 @@ export function useWorkbookGridContextMenu(input: {
       closeContextMenu,
       contextMenuState,
       handleHostContextMenuCapture,
-      hideTarget,
+      toggleTargetHidden,
       menuRef,
       openContextMenuForTarget,
     }),
@@ -169,7 +189,7 @@ export function useWorkbookGridContextMenu(input: {
       closeContextMenu,
       contextMenuState,
       handleHostContextMenuCapture,
-      hideTarget,
+      toggleTargetHidden,
       openContextMenuForTarget,
     ],
   );

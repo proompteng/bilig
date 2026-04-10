@@ -86,6 +86,8 @@ export function useWorkbookGridInteractions(
     | "onFillRange"
     | "onMoveRange"
     | "onPaste"
+    | "hiddenColumns"
+    | "hiddenRows"
     | "onSetColumnHidden"
     | "onSetRowHidden"
     | "onSelect"
@@ -112,6 +114,8 @@ export function useWorkbookGridInteractions(
     onFillRange,
     onMoveRange,
     onPaste,
+    hiddenColumns,
+    hiddenRows,
     onSetColumnHidden,
     onSetRowHidden,
     onSelect,
@@ -338,6 +342,8 @@ export function useWorkbookGridInteractions(
   });
   const contextMenu = useWorkbookGridContextMenu({
     focusGrid,
+    hiddenColumnsByIndex: hiddenColumns,
+    hiddenRowsByIndex: hiddenRows,
     isEditingCell,
     onCommitEdit: () => onCommitEdit(),
     onSelect,
