@@ -321,6 +321,9 @@ importers:
       '@bilig/workbook-domain':
         specifier: workspace:*
         version: link:../workbook-domain
+      effect:
+        specifier: 3.21.0
+        version: 3.21.0
 
   packages/excel-fixtures:
     dependencies:
