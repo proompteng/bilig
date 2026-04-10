@@ -3,6 +3,7 @@ import { parseCellAddress } from "@bilig/formula";
 import { CellEditorOverlay } from "./CellEditorOverlay.js";
 import { GridGpuSurface } from "./GridGpuSurface.js";
 import { GridTextOverlay } from "./GridTextOverlay.js";
+import { WorkbookGridContextMenu } from "./WorkbookGridContextMenu.js";
 import { useWorkbookGridInteractions } from "./useWorkbookGridInteractions.js";
 import { useWorkbookGridRenderState } from "./useWorkbookGridRenderState.js";
 import type { WorkbookGridSurfaceProps } from "./workbookGridSurfaceTypes.js";
@@ -48,6 +49,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onFillRange: props.onFillRange,
     onMoveRange: props.onMoveRange,
     onPaste: props.onPaste,
+    onSetColumnHidden: props.onSetColumnHidden,
+    onSetRowHidden: props.onSetRowHidden,
     onSelect: props.onSelect,
     onSelectionLabelChange: props.onSelectionLabelChange,
     onToggleBooleanCell: props.onToggleBooleanCell,
@@ -115,6 +118,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         onFocus={interactions.handleHostFocus}
         onKeyDownCapture={interactions.handleHostKeyDownCapture}
         onCopyCapture={interactions.handleHostCopyCapture}
+        onContextMenuCapture={interactions.handleHostContextMenuCapture}
         onPasteCapture={interactions.handleHostPasteCapture}
         onKeyDown={interactions.handleHostKeyDown}
         onDoubleClickCapture={interactions.handleHostDoubleClickCapture}
@@ -225,6 +229,14 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         ))}
         <div className="pointer-events-none absolute inset-0 z-[1]" />
       </div>
+      {interactions.contextMenu.contextMenuState ? (
+        <WorkbookGridContextMenu
+          menuRef={interactions.contextMenu.menuRef}
+          onClose={interactions.contextMenu.closeContextMenu}
+          onHideTarget={interactions.contextMenu.hideTarget}
+          state={interactions.contextMenu.contextMenuState}
+        />
+      ) : null}
       {props.isEditingCell && renderState.overlayStyle ? (
         <CellEditorOverlay
           label={`${props.sheetName}!${props.selectedAddr}`}

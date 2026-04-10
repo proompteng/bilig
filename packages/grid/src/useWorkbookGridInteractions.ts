@@ -62,6 +62,7 @@ import type {
   EditSelectionBehavior,
   WorkbookGridSurfaceProps,
 } from "./workbookGridSurfaceTypes.js";
+import { useWorkbookGridContextMenu } from "./useWorkbookGridContextMenu.js";
 import { useWorkbookGridKeyboardHandler } from "./useWorkbookGridKeyboardHandler.js";
 import { useWorkbookGridRenderState } from "./useWorkbookGridRenderState.js";
 import { useWorkbookGridPointerResolvers } from "./useWorkbookGridPointerResolvers.js";
@@ -84,6 +85,8 @@ export function useWorkbookGridInteractions(
     | "onFillRange"
     | "onMoveRange"
     | "onPaste"
+    | "onSetColumnHidden"
+    | "onSetRowHidden"
     | "onSelect"
     | "onSelectionLabelChange"
     | "onToggleBooleanCell"
@@ -108,6 +111,8 @@ export function useWorkbookGridInteractions(
     onFillRange,
     onMoveRange,
     onPaste,
+    onSetColumnHidden,
+    onSetRowHidden,
     onSelect,
     onSelectionLabelChange,
     onToggleBooleanCell,
@@ -329,6 +334,18 @@ export function useWorkbookGridInteractions(
     toggleSelectedBooleanCell: () => {
       toggleBooleanCellAt(selectedCell.col, selectedCell.row);
     },
+  });
+  const contextMenu = useWorkbookGridContextMenu({
+    focusGrid,
+    isEditingCell,
+    onCommitEdit: () => onCommitEdit(),
+    onSelect,
+    onSetColumnHidden,
+    onSetRowHidden,
+    resolveHeaderSelectionAtPointer,
+    selectedCell: [selectedCell.col, selectedCell.row],
+    setGridSelection,
+    visibleRegion,
   });
 
   const handleFillHandlePointerDown = useCallback(
@@ -782,6 +799,7 @@ export function useWorkbookGridInteractions(
         focusGrid();
       }
     },
+    handleHostContextMenuCapture: contextMenu.handleHostContextMenuCapture,
     handleHostKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
       handleGridKey(event);
     },
@@ -1001,5 +1019,6 @@ export function useWorkbookGridInteractions(
       refreshHoverState(event.clientX, event.clientY, 0);
     },
     handleSelectEntireSheet,
+    contextMenu,
   };
 }

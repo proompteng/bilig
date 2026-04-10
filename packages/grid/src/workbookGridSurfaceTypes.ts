@@ -67,6 +67,8 @@ export interface WorkbookGridSurfaceProps {
   rowHeights?: Readonly<Record<number, number>> | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
   onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
+  onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
+  onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
