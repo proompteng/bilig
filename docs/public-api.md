@@ -70,12 +70,12 @@ The canonical engine surface includes:
 
 ## Headless workbook surface
 
-`@bilig/headless` exposes a HyperFormula-style headless workbook API on top of
-`@bilig/core`:
+`@bilig/headless` exposes `WorkPaper`, a HyperFormula-style headless workbook API on top
+of `@bilig/core`:
 
-- `HeadlessWorkbook.buildEmpty`
-- `HeadlessWorkbook.buildFromArray`
-- `HeadlessWorkbook.buildFromSheets`
+- `WorkPaper.buildEmpty`
+- `WorkPaper.buildFromArray`
+- `WorkPaper.buildFromSheets`
 - workbook reads for cells, ranges, sheets, and named expressions
 - workbook mutations for cells, rows, columns, sheets, clipboard, and history
 - `batch`, `suspendEvaluation`, `resumeEvaluation`, `undo`, and `redo`
@@ -86,6 +86,9 @@ The canonical engine surface includes:
 - stable internal adapter getters: `graph`, `rangeMapping`, `arrayMapping`,
   `sheetMapping`, `addressMapping`, `dependencyGraph`, `evaluator`,
   `columnSearch`, and `lazilyTransformingAstService`
+
+`HeadlessWorkbook` remains exported as a compatibility alias, but `WorkPaper` is the
+canonical top-level contract.
 
 ### Core types added in the current tranche
 

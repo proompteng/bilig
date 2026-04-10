@@ -2,8 +2,8 @@
 
 Headless workbook facade for `bilig`.
 
-`@bilig/headless` exposes a HyperFormula-style workbook API on top of `@bilig/core`'s
-`SpreadsheetEngine` for server-side and headless workflows.
+`@bilig/headless` exposes `WorkPaper`, a HyperFormula-style workbook API on top of
+`@bilig/core`'s `SpreadsheetEngine` for server-side and headless workflows.
 
 ## Install
 
@@ -14,9 +14,9 @@ pnpm add @bilig/headless
 ## Usage
 
 ```ts
-import { HeadlessWorkbook } from "@bilig/headless";
+import { WorkPaper } from "@bilig/headless";
 
-const workbook = HeadlessWorkbook.buildFromSheets({
+const workbook = WorkPaper.buildFromSheets({
   Sheet1: [[1, "=A1*2"]],
 });
 
@@ -40,6 +40,8 @@ const value = workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 });
 
 ## Compatibility Notes
 
+- `WorkPaper` is the canonical top-level interface.
+- `HeadlessWorkbook` remains exported as a compatibility alias for existing callers.
 - The facade follows HyperFormula's public workbook workflow closely, but it is not a
   byte-for-byte drop-in replacement.
 - Public lookup helpers such as `getSheetId()`, `getSheetName()`,

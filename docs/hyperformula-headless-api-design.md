@@ -1,5 +1,9 @@
 # HyperFormula Headless API Design
 
+> Superseded by `docs/workpaper-platform-design.md`. The original `HeadlessWorkbook`
+> parity design remains useful as historical context, but `WorkPaper` is now the
+> canonical headless API contract.
+
 This document defines the `bilig` headless workbook API target by reading the local HyperFormula checkout at `/Users/gregkonush/github.com/hyperformula` and translating that public surface into a `bilig` design that fits this repo.
 
 Date: `2026-04-09`
