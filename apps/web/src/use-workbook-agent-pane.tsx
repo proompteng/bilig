@@ -38,6 +38,20 @@ import {
 } from "./workbook-agent-pane-storage.js";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
 
+type WorkbookAgentWorkflowStartRequest =
+  | {
+      readonly workflowTemplate: Exclude<
+        WorkbookAgentWorkflowTemplate,
+        "searchWorkbookQuery"
+      >;
+    }
+  | {
+      readonly workflowTemplate: "searchWorkbookQuery";
+      readonly query: string;
+      readonly sheetName?: string;
+      readonly limit?: number;
+    };
+
 interface WorkbookAgentLiveSession {
   threadId: string;
 }
@@ -874,7 +888,7 @@ export function useWorkbookAgentPane(input: {
   );
 
   const startWorkflow = useCallback(
-    async (workflowTemplate: WorkbookAgentWorkflowTemplate) => {
+    async (workflowRequest: WorkbookAgentWorkflowStartRequest) => {
       try {
         setError(null);
         setIsStartingWorkflow(true);
@@ -886,9 +900,7 @@ export function useWorkbookAgentPane(input: {
             headers: {
               "content-type": "application/json",
             },
-            body: JSON.stringify({
-              workflowTemplate,
-            }),
+            body: JSON.stringify(workflowRequest),
           },
         );
         const payload = (await response.json()) as unknown;
@@ -958,7 +970,13 @@ export function useWorkbookAgentPane(input: {
           void replayExecutionRecord(recordId);
         }}
         onStartWorkflow={(workflowTemplate) => {
-          void startWorkflow(workflowTemplate);
+          void startWorkflow({ workflowTemplate });
+        }}
+        onStartSearchWorkflow={(query) => {
+          void startWorkflow({
+            workflowTemplate: "searchWorkbookQuery",
+            query,
+          });
         }}
         onSelectThread={(threadId) => {
           void selectThread(threadId);

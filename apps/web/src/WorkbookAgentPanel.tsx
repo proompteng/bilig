@@ -837,7 +837,10 @@ export function WorkbookAgentPanel(props: {
   readonly onStartNewThread: () => void;
   readonly onTogglePendingCommand: (commandIndex: number) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
-  readonly onStartWorkflow: (template: WorkbookAgentWorkflowRun["workflowTemplate"]) => void;
+  readonly onStartWorkflow: (
+    template: Exclude<WorkbookAgentWorkflowRun["workflowTemplate"], "searchWorkbookQuery">,
+  ) => void;
+  readonly onStartSearchWorkflow: (query: string) => void;
   readonly onSubmit: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -876,6 +879,7 @@ export function WorkbookAgentPanel(props: {
           disabled={props.isLoading || isRunning}
           isStartingWorkflow={props.isStartingWorkflow}
           onStartWorkflow={props.onStartWorkflow}
+          onStartSearchWorkflow={props.onStartSearchWorkflow}
         />
       </div>
       <div

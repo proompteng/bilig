@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { WorkbookAgentWorkflowTemplate } from "@bilig/contracts";
 import { cn } from "./cn.js";
 import {
@@ -7,7 +8,7 @@ import {
 } from "./workbook-shell-chrome.js";
 
 interface WorkflowActionDefinition {
-  readonly template: WorkbookAgentWorkflowTemplate;
+  readonly template: Exclude<WorkbookAgentWorkflowTemplate, "searchWorkbookQuery">;
   readonly label: string;
   readonly summary: string;
 }
@@ -43,8 +44,13 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
 export function WorkflowActionStrip(props: {
   readonly disabled: boolean;
   readonly isStartingWorkflow: boolean;
-  readonly onStartWorkflow: (template: WorkbookAgentWorkflowTemplate) => void;
+  readonly onStartWorkflow: (
+    template: Exclude<WorkbookAgentWorkflowTemplate, "searchWorkbookQuery">,
+  ) => void;
+  readonly onStartSearchWorkflow: (query: string) => void;
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+
   return (
     <div className={cn(workbookInsetClass(), "mt-2 px-2 py-2")}>
       <div className="flex items-center justify-between gap-2">
@@ -78,6 +84,50 @@ export function WorkflowActionStrip(props: {
             </span>
           </button>
         ))}
+        <div className="grid gap-2 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 py-2">
+          <div className="text-[11px] font-semibold text-[var(--wb-text)]">Search workbook</div>
+          <div className="text-[11px] leading-4 text-[var(--wb-text-subtle)]">
+            Run a durable workbook search from the rail and keep the report in the thread.
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="min-w-0 flex-1 rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-2.5 py-1.5 text-[11px] text-[var(--wb-text)] outline-none transition-colors placeholder:text-[var(--wb-text-muted)] focus:border-[var(--wb-accent)] focus:ring-2 focus:ring-[var(--wb-accent-ring)]"
+              data-testid="workbook-agent-workflow-search-input"
+              disabled={props.disabled || props.isStartingWorkflow}
+              placeholder="Search for a concept, value, or formula"
+              type="text"
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  searchQuery.trim().length > 0 &&
+                  !(props.disabled || props.isStartingWorkflow)
+                ) {
+                  event.preventDefault();
+                  props.onStartSearchWorkflow(searchQuery.trim());
+                  setSearchQuery("");
+                }
+              }}
+            />
+            <button
+              className={workbookButtonClass({ size: "sm", tone: "accent", weight: "strong" })}
+              data-testid="workbook-agent-workflow-start-searchWorkbookQuery"
+              disabled={
+                props.disabled || props.isStartingWorkflow || searchQuery.trim().length === 0
+              }
+              type="button"
+              onClick={() => {
+                props.onStartSearchWorkflow(searchQuery.trim());
+                setSearchQuery("");
+              }}
+            >
+              {props.isStartingWorkflow ? "Starting…" : "Search"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
