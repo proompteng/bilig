@@ -197,6 +197,48 @@ describe("lookup builtins", () => {
     expect(DVARP(database, text("Missing"), ageIsTwelve)).toEqual(err(ErrorCode.Value));
   });
 
+  it("supports case-insensitive database headers with OR criteria rows", () => {
+    const DCOUNT = getLookupBuiltin("DCOUNT")!;
+    const DSUM = getLookupBuiltin("DSUM")!;
+
+    const database = cellRange(
+      [
+        text("Tree"),
+        text("Yield"),
+        text("Height"),
+        text("Apple"),
+        num(10),
+        num(18),
+        text("Pear"),
+        num(14),
+        num(20),
+        text("Apple"),
+        num(16),
+        num(22),
+        text("Plum"),
+        num(8),
+        num(16),
+      ],
+      5,
+      3,
+    );
+    const criteria = cellRange(
+      [
+        text("tree"),
+        text("yield"),
+        text("apple"),
+        text(">12"),
+        text("pear"),
+        { tag: ValueTag.Empty },
+      ],
+      3,
+      2,
+    );
+
+    expect(DCOUNT(database, text("Yield"), criteria)).toEqual(num(2));
+    expect(DSUM(database, text("Yield"), criteria)).toEqual(num(30));
+  });
+
   it("supports COVAR, COVARIANCE.P, COVARIANCE.S, AVEDEV, and DEVSQ", () => {
     const COVAR = getLookupBuiltin("COVAR")!;
     const COVARP = getLookupBuiltin("COVARIANCE.P")!;
