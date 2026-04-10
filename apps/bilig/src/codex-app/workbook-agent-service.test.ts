@@ -214,7 +214,7 @@ describe("workbook agent service", () => {
       expect(snapshot.executionRecords).toEqual([]);
 
       const events: unknown[] = [];
-      const unsubscribe = service.subscribe("agent-session-1", (event) => {
+      const unsubscribe = service.subscribe(snapshot.threadId, (event) => {
         events.push(event);
       });
 

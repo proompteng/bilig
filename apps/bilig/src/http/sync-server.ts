@@ -734,7 +734,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         snapshot: sessionSnapshot,
       });
 
-      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.sessionId, (event) => {
+      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.threadId, (event) => {
         writeEvent(event);
       });
       const keepalive = setInterval(() => {
@@ -798,7 +798,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
         snapshot: sessionSnapshot,
       });
 
-      const unsubscribe = workbookAgentService.subscribe(request.params.sessionId, (event) => {
+      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.threadId, (event) => {
         writeEvent(event);
       });
       const keepalive = setInterval(() => {

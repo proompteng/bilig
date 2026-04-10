@@ -246,7 +246,7 @@ export interface WorkbookAgentService {
     sessionId: string;
     session: SessionIdentity;
   }): WorkbookAgentSessionSnapshot;
-  subscribe(sessionId: string, listener: (event: WorkbookAgentStreamEvent) => void): () => void;
+  subscribe(threadId: string, listener: (event: WorkbookAgentStreamEvent) => void): () => void;
   close(): Promise<void>;
 }
 
@@ -356,7 +356,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         if (parsed.context) {
           accessibleSession.snapshot.context = parsed.context;
           await this.persistSessionState(accessibleSession);
-          this.emitSnapshot(accessibleSession.sessionId);
+          this.emitSnapshot(accessibleSession.threadId);
         }
         this.touch(accessibleSession);
         return cloneSnapshot(accessibleSession.snapshot);
@@ -372,7 +372,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       if (parsed.context) {
         sessionState.snapshot.context = parsed.context;
         await this.persistSessionState(sessionState);
-        this.emitSnapshot(sessionId);
+        this.emitSnapshot(existing.threadId);
       }
       this.touch(sessionState);
       return cloneSnapshot(sessionState.snapshot);
@@ -458,7 +458,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     sessionState.snapshot.context = parsed.context;
     this.touch(sessionState);
     await this.persistSessionState(sessionState);
-    this.emitSnapshot(input.sessionId);
+    this.emitSnapshot(sessionState.threadId);
     return cloneSnapshot(sessionState.snapshot);
   }
 
@@ -503,7 +503,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     sessionState.snapshot.lastError = null;
     this.touch(sessionState);
     await this.persistSessionState(sessionState);
-    this.emitSnapshot(input.sessionId);
+    this.emitSnapshot(sessionState.threadId);
     return cloneSnapshot(sessionState.snapshot);
   }
 
@@ -646,7 +646,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     this.touch(sessionState);
     await this.persistSessionState(sessionState);
-    this.emitSnapshot(sessionState.sessionId);
+    this.emitSnapshot(sessionState.threadId);
     return cloneSnapshot(sessionState.snapshot);
   }
 
@@ -677,7 +677,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     this.touch(sessionState);
     await this.persistSessionState(sessionState);
-    this.emitSnapshot(sessionState.sessionId);
+    this.emitSnapshot(sessionState.threadId);
     return cloneSnapshot(sessionState.snapshot);
   }
 
@@ -721,7 +721,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     this.touch(sessionState);
     await this.persistSessionState(sessionState);
-    this.emitSnapshot(sessionState.sessionId);
+    this.emitSnapshot(sessionState.threadId);
     return cloneSnapshot(sessionState.snapshot);
   }
 
@@ -749,18 +749,18 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return cloneSnapshot(sessionState.snapshot);
   }
 
-  subscribe(sessionId: string, listener: (event: WorkbookAgentStreamEvent) => void): () => void {
-    const listeners = this.subscribers.get(sessionId) ?? new Set();
+  subscribe(threadId: string, listener: (event: WorkbookAgentStreamEvent) => void): () => void {
+    const listeners = this.subscribers.get(threadId) ?? new Set();
     listeners.add(listener);
-    this.subscribers.set(sessionId, listeners);
+    this.subscribers.set(threadId, listeners);
     return () => {
-      const current = this.subscribers.get(sessionId);
+      const current = this.subscribers.get(threadId);
       if (!current) {
         return;
       }
       current.delete(listener);
       if (current.size === 0) {
-        this.subscribers.delete(sessionId);
+        this.subscribers.delete(threadId);
       }
     };
   }
@@ -826,7 +826,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
                   ),
                 );
                 await this.persistSessionState(sessionState);
-                this.emitSnapshot(sessionState.sessionId);
+                this.emitSnapshot(sessionState.threadId);
                 return bundle;
               },
             },
@@ -856,7 +856,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         sessionState.snapshot.activeTurnId = notification.params.turn.id;
         sessionState.snapshot.status = "inProgress";
         sessionState.snapshot.lastError = null;
-        this.emitSnapshot(sessionState.sessionId);
+        this.emitSnapshot(sessionState.threadId);
         return;
       }
       case "turn/completed": {
@@ -869,7 +869,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           notification.params.turn.status === "failed" ? "failed" : "idle";
         sessionState.snapshot.lastError = notification.params.turn.error?.message ?? null;
         await this.persistSessionState(sessionState);
-        this.emitSnapshot(sessionState.sessionId);
+        this.emitSnapshot(sessionState.threadId);
         return;
       }
       case "item/started":
@@ -893,7 +893,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           mapThreadItemToEntry(notification.params.item, notification.params.turnId),
         );
         await this.persistSessionState(sessionState);
-        this.emitSnapshot(sessionState.sessionId);
+        this.emitSnapshot(sessionState.threadId);
         return;
       }
       case "item/agentMessage/delta": {
@@ -920,7 +920,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           ...existing,
           text: `${existing.text ?? ""}${notification.params.delta}`,
         });
-        this.emit(sessionState.sessionId, {
+        this.emit(sessionState.threadId, {
           type: "assistantDelta",
           itemId: notification.params.itemId,
           delta: notification.params.delta,
@@ -951,7 +951,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
           ...existing,
           text: `${existing.text ?? ""}${notification.params.delta}`,
         });
-        this.emit(sessionState.sessionId, {
+        this.emit(sessionState.threadId, {
           type: "planDelta",
           itemId: notification.params.itemId,
           delta: notification.params.delta,
@@ -973,7 +973,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
               ),
             );
             await this.persistSessionState(sessionState);
-            this.emitSnapshot(sessionState.sessionId);
+            this.emitSnapshot(sessionState.threadId);
           }),
         );
         return;
@@ -1040,19 +1040,19 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     return this.sessions.get(sessionId) ?? null;
   }
 
-  private emitSnapshot(sessionId: string): void {
-    const sessionState = this.sessions.get(sessionId);
+  private emitSnapshot(threadId: string): void {
+    const sessionState = this.tryGetSessionByThreadId(threadId);
     if (!sessionState) {
       return;
     }
-    this.emit(sessionId, {
+    this.emit(threadId, {
       type: "snapshot",
       snapshot: cloneSnapshot(sessionState.snapshot),
     });
   }
 
-  private emit(sessionId: string, event: WorkbookAgentStreamEvent): void {
-    const listeners = this.subscribers.get(sessionId);
+  private emit(threadId: string, event: WorkbookAgentStreamEvent): void {
+    const listeners = this.subscribers.get(threadId);
     if (!listeners) {
       return;
     }
@@ -1071,7 +1071,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
     const candidates = [...this.sessions.values()]
       .filter((sessionState) => {
-        const listeners = this.subscribers.get(sessionState.sessionId);
+        const listeners = this.subscribers.get(sessionState.threadId);
         return sessionState.snapshot.status === "idle" && (!listeners || listeners.size === 0);
       })
       .toSorted((left, right) => left.lastAccessedAt - right.lastAccessedAt);
@@ -1082,7 +1082,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       }
       this.sessions.delete(evicted.sessionId);
       this.threadToSessionId.delete(evicted.threadId);
-      this.subscribers.delete(evicted.sessionId);
+      this.subscribers.delete(evicted.threadId);
     }
   }
 }
