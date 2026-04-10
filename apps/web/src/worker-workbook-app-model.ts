@@ -9,7 +9,6 @@ import {
   type LiteralInput,
   type WorkbookDefinedNameSnapshot,
 } from "@bilig/protocol";
-import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from "./workbook-sync.js";
 
 export type EditingMode = "idle" | "cell" | "formula";
 
@@ -55,23 +54,6 @@ export function normalizeSheetNameKey(value: string): string {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-export function parseColumnWidthMutationArgs(
-  mutation: PendingWorkbookMutationInput | PendingWorkbookMutation,
-): { sheetName: string; columnIndex: number; width: number } | null {
-  if (mutation.method !== "updateColumnWidth") {
-    return null;
-  }
-  const [sheetName, columnIndex, width] = mutation.args;
-  if (
-    typeof sheetName !== "string" ||
-    typeof columnIndex !== "number" ||
-    typeof width !== "number"
-  ) {
-    return null;
-  }
-  return { sheetName, columnIndex, width };
 }
 
 export function assert(condition: unknown, message: string): asserts condition {

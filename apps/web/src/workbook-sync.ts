@@ -15,15 +15,16 @@ export type WorkbookMutationMethod =
   | "moveRange"
   | "updateRowMetadata"
   | "updateColumnMetadata"
-  | "updateColumnWidth"
   | "setFreezePane"
   | "setRangeStyle"
   | "clearRangeStyle"
   | "setRangeNumberFormat"
   | "clearRangeNumberFormat";
 
+type KnownPendingWorkbookMutationMethod = WorkbookMutationMethod | "updateColumnWidth";
+
 export interface PendingWorkbookMutationInput {
-  readonly method: WorkbookMutationMethod;
+  readonly method: KnownPendingWorkbookMutationMethod;
   readonly args: unknown[];
 }
 
@@ -72,7 +73,6 @@ export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutat
     value === "moveRange" ||
     value === "updateRowMetadata" ||
     value === "updateColumnMetadata" ||
-    value === "updateColumnWidth" ||
     value === "setFreezePane" ||
     value === "setRangeStyle" ||
     value === "clearRangeStyle" ||
@@ -81,11 +81,19 @@ export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutat
   );
 }
 
+function isKnownPendingWorkbookMutationMethod(
+  value: unknown,
+): value is KnownPendingWorkbookMutationMethod {
+  return value === "updateColumnWidth" || isWorkbookMutationMethod(value);
+}
+
 export function isPendingWorkbookMutationInput(
   value: unknown,
 ): value is PendingWorkbookMutationInput {
   return (
-    isRecord(value) && isWorkbookMutationMethod(value["method"]) && Array.isArray(value["args"])
+    isRecord(value) &&
+    isKnownPendingWorkbookMutationMethod(value["method"]) &&
+    Array.isArray(value["args"])
   );
 }
 
@@ -239,12 +247,14 @@ export function buildZeroWorkbookMutation(
       ) {
         throw new Error("Invalid updateColumnWidth args");
       }
-      return mutators.workbook.updateColumnWidth({
+      return mutators.workbook.updateColumnMetadata({
         documentId,
         clientMutationId,
         sheetName,
-        columnIndex,
+        startCol: columnIndex,
+        count: 1,
         width,
+        hidden: null,
       });
     }
     case "setFreezePane": {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildZeroWorkbookMutation } from "../workbook-sync.js";
+import {
+  buildZeroWorkbookMutation,
+  isPendingWorkbookMutationInput,
+  isWorkbookMutationMethod,
+} from "../workbook-sync.js";
 
 describe("buildZeroWorkbookMutation", () => {
   it("builds structural metadata mutations", () => {
@@ -23,6 +27,24 @@ describe("buildZeroWorkbookMutation", () => {
 
     expect(
       buildZeroWorkbookMutation("doc-1", {
+        method: "updateColumnMetadata",
+        args: ["Sheet1", 3, 1, 144, null],
+      }),
+    ).toMatchObject({
+      args: {
+        clientMutationId: undefined,
+        count: 1,
+        documentId: "doc-1",
+        hidden: null,
+        sheetName: "Sheet1",
+        startCol: 3,
+        width: 144,
+      },
+      "~": "MutateRequest",
+    });
+
+    expect(
+      buildZeroWorkbookMutation("doc-1", {
         method: "setFreezePane",
         args: ["Sheet1", 1, 2],
       }),
@@ -36,6 +58,36 @@ describe("buildZeroWorkbookMutation", () => {
       },
       "~": "MutateRequest",
     });
+  });
+
+  it("normalizes legacy updateColumnWidth journal entries onto column metadata mutations", () => {
+    const legacyMutation = {
+      method: "updateColumnWidth",
+      args: ["Sheet1", 5, 168],
+    };
+
+    expect(isPendingWorkbookMutationInput(legacyMutation)).toBe(true);
+    if (!isPendingWorkbookMutationInput(legacyMutation)) {
+      throw new Error("expected legacy mutation to remain readable");
+    }
+
+    expect(buildZeroWorkbookMutation("doc-1", legacyMutation)).toMatchObject({
+      args: {
+        clientMutationId: undefined,
+        count: 1,
+        documentId: "doc-1",
+        hidden: null,
+        sheetName: "Sheet1",
+        startCol: 5,
+        width: 168,
+      },
+      "~": "MutateRequest",
+    });
+  });
+
+  it("does not advertise updateColumnWidth as an active workbook mutation method", () => {
+    expect(isWorkbookMutationMethod("updateColumnWidth")).toBe(false);
+    expect(isWorkbookMutationMethod("updateColumnMetadata")).toBe(true);
   });
 
   it("accepts renderCommit mutations with valid commit ops", () => {
