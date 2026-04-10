@@ -111,18 +111,25 @@ function getWorkflowTemplateMetadata(
           },
         ],
       };
-    case "findFormulaIssues":
+    case "findFormulaIssues": {
+      const scopeLabel = workflowInput?.sheetName
+        ? `${workflowInput.sheetName}`
+        : "the workbook";
       return {
         title: "Find Formula Issues",
-        runningSummary: "Running formula issue scan workflow.",
+        runningSummary: `Running formula issue scan workflow for ${scopeLabel}.`,
         stepPlans: [
           {
             stepId: "scan-formula-cells",
             label: "Scan formula cells",
             runningSummary:
-              "Scanning workbook formulas for errors, cycles, and JS-only fallbacks.",
+              workflowInput?.sheetName
+                ? `Scanning ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
+                : "Scanning workbook formulas for errors, cycles, and JS-only fallbacks.",
             pendingSummary:
-              "Waiting to scan workbook formulas for errors, cycles, and JS-only fallbacks.",
+              workflowInput?.sheetName
+                ? `Waiting to scan ${workflowInput.sheetName} formulas for errors, cycles, and JS-only fallbacks.`
+                : "Waiting to scan workbook formulas for errors, cycles, and JS-only fallbacks.",
           },
           {
             stepId: "draft-issue-report",
@@ -132,6 +139,7 @@ function getWorkflowTemplateMetadata(
           },
         ],
       };
+    }
     case "traceSelectionDependencies":
       return {
         title: "Trace Selection Dependencies",
@@ -729,14 +737,24 @@ export async function executeWorkbookAgentWorkflow(input: {
     }
     case "findFormulaIssues": {
       const formulaIssues = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
-        findWorkbookFormulaIssues(runtime),
+        findWorkbookFormulaIssues(runtime, {
+          ...(input.workflowInput?.sheetName
+            ? { sheetName: input.workflowInput.sheetName }
+            : {}),
+          ...(input.workflowInput?.limit !== undefined
+            ? { limit: input.workflowInput.limit }
+            : {}),
+        }),
       );
+      const scopeLabel = input.workflowInput?.sheetName
+        ? ` on ${input.workflowInput.sheetName}`
+        : "";
       return {
         title: "Find Formula Issues",
         summary:
           formulaIssues.summary.issueCount === 0
-            ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"} and found no issues.`
-            : `Found ${String(formulaIssues.summary.issueCount)} formula issue${formulaIssues.summary.issueCount === 1 ? "" : "s"} across ${String(formulaIssues.summary.scannedFormulaCells)} scanned formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}.`,
+            ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues.`
+            : `Found ${String(formulaIssues.summary.issueCount)} formula issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}${scopeLabel} across ${String(formulaIssues.summary.scannedFormulaCells)} scanned formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}.`,
         artifact: {
           kind: "markdown",
           title: "Formula Issues",
@@ -755,8 +773,8 @@ export async function executeWorkbookAgentWorkflow(input: {
             label: "Scan formula cells",
             summary:
               formulaIssues.summary.issueCount === 0
-                ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"} and found no issues.`
-                : `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"} and found ${String(formulaIssues.summary.issueCount)} issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}.`,
+                ? `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found no issues.`
+                : `Scanned ${String(formulaIssues.summary.scannedFormulaCells)} formula cell${formulaIssues.summary.scannedFormulaCells === 1 ? "" : "s"}${scopeLabel} and found ${String(formulaIssues.summary.issueCount)} issue${formulaIssues.summary.issueCount === 1 ? "" : "s"}.`,
           },
           {
             stepId: "draft-issue-report",

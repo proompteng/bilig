@@ -31,8 +31,8 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
   },
   {
     template: "findFormulaIssues",
-    label: "Formula issues",
-    summary: "Scan formulas for errors, cycles, and JS-only fallback formulas.",
+    label: "Sheet formula issues",
+    summary: "Scan formulas on the active sheet for errors, cycles, and JS-only fallback formulas.",
   },
   {
     template: "traceSelectionDependencies",

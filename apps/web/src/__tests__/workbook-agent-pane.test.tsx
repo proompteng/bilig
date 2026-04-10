@@ -534,6 +534,7 @@ describe("workbook agent pane", () => {
     expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-2/workflows");
     expect(requestBody(workflowCall?.[1])).toEqual({
       workflowTemplate: "findFormulaIssues",
+      sheetName: "Sheet1",
     });
     expect(host.textContent).toContain("Find Formula Issues");
     expect(host.textContent).toContain("Formula Issues");

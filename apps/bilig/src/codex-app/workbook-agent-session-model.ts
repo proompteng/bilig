@@ -72,6 +72,8 @@ export const startWorkflowBodySchema = z.discriminatedUnion("workflowTemplate", 
   }),
   z.object({
     workflowTemplate: z.literal("findFormulaIssues"),
+    sheetName: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(200).optional(),
   }),
   z.object({
     workflowTemplate: z.literal("traceSelectionDependencies"),

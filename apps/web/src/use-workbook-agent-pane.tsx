@@ -42,8 +42,13 @@ type WorkbookAgentWorkflowStartRequest =
   | {
       readonly workflowTemplate: Exclude<
         WorkbookAgentWorkflowTemplate,
-        "searchWorkbookQuery"
+        "findFormulaIssues" | "searchWorkbookQuery"
       >;
+    }
+  | {
+      readonly workflowTemplate: "findFormulaIssues";
+      readonly sheetName?: string;
+      readonly limit?: number;
     }
   | {
       readonly workflowTemplate: "searchWorkbookQuery";
@@ -984,6 +989,13 @@ export function useWorkbookAgentPane(input: {
           void replayExecutionRecord(recordId);
         }}
         onStartWorkflow={(workflowTemplate) => {
+          if (workflowTemplate === "findFormulaIssues" && currentContext?.selection.sheetName) {
+            void startWorkflow({
+              workflowTemplate,
+              sheetName: currentContext.selection.sheetName,
+            });
+            return;
+          }
           void startWorkflow({ workflowTemplate });
         }}
         onStartSearchWorkflow={(query) => {

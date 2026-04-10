@@ -480,6 +480,7 @@ describe("workbook agent service", () => {
         },
         body: {
           workflowTemplate: "findFormulaIssues",
+          sheetName: "Sheet1",
         },
       });
 

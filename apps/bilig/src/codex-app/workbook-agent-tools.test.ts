@@ -1022,6 +1022,84 @@ describe("workbook agent tools", () => {
     );
   });
 
+  it("starts sheet-scoped formula issue workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-formula-sheet-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "findFormulaIssues" as const,
+      title: "Find Formula Issues",
+      summary: "Found 2 formula issues on Sheet1 across 3 scanned formula cells.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "scan-formula-cells",
+          label: "Scan formula cells",
+          status: "completed" as const,
+          summary: "Scanned 3 formula cells on Sheet1 and found 2 issues.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "draft-issue-report",
+          label: "Draft issue report",
+          status: "completed" as const,
+          summary: "Prepared the durable formula issue report for the thread.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Formula Issues",
+        text: "## Formula Issues",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-formula-sheet-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "findFormulaIssues",
+          sheetName: "Sheet1",
+          limit: 25,
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "findFormulaIssues",
+      sheetName: "Sheet1",
+      limit: 25,
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"runId": "wf-formula-sheet-1"',
+    );
+  });
+
   it("stages column metadata commands for resize operations", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);
