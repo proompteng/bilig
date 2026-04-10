@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   extractKnownLimitations,
@@ -70,7 +71,7 @@ const snapshot: HyperFormulaSurfaceSnapshot = {
   configKeys: readInterfaceKeys(join(hyperFormulaRoot, "src", "ConfigParams.ts"), "ConfigParams"),
 };
 
-const serializedSnapshot = `${JSON.stringify(snapshot, null, 2)}\n`;
+const serializedSnapshot = formatJsonForRepo(`${JSON.stringify(snapshot, null, 2)}\n`);
 
 if (isCheckMode) {
   if (!existsSync(outputPath)) {
@@ -101,3 +102,26 @@ console.log(
     2,
   ),
 );
+
+function formatJsonForRepo(serializedJson: string): string {
+  const tempDir = mkdtempSync(join(tmpdir(), "workpaper-hf-audit-"));
+  const tempFilePath = join(tempDir, "snapshot.json");
+  writeFileSync(tempFilePath, serializedJson);
+  const oxfmtPath = join(rootDir, "node_modules", ".bin", "oxfmt");
+
+  const formatResult = Bun.spawnSync([oxfmtPath, "--write", tempFilePath], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (formatResult.exitCode !== 0) {
+    rmSync(tempDir, { recursive: true, force: true });
+    throw new Error(
+      `Unable to format generated snapshot: ${new TextDecoder().decode(formatResult.stderr).trim()}`,
+    );
+  }
+
+  const formattedJson = readFileSync(tempFilePath, "utf8");
+  rmSync(tempDir, { recursive: true, force: true });
+  return formattedJson;
+}
