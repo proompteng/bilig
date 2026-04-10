@@ -45,6 +45,28 @@ Examples:
 - Dynamic-array support does not prove lookup performance.
 - npm install success does not prove formula compatibility.
 
+## Claim Vocabulary
+
+This document uses a strict vocabulary so design language cannot outrun the evidence.
+
+- `parity`
+  - audited equality on a named surface against the local HyperFormula checkout
+- `lead`
+  - evidence-backed advantage on a named axis, while other axes may still be behind
+- `dominance`
+  - lead on an axis family with no red submetric left inside that family
+- `overall lead`
+  - no red category remains across surface, feature, formula, performance, and operability
+- `10x better`
+  - allowed only for a named workload with a checked-in artifact that includes mean, p95, host
+    metadata, and engine versions
+
+Forbidden shortcuts:
+
+- calling breadth leadership formula dominance without production-closure proof
+- calling feature leadership overall leadership while performance remains red
+- calling a single benchmark win a package-level speed win
+
 ## Problem Statement
 
 `WorkPaper` is now a real, publishable, measured headless package. That is good, but it is not the
@@ -77,18 +99,18 @@ The remaining work is:
 
 This is the scorecard that should drive engineering priority.
 
-| Axis | Metric | Current `bilig` evidence | Current HyperFormula evidence | Current position |
-| --- | --- | --- | --- | --- |
-| Surface parity | Public method inventory | `132/132` method names present on `HeadlessWorkbook` / `WorkPaper` | local checkout baseline | parity |
-| Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity |
-| Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical |
-| Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth |
-| Formula production quality | Canonical production closure | `92/101` canonical rows production-closed = `91.1%` | no matching canonical artifact | incomplete; `bilig` not yet dominant |
-| Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads |
-| Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula leads |
-| Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed |
-| Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence |
-| Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption |
+| Axis | Metric | Current `bilig` evidence | Current HyperFormula evidence | Current position | Next proof needed |
+| --- | --- | --- | --- | --- | --- |
+| Surface parity | Public method inventory | `132/132` method names present on `HeadlessWorkbook` / `WorkPaper` | local checkout baseline | parity | keep the snapshot artifact green |
+| Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity | keep the snapshot artifact green |
+| Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical | add a derived breadth artifact so the number is not doc-only |
+| Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
+| Formula production quality | Canonical production closure | `92/101` canonical rows production-closed = `91.1%` | no matching canonical artifact | incomplete; `bilig` not yet dominant | close the remaining `9` canonical rows and artifact the closure state |
+| Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
+| Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula leads | convert the current red workloads into majority `bilig` wins |
+| Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
+| Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
+| Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
 
 The important reading is:
 
@@ -116,6 +138,93 @@ Current measured values from local repo artifacts and docs:
 - leadership workload record:
   - dynamic-array benchmark present
   - HyperFormula marked `unsupported`
+
+## Evidence and Artifact Map
+
+Every claim in the scorecard must point at a concrete artifact or command.
+
+Surface parity:
+
+- artifact:
+  - `packages/headless/src/__tests__/fixtures/hyperformula-surface.json`
+- source generator:
+  - `scripts/gen-workpaper-hyperformula-audit.ts`
+- check command:
+  - `pnpm workpaper:parity:check`
+
+Competitive performance:
+
+- artifact:
+  - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- source generator:
+  - `scripts/gen-workpaper-vs-hyperformula-benchmark.ts`
+- check command:
+  - `pnpm workpaper:bench:competitive:check`
+
+Internal regression baseline:
+
+- artifact:
+  - `packages/benchmarks/baselines/workpaper-baseline.json`
+- source generator:
+  - `scripts/gen-workpaper-benchmark-baseline.ts`
+- check command:
+  - `pnpm workpaper:bench:check`
+
+External-consumer operability:
+
+- smoke harness:
+  - `scripts/workpaper-external-smoke.ts`
+- check command:
+  - `pnpm workpaper:smoke:external`
+
+Publishability:
+
+- package validation command:
+  - `pnpm publish:runtime:check`
+- release workflow:
+  - `.github/workflows/headless-package.yml`
+
+Formula breadth and canonical closure:
+
+- breadth source:
+  - `packages/formula/src/generated/formula-inventory.ts`
+- canonical closure source:
+  - `packages/formula/src/compatibility.ts`
+  - `docs/formula-language.md`
+- required future artifact:
+  - a generated formula-dominance snapshot derived from the inventory and canonical registry
+
+## Program States
+
+This program should be read as a state machine, not a binary done/not-done checklist.
+
+`contract-complete`
+
+- surface parity green
+- operability green
+- publishability green
+- competitive benchmark artifact exists
+
+`engine-catching-up`
+
+- directly comparable performance is still red
+- feature or formula leadership may already exist
+- work should focus on the measured deficits, not new surface work
+
+`performance-leading`
+
+- `bilig` wins the majority of directly comparable workloads
+- `bilig` loses none of the remaining comparable workloads by more than `1.25x`
+- at least one hotspot family has both mean and p95 wins
+
+`overall-leading`
+
+- no red scorecard category remains
+- formula closure is at or above the threshold in this document
+- feature leadership remains intact
+- performance-leading is true
+
+The current state is `engine-catching-up`.
 
 ## What Counts As “Fully Beat HyperFormula”
 
@@ -145,6 +254,34 @@ time:
    - public diagnostics and deterministic behavior remain stronger than the baseline package story
 
 If any one of those is false, the correct claim is narrower than “fully beat HyperFormula”.
+
+## Benchmark And Profiling Discipline
+
+Performance work in this program is only accepted when the measurement method is as disciplined as
+the code change.
+
+Rules:
+
+- all direct comparisons must preserve semantic equivalence and verification output
+- both mean and p95 matter; a faster mean with a materially worse p95 is not a clean win
+- every benchmark change must identify whether it improved:
+  - compute cost
+  - export/change serialization cost
+  - memory behavior
+  - or fixture/setup overhead
+- no hotspot claim is accepted without naming the exact workload from
+  `benchmark-workpaper-vs-hyperformula.ts`
+- no profiling result is accepted without naming the repo surface it implicates
+
+Required measurement loop for performance patches:
+
+1. profile the existing workload and name the hot repo surface
+2. patch the engine or formula runtime
+3. rerun:
+   - `pnpm workpaper:bench:competitive:check`
+   - the targeted benchmark generator in write mode when the artifact must change
+4. record whether the win came from compute, serialization, or setup
+5. reject the change as a dominance improvement if it shifts cost into a different red category
 
 ## Source Corpus
 
@@ -223,11 +360,11 @@ These are existing advantages and must not be traded away while chasing speed.
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
 
-- batch-edit recalculation
-- lookup with column indexing
-- lookup without column indexing
-- build from sheets
-- single-edit recalculation
+- batch-edit recalculation: HyperFormula currently leads by `891.37x`
+- lookup with column indexing: HyperFormula currently leads by `134.77x`
+- lookup without column indexing: HyperFormula currently leads by `79.49x`
+- build from sheets: HyperFormula currently leads by `33.63x`
+- single-edit recalculation: HyperFormula currently leads by `6.19x`
 
 Range-read is close enough that it is lower priority than the others.
 
@@ -255,6 +392,53 @@ It means:
 - production-routable
 - benchmarkable
 - stable under mutation and serialization
+
+## Primary Code Surfaces By Workstream
+
+This program should point directly into the runtime, not stop at high-level package names.
+
+Build and load path:
+
+- `packages/core/src/engine/services/snapshot-service.ts`
+- `packages/core/src/engine.ts`
+- `packages/formula/src/parser.ts`
+- `packages/formula/src/compiler.ts`
+- `packages/headless/src/headless-workbook.ts`
+
+Single-edit and batch recalculation:
+
+- `packages/core/src/engine/services/recalc-service.ts`
+- `packages/core/src/engine/services/mutation-service.ts`
+- `packages/core/src/engine/services/traversal-service.ts`
+- `packages/core/src/engine/services/formula-evaluation-service.ts`
+
+Lookup and indexing:
+
+- `packages/formula/src/builtins/lookup.ts`
+- `packages/formula/src/builtins/lookup-reference-builtins.ts`
+- `packages/formula/src/js-evaluator.ts`
+- `packages/core/src/engine/services/read-service.ts`
+
+Spill, arrays, and structured references:
+
+- `packages/formula/src/js-evaluator-array-special-calls.ts`
+- `packages/formula/src/js-evaluator-workbook-special-calls.ts`
+- `packages/core/src/engine/services/formula-graph-service.ts`
+- `packages/core/src/range-registry.ts`
+- `packages/core/src/formula-table.ts`
+
+Serialization, export, and public boundary cost:
+
+- `packages/headless/src/headless-workbook.ts`
+- `packages/headless/src/types.ts`
+- `packages/core/src/engine/services/event-service.ts`
+- `packages/core/src/engine/services/history-service.ts`
+
+WASM acceleration:
+
+- `packages/formula/src/binder-wasm-rules.ts`
+- `packages/core/src/wasm-facade.ts`
+- `packages/wasm-kernel/assembly/*`
 
 ## Non-Goals
 
@@ -602,6 +786,20 @@ Recommended formula artifacts:
 - canonical production-closure artifact derived from the formula compatibility registry
 - strategic-family artifact for arrays/tables/names/lambda status
 
+## Minimum Patch Shape
+
+No workstream in this document is complete with a code-only patch.
+
+Every substantial patch in this program should produce:
+
+- the code change in the implicated runtime surface
+- at least one targeted test in the owning package
+- either:
+  - an updated benchmark artifact
+  - or a deliberate note that the patch was correctness-only and should not change dominance claims
+- a short doc update if the public claim surface changes
+- clear evidence that no existing leadership area regressed
+
 ## Execution Order
 
 ### Phase 1: Close direct-comparison deficits
@@ -666,6 +864,20 @@ This program is complete only when all of the following are true:
 - formula breadth and formula production-closure metrics both support a leadership claim, not just a
   breadth claim
 - the scorecard supports “overall lead” without hiding any red category
+
+## What Still Makes Me Unsatisfied
+
+This document is only worth keeping if it remains stricter than a normal roadmap.
+
+I am satisfied with it only if these statements stay true:
+
+- it makes the current losses explicit instead of hiding them behind breadth wins
+- it points from every major claim to a concrete repo artifact or runtime surface
+- it tells an engineer where to start next without inventing a second design doc
+- it blocks vague “10x better” language unless the artifact and workload actually prove it
+
+If those stop being true, this document should be edited again before more leadership claims are
+made.
 
 ## Bottom Line
 
