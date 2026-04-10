@@ -1,7 +1,7 @@
 # bilig Next Iteration Production Plan
 
 ## Status
-Proposed, repo-grounded plan for the next production iteration.
+Proposed, repo-grounded plan for the next production iteration, tightened against the live `main` checkout on 2026-04-10.
 
 ## Executive summary
 
@@ -43,14 +43,26 @@ The current repo already contains the core building blocks we should preserve an
 ### What is still missing for the next product-grade iteration
 
 - Chat/session state is still largely **in-memory and per-user**, which prevents true shared multiplayer chat and makes resilience weaker than the workbook runtime itself.
+  Today, `apps/web/src/use-workbook-agent-pane.tsx` persists only `{sessionId, threadId}` in `window.sessionStorage`, and `apps/bilig/src/codex-app/workbook-agent-service.ts` keeps `WorkbookAgentSessionState` in memory with `Map`-backed `sessions`, `threadToSessionId`, and `subscribers`.
 - Pending bundles and timeline items are not yet a fully durable collaboration surface.
-- The Codex runtime is effectively a singleton monolith-owned transport, which is fine for current scope but not for broader multiplayer adoption.
+  Today, accepted runs are durable through `workbook_agent_run`, but pending bundles, timeline entries, and turn-progress state still disappear on monolith restart or session eviction.
+- The Codex runtime is currently a single monolith-owned client with in-process session eviction, which is acceptable for current scope but not for broader multiplayer adoption.
 - The supported agent tool surface is good, but it is not yet framed as a complete **workflow runtime**.
 - Some correctness/performance seams remain high risk:
   - projected viewport authority still needs further narrowing
   - formula parity / WASM production routing is not fully closed on the full desired surface
   - multi-tab/browser-lock edge cases still need explicit product behavior
   - typed binary agent payloads are not fully closed end to end
+
+### Current-state reality check
+
+This plan is intentionally anchored to the code that exists today.
+
+- The browser talks to session-scoped routes under `/v2/documents/:documentId/agent/sessions/*`, not durable thread routes.
+- The browser rebuilds a stale assistant stream by POSTing the previously stored `{sessionId, threadId}` back to `POST /v2/documents/:documentId/agent/sessions`.
+- The monolith validates preview/apply authoritatively in `apps/bilig/src/zero/service.ts`, including base-revision checks and preview-summary parity checks before commit.
+- The monolith already persists accepted execution records, but it does **not** yet persist the full chat timeline, tool calls, or pending-bundle state that produced those records.
+- Any proposed architecture change in this document must preserve those already-correct paths instead of replacing them with a parallel correctness model.
 
 ---
 
@@ -147,6 +159,17 @@ The worker keeps ownership of:
 - preview generation
 - viewport patch publication
 - local persistence coordination
+
+### 3.5 Keep one migration path
+
+The next iteration must not strand the product between a session-scoped chat model and a durable thread model for long.
+
+That means:
+
+- the existing `/agent/sessions` routes may remain temporarily as a compatibility facade
+- the durable thread/run model becomes the source of truth as soon as the persistence layer exists
+- browser code must migrate to durable thread identifiers, not accumulate a second unofficial state path
+- once the web shell no longer depends on session-scoped state, the old route semantics should collapse into aliases or be deleted
 
 ---
 
@@ -264,7 +287,14 @@ The browser worker should own:
 - projection overlay and viewport patches
 - local preview rendering for agent bundles
 - reconnect/rebase behavior
-- local persistence of lightweight chat state and session references
+- local persistence of lightweight chat state and thread references
+
+The browser should **not** become the durable source of truth for shared chat history. Its job is:
+
+- preserve drafts, current thread selection, and last-known live session references locally
+- rebuild from durable server state first on reconnect
+- resume the live stream only after durable thread hydration succeeds
+- keep agent preview rendering in the worker so chat features do not bypass the existing workbook hot path
 
 ### 6.3 Data model additions
 
@@ -282,6 +312,36 @@ Add durable domain tables for:
 
 Existing `workbook_agent_run` can remain as the accepted-run audit table, but the live chat and pending bundle state must become durable and replayable.
 
+Minimum ownership rules:
+
+- `workbook_chat_thread`
+  - document-scoped
+  - `scope` is `private` or `shared`
+  - created-by user id and last-activity metadata
+  - stable durable id used by both browser and server
+- `workbook_chat_item`
+  - belongs to one thread and optionally one turn
+  - stores completed user, assistant, plan, and system timeline entries
+  - does not need token-level deltas; only reconstructable end-state items
+- `workbook_chat_tool_call`
+  - belongs to one thread item / turn
+  - stores semantic tool inputs, status, and summarized outputs needed for replay and audit
+- `workbook_pending_bundle`
+  - belongs to one thread and one originating turn
+  - carries `base_revision`, bounded scope metadata, approval mode, preview summary, and staged commands
+  - is the durable source of truth for collaborator-visible pending agent work
+- `workbook_workflow_run`
+  - belongs to one thread and may outlive the originating live session
+  - stores run state, risk class, approval mode, and authoritative revision anchors
+- `workbook_workflow_step` / `workbook_workflow_artifact`
+  - store structured progress and outputs for longer-running monolith jobs
+
+Recommended initial simplification:
+
+- allow at most one active pending bundle per thread
+- allow at most one active workflow run per thread
+- expand concurrency only after the collaboration semantics are proven
+
 ### 6.4 Streaming model
 
 Use a two-lane model:
@@ -296,11 +356,18 @@ Recommended behavior:
 - reconnecting clients rebuild from durable state first, then resume live deltas
 - Zero exposes narrow thread/run projections so collaborators can follow shared chat state without depending on one browser session’s SSE connection
 
+Concrete boundary:
+
+- SSE stays the immediacy transport for active turns
+- Postgres is the durable source of truth for thread history and staged work
+- Zero is the fanout/query layer for collaborator-visible summaries, pending bundles, approvals, and run status
+- the browser should not treat SSE replay as authoritative history reconstruction
+
 ### 6.5 Codex app-server execution model
 
 The Codex app server should remain **embedded inside the monolith boundary** as a child-process pool managed by `apps/bilig`.
 
-The next iteration should move from a mostly singleton transport model to a bounded pool with:
+Today, `workbook-agent-service.ts` owns one lazily created `CodexAppServerClient`, subscribes to its notifications, and evicts idle in-memory sessions by `lastAccessedAt`. The next iteration should preserve the monolith boundary while moving to a bounded pool with:
 
 - concurrency caps
 - idle eviction
@@ -310,6 +377,12 @@ The next iteration should move from a mostly singleton transport model to a boun
 - structured metrics per turn and per tool call
 
 This preserves the monolith shape while making chat scale operationally.
+
+Execution model constraints:
+
+- active turns should remain pinned to one Codex worker for their lifetime
+- completed durable thread state must not depend on a specific worker still being alive
+- pool eviction may drop live execution state, but it must not drop durable thread history or pending bundles
 
 ---
 
@@ -325,6 +398,8 @@ The chat may be:
 
 - **private**: visible only to the initiating user
 - **shared**: visible to collaborators on the workbook
+
+Private vs shared is a durable thread property, not a browser-only filter.
 
 ### 7.2 Every mutating workflow is semantic
 
@@ -354,6 +429,8 @@ When a workflow applies:
 - it produces an execution record
 - it has an undo path or revert bundle where semantically valid
 - it is attached to the originating chat thread and workbook revision lineage
+
+Accepted execution records are already durable today. The tightening in this iteration is to make the **pre-acceptance** state equally durable and replayable.
 
 ### 7.5 Every supported spreadsheet workflow must be callable from chat
 
@@ -453,6 +530,13 @@ The workbook runtime is already more durable than the chat runtime. That mismatc
 - reconstruct sessions after monolith restart and browser reconnect
 - broadcast collaborator-visible thread/run state through durable projections
 - keep live delta streaming for immediacy
+
+Explicit cutover requirements:
+
+- current session routes continue to work during migration, but only as wrappers over durable thread state once that state exists
+- `sessionId` remains a transient live-stream handle; `threadId` becomes the durable product identifier
+- browser `sessionStorage` stops being the only recovery path for assistant state
+- session eviction in the monolith must no longer imply loss of pending bundle or timeline state
 
 ### Exit gate
 
@@ -573,6 +657,14 @@ Collaboration and chat features are behind explicit launch gates and observable 
 - reconstruct thread state from durable storage on reconnect
 - expose thread list / unread / shared thread summaries through narrow projections
 
+Concrete migration shape:
+
+1. Keep `POST /v2/documents/:documentId/agent/sessions` and related session routes alive.
+2. Change those handlers so they hydrate or create durable thread state first, then return a live session handle.
+3. Keep SSE for active-turn deltas, but serve the initial snapshot from durable thread state rather than from in-memory-only session state.
+4. Migrate the browser from “stored session id plus thread id” to “selected durable thread id plus optional live session id”.
+5. Only after the browser no longer depends on session-scoped history should new thread-centric routes become the primary public API surface.
+
 ### Result
 
 Chat stops being “session memory attached to a document” and becomes a durable document feature.
@@ -592,6 +684,12 @@ A monolith restart no longer wipes active workbook chat history or pending bundl
 - allow collaborators to inspect pending bundles and approved executions on shared threads
 - add approvals for medium/high-risk shared changes
 - attach cell/range references to thread items and results
+
+Policy clarification:
+
+- shared threads are document-scoped, not user-scoped
+- private threads remain visible only to the initiating user, even though accepted workbook mutations are still visible in the workbook change history
+- approvals for shared high-risk changes should attach to the pending bundle record itself, not to transient SSE state
 
 ### Result
 
@@ -613,6 +711,11 @@ Two collaborators on the same workbook can follow a shared agent thread and unde
 - stream workflow progress into chat
 - return preview bundles or artifacts from workflow runs
 
+Recommended implementation rule:
+
+- do not add a second mutation protocol for workflows
+- long-running workflows may have a different execution envelope, but their mutating output must still compile to the same semantic workbook bundle / authoritative apply path used today
+
 ### Result
 
 Chat becomes a reliable front door for spreadsheet-native workflows.
@@ -632,6 +735,8 @@ The Day-1 workflow families work end-to-end from chat prompt to applied workbook
 - improve codex pool management and memory isolation
 - expand preview/apply correctness harnesses
 - improve multi-tab writer lease behavior
+
+Lock the published targets only after Tranche 1 baseline capture. Until then, treat the SLO table in this document as the intended budget direction, not an already-measured guarantee.
 
 ### Result
 
@@ -665,11 +770,18 @@ Keep the current endpoints working, but evolve toward durable thread-centric rou
 
 The important shift is not path naming. The important shift is that the backing state becomes durable and multiplayer-safe.
 
+Compatibility rule:
+
+- during migration, the existing `/agent/sessions/*` endpoints should delegate to the same durable thread/run records as the new routes
+- they should not remain a second independently authoritative storage path
+
 ---
 
 ## 13. Performance, scale, and SLO targets
 
 These targets should become explicit release gates for the iteration.
+
+They should be re-baselined against the current perf harness during Tranche 1 before being treated as ship blockers.
 
 | Metric | Target |
 | --- | --- |
@@ -733,6 +845,7 @@ Add dashboards and alerts for:
 - low-risk workflow families first
 - shared threads after private-thread durability is proven
 - auto-apply only after preview mismatch and revert confidence are inside budget
+- remove the legacy session-only recovery assumptions once durable threads are stable in production
 
 ---
 
@@ -754,6 +867,7 @@ The release is ready only when all of the following are true:
 - workflow-generated edits use the authoritative semantic op model
 - preview/apply parity tests are green
 - projection parity and reconnect/rebase tests are green
+- monolith restart does not erase thread history, pending bundles, or shared workflow status
 
 ### Performance readiness
 
@@ -767,6 +881,7 @@ The release is ready only when all of the following are true:
 - feature flags can disable shared chat, workflow runner, and auto-apply independently
 - migration and recovery playbooks are documented
 - canary rollout is clean before broad exposure
+- legacy `/agent/sessions` behavior is either a thin compatibility layer over durable threads or removed
 
 ---
 
