@@ -11,6 +11,9 @@ Headless workbook facade for `bilig`.
 pnpm add @bilig/headless
 ```
 
+The package is also verified in CI through clean external Node and Vite consumer projects
+built from packed runtime tarballs.
+
 ## Usage
 
 ```ts

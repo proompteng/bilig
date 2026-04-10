@@ -20,6 +20,7 @@ on:
       - "scripts/next-runtime-release-version.ts"
       - "scripts/runtime-package-set.ts"
       - "scripts/publish-runtime-package-set.ts"
+      - "scripts/workpaper-external-smoke.ts"
       - "tsconfig.base.json"
       - "tsconfig.json"
       - "tsconfig.workspace-paths.json"
@@ -92,7 +93,9 @@ jobs:
           set -euo pipefail
           pnpm exec vitest run \
             packages/headless/src/__tests__/headless-workbook.test.ts \
-            packages/headless/src/__tests__/headless-workbook-parity.test.ts
+            packages/headless/src/__tests__/headless-workbook-parity.test.ts \
+            packages/headless/src/__tests__/work-paper.test.ts \
+            packages/headless/src/__tests__/hyperformula-surface-parity.test.ts
 
       - name: Build runtime package chain
         run: |
@@ -108,6 +111,11 @@ jobs:
         run: |
           set -euo pipefail
           pnpm publish:runtime:check
+
+      - name: Run WorkPaper external-consumer smoke test
+        run: |
+          set -euo pipefail
+          pnpm workpaper:smoke:external
 
       - name: Pack runtime package set
         run: |

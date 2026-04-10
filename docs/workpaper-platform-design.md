@@ -156,24 +156,24 @@ Primary branded types:
 
 ## Feature Matrix
 
-| Area | HyperFormula signal from checkout | WorkPaper target | Current `bilig` position |
-| --- | --- | --- | --- |
-| Headless factories | README, `HyperFormula.ts` | `WorkPaper.buildEmpty/buildFromArray/buildFromSheets` | implemented |
-| Reads and writes | basic operations guide | full workbook CRUD surface | implemented |
-| Clipboard | clipboard guide | copy, cut, paste, fill-range helpers | implemented |
-| Undo/redo | undo-redo guide | history with explicit clear/reset helpers | implemented |
-| Named expressions | named expressions guide | workbook and scoped named expressions | implemented |
-| Custom functions | custom functions guide | registry, translations, instance use | implemented |
-| Localization | i18n guide | static language registration and translation lookup | implemented |
-| Dependency graph | dependency graph guide | stable graph and adapter surface | implemented |
-| Sorting and reordering | sorting guide | row and column order/swap/move flows | implemented |
-| Batch and suspend/resume | performance guide | grouped recalc control and stable change returns | implemented |
-| Dynamic arrays | HyperFormula known limitation | first-class spill support | implemented in `bilig` |
-| Structured references and tables | HyperFormula known limitation | supported formulas and sheet semantics | implemented in `bilig` core/formula |
-| Relative named expressions | HyperFormula known limitation | explicit validation and future scoped support path | currently rejected deliberately |
-| Async functions | HyperFormula known limitation | out of scope for v1, design for later | not implemented |
-| Multiple workbooks | HyperFormula known limitation | multiple `WorkPaper` instances per process | implemented |
-| UI metadata-aware functions | HyperFormula known limitation | keep out of the core package until UI metadata contract is stable | not implemented |
+| Area                             | HyperFormula signal from checkout | WorkPaper target                                                  | Current `bilig` position            |
+| -------------------------------- | --------------------------------- | ----------------------------------------------------------------- | ----------------------------------- |
+| Headless factories               | README, `HyperFormula.ts`         | `WorkPaper.buildEmpty/buildFromArray/buildFromSheets`             | implemented                         |
+| Reads and writes                 | basic operations guide            | full workbook CRUD surface                                        | implemented                         |
+| Clipboard                        | clipboard guide                   | copy, cut, paste, fill-range helpers                              | implemented                         |
+| Undo/redo                        | undo-redo guide                   | history with explicit clear/reset helpers                         | implemented                         |
+| Named expressions                | named expressions guide           | workbook and scoped named expressions                             | implemented                         |
+| Custom functions                 | custom functions guide            | registry, translations, instance use                              | implemented                         |
+| Localization                     | i18n guide                        | static language registration and translation lookup               | implemented                         |
+| Dependency graph                 | dependency graph guide            | stable graph and adapter surface                                  | implemented                         |
+| Sorting and reordering           | sorting guide                     | row and column order/swap/move flows                              | implemented                         |
+| Batch and suspend/resume         | performance guide                 | grouped recalc control and stable change returns                  | implemented                         |
+| Dynamic arrays                   | HyperFormula known limitation     | first-class spill support                                         | implemented in `bilig`              |
+| Structured references and tables | HyperFormula known limitation     | supported formulas and sheet semantics                            | implemented in `bilig` core/formula |
+| Relative named expressions       | HyperFormula known limitation     | explicit validation and future scoped support path                | currently rejected deliberately     |
+| Async functions                  | HyperFormula known limitation     | out of scope for v1, design for later                             | not implemented                     |
+| Multiple workbooks               | HyperFormula known limitation     | multiple `WorkPaper` instances per process                        | implemented                         |
+| UI metadata-aware functions      | HyperFormula known limitation     | keep out of the core package until UI metadata contract is stable | not implemented                     |
 
 ## Architecture
 
@@ -218,6 +218,8 @@ Shipped enforcement for this repo:
 - generated snapshot: `packages/headless/src/__tests__/fixtures/hyperformula-surface.json`
 - local regeneration/check command: `bun scripts/gen-workpaper-hyperformula-audit.ts` and `bun scripts/gen-workpaper-hyperformula-audit.ts --check`
 - CI-safe parity test: `packages/headless/src/__tests__/hyperformula-surface-parity.test.ts`
+- external-consumer smoke command: `pnpm workpaper:smoke:external`
+- runtime-package CI workflow also verifies clean Node and Vite consumers from packed tarballs
 
 ## Performance Standard
 
