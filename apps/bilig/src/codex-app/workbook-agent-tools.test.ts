@@ -95,6 +95,12 @@ function createZeroSyncHarness(engine: SpreadsheetEngine) {
     async saveWorkbookAgentThreadState() {
       throw new Error("not used");
     },
+    async listWorkbookThreadWorkflowRuns() {
+      return [];
+    },
+    async upsertWorkbookWorkflowRun() {
+      throw new Error("not used");
+    },
     async getWorkbookHeadRevision() {
       return 1;
     },

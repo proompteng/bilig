@@ -139,6 +139,44 @@ export type WorkbookAgentThreadSummary = Schema.Schema.Type<
   typeof WorkbookAgentThreadSummarySchema
 >;
 
+export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
+  "summarizeWorkbook",
+  "describeRecentChanges",
+);
+export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
+  typeof WorkbookAgentWorkflowTemplateSchema
+>;
+
+export const WorkbookAgentWorkflowStatusSchema = Schema.Literal("running", "completed", "failed");
+export type WorkbookAgentWorkflowStatus = Schema.Schema.Type<
+  typeof WorkbookAgentWorkflowStatusSchema
+>;
+
+export const WorkbookAgentWorkflowArtifactSchema = Schema.Struct({
+  kind: Schema.Literal("markdown"),
+  title: Schema.String,
+  text: Schema.String,
+});
+export type WorkbookAgentWorkflowArtifact = Schema.Schema.Type<
+  typeof WorkbookAgentWorkflowArtifactSchema
+>;
+
+export const WorkbookAgentWorkflowRunSchema = Schema.Struct({
+  runId: Schema.String,
+  threadId: Schema.String,
+  startedByUserId: Schema.String,
+  workflowTemplate: WorkbookAgentWorkflowTemplateSchema,
+  title: Schema.String,
+  summary: Schema.String,
+  status: WorkbookAgentWorkflowStatusSchema,
+  createdAtUnixMs: Schema.Number,
+  updatedAtUnixMs: Schema.Number,
+  completedAtUnixMs: Schema.Union(Schema.Number, Schema.Null),
+  errorMessage: Schema.Union(Schema.String, Schema.Null),
+  artifact: Schema.Union(WorkbookAgentWorkflowArtifactSchema, Schema.Null),
+});
+export type WorkbookAgentWorkflowRun = Schema.Schema.Type<typeof WorkbookAgentWorkflowRunSchema>;
+
 export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   sessionId: Schema.String,
   documentId: Schema.String,
@@ -151,6 +189,7 @@ export const WorkbookAgentSessionSnapshotSchema = Schema.Struct({
   entries: Schema.Array(WorkbookAgentTimelineEntrySchema),
   pendingBundle: Schema.Union(Schema.Unknown, Schema.Null),
   executionRecords: Schema.Array(Schema.Unknown),
+  workflowRuns: Schema.Array(WorkbookAgentWorkflowRunSchema),
 });
 export type WorkbookAgentSessionSnapshot = Schema.Schema.Type<
   typeof WorkbookAgentSessionSnapshotSchema

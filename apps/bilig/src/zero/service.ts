@@ -63,8 +63,13 @@ import {
   type WorkbookAgentThreadStateRecord,
 } from "./workbook-chat-thread-store.js";
 import type { WorkbookAgentCommandBundle, WorkbookAgentExecutionRecord } from "@bilig/agent-api";
-import type { WorkbookAgentThreadSummary } from "@bilig/contracts";
+import type { WorkbookAgentThreadSummary, WorkbookAgentWorkflowRun } from "@bilig/contracts";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
+import {
+  ensureWorkbookWorkflowRunSchema,
+  listWorkbookThreadWorkflowRuns,
+  upsertWorkbookWorkflowRun,
+} from "./workbook-workflow-run-store.js";
 
 export interface ZeroSyncService {
   readonly enabled: boolean;
@@ -106,6 +111,13 @@ export interface ZeroSyncService {
     threadId: string,
   ): Promise<WorkbookAgentThreadStateRecord | null>;
   saveWorkbookAgentThreadState(record: WorkbookAgentThreadStateRecord): Promise<void>;
+  listWorkbookThreadWorkflowRuns(
+    documentId: string,
+    actorUserId: string,
+    threadId: string,
+    limit?: number,
+  ): Promise<WorkbookAgentWorkflowRun[]>;
+  upsertWorkbookWorkflowRun(documentId: string, run: WorkbookAgentWorkflowRun): Promise<void>;
   getWorkbookHeadRevision(documentId: string): Promise<number>;
   loadAuthoritativeEvents(
     documentId: string,
@@ -206,6 +218,14 @@ class DisabledZeroSyncService implements ZeroSyncService {
     throw new Error("Zero sync is not configured");
   }
 
+  async listWorkbookThreadWorkflowRuns(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async upsertWorkbookWorkflowRun(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
   async getWorkbookHeadRevision(): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
@@ -235,6 +255,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await ensureWorkbookChangeSchema(this.pool);
     await ensureWorkbookAgentRunSchema(this.pool);
     await ensureWorkbookChatThreadSchema(this.pool);
+    await ensureWorkbookWorkflowRunSchema(this.pool);
     await ensureZeroPublication(this.pool);
     await ensureZeroDataMigrationSchema(this.pool);
     if (resolveRunDataMigrationsOnBoot()) {
@@ -464,10 +485,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     });
   }
 
-  async listWorkbookChanges(
-    documentId: string,
-    limit = 10,
-  ): Promise<WorkbookChangeRecord[]> {
+  async listWorkbookChanges(documentId: string, limit = 10): Promise<WorkbookChangeRecord[]> {
     return await listWorkbookChanges(this.pool, {
       documentId,
       limit,
@@ -516,6 +534,30 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async saveWorkbookAgentThreadState(record: WorkbookAgentThreadStateRecord): Promise<void> {
     await saveWorkbookAgentThreadState(this.pool, record);
+  }
+
+  async listWorkbookThreadWorkflowRuns(
+    documentId: string,
+    actorUserId: string,
+    threadId: string,
+    limit?: number,
+  ): Promise<WorkbookAgentWorkflowRun[]> {
+    return await listWorkbookThreadWorkflowRuns(this.pool, {
+      documentId,
+      actorUserId,
+      threadId,
+      ...(limit === undefined ? {} : { limit }),
+    });
+  }
+
+  async upsertWorkbookWorkflowRun(
+    documentId: string,
+    run: WorkbookAgentWorkflowRun,
+  ): Promise<void> {
+    await upsertWorkbookWorkflowRun(this.pool, {
+      documentId,
+      run,
+    });
   }
 
   async getWorkbookHeadRevision(documentId: string): Promise<number> {

@@ -20,6 +20,7 @@ import {
   type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
   type WorkbookAgentUiContext,
+  type WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 import { Schema } from "effect";
 import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
@@ -298,6 +299,13 @@ export function useWorkbookAgentPane(input: {
     const candidates = snapshot?.executionRecords ?? [];
     return candidates.flatMap((entry) => (isWorkbookAgentExecutionRecord(entry) ? [entry] : []));
   }, [snapshot?.executionRecords]);
+  const workflowRuns = useMemo<readonly WorkbookAgentWorkflowRun[]>(
+    () =>
+      [...(snapshot?.workflowRuns ?? [])].toSorted(
+        (left, right) => right.updatedAtUnixMs - left.updatedAtUnixMs,
+      ),
+    [snapshot?.workflowRuns],
+  );
   const activeThreadSummary = useMemo(
     () =>
       threadSummaries.find(
@@ -910,6 +918,7 @@ export function useWorkbookAgentPane(input: {
         snapshot={snapshot}
         threadScope={threadScope}
         threadSummaries={threadSummaries}
+        workflowRuns={workflowRuns}
         onApplyPendingBundle={() => {
           void applyPendingBundle("user");
         }}
@@ -958,6 +967,7 @@ export function useWorkbookAgentPane(input: {
       startNewThread,
       threadScope,
       threadSummaries,
+      workflowRuns,
       togglePendingCommand,
     ],
   );

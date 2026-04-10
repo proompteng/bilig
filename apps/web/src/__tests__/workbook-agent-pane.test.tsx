@@ -120,6 +120,7 @@ function createSnapshot(overrides: Record<string, unknown> = {}) {
     ],
     pendingBundle: null,
     executionRecords: [],
+    workflowRuns: [],
     ...overrides,
     ...(overrideEntries ? { entries: overrideEntries } : {}),
   };
@@ -325,6 +326,70 @@ describe("workbook agent pane", () => {
     expect(host.textContent).toContain("Applied preview bundle at revision r7");
     expect(host.textContent).toContain("Sheet1!B2");
     expect(host.textContent).toContain("r7");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("renders durable workflow runs in the assistant rail", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({ threadId: "thr-1" }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              createSnapshot({
+                workflowRuns: [
+                  {
+                    runId: "wf-1",
+                    threadId: "thr-1",
+                    startedByUserId: "alex@example.com",
+                    workflowTemplate: "summarizeWorkbook",
+                    title: "Summarize Workbook",
+                    summary: "Summarized workbook structure across 2 sheets.",
+                    status: "completed",
+                    createdAtUnixMs: 1,
+                    updatedAtUnixMs: 2,
+                    completedAtUnixMs: 2,
+                    errorMessage: null,
+                    artifact: {
+                      kind: "markdown",
+                      title: "Workbook Summary",
+                      text: "## Workbook Summary\n\nSheets: 2\n### Sheets\n- Sheet1",
+                    },
+                  },
+                ],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(host.textContent).toContain("Workflows");
+    expect(host.textContent).toContain("Summarize Workbook");
+    expect(host.textContent).toContain("Workbook Summary");
+    expect(host.textContent).toContain("Sheets: 2");
+    expect(host.textContent).toContain("Done");
 
     await act(async () => {
       root.unmount();

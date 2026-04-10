@@ -472,6 +472,53 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/agent/sessions/:sessionId/workflows",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; sessionId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        return await service.startWorkflow({
+          documentId: request.params.documentId,
+          sessionId: request.params.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/workflows",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.startWorkflow({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/interrupt",
     async (
       request: FastifyRequest<{

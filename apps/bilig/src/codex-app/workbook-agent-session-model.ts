@@ -60,6 +60,10 @@ export const startTurnBodySchema = z.object({
     .optional(),
 });
 
+export const startWorkflowBodySchema = z.object({
+  workflowTemplate: z.enum(["summarizeWorkbook", "describeRecentChanges"]),
+});
+
 export function createWorkbookAgentBaseInstructions(): string {
   return [
     "You are the bilig workbook assistant embedded inside a spreadsheet product.",
@@ -296,6 +300,7 @@ export function cloneSnapshot(
     ...(snapshot.context ? { context: structuredClone(snapshot.context) } : { context: null }),
     pendingBundle: snapshot.pendingBundle ? structuredClone(snapshot.pendingBundle) : null,
     executionRecords: snapshot.executionRecords.map((record) => structuredClone(record)),
+    workflowRuns: snapshot.workflowRuns.map((run) => structuredClone(run)),
   };
 }
 

@@ -18,6 +18,7 @@ import type {
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
+  WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 import { cn } from "./cn.js";
 import {
@@ -28,6 +29,11 @@ import {
   workbookSurfaceClass,
 } from "./workbook-shell-chrome.js";
 import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
+import {
+  ExecutionRecordRow,
+  PreviewRangeList,
+  WorkflowRunRow,
+} from "./workbook-agent-panel-history.js";
 
 const toolStatusPillClass = cva(
   "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
@@ -572,34 +578,6 @@ function TimelineCitationList(props: {
   );
 }
 
-function PreviewRangeList(props: {
-  readonly ranges: readonly {
-    sheetName: string;
-    startAddress: string;
-    endAddress: string;
-    role: "target" | "source";
-  }[];
-}) {
-  if (props.ranges.length === 0) {
-    return null;
-  }
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {props.ranges.map((range) => (
-        <span
-          key={`${range.role}:${range.sheetName}:${range.startAddress}:${range.endAddress}`}
-          className={workbookPillClass({
-            tone: range.role === "target" ? "accent" : "neutral",
-          })}
-        >
-          {range.sheetName}!{range.startAddress}
-          {range.startAddress === range.endAddress ? "" : `:${range.endAddress}`}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function PendingBundleCard(props: {
   readonly bundle: WorkbookAgentCommandBundle;
   readonly preview: WorkbookAgentPreviewSummary | null;
@@ -774,42 +752,6 @@ function PendingBundleCard(props: {
   );
 }
 
-function ExecutionRecordRow(props: {
-  readonly record: WorkbookAgentExecutionRecord;
-  readonly onReplay: () => void;
-}) {
-  return (
-    <div className={cn(workbookSurfaceClass(), "px-3 py-2")}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-[var(--wb-text)]">
-            {props.record.summary}
-          </div>
-          <div className="text-[11px] text-[var(--wb-text-subtle)]">
-            r{String(props.record.appliedRevision)}
-          </div>
-        </div>
-        <span className={workbookPillClass({ tone: "neutral" })}>{props.record.scope}</span>
-      </div>
-      {(props.record.planText ?? props.record.goalText).trim().length > 0 ? (
-        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
-          {props.record.planText ?? props.record.goalText}
-        </div>
-      ) : null}
-      <PreviewRangeList ranges={props.record.preview?.ranges ?? []} />
-      <div className="mt-3 flex items-center justify-end">
-        <button
-          className={workbookButtonClass({ tone: "neutral" })}
-          type="button"
-          onClick={props.onReplay}
-        >
-          Replay
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null;
   readonly currentContext: WorkbookAgentUiContext | null;
@@ -819,6 +761,7 @@ export function WorkbookAgentPanel(props: {
   readonly sharedApprovalOwnerUserId: string | null;
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
+  readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
   readonly threadScope: WorkbookAgentThreadScope;
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly draft: string;
@@ -893,8 +836,23 @@ export function WorkbookAgentPanel(props: {
             {props.snapshot.entries.map((entry) => (
               <WorkbookAgentEntryRow key={entry.id} entry={entry} />
             ))}
+            {props.workflowRuns.length > 0 ? (
+              <div className="pt-2">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                  Workflows
+                </div>
+                <div className="flex flex-col gap-2">
+                  {props.workflowRuns.slice(0, 5).map((run) => (
+                    <WorkflowRunRow key={run.runId} run={run} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {props.executionRecords.length > 0 ? (
               <div className="pt-2">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[var(--wb-text-subtle)]">
+                  Executions
+                </div>
                 <div className="flex flex-col gap-2">
                   {props.executionRecords.slice(0, 5).map((record) => (
                     <ExecutionRecordRow

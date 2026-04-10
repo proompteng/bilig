@@ -6,6 +6,7 @@ import {
   RuntimeSessionSchema,
   WorkbookAgentTimelineEntrySchema,
   WorkbookAgentThreadSummarySchema,
+  WorkbookAgentWorkflowRunSchema,
 } from "../index.js";
 
 describe("@bilig/contracts", () => {
@@ -97,5 +98,34 @@ describe("@bilig/contracts", () => {
         revision: 7,
       }),
     ]);
+  });
+
+  it("decodes workbook agent workflow runs with markdown artifacts", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "summarizeWorkbook",
+      title: "Summarize Workbook",
+      summary: "Summarized workbook structure across 3 sheets.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      artifact: {
+        kind: "markdown",
+        title: "Workbook Summary",
+        text: "## Summary",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("summarizeWorkbook");
+    expect(decoded.artifact).toEqual(
+      expect.objectContaining({
+        kind: "markdown",
+        title: "Workbook Summary",
+      }),
+    );
   });
 });

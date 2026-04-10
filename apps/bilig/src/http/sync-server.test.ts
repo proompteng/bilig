@@ -4,6 +4,7 @@ import type { WorkbookAgentSessionSnapshot } from "@bilig/contracts";
 import { Effect } from "effect";
 import type { DocumentControlService } from "@bilig/runtime-kernel";
 import type { ZeroSyncService } from "../zero/service.js";
+import type { WorkbookAgentService } from "../codex-app/workbook-agent-service.js";
 import { createWorkbookAgentServiceError } from "../workbook-agent-errors.js";
 import { createSyncServer } from "./sync-server.js";
 
@@ -56,7 +57,7 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async handleMutate() {
       throw new Error("not used");
     },
-    async inspectWorkbook() {
+    async inspectWorkbook<T>(_documentId: string, _task: (runtime: never) => T | Promise<T>) {
       throw new Error("not used");
     },
     async applyServerMutator() {
@@ -86,12 +87,61 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async saveWorkbookAgentThreadState() {
       throw new Error("not used");
     },
+    async listWorkbookThreadWorkflowRuns() {
+      return [];
+    },
+    async upsertWorkbookWorkflowRun() {
+      throw new Error("not used");
+    },
     async getWorkbookHeadRevision() {
       return 1;
     },
     async loadAuthoritativeEvents() {
       throw new Error("not used");
     },
+    ...overrides,
+  };
+}
+
+function createWorkbookAgentServiceStub(
+  overrides: Partial<WorkbookAgentService> = {},
+): WorkbookAgentService {
+  return {
+    enabled: true,
+    async createSession() {
+      throw new Error("not used");
+    },
+    async updateContext() {
+      throw new Error("not used");
+    },
+    async startTurn() {
+      throw new Error("not used");
+    },
+    async startWorkflow() {
+      throw new Error("not used");
+    },
+    async interruptTurn() {
+      throw new Error("not used");
+    },
+    async applyPendingBundle() {
+      throw new Error("not used");
+    },
+    async dismissPendingBundle() {
+      throw new Error("not used");
+    },
+    async replayExecutionRecord() {
+      throw new Error("not used");
+    },
+    async listThreads() {
+      return [];
+    },
+    getSnapshot() {
+      throw new Error("not used");
+    },
+    subscribe() {
+      return () => {};
+    },
+    async close() {},
     ...overrides,
   };
 }
@@ -158,6 +208,7 @@ function createAgentSessionSnapshot(
     entries: [],
     pendingBundle: null,
     executionRecords: [],
+    workflowRuns: [],
     ...overrides,
   };
 }
@@ -393,38 +444,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
-        async createSession() {
-          throw new Error("not used");
-        },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
+      workbookAgentService: createWorkbookAgentServiceStub({
         listThreads,
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -470,38 +492,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -557,38 +550,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -645,38 +609,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -725,36 +660,10 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
         startTurn,
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -834,6 +743,158 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("starts workbook agent workflows through the session route", async () => {
+    const startWorkflow = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        workflowRuns: [
+          {
+            runId: "wf-1",
+            threadId: "thr-1",
+            startedByUserId: "alex@example.com",
+            workflowTemplate: "summarizeWorkbook",
+            title: "Summarize Workbook",
+            summary: "Summarized workbook structure across 1 sheet.",
+            status: "completed" as const,
+            createdAtUnixMs: 1,
+            updatedAtUnixMs: 2,
+            completedAtUnixMs: 2,
+            errorMessage: null,
+            artifact: {
+              kind: "markdown" as const,
+              title: "Workbook Summary",
+              text: "## Workbook Summary",
+            },
+          },
+        ],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        startWorkflow,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/workflows",
+        payload: {
+          workflowTemplate: "summarizeWorkbook",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(startWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          body: {
+            workflowTemplate: "summarizeWorkbook",
+          },
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          workflowRuns: [
+            expect.objectContaining({
+              runId: "wf-1",
+              workflowTemplate: "summarizeWorkbook",
+            }),
+          ],
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("starts workbook agent workflows through the durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const startWorkflow = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+        workflowRuns: [
+          {
+            runId: "wf-2",
+            threadId: "thr-2",
+            startedByUserId: "alex@example.com",
+            workflowTemplate: "describeRecentChanges",
+            title: "Describe Recent Changes",
+            summary: "Summarized 3 recent workbook changes.",
+            status: "completed" as const,
+            createdAtUnixMs: 1,
+            updatedAtUnixMs: 3,
+            completedAtUnixMs: 3,
+            errorMessage: null,
+            artifact: {
+              kind: "markdown" as const,
+              title: "Recent Changes",
+              text: "## Recent Changes",
+            },
+          },
+        ],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
+        startWorkflow,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads/thr-2/workflows",
+        payload: {
+          workflowTemplate: "describeRecentChanges",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-2",
+          },
+        }),
+      );
+      expect(startWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+          body: {
+            workflowTemplate: "describeRecentChanges",
+          },
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          threadId: "thr-2",
+          workflowRuns: [
+            expect.objectContaining({
+              runId: "wf-2",
+              workflowTemplate: "describeRecentChanges",
+            }),
+          ],
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("updates workbook agent context through a durable thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
@@ -850,36 +911,10 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
         updateContext,
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -954,36 +989,10 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
         interruptTurn,
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1021,38 +1030,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
-        async createSession() {
-          throw new Error("not used");
-        },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
+      workbookAgentService: createWorkbookAgentServiceStub({
         applyPendingBundle,
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1098,36 +1078,10 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
         applyPendingBundle,
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1176,38 +1130,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
-        async createSession() {
-          throw new Error("not used");
-        },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
+      workbookAgentService: createWorkbookAgentServiceStub({
         applyPendingBundle,
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1238,38 +1163,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
-        async createSession() {
-          throw new Error("not used");
-        },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
+      workbookAgentService: createWorkbookAgentServiceStub({
         dismissPendingBundle,
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1307,36 +1203,10 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
         dismissPendingBundle,
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1423,38 +1293,9 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
-        async createSession() {
-          throw new Error("not used");
-        },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
+      workbookAgentService: createWorkbookAgentServiceStub({
         replayExecutionRecord,
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1548,36 +1389,10 @@ describe("sync-server workbook agent", () => {
 
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         createSession,
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
         replayExecutionRecord,
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1617,32 +1432,7 @@ describe("sync-server workbook agent", () => {
   it("returns a structured not-found envelope when the agent event stream session is stale", async () => {
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
-        async createSession() {
-          throw new Error("not used");
-        },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
+      workbookAgentService: createWorkbookAgentServiceStub({
         getSnapshot() {
           throw createWorkbookAgentServiceError({
             code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
@@ -1651,11 +1441,7 @@ describe("sync-server workbook agent", () => {
             retryable: true,
           });
         },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {
@@ -1680,8 +1466,7 @@ describe("sync-server workbook agent", () => {
   it("returns a structured not-found envelope when the durable thread event stream is stale", async () => {
     const { app } = createSyncServer({
       logger: false,
-      workbookAgentService: {
-        enabled: true,
+      workbookAgentService: createWorkbookAgentServiceStub({
         async createSession() {
           throw createWorkbookAgentServiceError({
             code: "WORKBOOK_AGENT_SESSION_NOT_FOUND",
@@ -1690,35 +1475,7 @@ describe("sync-server workbook agent", () => {
             retryable: true,
           });
         },
-        async updateContext() {
-          throw new Error("not used");
-        },
-        async startTurn() {
-          throw new Error("not used");
-        },
-        async interruptTurn() {
-          throw new Error("not used");
-        },
-        async applyPendingBundle() {
-          throw new Error("not used");
-        },
-        async dismissPendingBundle() {
-          throw new Error("not used");
-        },
-        async replayExecutionRecord() {
-          throw new Error("not used");
-        },
-        async listThreads() {
-          return [];
-        },
-        getSnapshot() {
-          throw new Error("not used");
-        },
-        subscribe() {
-          return () => {};
-        },
-        async close() {},
-      },
+      }),
     });
 
     try {

@@ -4,9 +4,12 @@ import {
   type CodexServerNotification,
   type CodexTurn,
 } from "@bilig/agent-api";
+import { SpreadsheetEngine } from "@bilig/core";
 import { describe, expect, it, vi } from "vitest";
 import type { ZeroSyncService } from "../zero/service.js";
+import { buildWorkbookSourceProjectionFromEngine } from "../zero/projection.js";
 import type { WorkbookAgentThreadStateRecord } from "../zero/workbook-chat-thread-store.js";
+import type { WorkbookRuntime } from "../workbook-runtime/runtime-manager.js";
 import type {
   CodexAppServerClientOptions,
   CodexAppServerTransport,
@@ -100,7 +103,7 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async handleMutate() {
       throw new Error("not used");
     },
-    async inspectWorkbook() {
+    async inspectWorkbook<T>(_documentId: string, _task: (runtime: never) => T | Promise<T>) {
       throw new Error("not used");
     },
     async applyServerMutator() {},
@@ -124,6 +127,10 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
       return null;
     },
     async saveWorkbookAgentThreadState() {},
+    async listWorkbookThreadWorkflowRuns() {
+      return [];
+    },
+    async upsertWorkbookWorkflowRun() {},
     async getWorkbookHeadRevision() {
       return 1;
     },
@@ -298,6 +305,103 @@ describe("workbook agent service", () => {
       });
 
       unsubscribe();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("starts durable read/report workflows and records completed runs", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+    engine.setCellFormula("Sheet1", "B1", "SUM(A1:A1)");
+    let inspectWorkbookCallCount = 0;
+    const inspectWorkbook = async <T>(
+      _documentId: string,
+      task: (runtime: WorkbookRuntime) => T | Promise<T>,
+    ): Promise<T> => {
+      inspectWorkbookCallCount += 1;
+      const runtime: WorkbookRuntime = {
+        documentId: "doc-1",
+        engine,
+        projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+          revision: 1,
+          calculatedRevision: 1,
+          ownerUserId: "alex@example.com",
+          updatedBy: "alex@example.com",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+        }),
+        headRevision: 1,
+        calculatedRevision: 1,
+        ownerUserId: "alex@example.com",
+      };
+      return await task(runtime);
+    };
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        inspectWorkbook,
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "summarizeWorkbook",
+        },
+      });
+
+      expect(inspectWorkbookCallCount).toBe(1);
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "summarizeWorkbook",
+          status: "completed",
+          artifact: expect.objectContaining({
+            kind: "markdown",
+            title: "Workbook Summary",
+          }),
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Started workflow: Summarize Workbook",
+          }),
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Summarize Workbook",
+          }),
+        ]),
+      );
     } finally {
       await service.close();
     }

@@ -5,6 +5,7 @@ import type {
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
+  WorkbookAgentWorkflowRun,
 } from "@bilig/contracts";
 import type {
   CodexServerNotification,
@@ -41,9 +42,14 @@ import {
   createWorkbookAgentBaseInstructions,
   createWorkbookAgentDeveloperInstructions,
   mapThreadItemToEntry,
+  startWorkflowBodySchema,
   startTurnBodySchema,
   updateContextBodySchema,
 } from "./workbook-agent-session-model.js";
+import {
+  createWorkflowRunRecord,
+  executeWorkbookAgentWorkflow,
+} from "./workbook-agent-workflows.js";
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
 const CODEX_APP_SERVER_ARGS = ["app-server", "-c", "analytics.enabled=false"] as const;
@@ -66,6 +72,19 @@ function removeEntry(
   entryId: string,
 ): WorkbookAgentTimelineEntry[] {
   return entries.filter((entry) => entry.id !== entryId);
+}
+
+function upsertWorkflowRun(
+  runs: readonly WorkbookAgentWorkflowRun[],
+  nextRun: WorkbookAgentWorkflowRun,
+): WorkbookAgentWorkflowRun[] {
+  const index = runs.findIndex((run) => run.runId === nextRun.runId);
+  if (index < 0) {
+    return [nextRun, ...runs];
+  }
+  const nextRuns = [...runs];
+  nextRuns[index] = nextRun;
+  return nextRuns;
 }
 
 function mergeTimelineEntries(
@@ -159,12 +178,13 @@ function normalizeCodexNotificationErrorMessage(params: Record<string, unknown>)
 type MutableWorkbookAgentSessionSnapshot = {
   -readonly [Key in Exclude<
     keyof WorkbookAgentSessionSnapshot,
-    "entries" | "pendingBundle" | "executionRecords"
+    "entries" | "pendingBundle" | "executionRecords" | "workflowRuns"
   >]: WorkbookAgentSessionSnapshot[Key];
 } & {
   entries: WorkbookAgentTimelineEntry[];
   pendingBundle: WorkbookAgentCommandBundle | null;
   executionRecords: WorkbookAgentExecutionRecord[];
+  workflowRuns: WorkbookAgentWorkflowRun[];
 };
 
 interface WorkbookAgentSessionState {
@@ -206,6 +226,12 @@ export interface WorkbookAgentService {
     body: unknown;
   }): Promise<WorkbookAgentSessionSnapshot>;
   startTurn(input: {
+    documentId: string;
+    sessionId: string;
+    session: SessionIdentity;
+    body: unknown;
+  }): Promise<WorkbookAgentSessionSnapshot>;
+  startWorkflow(input: {
     documentId: string;
     sessionId: string;
     session: SessionIdentity;
@@ -262,6 +288,10 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   async startTurn(): Promise<never> {
+    throw new Error("Workbook agent service is not configured");
+  }
+
+  async startWorkflow(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
@@ -405,6 +435,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.session.userID,
       thread.id,
     );
+    const workflowRuns = await this.zeroSyncService.listWorkbookThreadWorkflowRuns(
+      input.documentId,
+      input.session.userID,
+      thread.id,
+    );
     const codexEntries = buildEntriesFromThread(thread);
 
     const snapshot: MutableWorkbookAgentSessionSnapshot = {
@@ -423,6 +458,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       entries: mergeTimelineEntries(codexEntries, durableThreadState?.entries ?? []),
       pendingBundle: durableThreadState?.pendingBundle ?? null,
       executionRecords,
+      workflowRuns,
     };
     const sessionState: WorkbookAgentSessionState = {
       sessionId,
@@ -505,6 +541,118 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     await this.persistSessionState(sessionState);
     this.emitSnapshot(sessionState.threadId);
     return cloneSnapshot(sessionState.snapshot);
+  }
+
+  async startWorkflow(input: {
+    documentId: string;
+    sessionId: string;
+    session: SessionIdentity;
+    body: unknown;
+  }): Promise<WorkbookAgentSessionSnapshot> {
+    const parsed = startWorkflowBodySchema.parse(input.body);
+    const sessionState = this.getOwnedSession(
+      input.documentId,
+      input.sessionId,
+      input.session.userID,
+    );
+    const runId = crypto.randomUUID();
+    const now = this.now();
+    const runningRun = createWorkflowRunRecord({
+      runId,
+      threadId: sessionState.threadId,
+      startedByUserId: input.session.userID,
+      workflowTemplate: parsed.workflowTemplate,
+      title:
+        parsed.workflowTemplate === "summarizeWorkbook"
+          ? "Summarize Workbook"
+          : "Describe Recent Changes",
+      summary:
+        parsed.workflowTemplate === "summarizeWorkbook"
+          ? "Running workbook summary workflow."
+          : "Running recent change report workflow.",
+      status: "running",
+      now,
+    });
+    sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+      sessionState.snapshot.workflowRuns,
+      runningRun,
+    );
+    sessionState.snapshot.entries = upsertEntry(
+      sessionState.snapshot.entries,
+      createSystemEntry(
+        `system-workflow-start:${runId}`,
+        sessionState.snapshot.activeTurnId,
+        `Started workflow: ${runningRun.title}`,
+      ),
+    );
+    this.touch(sessionState);
+    await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, runningRun);
+    await this.persistSessionState(sessionState);
+    this.emitSnapshot(sessionState.threadId);
+
+    try {
+      const result = await executeWorkbookAgentWorkflow({
+        documentId: input.documentId,
+        zeroSyncService: this.zeroSyncService,
+        workflowTemplate: parsed.workflowTemplate,
+      });
+      const completedAtUnixMs = this.now();
+      const completedRun: WorkbookAgentWorkflowRun = {
+        ...runningRun,
+        title: result.title,
+        summary: result.summary,
+        status: "completed",
+        updatedAtUnixMs: completedAtUnixMs,
+        completedAtUnixMs,
+        artifact: result.artifact,
+      };
+      sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+        sessionState.snapshot.workflowRuns,
+        completedRun,
+      );
+      sessionState.snapshot.entries = upsertEntry(
+        sessionState.snapshot.entries,
+        createSystemEntry(
+          `system-workflow-complete:${runId}`,
+          sessionState.snapshot.activeTurnId,
+          `Completed workflow: ${result.title}`,
+          result.citations,
+        ),
+      );
+      this.touch(sessionState);
+      await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, completedRun);
+      await this.persistSessionState(sessionState);
+      this.emitSnapshot(sessionState.threadId);
+      return cloneSnapshot(sessionState.snapshot);
+    } catch (error) {
+      const failedAtUnixMs = this.now();
+      const failedRun: WorkbookAgentWorkflowRun = {
+        ...runningRun,
+        status: "failed",
+        summary: `Workflow failed: ${runningRun.title}`,
+        updatedAtUnixMs: failedAtUnixMs,
+        completedAtUnixMs: failedAtUnixMs,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        artifact: null,
+      };
+      sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+        sessionState.snapshot.workflowRuns,
+        failedRun,
+      );
+      sessionState.snapshot.entries = upsertEntry(
+        sessionState.snapshot.entries,
+        createSystemEntry(
+          `system-workflow-failed:${runId}`,
+          sessionState.snapshot.activeTurnId,
+          failedRun.errorMessage ?? `Workflow failed: ${runningRun.title}`,
+        ),
+      );
+      this.touch(sessionState);
+      await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, failedRun);
+      await this.persistSessionState(sessionState);
+      this.emitSnapshot(sessionState.threadId);
+      return cloneSnapshot(sessionState.snapshot);
+    }
   }
 
   async interruptTurn(input: {
