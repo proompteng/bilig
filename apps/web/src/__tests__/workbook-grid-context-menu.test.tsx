@@ -17,6 +17,8 @@ afterEach(() => {
 
 function ContextMenuHarness(props: {
   headerSelection: HeaderSelection | null;
+  hiddenColumns?: Readonly<Record<number, true>> | undefined;
+  hiddenRows?: Readonly<Record<number, true>> | undefined;
   isEditingCell?: boolean;
   onCommitEdit?: (() => void) | undefined;
   onHideColumn?: ((columnIndex: number, hidden: boolean) => void) | undefined;
@@ -30,6 +32,8 @@ function ContextMenuHarness(props: {
     isEditingCell: props.isEditingCell ?? false,
     onCommitEdit: props.onCommitEdit ?? (() => {}),
     onSelect: props.onSelect ?? (() => {}),
+    hiddenColumnsByIndex: props.hiddenColumns,
+    hiddenRowsByIndex: props.hiddenRows,
     onSetColumnHidden: props.onHideColumn,
     onSetRowHidden: props.onHideRow,
     resolveHeaderSelectionAtPointer() {
@@ -61,7 +65,7 @@ function ContextMenuHarness(props: {
         <WorkbookGridContextMenu
           menuRef={menu.menuRef}
           onClose={menu.closeContextMenu}
-          onHideTarget={menu.hideTarget}
+          onToggleTargetHidden={menu.toggleTargetHidden}
           state={menu.contextMenuState}
         />
       ) : null}
@@ -111,6 +115,49 @@ describe("workbook grid context menu", () => {
 
     expect(onHideRow).toHaveBeenCalledWith(7, true);
     expect(setGridSelection).toHaveBeenCalledTimes(1);
+    expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("shows unhide for a hidden row and restores the row", async () => {
+    const onHideRow = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: "row", index: 7 }}
+          hiddenRows={{ 7: true }}
+          onHideRow={onHideRow}
+        />,
+      );
+    });
+
+    const target = host.querySelector("[data-testid='host']");
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 120,
+          clientY: 90,
+        }),
+      );
+    });
+
+    const unhideButton = host.querySelector("[data-testid='grid-context-action-unhide-row']");
+    expect(unhideButton).not.toBeNull();
+
+    await act(async () => {
+      unhideButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onHideRow).toHaveBeenCalledWith(7, false);
     expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
 
     await act(async () => {

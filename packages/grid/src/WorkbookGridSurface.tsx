@@ -49,6 +49,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onFillRange: props.onFillRange,
     onMoveRange: props.onMoveRange,
     onPaste: props.onPaste,
+    hiddenColumns: props.hiddenColumns,
+    hiddenRows: props.hiddenRows,
     onSetColumnHidden: props.onSetColumnHidden,
     onSetRowHidden: props.onSetRowHidden,
     onSelect: props.onSelect,
@@ -233,7 +235,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         <WorkbookGridContextMenu
           menuRef={interactions.contextMenu.menuRef}
           onClose={interactions.contextMenu.closeContextMenu}
-          onHideTarget={interactions.contextMenu.hideTarget}
+          onToggleTargetHidden={interactions.contextMenu.toggleTargetHidden}
           state={interactions.contextMenu.contextMenuState}
         />
       ) : null}
