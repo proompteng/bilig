@@ -50,6 +50,7 @@ import {
   updateContextBodySchema,
 } from "./workbook-agent-session-model.js";
 import {
+  cancelWorkflowSteps,
   completeWorkflowSteps,
   createWorkflowRunRecord,
   createRunningWorkflowSteps,
@@ -288,6 +289,12 @@ export interface WorkbookAgentService {
     session: SessionIdentity;
     body: unknown;
   }): Promise<WorkbookAgentSessionSnapshot>;
+  cancelWorkflow(input: {
+    documentId: string;
+    sessionId: string;
+    runId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentSessionSnapshot>;
   interruptTurn(input: {
     documentId: string;
     sessionId: string;
@@ -350,6 +357,10 @@ class DisabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   async startWorkflow(): Promise<never> {
+    throw new Error("Workbook agent service is not configured");
+  }
+
+  async cancelWorkflow(): Promise<never> {
     throw new Error("Workbook agent service is not configured");
   }
 
@@ -665,6 +676,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         context: sessionState.snapshot.context,
         workflowInput,
       });
+      const currentRun = sessionState.snapshot.workflowRuns.find((run) => run.runId === runId);
+      if (currentRun?.status === "cancelled") {
+        return cloneSnapshot(sessionState.snapshot);
+      }
       const completedAtUnixMs = this.now();
       const completedRun: WorkbookAgentWorkflowRun = {
         ...runningRun,
@@ -695,6 +710,10 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       this.emitSnapshot(sessionState.threadId);
       return cloneSnapshot(sessionState.snapshot);
     } catch (error) {
+      const currentRun = sessionState.snapshot.workflowRuns.find((run) => run.runId === runId);
+      if (currentRun?.status === "cancelled") {
+        return cloneSnapshot(sessionState.snapshot);
+      }
       const failedAtUnixMs = this.now();
       const errorMessage = error instanceof Error ? error.message : String(error);
       const failedRun: WorkbookAgentWorkflowRun = {
@@ -731,6 +750,66 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       this.emitSnapshot(sessionState.threadId);
       return cloneSnapshot(sessionState.snapshot);
     }
+  }
+
+  async cancelWorkflow(input: {
+    documentId: string;
+    sessionId: string;
+    runId: string;
+    session: SessionIdentity;
+  }): Promise<WorkbookAgentSessionSnapshot> {
+    const sessionState = this.getOwnedSession(
+      input.documentId,
+      input.sessionId,
+      input.session.userID,
+    );
+    const runningWorkflow = sessionState.snapshot.workflowRuns.find(
+      (run) => run.runId === input.runId,
+    );
+    if (!runningWorkflow) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_WORKFLOW_NOT_FOUND",
+        message: "Workbook agent workflow run not found",
+        statusCode: 404,
+        retryable: false,
+      });
+    }
+    if (runningWorkflow.status !== "running") {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_WORKFLOW_NOT_RUNNING",
+        message: "Workbook agent workflow is not currently running",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
+    const now = this.now();
+    const cancelledRun: WorkbookAgentWorkflowRun = {
+      ...runningWorkflow,
+      status: "cancelled",
+      summary: `Cancelled workflow: ${runningWorkflow.title}`,
+      updatedAtUnixMs: now,
+      completedAtUnixMs: now,
+      errorMessage: `Cancelled by ${input.session.userID}.`,
+      steps: cancelWorkflowSteps(runningWorkflow.steps, now),
+      artifact: null,
+    };
+    sessionState.snapshot.workflowRuns = upsertWorkflowRun(
+      sessionState.snapshot.workflowRuns,
+      cancelledRun,
+    );
+    sessionState.snapshot.entries = upsertEntry(
+      sessionState.snapshot.entries,
+      createSystemEntry(
+        `system-workflow-cancel:${input.runId}:${now}`,
+        sessionState.snapshot.activeTurnId,
+        `Cancelled workflow: ${runningWorkflow.title}`,
+      ),
+    );
+    this.touch(sessionState);
+    await this.zeroSyncService.upsertWorkbookWorkflowRun(input.documentId, cancelledRun);
+    await this.persistSessionState(sessionState);
+    this.emitSnapshot(sessionState.threadId);
+    return cloneSnapshot(sessionState.snapshot);
   }
 
   async interruptTurn(input: {

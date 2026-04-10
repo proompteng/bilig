@@ -874,6 +874,7 @@ export function WorkbookAgentPanel(props: {
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly workflowRuns: readonly WorkbookAgentWorkflowRun[];
+  readonly cancellingWorkflowRunId: string | null;
   readonly isStartingWorkflow: boolean;
   readonly threadScope: WorkbookAgentThreadScope;
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
@@ -890,6 +891,7 @@ export function WorkbookAgentPanel(props: {
   readonly onSelectThread: (threadId: string) => void;
   readonly onStartNewThread: () => void;
   readonly onTogglePendingCommand: (commandIndex: number) => void;
+  readonly onCancelWorkflowRun: (runId: string) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onStartWorkflow: (
     template: Exclude<WorkbookAgentWorkflowRun["workflowTemplate"], "searchWorkbookQuery">,
@@ -975,7 +977,14 @@ export function WorkbookAgentPanel(props: {
                 </div>
                 <div className="flex flex-col gap-2">
                   {props.workflowRuns.slice(0, 5).map((run) => (
-                    <WorkflowRunRow key={run.runId} run={run} />
+                    <WorkflowRunRow
+                      key={run.runId}
+                      isCancelling={props.cancellingWorkflowRunId === run.runId}
+                      run={run}
+                      onCancel={() => {
+                        props.onCancelWorkflowRun(run.runId);
+                      }}
+                    />
                   ))}
                 </div>
               </div>

@@ -1089,6 +1089,170 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("cancels a running durable workflow without letting late completion overwrite it", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+    engine.setCellValue("Sheet1", "A1", 42);
+
+    let releaseInspection!: () => void;
+    const inspectBarrier = new Promise<void>((resolve) => {
+      releaseInspection = () => {
+        resolve();
+      };
+    });
+    let resolveRunningPersisted!: () => void;
+    const runningPersisted = new Promise<void>((resolve) => {
+      resolveRunningPersisted = () => {
+        resolve();
+      };
+    });
+    const upsertWorkbookWorkflowRun = vi.fn(async (_documentId: string, run) => {
+      if (run.status === "running") {
+        resolveRunningPersisted();
+      }
+    });
+
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          await inspectBarrier;
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+        },
+      });
+
+      const workflowPromise = service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "summarizeWorkbook",
+        },
+      });
+
+      await runningPersisted;
+      const runningSnapshot = service.getSnapshot({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+      const runningRunId = runningSnapshot.workflowRuns[0]?.runId;
+      if (!runningRunId) {
+        throw new Error("Expected running workflow run id");
+      }
+
+      const cancelledSnapshot = await service.cancelWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        runId: runningRunId,
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+      });
+
+      expect(cancelledSnapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "summarizeWorkbook",
+          status: "cancelled",
+          summary: "Cancelled workflow: Summarize Workbook",
+          errorMessage: "Cancelled by alex@example.com.",
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              stepId: "inspect-workbook",
+              status: "cancelled",
+            }),
+          ]),
+        }),
+      );
+
+      releaseInspection();
+      const finalSnapshot = await workflowPromise;
+
+      expect(finalSnapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "summarizeWorkbook",
+          status: "cancelled",
+          summary: "Cancelled workflow: Summarize Workbook",
+          artifact: null,
+        }),
+      );
+      expect(finalSnapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Started workflow: Summarize Workbook",
+          }),
+          expect.objectContaining({
+            kind: "system",
+            text: "Cancelled workflow: Summarize Workbook",
+          }),
+        ]),
+      );
+      expect(finalSnapshot.entries).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Summarize Workbook",
+          }),
+        ]),
+      );
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+      expect(upsertWorkbookWorkflowRun.mock.calls.map(([, run]) => run.status)).toEqual([
+        "running",
+        "cancelled",
+      ]);
+    } finally {
+      releaseInspection();
+      await service.close();
+    }
+  });
+
   it("uses nested app-server error messages instead of the generic fallback", async () => {
     const fakeCodex = new FakeCodexTransport();
     const service = createWorkbookAgentService(createZeroSyncStub(), {

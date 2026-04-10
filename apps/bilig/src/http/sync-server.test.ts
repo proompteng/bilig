@@ -120,6 +120,9 @@ function createWorkbookAgentServiceStub(
     async startWorkflow() {
       throw new Error("not used");
     },
+    async cancelWorkflow() {
+      throw new Error("not used");
+    },
     async interruptTurn() {
       throw new Error("not used");
     },
@@ -921,6 +924,158 @@ describe("sync-server workbook agent", () => {
             expect.objectContaining({
               runId: "wf-2",
               workflowTemplate: "describeRecentChanges",
+            }),
+          ],
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("cancels workbook agent workflows through the session route", async () => {
+    const cancelWorkflow = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        workflowRuns: [
+          {
+            runId: "wf-running-1",
+            threadId: "thr-1",
+            startedByUserId: "alex@example.com",
+            workflowTemplate: "summarizeWorkbook",
+            title: "Summarize Workbook",
+            summary: "Cancelled workflow: Summarize Workbook",
+            status: "cancelled" as const,
+            createdAtUnixMs: 1,
+            updatedAtUnixMs: 3,
+            completedAtUnixMs: 3,
+            errorMessage: "Cancelled by alex@example.com.",
+            steps: [
+              {
+                stepId: "inspect-workbook",
+                label: "Inspect workbook structure",
+                status: "cancelled" as const,
+                summary: "Workflow cancelled before this step completed.",
+                updatedAtUnixMs: 3,
+              },
+            ],
+            artifact: null,
+          },
+        ],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        cancelWorkflow,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/sessions/agent-session-1/workflows/wf-running-1/cancel",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(cancelWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-1",
+          runId: "wf-running-1",
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          workflowRuns: [
+            expect.objectContaining({
+              runId: "wf-running-1",
+              status: "cancelled",
+            }),
+          ],
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("cancels workbook agent workflows through the durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const cancelWorkflow = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+        workflowRuns: [
+          {
+            runId: "wf-running-2",
+            threadId: "thr-2",
+            startedByUserId: "alex@example.com",
+            workflowTemplate: "describeRecentChanges",
+            title: "Describe Recent Changes",
+            summary: "Cancelled workflow: Describe Recent Changes",
+            status: "cancelled" as const,
+            createdAtUnixMs: 1,
+            updatedAtUnixMs: 4,
+            completedAtUnixMs: 4,
+            errorMessage: "Cancelled by alex@example.com.",
+            steps: [
+              {
+                stepId: "load-revisions",
+                label: "Load durable revisions",
+                status: "cancelled" as const,
+                summary: "Workflow cancelled before this step completed.",
+                updatedAtUnixMs: 4,
+              },
+            ],
+            artifact: null,
+          },
+        ],
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: createWorkbookAgentServiceStub({
+        createSession,
+        cancelWorkflow,
+      }),
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads/thr-2/workflows/wf-running-2/cancel",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: {
+            threadId: "thr-2",
+          },
+        }),
+      );
+      expect(cancelWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+          runId: "wf-running-2",
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          threadId: "thr-2",
+          workflowRuns: [
+            expect.objectContaining({
+              runId: "wf-running-2",
+              status: "cancelled",
             }),
           ],
         }),

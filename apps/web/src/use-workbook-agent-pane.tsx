@@ -146,6 +146,7 @@ export function useWorkbookAgentPane(input: {
   const [isLoading, setIsLoading] = useState(false);
   const [isApplyingBundle, setIsApplyingBundle] = useState(false);
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false);
+  const [cancellingWorkflowRunId, setCancellingWorkflowRunId] = useState<string | null>(null);
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
   const [threadSummaries, setThreadSummaries] = useState<readonly WorkbookAgentThreadSummary[]>([]);
@@ -938,6 +939,40 @@ export function useWorkbookAgentPane(input: {
     [documentId, ensureSession, persistSessionSnapshot],
   );
 
+  const cancelWorkflowRun = useCallback(
+    async (runId: string) => {
+      const activeSession = sessionRef.current;
+      if (!activeSession) {
+        return;
+      }
+      try {
+        setError(null);
+        setCancellingWorkflowRunId(runId);
+        const response = await fetch(
+          `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(activeSession.threadId)}/workflows/${encodeURIComponent(runId)}/cancel`,
+          {
+            method: "POST",
+          },
+        );
+        const payload = (await response.json()) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            resolvePayloadMessage(
+              payload,
+              `Workbook agent request failed with status ${response.status}`,
+            ),
+          );
+        }
+        persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      } finally {
+        setCancellingWorkflowRunId((currentRunId) => (currentRunId === runId ? null : currentRunId));
+      }
+    },
+    [documentId, persistSessionSnapshot],
+  );
+
   const clearAgentError = useCallback(() => {
     setError(null);
   }, []);
@@ -949,6 +984,7 @@ export function useWorkbookAgentPane(input: {
         currentContext={currentContext}
         draft={draft}
         executionRecords={executionRecords}
+        cancellingWorkflowRunId={cancellingWorkflowRunId}
         isApplyingBundle={isApplyingBundle}
         isLoading={isLoading}
         isStartingWorkflow={isStartingWorkflow}
@@ -988,6 +1024,9 @@ export function useWorkbookAgentPane(input: {
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
         }}
+        onCancelWorkflowRun={(runId) => {
+          void cancelWorkflowRun(runId);
+        }}
         onStartWorkflow={(workflowTemplate) => {
           if (workflowTemplate === "findFormulaIssues" && currentContext?.selection.sheetName) {
             void startWorkflow({
@@ -1015,6 +1054,8 @@ export function useWorkbookAgentPane(input: {
     ),
     [
       applyPendingBundle,
+      cancelWorkflowRun,
+      cancellingWorkflowRunId,
       currentContext,
       dismissPendingBundle,
       draft,

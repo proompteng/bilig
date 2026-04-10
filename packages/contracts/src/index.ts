@@ -152,7 +152,12 @@ export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowTemplateSchema
 >;
 
-export const WorkbookAgentWorkflowStatusSchema = Schema.Literal("running", "completed", "failed");
+export const WorkbookAgentWorkflowStatusSchema = Schema.Literal(
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+);
 export type WorkbookAgentWorkflowStatus = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowStatusSchema
 >;
@@ -162,6 +167,7 @@ export const WorkbookAgentWorkflowStepStatusSchema = Schema.Literal(
   "running",
   "completed",
   "failed",
+  "cancelled",
 );
 export type WorkbookAgentWorkflowStepStatus = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowStepStatusSchema

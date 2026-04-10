@@ -87,6 +87,7 @@ function workflowStatusTone(
       return "accent";
     case "failed":
       return "danger";
+    case "cancelled":
     case "completed":
       return "neutral";
   }
@@ -98,6 +99,8 @@ function workflowStatusLabel(status: WorkbookAgentWorkflowRun["status"]): string
       return "Running";
     case "failed":
       return "Failed";
+    case "cancelled":
+      return "Cancelled";
     case "completed":
       return "Done";
   }
@@ -112,6 +115,7 @@ function workflowStepTone(
     case "failed":
       return "danger";
     case "pending":
+    case "cancelled":
     case "completed":
       return "neutral";
   }
@@ -127,10 +131,16 @@ function workflowStepLabel(status: WorkbookAgentWorkflowRun["steps"][number]["st
       return "Done";
     case "failed":
       return "Failed";
+    case "cancelled":
+      return "Cancelled";
   }
 }
 
-export function WorkflowRunRow(props: { readonly run: WorkbookAgentWorkflowRun }) {
+export function WorkflowRunRow(props: {
+  readonly run: WorkbookAgentWorkflowRun;
+  readonly isCancelling?: boolean;
+  readonly onCancel?: () => void;
+}) {
   const artifactSummary = summarizeWorkflowArtifact(props.run);
   return (
     <div
@@ -181,8 +191,28 @@ export function WorkflowRunRow(props: { readonly run: WorkbookAgentWorkflowRun }
         </div>
       ) : null}
       {props.run.errorMessage ? (
-        <div className="mt-2 text-[11px] leading-5 text-[var(--wb-danger-text)]">
+        <div
+          className={cn(
+            "mt-2 text-[11px] leading-5",
+            props.run.status === "cancelled"
+              ? "text-[var(--wb-text-subtle)]"
+              : "text-[var(--wb-danger-text)]",
+          )}
+        >
           {props.run.errorMessage}
+        </div>
+      ) : null}
+      {props.run.status === "running" && props.onCancel ? (
+        <div className="mt-3 flex items-center justify-end">
+          <button
+            className={workbookButtonClass({ tone: "neutral" })}
+            data-testid={`workbook-agent-cancel-workflow-${props.run.runId}`}
+            disabled={props.isCancelling}
+            type="button"
+            onClick={props.onCancel}
+          >
+            {props.isCancelling ? "Cancelling..." : "Cancel"}
+          </button>
         </div>
       ) : null}
     </div>

@@ -76,7 +76,13 @@ function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["
 }
 
 function isWorkflowStepStatus(value: unknown): value is WorkbookAgentWorkflowStep["status"] {
-  return value === "pending" || value === "running" || value === "completed" || value === "failed";
+  return (
+    value === "pending" ||
+    value === "running" ||
+    value === "completed" ||
+    value === "failed" ||
+    value === "cancelled"
+  );
 }
 
 function isWorkflowStep(value: unknown): value is WorkbookAgentWorkflowStep {
@@ -182,7 +188,10 @@ function normalizeWorkflowRun(
     !isWorkflowTemplate(row.workflowTemplate) ||
     typeof row.title !== "string" ||
     typeof row.summary !== "string" ||
-    (row.status !== "running" && row.status !== "completed" && row.status !== "failed") ||
+    (row.status !== "running" &&
+      row.status !== "completed" &&
+      row.status !== "failed" &&
+      row.status !== "cancelled") ||
     createdAtUnixMs === null ||
     updatedAtUnixMs === null ||
     completedAtUnixMs === undefined ||

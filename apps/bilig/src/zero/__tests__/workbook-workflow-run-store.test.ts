@@ -178,4 +178,94 @@ describe("workbook-workflow-run-store", () => {
       }),
     ]);
   });
+
+  it("loads cancelled workflow runs with cancelled steps", async () => {
+    const run = {
+      ...createWorkflowRun(),
+      summary: "Cancelled workflow: Summarize Workbook",
+      status: "cancelled" as const,
+      updatedAtUnixMs: 130,
+      completedAtUnixMs: 130,
+      errorMessage: "Cancelled by alex@example.com.",
+      steps: [
+        {
+          stepId: "inspect-workbook",
+          label: "Inspect workbook structure",
+          status: "cancelled" as const,
+          summary: "Workflow cancelled before this step completed.",
+          updatedAtUnixMs: 130,
+        },
+      ],
+      artifact: null,
+    };
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes("FROM workbook_workflow_run AS run") &&
+        values?.[1] === "thr-1" &&
+        values?.[2] === "alex@example.com"
+          ? [
+              {
+                runId: run.runId,
+                workbookId: "doc-1",
+                threadId: run.threadId,
+                actorUserId: run.startedByUserId,
+                workflowTemplate: run.workflowTemplate,
+                title: run.title,
+                summary: run.summary,
+                status: run.status,
+                createdAtUnixMs: run.createdAtUnixMs,
+                updatedAtUnixMs: run.updatedAtUnixMs,
+                completedAtUnixMs: run.completedAtUnixMs,
+                errorMessage: run.errorMessage,
+                stepsJson: run.steps,
+                artifactJson: run.artifact,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_workflow_step AS step") &&
+        values?.[0] === "doc-1" &&
+        Array.isArray(values?.[1])
+          ? run.steps.map(
+              (step, index) =>
+                ({
+                  runId: run.runId,
+                  stepId: step.stepId,
+                  stepOrder: index,
+                  label: step.label,
+                  status: step.status,
+                  summary: step.summary,
+                  updatedAtUnixMs: step.updatedAtUnixMs,
+                }) satisfies QueryResultRow,
+            )
+          : null,
+      (text, values) =>
+        text.includes("FROM workbook_workflow_artifact AS artifact") &&
+        values?.[0] === "doc-1" &&
+        Array.isArray(values?.[1])
+          ? []
+          : null,
+    ]);
+
+    const runs = await listWorkbookThreadWorkflowRuns(queryable, {
+      documentId: "doc-1",
+      actorUserId: "alex@example.com",
+      threadId: "thr-1",
+    });
+
+    expect(runs).toEqual([
+      expect.objectContaining({
+        runId: "workflow-1",
+        status: "cancelled",
+        errorMessage: "Cancelled by alex@example.com.",
+        steps: [
+          expect.objectContaining({
+            stepId: "inspect-workbook",
+            status: "cancelled",
+          }),
+        ],
+        artifact: null,
+      }),
+    ]);
+  });
 });

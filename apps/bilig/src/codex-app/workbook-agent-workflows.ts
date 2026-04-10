@@ -299,6 +299,26 @@ export function failWorkflowSteps(
   );
 }
 
+export function cancelWorkflowSteps(
+  runningSteps: readonly WorkbookAgentWorkflowStep[],
+  now: number,
+): WorkbookAgentWorkflowStep[] {
+  return runningSteps.map((step) => {
+    if (step.status === "completed") {
+      return step;
+    }
+    return {
+      ...step,
+      status: "cancelled",
+      summary:
+        step.status === "running"
+          ? "Workflow cancelled before this step completed."
+          : "Workflow cancelled before this step started.",
+      updatedAtUnixMs: now,
+    };
+  });
+}
+
 function summarizeWorkbookMarkdown(summary: ReturnType<typeof summarizeWorkbookStructure>): string {
   const lines = [
     "## Workbook Summary",

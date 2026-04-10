@@ -544,6 +544,140 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("cancels running workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({ threadId: "thr-1" }),
+    );
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads/thr-1/workflows/wf-running-1/cancel")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-1",
+              workflowRuns: [
+                {
+                  runId: "wf-running-1",
+                  threadId: "thr-1",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "summarizeWorkbook",
+                  title: "Summarize Workbook",
+                  summary: "Cancelled workflow: Summarize Workbook",
+                  status: "cancelled",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 4,
+                  completedAtUnixMs: 4,
+                  errorMessage: "Cancelled by alex@example.com.",
+                  steps: [
+                    {
+                      stepId: "inspect-workbook",
+                      label: "Inspect workbook structure",
+                      status: "cancelled",
+                      summary: "Workflow cancelled before this step completed.",
+                      updatedAtUnixMs: 4,
+                    },
+                  ],
+                  artifact: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify(
+          createSnapshot({
+            threadId: "thr-1",
+            workflowRuns: [
+              {
+                runId: "wf-running-1",
+                threadId: "thr-1",
+                startedByUserId: "alex@example.com",
+                workflowTemplate: "summarizeWorkbook",
+                title: "Summarize Workbook",
+                summary: "Running workbook summary workflow.",
+                status: "running",
+                createdAtUnixMs: 1,
+                updatedAtUnixMs: 2,
+                completedAtUnixMs: null,
+                errorMessage: null,
+                steps: [
+                  {
+                    stepId: "inspect-workbook",
+                    label: "Inspect workbook structure",
+                    status: "running",
+                    summary: "Reading durable workbook structure and layout metadata.",
+                    updatedAtUnixMs: 2,
+                  },
+                  {
+                    stepId: "draft-summary",
+                    label: "Draft summary artifact",
+                    status: "pending",
+                    summary: "Waiting to assemble the durable workbook summary artifact.",
+                    updatedAtUnixMs: 2,
+                  },
+                ],
+                artifact: null,
+              },
+            ],
+          }),
+        ),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-cancel-workflow-wf-running-1']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+    expect(host.textContent).toContain("Running");
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Cancel workflow button not found");
+      }
+      button.click();
+    });
+
+    const cancelCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/threads/thr-1/workflows/wf-running-1/cancel"),
+    );
+    expect(cancelCall?.[0]).toBe(
+      "/v2/documents/doc-1/agent/threads/thr-1/workflows/wf-running-1/cancel",
+    );
+    expect(requestMethod(cancelCall?.[1])).toBe("POST");
+    expect(host.textContent).toContain("Cancelled");
+    expect(host.textContent).toContain("Cancelled by alex@example.com.");
+    expect(
+      host.querySelector("[data-testid='workbook-agent-cancel-workflow-wf-running-1']"),
+    ).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("starts dependency trace workflows through the durable thread workflow route", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

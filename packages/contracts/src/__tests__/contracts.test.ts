@@ -245,4 +245,33 @@ describe("@bilig/contracts", () => {
     expect(decoded.workflowTemplate).toBe("searchWorkbookQuery");
     expect(decoded.artifact?.title).toBe("Workbook Search");
   });
+
+  it("accepts cancelled workflow runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-4",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "summarizeWorkbook",
+      title: "Summarize Workbook",
+      summary: "Cancelled workflow: Summarize Workbook",
+      status: "cancelled",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 125,
+      completedAtUnixMs: 125,
+      errorMessage: "Cancelled by alex@example.com.",
+      steps: [
+        {
+          stepId: "inspect-workbook",
+          label: "Inspect workbook structure",
+          status: "cancelled",
+          summary: "Workflow cancelled before this step completed.",
+          updatedAtUnixMs: 125,
+        },
+      ],
+      artifact: null,
+    });
+
+    expect(decoded.status).toBe("cancelled");
+    expect(decoded.steps[0]?.status).toBe("cancelled");
+  });
 });
