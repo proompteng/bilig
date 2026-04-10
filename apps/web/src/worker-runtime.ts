@@ -8,7 +8,7 @@ import {
   type WorkbookAgentPreviewSummary,
 } from "@bilig/agent-api";
 import type { EngineOpBatch } from "@bilig/workbook-domain";
-import { formatAddress, indexToColumn, parseCellAddress } from "@bilig/formula";
+import { formatAddress, indexToColumn } from "@bilig/formula";
 import {
   createOpfsWorkbookLocalStoreFactory,
   type WorkbookLocalStore,
@@ -57,6 +57,14 @@ import {
   syncPendingMutationsFromJournal,
 } from "./worker-runtime-pending-mutations.js";
 import { applyPendingWorkbookMutationToEngine } from "./worker-runtime-mutation-replay.js";
+import {
+  ensureAuthoritativeEngine,
+  installAuthoritativeEngineState,
+  installRestoredAuthoritativeState,
+  readProjectedCellFromLocalStore,
+  rebuildProjectionEngine,
+  resolveAuthoritativeStateInput,
+} from "./worker-runtime-engine-access.js";
 import {
   createProjectionEngineFromState,
   createWorkbookEngineFromState,
@@ -909,43 +917,25 @@ export class WorkbookWorkerRuntime {
     snapshot: WorkbookSnapshot | null;
     replica: EngineReplicaSnapshot | null;
   }> {
-    if (this.authoritativeStateSource === "localStore") {
-      const restoredState = this.localStore ? await this.localStore.loadState() : null;
-      const restoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot)
-        ? restoredState.snapshot
-        : null;
-      const restoredReplica = isEngineReplicaSnapshot(restoredState?.replica)
-        ? restoredState.replica
-        : null;
-      this.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica);
-    }
-    return this.snapshotCaches.resolveAuthoritativeState({
-      exportSnapshot: this.authoritativeEngine
-        ? () => this.authoritativeEngine!.exportSnapshot()
-        : null,
-      exportReplica: this.authoritativeEngine
-        ? () => this.authoritativeEngine!.exportReplicaSnapshot()
-        : null,
+    return await resolveAuthoritativeStateInput({
+      authoritativeStateSource: this.authoritativeStateSource,
+      localStore: this.localStore,
+      snapshotCaches: this.snapshotCaches,
+      authoritativeEngine: this.authoritativeEngine,
+      installRestoredAuthoritativeState: (snapshot, replica) => {
+        this.installRestoredAuthoritativeState(snapshot, replica);
+      },
     });
   }
 
   private readProjectedCellFromLocalStore(sheetName: string, address: string): CellSnapshot | null {
-    if (!this.canReadLocalProjectionForViewport() || !this.localStore) {
-      return null;
-    }
-    const parsed = parseCellAddress(address, sheetName);
-    const localBase = this.viewportTileStore.readViewport({
+    return readProjectedCellFromLocalStore({
+      canReadLocalProjectionForViewport: this.canReadLocalProjectionForViewport(),
       localStore: this.localStore,
+      viewportTileStore: this.viewportTileStore,
       sheetName,
-      viewport: {
-        rowStart: parsed.row,
-        rowEnd: parsed.row,
-        colStart: parsed.col,
-        colEnd: parsed.col,
-      },
+      address,
     });
-    const cell = localBase?.cells.find((entry) => entry.snapshot.address === address);
-    return cell ? structuredClone(cell.snapshot) : null;
   }
 
   private installAuthoritativeEngine(
@@ -955,10 +945,7 @@ export class WorkbookWorkerRuntime {
   ): void {
     this.authoritativeStateSource = "memory";
     this.authoritativeEngine = engine;
-    this.snapshotCaches.installAuthoritativeState(
-      snapshot ?? engine.exportSnapshot(),
-      replica ?? engine.exportReplicaSnapshot(),
-    );
+    installAuthoritativeEngineState(this.snapshotCaches, engine, snapshot, replica);
   }
 
   private installRestoredAuthoritativeState(
@@ -967,28 +954,19 @@ export class WorkbookWorkerRuntime {
   ): void {
     this.authoritativeStateSource = "memory";
     this.authoritativeEngine = null;
-    this.snapshotCaches.installAuthoritativeState(snapshot, replica);
+    installRestoredAuthoritativeState(this.snapshotCaches, snapshot, replica);
   }
 
   private async getAuthoritativeEngine(): Promise<SpreadsheetEngine> {
-    if (this.authoritativeEngine) {
-      return this.authoritativeEngine;
-    }
-    const authoritativeState = await this.getAuthoritativeStateInput();
     const options = this.requireBootstrapOptions();
-    const engine = await createWorkbookEngineFromState({
-      workbookName: options.documentId,
+    const engine = await ensureAuthoritativeEngine({
+      authoritativeEngine: this.authoritativeEngine,
+      documentId: options.documentId,
       replicaId: options.replicaId,
-      snapshot: authoritativeState.snapshot,
-      replica: authoritativeState.replica,
+      snapshotCaches: this.snapshotCaches,
+      resolveAuthoritativeStateInput: () => this.getAuthoritativeStateInput(),
     });
     this.authoritativeEngine = engine;
-    if (!authoritativeState.snapshot) {
-      this.snapshotCaches.storeAuthoritativeSnapshot(engine.exportSnapshot());
-    }
-    if (!authoritativeState.replica) {
-      this.snapshotCaches.storeAuthoritativeReplica(engine.exportReplicaSnapshot());
-    }
     return engine;
   }
 
@@ -996,14 +974,12 @@ export class WorkbookWorkerRuntime {
     engine: SpreadsheetEngine;
     overlayScope: ProjectionOverlayScope | null;
   }> {
-    const authoritativeState = await this.getAuthoritativeStateInput();
     const options = this.requireBootstrapOptions();
-    return await createProjectionEngineFromState({
-      workbookName: options.documentId,
+    return await rebuildProjectionEngine({
+      documentId: options.documentId,
       replicaId: options.replicaId,
-      snapshot: authoritativeState.snapshot,
-      replica: authoritativeState.replica,
       pendingMutations: this.pendingMutations,
+      resolveAuthoritativeStateInput: () => this.getAuthoritativeStateInput(),
     });
   }
 
