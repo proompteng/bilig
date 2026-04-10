@@ -34,7 +34,6 @@ interface StoredWorkbookAgentThreadRef {
 }
 
 interface WorkbookAgentLiveSession {
-  sessionId: string;
   threadId: string;
 }
 
@@ -296,11 +295,9 @@ export function useWorkbookAgentPane(input: {
       setSnapshot(nextSnapshot);
       setThreadScope(nextSnapshot.scope);
       persistStoredSession(documentId, {
-        sessionId: nextSnapshot.sessionId,
         threadId: nextSnapshot.threadId,
       });
       sessionRef.current = {
-        sessionId: nextSnapshot.sessionId,
         threadId: nextSnapshot.threadId,
       };
       void loadThreadSummaries()
@@ -436,7 +433,6 @@ export function useWorkbookAgentPane(input: {
       connectStream(nextSnapshot.threadId);
       setError(null);
       const nextSession = {
-        sessionId: nextSnapshot.sessionId,
         threadId: nextSnapshot.threadId,
       };
       sessionRef.current = nextSession;

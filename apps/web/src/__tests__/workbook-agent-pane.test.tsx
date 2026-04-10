@@ -1310,8 +1310,10 @@ describe("workbook agent pane", () => {
       },
     });
     expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
-    expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
-      '"sessionId":"agent-session-2"',
+    expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toBe(
+      JSON.stringify({
+        threadId: "thr-1",
+      }),
     );
 
     await act(async () => {
