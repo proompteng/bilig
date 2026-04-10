@@ -93,15 +93,18 @@ import {
   WorkerViewportPatchPublisher,
   createEmptyCellSnapshot,
 } from "./worker-runtime-viewport-publisher.js";
-import { buildWorkbookLocalAuthoritativeBase } from "./worker-local-base.js";
 import { buildWorkbookLocalAuthoritativeDelta } from "./worker-local-authoritative-delta.js";
 import {
-  buildWorkbookLocalProjectionOverlay,
   collectProjectionOverlayScopeFromEngineEvents,
   createEmptyProjectionOverlayScope,
   mergeProjectionOverlayScopes,
   type ProjectionOverlayScope,
 } from "./worker-local-overlay.js";
+import {
+  buildPersistedWorkerState,
+  ingestAuthoritativeDeltaToLocalStore,
+  persistProjectionStateToLocalStore,
+} from "./worker-runtime-local-persistence.js";
 import { WorkerViewportTileStore } from "./worker-viewport-tile-store.js";
 
 export interface WorkbookWorkerBootstrapOptions {
@@ -407,29 +410,21 @@ export class WorkbookWorkerRuntime {
         engineEvents: authoritativeEngineEvents,
         previousSheets,
       });
-      const persisted: WorkbookStoredState = {
-        snapshot: this.snapshotCaches.getAuthoritativeSnapshot({
-          canReuseProjectionState: !this.authoritativeEngine && this.pendingMutations.length === 0,
-          exportProjectionSnapshot: () => this.requireEngine().exportSnapshot(),
-          exportAuthoritativeSnapshot: () => this.requireAuthoritativeEngine().exportSnapshot(),
-        }),
-        replica: this.snapshotCaches.getAuthoritativeReplica({
-          canReuseProjectionState: !this.authoritativeEngine && this.pendingMutations.length === 0,
-          exportProjectionReplica: () => this.requireEngine().exportReplicaSnapshot(),
-          exportAuthoritativeReplica: () =>
-            this.requireAuthoritativeEngine().exportReplicaSnapshot(),
-        }),
+      const persisted = buildPersistedWorkerState({
+        snapshotCaches: this.snapshotCaches,
+        authoritativeEngine,
+        projectionEngine: engine,
+        hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
         authoritativeRevision: this.authoritativeRevision,
         appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
-      };
-      await localStore.ingestAuthoritativeDelta({
+      });
+      await ingestAuthoritativeDeltaToLocalStore({
+        localStore,
         state: persisted,
         authoritativeDelta,
-        projectionOverlay: buildWorkbookLocalProjectionOverlay({
-          authoritativeEngine,
-          projectionEngine: engine,
-          scope: this.getProjectionOverlayScopeForPersist(),
-        }),
+        authoritativeEngine,
+        projectionEngine: engine,
+        projectionOverlayScope: this.getProjectionOverlayScopeForPersist(),
         removePendingMutationIds: [...absorbedMutationIds],
       });
       this.projectionMatchesLocalStore = true;
@@ -811,13 +806,6 @@ export class WorkbookWorkerRuntime {
     return this.engine;
   }
 
-  private requireAuthoritativeEngine(): SpreadsheetEngine {
-    if (!this.authoritativeEngine) {
-      throw new Error("Workbook worker runtime has no authoritative base state");
-    }
-    return this.authoritativeEngine;
-  }
-
   private canPersistState(): boolean {
     return Boolean(this.bootstrapOptions?.persistState && this.localStore);
   }
@@ -1038,33 +1026,25 @@ export class WorkbookWorkerRuntime {
 
     const authoritativeEngine = await this.getAuthoritativeEngine();
     const projectionEngine = await this.getProjectionEngine();
-    const persisted: WorkbookStoredState = {
-      snapshot: this.snapshotCaches.getAuthoritativeSnapshot({
-        canReuseProjectionState: !this.authoritativeEngine && this.pendingMutations.length === 0,
-        exportProjectionSnapshot: () => this.requireEngine().exportSnapshot(),
-        exportAuthoritativeSnapshot: () => authoritativeEngine.exportSnapshot(),
-      }),
-      replica: this.snapshotCaches.getAuthoritativeReplica({
-        canReuseProjectionState: !this.authoritativeEngine && this.pendingMutations.length === 0,
-        exportProjectionReplica: () => this.requireEngine().exportReplicaSnapshot(),
-        exportAuthoritativeReplica: () => authoritativeEngine.exportReplicaSnapshot(),
-      }),
+    const persisted = buildPersistedWorkerState({
+      snapshotCaches: this.snapshotCaches,
+      authoritativeEngine,
+      projectionEngine,
+      hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
       authoritativeRevision: this.authoritativeRevision,
       appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
-    };
+    });
     this.persistQueued = false;
     const localStore = this.localStore;
     if (!localStore) {
       return;
     }
-    const savePromise = localStore.persistProjectionState({
+    const savePromise = persistProjectionStateToLocalStore({
+      localStore,
       state: persisted,
-      authoritativeBase: buildWorkbookLocalAuthoritativeBase(authoritativeEngine),
-      projectionOverlay: buildWorkbookLocalProjectionOverlay({
-        authoritativeEngine,
-        projectionEngine,
-        scope: this.getProjectionOverlayScopeForPersist(),
-      }),
+      authoritativeEngine,
+      projectionEngine,
+      projectionOverlayScope: this.getProjectionOverlayScopeForPersist(),
     });
     this.persistInFlight = savePromise;
     try {
