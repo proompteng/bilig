@@ -65,6 +65,10 @@ import {
 } from "./worker-runtime-engine-access.js";
 import { restoreBootstrapPersistence } from "./worker-runtime-bootstrap-persistence.js";
 import {
+  acquireProjectionEngine,
+  scheduleProjectionEngineMaterialization,
+} from "./worker-runtime-projection-engine.js";
+import {
   createProjectionEngineFromState,
   createWorkbookEngineFromState,
 } from "./worker-runtime-engine-state.js";
@@ -937,43 +941,35 @@ export class WorkbookWorkerRuntime {
   }
 
   private async getProjectionEngine(): Promise<SpreadsheetEngine & WorkerEngine> {
-    if (this.engine) {
-      return this.engine;
-    }
-    if (this.projectionEnginePromise) {
-      return await this.projectionEnginePromise;
-    }
-    const buildVersion = this.projectionBuildVersion;
-    const buildPromise = (async () => {
-      const { engine, overlayScope } = await this.rebuildProjectionEngine();
-      if (buildVersion !== this.projectionBuildVersion) {
-        return this.engine ?? engine;
-      }
-      this.projectionOverlayScope = overlayScope;
-      this.installEngine(engine);
-      return this.requireEngine();
-    })();
-    this.projectionEnginePromise = buildPromise;
-    try {
-      return await buildPromise;
-    } finally {
-      if (this.projectionEnginePromise === buildPromise) {
-        this.projectionEnginePromise = null;
-      }
-    }
+    return await acquireProjectionEngine({
+      getInstalledEngine: () => this.engine,
+      getProjectionEnginePromise: () => this.projectionEnginePromise,
+      getProjectionBuildVersion: () => this.projectionBuildVersion,
+      rebuildProjectionEngine: () => this.rebuildProjectionEngine(),
+      setProjectionOverlayScope: (overlayScope) => {
+        this.projectionOverlayScope = overlayScope;
+      },
+      installEngine: (engine) => {
+        this.installEngine(engine);
+      },
+      setProjectionEnginePromise: (promise) => {
+        this.projectionEnginePromise = promise;
+      },
+      requireInstalledEngine: () => this.requireEngine(),
+    });
   }
 
   private scheduleProjectionEngineMaterialization(): void {
-    if (this.engine || this.projectionEnginePromise || !this.bootstrapOptions) {
-      return;
-    }
-    const scheduledVersion = this.projectionBuildVersion;
-    setTimeout(() => {
-      if (scheduledVersion !== this.projectionBuildVersion || this.engine) {
-        return;
-      }
-      void this.getProjectionEngine().catch(() => undefined);
-    }, 0);
+    scheduleProjectionEngineMaterialization({
+      hasInstalledEngine: () => this.engine !== null,
+      hasProjectionEnginePromise: () => this.projectionEnginePromise !== null,
+      hasBootstrapOptions: () => this.bootstrapOptions !== null,
+      getProjectionBuildVersion: () => this.projectionBuildVersion,
+      getProjectionEngine: () => this.getProjectionEngine(),
+      schedule: (callback) => {
+        setTimeout(callback, 0);
+      },
+    });
   }
 
   private installEngine(engine: SpreadsheetEngine & WorkerEngine): void {
