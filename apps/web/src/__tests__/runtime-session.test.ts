@@ -674,6 +674,15 @@ describe("createWorkerRuntimeSessionController", () => {
     });
     const zero = createSequencedZeroViews(workbookView);
     const phases: string[] = [];
+    const perfSession = {
+      scope: "phase0-doc:reconcile",
+      markShellMounted: vi.fn(),
+      noteBootstrapResult: vi.fn(),
+      markFirstAuthoritativePatchVisible: vi.fn(),
+      markFirstReconcileStarted: vi.fn(),
+      markFirstReconcileSettled: vi.fn(),
+      markFirstSelectionVisible: vi.fn(),
+    };
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -719,6 +728,7 @@ describe("createWorkerRuntimeSessionController", () => {
         createWorker: () => createMockWorkerPort(runtime),
         zero: zero.zero,
         fetchImpl,
+        perfSession,
       },
       {
         onRuntimeState() {},
@@ -750,6 +760,9 @@ describe("createWorkerRuntimeSessionController", () => {
       });
     });
     expect(phases).toContain("reconciling");
+    expect(perfSession.markFirstReconcileStarted).toHaveBeenCalledTimes(1);
+    expect(perfSession.markFirstReconcileSettled).toHaveBeenCalledTimes(1);
+    expect(perfSession.markFirstAuthoritativePatchVisible).toHaveBeenCalledTimes(1);
 
     controller.dispose();
   });

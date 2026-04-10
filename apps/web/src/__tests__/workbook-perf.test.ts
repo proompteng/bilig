@@ -49,6 +49,10 @@ describe("workbook perf session", () => {
     session.markFirstSelectionVisible();
     session.markFirstAuthoritativePatchVisible();
     session.markFirstAuthoritativePatchVisible();
+    session.markFirstReconcileStarted();
+    session.markFirstReconcileStarted();
+    session.markFirstReconcileSettled();
+    session.markFirstReconcileSettled();
 
     expect(recorder.marks).toEqual([
       "perf-doc:session:start",
@@ -56,6 +60,8 @@ describe("workbook perf session", () => {
       "perf-doc:session:local-restore-ready",
       "perf-doc:session:first-selection-visible",
       "perf-doc:session:first-authoritative-patch-visible",
+      "perf-doc:session:first-reconcile-started",
+      "perf-doc:session:first-reconcile-settled",
     ]);
     expect(recorder.measures).toEqual([
       {
@@ -77,6 +83,16 @@ describe("workbook perf session", () => {
         name: "perf-doc:session:time-to-first-authoritative-patch-visible",
         start: "perf-doc:session:start",
         end: "perf-doc:session:first-authoritative-patch-visible",
+      },
+      {
+        name: "perf-doc:session:time-to-first-reconcile-started",
+        start: "perf-doc:session:start",
+        end: "perf-doc:session:first-reconcile-started",
+      },
+      {
+        name: "perf-doc:session:time-to-first-reconcile-settled",
+        start: "perf-doc:session:start",
+        end: "perf-doc:session:first-reconcile-settled",
       },
     ]);
   });
@@ -126,6 +142,8 @@ describe("workbook perf session", () => {
         requiresAuthoritativeHydrate: true,
       });
       session.markFirstAuthoritativePatchVisible();
+      session.markFirstReconcileStarted();
+      session.markFirstReconcileSettled();
       session.markFirstSelectionVisible();
     }).not.toThrow();
   });

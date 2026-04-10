@@ -455,6 +455,7 @@ export async function createWorkerRuntimeSessionController(
     const previousRebaseQueue = rebaseQueue;
     rebaseQueue = (async () => {
       await previousRebaseQueue.catch(() => undefined);
+      input.perfSession?.markFirstReconcileStarted();
       publishPhase("reconciling");
       try {
         await runAuthoritativeRebase();
@@ -465,6 +466,7 @@ export async function createWorkerRuntimeSessionController(
       } finally {
         if (!disposed) {
           publishPhase("steady");
+          input.perfSession?.markFirstReconcileSettled();
         }
       }
     })();

@@ -17,6 +17,8 @@ export interface WorkbookPerfSession {
   markShellMounted(): void;
   noteBootstrapResult(result: WorkbookPerfBootstrapResultLike): void;
   markFirstAuthoritativePatchVisible(): void;
+  markFirstReconcileStarted(): void;
+  markFirstReconcileSettled(): void;
   markFirstSelectionVisible(): void;
 }
 
@@ -104,6 +106,12 @@ export function createWorkbookPerfSession(input: {
     },
     markFirstAuthoritativePatchVisible() {
       markEvent("first-authoritative-patch-visible");
+    },
+    markFirstReconcileStarted() {
+      markEvent("first-reconcile-started");
+    },
+    markFirstReconcileSettled() {
+      markEvent("first-reconcile-settled");
     },
     markFirstSelectionVisible() {
       markEvent("first-selection-visible");
