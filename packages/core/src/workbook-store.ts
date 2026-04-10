@@ -51,11 +51,20 @@ import {
   replaceWorkbookRangeRecords,
 } from "./workbook-range-records.js";
 import {
+  getAxisMetadataRecord,
+  listAxisEntries,
+  materializeAxisEntries,
+  materializeAxisEntryRecords,
+  moveAxisEntries,
+  snapshotAxisEntriesInRange,
+  spliceAxisEntries,
+  syncAxisMetadataBucket,
+} from "./workbook-axis-records.js";
+import {
   axisMetadataKey,
   cellNumberFormatIdForCode,
   cellStyleIdForKey,
   cellStyleKey,
-  deleteRecordsBySheet,
   normalizeCellNumberFormatRecord,
   normalizeCellStyleRecord,
 } from "./workbook-store-records.js";
@@ -927,6 +936,14 @@ export class WorkbookStore {
     }
   }
 
+  private createAxisEntry(axis: "row" | "column"): WorkbookAxisEntryRecord {
+    return {
+      id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
+      size: null,
+      hidden: null,
+    };
+  }
+
   private setAxisMetadata(
     sheet: SheetRecord,
     axis: "row" | "column",
@@ -972,22 +989,7 @@ export class WorkbookStore {
     if (!sheet) {
       return [];
     }
-    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    const result: WorkbookAxisEntrySnapshot[] = [];
-    entries.forEach((entry, index) => {
-      if (!entry) {
-        return;
-      }
-      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index };
-      if (entry.size !== null) {
-        snapshot.size = entry.size;
-      }
-      if (entry.hidden !== null) {
-        snapshot.hidden = entry.hidden;
-      }
-      result.push(snapshot);
-    });
-    return result;
+    return listAxisEntries(axis === "row" ? sheet.rowAxis : sheet.columnAxis);
   }
 
   private materializeAxisEntries(
@@ -996,16 +998,12 @@ export class WorkbookStore {
     start: number,
     count: number,
   ): WorkbookAxisEntrySnapshot[] {
-    return this.materializeAxisEntryRecords(sheet, axis, start, count).map((entry, offset) => {
-      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index: start + offset };
-      if (entry.size !== null) {
-        snapshot.size = entry.size;
-      }
-      if (entry.hidden !== null) {
-        snapshot.hidden = entry.hidden;
-      }
-      return snapshot;
-    });
+    return materializeAxisEntries(
+      axis === "row" ? sheet.rowAxis : sheet.columnAxis,
+      start,
+      count,
+      () => this.createAxisEntry(axis),
+    );
   }
 
   private snapshotAxisEntriesInRange(
@@ -1014,27 +1012,14 @@ export class WorkbookStore {
     start: number,
     count: number,
   ): WorkbookAxisEntrySnapshot[] {
-    if (!sheet || count <= 0) {
+    if (!sheet) {
       return [];
     }
-    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    const snapshots: WorkbookAxisEntrySnapshot[] = [];
-    for (let offset = 0; offset < count; offset += 1) {
-      const index = start + offset;
-      const entry = entries[index];
-      if (!entry) {
-        continue;
-      }
-      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index };
-      if (entry.size !== null) {
-        snapshot.size = entry.size;
-      }
-      if (entry.hidden !== null) {
-        snapshot.hidden = entry.hidden;
-      }
-      snapshots.push(snapshot);
-    }
-    return snapshots;
+    return snapshotAxisEntriesInRange(
+      axis === "row" ? sheet.rowAxis : sheet.columnAxis,
+      start,
+      count,
+    );
   }
 
   private materializeAxisEntryRecords(
@@ -1043,22 +1028,12 @@ export class WorkbookStore {
     start: number,
     count: number,
   ): WorkbookAxisEntryRecord[] {
-    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    const materialized: WorkbookAxisEntryRecord[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const position = start + index;
-      let entry = entries[position];
-      if (!entry) {
-        entry = {
-          id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
-          size: null,
-          hidden: null,
-        };
-        entries[position] = entry;
-      }
-      materialized.push(entry);
-    }
-    return materialized;
+    return materializeAxisEntryRecords(
+      axis === "row" ? sheet.rowAxis : sheet.columnAxis,
+      start,
+      count,
+      () => this.createAxisEntry(axis),
+    );
   }
 
   private spliceAxisEntries(
@@ -1069,52 +1044,14 @@ export class WorkbookStore {
     insertCount: number,
     entries?: readonly WorkbookAxisEntrySnapshot[],
   ): WorkbookAxisEntrySnapshot[] {
-    const axisEntries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    const providedEntries = new Map<number, WorkbookAxisEntrySnapshot>();
-    entries?.forEach((entry) => {
-      const offset = entry.index - start;
-      if (offset < 0 || offset >= insertCount) {
-        return;
-      }
-      providedEntries.set(offset, entry);
-    });
-    if (axisEntries.length < start) {
-      axisEntries.length = start;
-    }
-    if (deleteCount > 0) {
-      this.materializeAxisEntryRecords(sheet, axis, start, deleteCount);
-    }
-    const removed = axisEntries.splice(
+    return spliceAxisEntries(
+      axis === "row" ? sheet.rowAxis : sheet.columnAxis,
       start,
       deleteCount,
-      ...Array.from({ length: insertCount }, (_, index) => {
-        const provided = providedEntries.get(index);
-        if (provided) {
-          return { id: provided.id, size: provided.size ?? null, hidden: provided.hidden ?? null };
-        }
-        if (entries) {
-          return undefined;
-        }
-        return {
-          id: axis === "row" ? `row-${this.nextRowAxisId++}` : `column-${this.nextColumnAxisId++}`,
-          size: null,
-          hidden: null,
-        };
-      }),
+      insertCount,
+      () => this.createAxisEntry(axis),
+      entries,
     );
-    return removed.flatMap((entry, index) => {
-      if (!entry) {
-        return [];
-      }
-      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index: start + index };
-      if (entry.size !== null) {
-        snapshot.size = entry.size;
-      }
-      if (entry.hidden !== null) {
-        snapshot.hidden = entry.hidden;
-      }
-      return [snapshot];
-    });
   }
 
   private moveAxisEntries(
@@ -1124,13 +1061,9 @@ export class WorkbookStore {
     count: number,
     target: number,
   ): void {
-    if (count <= 0 || start === target) {
-      return;
-    }
-    const axisEntries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    this.materializeAxisEntryRecords(sheet, axis, start, count);
-    const moved = axisEntries.splice(start, count);
-    axisEntries.splice(target, 0, ...moved);
+    moveAxisEntries(axis === "row" ? sheet.rowAxis : sheet.columnAxis, start, count, target, () =>
+      this.createAxisEntry(axis),
+    );
   }
 
   private getAxisMetadataRecord(
@@ -1140,32 +1073,12 @@ export class WorkbookStore {
     start: number,
     count: number,
   ): WorkbookAxisMetadataRecord | undefined {
-    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    let size: number | null | undefined;
-    let hidden: boolean | null | undefined;
-    let sawMaterialized = false;
-    for (let index = start; index < start + count; index += 1) {
-      const entry = entries[index];
-      if (!entry) {
-        if (size === undefined) {
-          size = null;
-        }
-        if (hidden === undefined) {
-          hidden = null;
-        }
-        continue;
-      }
-      sawMaterialized = true;
-      size ??= entry.size;
-      hidden ??= entry.hidden;
-      if (size !== entry.size || hidden !== entry.hidden) {
-        return undefined;
-      }
-    }
-    if (!sawMaterialized || ((size ?? null) === null && (hidden ?? null) === null)) {
-      return undefined;
-    }
-    return { sheetName, start, count, size: size ?? null, hidden: hidden ?? null };
+    return getAxisMetadataRecord(
+      axis === "row" ? sheet.rowAxis : sheet.columnAxis,
+      sheetName,
+      start,
+      count,
+    );
   }
 
   private syncAxisMetadataBucket(
@@ -1174,35 +1087,7 @@ export class WorkbookStore {
     axis: "row" | "column",
     bucket: Map<string, WorkbookAxisMetadataRecord>,
   ): void {
-    deleteRecordsBySheet(bucket, sheetName, (record) => record.sheetName);
-    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
-    let cursor = 0;
-    while (cursor < entries.length) {
-      const entry = entries[cursor];
-      if (!entry || (entry.size === null && entry.hidden === null)) {
-        cursor += 1;
-        continue;
-      }
-      const start = cursor;
-      const size = entry.size;
-      const hidden = entry.hidden;
-      cursor += 1;
-      while (cursor < entries.length) {
-        const next = entries[cursor];
-        if (!next || next.size !== size || next.hidden !== hidden) {
-          break;
-        }
-        cursor += 1;
-      }
-      const record: WorkbookAxisMetadataRecord = {
-        sheetName,
-        start,
-        count: cursor - start,
-        size,
-        hidden,
-      };
-      bucket.set(axisMetadataKey(sheetName, start, record.count), record);
-    }
+    syncAxisMetadataBucket(bucket, sheetName, axis === "row" ? sheet.rowAxis : sheet.columnAxis);
   }
 }
 
