@@ -338,6 +338,34 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.post(
+    "/v2/documents/:documentId/agent/threads/:threadId/turns",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+        Body: Record<string, unknown>;
+      }>,
+      reply: FastifyReply,
+    ) => {
+      return await handleWorkbookAgentRequest(request, reply, async (service, session) => {
+        const sessionSnapshot = await service.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            ...request.body,
+            threadId: request.params.threadId,
+          },
+        });
+        return await service.startTurn({
+          documentId: request.params.documentId,
+          sessionId: sessionSnapshot.sessionId,
+          session,
+          body: request.body ?? {},
+        });
+      });
+    },
+  );
+
+  app.post(
     "/v2/documents/:documentId/agent/sessions/:sessionId/context",
     async (
       request: FastifyRequest<{

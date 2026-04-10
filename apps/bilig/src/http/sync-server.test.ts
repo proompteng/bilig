@@ -531,6 +531,133 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("starts workbook agent turns through a durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+      }),
+    );
+    const startTurn = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-2",
+        threadId: "thr-2",
+        status: "inProgress",
+        activeTurnId: "turn-1",
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        createSession,
+        async updateContext() {
+          throw new Error("not used");
+        },
+        startTurn,
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads/thr-2/turns",
+        payload: {
+          prompt: "Summarize this thread",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "A1",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: expect.objectContaining({
+            threadId: "thr-2",
+            prompt: "Summarize this thread",
+            context: {
+              selection: {
+                sheetName: "Sheet1",
+                address: "A1",
+              },
+              viewport: {
+                rowStart: 0,
+                rowEnd: 10,
+                colStart: 0,
+                colEnd: 5,
+              },
+            },
+          }),
+        }),
+      );
+      expect(startTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          sessionId: "agent-session-2",
+          body: {
+            prompt: "Summarize this thread",
+            context: {
+              selection: {
+                sheetName: "Sheet1",
+                address: "A1",
+              },
+              viewport: {
+                rowStart: 0,
+                rowEnd: 10,
+                colStart: 0,
+                colEnd: 5,
+              },
+            },
+          },
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          sessionId: "agent-session-2",
+          threadId: "thr-2",
+          status: "inProgress",
+          activeTurnId: "turn-1",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("applies staged workbook bundles through the monolith route", async () => {
     const applyPendingBundle = vi.fn(async () =>
       createAgentSessionSnapshot({
