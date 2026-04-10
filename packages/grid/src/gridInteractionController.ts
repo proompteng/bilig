@@ -1,21 +1,15 @@
 import { formatAddress } from "@bilig/formula";
 import {
-  createColumnSelection,
   createColumnSliceSelection,
   createGridSelection,
   createRowSliceSelection,
 } from "./gridSelection.js";
-import { resolveActivatedCell, resolveSelectionChange } from "./gridSelectionSync.js";
 import {
   resolveBodyDragSelection,
   resolveBodyPointerUpResult,
   resolveHeaderDragSelection,
 } from "./gridDragSelection.js";
-import {
-  resolveBodyDoubleClickIntent,
-  resolveHeaderClickIntent,
-  shouldSkipGridSelectionChange,
-} from "./gridEventPolicy.js";
+import { resolveBodyDoubleClickIntent } from "./gridEventPolicy.js";
 import {
   resolveColumnResizeTarget,
   type HeaderSelection,
@@ -25,7 +19,6 @@ import {
 import {
   beginGridBodyPointerInteraction,
   beginGridHeaderDrag,
-  clearGridPendingPointerActivation,
   finishGridColumnResize,
   resetGridPointerInteraction,
   scheduleGridPointerInteractionReset,
@@ -50,11 +43,6 @@ interface PointerMoveEventLike {
   clientX: number;
   clientY: number;
   buttons: number;
-}
-
-interface HeaderClickEventLike {
-  isEdge: boolean;
-  isDoubleClick?: boolean;
 }
 
 interface GridInteractionCommonOptions {
@@ -168,43 +156,6 @@ interface HandleGridPointerUpOptions extends GridInteractionCommonOptions {
     region?: VisibleRegionState,
     geometry?: PointerGeometry | null,
   ): HeaderSelection | null;
-}
-
-interface HandleGridCellActivatedOptions {
-  activatedCell: Item;
-  dragAnchorCell: Item | null;
-  pendingPointerCell: Item | null;
-  interactionState: GridInteractionStateRefs;
-  onSelect(this: void, addr: string): void;
-  setGridSelection(this: void, selection: GridSelection): void;
-}
-
-interface HandleGridHeaderClickOptions {
-  event: HeaderClickEventLike;
-  interactionState: GridInteractionStateRefs;
-  isEditingCell: boolean;
-  onCommitEdit(this: void): void;
-  onSelect(this: void, addr: string): void;
-  focusGrid(this: void): void;
-  selectedRow: number;
-  setGridSelection(this: void, selection: GridSelection): void;
-  columnIndex: number;
-  applyColumnWidth(this: void, columnIndex: number, width: number): void;
-  computeAutofitColumnWidth(this: void, columnIndex: number): number;
-}
-
-interface HandleGridSelectionChangeOptions {
-  nextSelection: GridSelection;
-  interactionState: GridInteractionStateRefs;
-  dragAnchorCell: Item | null;
-  dragPointerCell: Item | null;
-  pendingPointerCell: Item | null;
-  selectedCell: Item;
-  isEditingCell: boolean;
-  onCommitEdit(this: void): void;
-  onSelect(this: void, addr: string): void;
-  setGridSelection(this: void, selection: GridSelection): void;
-  now: number;
 }
 
 export function handleGridBodyDoubleClick({
@@ -496,108 +447,6 @@ export function handleGridPointerUp({
   scheduleGridPointerInteractionReset(interactionState, {
     clearPostDragSelectionExpiry: false,
   });
-}
-
-export function handleGridCellActivated({
-  activatedCell,
-  dragAnchorCell,
-  pendingPointerCell,
-  interactionState,
-  onSelect,
-  setGridSelection,
-}: HandleGridCellActivatedOptions): void {
-  const cell = resolveActivatedCell(activatedCell, dragAnchorCell, pendingPointerCell);
-  clearGridPendingPointerActivation(interactionState);
-  setGridSelection(createGridSelection(cell[0], cell[1]));
-  onSelect(formatAddress(cell[1], cell[0]));
-}
-
-export function handleGridHeaderClick({
-  event,
-  interactionState,
-  isEditingCell,
-  onCommitEdit,
-  onSelect,
-  focusGrid,
-  selectedRow,
-  setGridSelection,
-  columnIndex,
-  applyColumnWidth,
-  computeAutofitColumnWidth,
-}: HandleGridHeaderClickOptions): void {
-  const headerClickIntent = resolveHeaderClickIntent({
-    isEdge: event.isEdge,
-    isDoubleClick: Boolean(event.isDoubleClick),
-    columnResizeActive: interactionState.columnResizeActiveRef.current,
-    columnIndex,
-    selectedRow,
-  });
-  if (headerClickIntent.kind === "ignore") {
-    return;
-  }
-  if (headerClickIntent.kind === "autofit-column") {
-    applyColumnWidth(
-      headerClickIntent.columnIndex,
-      computeAutofitColumnWidth(headerClickIntent.columnIndex),
-    );
-    interactionState.columnResizeActiveRef.current = false;
-    return;
-  }
-  interactionState.ignoreNextPointerSelectionRef.current = true;
-  resetGridPointerInteraction(interactionState);
-  if (isEditingCell) {
-    onCommitEdit();
-  }
-  setGridSelection(
-    createColumnSelection(headerClickIntent.columnIndex, headerClickIntent.selectedRow),
-  );
-  onSelect(headerClickIntent.addr);
-  focusGrid();
-}
-
-export function handleGridSelectionChange({
-  nextSelection,
-  interactionState,
-  dragAnchorCell,
-  dragPointerCell,
-  pendingPointerCell,
-  selectedCell,
-  isEditingCell,
-  onCommitEdit,
-  onSelect,
-  setGridSelection,
-  now,
-}: HandleGridSelectionChangeOptions): void {
-  const selectionPolicy = shouldSkipGridSelectionChange({
-    columnResizeActive: interactionState.columnResizeActiveRef.current,
-    postDragSelectionExpiry: interactionState.postDragSelectionExpiryRef.current,
-    now,
-    ignoreNextPointerSelection: interactionState.ignoreNextPointerSelectionRef.current,
-    hasDragViewport: interactionState.dragViewportRef.current !== null,
-  });
-  if (selectionPolicy.clearPostDragSelectionExpiry) {
-    interactionState.postDragSelectionExpiryRef.current = 0;
-  }
-  if (selectionPolicy.consumeIgnoreNextPointerSelection) {
-    interactionState.ignoreNextPointerSelectionRef.current = false;
-  }
-  if (selectionPolicy.skip) {
-    return;
-  }
-  const resolvedSelection = resolveSelectionChange({
-    nextSelection,
-    anchorCell: dragAnchorCell ?? pendingPointerCell,
-    pointerCell: dragPointerCell ?? pendingPointerCell,
-    selectedCell,
-  });
-  if (!resolvedSelection) {
-    return;
-  }
-  setGridSelection(resolvedSelection.selection);
-  if (isEditingCell) {
-    onCommitEdit();
-  }
-  onSelect(resolvedSelection.addr);
 }
 
 export function startGridResize(interactionState: GridInteractionStateRefs): void {

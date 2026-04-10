@@ -97,7 +97,7 @@ export function shouldApplyBatch(state: ReplicaState, batch: EngineOpBatch): boo
   return !state.appliedBatchIds.has(batch.id);
 }
 
-export function compareBatches(left: EngineOpBatch, right: EngineOpBatch): number {
+function compareBatches(left: EngineOpBatch, right: EngineOpBatch): number {
   return (
     left.clock.counter - right.clock.counter ||
     left.replicaId.localeCompare(right.replicaId) ||
