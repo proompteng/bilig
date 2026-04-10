@@ -277,7 +277,7 @@ export function oddLastCouponFractions(
   };
 }
 
-export function oddFirstCouponMetrics(
+function oddFirstCouponMetrics(
   settlement: number,
   maturity: number,
   issue: number,
@@ -578,7 +578,7 @@ function days360European(startSerial: number, endSerial: number): number | undef
   );
 }
 
-export function couponDaysByBasis(
+function couponDaysByBasis(
   startSerial: number,
   endSerial: number,
   basis: number,

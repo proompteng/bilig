@@ -403,7 +403,7 @@ function formatArgumentLabel(arg: FormulaHelpArg): string {
   return arg.optional ? `[${arg.label.replace(/^\[(.*)\]$/, "$1")}]` : arg.label;
 }
 
-export function formatFormulaSignature(entry: FormulaHelpEntry): string {
+function formatFormulaSignature(entry: FormulaHelpEntry): string {
   if (entry.args.length === 0) {
     return `${entry.name}()`;
   }

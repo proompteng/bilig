@@ -127,7 +127,7 @@ function isCellEditorInputFocused(): boolean {
   );
 }
 
-export function isEditableElement(element: Element | null): element is HTMLElement {
+function isEditableElement(element: Element | null): element is HTMLElement {
   return element instanceof HTMLElement && element.isContentEditable;
 }
 

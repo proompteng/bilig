@@ -6,7 +6,6 @@ import {
   type CellSnapshot,
   type CellStyleRecord,
 } from "@bilig/protocol";
-import type { GridEngineLike } from "./grid-engine.js";
 
 const DEFAULT_FONT_FALLBACK =
   '"Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif';
@@ -198,16 +197,6 @@ function resolveTextThemeOverride(
 ): { themeOverride?: GridThemeOverride } {
   const themeOverride = cellStyleToThemeOverride(style, options);
   return themeOverride ? { themeOverride } : {};
-}
-
-export function cellToGridCell(
-  engine: GridEngineLike,
-  sheetName: string,
-  addr: string,
-  options?: GridCellOptions,
-): GridCell {
-  const snapshot = engine.getCell(sheetName, addr);
-  return snapshotToGridCell(snapshot, engine.getCellStyle(snapshot.styleId), options);
 }
 
 export function cellStyleToThemeOverride(
