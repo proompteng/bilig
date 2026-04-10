@@ -34,6 +34,7 @@ import {
   TOOLBAR_SEGMENTED_CLASS,
   TOOLBAR_SEPARATOR_CLASS,
 } from "./workbook-toolbar-theme.js";
+import { getWorkbookShortcutLabel } from "./shortcut-registry.js";
 
 export type { BorderPreset } from "./workbook-toolbar-primitives.js";
 
@@ -124,7 +125,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               ariaLabel="Undo"
               disabled={!writesAllowed || !canUndo}
-              shortcut="⌘/Ctrl+Z"
+              shortcut={getWorkbookShortcutLabel("undo")}
               onClick={onUndo}
             >
               <Undo2 className={TOOLBAR_ICON_CLASS} />
@@ -132,7 +133,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
             <RibbonIconButton
               ariaLabel="Redo"
               disabled={!writesAllowed || !canRedo}
-              shortcut="⇧⌘/Ctrl+Z"
+              shortcut={getWorkbookShortcutLabel("redo")}
               onClick={onRedo}
             >
               <Redo2 className={TOOLBAR_ICON_CLASS} />
@@ -168,7 +169,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               active={isBoldActive}
               ariaLabel="Bold"
               pressed={isBoldActive}
-              shortcut="⌘/Ctrl+B"
+              shortcut={getWorkbookShortcutLabel("bold")}
               onClick={onToggleBold}
             >
               <Bold className={TOOLBAR_ICON_CLASS} />
@@ -177,7 +178,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               active={isItalicActive}
               ariaLabel="Italic"
               pressed={isItalicActive}
-              shortcut="⌘/Ctrl+I"
+              shortcut={getWorkbookShortcutLabel("italic")}
               onClick={onToggleItalic}
             >
               <Italic className={TOOLBAR_ICON_CLASS} />
@@ -186,7 +187,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               active={isUnderlineActive}
               ariaLabel="Underline"
               pressed={isUnderlineActive}
-              shortcut="⌘/Ctrl+U"
+              shortcut={getWorkbookShortcutLabel("underline")}
               onClick={onToggleUnderline}
             >
               <Underline className={TOOLBAR_ICON_CLASS} />

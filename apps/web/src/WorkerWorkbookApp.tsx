@@ -6,6 +6,7 @@ import type { ZeroClient } from "./runtime-session.js";
 import { parseSelectionTarget, type ZeroConnectionState } from "./worker-workbook-app-model.js";
 import { WorkbookToastRegion } from "./WorkbookToastRegion.js";
 import { useWorkbookImportPane } from "./use-workbook-import-pane.js";
+import { useWorkbookShortcutDialog } from "./use-workbook-shortcut-dialog.js";
 import { useWorkerWorkbookAppState } from "./use-worker-workbook-app-state.js";
 
 export function WorkerWorkbookApp(props: {
@@ -47,6 +48,7 @@ function WorkerWorkbookAppInner({
     currentDocumentId: runtimeConfig.documentId,
     enabled: true,
   });
+  const shortcuts = useWorkbookShortcutDialog();
   const toasts = useMemo(
     () =>
       [
@@ -172,6 +174,7 @@ function WorkerWorkbookAppInner({
               sheetNames={app.sheetNames}
               headerStatus={
                 <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {shortcuts.shortcutHelpButton}
                   {importToggle}
                   {app.headerStatus}
                 </div>
@@ -187,6 +190,7 @@ function WorkerWorkbookAppInner({
           ) : null}
         </div>
         {importPanel}
+        {shortcuts.shortcutDialog}
       </div>
     </div>
   );
