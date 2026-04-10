@@ -13,6 +13,7 @@ import {
   NotAFormulaError,
   NothingToPasteError,
   type HeadlessCellAddress,
+  type HeadlessConfig,
   type HeadlessFunctionPluginDefinition,
 } from "../index.js";
 
@@ -32,6 +33,49 @@ const CUSTOM_PLUGIN: HeadlessFunctionPluginDefinition = {
     },
   },
 };
+
+function createConfigFixture(): HeadlessConfig {
+  return {
+    accentSensitive: true,
+    caseSensitive: true,
+    caseFirst: "upper",
+    chooseAddressMappingPolicy: { mode: "dense" },
+    context: { requestId: "ctx-1" },
+    currencySymbol: ["$", "USD"],
+    dateFormats: ["YYYY-MM-DD"],
+    functionArgSeparator: ";",
+    decimalSeparator: ",",
+    evaluateNullToZero: false,
+    functionPlugins: [CUSTOM_PLUGIN],
+    ignorePunctuation: true,
+    language: TEST_LANGUAGE_CODE,
+    ignoreWhiteSpace: "any",
+    leapYear1900: false,
+    licenseKey: "",
+    localeLang: "pl-PL",
+    matchWholeCell: false,
+    arrayColumnSeparator: ";",
+    arrayRowSeparator: "|",
+    maxRows: 2048,
+    maxColumns: 256,
+    nullDate: { year: 1904, month: 1, day: 1 },
+    nullYear: 50,
+    parseDateTime: (input) => ({ parsed: input }),
+    precisionEpsilon: 1e-8,
+    precisionRounding: 10,
+    stringifyDateTime: () => "date",
+    stringifyDuration: () => "duration",
+    smartRounding: false,
+    thousandSeparator: ".",
+    timeFormats: ["HH:mm:ss"],
+    useArrayArithmetic: false,
+    useColumnIndex: true,
+    useStats: false,
+    undoLimit: 25,
+    useRegularExpressions: false,
+    useWildcards: false,
+  };
+}
 
 function cell(sheet: number, row: number, col: number): HeadlessCellAddress {
   return { sheet, row, col };
@@ -116,6 +160,150 @@ describe("HeadlessWorkbook parity surface", () => {
     expect(HeadlessWorkbook.getAllFunctionPlugins().map((plugin) => plugin.id)).toContain(
       CUSTOM_PLUGIN.id,
     );
+  });
+
+  it("covers all config keys through build, clone, and update paths", () => {
+    HeadlessWorkbook.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} });
+    HeadlessWorkbook.registerFunctionPlugin(CUSTOM_PLUGIN);
+
+    const config = createConfigFixture();
+    const workbook = HeadlessWorkbook.buildFromArray([[1]], config);
+    const snapshot = workbook.getConfig();
+
+    expect(snapshot).toMatchObject({
+      accentSensitive: true,
+      caseSensitive: true,
+      caseFirst: "upper",
+      currencySymbol: ["$", "USD"],
+      dateFormats: ["YYYY-MM-DD"],
+      functionArgSeparator: ";",
+      decimalSeparator: ",",
+      evaluateNullToZero: false,
+      ignorePunctuation: true,
+      language: TEST_LANGUAGE_CODE,
+      ignoreWhiteSpace: "any",
+      leapYear1900: false,
+      licenseKey: "",
+      localeLang: "pl-PL",
+      matchWholeCell: false,
+      arrayColumnSeparator: ";",
+      arrayRowSeparator: "|",
+      maxRows: 2048,
+      maxColumns: 256,
+      nullDate: { year: 1904, month: 1, day: 1 },
+      nullYear: 50,
+      precisionEpsilon: 1e-8,
+      precisionRounding: 10,
+      smartRounding: false,
+      thousandSeparator: ".",
+      timeFormats: ["HH:mm:ss"],
+      useArrayArithmetic: false,
+      useColumnIndex: true,
+      useStats: false,
+      undoLimit: 25,
+      useRegularExpressions: false,
+      useWildcards: false,
+    });
+    expect(snapshot.chooseAddressMappingPolicy).toEqual({ mode: "dense" });
+    expect(snapshot.context).toEqual({ requestId: "ctx-1" });
+    expect(snapshot.functionPlugins?.map((plugin) => plugin.id)).toEqual([CUSTOM_PLUGIN.id]);
+    expect(snapshot.parseDateTime?.("value")).toEqual({ parsed: "value" });
+    expect(snapshot.stringifyDateTime?.({})).toBe("date");
+    expect(snapshot.stringifyDuration?.({})).toBe("duration");
+    expect(workbook.licenseKeyValidityState).toBe("missing");
+
+    snapshot.currencySymbol?.push("MUTATED");
+    snapshot.dateFormats?.push("MUTATED");
+    snapshot.timeFormats?.push("MUTATED");
+    snapshot.functionPlugins?.push({
+      id: "mutated",
+      implementedFunctions: {},
+    });
+
+    expect(workbook.getConfig().currencySymbol).toEqual(["$", "USD"]);
+    expect(workbook.getConfig().dateFormats).toEqual(["YYYY-MM-DD"]);
+    expect(workbook.getConfig().timeFormats).toEqual(["HH:mm:ss"]);
+    expect(workbook.getConfig().functionPlugins?.map((plugin) => plugin.id)).toEqual([
+      CUSTOM_PLUGIN.id,
+    ]);
+
+    workbook.updateConfig({
+      accentSensitive: false,
+      caseSensitive: false,
+      caseFirst: "lower",
+      chooseAddressMappingPolicy: { mode: "sparse" },
+      context: { requestId: "ctx-2" },
+      currencySymbol: ["EUR"],
+      dateFormats: ["DD/MM/YYYY"],
+      functionArgSeparator: ",",
+      decimalSeparator: ".",
+      evaluateNullToZero: true,
+      functionPlugins: [],
+      ignorePunctuation: false,
+      ignoreWhiteSpace: "standard",
+      leapYear1900: true,
+      licenseKey: "internal",
+      localeLang: "en-US",
+      matchWholeCell: true,
+      arrayColumnSeparator: ",",
+      arrayRowSeparator: ";",
+      maxRows: 1024,
+      maxColumns: 128,
+      nullDate: { year: 1899, month: 12, day: 30 },
+      nullYear: 30,
+      parseDateTime: undefined,
+      precisionEpsilon: 1e-13,
+      precisionRounding: 14,
+      stringifyDateTime: undefined,
+      stringifyDuration: undefined,
+      smartRounding: true,
+      thousandSeparator: ",",
+      timeFormats: ["HH:mm"],
+      useArrayArithmetic: true,
+      useColumnIndex: false,
+      useStats: true,
+      undoLimit: 100,
+      useRegularExpressions: true,
+      useWildcards: true,
+    });
+
+    expect(workbook.getConfig()).toMatchObject({
+      accentSensitive: false,
+      caseSensitive: false,
+      caseFirst: "lower",
+      currencySymbol: ["EUR"],
+      dateFormats: ["DD/MM/YYYY"],
+      functionArgSeparator: ",",
+      decimalSeparator: ".",
+      evaluateNullToZero: true,
+      functionPlugins: [],
+      ignorePunctuation: false,
+      ignoreWhiteSpace: "standard",
+      leapYear1900: true,
+      licenseKey: "internal",
+      localeLang: "en-US",
+      matchWholeCell: true,
+      arrayColumnSeparator: ",",
+      arrayRowSeparator: ";",
+      maxRows: 1024,
+      maxColumns: 128,
+      nullDate: { year: 1899, month: 12, day: 30 },
+      nullYear: 30,
+      precisionEpsilon: 1e-13,
+      precisionRounding: 14,
+      smartRounding: true,
+      thousandSeparator: ",",
+      timeFormats: ["HH:mm"],
+      useArrayArithmetic: true,
+      useColumnIndex: false,
+      useStats: true,
+      undoLimit: 100,
+      useRegularExpressions: true,
+      useWildcards: true,
+    });
+    expect(workbook.getConfig().chooseAddressMappingPolicy).toEqual({ mode: "sparse" });
+    expect(workbook.getConfig().context).toEqual({ requestId: "ctx-2" });
+    expect(workbook.licenseKeyValidityState).toBe("valid");
   });
 
   it("covers the read surface, formula helpers, and dependency helpers", () => {

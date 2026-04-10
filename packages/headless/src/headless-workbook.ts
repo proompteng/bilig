@@ -1556,7 +1556,9 @@ export class HeadlessWorkbook {
   getRangeValues(range: HeadlessCellRange): CellValue[][] {
     this.assertReadable();
     const ref = this.rangeRef(range);
-    return this.engine.getRangeValues(ref).map((row) => row.map((value) => cloneCellValue(value)));
+    return this.engine
+      .getRangeValues(ref)
+      .map((row: readonly CellValue[]) => row.map((value: CellValue) => cloneCellValue(value)));
   }
 
   getRangeFormulas(range: HeadlessCellRange): Array<Array<string | undefined>> {
@@ -1631,7 +1633,7 @@ export class HeadlessWorkbook {
     const sheet = this.sheetRecord(sheetId);
     let width = 0;
     let height = 0;
-    sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
+    sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
       height = Math.max(height, row + 1);
       width = Math.max(width, col + 1);
     });
@@ -1806,18 +1808,20 @@ export class HeadlessWorkbook {
   }
 
   isCellPartOfArray(address: HeadlessCellAddress): boolean {
-    return this.engine.getSpillRanges().some((spill) => {
-      if (this.requireSheetId(spill.sheetName) !== address.sheet) {
-        return false;
-      }
-      const owner = parseCellAddress(spill.address, spill.sheetName);
-      return (
-        address.row >= owner.row &&
-        address.row < owner.row + spill.rows &&
-        address.col >= owner.col &&
-        address.col < owner.col + spill.cols
-      );
-    });
+    return this.engine
+      .getSpillRanges()
+      .some((spill: { sheetName: string; address: string; rows: number; cols: number }) => {
+        if (this.requireSheetId(spill.sheetName) !== address.sheet) {
+          return false;
+        }
+        const owner = parseCellAddress(spill.address, spill.sheetName);
+        return (
+          address.row >= owner.row &&
+          address.row < owner.row + spill.rows &&
+          address.col >= owner.col &&
+          address.col < owner.col + spill.cols
+        );
+      });
   }
 
   getCellValueType(address: HeadlessCellAddress): HeadlessCellValueType {
@@ -2007,7 +2011,8 @@ export class HeadlessWorkbook {
       const spill = temporaryWorkbook.engine
         .getSpillRanges()
         .find(
-          (candidate) => candidate.sheetName === scratchSheetName && candidate.address === "A1",
+          (candidate: { sheetName: string; address: string; rows: number; cols: number }) =>
+            candidate.sheetName === scratchSheetName && candidate.address === "A1",
         );
       const value = spill
         ? temporaryWorkbook.getRangeValues({
@@ -2766,7 +2771,7 @@ export class HeadlessWorkbook {
   }
 
   private getDirectPrecedentStrings(address: HeadlessCellAddress): string[] {
-    const precedents = new Set(
+    const precedents = new Set<string>(
       this.engine.getDependencies(this.sheetName(address.sheet), this.a1(address)).directPrecedents,
     );
     const formula = this.getCellFormula(address);
@@ -2810,7 +2815,7 @@ export class HeadlessWorkbook {
     const snapshot = new Map<number, SheetStateSnapshot>();
     this.listSheetRecords().forEach((sheet) => {
       const cells = new Map<string, CellValue>();
-      sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
+      sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
         const address = formatAddress(row, col);
         const value = this.engine.getCellValue(sheet.name, address);
         if (value.tag === ValueTag.Empty) {
