@@ -25,6 +25,7 @@ import { Schema } from "effect";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
+const DRAFT_STORAGE_KEY_PREFIX = "bilig:workbook-agent-drafts:";
 const WorkbookAgentThreadSummaryListSchema = Schema.Array(WorkbookAgentThreadSummarySchema);
 
 interface StoredWorkbookAgentThreadRef {
@@ -39,6 +40,10 @@ interface WorkbookAgentLiveSession {
 
 function storageKey(documentId: string): string {
   return `${STORAGE_KEY_PREFIX}${documentId}`;
+}
+
+function draftStorageKey(documentId: string): string {
+  return `${DRAFT_STORAGE_KEY_PREFIX}${documentId}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,6 +88,51 @@ function persistStoredSession(documentId: string, value: StoredWorkbookAgentThre
 
 function clearStoredSession(documentId: string): void {
   window.sessionStorage.removeItem(storageKey(documentId));
+}
+
+function loadStoredDrafts(documentId: string): Record<string, string> {
+  try {
+    const raw = window.sessionStorage.getItem(draftStorageKey(documentId));
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([key, value]) =>
+        typeof value === "string" ? ([[key, value]] as const) : [],
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function persistStoredDrafts(documentId: string, drafts: Record<string, string>): void {
+  const entries = Object.entries(drafts).filter((entry) => entry[1].length > 0);
+  if (entries.length === 0) {
+    window.sessionStorage.removeItem(draftStorageKey(documentId));
+    return;
+  }
+  window.sessionStorage.setItem(
+    draftStorageKey(documentId),
+    JSON.stringify(Object.fromEntries(entries)),
+  );
+}
+
+function clearStoredDraft(documentId: string, key: string): void {
+  const drafts = loadStoredDrafts(documentId);
+  if (!(key in drafts)) {
+    return;
+  }
+  delete drafts[key];
+  persistStoredDrafts(documentId, drafts);
+}
+
+function draftKey(threadId: string | null, scope: WorkbookAgentThreadScope): string {
+  return threadId ? `thread:${threadId}` : `new:${scope}`;
 }
 
 function createSessionResumeBody(
@@ -159,12 +209,35 @@ export function useWorkbookAgentPane(input: {
   const eventSourceRef = useRef<EventSource | null>(null);
   const recoveringStreamRef = useRef(false);
   const lastContextKeyRef = useRef<string>("");
+  const lastDraftKeyRef = useRef<string | null>(null);
   const getContextRef = useRef(getContext);
   const currentContext = getContextRef.current();
+  const activeDraftKey = draftKey(snapshot?.threadId ?? null, threadScope);
 
   useEffect(() => {
     getContextRef.current = getContext;
   }, [getContext]);
+
+  useEffect(() => {
+    if (lastDraftKeyRef.current === activeDraftKey) {
+      return;
+    }
+    lastDraftKeyRef.current = activeDraftKey;
+    setDraft(loadStoredDrafts(documentId)[activeDraftKey] ?? "");
+  }, [activeDraftKey, documentId]);
+
+  useEffect(() => {
+    const drafts = loadStoredDrafts(documentId);
+    if (draft.length === 0) {
+      if (!(activeDraftKey in drafts)) {
+        return;
+      }
+      delete drafts[activeDraftKey];
+    } else {
+      drafts[activeDraftKey] = draft;
+    }
+    persistStoredDrafts(documentId, drafts);
+  }, [activeDraftKey, documentId, draft]);
 
   const loadThreadSummaries = useCallback(async (): Promise<
     readonly WorkbookAgentThreadSummary[]
@@ -684,11 +757,12 @@ export function useWorkbookAgentPane(input: {
         );
       }
       persistSessionSnapshot(decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload));
+      clearStoredDraft(documentId, activeDraftKey);
       setDraft("");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
-  }, [documentId, draft, ensureSession, persistSessionSnapshot]);
+  }, [activeDraftKey, documentId, draft, ensureSession, persistSessionSnapshot]);
 
   const interrupt = useCallback(async () => {
     const activeSession = sessionRef.current;

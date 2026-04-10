@@ -506,6 +506,194 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("keeps separate drafts for new private and shared threads", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/agent/threads")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        throw new Error(`Unexpected fetch to ${url}`);
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    const privateScopeButton = host.querySelector("[data-testid='workbook-agent-scope-private']");
+    const sharedScopeButton = host.querySelector("[data-testid='workbook-agent-scope-shared']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    expect(privateScopeButton instanceof HTMLButtonElement).toBe(true);
+    expect(sharedScopeButton instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (
+        !(input instanceof HTMLTextAreaElement) ||
+        !(sharedScopeButton instanceof HTMLButtonElement) ||
+        !(privateScopeButton instanceof HTMLButtonElement)
+      ) {
+        throw new Error("Agent controls not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["Private draft"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      sharedScopeButton.click();
+    });
+
+    const sharedInput = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(sharedInput instanceof HTMLTextAreaElement ? sharedInput.value : null).toBe("");
+
+    await act(async () => {
+      if (
+        !(sharedInput instanceof HTMLTextAreaElement) ||
+        !(sharedScopeButton instanceof HTMLButtonElement) ||
+        !(privateScopeButton instanceof HTMLButtonElement)
+      ) {
+        throw new Error("Agent controls not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, sharedInput, ["Shared draft"]);
+      sharedInput.dispatchEvent(new Event("input", { bubbles: true }));
+      privateScopeButton.click();
+    });
+
+    const restoredPrivateInput = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(
+      restoredPrivateInput instanceof HTMLTextAreaElement ? restoredPrivateInput.value : null,
+    ).toBe("Private draft");
+
+    await act(async () => {
+      if (!(sharedScopeButton instanceof HTMLButtonElement)) {
+        throw new Error("Shared scope button not found");
+      }
+      sharedScopeButton.click();
+    });
+
+    const restoredSharedInput = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(
+      restoredSharedInput instanceof HTMLTextAreaElement ? restoredSharedInput.value : null,
+    ).toBe("Shared draft");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("restores a new-thread draft after remount", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.endsWith("/agent/threads")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        throw new Error(`Unexpected fetch to ${url}`);
+      }),
+    );
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    const sharedScopeButton = host.querySelector("[data-testid='workbook-agent-scope-shared']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+    expect(sharedScopeButton instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(sharedScopeButton instanceof HTMLButtonElement)) {
+        throw new Error("Agent controls not found");
+      }
+      sharedScopeButton.click();
+    });
+
+    const sharedInput = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(sharedInput instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(sharedInput instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, sharedInput, ["Persisted shared draft"]);
+      sharedInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    const remountRoot = createRoot(host);
+    await act(async () => {
+      remountRoot.render(<AgentHarness />);
+    });
+
+    const remountedSharedScopeButton = host.querySelector(
+      "[data-testid='workbook-agent-scope-shared']",
+    );
+    expect(remountedSharedScopeButton instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(remountedSharedScopeButton instanceof HTMLButtonElement)) {
+        throw new Error("Shared scope button not found");
+      }
+      remountedSharedScopeButton.click();
+    });
+
+    const restoredInput = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(restoredInput instanceof HTMLTextAreaElement ? restoredInput.value : null).toBe(
+      "Persisted shared draft",
+    );
+
+    await act(async () => {
+      remountRoot.unmount();
+    });
+  });
+
   it("submits the draft on Enter from the chat composer", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
