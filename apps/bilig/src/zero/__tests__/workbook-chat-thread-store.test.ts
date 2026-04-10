@@ -332,4 +332,39 @@ describe("workbook-chat-thread-store", () => {
       },
     ]);
   });
+
+  it("includes collaborator-owned shared threads in the summary query", async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes("thread.scope = 'shared'")
+          ? [
+              {
+                threadId: "thr-shared",
+                scope: "shared",
+                updatedAtUnixMs: 300,
+                entryCount: 2,
+                hasPendingBundle: false,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const summaries = await listWorkbookAgentThreadSummaries(queryable, {
+      documentId: "doc-1",
+      actorUserId: "casey@example.com",
+    });
+
+    expect(summaries).toEqual([
+      {
+        threadId: "thr-shared",
+        scope: "shared",
+        updatedAtUnixMs: 300,
+        entryCount: 2,
+        hasPendingBundle: false,
+      },
+    ]);
+    expect(queryable.calls.at(-1)?.text).toContain(
+      "AND (thread.actor_user_id = $2 OR thread.scope = 'shared')",
+    );
+  });
 });

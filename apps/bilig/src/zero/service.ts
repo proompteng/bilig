@@ -469,7 +469,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
       documentId,
       actorUserId,
       threadId,
-      limit,
+      ...(limit === undefined ? {} : { limit }),
     });
   }
 

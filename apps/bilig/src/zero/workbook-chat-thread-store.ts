@@ -582,7 +582,8 @@ export async function listWorkbookAgentThreadSummaries(
         ON pending.workbook_id = thread.workbook_id
        AND pending.thread_id = thread.thread_id
        AND pending.actor_user_id = thread.actor_user_id
-      WHERE thread.workbook_id = $1 AND thread.actor_user_id = $2
+      WHERE thread.workbook_id = $1
+        AND (thread.actor_user_id = $2 OR thread.scope = 'shared')
       ORDER BY thread.updated_at_unix_ms DESC
     `,
     [input.documentId, input.actorUserId],
