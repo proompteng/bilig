@@ -22,8 +22,12 @@ function ContextMenuHarness(props: {
   hiddenRows?: Readonly<Record<number, true>> | undefined;
   isEditingCell?: boolean;
   onCommitEdit?: (() => void) | undefined;
+  onDeleteColumn?: ((columnIndex: number, count: number) => void) | undefined;
+  onDeleteRow?: ((rowIndex: number, count: number) => void) | undefined;
   onHideColumn?: ((columnIndex: number, hidden: boolean) => void) | undefined;
   onHideRow?: ((rowIndex: number, hidden: boolean) => void) | undefined;
+  onInsertColumn?: ((columnIndex: number, count: number) => void) | undefined;
+  onInsertRow?: ((rowIndex: number, count: number) => void) | undefined;
   openTarget?: WorkbookGridContextMenuTarget | undefined;
   onSelect?: ((addr: string) => void) | undefined;
   setGridSelection?: ((selection: GridSelection) => void) | undefined;
@@ -32,6 +36,10 @@ function ContextMenuHarness(props: {
     focusGrid: props.focusGrid ?? (() => {}),
     isEditingCell: props.isEditingCell ?? false,
     onCommitEdit: props.onCommitEdit ?? (() => {}),
+    onDeleteColumns: props.onDeleteColumn,
+    onDeleteRows: props.onDeleteRow,
+    onInsertColumns: props.onInsertColumn,
+    onInsertRows: props.onInsertRow,
     onSelect: props.onSelect ?? (() => {}),
     hiddenColumnsByIndex: props.hiddenColumns,
     hiddenRowsByIndex: props.hiddenRows,
@@ -66,6 +74,9 @@ function ContextMenuHarness(props: {
         <WorkbookGridContextMenu
           menuRef={menu.menuRef}
           onClose={menu.closeContextMenu}
+          onDeleteTarget={menu.deleteTarget}
+          onInsertAfterTarget={menu.insertAfterTarget}
+          onInsertBeforeTarget={menu.insertBeforeTarget}
           onToggleTargetHidden={menu.toggleTargetHidden}
           state={menu.contextMenuState}
         />
@@ -116,6 +127,49 @@ describe("workbook grid context menu", () => {
 
     expect(onHideRow).toHaveBeenCalledWith(7, true);
     expect(setGridSelection).toHaveBeenCalledTimes(1);
+    expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("inserts a row above the targeted row", async () => {
+    const onInsertRow = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: "row", index: 7 }}
+          onHideRow={vi.fn()}
+          onInsertRow={onInsertRow}
+        />,
+      );
+    });
+
+    const target = host.querySelector("[data-testid='host']");
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 120,
+          clientY: 90,
+        }),
+      );
+    });
+
+    const insertButton = host.querySelector(
+      "[data-testid='grid-context-action-insert-before-row']",
+    );
+    await act(async () => {
+      insertButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onInsertRow).toHaveBeenCalledWith(7, 1);
     expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
 
     await act(async () => {
@@ -274,7 +328,9 @@ describe("workbook grid context menu", () => {
       );
     });
 
-    const menuAction = host.querySelector("[data-testid='grid-context-action-hide-column']");
+    const menuAction = host.querySelector(
+      "[data-testid='grid-context-action-insert-before-column']",
+    );
     expect(menuAction instanceof HTMLButtonElement).toBe(true);
     expect(document.activeElement).toBe(menuAction);
     expect(focusGrid).toHaveBeenCalledTimes(1);
@@ -323,6 +379,46 @@ describe("workbook grid context menu", () => {
     });
 
     expect(onHideColumn).toHaveBeenCalledWith(2, true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("deletes the targeted column", async () => {
+    const onDeleteColumn = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: "column", index: 2 }}
+          onDeleteColumn={onDeleteColumn}
+          onHideColumn={vi.fn()}
+        />,
+      );
+    });
+
+    const target = host.querySelector("[data-testid='host']");
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 64,
+          clientY: 24,
+        }),
+      );
+    });
+
+    const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-column']");
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDeleteColumn).toHaveBeenCalledWith(2, 1);
 
     await act(async () => {
       root.unmount();

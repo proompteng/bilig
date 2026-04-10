@@ -472,6 +472,62 @@ export function buildWorkbookChangeDescriptor(
         range,
       };
     }
+    case "insertRows": {
+      const anchorAddress = formatAddress(payload.start, 0);
+      return {
+        eventKind: payload.kind,
+        summary: `Inserted rows ${rowRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress,
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: anchorAddress,
+          endAddress: formatAddress(payload.start + payload.count - 1, 0),
+        },
+      };
+    }
+    case "deleteRows": {
+      const anchorAddress = formatAddress(payload.start, 0);
+      return {
+        eventKind: payload.kind,
+        summary: `Deleted rows ${rowRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress,
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: anchorAddress,
+          endAddress: formatAddress(payload.start + payload.count - 1, 0),
+        },
+      };
+    }
+    case "insertColumns": {
+      const anchorAddress = formatAddress(0, payload.start);
+      return {
+        eventKind: payload.kind,
+        summary: `Inserted columns ${columnRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress,
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: anchorAddress,
+          endAddress: formatAddress(0, payload.start + payload.count - 1),
+        },
+      };
+    }
+    case "deleteColumns": {
+      const anchorAddress = formatAddress(0, payload.start);
+      return {
+        eventKind: payload.kind,
+        summary: `Deleted columns ${columnRangeLabel(payload.start, payload.count)} on ${payload.sheetName}`,
+        sheetName: payload.sheetName,
+        anchorAddress,
+        range: {
+          sheetName: payload.sheetName,
+          startAddress: anchorAddress,
+          endAddress: formatAddress(0, payload.start + payload.count - 1),
+        },
+      };
+    }
     case "updateRowMetadata": {
       const anchorAddress = formatAddress(payload.startRow, 0);
       return {

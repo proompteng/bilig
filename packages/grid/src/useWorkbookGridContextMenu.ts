@@ -19,6 +19,10 @@ export function useWorkbookGridContextMenu(input: {
   hiddenRowsByIndex?: Readonly<Record<number, true>> | undefined;
   isEditingCell: boolean;
   onCommitEdit(this: void): void;
+  onDeleteColumns?: ((startCol: number, count: number) => void) | undefined;
+  onDeleteRows?: ((startRow: number, count: number) => void) | undefined;
+  onInsertColumns?: ((startCol: number, count: number) => void) | undefined;
+  onInsertRows?: ((startRow: number, count: number) => void) | undefined;
   onSelect(this: void, addr: string): void;
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
   onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined;
@@ -38,6 +42,10 @@ export function useWorkbookGridContextMenu(input: {
     hiddenRowsByIndex,
     isEditingCell,
     onCommitEdit,
+    onDeleteColumns,
+    onDeleteRows,
+    onInsertColumns,
+    onInsertRows,
     onSelect,
     onSetColumnHidden,
     onSetRowHidden,
@@ -115,11 +123,47 @@ export function useWorkbookGridContextMenu(input: {
     closeContextMenu();
   }, [closeContextMenu, contextMenuState, onSetColumnHidden, onSetRowHidden]);
 
+  const insertBeforeTarget = useCallback(() => {
+    if (!contextMenuState) {
+      return;
+    }
+    if (contextMenuState.target.kind === "row") {
+      onInsertRows?.(contextMenuState.target.index, 1);
+    } else {
+      onInsertColumns?.(contextMenuState.target.index, 1);
+    }
+    closeContextMenu();
+  }, [closeContextMenu, contextMenuState, onInsertColumns, onInsertRows]);
+
+  const insertAfterTarget = useCallback(() => {
+    if (!contextMenuState) {
+      return;
+    }
+    if (contextMenuState.target.kind === "row") {
+      onInsertRows?.(contextMenuState.target.index + 1, 1);
+    } else {
+      onInsertColumns?.(contextMenuState.target.index + 1, 1);
+    }
+    closeContextMenu();
+  }, [closeContextMenu, contextMenuState, onInsertColumns, onInsertRows]);
+
+  const deleteTarget = useCallback(() => {
+    if (!contextMenuState) {
+      return;
+    }
+    if (contextMenuState.target.kind === "row") {
+      onDeleteRows?.(contextMenuState.target.index, 1);
+    } else {
+      onDeleteColumns?.(contextMenuState.target.index, 1);
+    }
+    closeContextMenu();
+  }, [closeContextMenu, contextMenuState, onDeleteColumns, onDeleteRows]);
+
   const openContextMenuForTarget = useCallback(
     ({ target, x, y }: WorkbookGridContextMenuTarget): boolean => {
       const canOpen =
-        (target.kind === "row" && onSetRowHidden) ||
-        (target.kind === "column" && onSetColumnHidden);
+        (target.kind === "row" && (onSetRowHidden || onInsertRows || onDeleteRows)) ||
+        (target.kind === "column" && (onSetColumnHidden || onInsertColumns || onDeleteColumns));
       if (!canOpen) {
         return false;
       }
@@ -150,6 +194,10 @@ export function useWorkbookGridContextMenu(input: {
       isTargetHidden,
       isEditingCell,
       onCommitEdit,
+      onDeleteColumns,
+      onDeleteRows,
+      onInsertColumns,
+      onInsertRows,
       onSelect,
       onSetColumnHidden,
       onSetRowHidden,
@@ -189,7 +237,10 @@ export function useWorkbookGridContextMenu(input: {
     () => ({
       closeContextMenu,
       contextMenuState,
+      deleteTarget,
       handleHostContextMenuCapture,
+      insertAfterTarget,
+      insertBeforeTarget,
       toggleTargetHidden,
       menuRef,
       openContextMenuForTarget,
@@ -197,7 +248,10 @@ export function useWorkbookGridContextMenu(input: {
     [
       closeContextMenu,
       contextMenuState,
+      deleteTarget,
       handleHostContextMenuCapture,
+      insertAfterTarget,
+      insertBeforeTarget,
       toggleTargetHidden,
       openContextMenuForTarget,
     ],

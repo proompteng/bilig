@@ -258,6 +258,44 @@ describe("workbook-change-store", () => {
 
     expect(
       buildWorkbookChangeDescriptor({
+        kind: "insertRows",
+        sheetName: "Sheet1",
+        start: 2,
+        count: 2,
+      }),
+    ).toEqual({
+      eventKind: "insertRows",
+      summary: "Inserted rows 3:4 on Sheet1",
+      sheetName: "Sheet1",
+      anchorAddress: "A3",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "A3",
+        endAddress: "A4",
+      },
+    });
+
+    expect(
+      buildWorkbookChangeDescriptor({
+        kind: "deleteColumns",
+        sheetName: "Sheet1",
+        start: 1,
+        count: 2,
+      }),
+    ).toEqual({
+      eventKind: "deleteColumns",
+      summary: "Deleted columns B:C on Sheet1",
+      sheetName: "Sheet1",
+      anchorAddress: "B1",
+      range: {
+        sheetName: "Sheet1",
+        startAddress: "B1",
+        endAddress: "C1",
+      },
+    });
+
+    expect(
+      buildWorkbookChangeDescriptor({
         kind: "redoChange",
         targetRevision: 41,
         targetSummary: "Updated Sheet1!A1",

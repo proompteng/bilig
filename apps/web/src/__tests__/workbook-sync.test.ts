@@ -58,6 +58,38 @@ describe("buildZeroWorkbookMutation", () => {
       },
       "~": "MutateRequest",
     });
+
+    expect(
+      buildZeroWorkbookMutation("doc-1", {
+        method: "insertRows",
+        args: ["Sheet1", 4, 2],
+      }),
+    ).toMatchObject({
+      args: {
+        clientMutationId: undefined,
+        count: 2,
+        documentId: "doc-1",
+        sheetName: "Sheet1",
+        start: 4,
+      },
+      "~": "MutateRequest",
+    });
+
+    expect(
+      buildZeroWorkbookMutation("doc-1", {
+        method: "deleteColumns",
+        args: ["Sheet1", 1, 3],
+      }),
+    ).toMatchObject({
+      args: {
+        clientMutationId: undefined,
+        count: 3,
+        documentId: "doc-1",
+        sheetName: "Sheet1",
+        start: 1,
+      },
+      "~": "MutateRequest",
+    });
   });
 
   it("normalizes legacy updateColumnWidth journal entries onto column metadata mutations", () => {
@@ -88,6 +120,8 @@ describe("buildZeroWorkbookMutation", () => {
   it("does not advertise updateColumnWidth as an active workbook mutation method", () => {
     expect(isWorkbookMutationMethod("updateColumnWidth")).toBe(false);
     expect(isWorkbookMutationMethod("updateColumnMetadata")).toBe(true);
+    expect(isWorkbookMutationMethod("insertRows")).toBe(true);
+    expect(isWorkbookMutationMethod("deleteColumns")).toBe(true);
   });
 
   it("accepts renderCommit mutations with valid commit ops", () => {

@@ -81,6 +81,10 @@ interface WorkbookViewProps {
   onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
   onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined;
+  onInsertRows?: ((startRow: number, count: number) => void) | undefined;
+  onDeleteRows?: ((startRow: number, count: number) => void) | undefined;
+  onInsertColumns?: ((startCol: number, count: number) => void) | undefined;
+  onDeleteColumns?: ((startCol: number, count: number) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
@@ -146,6 +150,10 @@ export function WorkbookView({
   onRowHeightChange,
   onSetColumnHidden,
   onSetRowHidden,
+  onInsertRows,
+  onDeleteRows,
+  onInsertColumns,
+  onDeleteColumns,
   onAutofitColumn,
   onVisibleViewportChange,
   previewRanges,
@@ -239,6 +247,10 @@ export function WorkbookView({
             onRowHeightChange={onRowHeightChange}
             onSetColumnHidden={onSetColumnHidden}
             onSetRowHidden={onSetRowHidden}
+            onInsertRows={onInsertRows}
+            onDeleteRows={onDeleteRows}
+            onInsertColumns={onInsertColumns}
+            onDeleteColumns={onDeleteColumns}
             onAutofitColumn={onAutofitColumn}
             onVisibleViewportChange={onVisibleViewportChange}
             previewRanges={previewRanges}

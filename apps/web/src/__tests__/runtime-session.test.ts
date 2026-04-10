@@ -339,6 +339,56 @@ describe("createWorkerRuntimeSessionController", () => {
     vi.restoreAllMocks();
   });
 
+  it("replays structural insert and delete mutations into the local projection engine", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "phase0-doc",
+      replicaId: "browser:test",
+    });
+    await engine.ready();
+    engine.updateRowMetadata("Sheet1", 1, 1, 30, false);
+    engine.updateColumnMetadata("Sheet1", 3, 1, 140, false);
+
+    applyPendingWorkbookMutationToEngine(engine, {
+      id: "pending-1",
+      localSeq: 1,
+      baseRevision: 0,
+      enqueuedAtUnixMs: 1,
+      submittedAtUnixMs: null,
+      lastAttemptedAtUnixMs: null,
+      ackedAtUnixMs: null,
+      rebasedAtUnixMs: null,
+      failedAtUnixMs: null,
+      attemptCount: 0,
+      failureMessage: null,
+      status: "local",
+      method: "insertRows",
+      args: ["Sheet1", 1, 2],
+    });
+    applyPendingWorkbookMutationToEngine(engine, {
+      id: "pending-2",
+      localSeq: 2,
+      baseRevision: 0,
+      enqueuedAtUnixMs: 2,
+      submittedAtUnixMs: null,
+      lastAttemptedAtUnixMs: null,
+      ackedAtUnixMs: null,
+      rebasedAtUnixMs: null,
+      failedAtUnixMs: null,
+      attemptCount: 0,
+      failureMessage: null,
+      status: "local",
+      method: "deleteColumns",
+      args: ["Sheet1", 3, 1],
+    });
+
+    expect(engine.getRowAxisEntries("Sheet1")).toEqual([
+      { id: "row-2", index: 1 },
+      { id: "row-3", index: 2 },
+      { id: "row-1", index: 3, size: 30, hidden: false },
+    ]);
+    expect(engine.getColumnAxisEntries("Sheet1")).toEqual([]);
+  });
+
   it("hydrates the mounted worker session from the latest authoritative snapshot", async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),

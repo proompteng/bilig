@@ -14,11 +14,25 @@ export function WorkbookGridContextMenu(props: {
   state: WorkbookGridContextMenuState;
   menuRef: RefObject<HTMLDivElement | null>;
   onClose(this: void): void;
+  onDeleteTarget(this: void): void;
+  onInsertAfterTarget(this: void): void;
+  onInsertBeforeTarget(this: void): void;
   onToggleTargetHidden(this: void): void;
 }) {
-  const { state, menuRef, onClose, onToggleTargetHidden } = props;
+  const {
+    state,
+    menuRef,
+    onClose,
+    onDeleteTarget,
+    onInsertAfterTarget,
+    onInsertBeforeTarget,
+    onToggleTargetHidden,
+  } = props;
   const targetAxisLabel = state.target.kind === "row" ? "row" : "column";
   const actionLabel = `${state.target.hidden ? "Unhide" : "Hide"} ${targetAxisLabel}`;
+  const insertBeforeLabel = state.target.kind === "row" ? "Insert row above" : "Insert column left";
+  const insertAfterLabel = state.target.kind === "row" ? "Insert row below" : "Insert column right";
+  const deleteLabel = `Delete ${targetAxisLabel}`;
   const style: CSSProperties = {
     left: Math.round(state.x),
     position: "fixed",
@@ -35,6 +49,36 @@ export function WorkbookGridContextMenu(props: {
       role="menu"
       style={style}
     >
+      <button
+        aria-label={insertBeforeLabel}
+        className="flex h-8 w-full items-center rounded-[4px] px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:bg-[var(--wb-hover)]"
+        data-testid={`grid-context-action-insert-before-${targetAxisLabel}`}
+        onClick={onInsertBeforeTarget}
+        role="menuitem"
+        type="button"
+      >
+        {insertBeforeLabel}
+      </button>
+      <button
+        aria-label={insertAfterLabel}
+        className="flex h-8 w-full items-center rounded-[4px] px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:bg-[var(--wb-hover)]"
+        data-testid={`grid-context-action-insert-after-${targetAxisLabel}`}
+        onClick={onInsertAfterTarget}
+        role="menuitem"
+        type="button"
+      >
+        {insertAfterLabel}
+      </button>
+      <button
+        aria-label={deleteLabel}
+        className="flex h-8 w-full items-center rounded-[4px] px-2 text-left text-[11px] font-medium text-[var(--wb-danger)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:bg-[var(--wb-hover)]"
+        data-testid={`grid-context-action-delete-${targetAxisLabel}`}
+        onClick={onDeleteTarget}
+        role="menuitem"
+        type="button"
+      >
+        {deleteLabel}
+      </button>
       <button
         aria-label={actionLabel}
         className="flex h-8 w-full items-center rounded-[4px] px-2 text-left text-[11px] font-medium text-[var(--wb-text)] outline-none transition-colors hover:bg-[var(--wb-hover)] focus-visible:bg-[var(--wb-hover)]"
