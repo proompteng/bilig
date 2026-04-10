@@ -63,6 +63,7 @@ import type {
   WorkbookGridSurfaceProps,
 } from "./workbookGridSurfaceTypes.js";
 import { useWorkbookGridContextMenu } from "./useWorkbookGridContextMenu.js";
+import { resolveKeyboardHeaderContextMenuTarget } from "./workbookGridContextMenuTarget.js";
 import { useWorkbookGridKeyboardHandler } from "./useWorkbookGridKeyboardHandler.js";
 import { useWorkbookGridRenderState } from "./useWorkbookGridRenderState.js";
 import { useWorkbookGridPointerResolvers } from "./useWorkbookGridPointerResolvers.js";
@@ -347,6 +348,40 @@ export function useWorkbookGridInteractions(
     setGridSelection,
     visibleRegion,
   });
+  const openHeaderContextMenuFromKeyboard = useCallback(() => {
+    const hostBounds = hostRef.current?.getBoundingClientRect();
+    if (!hostBounds) {
+      return false;
+    }
+    const currentCell = gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row];
+    const targetCellBounds =
+      gridSelection.rows.length > 0 && gridSelection.columns.length === 0
+        ? getCellScreenBounds(currentCell[0], gridSelection.rows.first() ?? currentCell[1])
+        : gridSelection.columns.length > 0 && gridSelection.rows.length === 0
+          ? getCellScreenBounds(gridSelection.columns.first() ?? currentCell[0], currentCell[1])
+          : undefined;
+    const target = resolveKeyboardHeaderContextMenuTarget({
+      gridSelection,
+      targetCellBounds,
+      hostLeft: hostBounds.left,
+      hostTop: hostBounds.top,
+      rowMarkerWidth: gridMetrics.rowMarkerWidth,
+      headerHeight: gridMetrics.headerHeight,
+    });
+    if (!target) {
+      return false;
+    }
+    return contextMenu.openContextMenuForTarget(target);
+  }, [
+    contextMenu,
+    getCellScreenBounds,
+    gridMetrics.headerHeight,
+    gridMetrics.rowMarkerWidth,
+    gridSelection,
+    hostRef,
+    selectedCell.col,
+    selectedCell.row,
+  ]);
 
   const handleFillHandlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -741,6 +776,13 @@ export function useWorkbookGridInteractions(
       resetGridPointerInteraction(interactionState, {
         clearIgnoreNextPointerSelection: true,
       });
+      if (normalizedKey === "ContextMenu" || (event.shiftKey && normalizedKey === "F10")) {
+        if (openHeaderContextMenuFromKeyboard()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
 
       if (
         !isHandledGridKey({
