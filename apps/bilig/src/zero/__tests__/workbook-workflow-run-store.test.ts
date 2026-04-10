@@ -48,6 +48,22 @@ function createWorkflowRun() {
     updatedAtUnixMs: 120,
     completedAtUnixMs: 120,
     errorMessage: null,
+    steps: [
+      {
+        stepId: "inspect-workbook",
+        label: "Inspect workbook structure",
+        status: "completed" as const,
+        summary: "Read durable workbook structure across 2 sheets.",
+        updatedAtUnixMs: 110,
+      },
+      {
+        stepId: "draft-summary",
+        label: "Draft summary artifact",
+        status: "completed" as const,
+        summary: "Prepared the durable workbook summary artifact for the thread.",
+        updatedAtUnixMs: 120,
+      },
+    ],
     artifact: {
       kind: "markdown" as const,
       title: "Workbook Summary",
@@ -68,7 +84,8 @@ describe("workbook-workflow-run-store", () => {
     const insertQuery = queryable.calls.find((call) =>
       call.text.includes("INSERT INTO workbook_workflow_run"),
     );
-    expect(insertQuery?.values?.[12]).toBe(JSON.stringify(createWorkflowRun().artifact));
+    expect(insertQuery?.values?.[12]).toBe(JSON.stringify(createWorkflowRun().steps));
+    expect(insertQuery?.values?.[13]).toBe(JSON.stringify(createWorkflowRun().artifact));
   });
 
   it("loads shared workflow runs for collaborator viewers", async () => {
@@ -92,6 +109,7 @@ describe("workbook-workflow-run-store", () => {
                 updatedAtUnixMs: run.updatedAtUnixMs,
                 completedAtUnixMs: run.completedAtUnixMs,
                 errorMessage: run.errorMessage,
+                stepsJson: run.steps,
                 artifactJson: run.artifact,
               } satisfies QueryResultRow,
             ]
@@ -109,6 +127,12 @@ describe("workbook-workflow-run-store", () => {
         runId: "workflow-1",
         startedByUserId: "alex@example.com",
         workflowTemplate: "summarizeWorkbook",
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            stepId: "inspect-workbook",
+            status: "completed",
+          }),
+        ]),
       }),
     ]);
   });

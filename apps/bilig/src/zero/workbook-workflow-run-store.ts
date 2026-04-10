@@ -1,4 +1,8 @@
-import type { WorkbookAgentWorkflowArtifact, WorkbookAgentWorkflowRun } from "@bilig/contracts";
+import type {
+  WorkbookAgentWorkflowArtifact,
+  WorkbookAgentWorkflowRun,
+  WorkbookAgentWorkflowStep,
+} from "@bilig/contracts";
 import type { QueryResultRow, Queryable } from "./store.js";
 
 interface WorkbookWorkflowRunRow extends QueryResultRow {
@@ -14,6 +18,7 @@ interface WorkbookWorkflowRunRow extends QueryResultRow {
   readonly updatedAtUnixMs?: unknown;
   readonly completedAtUnixMs?: unknown;
   readonly errorMessage?: unknown;
+  readonly stepsJson?: unknown;
   readonly artifactJson?: unknown;
 }
 
@@ -41,6 +46,50 @@ function isMarkdownArtifact(value: unknown): value is WorkbookAgentWorkflowArtif
   );
 }
 
+function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["workflowTemplate"] {
+  return (
+    value === "summarizeWorkbook" ||
+    value === "describeRecentChanges" ||
+    value === "findFormulaIssues"
+  );
+}
+
+function isWorkflowStepStatus(value: unknown): value is WorkbookAgentWorkflowStep["status"] {
+  return (
+    value === "pending" || value === "running" || value === "completed" || value === "failed"
+  );
+}
+
+function isWorkflowStep(value: unknown): value is WorkbookAgentWorkflowStep {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "stepId" in value &&
+    typeof value.stepId === "string" &&
+    "label" in value &&
+    typeof value.label === "string" &&
+    "status" in value &&
+    isWorkflowStepStatus(value.status) &&
+    "summary" in value &&
+    typeof value.summary === "string" &&
+    "updatedAtUnixMs" in value &&
+    parseNumericValue(value.updatedAtUnixMs) !== null
+  );
+}
+
+function normalizeWorkflowSteps(value: unknown): WorkbookAgentWorkflowStep[] | null {
+  if (!Array.isArray(value) || !value.every((entry) => isWorkflowStep(entry))) {
+    return null;
+  }
+  return value.map((entry) => ({
+    stepId: entry.stepId,
+    label: entry.label,
+    status: entry.status,
+    summary: entry.summary,
+    updatedAtUnixMs: parseNumericValue(entry.updatedAtUnixMs) ?? 0,
+  }));
+}
+
 function normalizeWorkflowRun(row: WorkbookWorkflowRunRow): WorkbookAgentWorkflowRun | null {
   const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs);
   const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs);
@@ -48,18 +97,19 @@ function normalizeWorkflowRun(row: WorkbookWorkflowRunRow): WorkbookAgentWorkflo
     row.completedAtUnixMs === null || row.completedAtUnixMs === undefined
       ? null
       : parseNumericValue(row.completedAtUnixMs);
+  const steps = normalizeWorkflowSteps(row.stepsJson ?? []);
   if (
     typeof row.runId !== "string" ||
     typeof row.threadId !== "string" ||
     typeof row.actorUserId !== "string" ||
-    (row.workflowTemplate !== "summarizeWorkbook" &&
-      row.workflowTemplate !== "describeRecentChanges") ||
+    !isWorkflowTemplate(row.workflowTemplate) ||
     typeof row.title !== "string" ||
     typeof row.summary !== "string" ||
     (row.status !== "running" && row.status !== "completed" && row.status !== "failed") ||
     createdAtUnixMs === null ||
     updatedAtUnixMs === null ||
     completedAtUnixMs === undefined ||
+    steps === null ||
     (row.errorMessage !== null &&
       row.errorMessage !== undefined &&
       typeof row.errorMessage !== "string") ||
@@ -81,6 +131,7 @@ function normalizeWorkflowRun(row: WorkbookWorkflowRunRow): WorkbookAgentWorkflo
     updatedAtUnixMs,
     completedAtUnixMs,
     errorMessage: typeof row.errorMessage === "string" ? row.errorMessage : null,
+    steps,
     artifact: isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null,
   };
 }
@@ -100,8 +151,13 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
       updated_at_unix_ms BIGINT NOT NULL,
       completed_at_unix_ms BIGINT,
       error_message TEXT,
+      steps_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       artifact_json JSONB
     )
+  `);
+  await db.query(`
+    ALTER TABLE workbook_workflow_run
+      ADD COLUMN IF NOT EXISTS steps_json JSONB NOT NULL DEFAULT '[]'::jsonb
   `);
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_run_thread_updated_idx
@@ -131,10 +187,11 @@ export async function upsertWorkbookWorkflowRun(
         updated_at_unix_ms,
         completed_at_unix_ms,
         error_message,
+        steps_json,
         artifact_json
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb
       )
       ON CONFLICT (run_id)
       DO UPDATE SET
@@ -149,6 +206,7 @@ export async function upsertWorkbookWorkflowRun(
         updated_at_unix_ms = EXCLUDED.updated_at_unix_ms,
         completed_at_unix_ms = EXCLUDED.completed_at_unix_ms,
         error_message = EXCLUDED.error_message,
+        steps_json = EXCLUDED.steps_json,
         artifact_json = EXCLUDED.artifact_json
     `,
     [
@@ -164,6 +222,7 @@ export async function upsertWorkbookWorkflowRun(
       input.run.updatedAtUnixMs,
       input.run.completedAtUnixMs,
       input.run.errorMessage,
+      JSON.stringify(input.run.steps),
       JSON.stringify(input.run.artifact),
     ],
   );
@@ -193,6 +252,7 @@ export async function listWorkbookThreadWorkflowRuns(
         run.updated_at_unix_ms AS "updatedAtUnixMs",
         run.completed_at_unix_ms AS "completedAtUnixMs",
         run.error_message AS "errorMessage",
+        run.steps_json AS "stepsJson",
         run.artifact_json AS "artifactJson"
       FROM workbook_workflow_run AS run
       LEFT JOIN workbook_chat_thread AS thread

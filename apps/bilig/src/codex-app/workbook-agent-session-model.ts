@@ -61,7 +61,11 @@ export const startTurnBodySchema = z.object({
 });
 
 export const startWorkflowBodySchema = z.object({
-  workflowTemplate: z.enum(["summarizeWorkbook", "describeRecentChanges"]),
+  workflowTemplate: z.enum([
+    "summarizeWorkbook",
+    "describeRecentChanges",
+    "findFormulaIssues",
+  ]),
 });
 
 export function createWorkbookAgentBaseInstructions(): string {
@@ -77,7 +81,7 @@ export function createWorkbookAgentBaseInstructions(): string {
 export function createWorkbookAgentDeveloperInstructions(): string {
   return [
     "Before changing cells you have not inspected, read the relevant workbook range first.",
-    `Use ${WORKBOOK_AGENT_TOOL_NAMES.startWorkflow} with summarizeWorkbook or describeRecentChanges when the request matches those built-in read/report workflows and you want a durable workflow run in the thread.`,
+    `Use ${WORKBOOK_AGENT_TOOL_NAMES.startWorkflow} with summarizeWorkbook, describeRecentChanges, or findFormulaIssues when the request matches those built-in durable workflows and you want the result saved in the thread.`,
     `Use ${WORKBOOK_AGENT_TOOL_NAMES.readWorkbook} first when the user asks for workbook-wide structure, important sheets, or a starting summary and the built-in workflow is not the best fit.`,
     `When the user refers to the current cell, selection, or visible area, call ${WORKBOOK_AGENT_TOOL_NAMES.getContext}.`,
     `Prefer ${WORKBOOK_AGENT_TOOL_NAMES.readSelection}, ${WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange}, and ${WORKBOOK_AGENT_TOOL_NAMES.inspectCell} for context-native workbook analysis.`,

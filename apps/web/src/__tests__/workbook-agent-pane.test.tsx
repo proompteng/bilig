@@ -360,6 +360,22 @@ describe("workbook agent pane", () => {
                     updatedAtUnixMs: 2,
                     completedAtUnixMs: 2,
                     errorMessage: null,
+                    steps: [
+                      {
+                        stepId: "inspect-workbook",
+                        label: "Inspect workbook structure",
+                        status: "completed",
+                        summary: "Read durable workbook structure across 2 sheets.",
+                        updatedAtUnixMs: 1,
+                      },
+                      {
+                        stepId: "draft-summary",
+                        label: "Draft summary artifact",
+                        status: "completed",
+                        summary: "Prepared the durable workbook summary artifact for the thread.",
+                        updatedAtUnixMs: 2,
+                      },
+                    ],
                     artifact: {
                       kind: "markdown",
                       title: "Workbook Summary",
@@ -387,6 +403,7 @@ describe("workbook agent pane", () => {
 
     expect(host.textContent).toContain("Workflows");
     expect(host.textContent).toContain("Summarize Workbook");
+    expect(host.textContent).toContain("Inspect workbook structure");
     expect(host.textContent).toContain("Workbook Summary");
     expect(host.textContent).toContain("Sheets: 2");
     expect(host.textContent).toContain("Done");
@@ -428,18 +445,34 @@ describe("workbook agent pane", () => {
                   runId: "wf-1",
                   threadId: "thr-2",
                   startedByUserId: "alex@example.com",
-                  workflowTemplate: "summarizeWorkbook",
-                  title: "Summarize Workbook",
-                  summary: "Summarized workbook structure across 1 sheet.",
+                  workflowTemplate: "findFormulaIssues",
+                  title: "Find Formula Issues",
+                  summary: "Found 2 formula issues across 3 scanned formula cells.",
                   status: "completed",
                   createdAtUnixMs: 1,
                   updatedAtUnixMs: 2,
                   completedAtUnixMs: 2,
                   errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "scan-formula-cells",
+                      label: "Scan formula cells",
+                      status: "completed",
+                      summary: "Scanned 3 formula cells and found 2 issues.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "draft-issue-report",
+                      label: "Draft issue report",
+                      status: "completed",
+                      summary: "Prepared the durable formula issue report for the thread.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
                   artifact: {
                     kind: "markdown",
-                    title: "Workbook Summary",
-                    text: "## Workbook Summary",
+                    title: "Formula Issues",
+                    text: "## Formula Issues",
                   },
                 },
               ],
@@ -464,7 +497,7 @@ describe("workbook agent pane", () => {
     });
 
     const button = host.querySelector(
-      "[data-testid='workbook-agent-workflow-start-summarizeWorkbook']",
+      "[data-testid='workbook-agent-workflow-start-findFormulaIssues']",
     );
     expect(button instanceof HTMLButtonElement).toBe(true);
 
@@ -500,10 +533,10 @@ describe("workbook agent pane", () => {
     );
     expect(workflowCall?.[0]).toBe("/v2/documents/doc-1/agent/threads/thr-2/workflows");
     expect(requestBody(workflowCall?.[1])).toEqual({
-      workflowTemplate: "summarizeWorkbook",
+      workflowTemplate: "findFormulaIssues",
     });
-    expect(host.textContent).toContain("Summarize Workbook");
-    expect(host.textContent).toContain("Workbook Summary");
+    expect(host.textContent).toContain("Find Formula Issues");
+    expect(host.textContent).toContain("Formula Issues");
 
     await act(async () => {
       root.unmount();

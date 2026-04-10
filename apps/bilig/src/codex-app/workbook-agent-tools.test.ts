@@ -812,6 +812,22 @@ describe("workbook agent tools", () => {
       updatedAtUnixMs: 2,
       completedAtUnixMs: 2,
       errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-workbook",
+          label: "Inspect workbook structure",
+          status: "completed" as const,
+          summary: "Read durable workbook structure across 2 sheets.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "draft-summary",
+          label: "Draft summary artifact",
+          status: "completed" as const,
+          summary: "Prepared the durable workbook summary artifact for the thread.",
+          updatedAtUnixMs: 2,
+        },
+      ],
       artifact: {
         kind: "markdown" as const,
         title: "Workbook Summary",

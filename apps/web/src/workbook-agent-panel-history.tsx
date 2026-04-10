@@ -103,6 +103,33 @@ function workflowStatusLabel(status: WorkbookAgentWorkflowRun["status"]): string
   }
 }
 
+function workflowStepTone(
+  status: WorkbookAgentWorkflowRun["steps"][number]["status"],
+): "accent" | "danger" | "neutral" {
+  switch (status) {
+    case "running":
+      return "accent";
+    case "failed":
+      return "danger";
+    case "pending":
+    case "completed":
+      return "neutral";
+  }
+}
+
+function workflowStepLabel(status: WorkbookAgentWorkflowRun["steps"][number]["status"]): string {
+  switch (status) {
+    case "pending":
+      return "Pending";
+    case "running":
+      return "Running";
+    case "completed":
+      return "Done";
+    case "failed":
+      return "Failed";
+  }
+}
+
 export function WorkflowRunRow(props: { readonly run: WorkbookAgentWorkflowRun }) {
   const artifactSummary = summarizeWorkflowArtifact(props.run);
   return (
@@ -124,6 +151,23 @@ export function WorkflowRunRow(props: { readonly run: WorkbookAgentWorkflowRun }
           {workflowStatusLabel(props.run.status)}
         </span>
       </div>
+      {props.run.steps.length > 0 ? (
+        <div className="mt-2 grid gap-2">
+          {props.run.steps.map((step) => (
+            <div key={step.stepId} className={cn(workbookInsetClass(), "px-3 py-2")}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[11px] font-medium text-[var(--wb-text)]">{step.label}</div>
+                <span className={workbookPillClass({ tone: workflowStepTone(step.status) })}>
+                  {workflowStepLabel(step.status)}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] leading-5 text-[var(--wb-text-subtle)]">
+                {step.summary}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {props.run.artifact ? (
         <div className={cn(workbookInsetClass(), "mt-2 px-3 py-2")}>
           <div className="text-[11px] font-medium text-[var(--wb-text)]">

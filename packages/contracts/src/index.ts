@@ -142,6 +142,7 @@ export type WorkbookAgentThreadSummary = Schema.Schema.Type<
 export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "summarizeWorkbook",
   "describeRecentChanges",
+  "findFormulaIssues",
 );
 export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowTemplateSchema
@@ -150,6 +151,27 @@ export type WorkbookAgentWorkflowTemplate = Schema.Schema.Type<
 export const WorkbookAgentWorkflowStatusSchema = Schema.Literal("running", "completed", "failed");
 export type WorkbookAgentWorkflowStatus = Schema.Schema.Type<
   typeof WorkbookAgentWorkflowStatusSchema
+>;
+
+export const WorkbookAgentWorkflowStepStatusSchema = Schema.Literal(
+  "pending",
+  "running",
+  "completed",
+  "failed",
+);
+export type WorkbookAgentWorkflowStepStatus = Schema.Schema.Type<
+  typeof WorkbookAgentWorkflowStepStatusSchema
+>;
+
+export const WorkbookAgentWorkflowStepSchema = Schema.Struct({
+  stepId: Schema.String,
+  label: Schema.String,
+  status: WorkbookAgentWorkflowStepStatusSchema,
+  summary: Schema.String,
+  updatedAtUnixMs: Schema.Number,
+});
+export type WorkbookAgentWorkflowStep = Schema.Schema.Type<
+  typeof WorkbookAgentWorkflowStepSchema
 >;
 
 export const WorkbookAgentWorkflowArtifactSchema = Schema.Struct({
@@ -173,6 +195,7 @@ export const WorkbookAgentWorkflowRunSchema = Schema.Struct({
   updatedAtUnixMs: Schema.Number,
   completedAtUnixMs: Schema.Union(Schema.Number, Schema.Null),
   errorMessage: Schema.Union(Schema.String, Schema.Null),
+  steps: Schema.Array(WorkbookAgentWorkflowStepSchema),
   artifact: Schema.Union(WorkbookAgentWorkflowArtifactSchema, Schema.Null),
 });
 export type WorkbookAgentWorkflowRun = Schema.Schema.Type<typeof WorkbookAgentWorkflowRunSchema>;

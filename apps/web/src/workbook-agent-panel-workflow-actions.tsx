@@ -23,6 +23,11 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     label: "Recent changes",
     summary: "Read the latest durable workbook revisions and summarize them.",
   },
+  {
+    template: "findFormulaIssues",
+    label: "Formula issues",
+    summary: "Scan formulas for errors, cycles, and JS-only fallback formulas.",
+  },
 ];
 
 export function WorkflowActionStrip(props: {

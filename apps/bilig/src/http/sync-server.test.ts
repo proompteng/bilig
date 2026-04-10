@@ -759,6 +759,22 @@ describe("sync-server workbook agent", () => {
             updatedAtUnixMs: 2,
             completedAtUnixMs: 2,
             errorMessage: null,
+            steps: [
+              {
+                stepId: "inspect-workbook",
+                label: "Inspect workbook structure",
+                status: "completed" as const,
+                summary: "Read durable workbook structure across 1 sheet.",
+                updatedAtUnixMs: 1,
+              },
+              {
+                stepId: "draft-summary",
+                label: "Draft summary artifact",
+                status: "completed" as const,
+                summary: "Prepared the durable workbook summary artifact for the thread.",
+                updatedAtUnixMs: 2,
+              },
+            ],
             artifact: {
               kind: "markdown" as const,
               title: "Workbook Summary",
@@ -834,6 +850,22 @@ describe("sync-server workbook agent", () => {
             updatedAtUnixMs: 3,
             completedAtUnixMs: 3,
             errorMessage: null,
+            steps: [
+              {
+                stepId: "load-revisions",
+                label: "Load durable revisions",
+                status: "completed" as const,
+                summary: "Loaded 3 durable workbook revisions.",
+                updatedAtUnixMs: 2,
+              },
+              {
+                stepId: "draft-change-report",
+                label: "Draft change report",
+                status: "completed" as const,
+                summary: "Prepared the durable recent change report for the thread.",
+                updatedAtUnixMs: 3,
+              },
+            ],
             artifact: {
               kind: "markdown" as const,
               title: "Recent Changes",

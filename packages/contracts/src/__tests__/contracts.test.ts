@@ -113,6 +113,22 @@ describe("@bilig/contracts", () => {
       updatedAtUnixMs: 120,
       completedAtUnixMs: 120,
       errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-workbook",
+          label: "Inspect workbook structure",
+          status: "completed",
+          summary: "Read durable workbook structure across 3 sheets.",
+          updatedAtUnixMs: 110,
+        },
+        {
+          stepId: "draft-summary",
+          label: "Draft summary artifact",
+          status: "completed",
+          summary: "Prepared the durable workbook summary artifact for the thread.",
+          updatedAtUnixMs: 120,
+        },
+      ],
       artifact: {
         kind: "markdown",
         title: "Workbook Summary",
@@ -121,6 +137,8 @@ describe("@bilig/contracts", () => {
     });
 
     expect(decoded.workflowTemplate).toBe("summarizeWorkbook");
+    expect(decoded.steps).toHaveLength(2);
+    expect(decoded.steps[0]?.status).toBe("completed");
     expect(decoded.artifact).toEqual(
       expect.objectContaining({
         kind: "markdown",

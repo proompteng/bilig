@@ -71,7 +71,11 @@ const readRecentChangesToolArgsSchema = z.object({
   limit: z.number().int().positive().max(50).optional(),
 });
 const startWorkflowToolArgsSchema = z.object({
-  workflowTemplate: z.enum(["summarizeWorkbook", "describeRecentChanges"]),
+  workflowTemplate: z.enum([
+    "summarizeWorkbook",
+    "describeRecentChanges",
+    "findFormulaIssues",
+  ]),
 });
 const searchWorkbookToolArgsSchema = z.object({
   query: z.string().trim().min(1),
@@ -561,7 +565,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         properties: {
           workflowTemplate: {
             type: "string",
-            enum: ["summarizeWorkbook", "describeRecentChanges"],
+            enum: ["summarizeWorkbook", "describeRecentChanges", "findFormulaIssues"],
           },
         },
       },

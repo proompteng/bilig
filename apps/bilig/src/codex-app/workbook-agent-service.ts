@@ -47,8 +47,12 @@ import {
   updateContextBodySchema,
 } from "./workbook-agent-session-model.js";
 import {
+  completeWorkflowSteps,
   createWorkflowRunRecord,
+  createRunningWorkflowSteps,
+  describeWorkbookAgentWorkflowTemplate,
   executeWorkbookAgentWorkflow,
+  failWorkflowSteps,
 } from "./workbook-agent-workflows.js";
 
 const DEFAULT_MODEL = process.env["BILIG_CODEX_MODEL"]?.trim() || "gpt-5.4";
@@ -557,21 +561,18 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     );
     const runId = crypto.randomUUID();
     const now = this.now();
+    const workflowTemplate = parsed.workflowTemplate;
+    const workflowDescription = describeWorkbookAgentWorkflowTemplate(workflowTemplate);
     const runningRun = createWorkflowRunRecord({
       runId,
       threadId: sessionState.threadId,
       startedByUserId: input.session.userID,
-      workflowTemplate: parsed.workflowTemplate,
-      title:
-        parsed.workflowTemplate === "summarizeWorkbook"
-          ? "Summarize Workbook"
-          : "Describe Recent Changes",
-      summary:
-        parsed.workflowTemplate === "summarizeWorkbook"
-          ? "Running workbook summary workflow."
-          : "Running recent change report workflow.",
+      workflowTemplate,
+      title: workflowDescription.title,
+      summary: workflowDescription.runningSummary,
       status: "running",
       now,
+      steps: createRunningWorkflowSteps(workflowTemplate, now),
     });
     sessionState.snapshot.workflowRuns = upsertWorkflowRun(
       sessionState.snapshot.workflowRuns,
@@ -594,7 +595,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       const result = await executeWorkbookAgentWorkflow({
         documentId: input.documentId,
         zeroSyncService: this.zeroSyncService,
-        workflowTemplate: parsed.workflowTemplate,
+        workflowTemplate,
       });
       const completedAtUnixMs = this.now();
       const completedRun: WorkbookAgentWorkflowRun = {
@@ -605,6 +606,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         updatedAtUnixMs: completedAtUnixMs,
         completedAtUnixMs,
         artifact: result.artifact,
+        steps: completeWorkflowSteps(workflowTemplate, result.steps, completedAtUnixMs),
       };
       sessionState.snapshot.workflowRuns = upsertWorkflowRun(
         sessionState.snapshot.workflowRuns,
@@ -626,13 +628,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       return cloneSnapshot(sessionState.snapshot);
     } catch (error) {
       const failedAtUnixMs = this.now();
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const failedRun: WorkbookAgentWorkflowRun = {
         ...runningRun,
         status: "failed",
         summary: `Workflow failed: ${runningRun.title}`,
         updatedAtUnixMs: failedAtUnixMs,
         completedAtUnixMs: failedAtUnixMs,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage,
+        steps: failWorkflowSteps(workflowTemplate, runningRun.steps, errorMessage, failedAtUnixMs),
         artifact: null,
       };
       sessionState.snapshot.workflowRuns = upsertWorkflowRun(
