@@ -6,6 +6,7 @@ import {
   type ViewportPatch,
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
+import { selectProjectedViewportKeysToEvict } from "./projected-viewport-cache-pruning.js";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HEIGHTS: Readonly<Record<number, number>> = Object.freeze({});
@@ -151,6 +152,8 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly knownSheets = new Set<string>();
   private readonly activeViewportKeysBySheet = new Map<string, Set<string>>();
   private readonly activeViewports = new Map<string, Viewport>();
+  private readonly cellAccessTicks = new Map<string, number>();
+  private nextCellAccessTick = 1;
 
   constructor(private readonly client?: WorkerEngineClient) {}
 
@@ -162,7 +165,12 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   peekCell(sheetName: string, address: string): CellSnapshot | undefined {
-    return this.cellSnapshots.get(`${sheetName}!${address}`);
+    const key = `${sheetName}!${address}`;
+    const snapshot = this.cellSnapshots.get(key);
+    if (snapshot) {
+      this.touchCellKey(key);
+    }
+    return snapshot;
   }
 
   getColumnWidths(sheetName: string): Readonly<Record<number, number>> {
@@ -221,6 +229,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     }
     this.knownSheets.add(snapshot.sheetName);
     this.cellSnapshots.set(key, snapshot);
+    this.touchCellKey(key);
     this.sheetCellKeys(snapshot.sheetName).add(key);
     this.notifyCellSubscriptions(new Set([key]));
     this.listeners.forEach((listener) => listener());
@@ -629,6 +638,7 @@ export class ProjectedViewportStore implements GridEngineLike {
         }
       }
       this.cellSnapshots.set(key, cell.snapshot);
+      this.touchCellKey(key);
       this.sheetCellKeys(patch.viewport.sheetName).add(key);
       changedKeys.add(key);
       if (!damagedCellKeys.has(key)) {
@@ -745,39 +755,25 @@ export class ProjectedViewportStore implements GridEngineLike {
       }
       subscription.addresses.forEach((address) => pinnedKeys.add(`${sheetName}!${address}`));
     });
-    const keysToInspect = Array.from(sheetCellKeys);
-    for (const key of keysToInspect) {
-      if (sheetCellKeys.size <= MAX_CACHED_CELLS_PER_SHEET) {
-        break;
-      }
-      if (pinnedKeys.has(key)) {
-        continue;
-      }
-      const snapshot = this.cellSnapshots.get(key);
-      if (!snapshot) {
-        sheetCellKeys.delete(key);
-        continue;
-      }
-      const parsed = parseCellAddress(snapshot.address, snapshot.sheetName);
-      const insideActiveViewport = activeViewports.some((viewport) => {
-        return (
-          parsed.row >= viewport.rowStart &&
-          parsed.row <= viewport.rowEnd &&
-          parsed.col >= viewport.colStart &&
-          parsed.col <= viewport.colEnd
-        );
-      });
-      if (insideActiveViewport) {
-        continue;
-      }
+    const keysToEvict = selectProjectedViewportKeysToEvict({
+      sheetCellKeys: Array.from(sheetCellKeys),
+      cellSnapshots: this.cellSnapshots,
+      cellAccessTicks: this.cellAccessTicks,
+      pinnedKeys,
+      activeViewports,
+      maxCachedCellsPerSheet: MAX_CACHED_CELLS_PER_SHEET,
+    });
+    keysToEvict.forEach((key) => {
       this.cellSnapshots.delete(key);
+      this.cellAccessTicks.delete(key);
       sheetCellKeys.delete(key);
-    }
+    });
   }
 
   private dropSheetCache(sheetName: string): void {
     this.cellKeysBySheet.get(sheetName)?.forEach((key) => {
       this.cellSnapshots.delete(key);
+      this.cellAccessTicks.delete(key);
     });
     this.cellKeysBySheet.delete(sheetName);
     this.columnSizesBySheet.delete(sheetName);
@@ -793,6 +789,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     const viewportKeys = this.activeViewportKeysBySheet.get(sheetName);
     viewportKeys?.forEach((key) => this.activeViewports.delete(key));
     this.activeViewportKeysBySheet.delete(sheetName);
+  }
+
+  private touchCellKey(key: string): void {
+    this.cellAccessTicks.set(key, this.nextCellAccessTick++);
   }
 
   private notifyCellSubscriptions(changedKeys: Set<string>): void {
