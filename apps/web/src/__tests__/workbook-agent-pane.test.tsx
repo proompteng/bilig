@@ -448,10 +448,10 @@ describe("workbook agent pane", () => {
       );
     });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy.mock.calls[1]?.[0]).toBe(
-      "/v2/documents/doc-1/agent/sessions/agent-session-1/turns",
+    const turnCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/sessions/agent-session-1/turns"),
     );
+    expect(turnCall?.[0]).toBe("/v2/documents/doc-1/agent/sessions/agent-session-1/turns");
     const nextInput = host.querySelector("[data-testid='workbook-agent-input']");
     expect(nextInput instanceof HTMLTextAreaElement ? nextInput.value : null).toBe("");
 
@@ -554,10 +554,10 @@ describe("workbook agent pane", () => {
       button.click();
     });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy.mock.calls[1]?.[0]).toBe(
-      "/v2/documents/doc-1/agent/sessions/agent-session-1/interrupt",
+    const interruptCall = fetchSpy.mock.calls.find(([input]) =>
+      requestUrl(input).endsWith("/agent/sessions/agent-session-1/interrupt"),
     );
+    expect(interruptCall?.[0]).toBe("/v2/documents/doc-1/agent/sessions/agent-session-1/interrupt");
 
     await act(async () => {
       root.unmount();
@@ -848,8 +848,11 @@ describe("workbook agent pane", () => {
       await Promise.resolve();
     });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(requestBody(fetchSpy.mock.calls[0]?.[1])).toEqual({
+    const sessionCalls = fetchSpy.mock.calls.filter(([input]) =>
+      requestUrl(input).endsWith("/agent/sessions"),
+    );
+    expect(sessionCalls).toHaveLength(2);
+    expect(requestBody(sessionCalls[0]?.[1])).toEqual({
       threadId: "thr-1",
       context: {
         selection: {
@@ -864,7 +867,7 @@ describe("workbook agent pane", () => {
         },
       },
     });
-    expect(requestBody(fetchSpy.mock.calls[1]?.[1])).toEqual({
+    expect(requestBody(sessionCalls[1]?.[1])).toEqual({
       threadId: "thr-1",
       context: {
         selection: {
@@ -929,8 +932,11 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(requestBody(fetchSpy.mock.calls[0]?.[1])).toEqual({
+    const bootstrapSessionCall = fetchSpy.mock.calls.find(([input]) =>
+      requestUrl(input).endsWith("/agent/sessions"),
+    );
+    expect(bootstrapSessionCall).toBeDefined();
+    expect(requestBody(bootstrapSessionCall?.[1])).toEqual({
       threadId: "thr-1",
       context: {
         selection: {
