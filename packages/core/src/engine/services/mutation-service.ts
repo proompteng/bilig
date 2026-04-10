@@ -529,28 +529,29 @@ export function createEngineMutationService(args: {
 
   const canonicalizeForwardOps = (ops: readonly EngineOp[]): EngineOp[] =>
     ops.map((op) => {
-      switch (op.kind) {
-        case "insertRows":
-          return op.entries
-            ? { ...op, entries: op.entries.map((entry) => ({ ...entry })) }
-            : {
-                ...op,
-                entries: args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count),
-              };
-        case "insertColumns":
-          return op.entries
-            ? { ...op, entries: op.entries.map((entry) => ({ ...entry })) }
-            : {
-                ...op,
-                entries: args.state.workbook.snapshotColumnAxisEntries(
-                  op.sheetName,
-                  op.start,
-                  op.count,
-                ),
-              };
-        default:
-          return structuredClone(op);
+      if (op.kind === "insertRows") {
+        return op.entries
+          ? { ...op, entries: op.entries.map((entry) => ({ ...entry })) }
+          : {
+              ...op,
+              entries: args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count),
+            };
       }
+
+      if (op.kind === "insertColumns") {
+        return op.entries
+          ? { ...op, entries: op.entries.map((entry) => ({ ...entry })) }
+          : {
+              ...op,
+              entries: args.state.workbook.snapshotColumnAxisEntries(
+                op.sheetName,
+                op.start,
+                op.count,
+              ),
+            };
+      }
+
+      return structuredClone(op);
     });
 
   const executeTransactionNow = (
