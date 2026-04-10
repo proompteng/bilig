@@ -1,9 +1,7 @@
 import { Data, Effect } from "effect";
 import type { PendingWorkbookMutation } from "./workbook-sync.js";
 
-export class MutationJournalTransitionError extends Data.TaggedError(
-  "MutationJournalTransitionError",
-)<{
+class MutationJournalTransitionError extends Data.TaggedError("MutationJournalTransitionError")<{
   readonly message: string;
 }> {}
 

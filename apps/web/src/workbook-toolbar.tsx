@@ -223,6 +223,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               active={horizontalAlignment === "left"}
               ariaLabel="Align left"
               pressed={horizontalAlignment === "left"}
+              shortcut={getWorkbookShortcutLabel("align-left")}
               onClick={() => onHorizontalAlignmentChange("left")}
             >
               <AlignLeft className={TOOLBAR_ICON_CLASS} />
@@ -231,6 +232,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               active={horizontalAlignment === "center"}
               ariaLabel="Align center"
               pressed={horizontalAlignment === "center"}
+              shortcut={getWorkbookShortcutLabel("align-center")}
               onClick={() => onHorizontalAlignmentChange("center")}
             >
               <AlignCenter className={TOOLBAR_ICON_CLASS} />
@@ -239,6 +241,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               active={horizontalAlignment === "right"}
               ariaLabel="Align right"
               pressed={horizontalAlignment === "right"}
+              shortcut={getWorkbookShortcutLabel("align-right")}
               onClick={() => onHorizontalAlignmentChange("right")}
             >
               <AlignRight className={TOOLBAR_ICON_CLASS} />
