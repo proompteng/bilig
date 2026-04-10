@@ -1593,6 +1593,120 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("does not auto-apply low-risk preview bundles on shared threads", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        threadId: "thr-shared",
+      }),
+    );
+    const preview = createPreviewSummary({
+      ranges: [
+        {
+          sheetName: "Sheet1",
+          startAddress: "A1",
+          endAddress: "A1",
+          role: "target" as const,
+        },
+      ],
+    });
+    const previewBundle = vi.fn(async () => preview);
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-shared",
+              threadId: "thr-shared",
+              scope: "shared",
+              pendingBundle: {
+                id: "bundle-shared-1",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-1",
+                goalText: "Bold the selected cell",
+                summary: "Format Sheet1!A1",
+                scope: "selection",
+                riskClass: "low",
+                approvalMode: "auto",
+                baseRevision: 3,
+                createdAtUnixMs: 10,
+                context: {
+                  selection: {
+                    sheetName: "Sheet1",
+                    address: "A1",
+                  },
+                  viewport: {
+                    rowStart: 0,
+                    rowEnd: 10,
+                    colStart: 0,
+                    colEnd: 5,
+                  },
+                },
+                commands: [
+                  {
+                    kind: "formatRange",
+                    range: {
+                      sheetName: "Sheet1",
+                      startAddress: "A1",
+                      endAddress: "A1",
+                    },
+                    patch: {
+                      font: {
+                        bold: true,
+                      },
+                    },
+                  },
+                ],
+                affectedRanges: [
+                  {
+                    sheetName: "Sheet1",
+                    startAddress: "A1",
+                    endAddress: "A1",
+                    role: "target",
+                  },
+                ],
+                estimatedAffectedCells: 1,
+              },
+            }),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness previewBundle={previewBundle} />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(previewBundle).toHaveBeenCalled();
+    expect(previewBundle.mock.calls[0]?.[0]).toMatchObject({
+      id: "bundle-shared-1",
+    });
+    const applyCall = fetchSpy.mock.calls.find(([input]) =>
+      requestUrl(input).endsWith("/bundles/bundle-shared-1/apply"),
+    );
+    expect(applyCall).toBeUndefined();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("re-previews and applies only the selected command subset", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

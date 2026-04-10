@@ -549,6 +549,7 @@ export function useWorkbookAgentPane(input: {
   useEffect(() => {
     if (
       !enabled ||
+      snapshot?.scope === "shared" ||
       !pendingBundle ||
       !selectedPendingBundle ||
       !preview ||
@@ -571,6 +572,7 @@ export function useWorkbookAgentPane(input: {
     normalizedCommandIndexes,
     pendingBundle,
     preview,
+    snapshot?.scope,
     selectedPendingBundle,
   ]);
 

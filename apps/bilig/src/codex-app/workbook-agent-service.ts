@@ -561,6 +561,18 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       });
     }
+    if (
+      sessionState.scope === "shared" &&
+      pendingBundle.riskClass !== "low" &&
+      sessionState.storageActorUserId !== input.session.userID
+    ) {
+      throw createWorkbookAgentServiceError({
+        code: "WORKBOOK_AGENT_SHARED_APPROVAL_REQUIRED",
+        message: "Shared medium/high-risk workbook bundles must be applied by the thread owner.",
+        statusCode: 409,
+        retryable: false,
+      });
+    }
     const result = await this.zeroSyncService.applyAgentCommandBundle(
       input.documentId,
       selection.acceptedBundle,

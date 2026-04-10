@@ -1159,6 +1159,179 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("requires the shared thread owner to apply medium/high-risk bundles", async () => {
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 5,
+      preview: createPreviewSummary(),
+    }));
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-shared",
+            actorUserId: "alex@example.com",
+            scope: "shared",
+            context: null,
+            entries: [],
+            pendingBundle: {
+              id: "bundle-shared-1",
+              documentId: "doc-1",
+              threadId: "thr-shared",
+              turnId: "turn-1",
+              goalText: "Build a workbook-wide summary",
+              summary: "Create summary sheet and rewrite rollups",
+              scope: "workbook",
+              riskClass: "high",
+              approvalMode: "explicit",
+              baseRevision: 4,
+              createdAtUnixMs: 100,
+              context: null,
+              commands: [
+                {
+                  kind: "createSheet",
+                  name: "Summary",
+                },
+              ],
+              affectedRanges: [],
+              estimatedAffectedCells: 0,
+            },
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared",
+          threadId: "thr-shared",
+        },
+      });
+
+      await expect(
+        service.applyPendingBundle({
+          documentId: "doc-1",
+          sessionId: snapshot.sessionId,
+          bundleId: "bundle-shared-1",
+          session: {
+            userID: "casey@example.com",
+            roles: ["editor"],
+          },
+          appliedBy: "user",
+          preview: createPreviewSummary(),
+        }),
+      ).rejects.toThrow(
+        "Shared medium/high-risk workbook bundles must be applied by the thread owner.",
+      );
+      expect(applyAgentCommandBundle).not.toHaveBeenCalled();
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("still allows collaborators to apply low-risk shared bundles manually", async () => {
+    const applyAgentCommandBundle = vi.fn(async () => ({
+      revision: 5,
+      preview: createPreviewSummary(),
+    }));
+    const appendWorkbookAgentRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        applyAgentCommandBundle,
+        appendWorkbookAgentRun,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-shared",
+            actorUserId: "alex@example.com",
+            scope: "shared",
+            context: null,
+            entries: [],
+            pendingBundle: {
+              id: "bundle-shared-low",
+              documentId: "doc-1",
+              threadId: "thr-shared",
+              turnId: "turn-1",
+              goalText: "Fix one visible cell",
+              summary: "Write cells in Sheet1!B2",
+              scope: "selection",
+              riskClass: "low",
+              approvalMode: "auto",
+              baseRevision: 4,
+              createdAtUnixMs: 100,
+              context: null,
+              commands: [
+                {
+                  kind: "writeRange",
+                  sheetName: "Sheet1",
+                  startAddress: "B2",
+                  values: [[42]],
+                },
+              ],
+              affectedRanges: [
+                {
+                  sheetName: "Sheet1",
+                  startAddress: "B2",
+                  endAddress: "B2",
+                  role: "target",
+                },
+              ],
+              estimatedAffectedCells: 1,
+            },
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared-low",
+          threadId: "thr-shared",
+        },
+      });
+
+      const applied = await service.applyPendingBundle({
+        documentId: "doc-1",
+        sessionId: snapshot.sessionId,
+        bundleId: "bundle-shared-low",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        appliedBy: "user",
+        preview: createPreviewSummary(),
+      });
+
+      expect(applyAgentCommandBundle).toHaveBeenCalled();
+      expect(applied.pendingBundle).toBeNull();
+    } finally {
+      await service.close();
+    }
+  });
+
   it("loads only thread-scoped execution history for private threads", async () => {
     const threadExecutionRecord = {
       id: "run-private-1",
