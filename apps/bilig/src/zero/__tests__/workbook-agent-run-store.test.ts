@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { appendWorkbookAgentRun, listWorkbookAgentRuns } from "../workbook-agent-run-store.js";
+import {
+  appendWorkbookAgentRun,
+  listWorkbookAgentThreadRuns,
+  listWorkbookAgentRuns,
+} from "../workbook-agent-run-store.js";
 import type { QueryResultRow, Queryable } from "../store.js";
 
 interface RecordedQuery {
@@ -139,6 +143,59 @@ describe("workbook-agent-run-store", () => {
             values: [[2]],
           },
         ],
+      }),
+    ]);
+  });
+
+  it("loads shared thread execution records for collaborator viewers", async () => {
+    const record = {
+      ...createExecutionRecord(),
+      threadId: "thr-shared",
+      actorUserId: "alex@example.com",
+    };
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes("FROM workbook_agent_run AS run") &&
+        values?.[1] === "thr-shared" &&
+        values?.[2] === "casey@example.com"
+          ? [
+              {
+                id: record.id,
+                bundleId: record.bundleId,
+                workbookId: record.documentId,
+                threadId: record.threadId,
+                turnId: record.turnId,
+                actorUserId: record.actorUserId,
+                goalText: record.goalText,
+                planText: record.planText,
+                summary: record.summary,
+                scope: record.scope,
+                riskClass: record.riskClass,
+                approvalMode: record.approvalMode,
+                acceptedScope: record.acceptedScope,
+                appliedBy: record.appliedBy,
+                baseRevision: record.baseRevision,
+                appliedRevision: record.appliedRevision,
+                createdAtUnixMs: record.createdAtUnixMs,
+                appliedAtUnixMs: record.appliedAtUnixMs,
+                contextJson: record.context,
+                commandsJson: record.commands,
+                previewJson: record.preview,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ]);
+
+    const records = await listWorkbookAgentThreadRuns(queryable, {
+      documentId: "doc-1",
+      actorUserId: "casey@example.com",
+      threadId: "thr-shared",
+    });
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        threadId: "thr-shared",
+        actorUserId: "alex@example.com",
       }),
     ]);
   });

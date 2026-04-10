@@ -48,6 +48,7 @@ import { ensureZeroSyncSchema } from "./zero-schema-store.js";
 import {
   appendWorkbookAgentRun,
   ensureWorkbookAgentRunSchema,
+  listWorkbookAgentThreadRuns,
   listWorkbookAgentRuns,
 } from "./workbook-agent-run-store.js";
 import {
@@ -81,6 +82,12 @@ export interface ZeroSyncService {
   listWorkbookAgentRuns(
     documentId: string,
     actorUserId: string,
+    limit?: number,
+  ): Promise<WorkbookAgentExecutionRecord[]>;
+  listWorkbookAgentThreadRuns(
+    documentId: string,
+    actorUserId: string,
+    threadId: string,
     limit?: number,
   ): Promise<WorkbookAgentExecutionRecord[]>;
   appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void>;
@@ -171,6 +178,10 @@ class DisabledZeroSyncService implements ZeroSyncService {
   }
 
   async appendWorkbookAgentRun(): Promise<never> {
+    throw new Error("Zero sync is not configured");
+  }
+
+  async listWorkbookAgentThreadRuns(): Promise<never> {
     throw new Error("Zero sync is not configured");
   }
 
@@ -446,6 +457,20 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async appendWorkbookAgentRun(record: WorkbookAgentExecutionRecord): Promise<void> {
     await appendWorkbookAgentRun(this.pool, record);
+  }
+
+  async listWorkbookAgentThreadRuns(
+    documentId: string,
+    actorUserId: string,
+    threadId: string,
+    limit?: number,
+  ): Promise<WorkbookAgentExecutionRecord[]> {
+    return await listWorkbookAgentThreadRuns(this.pool, {
+      documentId,
+      actorUserId,
+      threadId,
+      limit,
+    });
   }
 
   async listWorkbookAgentThreadSummaries(

@@ -359,10 +359,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     }
 
     const codexClient = await this.getCodexClient();
-    const executionRecords = await this.zeroSyncService.listWorkbookAgentRuns(
-      input.documentId,
-      input.session.userID,
-    );
     const thread =
       parsed.threadId === undefined
         ? await codexClient.threadStart({
@@ -383,13 +379,22 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       input.session.userID,
       thread.id,
     );
+    const resolvedScope = durableThreadState?.scope ?? parsed.scope ?? "private";
+    const executionRecords =
+      resolvedScope === "shared"
+        ? await this.zeroSyncService.listWorkbookAgentThreadRuns(
+            input.documentId,
+            input.session.userID,
+            thread.id,
+          )
+        : await this.zeroSyncService.listWorkbookAgentRuns(input.documentId, input.session.userID);
     const codexEntries = buildEntriesFromThread(thread);
 
     const snapshot: MutableWorkbookAgentSessionSnapshot = {
       sessionId,
       documentId: input.documentId,
       threadId: thread.id,
-      scope: durableThreadState?.scope ?? parsed.scope ?? "private",
+      scope: resolvedScope,
       status: thread.turns.some((turn) => turn.status === "failed")
         ? "failed"
         : thread.turns.some((turn) => turn.status === "inProgress")
@@ -407,7 +412,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       documentId: input.documentId,
       userId: input.session.userID,
       storageActorUserId: durableThreadState?.actorUserId ?? input.session.userID,
-      scope: durableThreadState?.scope ?? parsed.scope ?? "private",
+      scope: resolvedScope,
       threadId: thread.id,
       snapshot,
       optimisticUserEntryIdByTurn: new Map(),

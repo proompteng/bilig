@@ -110,6 +110,9 @@ function createZeroSyncStub(overrides: Partial<ZeroSyncService> = {}): ZeroSyncS
     async listWorkbookAgentRuns() {
       return [];
     },
+    async listWorkbookAgentThreadRuns() {
+      return [];
+    },
     async appendWorkbookAgentRun() {},
     async listWorkbookAgentThreadSummaries() {
       return [];
@@ -1066,6 +1069,88 @@ describe("workbook agent service", () => {
           scope: "shared",
         }),
       );
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("loads shared execution history when a collaborator resumes a shared thread", async () => {
+    const executionRecord = {
+      id: "run-shared-1",
+      bundleId: "bundle-shared-1",
+      documentId: "doc-1",
+      threadId: "thr-shared",
+      turnId: "turn-1",
+      actorUserId: "alex@example.com",
+      goalText: "Normalize imported rows",
+      planText: "Apply the shared cleanup plan",
+      summary: "Write cells in Sheet1!B2",
+      scope: "sheet" as const,
+      riskClass: "medium" as const,
+      approvalMode: "preview" as const,
+      acceptedScope: "full" as const,
+      appliedBy: "user" as const,
+      baseRevision: 3,
+      appliedRevision: 4,
+      createdAtUnixMs: 100,
+      appliedAtUnixMs: 200,
+      context: null,
+      commands: [
+        {
+          kind: "writeRange" as const,
+          sheetName: "Sheet1",
+          startAddress: "B2",
+          values: [[42]],
+        },
+      ],
+      preview: null,
+    };
+    const listWorkbookAgentThreadRuns = vi.fn(async () => [executionRecord]);
+    const listWorkbookAgentRuns = vi.fn(async () => []);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        listWorkbookAgentRuns,
+        listWorkbookAgentThreadRuns,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-shared",
+            actorUserId: "alex@example.com",
+            scope: "shared",
+            context: null,
+            entries: [],
+            pendingBundle: null,
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "casey@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-shared",
+          threadId: "thr-shared",
+        },
+      });
+
+      expect(snapshot.scope).toBe("shared");
+      expect(snapshot.executionRecords).toEqual([executionRecord]);
+      expect(listWorkbookAgentThreadRuns).toHaveBeenCalledWith(
+        "doc-1",
+        "casey@example.com",
+        "thr-shared",
+      );
+      expect(listWorkbookAgentRuns).not.toHaveBeenCalled();
     } finally {
       await service.close();
     }

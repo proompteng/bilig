@@ -285,3 +285,60 @@ export async function listWorkbookAgentRuns(
     return record ? [record] : [];
   });
 }
+
+export async function listWorkbookAgentThreadRuns(
+  db: Queryable,
+  input: {
+    documentId: string;
+    actorUserId: string;
+    threadId: string;
+    limit?: number;
+  },
+): Promise<WorkbookAgentExecutionRecord[]> {
+  const result = await db.query<WorkbookAgentRunRow>(
+    `
+      SELECT
+        run.id AS "id",
+        run.bundle_id AS "bundleId",
+        run.workbook_id AS "workbookId",
+        run.thread_id AS "threadId",
+        run.turn_id AS "turnId",
+        run.actor_user_id AS "actorUserId",
+        run.goal_text AS "goalText",
+        run.plan_text AS "planText",
+        run.summary AS "summary",
+        run.scope AS "scope",
+        run.risk_class AS "riskClass",
+        run.approval_mode AS "approvalMode",
+        run.accepted_scope AS "acceptedScope",
+        run.applied_by AS "appliedBy",
+        run.base_revision AS "baseRevision",
+        run.applied_revision AS "appliedRevision",
+        run.created_at_unix_ms AS "createdAtUnixMs",
+        run.applied_at_unix_ms AS "appliedAtUnixMs",
+        run.context_json AS "contextJson",
+        run.commands_json AS "commandsJson",
+        run.preview_json AS "previewJson"
+      FROM workbook_agent_run AS run
+      WHERE run.workbook_id = $1
+        AND run.thread_id = $2
+        AND (
+          run.actor_user_id = $3
+          OR EXISTS (
+            SELECT 1
+            FROM workbook_chat_thread AS thread
+            WHERE thread.workbook_id = run.workbook_id
+              AND thread.thread_id = run.thread_id
+              AND thread.scope = 'shared'
+          )
+        )
+      ORDER BY run.applied_at_unix_ms DESC
+      LIMIT $4
+    `,
+    [input.documentId, input.threadId, input.actorUserId, input.limit ?? 20],
+  );
+  return result.rows.flatMap((row) => {
+    const record = normalizeExecutionRecord(row);
+    return record ? [record] : [];
+  });
+}
