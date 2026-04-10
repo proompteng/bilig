@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "packages": {
+    "packages/headless": {
+      "component": "headless",
+      "package-name": "@bilig/headless",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["package.json"],
+      "include-component-in-tag": true,
+      "versioning": "default"
+    }
+  }
+}
