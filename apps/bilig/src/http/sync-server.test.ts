@@ -535,6 +535,94 @@ describe("sync-server workbook agent", () => {
     }
   });
 
+  it("creates or resumes workbook agent threads through the durable thread route", async () => {
+    const createSession = vi.fn(async () =>
+      createAgentSessionSnapshot({
+        sessionId: "agent-session-thread",
+        threadId: "thr-shared",
+        scope: "shared",
+      }),
+    );
+
+    const { app } = createSyncServer({
+      logger: false,
+      workbookAgentService: {
+        enabled: true,
+        createSession,
+        async updateContext() {
+          throw new Error("not used");
+        },
+        async startTurn() {
+          throw new Error("not used");
+        },
+        async interruptTurn() {
+          throw new Error("not used");
+        },
+        async applyPendingBundle() {
+          throw new Error("not used");
+        },
+        async dismissPendingBundle() {
+          throw new Error("not used");
+        },
+        async replayExecutionRecord() {
+          throw new Error("not used");
+        },
+        async listThreads() {
+          return [];
+        },
+        getSnapshot() {
+          throw new Error("not used");
+        },
+        subscribe() {
+          return () => {};
+        },
+        async close() {},
+      },
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v2/documents/doc-1/agent/threads",
+        payload: {
+          threadId: "thr-shared",
+          context: {
+            selection: {
+              sheetName: "Sheet1",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 10,
+              colStart: 0,
+              colEnd: 5,
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: "doc-1",
+          body: expect.objectContaining({
+            threadId: "thr-shared",
+          }),
+        }),
+      );
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          sessionId: "agent-session-thread",
+          threadId: "thr-shared",
+          scope: "shared",
+        }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("starts workbook agent turns through a durable thread route", async () => {
     const createSession = vi.fn(async () =>
       createAgentSessionSnapshot({
