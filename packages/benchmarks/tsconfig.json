@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.workspace-paths.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist"
@@ -7,6 +7,9 @@
   "references": [
     {
       "path": "../core"
+    },
+    {
+      "path": "../headless"
     }
   ],
   "include": ["src/**/*"],

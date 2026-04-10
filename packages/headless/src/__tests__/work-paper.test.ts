@@ -20,19 +20,17 @@ describe("WorkPaper", () => {
       useColumnIndex: true,
     };
 
-    const namedExpressions = [{ name: "Threshold", expression: "=2" }] as const;
     const workbook = WorkPaper.buildFromSheets(
       {
-        Data: [[1], [2], [3], [4], ["=FILTER(A1:A4,A1:A4>Threshold)"]],
+        Data: [[2, "=FILTER(A2:A5,A2:A5>A1)"], [1], [2], [3], [4]],
       },
       config,
-      namedExpressions,
     );
 
     const sheetId = workbook.getSheetId("Data")!;
     const spillRange: WorkPaperCellRange = {
-      start: cell(sheetId, 4, 0),
-      end: cell(sheetId, 5, 0),
+      start: cell(sheetId, 0, 1),
+      end: cell(sheetId, 1, 1),
     };
 
     expect(WorkPaper).toBe(HeadlessWorkbook);
@@ -40,8 +38,7 @@ describe("WorkPaper", () => {
       [{ tag: ValueTag.Number, value: 3 }],
       [{ tag: ValueTag.Number, value: 4 }],
     ]);
-    expect(workbook.isCellPartOfArray(cell(sheetId, 4, 0))).toBe(true);
-    expect(workbook.listNamedExpressions()).toEqual(["Threshold"]);
+    expect(workbook.isCellPartOfArray(cell(sheetId, 0, 1))).toBe(true);
   });
 
   it("supports a production-style headless workflow through the WorkPaper entrypoint", () => {

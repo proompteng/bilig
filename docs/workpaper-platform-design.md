@@ -213,6 +213,12 @@ Required quality gates:
 - regression tests for clipboard, history, named expressions, rebuilds, adapters, and WorkPaper aliasing
 - packaging smoke test in a clean external project
 
+Shipped enforcement for this repo:
+
+- generated snapshot: `packages/headless/src/__tests__/fixtures/hyperformula-surface.json`
+- local regeneration/check command: `bun scripts/gen-workpaper-hyperformula-audit.ts` and `bun scripts/gen-workpaper-hyperformula-audit.ts --check`
+- CI-safe parity test: `packages/headless/src/__tests__/hyperformula-surface-parity.test.ts`
+
 ## Performance Standard
 
 HyperFormula documents batching, evaluation suspension, address mapping policy, and column indexing as performance levers. WorkPaper keeps those controls and raises the bar.
@@ -229,6 +235,18 @@ Performance requirements:
   - dynamic-array recalculation
 - use the `@bilig/wasm-kernel` fast path when a formula family has a proven numeric hot spot and JS parity is already green
 - publish benchmark artifacts or checked-in benchmark baselines before claiming any `10x` improvement
+
+Shipped benchmark harness:
+
+- package benchmark entrypoint: `packages/benchmarks/src/benchmark-workpaper.ts`
+- repo command: `pnpm bench:workpaper`
+- covered scenarios:
+  - workbook build from sheets
+  - single-cell edit with downstream recalculation
+  - batched edits
+  - dense range reads
+  - lookup workload with `useColumnIndex`
+  - dynamic-array recalculation
 
 WorkPaper is allowed to claim a `10x` win only when a benchmark and fixture suite proves it for a defined workload. Until then, the doc treats `10x better` as an engineering target, not a blanket claim.
 
@@ -286,6 +304,9 @@ This design is not speculative. The repo work paired with it does the following:
 - adds WorkPaper-branded public type aliases
 - updates package and public API docs to use `WorkPaper`
 - adds tests that exercise real headless workflows through `WorkPaper`
+- generates and checks a HyperFormula surface snapshot from the local checkout
+- adds a CI-safe parity test against that generated snapshot
+- adds a WorkPaper benchmark suite and repo command
 - keeps `HeadlessWorkbook` working for compatibility
 
 ## Acceptance Criteria
