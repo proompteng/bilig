@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildSheetCellSourceRows,
   buildSheetCellSourceRowsFromEngine,
+  buildWorkbookSourceProjection,
+  buildWorkbookSourceProjectionFromEngine,
   diffProjectionRows,
   materializeCellEvalProjection,
   sourceProjectionKeys,
@@ -206,6 +208,28 @@ describe("projection helpers", () => {
 
     expect(buildSheetCellSourceRowsFromEngine("doc-a", engine, "Sheet1", options)).toEqual(
       buildSheetCellSourceRows("doc-a", engine.exportSnapshot(), "Sheet1", options),
+    );
+  });
+
+  it("does not leak runtime-only dependency cells into source projection after structural rewrites", async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "projection-test",
+    });
+    await engine.ready();
+    engine.setCellFormula("Sheet1", "A1", "A1+B1");
+    engine.insertColumns("Sheet1", 0, 1);
+
+    const options = {
+      revision: 1,
+      calculatedRevision: 1,
+      ownerUserId: "owner-a",
+      updatedBy: "user-a",
+      updatedAt: "2026-03-29T10:00:00.000Z",
+    } as const;
+
+    expect(buildWorkbookSourceProjectionFromEngine("doc-a", engine, options)).toEqual(
+      buildWorkbookSourceProjection("doc-a", engine.exportSnapshot(), options),
     );
   });
 });

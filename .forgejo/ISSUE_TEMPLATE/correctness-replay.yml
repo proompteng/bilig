@@ -1,0 +1,98 @@
+name: Correctness Replay
+description: Capture a reproducible correctness bug with the guarantee it violates and the narrowest replay target.
+title: "[correctness] "
+labels:
+  - correctness
+body:
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: Subsystem
+      description: Pick the narrowest layer that can own the replay.
+      options:
+        - packages/core
+        - packages/formula
+        - apps/bilig
+        - packages/zero-sync
+        - apps/web
+        - packages/grid
+    validations:
+      required: true
+  - type: dropdown
+    id: guarantee
+    attributes:
+      label: Guarantee
+      description: Which named correctness guarantee failed?
+      options:
+        - snapshot round-trip parity
+        - recalc determinism
+        - dependency stability
+        - structural rewrite correctness
+        - undo/redo reversibility
+        - op replay parity
+        - builtin oracle parity
+        - error propagation correctness
+        - coercion and edge-case stability
+        - binder and evaluator agreement
+        - JS and WASM parity
+        - mutation idempotence
+        - event ordering and causality
+        - engine/projection parity
+        - migration replay correctness
+        - snapshot and replica compatibility
+        - worker/runtime/UI parity
+        - authoritative data path correctness
+        - viewport subscription correctness
+        - reconnect and invalidation consistency
+        - resource budget regression
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal replay
+      description: Include the smallest workbook snapshot, operation sequence, or frame sequence that reproduces the bug.
+      placeholder: |
+        Workbook snapshot:
+        ...
+
+        Operations / frames:
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the semantic result that should have happened.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe the observed result, including exact wrong cells, rows, ordering, or resource symptoms.
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: Replay target
+      description: Name the test file or nearest layer where the permanent replay should live.
+      placeholder: |
+        packages/core/src/__tests__/engine-correctness.test.ts
+        or
+        apps/bilig/src/zero/__tests__/projection-parity.test.ts
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link the failing CI job, local command, fuzz artifact, production incident, or customer report.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Blast radius and user impact
+      description: State whether this is user-visible, production-only, flaky harness behavior, or a resource regression.

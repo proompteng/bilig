@@ -288,7 +288,8 @@ function buildCellSourceRowFromEngineCell(
 ): CellSourceRow | null {
   if (
     cell.formula === undefined &&
-    cell.value.tag === ValueTag.Empty &&
+    (cell.value.tag === ValueTag.Empty || cell.value.tag === ValueTag.Error) &&
+    cell.version === 0 &&
     cell.styleId === undefined &&
     cell.numberFormatId === undefined &&
     cell.format === undefined

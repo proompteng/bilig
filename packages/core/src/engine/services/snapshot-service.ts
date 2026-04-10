@@ -12,14 +12,16 @@ import {
   exportReplicaSnapshot as exportReplicaStateSnapshot,
   hydrateReplicaState,
 } from "../../replica-state.js";
-import type { EngineRuntimeState, EngineReplicaSnapshot, TransactionRecord } from "../runtime-state.js";
+import type {
+  EngineRuntimeState,
+  EngineReplicaSnapshot,
+  TransactionRecord,
+} from "../runtime-state.js";
 import { EngineSnapshotError } from "../errors.js";
 
 export interface EngineSnapshotService {
   readonly exportWorkbook: () => Effect.Effect<WorkbookSnapshot, EngineSnapshotError>;
-  readonly importWorkbook: (
-    snapshot: WorkbookSnapshot,
-  ) => Effect.Effect<void, EngineSnapshotError>;
+  readonly importWorkbook: (snapshot: WorkbookSnapshot) => Effect.Effect<void, EngineSnapshotError>;
   readonly exportReplica: () => Effect.Effect<EngineReplicaSnapshot, EngineSnapshotError>;
   readonly importReplica: (
     snapshot: EngineReplicaSnapshot,
@@ -29,12 +31,7 @@ export interface EngineSnapshotService {
 export function createEngineSnapshotService(args: {
   readonly state: Pick<
     EngineRuntimeState,
-    | "workbook"
-    | "strings"
-    | "formulas"
-    | "replicaState"
-    | "entityVersions"
-    | "sheetDeleteVersions"
+    "workbook" | "strings" | "formulas" | "replicaState" | "entityVersions" | "sheetDeleteVersions"
   >;
   readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
   readonly resetWorkbook: (workbookName?: string) => void;
@@ -76,7 +73,9 @@ export function createEngineSnapshotService(args: {
           for (let cellIndex = 0; cellIndex < args.state.workbook.cellStore.size; cellIndex += 1) {
             const explicitFormat = args.state.workbook.getCellFormat(cellIndex);
             if (explicitFormat !== undefined) {
-              referencedFormatIds.add(args.state.workbook.internCellNumberFormat(explicitFormat).id);
+              referencedFormatIds.add(
+                args.state.workbook.internCellNumberFormat(explicitFormat).id,
+              );
             }
           }
           const styles = args.state.workbook
@@ -155,6 +154,14 @@ export function createEngineSnapshotService(args: {
                   if ((snapshot.flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
                     return;
                   }
+                  if (
+                    snapshot.formula === undefined &&
+                    snapshot.format === undefined &&
+                    snapshot.version === 0 &&
+                    (snapshot.value.tag === ValueTag.Empty || snapshot.value.tag === ValueTag.Error)
+                  ) {
+                    return;
+                  }
                   const cell: WorkbookSnapshot["sheets"][number]["cells"][number] = {
                     address: snapshot.address,
                   };
@@ -228,7 +235,7 @@ export function createEngineSnapshotService(args: {
           });
           snapshot.sheets.forEach((sheet) => {
             sheet.metadata?.rows?.forEach(({ index, id, size, hidden }) => {
-              const entry = { index, id } as WorkbookAxisEntrySnapshot;
+              const entry: WorkbookAxisEntrySnapshot = { index, id };
               if (size !== undefined) {
                 entry.size = size;
               }
@@ -244,7 +251,7 @@ export function createEngineSnapshotService(args: {
               });
             });
             sheet.metadata?.columns?.forEach(({ index, id, size, hidden }) => {
-              const entry = { index, id } as WorkbookAxisEntrySnapshot;
+              const entry: WorkbookAxisEntrySnapshot = { index, id };
               if (size !== undefined) {
                 entry.size = size;
               }
@@ -380,7 +387,9 @@ export function createEngineSnapshotService(args: {
             (count, sheet) => count + sheet.cells.length,
             0,
           );
-          args.executeRestoreTransaction(potentialNewCells > 0 ? { ops, potentialNewCells } : { ops });
+          args.executeRestoreTransaction(
+            potentialNewCells > 0 ? { ops, potentialNewCells } : { ops },
+          );
         },
         catch: (cause) =>
           new EngineSnapshotError({
