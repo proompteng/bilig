@@ -3,9 +3,10 @@ import type { FormulaNode } from "./ast.js";
 import { indexToColumn, parseCellAddress, parseRangeAddress } from "./addressing.js";
 import { getBuiltin, hasBuiltin } from "./builtins.js";
 import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
-import { evaluateGroupBy, evaluatePivotBy, type MatrixValue } from "./group-pivot-evaluator.js";
+import type { MatrixValue } from "./group-pivot-evaluator.js";
 import { evaluateArraySpecialCall } from "./js-evaluator-array-special-calls.js";
 import { evaluateContextSpecialCall } from "./js-evaluator-context-special-calls.js";
+import { evaluateWorkbookSpecialCall } from "./js-evaluator-workbook-special-calls.js";
 import type {
   EvaluationContext,
   JsPlanInstruction,
@@ -769,208 +770,23 @@ function evaluateSpecialCall(
   argRefs: readonly (ReferenceOperand | undefined)[] = [],
 ): StackValue | undefined {
   switch (callee) {
-    case "GETPIVOTDATA": {
-      if (rawArgs.length < 2 || (rawArgs.length - 2) % 2 !== 0) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const dataFieldValue = isSingleCellValue(rawArgs[0]!);
-      const address = referenceTopLeftAddress(argRefs[1]);
-      const sheetName = referenceSheetName(argRefs[1], context);
-      if (!dataFieldValue) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      if (!address || !sheetName) {
-        return stackScalar(error(ErrorCode.Ref));
-      }
-      const filters: Array<{ field: string; item: CellValue }> = [];
-      for (let index = 2; index < rawArgs.length; index += 2) {
-        const fieldValue = isSingleCellValue(rawArgs[index]!);
-        const itemValue = isSingleCellValue(rawArgs[index + 1]!);
-        if (!fieldValue || !itemValue) {
-          return stackScalar(error(ErrorCode.Value));
-        }
-        filters.push({ field: toStringValue(fieldValue), item: itemValue });
-      }
-      return stackScalar(
-        context.resolvePivotData?.({
-          dataField: toStringValue(dataFieldValue),
-          sheetName,
-          address,
-          filters,
-        }) ?? error(ErrorCode.Ref),
-      );
-    }
-    case "GROUPBY": {
-      if (rawArgs.length < 3 || rawArgs.length > 8) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const rowFields = matrixFromStackValue(rawArgs[0]!);
-      const values = matrixFromStackValue(rawArgs[1]!);
-      if (!rowFields || !values) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const sortOrder =
-        vectorIntegerArgument(rawArgs[5]) ??
-        (rawArgs[5] ? [scalarIntegerArgument(rawArgs[5]) ?? Number.NaN] : undefined);
-      const fieldHeadersMode = scalarIntegerArgument(rawArgs[3]);
-      const totalDepth = scalarIntegerArgument(rawArgs[4]);
-      const filterArray = rawArgs[6] ? matrixFromStackValue(rawArgs[6]) : undefined;
-      const fieldRelationship = scalarIntegerArgument(rawArgs[7]);
-      const groupByOptions = {
-        aggregate: (subset: readonly CellValue[], totalSet?: readonly CellValue[]) =>
-          aggregateRangeSubset(rawArgs[2]!, subset, context, totalSet),
-        ...(fieldHeadersMode !== undefined ? { fieldHeadersMode } : {}),
-        ...(totalDepth !== undefined ? { totalDepth } : {}),
-        ...(sortOrder?.every(Number.isFinite) ? { sortOrder } : {}),
-        ...(filterArray !== undefined ? { filterArray } : {}),
-        ...(fieldRelationship !== undefined ? { fieldRelationship } : {}),
-      };
-      const result = evaluateGroupBy(rowFields, values, groupByOptions);
-      return isArrayValue(result) ? result : stackScalar(result);
-    }
-    case "PIVOTBY": {
-      if (rawArgs.length < 4 || rawArgs.length > 11) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const rowFields = matrixFromStackValue(rawArgs[0]!);
-      const colFields = matrixFromStackValue(rawArgs[1]!);
-      const values = matrixFromStackValue(rawArgs[2]!);
-      if (!rowFields || !colFields || !values) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const rowSortOrder =
-        vectorIntegerArgument(rawArgs[6]) ??
-        (rawArgs[6] ? [scalarIntegerArgument(rawArgs[6]) ?? Number.NaN] : undefined);
-      const colSortOrder =
-        vectorIntegerArgument(rawArgs[8]) ??
-        (rawArgs[8] ? [scalarIntegerArgument(rawArgs[8]) ?? Number.NaN] : undefined);
-      const fieldHeadersMode = scalarIntegerArgument(rawArgs[4]);
-      const rowTotalDepth = scalarIntegerArgument(rawArgs[5]);
-      const colTotalDepth = scalarIntegerArgument(rawArgs[7]);
-      const filterArray = rawArgs[9] ? matrixFromStackValue(rawArgs[9]) : undefined;
-      const relativeTo = scalarIntegerArgument(rawArgs[10]);
-      const pivotByOptions = {
-        aggregate: (subset: readonly CellValue[], totalSet?: readonly CellValue[]) =>
-          aggregateRangeSubset(rawArgs[3]!, subset, context, totalSet),
-        ...(fieldHeadersMode !== undefined ? { fieldHeadersMode } : {}),
-        ...(rowTotalDepth !== undefined ? { rowTotalDepth } : {}),
-        ...(rowSortOrder?.every(Number.isFinite) ? { rowSortOrder } : {}),
-        ...(colTotalDepth !== undefined ? { colTotalDepth } : {}),
-        ...(colSortOrder?.every(Number.isFinite) ? { colSortOrder } : {}),
-        ...(filterArray !== undefined ? { filterArray } : {}),
-        ...(relativeTo !== undefined ? { relativeTo } : {}),
-      };
-      const result = evaluatePivotBy(rowFields, colFields, values, pivotByOptions);
-      return isArrayValue(result) ? result : stackScalar(result);
-    }
-    case "MULTIPLE.OPERATIONS": {
-      if (rawArgs.length !== 3 && rawArgs.length !== 5) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const formulaAddress = referenceTopLeftAddress(argRefs[0]);
-      const formulaSheetName = referenceSheetName(argRefs[0], context);
-      const rowCellAddress = referenceTopLeftAddress(argRefs[1]);
-      const rowCellSheetName = referenceSheetName(argRefs[1], context);
-      const rowReplacementAddress = referenceTopLeftAddress(argRefs[2]);
-      const rowReplacementSheetName = referenceSheetName(argRefs[2], context);
-      if (
-        !formulaAddress ||
-        !formulaSheetName ||
-        !rowCellAddress ||
-        !rowCellSheetName ||
-        !rowReplacementAddress ||
-        !rowReplacementSheetName
-      ) {
-        return stackScalar(error(ErrorCode.Ref));
-      }
-      const columnCellAddress =
-        rawArgs.length === 5 ? referenceTopLeftAddress(argRefs[3]) : undefined;
-      const columnCellSheetName =
-        rawArgs.length === 5 ? referenceSheetName(argRefs[3], context) : undefined;
-      const columnReplacementAddress =
-        rawArgs.length === 5 ? referenceTopLeftAddress(argRefs[4]) : undefined;
-      const columnReplacementSheetName =
-        rawArgs.length === 5 ? referenceSheetName(argRefs[4], context) : undefined;
-      if (
-        rawArgs.length === 5 &&
-        (!columnCellAddress ||
-          !columnCellSheetName ||
-          !columnReplacementAddress ||
-          !columnReplacementSheetName)
-      ) {
-        return stackScalar(error(ErrorCode.Ref));
-      }
-      const request = {
-        formulaSheetName,
-        formulaAddress,
-        rowCellSheetName,
-        rowCellAddress,
-        rowReplacementSheetName,
-        rowReplacementAddress,
-        ...(columnCellSheetName ? { columnCellSheetName } : {}),
-        ...(columnCellAddress ? { columnCellAddress } : {}),
-        ...(columnReplacementSheetName ? { columnReplacementSheetName } : {}),
-        ...(columnReplacementAddress ? { columnReplacementAddress } : {}),
-      };
-      return stackScalar(context.resolveMultipleOperations?.(request) ?? error(ErrorCode.Ref));
-    }
-    case "INDIRECT": {
-      if (rawArgs.length < 1 || rawArgs.length > 2) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const refText = coerceScalarTextArgument(rawArgs[0]);
-      if (isCellValueError(refText)) {
-        return stackScalar(refText);
-      }
-      const a1Mode = coerceOptionalBooleanArgument(rawArgs[1], true);
-      if (isCellValueError(a1Mode)) {
-        return stackScalar(a1Mode);
-      }
-      if (!a1Mode) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const normalizedRefText = refText.trim();
-      if (normalizedRefText === "") {
-        return stackScalar(error(ErrorCode.Ref));
-      }
-
-      try {
-        const cell = parseCellAddress(normalizedRefText, context.sheetName);
-        return stackScalar(context.resolveCell(cell.sheetName ?? context.sheetName, cell.text));
-      } catch {
-        // fall through to range/name resolution
-      }
-
-      try {
-        const range = parseRangeAddress(normalizedRefText, context.sheetName);
-        if (range.kind !== "cells") {
-          return stackScalar(error(ErrorCode.Ref));
-        }
-        const targetSheetName = range.sheetName ?? context.sheetName;
-        const values = context.resolveRange(
-          targetSheetName,
-          range.start.text,
-          range.end.text,
-          "cells",
-        );
-        const rows = range.end.row - range.start.row + 1;
-        const cols = range.end.col - range.start.col + 1;
-        return {
-          kind: "range",
-          values,
-          refKind: "cells",
-          rows,
-          cols,
-        };
-      } catch {
-        // fall through to name resolution
-      }
-
-      const resolvedName = context.resolveName?.(normalizedRefText);
-      return stackScalar(resolvedName ?? error(ErrorCode.Ref));
-    }
     default:
       return (
+        evaluateWorkbookSpecialCall(callee, rawArgs, context, argRefs, {
+          error,
+          stackScalar,
+          toStringValue,
+          isSingleCellValue,
+          matrixFromStackValue,
+          scalarIntegerArgument,
+          vectorIntegerArgument,
+          aggregateRangeSubset,
+          referenceTopLeftAddress,
+          referenceSheetName,
+          coerceScalarTextArgument,
+          coerceOptionalBooleanArgument,
+          isCellValueError,
+        }) ??
         evaluateContextSpecialCall(callee, rawArgs, context, argRefs, {
           error,
           emptyValue,
@@ -996,17 +812,17 @@ function evaluateSpecialCall(
           emptyValue,
           numberValue,
           stringValue,
-        stackScalar,
-        toRangeLike,
-        getRangeCell,
-        getBroadcastShape,
-        makeArrayStack,
-        applyLambda,
-        toPositiveInteger,
-        coerceScalarTextArgument,
-        coerceOptionalBooleanArgument,
-        coerceOptionalMatchModeArgument,
-        coerceOptionalPositiveIntegerArgument,
+          stackScalar,
+          toRangeLike,
+          getRangeCell,
+          getBroadcastShape,
+          makeArrayStack,
+          applyLambda,
+          toPositiveInteger,
+          coerceScalarTextArgument,
+          coerceOptionalBooleanArgument,
+          coerceOptionalMatchModeArgument,
+          coerceOptionalPositiveIntegerArgument,
           coerceOptionalTrimModeArgument,
           isCellValueError,
           isSingleCellValue,
