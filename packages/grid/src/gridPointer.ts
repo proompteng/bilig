@@ -4,6 +4,8 @@ import {
   SCROLLBAR_GUTTER,
   type GridMetrics,
   type GridRect,
+  getResolvedColumnWidth,
+  getResolvedRowHeight,
   getVisibleColumnBounds,
   getVisibleRowBounds,
   resolveColumnAtClientX,
@@ -15,6 +17,8 @@ export interface VisibleRegionState {
   range: Rectangle;
   tx: number;
   ty: number;
+  freezeRows?: number;
+  freezeCols?: number;
 }
 
 export interface PointerGeometry {
@@ -25,6 +29,10 @@ export interface PointerGeometry {
   dataTop: number;
   dataRight: number;
   dataBottom: number;
+  frozenLeftWidth: number;
+  frozenTopHeight: number;
+  mainDataLeft: number;
+  mainDataTop: number;
 }
 
 export interface SelectedCellBounds {
@@ -58,40 +66,60 @@ export function createPointerGeometry(
   rowHeights: Readonly<Record<number, number>>,
   gridMetrics: GridMetrics,
 ): PointerGeometry {
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, region.freezeCols ?? 0));
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, region.freezeRows ?? 0));
   const cellWidth = gridMetrics.columnWidth;
   const cellHeight = gridMetrics.rowHeight;
   const dataLeft = hostBounds.left + gridMetrics.rowMarkerWidth;
   const dataTop = hostBounds.top + gridMetrics.headerHeight;
+  const frozenLeftWidth = resolveFrozenColumnWidth(
+    freezeCols,
+    columnWidths,
+    gridMetrics.columnWidth,
+  );
+  const frozenTopHeight = resolveFrozenRowHeight(freezeRows, rowHeights, gridMetrics.rowHeight);
+  const mainDataLeft = dataLeft + frozenLeftWidth;
+  const mainDataTop = dataTop + frozenTopHeight;
   const visibleColumnBounds = getVisibleColumnBounds(
     region.range,
-    dataLeft,
+    mainDataLeft,
     MAX_COLS,
     columnWidths,
     gridMetrics.columnWidth,
   );
-  const dataWidth =
+  const mainDataWidth =
     visibleColumnBounds.length === 0
       ? region.range.width * cellWidth
-      : visibleColumnBounds.at(-1)!.right - dataLeft;
+      : visibleColumnBounds.at(-1)!.right - mainDataLeft;
   const visibleRowBounds = getVisibleRowBounds(
     region.range,
-    dataTop,
+    mainDataTop,
     MAX_ROWS,
     rowHeights,
     gridMetrics.rowHeight,
   );
-  const dataHeight =
+  const mainDataHeight =
     visibleRowBounds.length === 0
       ? region.range.height * cellHeight
-      : visibleRowBounds.at(-1)!.bottom - dataTop;
+      : visibleRowBounds.at(-1)!.bottom - mainDataTop;
   return {
     hostBounds,
     cellWidth,
     cellHeight,
     dataLeft,
     dataTop,
-    dataRight: Math.min(hostBounds.right - SCROLLBAR_GUTTER, dataLeft + dataWidth),
-    dataBottom: Math.min(hostBounds.bottom - SCROLLBAR_GUTTER, dataTop + dataHeight),
+    dataRight: Math.min(
+      hostBounds.right - SCROLLBAR_GUTTER,
+      dataLeft + frozenLeftWidth + mainDataWidth,
+    ),
+    dataBottom: Math.min(
+      hostBounds.bottom - SCROLLBAR_GUTTER,
+      dataTop + frozenTopHeight + mainDataHeight,
+    ),
+    frozenLeftWidth,
+    frozenTopHeight,
+    mainDataLeft,
+    mainDataTop,
   };
 }
 
@@ -106,13 +134,7 @@ export function resolveColumnResizeTarget(
   if (clientY < geometry.hostBounds.top || clientY >= geometry.dataTop) {
     return null;
   }
-  for (const column of getVisibleColumnBounds(
-    region.range,
-    geometry.dataLeft,
-    MAX_COLS,
-    columnWidths,
-    defaultWidth,
-  )) {
+  for (const column of getPointerVisibleColumns(region, geometry, columnWidths, defaultWidth)) {
     if (column.index >= MAX_COLS - 1) {
       continue;
     }
@@ -137,13 +159,7 @@ export function resolveRowResizeTarget(
   if (clientX < geometry.hostBounds.left || clientX >= geometry.dataLeft) {
     return null;
   }
-  for (const row of getVisibleRowBounds(
-    region.range,
-    geometry.dataTop,
-    MAX_ROWS,
-    rowHeights,
-    defaultHeight,
-  )) {
+  for (const row of getPointerVisibleRows(region, geometry, rowHeights, defaultHeight)) {
     if (row.index >= MAX_ROWS - 1) {
       continue;
     }
@@ -199,22 +215,14 @@ export function resolvePointerCell(input: PointerCellResolutionInput): Item | nu
     return selectedCell;
   }
 
-  const col = resolveColumnAtClientX(
+  const col = resolvePointerColumnIndex(
     clientX,
-    region.range,
-    dataLeft,
-    MAX_COLS,
+    region,
+    geometry,
     columnWidths,
     gridMetrics.columnWidth,
   );
-  const row = resolveRowAtClientY(
-    clientY,
-    region.range,
-    dataTop,
-    MAX_ROWS,
-    rowHeights,
-    gridMetrics.rowHeight,
-  );
+  const row = resolvePointerRowIndex(clientY, region, geometry, rowHeights, gridMetrics.rowHeight);
   if (col === null || col < 0 || col >= MAX_COLS || row === null || row < 0 || row >= MAX_ROWS) {
     return null;
   }
@@ -241,11 +249,10 @@ export function resolveHeaderSelection(
     clientX >= dataLeft &&
     clientX < dataRight
   ) {
-    const col = resolveColumnAtClientX(
+    const col = resolvePointerColumnIndex(
       clientX,
-      region.range,
-      dataLeft,
-      MAX_COLS,
+      region,
+      geometry,
       columnWidths,
       gridMetrics.columnWidth,
     );
@@ -260,11 +267,10 @@ export function resolveHeaderSelection(
     clientY >= dataTop &&
     clientY < dataBottom
   ) {
-    const row = resolveRowAtClientY(
+    const row = resolvePointerRowIndex(
       clientY,
-      region.range,
-      dataTop,
-      MAX_ROWS,
+      region,
+      geometry,
       rowHeights,
       gridMetrics.rowHeight,
     );
@@ -297,11 +303,10 @@ export function resolveHeaderSelectionForDrag(
     ) {
       return null;
     }
-    const col = resolveColumnAtClientX(
+    const col = resolvePointerColumnIndex(
       clientX,
-      region.range,
-      dataLeft,
-      MAX_COLS,
+      region,
+      geometry,
       columnWidths,
       gridMetrics.columnWidth,
     );
@@ -319,16 +324,143 @@ export function resolveHeaderSelectionForDrag(
   ) {
     return null;
   }
-  const row = resolveRowAtClientY(
-    clientY,
-    region.range,
-    dataTop,
-    MAX_ROWS,
-    rowHeights,
-    gridMetrics.rowHeight,
-  );
+  const row = resolvePointerRowIndex(clientY, region, geometry, rowHeights, gridMetrics.rowHeight);
   if (row === null || row < 0 || row >= MAX_ROWS) {
     return null;
   }
   return { kind: "row", index: row };
+}
+
+function resolveFrozenColumnWidth(
+  freezeCols: number,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number,
+): number {
+  let width = 0;
+  for (let col = 0; col < freezeCols; col += 1) {
+    width += getResolvedColumnWidth(columnWidths, col, defaultWidth);
+  }
+  return width;
+}
+
+function resolveFrozenRowHeight(
+  freezeRows: number,
+  rowHeights: Readonly<Record<number, number>>,
+  defaultHeight: number,
+): number {
+  let height = 0;
+  for (let row = 0; row < freezeRows; row += 1) {
+    height += getResolvedRowHeight(rowHeights, row, defaultHeight);
+  }
+  return height;
+}
+
+function getPointerVisibleColumns(
+  region: VisibleRegionState,
+  geometry: PointerGeometry,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number,
+) {
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, region.freezeCols ?? 0));
+  const frozenColumns =
+    freezeCols === 0
+      ? []
+      : getVisibleColumnBounds(
+          { x: 0, width: freezeCols },
+          geometry.dataLeft,
+          MAX_COLS,
+          columnWidths,
+          defaultWidth,
+        );
+  const mainColumns = getVisibleColumnBounds(
+    region.range,
+    geometry.mainDataLeft,
+    MAX_COLS,
+    columnWidths,
+    defaultWidth,
+  );
+  return [...frozenColumns, ...mainColumns];
+}
+
+function getPointerVisibleRows(
+  region: VisibleRegionState,
+  geometry: PointerGeometry,
+  rowHeights: Readonly<Record<number, number>>,
+  defaultHeight: number,
+) {
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, region.freezeRows ?? 0));
+  const frozenRows =
+    freezeRows === 0
+      ? []
+      : getVisibleRowBounds(
+          { y: 0, height: freezeRows },
+          geometry.dataTop,
+          MAX_ROWS,
+          rowHeights,
+          defaultHeight,
+        );
+  const mainRows = getVisibleRowBounds(
+    region.range,
+    geometry.mainDataTop,
+    MAX_ROWS,
+    rowHeights,
+    defaultHeight,
+  );
+  return [...frozenRows, ...mainRows];
+}
+
+function resolvePointerColumnIndex(
+  clientX: number,
+  region: VisibleRegionState,
+  geometry: PointerGeometry,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number,
+): number | null {
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, region.freezeCols ?? 0));
+  if (freezeCols > 0 && clientX < geometry.mainDataLeft) {
+    return resolveColumnAtClientX(
+      clientX,
+      { x: 0, width: freezeCols },
+      geometry.dataLeft,
+      MAX_COLS,
+      columnWidths,
+      defaultWidth,
+    );
+  }
+  return resolveColumnAtClientX(
+    clientX,
+    region.range,
+    geometry.mainDataLeft,
+    MAX_COLS,
+    columnWidths,
+    defaultWidth,
+  );
+}
+
+function resolvePointerRowIndex(
+  clientY: number,
+  region: VisibleRegionState,
+  geometry: PointerGeometry,
+  rowHeights: Readonly<Record<number, number>>,
+  defaultHeight: number,
+): number | null {
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, region.freezeRows ?? 0));
+  if (freezeRows > 0 && clientY < geometry.mainDataTop) {
+    return resolveRowAtClientY(
+      clientY,
+      { y: 0, height: freezeRows },
+      geometry.dataTop,
+      MAX_ROWS,
+      rowHeights,
+      defaultHeight,
+    );
+  }
+  return resolveRowAtClientY(
+    clientY,
+    region.range,
+    geometry.mainDataTop,
+    MAX_ROWS,
+    rowHeights,
+    defaultHeight,
+  );
 }

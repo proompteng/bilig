@@ -22,6 +22,8 @@ function createPatch(): ViewportPatch {
   return {
     version: 2,
     full: false,
+    freezeRows: 1,
+    freezeCols: 2,
     viewport: {
       sheetName: "Sheet1",
       ...createViewport(),

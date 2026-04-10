@@ -117,6 +117,8 @@ function mergeViewportTiles(
   return {
     sheetId: firstTile.sheetId,
     sheetName: firstTile.sheetName,
+    freezeRows: firstTile.freezeRows,
+    freezeCols: firstTile.freezeCols,
     cells: [...cells.values()].toSorted(sortViewportCells),
     rowAxisEntries: [...rowAxisEntries.values()].toSorted(
       (left, right) => left.index - right.index,

@@ -10,6 +10,7 @@ import {
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HEIGHTS: Readonly<Record<number, number>> = Object.freeze({});
 const EMPTY_HIDDEN_AXES: Readonly<Record<number, true>> = Object.freeze({});
+const EMPTY_FREEZE = 0;
 const DEFAULT_STYLE_ID = "style-0";
 const MAX_CACHED_CELLS_PER_SHEET = 6000;
 type CellItem = readonly [number, number];
@@ -145,6 +146,8 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly pendingRowHeightsBySheet = new Map<string, Record<number, number>>();
   private readonly hiddenColumnsBySheet = new Map<string, Record<number, true>>();
   private readonly hiddenRowsBySheet = new Map<string, Record<number, true>>();
+  private readonly freezeRowsBySheet = new Map<string, number>();
+  private readonly freezeColsBySheet = new Map<string, number>();
   private readonly knownSheets = new Set<string>();
   private readonly activeViewportKeysBySheet = new Map<string, Set<string>>();
   private readonly activeViewports = new Map<string, Viewport>();
@@ -184,6 +187,14 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   getHiddenRows(sheetName: string): Readonly<Record<number, true>> {
     return this.hiddenRowsBySheet.get(sheetName) ?? EMPTY_HIDDEN_AXES;
+  }
+
+  getFreezeRows(sheetName: string): number {
+    return this.freezeRowsBySheet.get(sheetName) ?? EMPTY_FREEZE;
+  }
+
+  getFreezeCols(sheetName: string): number {
+    return this.freezeColsBySheet.get(sheetName) ?? EMPTY_FREEZE;
   }
 
   getCell(sheetName: string, address: string): CellSnapshot {
@@ -553,6 +564,13 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   private applyPatch(patch: ReturnType<typeof decodeViewportPatch>): readonly { cell: CellItem }[] {
     this.knownSheets.add(patch.viewport.sheetName);
+    const nextFreezeRows = patch.freezeRows ?? 0;
+    const nextFreezeCols = patch.freezeCols ?? 0;
+    const freezeChanged =
+      this.freezeRowsBySheet.get(patch.viewport.sheetName) !== nextFreezeRows ||
+      this.freezeColsBySheet.get(patch.viewport.sheetName) !== nextFreezeCols;
+    this.freezeRowsBySheet.set(patch.viewport.sheetName, nextFreezeRows);
+    this.freezeColsBySheet.set(patch.viewport.sheetName, nextFreezeCols);
 
     const changedKeys = new Set<string>();
     const changedStyleIds = new Set<string>();
@@ -692,7 +710,7 @@ export class ProjectedViewportStore implements GridEngineLike {
 
     this.pruneSheetCache(patch.viewport.sheetName);
     this.notifyCellSubscriptions(changedKeys);
-    if (damage.length > 0 || axisChanged) {
+    if (damage.length > 0 || axisChanged || freezeChanged) {
       this.listeners.forEach((listener) => listener());
     }
     return damage;
@@ -770,6 +788,8 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.pendingRowHeightsBySheet.delete(sheetName);
     this.hiddenColumnsBySheet.delete(sheetName);
     this.hiddenRowsBySheet.delete(sheetName);
+    this.freezeRowsBySheet.delete(sheetName);
+    this.freezeColsBySheet.delete(sheetName);
     const viewportKeys = this.activeViewportKeysBySheet.get(sheetName);
     viewportKeys?.forEach((key) => this.activeViewports.delete(key));
     this.activeViewportKeysBySheet.delete(sheetName);

@@ -95,6 +95,8 @@ export interface WorkbookLocalViewportCell {
 export interface WorkbookLocalViewportBase {
   readonly sheetId: number;
   readonly sheetName: string;
+  readonly freezeRows: number;
+  readonly freezeCols: number;
   readonly cells: readonly WorkbookLocalViewportCell[];
   readonly rowAxisEntries: readonly WorkbookAxisEntrySnapshot[];
   readonly columnAxisEntries: readonly WorkbookAxisEntrySnapshot[];

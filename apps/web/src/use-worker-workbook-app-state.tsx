@@ -219,6 +219,24 @@ export function useWorkerWorkbookAppState(input: {
     () => readViewportHiddenRows(workerHandle, selection.sheetName),
   );
 
+  const freezeRows = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => workerHandle?.viewportStore.getFreezeRows(selection.sheetName) ?? 0,
+    () => workerHandle?.viewportStore.getFreezeRows(selection.sheetName) ?? 0,
+  );
+
+  const freezeCols = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
+      [workerHandle],
+    ),
+    () => workerHandle?.viewportStore.getFreezeCols(selection.sheetName) ?? 0,
+    () => workerHandle?.viewportStore.getFreezeCols(selection.sheetName) ?? 0,
+  );
+
   const selectedCell = useSyncExternalStore(
     useCallback(
       (listener: () => void) => workerHandle?.viewportStore.subscribe(listener) ?? (() => {}),
@@ -695,6 +713,13 @@ export function useWorkerWorkbookAppState(input: {
     [invokeMutation],
   );
 
+  const invokeSetFreezePaneMutation = useCallback(
+    async (sheetName: string, rows: number, cols: number): Promise<void> => {
+      await invokeMutation("setFreezePane", sheetName, rows, cols);
+    },
+    [invokeMutation],
+  );
+
   return {
     agentError,
     clearAgentError,
@@ -706,6 +731,8 @@ export function useWorkerWorkbookAppState(input: {
     columnWidths,
     hiddenColumns,
     hiddenRows,
+    freezeCols,
+    freezeRows,
     rowHeights,
     commitEditor,
     copySelectionRange,
@@ -722,6 +749,7 @@ export function useWorkerWorkbookAppState(input: {
     invokeDeleteRowsMutation,
     invokeInsertColumnsMutation,
     invokeInsertRowsMutation,
+    invokeSetFreezePaneMutation,
     invokeColumnVisibilityMutation,
     invokeColumnWidthMutation,
     invokeRowHeightMutation,

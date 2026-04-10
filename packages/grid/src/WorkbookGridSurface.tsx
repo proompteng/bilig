@@ -27,6 +27,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
     controlledRowHeights: props.rowHeights,
+    freezeRows: props.freezeRows,
+    freezeCols: props.freezeCols,
     onVisibleViewportChange: props.onVisibleViewportChange,
     onColumnWidthChange: props.onColumnWidthChange,
     onRowHeightChange: props.onRowHeightChange,
@@ -57,6 +59,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onDeleteRows: props.onDeleteRows,
     onInsertColumns: props.onInsertColumns,
     onDeleteColumns: props.onDeleteColumns,
+    onSetFreezePane: props.onSetFreezePane,
     onSelect: props.onSelect,
     onSelectionLabelChange: props.onSelectionLabelChange,
     onToggleBooleanCell: props.onToggleBooleanCell,
@@ -237,12 +240,15 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
       </div>
       {interactions.contextMenu.contextMenuState ? (
         <WorkbookGridContextMenu
+          canUnfreezePanes={interactions.contextMenu.canUnfreezePanes}
           menuRef={interactions.contextMenu.menuRef}
           onClose={interactions.contextMenu.closeContextMenu}
           onDeleteTarget={interactions.contextMenu.deleteTarget}
+          onFreezeTarget={interactions.contextMenu.freezeTarget}
           onInsertAfterTarget={interactions.contextMenu.insertAfterTarget}
           onInsertBeforeTarget={interactions.contextMenu.insertBeforeTarget}
           onToggleTargetHidden={interactions.contextMenu.toggleTargetHidden}
+          onUnfreezePanes={interactions.contextMenu.unfreezePanes}
           state={interactions.contextMenu.contextMenuState}
         />
       ) : null}

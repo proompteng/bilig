@@ -8,11 +8,61 @@ import {
 import type { Item } from "./gridTypes.js";
 import type { VisibleRegionState } from "./gridPointer.js";
 
+function resolveFrozenColumnOffset(
+  freezeCols: number,
+  columnWidths: Readonly<Record<number, number>>,
+  defaultWidth: number,
+): number {
+  let width = 0;
+  for (let col = 0; col < freezeCols; col += 1) {
+    width += getResolvedColumnWidth(columnWidths, col, defaultWidth);
+  }
+  return width;
+}
+
+function resolveFrozenRowOffset(
+  freezeRows: number,
+  rowHeights: Readonly<Record<number, number>>,
+  defaultHeight: number,
+): number {
+  let height = 0;
+  for (let row = 0; row < freezeRows; row += 1) {
+    height += getResolvedRowHeight(rowHeights, row, defaultHeight);
+  }
+  return height;
+}
+
+export function resolveFrozenColumnWidth(options: {
+  freezeCols: number;
+  columnWidths: Readonly<Record<number, number>>;
+  gridMetrics: ReturnType<typeof getGridMetrics>;
+}): number {
+  return resolveFrozenColumnOffset(
+    Math.max(0, options.freezeCols),
+    options.columnWidths,
+    options.gridMetrics.columnWidth,
+  );
+}
+
+export function resolveFrozenRowHeight(options: {
+  freezeRows: number;
+  rowHeights: Readonly<Record<number, number>>;
+  gridMetrics: ReturnType<typeof getGridMetrics>;
+}): number {
+  return resolveFrozenRowOffset(
+    Math.max(0, options.freezeRows),
+    options.rowHeights,
+    options.gridMetrics.rowHeight,
+  );
+}
+
 export function resolveVisibleRegionFromScroll(options: {
   scrollLeft: number;
   scrollTop: number;
   viewportWidth: number;
   viewportHeight: number;
+  freezeRows?: number;
+  freezeCols?: number;
   columnWidths: Readonly<Record<number, number>>;
   rowHeights: Readonly<Record<number, number>>;
   gridMetrics: ReturnType<typeof getGridMetrics>;
@@ -22,28 +72,44 @@ export function resolveVisibleRegionFromScroll(options: {
     scrollTop,
     viewportWidth,
     viewportHeight,
+    freezeRows: requestedFreezeRows = 0,
+    freezeCols: requestedFreezeCols = 0,
     columnWidths,
     rowHeights,
     gridMetrics,
   } = options;
-  const bodyWidth = Math.max(0, viewportWidth - gridMetrics.rowMarkerWidth);
-  const bodyHeight = Math.max(0, viewportHeight - gridMetrics.headerHeight);
-  const horizontalAnchor = resolveColumnAnchor(scrollLeft, columnWidths, gridMetrics.columnWidth);
-  const verticalAnchor = resolveRowAnchor(scrollTop, rowHeights, gridMetrics.rowHeight);
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows));
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols));
+  const frozenWidth = resolveFrozenColumnOffset(freezeCols, columnWidths, gridMetrics.columnWidth);
+  const frozenHeight = resolveFrozenRowOffset(freezeRows, rowHeights, gridMetrics.rowHeight);
+  const bodyWidth = Math.max(0, viewportWidth - gridMetrics.rowMarkerWidth - frozenWidth);
+  const bodyHeight = Math.max(0, viewportHeight - gridMetrics.headerHeight - frozenHeight);
+  const horizontalAnchor = resolveColumnAnchor(
+    scrollLeft + frozenWidth,
+    columnWidths,
+    gridMetrics.columnWidth,
+  );
+  const verticalAnchor = resolveRowAnchor(
+    scrollTop + frozenHeight,
+    rowHeights,
+    gridMetrics.rowHeight,
+  );
+  const rangeX = Math.max(freezeCols, horizontalAnchor.index);
+  const rangeY = Math.max(freezeRows, verticalAnchor.index);
 
   return {
     range: {
-      x: horizontalAnchor.index,
-      y: verticalAnchor.index,
+      x: rangeX,
+      y: rangeY,
       width: resolveVisibleColumnCount({
-        startCol: horizontalAnchor.index,
+        startCol: rangeX,
         tx: horizontalAnchor.offset,
         bodyWidth,
         columnWidths,
         defaultWidth: gridMetrics.columnWidth,
       }),
       height: resolveVisibleRowCount({
-        startRow: verticalAnchor.index,
+        startRow: rangeY,
         ty: verticalAnchor.offset,
         bodyHeight,
         rowHeights,
@@ -52,6 +118,8 @@ export function resolveVisibleRegionFromScroll(options: {
     },
     tx: horizontalAnchor.offset,
     ty: verticalAnchor.offset,
+    freezeRows,
+    freezeCols,
   };
 }
 
@@ -72,6 +140,8 @@ export function resolveColumnOffset(
 
 export function scrollCellIntoView(options: {
   cell: Item;
+  freezeRows?: number;
+  freezeCols?: number;
   columnWidths: Readonly<Record<number, number>>;
   rowHeights: Readonly<Record<number, number>>;
   gridMetrics: ReturnType<typeof getGridMetrics>;
@@ -81,6 +151,8 @@ export function scrollCellIntoView(options: {
 }): void {
   const {
     cell,
+    freezeRows: requestedFreezeRows = 0,
+    freezeCols: requestedFreezeCols = 0,
     columnWidths,
     rowHeights,
     gridMetrics,
@@ -88,48 +160,98 @@ export function scrollCellIntoView(options: {
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
   } = options;
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows));
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols));
+  const frozenWidth = resolveColumnOffset(
+    freezeCols,
+    sortedColumnWidthOverrides,
+    gridMetrics.columnWidth,
+  );
+  const frozenHeight = resolveRowOffset(
+    freezeRows,
+    sortedRowHeightOverrides,
+    gridMetrics.rowHeight,
+  );
   const cellLeft = resolveColumnOffset(
     cell[0],
     sortedColumnWidthOverrides,
     gridMetrics.columnWidth,
   );
   const cellWidth = getResolvedColumnWidth(columnWidths, cell[0], gridMetrics.columnWidth);
-  const bodyWidth = Math.max(0, scrollViewport.clientWidth - gridMetrics.rowMarkerWidth);
-  if (cellLeft < scrollViewport.scrollLeft) {
-    scrollViewport.scrollLeft = cellLeft;
-  } else if (cellLeft + cellWidth > scrollViewport.scrollLeft + bodyWidth) {
-    scrollViewport.scrollLeft = cellLeft + cellWidth - bodyWidth;
+  const bodyWidth = Math.max(
+    0,
+    scrollViewport.clientWidth - gridMetrics.rowMarkerWidth - frozenWidth,
+  );
+  if (cell[0] >= freezeCols) {
+    const scrollCellLeft = cellLeft - frozenWidth;
+    if (scrollCellLeft < scrollViewport.scrollLeft) {
+      scrollViewport.scrollLeft = scrollCellLeft;
+    } else if (scrollCellLeft + cellWidth > scrollViewport.scrollLeft + bodyWidth) {
+      scrollViewport.scrollLeft = scrollCellLeft + cellWidth - bodyWidth;
+    }
   }
 
   const cellTop = resolveRowOffset(cell[1], sortedRowHeightOverrides, gridMetrics.rowHeight);
   const cellHeight = getResolvedRowHeight(rowHeights, cell[1], gridMetrics.rowHeight);
-  const bodyHeight = Math.max(0, scrollViewport.clientHeight - gridMetrics.headerHeight);
-  if (cellTop < scrollViewport.scrollTop) {
-    scrollViewport.scrollTop = cellTop;
-  } else if (cellTop + cellHeight > scrollViewport.scrollTop + bodyHeight) {
-    scrollViewport.scrollTop = cellTop + cellHeight - bodyHeight;
+  const bodyHeight = Math.max(
+    0,
+    scrollViewport.clientHeight - gridMetrics.headerHeight - frozenHeight,
+  );
+  if (cell[1] >= freezeRows) {
+    const scrollCellTop = cellTop - frozenHeight;
+    if (scrollCellTop < scrollViewport.scrollTop) {
+      scrollViewport.scrollTop = scrollCellTop;
+    } else if (scrollCellTop + cellHeight > scrollViewport.scrollTop + bodyHeight) {
+      scrollViewport.scrollTop = scrollCellTop + cellHeight - bodyHeight;
+    }
   }
 }
 
 export function resolveViewportScrollPosition(options: {
   viewport: Pick<VisibleRegionState["range"], "x" | "y"> | { colStart: number; rowStart: number };
+  freezeRows?: number;
+  freezeCols?: number;
   sortedColumnWidthOverrides: readonly (readonly [number, number])[];
   sortedRowHeightOverrides: readonly (readonly [number, number])[];
   gridMetrics: ReturnType<typeof getGridMetrics>;
 }): { scrollLeft: number; scrollTop: number } {
   const colStart = "colStart" in options.viewport ? options.viewport.colStart : options.viewport.x;
   const rowStart = "rowStart" in options.viewport ? options.viewport.rowStart : options.viewport.y;
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, options.freezeCols ?? 0));
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, options.freezeRows ?? 0));
+  const frozenWidth = resolveColumnOffset(
+    freezeCols,
+    options.sortedColumnWidthOverrides,
+    options.gridMetrics.columnWidth,
+  );
+  const frozenHeight = resolveRowOffset(
+    freezeRows,
+    options.sortedRowHeightOverrides,
+    options.gridMetrics.rowHeight,
+  );
   return {
-    scrollLeft: resolveColumnOffset(
-      colStart,
-      options.sortedColumnWidthOverrides,
-      options.gridMetrics.columnWidth,
-    ),
-    scrollTop: resolveRowOffset(
-      rowStart,
-      options.sortedRowHeightOverrides,
-      options.gridMetrics.rowHeight,
-    ),
+    scrollLeft:
+      colStart <= freezeCols
+        ? 0
+        : Math.max(
+            0,
+            resolveColumnOffset(
+              colStart,
+              options.sortedColumnWidthOverrides,
+              options.gridMetrics.columnWidth,
+            ) - frozenWidth,
+          ),
+    scrollTop:
+      rowStart <= freezeRows
+        ? 0
+        : Math.max(
+            0,
+            resolveRowOffset(
+              rowStart,
+              options.sortedRowHeightOverrides,
+              options.gridMetrics.rowHeight,
+            ) - frozenHeight,
+          ),
   };
 }
 

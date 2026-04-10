@@ -219,6 +219,8 @@ export function buildViewportPatchFromEngine(input: {
   return {
     version: state.nextVersion++,
     full,
+    freezeRows: engine.getFreezePane(viewport.sheetName)?.rows ?? 0,
+    freezeCols: engine.getFreezePane(viewport.sheetName)?.cols ?? 0,
     viewport,
     metrics: { ...metrics },
     styles,
@@ -297,6 +299,8 @@ export function buildViewportPatchFromLocalBase(input: {
   return {
     version: state.nextVersion++,
     full: true,
+    freezeRows: base.freezeRows,
+    freezeCols: base.freezeCols,
     viewport,
     metrics: { ...metrics },
     styles,

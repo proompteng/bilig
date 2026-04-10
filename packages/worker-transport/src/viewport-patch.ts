@@ -37,6 +37,8 @@ export interface ViewportAxisPatch {
 export interface ViewportPatch {
   version: number;
   full: boolean;
+  freezeRows?: number;
+  freezeCols?: number;
   viewport: ViewportPatchSubscription;
   metrics: RecalcMetrics;
   styles: CellStyleRecord[];
@@ -538,6 +540,8 @@ export function encodeViewportPatch(patch: ViewportPatch): Uint8Array {
   writer.u32(VIEWPORT_PATCH_CODEC_VERSION);
   writer.u32(patch.version);
   writer.bool(patch.full);
+  writer.u32(patch.freezeRows ?? 0);
+  writer.u32(patch.freezeCols ?? 0);
   writer.string(patch.viewport.sheetName);
   writer.u32(patch.viewport.rowStart);
   writer.u32(patch.viewport.rowEnd);
@@ -583,6 +587,8 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
 
   const version = reader.u32();
   const full = reader.bool();
+  const freezeRows = reader.u32();
+  const freezeCols = reader.u32();
   const viewport: ViewportPatchSubscription = {
     sheetName: reader.string(),
     rowStart: reader.u32(),
@@ -593,6 +599,8 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
   const patch: ViewportPatch = {
     version,
     full,
+    freezeRows,
+    freezeCols,
     viewport,
     metrics: decodeMetrics(reader),
     styles: [],

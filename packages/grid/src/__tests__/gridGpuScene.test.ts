@@ -219,6 +219,66 @@ describe("gridGpuScene", () => {
     });
   });
 
+  test("renders frozen row and column headers alongside the scrollable pane", () => {
+    const scene = buildGridGpuScene({
+      engine: makeEngine({}),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      gridSelection: createSelection(),
+      selectedCell: [0, 0],
+      sheetName: "Sheet1",
+      visibleItems: [
+        [0, 0],
+        [2, 0],
+        [0, 3],
+        [2, 3],
+      ],
+      visibleRegion: {
+        range: { x: 2, y: 3, width: 1, height: 1 },
+        tx: 0,
+        ty: 0,
+        freezeRows: 1,
+        freezeCols: 1,
+      },
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: (col, row) => ({
+        x: col === 0 ? 46 : 150,
+        y: row === 0 ? 24 : 46,
+        width: 104,
+        height: 22,
+      }),
+    });
+
+    expect(scene.fillRects).toContainEqual({
+      x: 46,
+      y: 0,
+      width: 104,
+      height: 24,
+      color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
+    });
+    expect(scene.fillRects).toContainEqual({
+      x: 150,
+      y: 0,
+      width: 104,
+      height: 24,
+      color: { r: 248 / 255, g: 249 / 255, b: 250 / 255, a: 1 },
+    });
+    expect(scene.fillRects).toContainEqual({
+      x: 0,
+      y: 24,
+      width: 46,
+      height: 22,
+      color: { r: 230 / 255, g: 244 / 255, b: 234 / 255, a: 1 },
+    });
+    expect(scene.fillRects).toContainEqual({
+      x: 0,
+      y: 46,
+      width: 46,
+      height: 22,
+      color: { r: 248 / 255, g: 249 / 255, b: 250 / 255, a: 1 },
+    });
+  });
+
   test("adds GPU-backed header and body hover affordances", () => {
     const scene = buildGridGpuScene({
       engine: makeEngine({}),

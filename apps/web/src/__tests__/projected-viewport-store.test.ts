@@ -18,6 +18,8 @@ function createPatch(styleId?: string): ViewportPatch {
   return {
     version: 1,
     full: false,
+    freezeRows: 0,
+    freezeCols: 0,
     viewport: {
       sheetName: "Sheet1",
       rowStart: 3,
@@ -353,6 +355,19 @@ describe("ProjectedViewportStore", () => {
       id: "style-fill",
       fill: { backgroundColor: "#a4c2f4" },
     });
+  });
+
+  it("tracks freeze pane metadata from viewport patches", () => {
+    const cache = new ProjectedViewportStore();
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      freezeRows: 2,
+      freezeCols: 1,
+    });
+
+    expect(cache.getFreezeRows("Sheet1")).toBe(2);
+    expect(cache.getFreezeCols("Sheet1")).toBe(1);
   });
 
   it("clears stale viewport cells on full patches without dropping cells outside the viewport", () => {

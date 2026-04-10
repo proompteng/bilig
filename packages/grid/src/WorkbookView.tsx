@@ -77,6 +77,8 @@ interface WorkbookViewProps {
   hiddenColumns?: Readonly<Record<number, true>> | undefined;
   hiddenRows?: Readonly<Record<number, true>> | undefined;
   rowHeights?: Readonly<Record<number, number>> | undefined;
+  freezeRows?: number | undefined;
+  freezeCols?: number | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
   onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
@@ -85,6 +87,7 @@ interface WorkbookViewProps {
   onDeleteRows?: ((startRow: number, count: number) => void) | undefined;
   onInsertColumns?: ((startCol: number, count: number) => void) | undefined;
   onDeleteColumns?: ((startCol: number, count: number) => void) | undefined;
+  onSetFreezePane?: ((rows: number, cols: number) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;
@@ -146,6 +149,8 @@ export function WorkbookView({
   hiddenColumns,
   hiddenRows,
   rowHeights,
+  freezeRows,
+  freezeCols,
   onColumnWidthChange,
   onRowHeightChange,
   onSetColumnHidden,
@@ -154,6 +159,7 @@ export function WorkbookView({
   onDeleteRows,
   onInsertColumns,
   onDeleteColumns,
+  onSetFreezePane,
   onAutofitColumn,
   onVisibleViewportChange,
   previewRanges,
@@ -243,6 +249,8 @@ export function WorkbookView({
             hiddenColumns={hiddenColumns}
             hiddenRows={hiddenRows}
             rowHeights={rowHeights}
+            freezeRows={freezeRows}
+            freezeCols={freezeCols}
             onColumnWidthChange={onColumnWidthChange}
             onRowHeightChange={onRowHeightChange}
             onSetColumnHidden={onSetColumnHidden}
@@ -251,6 +259,7 @@ export function WorkbookView({
             onDeleteRows={onDeleteRows}
             onInsertColumns={onInsertColumns}
             onDeleteColumns={onDeleteColumns}
+            onSetFreezePane={onSetFreezePane}
             onAutofitColumn={onAutofitColumn}
             onVisibleViewportChange={onVisibleViewportChange}
             previewRanges={previewRanges}

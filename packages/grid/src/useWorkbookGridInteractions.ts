@@ -94,6 +94,7 @@ export function useWorkbookGridInteractions(
     | "onDeleteRows"
     | "onInsertColumns"
     | "onDeleteColumns"
+    | "onSetFreezePane"
     | "onSelect"
     | "onSelectionLabelChange"
     | "onToggleBooleanCell"
@@ -126,6 +127,7 @@ export function useWorkbookGridInteractions(
     onDeleteRows,
     onInsertColumns,
     onDeleteColumns,
+    onSetFreezePane,
     onSelect,
     onSelectionLabelChange,
     onToggleBooleanCell,
@@ -361,6 +363,7 @@ export function useWorkbookGridInteractions(
     onDeleteRows,
     onInsertColumns,
     onDeleteColumns,
+    onSetFreezePane,
     resolveHeaderSelectionAtPointer,
     selectedCell: [selectedCell.col, selectedCell.row],
     setGridSelection,

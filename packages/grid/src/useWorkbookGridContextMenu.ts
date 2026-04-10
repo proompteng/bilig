@@ -24,6 +24,7 @@ export function useWorkbookGridContextMenu(input: {
   onInsertColumns?: ((startCol: number, count: number) => void) | undefined;
   onInsertRows?: ((startRow: number, count: number) => void) | undefined;
   onSelect(this: void, addr: string): void;
+  onSetFreezePane?: ((rows: number, cols: number) => void) | undefined;
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
   onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined;
   resolveHeaderSelectionAtPointer(
@@ -47,6 +48,7 @@ export function useWorkbookGridContextMenu(input: {
     onInsertColumns,
     onInsertRows,
     onSelect,
+    onSetFreezePane,
     onSetColumnHidden,
     onSetRowHidden,
     resolveHeaderSelectionAtPointer,
@@ -159,11 +161,39 @@ export function useWorkbookGridContextMenu(input: {
     closeContextMenu();
   }, [closeContextMenu, contextMenuState, onDeleteColumns, onDeleteRows]);
 
+  const freezeTarget = useCallback(() => {
+    if (!contextMenuState || !onSetFreezePane) {
+      return;
+    }
+    if (contextMenuState.target.kind === "row") {
+      onSetFreezePane(contextMenuState.target.index + 1, visibleRegion.freezeCols ?? 0);
+    } else {
+      onSetFreezePane(visibleRegion.freezeRows ?? 0, contextMenuState.target.index + 1);
+    }
+    closeContextMenu();
+  }, [
+    closeContextMenu,
+    contextMenuState,
+    onSetFreezePane,
+    visibleRegion.freezeCols,
+    visibleRegion.freezeRows,
+  ]);
+
+  const unfreezePanes = useCallback(() => {
+    if (!onSetFreezePane) {
+      return;
+    }
+    onSetFreezePane(0, 0);
+    closeContextMenu();
+  }, [closeContextMenu, onSetFreezePane]);
+
   const openContextMenuForTarget = useCallback(
     ({ target, x, y }: WorkbookGridContextMenuTarget): boolean => {
       const canOpen =
-        (target.kind === "row" && (onSetRowHidden || onInsertRows || onDeleteRows)) ||
-        (target.kind === "column" && (onSetColumnHidden || onInsertColumns || onDeleteColumns));
+        (target.kind === "row" &&
+          (onSetRowHidden || onInsertRows || onDeleteRows || onSetFreezePane)) ||
+        (target.kind === "column" &&
+          (onSetColumnHidden || onInsertColumns || onDeleteColumns || onSetFreezePane));
       if (!canOpen) {
         return false;
       }
@@ -199,6 +229,7 @@ export function useWorkbookGridContextMenu(input: {
       onInsertColumns,
       onInsertRows,
       onSelect,
+      onSetFreezePane,
       onSetColumnHidden,
       onSetRowHidden,
       selectedCell,
@@ -236,12 +267,15 @@ export function useWorkbookGridContextMenu(input: {
   return useMemo(
     () => ({
       closeContextMenu,
+      canUnfreezePanes: (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0,
       contextMenuState,
       deleteTarget,
+      freezeTarget,
       handleHostContextMenuCapture,
       insertAfterTarget,
       insertBeforeTarget,
       toggleTargetHidden,
+      unfreezePanes,
       menuRef,
       openContextMenuForTarget,
     }),
@@ -249,11 +283,15 @@ export function useWorkbookGridContextMenu(input: {
       closeContextMenu,
       contextMenuState,
       deleteTarget,
+      freezeTarget,
       handleHostContextMenuCapture,
       insertAfterTarget,
       insertBeforeTarget,
       toggleTargetHidden,
+      unfreezePanes,
       openContextMenuForTarget,
+      visibleRegion.freezeCols,
+      visibleRegion.freezeRows,
     ],
   );
 }

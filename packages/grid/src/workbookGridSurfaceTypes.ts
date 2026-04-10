@@ -67,6 +67,8 @@ export interface WorkbookGridSurfaceProps {
   hiddenColumns?: Readonly<Record<number, true>> | undefined;
   hiddenRows?: Readonly<Record<number, true>> | undefined;
   rowHeights?: Readonly<Record<number, number>> | undefined;
+  freezeRows?: number | undefined;
+  freezeCols?: number | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
   onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined;
@@ -75,6 +77,7 @@ export interface WorkbookGridSurfaceProps {
   onDeleteRows?: ((startRow: number, count: number) => void) | undefined;
   onInsertColumns?: ((startCol: number, count: number) => void) | undefined;
   onDeleteColumns?: ((startCol: number, count: number) => void) | undefined;
+  onSetFreezePane?: ((rows: number, cols: number) => void) | undefined;
   onAutofitColumn?:
     | ((columnIndex: number, fallbackWidth: number) => void | Promise<void>)
     | undefined;

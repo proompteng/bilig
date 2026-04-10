@@ -16,6 +16,8 @@ const region: VisibleRegionState = {
   range: { x: 0, y: 0, width: 12, height: 24 },
   tx: 0,
   ty: 0,
+  freezeRows: 0,
+  freezeCols: 0,
 };
 
 function buildGeometry(): PointerGeometry {
@@ -169,5 +171,54 @@ describe("gridPointer", () => {
     expect(
       resolveRowResizeTarget(20, 40, region, geometry, { 1: 34 }, PRODUCT_ROW_HEIGHT),
     ).toBeNull();
+  });
+
+  test("maps clicks inside frozen panes to frozen cells and headers", () => {
+    const frozenRegion: VisibleRegionState = {
+      range: { x: 2, y: 3, width: 12, height: 24 },
+      tx: 0,
+      ty: 0,
+      freezeRows: 1,
+      freezeCols: 1,
+    };
+    const geometry = createPointerGeometry(
+      { left: 0, top: 33, right: 1068, bottom: 868 },
+      frozenRegion,
+      {},
+      {},
+      gridMetrics,
+    );
+
+    expect(
+      resolvePointerCell({
+        clientX: 46 + Math.floor(PRODUCT_COLUMN_WIDTH / 2),
+        clientY: 57 + 4,
+        region: frozenRegion,
+        geometry,
+        columnWidths: {},
+        rowHeights: {},
+        gridMetrics,
+        selectedCell: [0, 0],
+        selectedCellBounds: null,
+        selectionRange: { x: 0, y: 0, width: 1, height: 1 },
+        hasColumnSelection: false,
+        hasRowSelection: false,
+      }),
+    ).toEqual([0, 0]);
+
+    expect(
+      resolveHeaderSelection(
+        46 + PRODUCT_COLUMN_WIDTH + 10,
+        40,
+        frozenRegion,
+        geometry,
+        {},
+        {},
+        gridMetrics,
+      ),
+    ).toEqual({
+      kind: "column",
+      index: 2,
+    });
   });
 });

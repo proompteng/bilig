@@ -15,6 +15,7 @@ import {
   type RecalcMetrics,
   type SyncState,
   type WorkbookAxisEntrySnapshot,
+  type WorkbookFreezePaneSnapshot,
   type WorkbookSnapshot,
 } from "@bilig/protocol";
 import type { ViewportAxisPatch, ViewportPatchSubscription } from "@bilig/worker-transport";
@@ -82,6 +83,7 @@ export interface WorkerEngine {
     hidden: boolean | null,
   ): unknown;
   setFreezePane(sheetName: string, rows: number, cols: number): unknown;
+  getFreezePane(sheetName: string): WorkbookFreezePaneSnapshot | undefined;
   exportSnapshot(): WorkbookSnapshot;
   exportReplicaSnapshot(): EngineReplicaSnapshot;
   importSnapshot(snapshot: WorkbookSnapshot): void;

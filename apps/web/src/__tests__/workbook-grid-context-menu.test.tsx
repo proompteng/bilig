@@ -28,9 +28,12 @@ function ContextMenuHarness(props: {
   onHideRow?: ((rowIndex: number, hidden: boolean) => void) | undefined;
   onInsertColumn?: ((columnIndex: number, count: number) => void) | undefined;
   onInsertRow?: ((rowIndex: number, count: number) => void) | undefined;
+  onSetFreezePane?: ((rows: number, cols: number) => void) | undefined;
   openTarget?: WorkbookGridContextMenuTarget | undefined;
   onSelect?: ((addr: string) => void) | undefined;
   setGridSelection?: ((selection: GridSelection) => void) | undefined;
+  freezeRows?: number | undefined;
+  freezeCols?: number | undefined;
 }) {
   const menu = useWorkbookGridContextMenu({
     focusGrid: props.focusGrid ?? (() => {}),
@@ -41,6 +44,7 @@ function ContextMenuHarness(props: {
     onInsertColumns: props.onInsertColumn,
     onInsertRows: props.onInsertRow,
     onSelect: props.onSelect ?? (() => {}),
+    onSetFreezePane: props.onSetFreezePane,
     hiddenColumnsByIndex: props.hiddenColumns,
     hiddenRowsByIndex: props.hiddenRows,
     onSetColumnHidden: props.onHideColumn,
@@ -54,6 +58,8 @@ function ContextMenuHarness(props: {
       range: { x: 0, y: 0, width: 20, height: 20 },
       tx: 0,
       ty: 0,
+      freezeRows: props.freezeRows ?? 0,
+      freezeCols: props.freezeCols ?? 0,
     } satisfies VisibleRegionState,
   });
 
@@ -72,12 +78,15 @@ function ContextMenuHarness(props: {
       </button>
       {menu.contextMenuState ? (
         <WorkbookGridContextMenu
+          canUnfreezePanes={menu.canUnfreezePanes}
           menuRef={menu.menuRef}
           onClose={menu.closeContextMenu}
           onDeleteTarget={menu.deleteTarget}
+          onFreezeTarget={menu.freezeTarget}
           onInsertAfterTarget={menu.insertAfterTarget}
           onInsertBeforeTarget={menu.insertBeforeTarget}
           onToggleTargetHidden={menu.toggleTargetHidden}
+          onUnfreezePanes={menu.unfreezePanes}
           state={menu.contextMenuState}
         />
       ) : null}
@@ -170,6 +179,95 @@ describe("workbook grid context menu", () => {
     });
 
     expect(onInsertRow).toHaveBeenCalledWith(7, 1);
+    expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("freezes through the targeted row while preserving frozen columns", async () => {
+    const onSetFreezePane = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: "row", index: 7 }}
+          freezeCols={2}
+          onHideRow={vi.fn()}
+          onSetFreezePane={onSetFreezePane}
+        />,
+      );
+    });
+
+    const target = host.querySelector("[data-testid='host']");
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 120,
+          clientY: 90,
+        }),
+      );
+    });
+
+    const freezeButton = host.querySelector("[data-testid='grid-context-action-freeze-row']");
+    expect(freezeButton).not.toBeNull();
+
+    await act(async () => {
+      freezeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSetFreezePane).toHaveBeenCalledWith(8, 2);
+    expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("shows an unfreeze action when panes are frozen", async () => {
+    const onSetFreezePane = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: "column", index: 3 }}
+          freezeRows={1}
+          freezeCols={2}
+          onHideColumn={vi.fn()}
+          onSetFreezePane={onSetFreezePane}
+        />,
+      );
+    });
+
+    const target = host.querySelector("[data-testid='host']");
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          clientX: 64,
+          clientY: 24,
+        }),
+      );
+    });
+
+    const unfreezeButton = host.querySelector("[data-testid='grid-context-action-unfreeze-panes']");
+    expect(unfreezeButton).not.toBeNull();
+
+    await act(async () => {
+      unfreezeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSetFreezePane).toHaveBeenCalledWith(0, 0);
     expect(host.querySelector("[data-testid='grid-context-menu']")).toBeNull();
 
     await act(async () => {

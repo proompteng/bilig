@@ -1,10 +1,10 @@
 import { formatAddress } from "@bilig/formula";
 import { ValueTag, type CellStyleRecord } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
-import type { GridMetrics } from "./gridMetrics.js";
-import { getVisibleColumnBounds, getVisibleRowBounds } from "./gridMetrics.js";
+import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from "./gridMetrics.js";
 import type { HeaderSelection } from "./gridPointer.js";
 import type { GridSelection, Item, Rectangle } from "./gridTypes.js";
+import { collectVisibleColumnBounds, collectVisibleRowBounds } from "./visibleGridAxes.js";
 
 export interface GridGpuColor {
   readonly r: number;
@@ -34,6 +34,8 @@ interface BuildGridGpuSceneOptions {
     readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
     readonly tx: number;
     readonly ty: number;
+    readonly freezeRows?: number;
+    readonly freezeCols?: number;
   };
   readonly gridMetrics: GridMetrics;
   readonly columnWidths: Readonly<Record<number, number>>;
@@ -102,6 +104,8 @@ export function buildGridGpuScene({
     selectedCell,
     selectionRange,
     visibleRegion,
+    visibleItems,
+    getCellBounds,
   });
   if (visibleItems.length === 0) {
     return {
@@ -217,7 +221,11 @@ function pushHeaderRects(options: {
     readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
     readonly tx: number;
     readonly ty: number;
+    readonly freezeRows?: number;
+    readonly freezeCols?: number;
   };
+  visibleItems: readonly Item[];
+  getCellBounds: (col: number, row: number) => Rectangle | undefined;
 }) {
   const {
     borderRects,
@@ -233,23 +241,29 @@ function pushHeaderRects(options: {
     selectedCell,
     selectionRange,
     visibleRegion,
+    visibleItems,
+    getCellBounds,
   } = options;
 
-  const visibleColumns = getVisibleColumnBounds(
-    visibleRegion.range,
-    gridMetrics.rowMarkerWidth - visibleRegion.tx,
-    Number.MAX_SAFE_INTEGER,
-    columnWidths,
-    gridMetrics.columnWidth,
-  );
-  const visibleRows = getVisibleRowBounds(
-    visibleRegion.range,
-    gridMetrics.headerHeight - visibleRegion.ty,
-    Number.MAX_SAFE_INTEGER,
-    rowHeights,
-    gridMetrics.rowHeight,
-  );
-  const visibleRowEnd = visibleRegion.range.y + visibleRegion.range.height - 1;
+  const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0;
+  const visibleColumns = hasFrozenAxes
+    ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
+    : getVisibleColumnBounds(
+        visibleRegion.range,
+        gridMetrics.rowMarkerWidth - visibleRegion.tx,
+        Number.MAX_SAFE_INTEGER,
+        columnWidths,
+        gridMetrics.columnWidth,
+      );
+  const visibleRows = hasFrozenAxes
+    ? collectVisibleRowBounds(visibleItems, getCellBounds, gridMetrics)
+    : getVisibleRowBounds(
+        visibleRegion.range,
+        gridMetrics.headerHeight - visibleRegion.ty,
+        Number.MAX_SAFE_INTEGER,
+        rowHeights,
+        gridMetrics.rowHeight,
+      );
   const selectedColumns = resolveAxisSelectionRange(
     selectionRange?.x ?? selectedCell[0],
     selectionRange ? selectionRange.x + selectionRange.width - 1 : selectedCell[0],
@@ -277,13 +291,9 @@ function pushHeaderRects(options: {
       fillRects,
       gridMetrics,
       selectedRows,
-      visibleRegion,
-      visibleRowEnd,
       visibleRows,
       visibleWidth:
-        visibleColumns.length === 0
-          ? 0
-          : visibleColumns.at(-1)!.right - gridMetrics.rowMarkerWidth + visibleRegion.tx,
+        visibleColumns.length === 0 ? 0 : visibleColumns.at(-1)!.right - gridMetrics.rowMarkerWidth,
     });
   }
 
@@ -295,7 +305,6 @@ function pushHeaderRects(options: {
       gridMetrics,
       selectedColumns,
       visibleColumns,
-      visibleRegion,
       visibleRows,
     });
   }
@@ -307,13 +316,9 @@ function pushHeaderRects(options: {
       fillRects,
       gridMetrics,
       selectedRows,
-      visibleRegion,
-      visibleRowEnd,
       visibleRows,
       visibleWidth:
-        visibleColumns.length === 0
-          ? 0
-          : visibleColumns.at(-1)!.right - gridMetrics.rowMarkerWidth + visibleRegion.tx,
+        visibleColumns.length === 0 ? 0 : visibleColumns.at(-1)!.right - gridMetrics.rowMarkerWidth,
     });
   }
 
@@ -491,12 +496,6 @@ function pushRowSelectionBodyRects(options: {
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   selectedRows: { start: number; end: number };
-  visibleRegion: {
-    readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
-    readonly tx: number;
-    readonly ty: number;
-  };
-  visibleRowEnd: number;
   visibleRows: ReadonlyArray<{
     index: number;
     top: number;
@@ -505,29 +504,19 @@ function pushRowSelectionBodyRects(options: {
   }>;
   visibleWidth: number;
 }) {
-  const {
-    fillRects,
-    gridMetrics,
-    selectedRows,
-    visibleRegion,
-    visibleRowEnd,
-    visibleRows,
-    visibleWidth,
-  } = options;
+  const { fillRects, gridMetrics, selectedRows, visibleRows, visibleWidth } = options;
   if (visibleWidth <= 0) {
     return;
   }
   const bodyLeft = gridMetrics.rowMarkerWidth;
-  const visibleSelectionStart = Math.max(visibleRegion.range.y, selectedRows.start);
-  const visibleSelectionEnd = Math.min(visibleRowEnd, selectedRows.end);
-  if (visibleSelectionStart > visibleSelectionEnd) {
+  const visibleSelectionRows = visibleRows.filter(
+    (row) => row.index >= selectedRows.start && row.index <= selectedRows.end,
+  );
+  if (visibleSelectionRows.length === 0) {
     return;
   }
-  const startRow = visibleRows.find((row) => row.index === visibleSelectionStart);
-  const endRow = visibleRows.find((row) => row.index === visibleSelectionEnd);
-  if (!startRow || !endRow) {
-    return;
-  }
+  const startRow = visibleSelectionRows[0]!;
+  const endRow = visibleSelectionRows.at(-1)!;
   const top = startRow.top;
   const height = endRow.bottom - startRow.top;
   fillRects.push({
@@ -940,11 +929,6 @@ function pushColumnHeaderDragGuideRects(options: {
     right: number;
     width: number;
   }>;
-  visibleRegion: {
-    readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
-    readonly tx: number;
-    readonly ty: number;
-  };
   visibleRows: ReadonlyArray<{
     index: number;
     top: number;
@@ -1018,12 +1002,6 @@ function pushRowHeaderDragGuideRects(options: {
   fillRects: GridGpuRect[];
   gridMetrics: GridMetrics;
   selectedRows: { start: number; end: number };
-  visibleRegion: {
-    readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
-    readonly tx: number;
-    readonly ty: number;
-  };
-  visibleRowEnd: number;
   visibleRows: ReadonlyArray<{
     index: number;
     top: number;
@@ -1038,24 +1016,22 @@ function pushRowHeaderDragGuideRects(options: {
     fillRects,
     gridMetrics,
     selectedRows,
-    visibleRegion,
-    visibleRowEnd,
     visibleRows,
     visibleWidth,
   } = options;
   if (visibleWidth <= 0) {
     return;
   }
-  const topRow = Math.max(visibleRegion.range.y, selectedRows.start);
-  const bottomRow = Math.min(visibleRowEnd, selectedRows.end);
-  if (topRow > bottomRow) {
+  const visibleSelectionRows = visibleRows.filter(
+    (row) => row.index >= selectedRows.start && row.index <= selectedRows.end,
+  );
+  if (visibleSelectionRows.length === 0) {
     return;
   }
-  const topEntry = visibleRows.find((row) => row.index === topRow);
-  const bottomEntry = visibleRows.find((row) => row.index === bottomRow);
-  if (!topEntry || !bottomEntry) {
-    return;
-  }
+  const topEntry = visibleSelectionRows[0]!;
+  const bottomEntry = visibleSelectionRows.at(-1)!;
+  const topRow = topEntry.index;
+  const bottomRow = bottomEntry.index;
   const top = topEntry.top;
   const bottom = bottomEntry.bottom;
   const totalWidth = gridMetrics.rowMarkerWidth + visibleWidth;

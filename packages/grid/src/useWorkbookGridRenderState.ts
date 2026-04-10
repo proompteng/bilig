@@ -45,6 +45,8 @@ import type { SheetGridViewportSubscription } from "./workbookGridSurfaceTypes.j
 import {
   hasSelectionTargetChanged,
   resolveColumnOffset,
+  resolveFrozenColumnWidth,
+  resolveFrozenRowHeight,
   resolveViewportScrollPosition,
   resolveVisibleRegionFromScroll,
   scrollCellIntoView,
@@ -67,6 +69,8 @@ function sameBounds(left: Rectangle | undefined, right: Rectangle | undefined): 
 
 function sameVisibleRegion(left: VisibleRegionState, right: VisibleRegionState): boolean {
   return (
+    (left.freezeCols ?? 0) === (right.freezeCols ?? 0) &&
+    (left.freezeRows ?? 0) === (right.freezeRows ?? 0) &&
     left.tx === right.tx &&
     left.ty === right.ty &&
     left.range.x === right.range.x &&
@@ -74,6 +78,88 @@ function sameVisibleRegion(left: VisibleRegionState, right: VisibleRegionState):
     left.range.width === right.range.width &&
     left.range.height === right.range.height
   );
+}
+
+function collectVisibleItems(options: { visibleRegion: VisibleRegionState }): [number, number][] {
+  const { visibleRegion } = options;
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, visibleRegion.freezeCols ?? 0));
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, visibleRegion.freezeRows ?? 0));
+  const rowEnd = Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1);
+  const colEnd = Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1);
+  const items: [number, number][] = [];
+  const seen = new Set<string>();
+
+  const pushItem = (col: number, row: number) => {
+    if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
+      return;
+    }
+    const key = `${col}:${row}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    items.push([col, row]);
+  };
+
+  for (let row = 0; row < freezeRows; row += 1) {
+    for (let col = 0; col < freezeCols; col += 1) {
+      pushItem(col, row);
+    }
+    for (let col = visibleRegion.range.x; col <= colEnd; col += 1) {
+      pushItem(col, row);
+    }
+  }
+
+  for (let row = visibleRegion.range.y; row <= rowEnd; row += 1) {
+    for (let col = 0; col < freezeCols; col += 1) {
+      pushItem(col, row);
+    }
+    for (let col = visibleRegion.range.x; col <= colEnd; col += 1) {
+      pushItem(col, row);
+    }
+  }
+
+  return items;
+}
+
+function collectViewportSubscriptions(
+  viewport: Viewport,
+  freezeRows: number,
+  freezeCols: number,
+): Viewport[] {
+  const viewports: Viewport[] = [viewport];
+  if (freezeRows > 0) {
+    viewports.push({
+      rowStart: 0,
+      rowEnd: freezeRows - 1,
+      colStart: viewport.colStart,
+      colEnd: viewport.colEnd,
+    });
+  }
+  if (freezeCols > 0) {
+    viewports.push({
+      rowStart: viewport.rowStart,
+      rowEnd: viewport.rowEnd,
+      colStart: 0,
+      colEnd: freezeCols - 1,
+    });
+  }
+  if (freezeRows > 0 && freezeCols > 0) {
+    viewports.push({
+      rowStart: 0,
+      rowEnd: freezeRows - 1,
+      colStart: 0,
+      colEnd: freezeCols - 1,
+    });
+  }
+  return [
+    ...new Map(
+      viewports.map((entry) => [
+        `${entry.rowStart}:${entry.rowEnd}:${entry.colStart}:${entry.colEnd}`,
+        entry,
+      ]),
+    ).values(),
+  ];
 }
 
 export function useWorkbookGridRenderState(input: {
@@ -86,6 +172,8 @@ export function useWorkbookGridRenderState(input: {
   subscribeViewport?: SheetGridViewportSubscription | undefined;
   controlledColumnWidths?: Readonly<Record<number, number>> | undefined;
   controlledRowHeights?: Readonly<Record<number, number>> | undefined;
+  freezeRows?: number | undefined;
+  freezeCols?: number | undefined;
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined;
   onColumnWidthChange?: ((columnIndex: number, newSize: number) => void) | undefined;
   onRowHeightChange?: ((rowIndex: number, newSize: number) => void) | undefined;
@@ -106,9 +194,13 @@ export function useWorkbookGridRenderState(input: {
     subscribeViewport,
     controlledColumnWidths,
     controlledRowHeights,
+    freezeRows: requestedFreezeRows = 0,
+    freezeCols: requestedFreezeCols = 0,
     onVisibleViewportChange,
     restoreViewportTarget,
   } = input;
+  const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows));
+  const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols));
   const emptyGpuScene = useMemo<GridGpuScene>(() => ({ fillRects: [], borderRects: [] }), []);
   const emptyTextScene = useMemo<GridTextScene>(() => ({ items: [] }), []);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +230,8 @@ export function useWorkbookGridRenderState(input: {
     range: { x: 0, y: 0, width: 12, height: 24 },
     tx: 0,
     ty: 0,
+    freezeRows,
+    freezeCols,
   });
   const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined);
   const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<
@@ -234,20 +328,13 @@ export function useWorkbookGridRenderState(input: {
       resolveRowOffset(MAX_ROWS, sortedRowHeightOverrides, gridMetrics.rowHeight),
     [gridMetrics.headerHeight, gridMetrics.rowHeight, sortedRowHeightOverrides],
   );
-  const scrollLeft = useMemo(
-    () =>
-      resolveColumnOffset(
-        visibleRegion.range.x,
-        sortedColumnWidthOverrides,
-        gridMetrics.columnWidth,
-      ) + visibleRegion.tx,
-    [gridMetrics.columnWidth, sortedColumnWidthOverrides, visibleRegion.range.x, visibleRegion.tx],
+  const frozenColumnWidth = useMemo(
+    () => resolveFrozenColumnWidth({ freezeCols, columnWidths, gridMetrics }),
+    [columnWidths, freezeCols, gridMetrics],
   );
-  const scrollTop = useMemo(
-    () =>
-      resolveRowOffset(visibleRegion.range.y, sortedRowHeightOverrides, gridMetrics.rowHeight) +
-      visibleRegion.ty,
-    [gridMetrics.rowHeight, sortedRowHeightOverrides, visibleRegion.range.y, visibleRegion.ty],
+  const frozenRowHeight = useMemo(
+    () => resolveFrozenRowHeight({ freezeRows, rowHeights, gridMetrics }),
+    [freezeRows, gridMetrics, rowHeights],
   );
   const selectionRange = gridSelection.current?.range ?? null;
 
@@ -258,28 +345,52 @@ export function useWorkbookGridRenderState(input: {
       }
       return {
         x:
-          gridMetrics.rowMarkerWidth +
-          resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
-          scrollLeft,
+          col < freezeCols
+            ? gridMetrics.rowMarkerWidth +
+              resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth)
+            : gridMetrics.rowMarkerWidth +
+              frozenColumnWidth +
+              resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
+              resolveColumnOffset(
+                visibleRegion.range.x,
+                sortedColumnWidthOverrides,
+                gridMetrics.columnWidth,
+              ) -
+              visibleRegion.tx,
         y:
-          gridMetrics.headerHeight +
-          resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight) -
-          scrollTop,
+          row < freezeRows
+            ? gridMetrics.headerHeight +
+              resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight)
+            : gridMetrics.headerHeight +
+              frozenRowHeight +
+              resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight) -
+              resolveRowOffset(
+                visibleRegion.range.y,
+                sortedRowHeightOverrides,
+                gridMetrics.rowHeight,
+              ) -
+              visibleRegion.ty,
         width: getResolvedColumnWidth(columnWidths, col, gridMetrics.columnWidth),
         height: getResolvedRowHeight(rowHeights, row, gridMetrics.rowHeight),
       };
     },
     [
       columnWidths,
+      freezeCols,
+      freezeRows,
+      frozenColumnWidth,
+      frozenRowHeight,
       gridMetrics.columnWidth,
       gridMetrics.headerHeight,
       gridMetrics.rowHeight,
       gridMetrics.rowMarkerWidth,
       rowHeights,
-      scrollLeft,
-      scrollTop,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
+      visibleRegion.range.x,
+      visibleRegion.range.y,
+      visibleRegion.tx,
+      visibleRegion.ty,
     ],
   );
 
@@ -301,21 +412,8 @@ export function useWorkbookGridRenderState(input: {
   );
 
   const visibleItems = useMemo(() => {
-    const items: [number, number][] = [];
-    const rowEnd = Math.min(MAX_ROWS - 1, visibleRegion.range.y + visibleRegion.range.height - 1);
-    const colEnd = Math.min(MAX_COLS - 1, visibleRegion.range.x + visibleRegion.range.width - 1);
-    for (let row = visibleRegion.range.y; row <= rowEnd; row += 1) {
-      for (let col = visibleRegion.range.x; col <= colEnd; col += 1) {
-        items.push([col, row]);
-      }
-    }
-    return items;
-  }, [
-    visibleRegion.range.height,
-    visibleRegion.range.width,
-    visibleRegion.range.x,
-    visibleRegion.range.y,
-  ]);
+    return collectVisibleItems({ visibleRegion });
+  }, [visibleRegion]);
   const visibleAddresses = useMemo(
     () => visibleItems.map(([col, row]) => formatAddress(row, col)),
     [visibleItems],
@@ -351,12 +449,14 @@ export function useWorkbookGridRenderState(input: {
       scrollTop: scrollViewport.scrollTop,
       viewportWidth: scrollViewport.clientWidth,
       viewportHeight: scrollViewport.clientHeight,
+      freezeRows,
+      freezeCols,
       columnWidths,
       rowHeights,
       gridMetrics,
     });
     setVisibleRegion((current) => (sameVisibleRegion(current, next) ? current : next));
-  }, [columnWidths, gridMetrics, rowHeights]);
+  }, [columnWidths, freezeCols, freezeRows, gridMetrics, rowHeights]);
 
   useEffect(() => {
     const preview = columnResizePreviewRef.current;
@@ -434,10 +534,25 @@ export function useWorkbookGridRenderState(input: {
 
   useEffect(() => {
     if (subscribeViewport) {
-      return subscribeViewport(sheetName, viewport, invalidateScene);
+      const viewports = collectViewportSubscriptions(viewport, freezeRows, freezeCols);
+      const cleanups = viewports.map((nextViewport) =>
+        subscribeViewport(sheetName, nextViewport, invalidateScene),
+      );
+      return () => {
+        cleanups.forEach((cleanup) => cleanup());
+      };
     }
     return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene);
-  }, [engine, invalidateScene, sheetName, subscribeViewport, viewport, visibleAddresses]);
+  }, [
+    engine,
+    freezeCols,
+    freezeRows,
+    invalidateScene,
+    sheetName,
+    subscribeViewport,
+    viewport,
+    visibleAddresses,
+  ]);
 
   const resizeGuideColumn = useMemo(
     () =>
@@ -603,6 +718,8 @@ export function useWorkbookGridRenderState(input: {
     autoScrollSelectionRef.current = nextAutoScrollSelection;
     scrollCellIntoView({
       cell: [selectedCell.col, selectedCell.row],
+      freezeRows,
+      freezeCols,
       columnWidths,
       rowHeights,
       gridMetrics,
@@ -612,6 +729,8 @@ export function useWorkbookGridRenderState(input: {
     });
   }, [
     columnWidths,
+    freezeCols,
+    freezeRows,
     gridMetrics,
     rowHeights,
     selectedCell.col,
@@ -632,13 +751,22 @@ export function useWorkbookGridRenderState(input: {
     restoredViewportTokenRef.current = restoreViewportTarget.token;
     const { scrollLeft: nextScrollLeft, scrollTop: nextScrollTop } = resolveViewportScrollPosition({
       viewport: restoreViewportTarget.viewport,
+      freezeRows,
+      freezeCols,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
       gridMetrics,
     });
     scrollViewport.scrollLeft = nextScrollLeft;
     scrollViewport.scrollTop = nextScrollTop;
-  }, [gridMetrics, restoreViewportTarget, sortedColumnWidthOverrides, sortedRowHeightOverrides]);
+  }, [
+    freezeCols,
+    freezeRows,
+    gridMetrics,
+    restoreViewportTarget,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+  ]);
 
   const refreshOverlayBounds = useCallback(() => {
     const next = getCellScreenBounds(selectedCell.col, selectedCell.row);

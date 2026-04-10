@@ -734,6 +734,8 @@ function mergeViewportBaseAndOverlay(input: {
   return {
     sheetId: input.base.sheetId,
     sheetName: input.base.sheetName,
+    freezeRows: input.base.freezeRows,
+    freezeCols: input.base.freezeCols,
     cells: sortViewportCells(cells.values()),
     rowAxisEntries: sortAxisEntries(rowAxisEntries.values()),
     columnAxisEntries: sortAxisEntries(columnAxisEntries.values()),
@@ -750,7 +752,9 @@ function readWorkbookViewportBase(
     db,
     `
       SELECT name,
-             sheet_id AS sheetId
+             sheet_id AS sheetId,
+             freeze_rows AS freezeRows,
+             freeze_cols AS freezeCols
         FROM authoritative_sheet
        WHERE name = ?
     `,
@@ -763,6 +767,8 @@ function readWorkbookViewportBase(
   if (typeof sheetId !== "number") {
     return null;
   }
+  const freezeRows = typeof sheetRecord["freezeRows"] === "number" ? sheetRecord["freezeRows"] : 0;
+  const freezeCols = typeof sheetRecord["freezeCols"] === "number" ? sheetRecord["freezeCols"] : 0;
 
   const cells = readViewportCells(
     db,
@@ -802,6 +808,8 @@ function readWorkbookViewportBase(
   return {
     sheetId,
     sheetName,
+    freezeRows,
+    freezeCols,
     cells,
     rowAxisEntries: readAxisEntries(
       db,

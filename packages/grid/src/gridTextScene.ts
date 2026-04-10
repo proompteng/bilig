@@ -1,11 +1,11 @@
 import { ValueTag, type CellSnapshot } from "@bilig/protocol";
 import type { GridEngineLike } from "./grid-engine.js";
 import { getResolvedCellFontFamily, snapshotToRenderCell } from "./gridCells.js";
-import type { GridMetrics } from "./gridMetrics.js";
-import { getVisibleColumnBounds, getVisibleRowBounds } from "./gridMetrics.js";
+import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from "./gridMetrics.js";
 import { indexToColumn } from "@bilig/formula";
 import type { HeaderSelection } from "./gridPointer.js";
 import type { Item, Rectangle } from "./gridTypes.js";
+import { collectVisibleColumnBounds, collectVisibleRowBounds } from "./visibleGridAxes.js";
 
 export interface GridTextItem {
   readonly x: number;
@@ -34,6 +34,8 @@ interface BuildGridTextSceneOptions {
     readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
     readonly tx: number;
     readonly ty: number;
+    readonly freezeRows?: number;
+    readonly freezeCols?: number;
   };
   readonly gridMetrics: GridMetrics;
   readonly columnWidths: Readonly<Record<number, number>>;
@@ -87,6 +89,8 @@ export function buildGridTextScene({
     activeHeaderDrag,
     resizeGuideColumn,
     visibleRegion,
+    visibleItems,
+    getCellBounds,
   });
 
   for (const [col, row] of visibleItems) {
@@ -101,7 +105,7 @@ export function buildGridTextScene({
       row,
       hostBounds,
       getCellBounds,
-      visibleColumnEnd: visibleRegion.range.x + visibleRegion.range.width - 1,
+      visibleColumnEnd: Math.max(...visibleItems.map(([visibleCol]) => visibleCol)),
       selectedAddress:
         col === selectedCell[0] && row === selectedCell[1]
           ? `${indexToColumn(col)}${row + 1}`
@@ -285,7 +289,11 @@ function pushHeaderTextItems(options: {
     readonly range: Pick<Rectangle, "x" | "y" | "width" | "height">;
     readonly tx: number;
     readonly ty: number;
+    readonly freezeRows?: number;
+    readonly freezeCols?: number;
   };
+  visibleItems: readonly Item[];
+  getCellBounds: (col: number, row: number) => Rectangle | undefined;
 }) {
   const {
     columnWidths,
@@ -298,6 +306,8 @@ function pushHeaderTextItems(options: {
     activeHeaderDrag,
     resizeGuideColumn,
     visibleRegion,
+    visibleItems,
+    getCellBounds,
   } = options;
   const selectedColumns = resolveSelectionRange(
     selectionRange?.x ?? selectedCell[0],
@@ -308,13 +318,16 @@ function pushHeaderTextItems(options: {
     selectionRange ? selectionRange.y + selectionRange.height - 1 : selectedCell[1],
   );
 
-  const visibleColumns = getVisibleColumnBounds(
-    visibleRegion.range,
-    gridMetrics.rowMarkerWidth - visibleRegion.tx,
-    Number.MAX_SAFE_INTEGER,
-    columnWidths,
-    gridMetrics.columnWidth,
-  );
+  const hasFrozenAxes = (visibleRegion.freezeRows ?? 0) > 0 || (visibleRegion.freezeCols ?? 0) > 0;
+  const visibleColumns = hasFrozenAxes
+    ? collectVisibleColumnBounds(visibleItems, getCellBounds, gridMetrics)
+    : getVisibleColumnBounds(
+        visibleRegion.range,
+        gridMetrics.rowMarkerWidth - visibleRegion.tx,
+        Number.MAX_SAFE_INTEGER,
+        columnWidths,
+        gridMetrics.columnWidth,
+      );
   for (const column of visibleColumns) {
     items.push({
       x: column.left,
@@ -339,13 +352,15 @@ function pushHeaderTextItems(options: {
     });
   }
 
-  const visibleRows = getVisibleRowBounds(
-    visibleRegion.range,
-    gridMetrics.headerHeight - visibleRegion.ty,
-    Number.MAX_SAFE_INTEGER,
-    rowHeights,
-    gridMetrics.rowHeight,
-  );
+  const visibleRows = hasFrozenAxes
+    ? collectVisibleRowBounds(visibleItems, getCellBounds, gridMetrics)
+    : getVisibleRowBounds(
+        visibleRegion.range,
+        gridMetrics.headerHeight - visibleRegion.ty,
+        Number.MAX_SAFE_INTEGER,
+        rowHeights,
+        gridMetrics.rowHeight,
+      );
   for (const row of visibleRows) {
     items.push({
       x: 0,

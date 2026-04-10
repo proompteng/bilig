@@ -172,6 +172,11 @@ function WorkerWorkbookAppInner({
                   .invokeDeleteRowsMutation(app.selection.sheetName, startRow, count)
                   .catch(app.reportRuntimeError);
               }}
+              onSetFreezePane={(rows: number, cols: number) => {
+                void app
+                  .invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols)
+                  .catch(app.reportRuntimeError);
+              }}
               onVisibleViewportChange={app.handleVisibleViewportChange}
               onCommitEdit={app.commitEditor}
               onCopyRange={app.copySelectionRange}
@@ -204,6 +209,8 @@ function WorkerWorkbookAppInner({
               hiddenColumns={app.hiddenColumns}
               hiddenRows={app.hiddenRows}
               rowHeights={app.rowHeights}
+              freezeRows={app.freezeRows}
+              freezeCols={app.freezeCols}
               onSideRailWidthChange={app.setSideRailWidth}
               sideRailId={app.sideRailId}
               sideRail={app.sideRail}

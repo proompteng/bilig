@@ -189,6 +189,94 @@ describe("gridTextScene", () => {
     });
   });
 
+  test("renders frozen header labels beside the scrollable pane", () => {
+    const scene = buildGridTextScene({
+      engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.Empty })),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [0, 0],
+      selectionRange: { x: 0, y: 0, width: 1, height: 1 },
+      sheetName: "Sheet1",
+      visibleItems: [
+        [0, 0],
+        [2, 0],
+        [0, 3],
+        [2, 3],
+      ],
+      visibleRegion: {
+        range: { x: 2, y: 3, width: 1, height: 1 },
+        tx: 0,
+        ty: 0,
+        freezeRows: 1,
+        freezeCols: 1,
+      },
+      hostBounds: { left: 0, top: 0 },
+      getCellBounds: (col, row) => ({
+        x: col === 0 ? 46 : 150,
+        y: row === 0 ? 24 : 46,
+        width: 104,
+        height: 22,
+      }),
+    });
+
+    expect(scene.items).toContainEqual({
+      x: 46,
+      y: 0,
+      width: 104,
+      height: 24,
+      text: "A",
+      align: "center",
+      wrap: false,
+      color: "#1f7a43",
+      font: HEADER_FONT,
+      fontSize: 11,
+      underline: false,
+      strike: false,
+    });
+    expect(scene.items).toContainEqual({
+      x: 150,
+      y: 0,
+      width: 104,
+      height: 24,
+      text: "C",
+      align: "center",
+      wrap: false,
+      color: "#5f6368",
+      font: HEADER_FONT,
+      fontSize: 11,
+      underline: false,
+      strike: false,
+    });
+    expect(scene.items).toContainEqual({
+      x: 0,
+      y: 24,
+      width: 46,
+      height: 22,
+      text: "1",
+      align: "right",
+      wrap: false,
+      color: "#1f7a43",
+      font: HEADER_FONT,
+      fontSize: 11,
+      underline: false,
+      strike: false,
+    });
+    expect(scene.items).toContainEqual({
+      x: 0,
+      y: 46,
+      width: 46,
+      height: 22,
+      text: "4",
+      align: "right",
+      wrap: false,
+      color: "#5f6368",
+      font: HEADER_FONT,
+      fontSize: 11,
+      underline: false,
+      strike: false,
+    });
+  });
+
   test("adds resize-guide emphasis to the active column header label", () => {
     const scene = buildGridTextScene({
       engine: makeEngine({}, createCellSnapshot({ tag: ValueTag.Empty })),
