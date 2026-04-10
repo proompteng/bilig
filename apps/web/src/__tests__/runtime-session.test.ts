@@ -510,6 +510,7 @@ describe("createWorkerRuntimeSessionController", () => {
       scope: "phase0-doc:perf",
       markShellMounted: vi.fn(),
       noteBootstrapResult: vi.fn(),
+      markFirstAuthoritativePatchVisible: vi.fn(),
       markFirstSelectionVisible: vi.fn(),
     };
 
@@ -541,6 +542,55 @@ describe("createWorkerRuntimeSessionController", () => {
       }),
     );
     expect(perfSession.markFirstSelectionVisible).toHaveBeenCalledTimes(1);
+    expect(perfSession.markFirstAuthoritativePatchVisible).not.toHaveBeenCalled();
+
+    controller.dispose();
+  });
+
+  it("marks the first authoritative patch when bootstrap hydrate installs a snapshot", async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    });
+    const perfSession = {
+      scope: "phase0-doc:hydrate",
+      markShellMounted: vi.fn(),
+      noteBootstrapResult: vi.fn(),
+      markFirstAuthoritativePatchVisible: vi.fn(),
+      markFirstSelectionVisible: vi.fn(),
+    };
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: "phase0-doc",
+        replicaId: "browser:test",
+        persistState: true,
+        initialSelection: { sheetName: "Sheet1", address: "A1" },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(
+          async () =>
+            new Response(JSON.stringify(createSnapshot([{ address: "B2", value: 42 }])), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+        ),
+        perfSession,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message);
+        },
+      },
+    );
+
+    expect(perfSession.noteBootstrapResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        restoredFromPersistence: false,
+      }),
+    );
+    expect(perfSession.markFirstAuthoritativePatchVisible).toHaveBeenCalledTimes(1);
+    expect(controller.runtimeState.sheetNames).toEqual(["Sheet1"]);
 
     controller.dispose();
   });

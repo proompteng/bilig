@@ -47,12 +47,15 @@ describe("workbook perf session", () => {
     });
     session.markFirstSelectionVisible();
     session.markFirstSelectionVisible();
+    session.markFirstAuthoritativePatchVisible();
+    session.markFirstAuthoritativePatchVisible();
 
     expect(recorder.marks).toEqual([
       "perf-doc:session:start",
       "perf-doc:session:shell-mounted",
       "perf-doc:session:local-restore-ready",
       "perf-doc:session:first-selection-visible",
+      "perf-doc:session:first-authoritative-patch-visible",
     ]);
     expect(recorder.measures).toEqual([
       {
@@ -69,6 +72,11 @@ describe("workbook perf session", () => {
         name: "perf-doc:session:time-to-first-selection-visible",
         start: "perf-doc:session:start",
         end: "perf-doc:session:first-selection-visible",
+      },
+      {
+        name: "perf-doc:session:time-to-first-authoritative-patch-visible",
+        start: "perf-doc:session:start",
+        end: "perf-doc:session:first-authoritative-patch-visible",
       },
     ]);
   });
@@ -117,6 +125,7 @@ describe("workbook perf session", () => {
         restoredFromPersistence: false,
         requiresAuthoritativeHydrate: true,
       });
+      session.markFirstAuthoritativePatchVisible();
       session.markFirstSelectionVisible();
     }).not.toThrow();
   });

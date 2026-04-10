@@ -415,6 +415,7 @@ export async function createWorkerRuntimeSessionController(
       );
       currentAuthoritativeRevision = eventBatch.headRevision;
       publishRuntimeState(runtimeState);
+      input.perfSession?.markFirstAuthoritativePatchVisible();
       await syncSelectionAfterRuntimeState(runtimeState);
       return runAuthoritativeRebase();
     }
@@ -508,6 +509,7 @@ export async function createWorkerRuntimeSessionController(
           } satisfies InstallAuthoritativeSnapshotInput,
         );
         publishRuntimeState(hydratedState);
+        input.perfSession?.markFirstAuthoritativePatchVisible();
       }
     }
 

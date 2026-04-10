@@ -16,6 +16,7 @@ export interface WorkbookPerfSession {
   readonly scope: string;
   markShellMounted(): void;
   noteBootstrapResult(result: WorkbookPerfBootstrapResultLike): void;
+  markFirstAuthoritativePatchVisible(): void;
   markFirstSelectionVisible(): void;
 }
 
@@ -100,6 +101,9 @@ export function createWorkbookPerfSession(input: {
           ? "local-restore-ready"
           : "authoritative-hydrate-required",
       );
+    },
+    markFirstAuthoritativePatchVisible() {
+      markEvent("first-authoritative-patch-visible");
     },
     markFirstSelectionVisible() {
       markEvent("first-selection-visible");
