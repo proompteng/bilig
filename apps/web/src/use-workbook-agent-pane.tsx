@@ -155,6 +155,10 @@ function createSessionResumeBody(
       };
 }
 
+function threadSnapshotUrl(documentId: string, threadId: string): string {
+  return `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(threadId)}`;
+}
+
 function updateSnapshotFromDelta(
   snapshot: WorkbookAgentSessionSnapshot | null,
   event: Extract<WorkbookAgentStreamEvent, { type: "assistantDelta" | "planDelta" }>,
@@ -381,18 +385,7 @@ export function useWorkbookAgentPane(input: {
         void (async () => {
           try {
             setIsLoading(true);
-            const response = await fetch(
-              `/v2/documents/${encodeURIComponent(documentId)}/agent/threads`,
-              {
-                method: "POST",
-                headers: {
-                  "content-type": "application/json",
-                },
-                body: JSON.stringify(
-                  createSessionResumeBody(storedSession, getContextRef.current(), threadScope),
-                ),
-              },
-            );
+            const response = await fetch(threadSnapshotUrl(documentId, storedSession.threadId));
             const payload = (await response.json()) as unknown;
             if (!response.ok) {
               throw new Error(
@@ -415,15 +408,11 @@ export function useWorkbookAgentPane(input: {
       });
       eventSourceRef.current = source;
     },
-    [closeStream, documentId, perfSession, persistSessionSnapshot, threadScope],
+    [closeStream, documentId, perfSession, persistSessionSnapshot],
   );
 
-  const createOrResumeSession = useCallback(
-    async (
-      storedSession: StoredWorkbookAgentThreadRef | null,
-      context: WorkbookAgentUiContext,
-      scope: WorkbookAgentThreadScope,
-    ) => {
+  const createSession = useCallback(
+    async (context: WorkbookAgentUiContext, scope: WorkbookAgentThreadScope) => {
       const response = await fetch(
         `/v2/documents/${encodeURIComponent(documentId)}/agent/threads`,
         {
@@ -431,9 +420,26 @@ export function useWorkbookAgentPane(input: {
           headers: {
             "content-type": "application/json",
           },
-          body: JSON.stringify(createSessionResumeBody(storedSession, context, scope)),
+          body: JSON.stringify(createSessionResumeBody(null, context, scope)),
         },
       );
+      const payload = (await response.json()) as unknown;
+      if (!response.ok) {
+        throw new Error(
+          resolvePayloadMessage(
+            payload,
+            `Workbook agent request failed with status ${response.status}`,
+          ),
+        );
+      }
+      return decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
+    },
+    [documentId],
+  );
+
+  const loadThreadSnapshot = useCallback(
+    async (threadId: string) => {
+      const response = await fetch(threadSnapshotUrl(documentId, threadId));
       const payload = (await response.json()) as unknown;
       if (!response.ok) {
         throw new Error(
@@ -455,7 +461,7 @@ export function useWorkbookAgentPane(input: {
     }
     setIsLoading(true);
     try {
-      const nextSnapshot = await createOrResumeSession(null, getContextRef.current(), threadScope);
+      const nextSnapshot = await createSession(getContextRef.current(), threadScope);
       persistSessionSnapshot(nextSnapshot);
       connectStream(nextSnapshot.threadId);
       setError(null);
@@ -467,7 +473,7 @@ export function useWorkbookAgentPane(input: {
     } finally {
       setIsLoading(false);
     }
-  }, [connectStream, createOrResumeSession, persistSessionSnapshot, threadScope]);
+  }, [connectStream, createSession, persistSessionSnapshot, threadScope]);
 
   useEffect(() => {
     autoApplyBundleIdRef.current = null;
@@ -662,11 +668,7 @@ export function useWorkbookAgentPane(input: {
     const bootstrapStoredSession = async () => {
       try {
         setIsLoading(true);
-        const nextSnapshot = await createOrResumeSession(
-          storedSession,
-          getContextRef.current(),
-          threadScope,
-        );
+        const nextSnapshot = await loadThreadSnapshot(storedSession.threadId);
         if (cancelled) {
           return;
         }
@@ -691,12 +693,11 @@ export function useWorkbookAgentPane(input: {
   }, [
     closeStream,
     connectStream,
-    createOrResumeSession,
     documentId,
     enabled,
+    loadThreadSnapshot,
     loadThreadSummaries,
     persistSessionSnapshot,
-    threadScope,
   ]);
 
   const selectThread = useCallback(
@@ -707,11 +708,7 @@ export function useWorkbookAgentPane(input: {
       try {
         setIsLoading(true);
         setError(null);
-        const nextSnapshot = await createOrResumeSession(
-          { threadId },
-          getContextRef.current(),
-          threadScope,
-        );
+        const nextSnapshot = await loadThreadSnapshot(threadId);
         persistSessionSnapshot(nextSnapshot);
         connectStream(nextSnapshot.threadId);
       } catch (nextError) {
@@ -720,7 +717,7 @@ export function useWorkbookAgentPane(input: {
         setIsLoading(false);
       }
     },
-    [connectStream, createOrResumeSession, persistSessionSnapshot, threadScope],
+    [connectStream, loadThreadSnapshot, persistSessionSnapshot],
   );
 
   const startNewThread = useCallback(() => {

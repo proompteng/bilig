@@ -298,7 +298,6 @@ describe("workbook agent pane", () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    let sessionsRequestBody: unknown;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
       if (url.endsWith("/agent/threads") && requestMethod(init) === "GET") {
@@ -316,8 +315,7 @@ describe("workbook agent pane", () => {
           },
         );
       }
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
-        sessionsRequestBody = requestBody(init);
+      if (url.endsWith("/agent/threads/thr-2")) {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -366,21 +364,7 @@ describe("workbook agent pane", () => {
         .querySelector("[data-testid='workbook-agent-scope-shared']")
         ?.getAttribute("aria-pressed"),
     ).toBe("true");
-    expect(sessionsRequestBody).toEqual({
-      threadId: "thr-2",
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
-    });
+    expect(fetchSpy).toHaveBeenCalledWith("/v2/documents/doc-1/agent/threads/thr-2");
 
     await act(async () => {
       root.unmount();
@@ -910,7 +894,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1186,7 +1170,7 @@ describe("workbook agent pane", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = requestUrl(input);
-        if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+        if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
           return new Response(JSON.stringify(createSnapshot()), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -1246,7 +1230,7 @@ describe("workbook agent pane", () => {
     let resumeCount = 0;
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
         resumeCount += 1;
         return new Response(
           JSON.stringify(
@@ -1283,39 +1267,9 @@ describe("workbook agent pane", () => {
 
     const sessionCalls = fetchSpy.mock.calls.filter(
       ([input, init]) =>
-        requestUrl(input).endsWith("/agent/threads") && requestMethod(init) === "POST",
+        requestUrl(input).endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET",
     );
     expect(sessionCalls).toHaveLength(2);
-    expect(requestBody(sessionCalls[0]?.[1])).toEqual({
-      threadId: "thr-1",
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
-    });
-    expect(requestBody(sessionCalls[1]?.[1])).toEqual({
-      threadId: "thr-1",
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
-    });
     expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toBe(
       JSON.stringify({
@@ -1340,7 +1294,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1366,26 +1320,10 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    const bootstrapSessionCall = fetchSpy.mock.calls.find(
-      ([input, init]) =>
-        requestUrl(input).endsWith("/agent/threads") && requestMethod(init) === "POST",
-    );
-    expect(bootstrapSessionCall).toBeDefined();
-    expect(requestBody(bootstrapSessionCall?.[1])).toEqual({
-      threadId: "thr-1",
-      context: {
-        selection: {
-          sheetName: "Sheet1",
-          address: "A1",
-        },
-        viewport: {
-          rowStart: 0,
-          rowEnd: 10,
-          colStart: 0,
-          colEnd: 5,
-        },
-      },
+    const bootstrapSessionCall = fetchSpy.mock.calls.find(([input, init]) => {
+      return requestUrl(input).endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET";
     });
+    expect(bootstrapSessionCall).toBeDefined();
     expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
       '"threadId":"thr-1"',
@@ -1440,7 +1378,7 @@ describe("workbook agent pane", () => {
     const previewBundle = vi.fn(async () => preview);
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1619,7 +1557,7 @@ describe("workbook agent pane", () => {
     const previewBundle = vi.fn(async () => preview);
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1741,7 +1679,7 @@ describe("workbook agent pane", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (url.endsWith("/agent/threads") && init?.method === "POST") {
+      if (url.endsWith("/agent/threads/thr-shared") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
@@ -1896,7 +1834,7 @@ describe("workbook agent pane", () => {
     );
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+      if (url.endsWith("/agent/threads/thr-1") && requestMethod(init) === "GET") {
         return new Response(
           JSON.stringify(
             createSnapshot({
