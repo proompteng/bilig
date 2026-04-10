@@ -103,9 +103,9 @@ This is the scorecard that should drive engineering priority.
 | --- | --- | --- | --- | --- | --- |
 | Surface parity | Public method inventory | `132/132` method names present on `HeadlessWorkbook` / `WorkPaper` | local checkout baseline | parity | keep the snapshot artifact green |
 | Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity | keep the snapshot artifact green |
-| Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical | add a derived breadth artifact so the number is not doc-only |
+| Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical | keep the generated dominance snapshot current |
 | Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
-| Formula production quality | Canonical production closure | `92/101` canonical rows production-closed = `91.1%` | no matching canonical artifact | incomplete; `bilig` not yet dominant | close the remaining `9` canonical rows and artifact the closure state |
+| Formula production quality | Canonical production closure | `298/300` canonical rows production-closed = `99.3%` | no matching canonical artifact | `bilig` leads on closure, with `2` grouped-array rows still JS-only | close the remaining `2` grouped-array rows and keep the dominance snapshot current |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
 | Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula leads | convert the current red workloads into majority `bilig` wins |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
@@ -130,7 +130,7 @@ Current measured values from local repo artifacts and docs:
 - HyperFormula published Excel coverage from the local docs:
   - `350/515` Excel functions = `68%`
 - `bilig` canonical formula production closure:
-  - `92/101` rows = `91.1%`
+  - `298/300` rows = `99.3%`
 - directly comparable benchmark record:
   - `WorkPaper` wins: `0/6`
   - HyperFormula wins: `6/6`
@@ -190,9 +190,7 @@ Formula breadth and canonical closure:
   - `packages/formula/src/generated/formula-inventory.ts`
 - canonical closure source:
   - `packages/formula/src/compatibility.ts`
-  - `docs/formula-language.md`
-- required future artifact:
-  - a generated formula-dominance snapshot derived from the inventory and canonical registry
+  - `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json`
 
 ## Program States
 
@@ -243,7 +241,8 @@ time:
 3. formula dominance improves beyond breadth-only claims
    - Office-listed formula breadth stays at or above `95%`
    - canonical production closure reaches at least `98%`
-   - no critical rows remain open in dynamic arrays, names, tables, or structured references
+   - no critical rows remain open in names, tables, structured references, or lambda families
+   - any remaining canonical non-production rows are explicitly documented as non-critical grouped-array follow-ons
 4. performance dominance becomes true on comparable workloads
    - `bilig` wins a majority of directly comparable benchmark workloads
    - `bilig` loses none of them by more than `1.25x`
@@ -374,15 +373,8 @@ Breadth is already high, but production closure is not yet finished.
 
 The highest-value remaining canonical closures are:
 
-- `dynamic-array:filter-basic`
-- `dynamic-array:unique-basic`
-- `names:defined-name-range`
-- `tables:table-total-row-sum`
-- `structured-reference:table-column-ref`
-- `lambda:let-basic`
-- `lambda:lambda-invoke`
-- `lambda:map-basic`
-- `lambda:byrow-basic`
+- `dynamic-array:groupby-basic`
+- `dynamic-array:pivotby-basic`
 
 This matters because formula dominance is not just “the parser recognizes the name.”
 
@@ -730,13 +722,13 @@ Metric:
 
 Current value:
 
-- `92/101` = `91.1%`
+- `298/300` = `99.3%`
 
 Interpretation:
 
-- strong progress
-- not finished
-- critical strategic rows are still open
+- strong closure
+- only `2` grouped-array rows remain JS-only in the canonical slice
+- names, tables, structured references, and lambda canonical rows are now production-closed
 
 ### Layer 3: Strategic Semantics
 
@@ -780,11 +772,15 @@ Recommended future artifacts:
   - spill/range leadership
   - memory-retention lifecycle tests
 
-Recommended formula artifacts:
+Shipped formula artifact:
 
-- formula breadth artifact derived from `formula-inventory.ts`
-- canonical production-closure artifact derived from the formula compatibility registry
-- strategic-family artifact for arrays/tables/names/lambda status
+- `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json`
+
+That snapshot now covers:
+
+- formula breadth derived from `formula-inventory.ts`
+- canonical production closure derived from `compatibility.ts`
+- strategic-family status for arrays, names, tables, structured references, and lambda
 
 ## Minimum Patch Shape
 

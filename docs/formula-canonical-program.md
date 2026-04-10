@@ -13,46 +13,30 @@ Close the current canonical Excel for the web worksheet formula corpus as repres
 
 ## Current code-backed status
 
-The canonical registry in code currently contains `101` canonical rows.
+The canonical registry in code currently contains `300` canonical rows.
 
 Current status split:
 
-- `92` rows are `implemented-wasm-production`
-- `6` rows are `implemented-js`
-- `3` rows are `blocked`
+- `298` rows are `implemented-wasm-production`
+- `2` rows are `implemented-js`
+- `0` rows are `blocked`
 
 The remaining open canonical rows are:
 
-- `dynamic-array:filter-basic`
-- `dynamic-array:unique-basic`
-- `lambda:let-basic`
-- `lambda:lambda-invoke`
-- `lambda:map-basic`
-- `lambda:byrow-basic`
-- `names:defined-name-range`
-- `tables:table-total-row-sum`
-- `structured-reference:table-column-ref`
+- `dynamic-array:groupby-basic`
+- `dynamic-array:pivotby-basic`
 
 The checked-in registry is the authoritative source of corpus size and composition.
+The generated snapshot at
+`packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json` is the easiest current readout.
 
 ## Remaining semantic focus
 
 The remaining non-production rows break down as:
 
 - dynamic-array:
-  - `dynamic-array:filter-basic`
-  - `dynamic-array:unique-basic`
-- lambda:
-  - `lambda:let-basic`
-  - `lambda:lambda-invoke`
-  - `lambda:map-basic`
-  - `lambda:byrow-basic`
-- names:
-  - `names:defined-name-range`
-- tables:
-  - `tables:table-total-row-sum`
-- structured-reference:
-  - `structured-reference:table-column-ref`
+  - `dynamic-array:groupby-basic`
+  - `dynamic-array:pivotby-basic`
 
 ## Delivery rule
 

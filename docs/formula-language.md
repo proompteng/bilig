@@ -3,27 +3,22 @@
 ## Current state
 
 - JS is still the semantic oracle
-- canonical production routing is closed for `92` of `101` canonical rows
-- `6` canonical rows remain `implemented-js`
-- `3` canonical rows remain `blocked`
+- canonical production routing is closed for `298` of `300` canonical rows
+- `2` canonical rows remain `implemented-js`
+- `0` canonical rows remain `blocked`
+- the generated source of truth is
+  `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json`
 
 ## Canonical corpus milestone
 
 The active milestone is the canonical Excel for the web worksheet formula corpus represented in `packages/formula/src/compatibility.ts`.
 
-The current code-backed canonical registry contains `101` rows.
+The current code-backed canonical registry contains `300` rows.
 
-The `9` non-production canonical rows are:
+The `2` non-production canonical rows are:
 
-- `dynamic-array:filter-basic`
-- `dynamic-array:unique-basic`
-- `lambda:let-basic`
-- `lambda:lambda-invoke`
-- `lambda:map-basic`
-- `lambda:byrow-basic`
-- `names:defined-name-range`
-- `tables:table-total-row-sum`
-- `structured-reference:table-column-ref`
+- `dynamic-array:groupby-basic`
+- `dynamic-array:pivotby-basic`
 
 ## Full target
 
@@ -65,3 +60,4 @@ The worksheet engine keeps non-worksheet Excel surfaces behind the adapter contr
 - [wasm-runtime-contract.md](/Users/gregkonush/github.com/bilig/docs/wasm-runtime-contract.md)
 - [dynamic-array-runtime.md](/Users/gregkonush/github.com/bilig/docs/dynamic-array-runtime.md)
 - [workbook-metadata-model.md](/Users/gregkonush/github.com/bilig/docs/workbook-metadata-model.md)
+- `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json`

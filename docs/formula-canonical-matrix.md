@@ -3,7 +3,8 @@
 ## Contract
 
 - `packages/formula/src/compatibility.ts` is the authoritative source of canonical row count and status
-- the current code-backed canonical registry contains `101` rows
+- `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json` is the generated source of truth for current counts
+- the current code-backed canonical registry contains `300` rows
 - canonical fixture ids must stay aligned with canonical registry ids
 - the checked-in registry is the authoritative source of canonical row count and status
 - scope key in code is `canonical`
@@ -22,24 +23,17 @@
 | `lookup-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `statistical` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `information` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `dynamic-array` | mixed | mixed | `FILTER` and `UNIQUE` are JS-only in the canonical slice |
-| `names` | mixed | mixed | scalar names are promoted; reference-valued names remain blocked |
-| `tables` | `blocked` | `blocked` | `tables:table-total-row-sum` |
-| `structured-reference` | `blocked` | `blocked` | `structured-reference:table-column-ref` |
+| `dynamic-array` | mixed | mixed | `GROUPBY` and `PIVOTBY` remain JS-only in the canonical slice |
+| `names` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `tables` | `implemented-wasm-production` | `production` | no non-production canonical rows |
+| `structured-reference` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 | `volatile` | `implemented-wasm-production` | `production` | no non-production canonical rows |
-| `lambda` | mixed | `not-started` | `LET`, `LAMBDA`, `MAP`, and `BYROW` remain JS-only |
+| `lambda` | `implemented-wasm-production` | `production` | no non-production canonical rows |
 
 ## Current remaining open rows
 
-- `dynamic-array:filter-basic` (`implemented-js`)
-- `dynamic-array:unique-basic` (`implemented-js`)
-- `lambda:let-basic` (`implemented-js`)
-- `lambda:lambda-invoke` (`implemented-js`)
-- `lambda:map-basic` (`implemented-js`)
-- `lambda:byrow-basic` (`implemented-js`)
-- `names:defined-name-range` (`blocked`)
-- `tables:table-total-row-sum` (`blocked`)
-- `structured-reference:table-column-ref` (`blocked`)
+- `dynamic-array:groupby-basic` (`implemented-js`)
+- `dynamic-array:pivotby-basic` (`implemented-js`)
 
 ## Notes
 

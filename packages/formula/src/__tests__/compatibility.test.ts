@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   compatibilityFamilies,
@@ -18,7 +19,55 @@ import {
   excelFixtureIdPattern,
 } from "../../../excel-fixtures/src/index.js";
 
+interface FormulaDominanceSnapshotFixture {
+  canonical: {
+    nonProductionRows: Array<{ id: string }>;
+    summary: { percent: number; production: number; total: number };
+  };
+  formulaBreadth: {
+    officeListed: { percent: number; production: number; total: number };
+    tracked: { percent: number; production: number; total: number };
+  };
+}
+
 describe("formula compatibility registry", () => {
+  it("keeps the generated formula dominance snapshot aligned with inventory and canonical status", () => {
+    const snapshot = readFormulaDominanceSnapshot();
+    const canonicalRegistryEntries = formulaCompatibilityRegistry.filter(
+      (entry) => entry.scope === "canonical",
+    );
+    const canonicalProductionEntries = canonicalRegistryEntries.filter(
+      (entry) => entry.status === "implemented-wasm-production",
+    );
+    const canonicalOpenRows = canonicalRegistryEntries
+      .filter((entry) => entry.status !== "implemented-wasm-production")
+      .map((entry) => entry.id)
+      .toSorted();
+
+    expect(snapshot.formulaBreadth.officeListed).toEqual({
+      production: 487,
+      total: 508,
+      percent: 95.9,
+    });
+    expect(snapshot.formulaBreadth.tracked).toEqual({
+      production: 487,
+      total: 525,
+      percent: 92.8,
+    });
+    expect(snapshot.canonical.summary).toEqual({
+      production: canonicalProductionEntries.length,
+      total: canonicalRegistryEntries.length,
+      percent: 99.3,
+    });
+    expect(snapshot.canonical.nonProductionRows.map((row) => row.id).toSorted()).toEqual(
+      canonicalOpenRows,
+    );
+    expect(canonicalOpenRows).toEqual([
+      "dynamic-array:groupby-basic",
+      "dynamic-array:pivotby-basic",
+    ]);
+  });
+
   it("keeps the canonical formula fixture corpus and registry in exact lockstep", () => {
     const canonicalRegistryEntries = formulaCompatibilityRegistry.filter(
       (entry) => entry.scope === "canonical",
@@ -117,3 +166,65 @@ describe("formula compatibility registry", () => {
     );
   });
 });
+
+function readFormulaDominanceSnapshot(): FormulaDominanceSnapshotFixture {
+  const parsed = JSON.parse(
+    readFileSync(new URL("./fixtures/formula-dominance-snapshot.json", import.meta.url), "utf8"),
+  ) as unknown;
+
+  if (!isFormulaDominanceSnapshotFixture(parsed)) {
+    throw new Error("Invalid formula dominance snapshot fixture shape");
+  }
+
+  return parsed;
+}
+
+function isFormulaDominanceSnapshotFixture(
+  value: unknown,
+): value is FormulaDominanceSnapshotFixture {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isRatioRecord(value["formulaBreadth"]) &&
+    isRatioRecord(value["canonical"]) &&
+    Array.isArray(value["canonical"]["nonProductionRows"]) &&
+    value["canonical"]["nonProductionRows"].every(
+      (row) => isRecord(row) && typeof row["id"] === "string",
+    )
+  );
+}
+
+function isRatioRecord(value: unknown): value is {
+  officeListed?: { percent: number; production: number; total: number };
+  tracked?: { percent: number; production: number; total: number };
+  summary?: { percent: number; production: number; total: number };
+  nonProductionRows?: unknown[];
+} {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const summary = value["summary"];
+  const officeListed = value["officeListed"];
+  const tracked = value["tracked"];
+  return (
+    (summary === undefined || isRatio(summary)) &&
+    (officeListed === undefined || isRatio(officeListed)) &&
+    (tracked === undefined || isRatio(tracked))
+  );
+}
+
+function isRatio(value: unknown): value is { percent: number; production: number; total: number } {
+  return (
+    isRecord(value) &&
+    typeof value["percent"] === "number" &&
+    typeof value["production"] === "number" &&
+    typeof value["total"] === "number"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}

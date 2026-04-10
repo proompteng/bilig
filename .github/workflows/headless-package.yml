@@ -13,13 +13,20 @@ on:
       - "packages/workbook-domain/**"
       - "packages/wasm-kernel/**"
       - "packages/benchmarks/**"
+      - "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json"
       - "docs/workpaper-platform-design.md"
+      - "docs/workpaper-engine-leadership-program.md"
       - "docs/public-api.md"
+      - "docs/formula-language.md"
+      - "docs/formula-canonical-matrix.md"
+      - "docs/formula-canonical-program.md"
+      - "docs/production-acceptance-matrix.md"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "scripts/check-package-publish.ts"
       - "scripts/gen-workpaper-hyperformula-audit.ts"
+      - "scripts/gen-formula-dominance-snapshot.ts"
       - "scripts/workpaper-surface-contract.ts"
       - "scripts/next-runtime-release-version.ts"
       - "scripts/runtime-package-set.ts"
@@ -122,6 +129,11 @@ jobs:
         run: |
           set -euo pipefail
           pnpm workpaper:bench:check
+
+      - name: Check formula dominance snapshot
+        run: |
+          set -euo pipefail
+          pnpm formula:dominance:check
 
       - name: Check WorkPaper competitive benchmark artifact shape
         run: |

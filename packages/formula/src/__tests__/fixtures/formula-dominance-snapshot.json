@@ -1,0 +1,480 @@
+{
+  "schemaVersion": 1,
+  "formulaBreadth": {
+    "officeListed": {
+      "production": 487,
+      "total": 508,
+      "percent": 95.9
+    },
+    "tracked": {
+      "production": 487,
+      "total": 525,
+      "percent": 92.8
+    },
+    "missingOfficeFunctions": [
+      "ACCRINT",
+      "ACCRINTM",
+      "AMORDEGRC",
+      "AMORLINC",
+      "ARABIC",
+      "AVEDEV",
+      "COMPLEX",
+      "DEVSQ",
+      "IMABS",
+      "IMAGINARY",
+      "IMARGUMENT",
+      "IMCONJUGATE",
+      "IMCOS",
+      "IMCOSH",
+      "IMCOT",
+      "IMCSC",
+      "IMCSCH",
+      "IMDIV",
+      "IMEXP",
+      "IMLN",
+      "IMLOG10",
+      "IMLOG2",
+      "IMPOWER",
+      "IMPRODUCT",
+      "IMREAL",
+      "IMSEC",
+      "IMSECH",
+      "IMSIN",
+      "IMSINH",
+      "IMSQRT",
+      "IMSUB",
+      "IMSUM",
+      "IMTAN",
+      "MULTINOMIAL",
+      "ROMAN"
+    ]
+  },
+  "canonical": {
+    "summary": {
+      "production": 298,
+      "total": 300,
+      "percent": 99.3
+    },
+    "statusCounts": {
+      "unsupported": 0,
+      "seeded": 0,
+      "implemented-js": 2,
+      "implemented-js-and-wasm-shadow": 0,
+      "implemented-wasm-production": 298,
+      "blocked": 0
+    },
+    "nonProductionRows": [
+      {
+        "id": "dynamic-array:groupby-basic",
+        "family": "dynamic-array",
+        "formula": "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
+        "status": "implemented-js",
+        "wasmStatus": "not-started",
+        "notes": "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
+      },
+      {
+        "id": "dynamic-array:pivotby-basic",
+        "family": "dynamic-array",
+        "formula": "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
+        "status": "implemented-js",
+        "wasmStatus": "not-started",
+        "notes": "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
+      }
+    ]
+  },
+  "families": [
+    {
+      "family": "arithmetic",
+      "summary": {
+        "production": 6,
+        "total": 6,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 6,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "comparison",
+      "summary": {
+        "production": 4,
+        "total": 4,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 4,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "logical",
+      "summary": {
+        "production": 14,
+        "total": 14,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 14,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "aggregation",
+      "summary": {
+        "production": 7,
+        "total": 7,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 7,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "math",
+      "summary": {
+        "production": 42,
+        "total": 42,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 42,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "text",
+      "summary": {
+        "production": 30,
+        "total": 30,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 30,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "date-time",
+      "summary": {
+        "production": 65,
+        "total": 65,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 65,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "lookup-reference",
+      "summary": {
+        "production": 9,
+        "total": 9,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 9,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "statistical",
+      "summary": {
+        "production": 89,
+        "total": 89,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 89,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "information",
+      "summary": {
+        "production": 9,
+        "total": 9,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 9,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "dynamic-array",
+      "summary": {
+        "production": 14,
+        "total": 16,
+        "percent": 87.5
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 2,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 14,
+        "blocked": 0
+      },
+      "nonProductionRows": [
+        {
+          "id": "dynamic-array:groupby-basic",
+          "family": "dynamic-array",
+          "formula": "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
+          "status": "implemented-js",
+          "wasmStatus": "not-started",
+          "notes": "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
+        },
+        {
+          "id": "dynamic-array:pivotby-basic",
+          "family": "dynamic-array",
+          "formula": "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
+          "status": "implemented-js",
+          "wasmStatus": "not-started",
+          "notes": "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
+        }
+      ]
+    },
+    {
+      "family": "names",
+      "summary": {
+        "production": 2,
+        "total": 2,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 2,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "tables",
+      "summary": {
+        "production": 1,
+        "total": 1,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 1,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "structured-reference",
+      "summary": {
+        "production": 1,
+        "total": 1,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 1,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "volatile",
+      "summary": {
+        "production": 1,
+        "total": 1,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 1,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "lambda",
+      "summary": {
+        "production": 4,
+        "total": 4,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 4,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    }
+  ],
+  "strategicFamilies": [
+    {
+      "family": "dynamic-array",
+      "summary": {
+        "production": 14,
+        "total": 16,
+        "percent": 87.5
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 2,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 14,
+        "blocked": 0
+      },
+      "nonProductionRows": [
+        {
+          "id": "dynamic-array:groupby-basic",
+          "family": "dynamic-array",
+          "formula": "=GROUPBY(A1:A5,C1:C5,SUM,3,1)",
+          "status": "implemented-js",
+          "wasmStatus": "not-started",
+          "notes": "GROUPBY now has production JS-special spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
+        },
+        {
+          "id": "dynamic-array:pivotby-basic",
+          "family": "dynamic-array",
+          "formula": "=PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)",
+          "status": "implemented-js",
+          "wasmStatus": "not-started",
+          "notes": "PIVOTBY now has production JS-special pivot spill semantics and canonical fixture coverage; native grouped-array lowering is still pending."
+        }
+      ]
+    },
+    {
+      "family": "names",
+      "summary": {
+        "production": 2,
+        "total": 2,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 2,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "tables",
+      "summary": {
+        "production": 1,
+        "total": 1,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 1,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "structured-reference",
+      "summary": {
+        "production": 1,
+        "total": 1,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 1,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    },
+    {
+      "family": "lambda",
+      "summary": {
+        "production": 4,
+        "total": 4,
+        "percent": 100
+      },
+      "statusCounts": {
+        "unsupported": 0,
+        "seeded": 0,
+        "implemented-js": 0,
+        "implemented-js-and-wasm-shadow": 0,
+        "implemented-wasm-production": 4,
+        "blocked": 0
+      },
+      "nonProductionRows": []
+    }
+  ]
+}
