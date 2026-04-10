@@ -526,6 +526,127 @@ describe("workbook agent service", () => {
     }
   });
 
+  it("runs durable current-sheet summary workflows from the active selection context", async () => {
+    const fakeCodex = new FakeCodexTransport();
+    const engine = new SpreadsheetEngine({
+      workbookName: "doc-1",
+      replicaId: "server:test",
+    });
+    await engine.ready();
+    engine.createSheet("Revenue");
+    engine.setCellValue("Revenue", "A1", "Region");
+    engine.setCellValue("Revenue", "B1", "Revenue");
+    engine.setCellValue("Revenue", "A2", "West");
+    engine.setCellFormula("Revenue", "B2", "SUM(B3:B5)");
+    engine.setFreezePane("Revenue", 1, 0);
+    const upsertWorkbookWorkflowRun = vi.fn(async () => undefined);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        async inspectWorkbook<T>(
+          _documentId: string,
+          task: (runtime: WorkbookRuntime) => T | Promise<T>,
+        ) {
+          const runtime: WorkbookRuntime = {
+            documentId: "doc-1",
+            engine,
+            projection: buildWorkbookSourceProjectionFromEngine("doc-1", engine, {
+              revision: 1,
+              calculatedRevision: 1,
+              ownerUserId: "alex@example.com",
+              updatedBy: "alex@example.com",
+              updatedAt: "2026-04-10T00:00:00.000Z",
+            }),
+            headRevision: 1,
+            calculatedRevision: 1,
+            ownerUserId: "alex@example.com",
+          };
+          return await task(runtime);
+        },
+        upsertWorkbookWorkflowRun,
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          fakeCodex,
+      },
+    );
+
+    try {
+      await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-1",
+          context: {
+            selection: {
+              sheetName: "Revenue",
+              address: "B2",
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 8,
+            },
+          },
+        },
+      });
+
+      const snapshot = await service.startWorkflow({
+        documentId: "doc-1",
+        sessionId: "agent-session-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          workflowTemplate: "summarizeCurrentSheet",
+        },
+      });
+
+      expect(upsertWorkbookWorkflowRun).toHaveBeenCalledTimes(2);
+      expect(snapshot.workflowRuns[0]).toEqual(
+        expect.objectContaining({
+          workflowTemplate: "summarizeCurrentSheet",
+          title: "Summarize Current Sheet",
+          status: "completed",
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              stepId: "inspect-current-sheet",
+              status: "completed",
+            }),
+          ]),
+          artifact: expect.objectContaining({
+            title: "Current Sheet Summary",
+            text: expect.stringContaining("Sheet: Revenue"),
+          }),
+        }),
+      );
+      expect(snapshot.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "system",
+            text: "Started workflow: Summarize Current Sheet",
+          }),
+          expect.objectContaining({
+            kind: "system",
+            text: "Completed workflow: Summarize Current Sheet",
+            citations: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "range",
+                sheetName: "Revenue",
+              }),
+            ]),
+          }),
+        ]),
+      );
+    } finally {
+      await service.close();
+    }
+  });
+
   it("runs durable dependency trace workflows from the current selection context", async () => {
     const fakeCodex = new FakeCodexTransport();
     const engine = new SpreadsheetEngine({

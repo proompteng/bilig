@@ -20,6 +20,11 @@ const WORKFLOW_ACTIONS: readonly WorkflowActionDefinition[] = [
     summary: "Read workbook structure, sheets, and layout metadata.",
   },
   {
+    template: "summarizeCurrentSheet",
+    label: "Summarize current sheet",
+    summary: "Read the active sheet layout, tables, filters, freeze panes, and hidden metadata.",
+  },
+  {
     template: "describeRecentChanges",
     label: "Recent changes",
     summary: "Read the latest durable workbook revisions and summarize them.",

@@ -947,6 +947,81 @@ describe("workbook agent tools", () => {
     expect(output && "text" in output ? output.text : "").toContain('"title": "Search Workbook"');
   });
 
+  it("starts current-sheet summary workflows from the semantic tool surface", async () => {
+    const engine = await createEngine();
+    const { zeroSyncService } = createZeroSyncHarness(engine);
+    const startWorkflow = vi.fn(async () => ({
+      runId: "wf-sheet-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "summarizeCurrentSheet" as const,
+      title: "Summarize Current Sheet",
+      summary: "Summarized Revenue with 24 populated cells and 1 table.",
+      status: "completed" as const,
+      createdAtUnixMs: 1,
+      updatedAtUnixMs: 2,
+      completedAtUnixMs: 2,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-current-sheet",
+          label: "Inspect current sheet",
+          status: "completed" as const,
+          summary: "Read durable metadata for Revenue, including used range and tables.",
+          updatedAtUnixMs: 1,
+        },
+        {
+          stepId: "draft-sheet-summary",
+          label: "Draft current sheet summary",
+          status: "completed" as const,
+          summary: "Prepared the durable current-sheet summary artifact for the thread.",
+          updatedAtUnixMs: 2,
+        },
+      ],
+      artifact: {
+        kind: "markdown" as const,
+        title: "Current Sheet Summary",
+        text: "## Current Sheet Summary",
+      },
+    }));
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async (command: WorkbookAgentCommandBundle["commands"][number]) =>
+          createBundle(command),
+        ),
+        startWorkflow,
+      },
+      {
+        threadId: "thr-1",
+        turnId: "turn-1",
+        callId: "call-workflow-sheet-1",
+        tool: "bilig_start_workflow",
+        arguments: {
+          workflowTemplate: "summarizeCurrentSheet",
+        },
+      },
+    );
+
+    expect(response.success).toBe(true);
+    expect(startWorkflow).toHaveBeenCalledWith({
+      workflowTemplate: "summarizeCurrentSheet",
+    });
+    const output = response.contentItems.find((item) => item.type === "inputText");
+    expect(output?.type).toBe("inputText");
+    expect(output && "text" in output ? output.text : "").toContain('"runId": "wf-sheet-1"');
+    expect(output && "text" in output ? output.text : "").toContain(
+      '"title": "Current Sheet Summary"',
+    );
+  });
+
   it("stages column metadata commands for resize operations", async () => {
     const engine = await createEngine();
     const { zeroSyncService } = createZeroSyncHarness(engine);

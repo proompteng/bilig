@@ -66,6 +66,7 @@ function isMarkdownArtifact(value: unknown): value is WorkbookAgentWorkflowArtif
 function isWorkflowTemplate(value: unknown): value is WorkbookAgentWorkflowRun["workflowTemplate"] {
   return (
     value === "summarizeWorkbook" ||
+    value === "summarizeCurrentSheet" ||
     value === "describeRecentChanges" ||
     value === "findFormulaIssues" ||
     value === "traceSelectionDependencies" ||

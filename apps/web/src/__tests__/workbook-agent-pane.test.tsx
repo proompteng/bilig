@@ -659,6 +659,116 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts current-sheet summary workflows through the durable thread workflow route", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && requestMethod(init) === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/agent/threads/thr-2/workflows")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-2",
+              workflowRuns: [
+                {
+                  runId: "wf-sheet-1",
+                  threadId: "thr-2",
+                  startedByUserId: "alex@example.com",
+                  workflowTemplate: "summarizeCurrentSheet",
+                  title: "Summarize Current Sheet",
+                  summary: "Summarized Sheet1 with 12 populated cells and 1 table.",
+                  status: "completed",
+                  createdAtUnixMs: 1,
+                  updatedAtUnixMs: 2,
+                  completedAtUnixMs: 2,
+                  errorMessage: null,
+                  steps: [
+                    {
+                      stepId: "inspect-current-sheet",
+                      label: "Inspect current sheet",
+                      status: "completed",
+                      summary:
+                        "Read durable metadata for Sheet1, including used range, tables, pivots, spills, and axis metadata.",
+                      updatedAtUnixMs: 1,
+                    },
+                    {
+                      stepId: "draft-sheet-summary",
+                      label: "Draft current sheet summary",
+                      status: "completed",
+                      summary: "Prepared the durable current-sheet summary artifact for the thread.",
+                      updatedAtUnixMs: 2,
+                    },
+                  ],
+                  artifact: {
+                    kind: "markdown",
+                    title: "Current Sheet Summary",
+                    text: "## Current Sheet Summary\n\nSheet: Sheet1",
+                  },
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const button = host.querySelector(
+      "[data-testid='workbook-agent-workflow-start-summarizeCurrentSheet']",
+    );
+    expect(button instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error("Workflow button not found");
+      }
+      button.click();
+    });
+
+    const workflowCall = fetchSpy.mock.calls.find(([requestInput]) =>
+      requestUrl(requestInput).endsWith("/agent/threads/thr-2/workflows"),
+    );
+    expect(requestBody(workflowCall?.[1])).toEqual({
+      workflowTemplate: "summarizeCurrentSheet",
+    });
+    expect(host.textContent).toContain("Summarize Current Sheet");
+    expect(host.textContent).toContain("Current Sheet Summary");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("starts current-cell explanation workflows through the durable thread workflow route", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

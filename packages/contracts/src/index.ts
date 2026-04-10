@@ -141,6 +141,7 @@ export type WorkbookAgentThreadSummary = Schema.Schema.Type<
 
 export const WorkbookAgentWorkflowTemplateSchema = Schema.Literal(
   "summarizeWorkbook",
+  "summarizeCurrentSheet",
   "describeRecentChanges",
   "findFormulaIssues",
   "traceSelectionDependencies",

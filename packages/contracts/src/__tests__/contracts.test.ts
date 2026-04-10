@@ -180,6 +180,39 @@ describe("@bilig/contracts", () => {
     expect(decoded.artifact?.title).toBe("Current Cell");
   });
 
+  it("accepts current-sheet summary workflow templates in durable runs", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
+      runId: "workflow-sheet-1",
+      threadId: "thr-1",
+      startedByUserId: "alex@example.com",
+      workflowTemplate: "summarizeCurrentSheet",
+      title: "Summarize Current Sheet",
+      summary: "Summarized Revenue with 24 populated cells and 1 table.",
+      status: "completed",
+      createdAtUnixMs: 100,
+      updatedAtUnixMs: 120,
+      completedAtUnixMs: 120,
+      errorMessage: null,
+      steps: [
+        {
+          stepId: "inspect-current-sheet",
+          label: "Inspect current sheet",
+          status: "completed",
+          summary: "Read durable metadata for Revenue, including used range and tables.",
+          updatedAtUnixMs: 110,
+        },
+      ],
+      artifact: {
+        kind: "markdown",
+        title: "Current Sheet Summary",
+        text: "## Current Sheet Summary",
+      },
+    });
+
+    expect(decoded.workflowTemplate).toBe("summarizeCurrentSheet");
+    expect(decoded.artifact?.title).toBe("Current Sheet Summary");
+  });
+
   it("accepts search-query workflow templates in durable runs", () => {
     const decoded = decodeUnknownSync(WorkbookAgentWorkflowRunSchema, {
       runId: "workflow-3",

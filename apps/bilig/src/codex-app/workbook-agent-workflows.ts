@@ -73,6 +73,25 @@ function getWorkflowTemplateMetadata(
           },
         ],
       };
+    case "summarizeCurrentSheet":
+      return {
+        title: "Summarize Current Sheet",
+        runningSummary: "Running current sheet summary workflow.",
+        stepPlans: [
+          {
+            stepId: "inspect-current-sheet",
+            label: "Inspect current sheet",
+            runningSummary: "Reading durable metadata for the active sheet.",
+            pendingSummary: "Waiting to inspect durable metadata for the active sheet.",
+          },
+          {
+            stepId: "draft-sheet-summary",
+            label: "Draft current sheet summary",
+            runningSummary: "Drafting the durable current-sheet summary artifact.",
+            pendingSummary: "Waiting to assemble the durable current-sheet summary artifact.",
+          },
+        ],
+      };
     case "describeRecentChanges":
       return {
         title: "Describe Recent Changes",
@@ -289,6 +308,60 @@ function summarizeWorkbookMarkdown(summary: ReturnType<typeof summarizeWorkbookS
       `- ${sheet.name}: ${String(sheet.cellCount)} populated cells, ${String(sheet.formulaCellCount)} formulas${sheet.usedRange ? `, used range ${sheet.usedRange.startAddress}:${sheet.usedRange.endAddress}` : ""}`,
     );
   });
+  return lines.join("\n");
+}
+
+function summarizeCurrentSheetMarkdown(
+  sheet: ReturnType<typeof summarizeWorkbookStructure>["sheets"][number],
+): string {
+  const lines = [
+    "## Current Sheet Summary",
+    "",
+    `Sheet: ${sheet.name}`,
+    `Order: ${String(sheet.order)}`,
+    `Used range: ${sheet.usedRange ? `${sheet.usedRange.startAddress}:${sheet.usedRange.endAddress}` : "(empty)"}`,
+    `Populated cells: ${String(sheet.cellCount)}`,
+    `Formula cells: ${String(sheet.formulaCellCount)}`,
+    `Tables: ${String(sheet.tableCount)}`,
+    `Pivots: ${String(sheet.pivotCount)}`,
+    `Spills: ${String(sheet.spillCount)}`,
+    `Filters: ${String(sheet.filterCount)}`,
+    `Sorts: ${String(sheet.sortCount)}`,
+    `Freeze panes: ${sheet.freezePane ? `${String(sheet.freezePane.rows)} row(s), ${String(sheet.freezePane.cols)} column(s)` : "none"}`,
+    `Hidden row indexes: ${String(sheet.rowMetadata.hiddenIndexCount)}`,
+    `Hidden column indexes: ${String(sheet.columnMetadata.hiddenIndexCount)}`,
+    `Explicit row sizes: ${String(sheet.rowMetadata.explicitSizeIndexCount)}`,
+    `Explicit column sizes: ${String(sheet.columnMetadata.explicitSizeIndexCount)}`,
+    "",
+    "### Tables",
+  ];
+  if (sheet.tables.length === 0) {
+    lines.push("- None");
+  } else {
+    for (const table of sheet.tables) {
+      lines.push(
+        `- ${table.name}: ${table.startAddress}:${table.endAddress} (${String(table.columnCount)} columns)`,
+      );
+    }
+  }
+  lines.push("", "### Pivots");
+  if (sheet.pivots.length === 0) {
+    lines.push("- None");
+  } else {
+    for (const pivot of sheet.pivots) {
+      lines.push(
+        `- ${pivot.name}: ${pivot.address} from ${pivot.source} (${String(pivot.valueCount)} values)`,
+      );
+    }
+  }
+  lines.push("", "### Spill Ranges");
+  if (sheet.spills.length === 0) {
+    lines.push("- None");
+  } else {
+    for (const spill of sheet.spills) {
+      lines.push(`- ${spill.address}: ${String(spill.rows)}x${String(spill.cols)}`);
+    }
+  }
   return lines.join("\n");
 }
 
@@ -548,6 +621,74 @@ export async function executeWorkbookAgentWorkflow(input: {
             stepId: "draft-summary",
             label: "Draft summary artifact",
             summary: "Prepared the durable workbook summary artifact for the thread.",
+          },
+        ],
+      };
+    }
+    case "summarizeCurrentSheet": {
+      const selection = input.context?.selection;
+      if (!selection) {
+        throw new Error("Selection context is required for current sheet summary workflows.");
+      }
+      const structure = await input.zeroSyncService.inspectWorkbook(input.documentId, (runtime) =>
+        summarizeWorkbookStructure(runtime),
+      );
+      const sheet = structure.sheets.find((candidate) => candidate.name === selection.sheetName);
+      if (!sheet) {
+        throw new Error(`Active sheet ${selection.sheetName} was not found in the workbook.`);
+      }
+      return {
+        title: "Summarize Current Sheet",
+        summary: `Summarized ${sheet.name} with ${String(sheet.cellCount)} populated cell${sheet.cellCount === 1 ? "" : "s"} and ${String(sheet.tableCount)} table${sheet.tableCount === 1 ? "" : "s"}.`,
+        artifact: {
+          kind: "markdown",
+          title: "Current Sheet Summary",
+          text: summarizeCurrentSheetMarkdown(sheet),
+        },
+        citations: [
+          ...(sheet.usedRange
+            ? [
+                {
+                  kind: "range" as const,
+                  sheetName: sheet.name,
+                  startAddress: sheet.usedRange.startAddress,
+                  endAddress: sheet.usedRange.endAddress,
+                  role: "target" as const,
+                },
+              ]
+            : []),
+          ...sheet.tables.map((table) => ({
+            kind: "range" as const,
+            sheetName: sheet.name,
+            startAddress: table.startAddress,
+            endAddress: table.endAddress,
+            role: "source" as const,
+          })),
+          ...sheet.pivots.map((pivot) => ({
+            kind: "range" as const,
+            sheetName: sheet.name,
+            startAddress: pivot.address,
+            endAddress: pivot.address,
+            role: "source" as const,
+          })),
+          ...sheet.spills.map((spill) => ({
+            kind: "range" as const,
+            sheetName: sheet.name,
+            startAddress: spill.address,
+            endAddress: spill.address,
+            role: "source" as const,
+          })),
+        ],
+        steps: [
+          {
+            stepId: "inspect-current-sheet",
+            label: "Inspect current sheet",
+            summary: `Read durable metadata for ${sheet.name}, including used range, tables, pivots, spills, and axis metadata.`,
+          },
+          {
+            stepId: "draft-sheet-summary",
+            label: "Draft current sheet summary",
+            summary: "Prepared the durable current-sheet summary artifact for the thread.",
           },
         ],
       };

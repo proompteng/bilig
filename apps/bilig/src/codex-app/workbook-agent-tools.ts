@@ -74,6 +74,9 @@ const startWorkflowToolArgsSchema = z.discriminatedUnion("workflowTemplate", [
     workflowTemplate: z.literal("summarizeWorkbook"),
   }),
   z.object({
+    workflowTemplate: z.literal("summarizeCurrentSheet"),
+  }),
+  z.object({
     workflowTemplate: z.literal("describeRecentChanges"),
   }),
   z.object({
