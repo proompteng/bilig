@@ -19,6 +19,32 @@ consumer guarantees, and evidence policy.
 This document defines the engine, formula-runtime, and benchmark work required to make
 `WorkPaper` competitively superior in reality.
 
+## Empirical Rule
+
+This program uses empirical metrics, not taste.
+
+Every leadership claim must fall into one of these buckets:
+
+1. surface parity
+   - API/config coverage against the local HyperFormula checkout
+2. feature dominance
+   - important semantics supported in `bilig` that HyperFormula explicitly does not support
+3. formula dominance
+   - formula breadth and production-quality closure
+4. performance dominance
+   - measured wins on directly comparable workloads
+5. operability dominance
+   - packaging, consumer installation, licensing, determinism, and diagnostics
+
+No bucket may borrow evidence from another bucket.
+
+Examples:
+
+- API parity does not prove runtime speed.
+- Formula count does not prove semantic quality.
+- Dynamic-array support does not prove lookup performance.
+- npm install success does not prove formula compatibility.
+
 ## Problem Statement
 
 `WorkPaper` is now a real, publishable, measured headless package. That is good, but it is not the
@@ -46,6 +72,79 @@ The remaining work is:
 - actual formula-runtime optimization
 - actual semantics expansion where `bilig` can surpass HyperFormula
 - actual workload-specific proof that the improvements are real
+
+## Dominance Scorecard
+
+This is the scorecard that should drive engineering priority.
+
+| Axis | Metric | Current `bilig` evidence | Current HyperFormula evidence | Current position |
+| --- | --- | --- | --- | --- |
+| Surface parity | Public method inventory | `132/132` method names present on `HeadlessWorkbook` / `WorkPaper` | local checkout baseline | parity |
+| Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity |
+| Formula breadth | Registered breadth against Office list | `487/508` registered in codebase = `95.9%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical |
+| Formula breadth | Unified inventory breadth | `487/525` unified tracked functions = `92.8%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth |
+| Formula production quality | Canonical production closure | `92/101` canonical rows production-closed = `91.1%` | no matching canonical artifact | incomplete; `bilig` not yet dominant |
+| Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads |
+| Performance dominance | Directly comparable benchmark workloads | `0/6` wins in `workpaper-vs-hyperformula.json` | `6/6` wins on current host | HyperFormula leads |
+| Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed |
+| Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence |
+| Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption |
+
+The important reading is:
+
+- `bilig` already leads on surface completeness, feature breadth, and package operability
+- `bilig` does not yet lead on directly comparable runtime speed
+- `bilig` does not yet deserve a blanket overall-win claim
+
+## Current Metric Values
+
+Current measured values from local repo artifacts and docs:
+
+- HyperFormula public API coverage in `WorkPaper`: `132/132`
+- HyperFormula config coverage in `WorkPaperConfig`: `38/38`
+- `bilig` registered formula breadth:
+  - `487/508` Office-listed functions = `95.9%`
+  - `487/525` unified tracked functions = `92.8%`
+- HyperFormula published Excel coverage from the local docs:
+  - `350/515` Excel functions = `68%`
+- `bilig` canonical formula production closure:
+  - `92/101` rows = `91.1%`
+- directly comparable benchmark record:
+  - `WorkPaper` wins: `0/6`
+  - HyperFormula wins: `6/6`
+  - HyperFormula current win range on this host: `1.02x` to `891.37x`
+- leadership workload record:
+  - dynamic-array benchmark present
+  - HyperFormula marked `unsupported`
+
+## What Counts As “Fully Beat HyperFormula”
+
+This program treats “fully beat HyperFormula” as a multidimensional standard, not a slogan.
+
+To claim that `bilig` fully beats HyperFormula, all of the following must be true at the same
+time:
+
+1. surface parity is preserved
+   - `132/132` public method parity remains true
+   - `38/38` config-key parity remains true
+2. feature dominance is preserved
+   - `bilig` continues to support dynamic arrays
+   - `bilig` continues to support structured references/tables
+   - `bilig` continues to support multiple workbook instances per process
+3. formula dominance improves beyond breadth-only claims
+   - Office-listed formula breadth stays at or above `95%`
+   - canonical production closure reaches at least `98%`
+   - no critical rows remain open in dynamic arrays, names, tables, or structured references
+4. performance dominance becomes true on comparable workloads
+   - `bilig` wins a majority of directly comparable benchmark workloads
+   - `bilig` loses none of them by more than `1.25x`
+   - at least two major hotspot families show a clear `bilig` win
+5. operability dominance remains true
+   - clean external install remains green
+   - release/publish path remains green
+   - public diagnostics and deterministic behavior remain stronger than the baseline package story
+
+If any one of those is false, the correct claim is narrower than “fully beat HyperFormula”.
 
 ## Source Corpus
 
@@ -80,6 +179,8 @@ To say that `bilig` beats HyperFormula, at least one of the following must be tr
 
 To say that `bilig` beats HyperFormula overall, all three must be true in a defensible way.
 
+For this program, “overall” is made concrete by the scorecard above, not by prose.
+
 ## Current Reality
 
 The current repository supports these claims:
@@ -92,14 +193,68 @@ The current repository supports these claims:
   - MIT runtime packaging
   - verified external consumer install path
   - richer detailed event payloads
+  - multiple independent workbook instances with no one-instance-one-workbook restriction
 
 The current repository does not support these claims:
 
 - that `bilig` is faster than HyperFormula in general
 - that `bilig` is `10x` better overall
 - that all meaningful engine gaps are closed
+- that formula breadth leadership already implies formula production leadership
 
 That means the engineering program must focus on real runtime work, not just surface-level parity.
+
+## Priority By Deficit Size
+
+The scorecard gives a direct priority order.
+
+### Priority 0: Preserve existing wins
+
+Do not regress:
+
+- method/config parity
+- dynamic arrays
+- structured references/tables
+- external consumer install/publish path
+
+These are existing advantages and must not be traded away while chasing speed.
+
+### Priority 1: Fix the largest measured performance deficits
+
+Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
+
+- batch-edit recalculation
+- lookup with column indexing
+- lookup without column indexing
+- build from sheets
+- single-edit recalculation
+
+Range-read is close enough that it is lower priority than the others.
+
+### Priority 2: Close formula production-quality gaps
+
+Breadth is already high, but production closure is not yet finished.
+
+The highest-value remaining canonical closures are:
+
+- `dynamic-array:filter-basic`
+- `dynamic-array:unique-basic`
+- `names:defined-name-range`
+- `tables:table-total-row-sum`
+- `structured-reference:table-column-ref`
+- `lambda:let-basic`
+- `lambda:lambda-invoke`
+- `lambda:map-basic`
+- `lambda:byrow-basic`
+
+This matters because formula dominance is not just “the parser recognizes the name.”
+
+It means:
+
+- semantically correct
+- production-routable
+- benchmarkable
+- stable under mutation and serialization
 
 ## Non-Goals
 
@@ -110,8 +265,11 @@ This program explicitly does not call for:
 - destabilizing the `WorkPaper` public contract without necessity
 - adding speculative features with no semantics design
 - claiming performance wins before benchmarks prove them
+- confusing directional breadth metrics with apples-to-apples quality metrics
 
 ## Required Engine Workstreams
+
+Every workstream below must report its effect back into the scorecard.
 
 ### 1. Build and Load Path
 
@@ -142,6 +300,7 @@ Required work:
 Exit criteria:
 
 - `workpaper-vs-hyperformula.json` includes improved build-path results
+- build workload is no longer a double-digit loss ratio
 - no correctness regression in headless parity tests
 
 ### 2. Single-Edit Recalc Hot Path
@@ -169,6 +328,7 @@ Required work:
 Exit criteria:
 
 - lower mean and p95 on named edit workloads
+- single-edit workload no longer shows a material multi-x loss
 - stats expose enough detail to attribute wins
 
 ### 3. Batch Mutation Efficiency
@@ -193,6 +353,7 @@ Required work:
 Exit criteria:
 
 - batched-edit slope improves materially with edit count
+- batch-edit loss ratio is reduced to a non-embarrassing range before broader victory claims
 - benchmark artifact records the result
 
 ### 4. Lookup and Indexing Workloads
@@ -217,6 +378,7 @@ Required work:
 Exit criteria:
 
 - benchmark artifact shows improved lookup workloads
+- at least one lookup workload becomes a `bilig` win before this workstream can be called done
 - memory growth from indexing is explicitly measured and acceptable
 
 ### 5. Range and Spill Graph Performance
@@ -247,6 +409,8 @@ Exit criteria:
 
 - leadership workloads remain deterministic and stable under stress
 - leadership benchmarks show acceptable throughput and memory
+- at least one leadership workload has a checked-in advantage claim that is stronger than “unsupported
+  in HyperFormula”
 
 ### 6. Change Emission and Serialization Overhead
 
@@ -354,6 +518,59 @@ Must define:
 - deterministic headless fallback behavior
 - isolation from `@bilig/headless` when metadata is absent
 
+## Formula Dominance Program
+
+Formula dominance must be measured on three separate layers.
+
+### Layer 1: Breadth
+
+Metric:
+
+- registered runtime formulas / target formula inventory
+
+Current values:
+
+- `487/508` Office-listed = `95.9%`
+- `487/525` unified tracked = `92.8%`
+
+Interpretation:
+
+- good breadth
+- not sufficient by itself to claim formula leadership
+
+### Layer 2: Production Closure
+
+Metric:
+
+- canonical rows that are production-routable with correct semantics
+
+Current value:
+
+- `92/101` = `91.1%`
+
+Interpretation:
+
+- strong progress
+- not finished
+- critical strategic rows are still open
+
+### Layer 3: Strategic Semantics
+
+Metric:
+
+- whether `bilig` production-closes important formula families that HyperFormula does not support
+
+Families:
+
+- dynamic arrays
+- structured references
+- table-aware totals and references
+- lambda-family semantics where product value justifies them
+
+Interpretation:
+
+- this is where `bilig` can become obviously stronger, not merely broader
+
 ## Benchmark Program Requirements
 
 The benchmark program must stay honest.
@@ -378,6 +595,12 @@ Recommended future artifacts:
   - lookup/indexing
   - spill/range leadership
   - memory-retention lifecycle tests
+
+Recommended formula artifacts:
+
+- formula breadth artifact derived from `formula-inventory.ts`
+- canonical production-closure artifact derived from the formula compatibility registry
+- strategic-family artifact for arrays/tables/names/lambda status
 
 ## Execution Order
 
@@ -413,6 +636,12 @@ Reason:
 
 - these are expensive semantics projects and should not precede direct performance deficit work
 
+### Phase 4: Convert directional wins into dominance claims
+
+- promote breadth metrics into artifact-backed dominance statements
+- publish workload-specific win claims only where the artifact shows real wins
+- revise `docs/workpaper-platform-design.md` only after the scorecard actually improves
+
 ## Required Deliverables
 
 This program is only complete when it yields concrete repo outputs:
@@ -434,6 +663,9 @@ This program is complete only when all of the following are true:
 - at least one additional real engine feature gap has been closed, not just documented
 - performance claims in `docs/workpaper-platform-design.md` can be stated more strongly without
   violating its evidence policy
+- formula breadth and formula production-closure metrics both support a leadership claim, not just a
+  breadth claim
+- the scorecard supports “overall lead” without hiding any red category
 
 ## Bottom Line
 
