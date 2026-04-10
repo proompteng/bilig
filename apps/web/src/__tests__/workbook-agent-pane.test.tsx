@@ -342,9 +342,7 @@ describe("workbook agent pane", () => {
       threadButton.click();
     });
 
-    expect(MockEventSource.latest?.url).toBe(
-      "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
-    );
+    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/agent/threads/thr-2/events");
     expect(
       host
         .querySelector("[data-testid='workbook-agent-thread-thr-2']")
@@ -477,9 +475,7 @@ describe("workbook agent pane", () => {
       );
     });
 
-    expect(MockEventSource.latest?.url).toBe(
-      "/v2/documents/doc-1/agent/sessions/agent-session-shared/events",
-    );
+    expect(MockEventSource.latest?.url).toBe("/v2/documents/doc-1/agent/threads/thr-shared/events");
     expect(sessionBody).toEqual({
       scope: "shared",
       context: {
@@ -1098,9 +1094,7 @@ describe("workbook agent pane", () => {
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain(
       "Thinking",
     );
-    expect(MockEventSource.latest?.url).toContain(
-      "/v2/documents/doc-1/agent/sessions/agent-session-1/events",
-    );
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
 
     await act(async () => {
       MockEventSource.latest?.emit({
@@ -1161,9 +1155,7 @@ describe("workbook agent pane", () => {
       root.render(<AgentHarness />);
     });
 
-    expect(MockEventSource.latest?.url).toContain(
-      "/v2/documents/doc-1/agent/sessions/agent-session-1/events",
-    );
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
 
     await act(async () => {
       MockEventSource.latest?.emitError();
@@ -1205,9 +1197,7 @@ describe("workbook agent pane", () => {
         },
       },
     });
-    expect(MockEventSource.latest?.url).toContain(
-      "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
-    );
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
       '"sessionId":"agent-session-2"',
     );
@@ -1274,9 +1264,7 @@ describe("workbook agent pane", () => {
         },
       },
     });
-    expect(MockEventSource.latest?.url).toContain(
-      "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
-    );
+    expect(MockEventSource.latest?.url).toContain("/v2/documents/doc-1/agent/threads/thr-1/events");
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
       '"threadId":"thr-1"',
     );

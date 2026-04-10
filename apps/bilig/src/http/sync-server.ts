@@ -593,6 +593,72 @@ export function createSyncServer(options: SyncServerOptions = {}) {
   );
 
   app.get(
+    "/v2/documents/:documentId/agent/threads/:threadId/events",
+    async (
+      request: FastifyRequest<{
+        Params: { documentId: string; threadId: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      if (!workbookAgentService?.enabled) {
+        reply.code(503);
+        return createErrorEnvelope(
+          "WORKBOOK_AGENT_DISABLED",
+          "Workbook agent service is not configured",
+          true,
+        );
+      }
+      const session = resolveSessionIdentity(request, reply);
+      let sessionSnapshot: Awaited<ReturnType<typeof workbookAgentService.createSession>>;
+      try {
+        sessionSnapshot = await workbookAgentService.createSession({
+          documentId: request.params.documentId,
+          session,
+          body: {
+            threadId: request.params.threadId,
+          },
+        });
+      } catch (error) {
+        if (isWorkbookAgentServiceError(error)) {
+          reply.code(error.statusCode);
+          return createErrorEnvelope(error.code, error.message, error.retryable);
+        }
+        throw error;
+      }
+
+      reply.hijack();
+      const raw = reply.raw;
+      raw.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      });
+
+      const writeEvent = (event: WorkbookAgentStreamEvent) => {
+        raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      writeEvent({
+        type: "snapshot",
+        snapshot: sessionSnapshot,
+      });
+
+      const unsubscribe = workbookAgentService.subscribe(sessionSnapshot.sessionId, (event) => {
+        writeEvent(event);
+      });
+      const keepalive = setInterval(() => {
+        raw.write(":keepalive\n\n");
+      }, 15_000);
+
+      request.raw.on("close", () => {
+        clearInterval(keepalive);
+        unsubscribe();
+      });
+      return reply;
+    },
+  );
+
+  app.get(
     "/v2/documents/:documentId/agent/sessions/:sessionId/events",
     async (
       request: FastifyRequest<{

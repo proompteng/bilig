@@ -313,10 +313,10 @@ export function useWorkbookAgentPane(input: {
   );
 
   const connectStream = useCallback(
-    (sessionId: string) => {
+    (threadId: string) => {
       closeStream();
       const source = new EventSource(
-        `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions/${encodeURIComponent(sessionId)}/events`,
+        `/v2/documents/${encodeURIComponent(documentId)}/agent/threads/${encodeURIComponent(threadId)}/events`,
       );
       source.addEventListener("message", (message) => {
         try {
@@ -379,7 +379,7 @@ export function useWorkbookAgentPane(input: {
             }
             const nextSnapshot = decodeUnknownSync(WorkbookAgentSessionSnapshotSchema, payload);
             persistSessionSnapshot(nextSnapshot);
-            connectStream(nextSnapshot.sessionId);
+            connectStream(nextSnapshot.threadId);
           } catch (nextError) {
             recoveringStreamRef.current = false;
             setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -432,7 +432,7 @@ export function useWorkbookAgentPane(input: {
     try {
       const nextSnapshot = await createOrResumeSession(null, getContextRef.current(), threadScope);
       persistSessionSnapshot(nextSnapshot);
-      connectStream(nextSnapshot.sessionId);
+      connectStream(nextSnapshot.threadId);
       setError(null);
       const nextSession = {
         sessionId: nextSnapshot.sessionId,
@@ -631,7 +631,7 @@ export function useWorkbookAgentPane(input: {
           return;
         }
         persistSessionSnapshot(nextSnapshot);
-        connectStream(nextSnapshot.sessionId);
+        connectStream(nextSnapshot.threadId);
         setError(null);
       } catch (nextError) {
         if (!cancelled) {
@@ -673,7 +673,7 @@ export function useWorkbookAgentPane(input: {
           threadScope,
         );
         persistSessionSnapshot(nextSnapshot);
-        connectStream(nextSnapshot.sessionId);
+        connectStream(nextSnapshot.threadId);
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : String(nextError));
       } finally {
