@@ -6,6 +6,7 @@ import {
   type ViewportPatch,
   type WorkerEngineClient,
 } from "@bilig/worker-transport";
+import { applyProjectedViewportAxisPatches } from "./projected-viewport-axis-patches.js";
 import { selectProjectedViewportKeysToEvict } from "./projected-viewport-cache-pruning.js";
 
 const EMPTY_WIDTHS: Readonly<Record<number, number>> = Object.freeze({});
@@ -649,73 +650,41 @@ export class ProjectedViewportStore implements GridEngineLike {
 
     let axisChanged = false;
     if (patch.columns.length > 0) {
-      const sizes = { ...this.columnSizesBySheet.get(patch.viewport.sheetName) };
-      const widths = { ...this.columnWidthsBySheet.get(patch.viewport.sheetName) };
-      const pendingWidths = { ...this.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) };
-      const hiddenColumns = { ...this.hiddenColumnsBySheet.get(patch.viewport.sheetName) };
-      patch.columns.forEach((column: { index: number; size: number; hidden: boolean }) => {
-        const wasHidden = hiddenColumns[column.index] === true;
-        sizes[column.index] = column.size;
-        const pending = pendingWidths[column.index];
-        if (column.hidden) {
-          hiddenColumns[column.index] = true;
-          widths[column.index] = 0;
-          axisChanged = true;
-          return;
-        }
-        delete hiddenColumns[column.index];
-        if (pending !== undefined && pending !== column.size && !wasHidden) {
-          return;
-        }
-        if (pending === column.size) {
-          delete pendingWidths[column.index];
-        }
-        widths[column.index] = column.size;
-        axisChanged = true;
+      const nextColumns = applyProjectedViewportAxisPatches({
+        patches: patch.columns,
+        sizes: this.columnSizesBySheet.get(patch.viewport.sheetName) ?? {},
+        renderedSizes: this.columnWidthsBySheet.get(patch.viewport.sheetName) ?? {},
+        pendingSizes: this.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) ?? {},
+        hiddenAxes: this.hiddenColumnsBySheet.get(patch.viewport.sheetName) ?? {},
       });
-      this.columnSizesBySheet.set(patch.viewport.sheetName, sizes);
-      this.columnWidthsBySheet.set(patch.viewport.sheetName, widths);
-      this.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, pendingWidths);
-      if (Object.keys(hiddenColumns).length === 0) {
+      this.columnSizesBySheet.set(patch.viewport.sheetName, nextColumns.sizes);
+      this.columnWidthsBySheet.set(patch.viewport.sheetName, nextColumns.renderedSizes);
+      this.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, nextColumns.pendingSizes);
+      if (Object.keys(nextColumns.hiddenAxes).length === 0) {
         this.hiddenColumnsBySheet.delete(patch.viewport.sheetName);
       } else {
-        this.hiddenColumnsBySheet.set(patch.viewport.sheetName, hiddenColumns);
+        this.hiddenColumnsBySheet.set(patch.viewport.sheetName, nextColumns.hiddenAxes);
       }
+      axisChanged = axisChanged || nextColumns.axisChanged;
     }
 
     if (patch.rows.length > 0) {
-      const sizes = { ...this.rowSizesBySheet.get(patch.viewport.sheetName) };
-      const heights = { ...this.rowHeightsBySheet.get(patch.viewport.sheetName) };
-      const pendingHeights = { ...this.pendingRowHeightsBySheet.get(patch.viewport.sheetName) };
-      const hiddenRows = { ...this.hiddenRowsBySheet.get(patch.viewport.sheetName) };
-      patch.rows.forEach((row: { index: number; size: number; hidden: boolean }) => {
-        const wasHidden = hiddenRows[row.index] === true;
-        sizes[row.index] = row.size;
-        const pending = pendingHeights[row.index];
-        if (row.hidden) {
-          hiddenRows[row.index] = true;
-          heights[row.index] = 0;
-          axisChanged = true;
-          return;
-        }
-        delete hiddenRows[row.index];
-        if (pending !== undefined && pending !== row.size && !wasHidden) {
-          return;
-        }
-        if (pending === row.size) {
-          delete pendingHeights[row.index];
-        }
-        heights[row.index] = row.size;
-        axisChanged = true;
+      const nextRows = applyProjectedViewportAxisPatches({
+        patches: patch.rows,
+        sizes: this.rowSizesBySheet.get(patch.viewport.sheetName) ?? {},
+        renderedSizes: this.rowHeightsBySheet.get(patch.viewport.sheetName) ?? {},
+        pendingSizes: this.pendingRowHeightsBySheet.get(patch.viewport.sheetName) ?? {},
+        hiddenAxes: this.hiddenRowsBySheet.get(patch.viewport.sheetName) ?? {},
       });
-      this.rowSizesBySheet.set(patch.viewport.sheetName, sizes);
-      this.rowHeightsBySheet.set(patch.viewport.sheetName, heights);
-      this.pendingRowHeightsBySheet.set(patch.viewport.sheetName, pendingHeights);
-      if (Object.keys(hiddenRows).length === 0) {
+      this.rowSizesBySheet.set(patch.viewport.sheetName, nextRows.sizes);
+      this.rowHeightsBySheet.set(patch.viewport.sheetName, nextRows.renderedSizes);
+      this.pendingRowHeightsBySheet.set(patch.viewport.sheetName, nextRows.pendingSizes);
+      if (Object.keys(nextRows.hiddenAxes).length === 0) {
         this.hiddenRowsBySheet.delete(patch.viewport.sheetName);
       } else {
-        this.hiddenRowsBySheet.set(patch.viewport.sheetName, hiddenRows);
+        this.hiddenRowsBySheet.set(patch.viewport.sheetName, nextRows.hiddenAxes);
       }
+      axisChanged = axisChanged || nextRows.axisChanged;
     }
 
     this.pruneSheetCache(patch.viewport.sheetName);
