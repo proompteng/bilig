@@ -247,6 +247,26 @@ describe("EngineMutationService", () => {
     });
   });
 
+  it("does not synthesize blank column identities in delete undo ops", async () => {
+    const engine = new SpreadsheetEngine({ workbookName: "undo-columns" });
+    await engine.ready();
+    engine.createSheet("Sheet1");
+
+    const inverseOps = Effect.runSync(
+      getMutationService(engine).executeLocal([
+        { kind: "deleteColumns", sheetName: "Sheet1", start: 0, count: 1 },
+      ]),
+    );
+
+    expect(inverseOps).toContainEqual({
+      kind: "insertColumns",
+      sheetName: "Sheet1",
+      start: 0,
+      count: 1,
+      entries: [],
+    });
+  });
+
   it("copies ranges through the service and rewrites relative formulas", async () => {
     const engine = new SpreadsheetEngine({ workbookName: "copy-range-service" });
     await engine.ready();

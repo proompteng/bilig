@@ -595,6 +595,7 @@ export function createEngineOperationService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
+            args.state.workbook.pruneCellIfEmpty(cellIndex);
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
             args.state.entityVersions.set(entityKeyForOp(op), order);
@@ -638,6 +639,7 @@ export function createEngineOperationService(args: {
           case "setCellFormat": {
             const cellIndex = args.ensureCellTracked(op.sheetName, op.address);
             args.state.workbook.setCellFormat(cellIndex, op.format);
+            args.state.workbook.pruneCellIfEmpty(cellIndex);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
             args.state.entityVersions.set(entityKeyForOp(op), order);
             break;
@@ -685,6 +687,7 @@ export function createEngineOperationService(args: {
                 CellFlags.SpillChild |
                 CellFlags.PivotOutput
               );
+            args.state.workbook.pruneCellIfEmpty(cellIndex);
             changedInputCount = args.markInputChanged(cellIndex, changedInputCount);
             explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount);
             args.state.entityVersions.set(entityKeyForOp(op), order);

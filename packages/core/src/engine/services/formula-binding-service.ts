@@ -240,6 +240,25 @@ export function createEngineFormulaBindingService(args: {
     );
   };
 
+  const pruneTrackedDependencyCell = (cellIndex: number, ownerCellIndex: number): void => {
+    if (cellIndex === ownerCellIndex) {
+      return;
+    }
+    if (getReverseEdgeSlice(makeCellEntity(cellIndex))) {
+      return;
+    }
+    args.state.workbook.pruneCellIfEmpty(cellIndex);
+  };
+
+  const pruneOrphanedDependencyCells = (cellIndices: readonly number[]): void => {
+    cellIndices.forEach((cellIndex) => {
+      if (getReverseEdgeSlice(makeCellEntity(cellIndex))) {
+        return;
+      }
+      args.state.workbook.pruneCellIfEmpty(cellIndex);
+    });
+  };
+
 
   const compileFormulaForSheet = (
     currentSheetName: string,
@@ -370,7 +389,11 @@ export function createEngineFormulaBindingService(args: {
       const dependencyEntities = args.edgeArena.readView(existing.dependencyEntities);
       const formulaEntity = makeCellEntity(cellIndex);
       for (let index = 0; index < dependencyEntities.length; index += 1) {
-        removeReverseEdge(dependencyEntities[index]!, formulaEntity);
+        const dependencyEntity = dependencyEntities[index]!;
+        removeReverseEdge(dependencyEntity, formulaEntity);
+        if (!isRangeEntity(dependencyEntity)) {
+          pruneTrackedDependencyCell(entityPayload(dependencyEntity), cellIndex);
+        }
       }
       existing.compiled.symbolicNames.forEach((name) => {
         removeDefinedNameReverseEdge(name, cellIndex);
@@ -400,7 +423,9 @@ export function createEngineFormulaBindingService(args: {
         }
         const rangeEntity = makeRangeEntity(rangeIndex);
         for (let memberIndex = 0; memberIndex < released.members.length; memberIndex += 1) {
-          removeReverseEdge(makeCellEntity(released.members[memberIndex]!), rangeEntity);
+          const memberCellIndex = released.members[memberIndex]!;
+          removeReverseEdge(makeCellEntity(memberCellIndex), rangeEntity);
+          pruneTrackedDependencyCell(memberCellIndex, cellIndex);
         }
         setReverseEdgeSlice(rangeEntity, args.edgeArena.empty());
       }
@@ -717,6 +742,7 @@ export function createEngineFormulaBindingService(args: {
           const pending = [...args.state.formulas.entries()].map(([cellIndex, formula]) => ({
             cellIndex,
             source: formula.source,
+            dependencyIndices: [...formula.dependencyIndices],
           }));
           args.state.formulas.clear();
           args.state.ranges.reset();
@@ -745,6 +771,9 @@ export function createEngineFormulaBindingService(args: {
             }
             activeCellIndices.push(cellIndex);
           });
+          pruneOrphanedDependencyCells(
+            pending.flatMap(({ dependencyIndices }) => dependencyIndices),
+          );
           return activeCellIndices;
         },
         catch: (cause) =>

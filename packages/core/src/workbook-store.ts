@@ -1,6 +1,7 @@
 import {
   buildCellNumberFormatCode,
   getCellNumberFormatKind,
+  ValueTag,
   type CellHorizontalAlignment,
   type CellVerticalAlignment,
   type CellBorderSideSnapshot,
@@ -21,7 +22,7 @@ import {
 } from "@bilig/protocol";
 import { formatAddress, parseCellAddress } from "@bilig/formula";
 import { SheetGrid } from "./sheet-grid.js";
-import { CellStore } from "./cell-store.js";
+import { CellFlags, CellStore } from "./cell-store.js";
 import {
   createWorkbookMetadataService,
   runWorkbookMetadataEffect,
@@ -265,6 +266,36 @@ export class WorkbookStore {
 
   getQualifiedAddress(index: number): string {
     return `${this.getSheetNameById(this.cellStore.sheetIds[index]!)}!${this.getAddress(index)}`;
+  }
+
+  pruneCellIfEmpty(index: number): boolean {
+    const sheetId = this.cellStore.sheetIds[index];
+    if (!sheetId) {
+      return false;
+    }
+    const sheet = this.getSheetById(sheetId);
+    if (!sheet) {
+      return false;
+    }
+    const row = this.cellStore.rows[index];
+    const col = this.cellStore.cols[index];
+    if (row === undefined || col === undefined) {
+      return false;
+    }
+    const value = this.cellStore.getValue(index, () => "");
+    const flags = this.cellStore.flags[index] ?? 0;
+    if (
+      value.tag !== ValueTag.Empty ||
+      this.cellFormats.has(index) ||
+      (flags &
+        (CellFlags.HasFormula | CellFlags.SpillChild | CellFlags.PivotOutput | CellFlags.PendingDelete)) !==
+        0
+    ) {
+      return false;
+    }
+    this.cellKeyToIndex.delete(makeCellKey(sheet.id, row, col));
+    sheet.grid.clear(row, col);
+    return true;
   }
 
   setCellFormat(index: number, format: string | null | undefined): void {
@@ -632,6 +663,22 @@ export class WorkbookStore {
     return this.listAxisEntries(this.getSheet(sheetName), "column");
   }
 
+  snapshotRowAxisEntries(
+    sheetName: string,
+    start: number,
+    count: number,
+  ): WorkbookAxisEntrySnapshot[] {
+    return this.snapshotAxisEntriesInRange(this.getSheet(sheetName), "row", start, count);
+  }
+
+  snapshotColumnAxisEntries(
+    sheetName: string,
+    start: number,
+    count: number,
+  ): WorkbookAxisEntrySnapshot[] {
+    return this.snapshotAxisEntriesInRange(this.getSheet(sheetName), "column", start, count);
+  }
+
   materializeRowAxisEntries(
     sheetName: string,
     start: number,
@@ -951,6 +998,35 @@ export class WorkbookStore {
     });
   }
 
+  private snapshotAxisEntriesInRange(
+    sheet: SheetRecord | undefined,
+    axis: "row" | "column",
+    start: number,
+    count: number,
+  ): WorkbookAxisEntrySnapshot[] {
+    if (!sheet || count <= 0) {
+      return [];
+    }
+    const entries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    const snapshots: WorkbookAxisEntrySnapshot[] = [];
+    for (let offset = 0; offset < count; offset += 1) {
+      const index = start + offset;
+      const entry = entries[index];
+      if (!entry) {
+        continue;
+      }
+      const snapshot: WorkbookAxisEntrySnapshot = { id: entry.id, index };
+      if (entry.size !== null) {
+        snapshot.size = entry.size;
+      }
+      if (entry.hidden !== null) {
+        snapshot.hidden = entry.hidden;
+      }
+      snapshots.push(snapshot);
+    }
+    return snapshots;
+  }
+
   private materializeAxisEntryRecords(
     sheet: SheetRecord,
     axis: "row" | "column",
@@ -984,6 +1060,14 @@ export class WorkbookStore {
     entries?: readonly WorkbookAxisEntrySnapshot[],
   ): WorkbookAxisEntrySnapshot[] {
     const axisEntries = axis === "row" ? sheet.rowAxis : sheet.columnAxis;
+    const providedEntries = new Map<number, WorkbookAxisEntrySnapshot>();
+    entries?.forEach((entry) => {
+      const offset = entry.index - start;
+      if (offset < 0 || offset >= insertCount) {
+        return;
+      }
+      providedEntries.set(offset, entry);
+    });
     if (axisEntries.length < start) {
       axisEntries.length = start;
     }
@@ -994,17 +1078,21 @@ export class WorkbookStore {
       start,
       deleteCount,
       ...Array.from({ length: insertCount }, (_, index) => {
-        const provided = entries?.[index];
-        return provided
-          ? { id: provided.id, size: provided.size ?? null, hidden: provided.hidden ?? null }
-          : {
-              id:
-                axis === "row"
-                  ? `row-${this.nextRowAxisId++}`
-                  : `column-${this.nextColumnAxisId++}`,
-              size: null,
-              hidden: null,
-            };
+        const provided = providedEntries.get(index);
+        if (provided) {
+          return { id: provided.id, size: provided.size ?? null, hidden: provided.hidden ?? null };
+        }
+        if (entries) {
+          return undefined;
+        }
+        return {
+          id:
+            axis === "row"
+              ? `row-${this.nextRowAxisId++}`
+              : `column-${this.nextColumnAxisId++}`,
+          size: null,
+          hidden: null,
+        };
       }),
     );
     return removed.flatMap((entry, index) => {

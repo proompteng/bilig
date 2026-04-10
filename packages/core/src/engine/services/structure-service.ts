@@ -76,6 +76,26 @@ export function createEngineStructureService(args: {
   readonly clearOwnedPivot: (pivot: WorkbookPivotRecord) => number[];
   readonly rebuildAllFormulaBindings: () => number[];
 }): EngineStructureService {
+  const captureStoredCellState = (
+    cellIndex: number,
+    sheetName: string,
+    address: string,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ): EngineOp[] => {
+    const ops = args.toCellStateOps(
+      sheetName,
+      address,
+      args.getCellByIndex(cellIndex),
+      sourceSheetName,
+      sourceAddress,
+    );
+    if (args.state.workbook.getCellFormat(cellIndex) !== undefined) {
+      return ops;
+    }
+    return ops.filter((op) => op.kind !== "setCellFormat");
+  };
+
   const captureAxisRangeCellState = (
     sheetName: string,
     axis: "row" | "column",
@@ -96,7 +116,7 @@ export function createEngineStructureService(args: {
     return captured
       .toSorted((left, right) => left.row - right.row || left.col - right.col)
       .flatMap(({ cellIndex, row, col }) =>
-        args.toCellStateOps(sheetName, formatAddress(row, col), args.getCellByIndex(cellIndex)),
+        captureStoredCellState(cellIndex, sheetName, formatAddress(row, col)),
       );
   };
 
@@ -112,10 +132,10 @@ export function createEngineStructureService(args: {
     return captured
       .toSorted((left, right) => left.row - right.row || left.col - right.col)
       .flatMap(({ cellIndex }) =>
-        args.toCellStateOps(
+        captureStoredCellState(
+          cellIndex,
           sheetName,
           args.state.workbook.getAddress(cellIndex),
-          args.getCellByIndex(cellIndex),
         ),
       );
   };

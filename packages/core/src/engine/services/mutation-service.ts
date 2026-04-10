@@ -190,7 +190,7 @@ export function createEngineMutationService(args: {
       case "insertRows":
         return [{ kind: "deleteRows", sheetName: op.sheetName, start: op.start, count: op.count }];
       case "deleteRows": {
-        const entries = args.state.workbook.materializeRowAxisEntries(op.sheetName, op.start, op.count);
+        const entries = args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count);
         return [
           {
             kind: "insertRows",
@@ -217,11 +217,7 @@ export function createEngineMutationService(args: {
           { kind: "deleteColumns", sheetName: op.sheetName, start: op.start, count: op.count },
         ];
       case "deleteColumns": {
-        const entries = args.state.workbook.materializeColumnAxisEntries(
-          op.sheetName,
-          op.start,
-          op.count,
-        );
+        const entries = args.state.workbook.snapshotColumnAxisEntries(op.sheetName, op.start, op.count);
         return [
           {
             kind: "insertColumns",
@@ -508,6 +504,32 @@ export function createEngineMutationService(args: {
     return inverseOps;
   };
 
+  const canonicalizeForwardOps = (ops: readonly EngineOp[]): EngineOp[] =>
+    ops.map((op) => {
+      switch (op.kind) {
+        case "insertRows":
+          return op.entries
+            ? { ...op, entries: op.entries.map((entry) => ({ ...entry })) }
+            : {
+                ...op,
+                entries: args.state.workbook.snapshotRowAxisEntries(op.sheetName, op.start, op.count),
+              };
+        case "insertColumns":
+          return op.entries
+            ? { ...op, entries: op.entries.map((entry) => ({ ...entry })) }
+            : {
+                ...op,
+                entries: args.state.workbook.snapshotColumnAxisEntries(
+                  op.sheetName,
+                  op.start,
+                  op.count,
+                ),
+              };
+        default:
+          return structuredClone(op);
+      }
+    });
+
   const executeTransactionNow = (
     record: TransactionRecord,
     source: "local" | "restore" | "history",
@@ -546,7 +568,12 @@ export function createEngineMutationService(args: {
           };
           executeTransactionNow(forward, "local");
           if (args.state.getTransactionReplayDepth() === 0) {
-            args.state.undoStack.push({ forward, inverse });
+            const historyForwardOps = canonicalizeForwardOps(ops);
+            const historyForward: TransactionRecord =
+              potentialNewCells === undefined
+                ? { ops: historyForwardOps }
+                : { ops: historyForwardOps, potentialNewCells };
+            args.state.undoStack.push({ forward: historyForward, inverse });
             args.state.redoStack.length = 0;
           }
           return structuredClone(inverse.ops);

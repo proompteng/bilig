@@ -47,6 +47,8 @@
     "test:fuzz:main": "bun scripts/run-fuzz.ts main",
     "test:fuzz:nightly": "bun scripts/run-fuzz.ts nightly",
     "test:fuzz:replay": "bun scripts/run-fuzz.ts replay",
+    "test:correctness:core": "vitest --run packages/core/src/__tests__/engine-correctness.test.ts packages/core/src/__tests__/mutation-service.test.ts packages/core/src/__tests__/workbook-store.test.ts packages/core/src/__tests__/engine-range-format-ops.test.ts",
+    "test:correctness:fast": "pnpm analyze:quality && pnpm test:correctness:core",
     "test:watch": "vitest",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:smoke": "bun scripts/perf-smoke.ts",

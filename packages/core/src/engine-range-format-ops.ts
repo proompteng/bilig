@@ -58,10 +58,27 @@ export function buildStyleClearOps(
 }
 
 export function restoreStyleRangeOps(workbook: WorkbookStore, range: CellRangeRef): EngineOp[] {
-  return materializeStyleRangeOps(workbook, range, (baseStyle, currentStyleId) => ({
-    id: currentStyleId,
-    ...baseStyle,
-  }));
+  const tiles = resolveStyleTiles(workbook, range);
+  const seenStyleIds = new Set<string>();
+  const ops: EngineOp[] = [];
+  tiles.forEach((tile) => {
+    if (tile.styleId !== WorkbookStore.defaultStyleId && !seenStyleIds.has(tile.styleId)) {
+      const style = workbook.getCellStyle(tile.styleId);
+      if (style) {
+        ops.push({
+          kind: "upsertCellStyle",
+          style: cloneCellStyleRecord(style),
+        });
+      }
+      seenStyleIds.add(tile.styleId);
+    }
+    ops.push({
+      kind: "setStyleRange",
+      range: tile.range,
+      styleId: tile.styleId,
+    });
+  });
+  return ops;
 }
 
 export function buildFormatPatchOps(
@@ -82,7 +99,27 @@ export function buildFormatClearOps(workbook: WorkbookStore, range: CellRangeRef
 }
 
 export function restoreFormatRangeOps(workbook: WorkbookStore, range: CellRangeRef): EngineOp[] {
-  return materializeFormatRangeOps(workbook, range, (_currentFormatId, tile) => tile.formatId);
+  const tiles = resolveFormatTiles(workbook, range);
+  const seenFormatIds = new Set<string>();
+  const ops: EngineOp[] = [];
+  tiles.forEach((tile) => {
+    if (tile.formatId !== WorkbookStore.defaultFormatId && !seenFormatIds.has(tile.formatId)) {
+      const format = workbook.getCellNumberFormat(tile.formatId);
+      if (format) {
+        ops.push({
+          kind: "upsertCellNumberFormat",
+          format: { ...format },
+        });
+      }
+      seenFormatIds.add(tile.formatId);
+    }
+    ops.push({
+      kind: "setFormatRange",
+      range: tile.range,
+      formatId: tile.formatId,
+    });
+  });
+  return ops;
 }
 
 function materializeStyleRangeOps(

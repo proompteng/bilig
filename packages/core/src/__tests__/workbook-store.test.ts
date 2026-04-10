@@ -220,4 +220,20 @@ describe("WorkbookStore", () => {
       cols: 2,
     });
   });
+
+  it("restores sparse column axis entries without synthesizing blank identities", () => {
+    const workbook = new WorkbookStore("sparse-axis-restore");
+    workbook.createSheet("Sheet1");
+    workbook.setColumnMetadata("Sheet1", 1, 1, 120, false);
+
+    const captured = workbook.snapshotColumnAxisEntries("Sheet1", 0, 2);
+    expect(captured).toEqual([{ id: "column-1", index: 1, size: 120, hidden: false }]);
+
+    workbook.deleteColumns("Sheet1", 0, 2);
+    workbook.insertColumns("Sheet1", 0, 2, captured);
+
+    expect(workbook.listColumnAxisEntries("Sheet1")).toEqual([
+      { id: "column-1", index: 1, size: 120, hidden: false },
+    ]);
+  });
 });
