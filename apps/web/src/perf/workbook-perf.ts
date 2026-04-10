@@ -17,8 +17,10 @@ export interface WorkbookPerfSession {
   markShellMounted(): void;
   noteBootstrapResult(result: WorkbookPerfBootstrapResultLike): void;
   markFirstAuthoritativePatchVisible(): void;
+  markFirstAssistantDeltaVisible?(): void;
   markFirstLocalEditApplied?(): void;
   markFirstPasteApplied?(): void;
+  markFirstPreviewVisible?(): void;
   markFirstReconcileStarted(): void;
   markFirstReconcileSettled(): void;
   markFirstSelectionVisible(): void;
@@ -109,11 +111,17 @@ export function createWorkbookPerfSession(input: {
     markFirstAuthoritativePatchVisible() {
       markEvent("first-authoritative-patch-visible");
     },
+    markFirstAssistantDeltaVisible() {
+      markEvent("first-assistant-delta-visible");
+    },
     markFirstLocalEditApplied() {
       markEvent("first-local-edit-applied");
     },
     markFirstPasteApplied() {
       markEvent("first-paste-applied");
+    },
+    markFirstPreviewVisible() {
+      markEvent("first-preview-visible");
     },
     markFirstReconcileStarted() {
       markEvent("first-reconcile-started");

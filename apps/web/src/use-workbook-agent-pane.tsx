@@ -22,6 +22,7 @@ import {
   type WorkbookAgentUiContext,
 } from "@bilig/contracts";
 import { Schema } from "effect";
+import { createWorkbookPerfSession } from "./perf/workbook-perf.js";
 import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
@@ -212,6 +213,14 @@ export function useWorkbookAgentPane(input: {
   const getContextRef = useRef(getContext);
   const currentContext = getContextRef.current();
   const activeDraftKey = draftKey(snapshot?.threadId ?? null, threadScope);
+  const perfSession = useMemo(
+    () =>
+      createWorkbookPerfSession({
+        documentId,
+        scope: `bilig:${documentId}:agent-perf`,
+      }),
+    [documentId],
+  );
 
   useEffect(() => {
     getContextRef.current = getContext;
@@ -332,6 +341,9 @@ export function useWorkbookAgentPane(input: {
           setSnapshot((current: WorkbookAgentSessionSnapshot | null) =>
             updateSnapshotFromDelta(current, event),
           );
+          if (event.type === "assistantDelta") {
+            perfSession.markFirstAssistantDeltaVisible?.();
+          }
         } catch (nextError) {
           setError(nextError instanceof Error ? nextError.message : String(nextError));
         }
@@ -388,7 +400,7 @@ export function useWorkbookAgentPane(input: {
       });
       eventSourceRef.current = source;
     },
-    [closeStream, documentId, persistSessionSnapshot, threadScope],
+    [closeStream, documentId, perfSession, persistSessionSnapshot, threadScope],
   );
 
   const createOrResumeSession = useCallback(
@@ -475,6 +487,13 @@ export function useWorkbookAgentPane(input: {
       cancelled = true;
     };
   }, [enabled, previewBundle, selectedPendingBundle]);
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+    perfSession.markFirstPreviewVisible?.();
+  }, [perfSession, preview]);
 
   const applyPendingBundle = useCallback(
     async (appliedBy: "user" | "auto" = "user") => {
