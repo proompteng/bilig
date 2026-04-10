@@ -1,5 +1,4 @@
 import {
-  getCellNumberFormatKind,
   ValueTag,
   type CellNumberFormatRecord,
   type CellStyleRecord,
@@ -45,12 +44,6 @@ import {
   type WorkbookVolatileContextRecord,
 } from "./workbook-metadata-types.js";
 import {
-  cloneWorkbookRangeRecords,
-  findWorkbookRangeRecord,
-  overlayWorkbookRangeRecords,
-  replaceWorkbookRangeRecords,
-} from "./workbook-range-records.js";
-import {
   getAxisMetadataRecord,
   listAxisEntries,
   materializeAxisEntries,
@@ -60,14 +53,25 @@ import {
   spliceAxisEntries,
   syncAxisMetadataBucket,
 } from "./workbook-axis-records.js";
+import { cellStyleKey, axisMetadataKey } from "./workbook-store-records.js";
 import {
-  axisMetadataKey,
-  cellNumberFormatIdForCode,
-  cellStyleIdForKey,
-  cellStyleKey,
-  normalizeCellNumberFormatRecord,
-  normalizeCellStyleRecord,
-} from "./workbook-store-records.js";
+  getCellStyle as readCellStyle,
+  getCellNumberFormat as readCellNumberFormat,
+  getRangeFormatId as readRangeFormatId,
+  getStyleId as readStyleId,
+  internCellNumberFormat as internWorkbookCellNumberFormat,
+  internCellStyle as internWorkbookCellStyle,
+  listCellNumberFormats as listWorkbookCellNumberFormats,
+  listCellStyles as listWorkbookCellStyles,
+  listFormatRanges as listWorkbookFormatRanges,
+  listStyleRanges as listWorkbookStyleRanges,
+  setFormatRange as storeFormatRange,
+  setFormatRanges as replaceFormatRanges,
+  setStyleRange as storeStyleRange,
+  setStyleRanges as replaceStyleRanges,
+  upsertCellNumberFormat as storeCellNumberFormat,
+  upsertCellStyle as storeCellStyle,
+} from "./workbook-style-format-store.js";
 
 const SHEET_STRIDE = MAX_ROWS * MAX_COLS;
 export {
@@ -329,213 +333,85 @@ export class WorkbookStore {
   }
 
   upsertCellStyle(style: CellStyleRecord): WorkbookCellStyleRecord {
-    const normalized = normalizeCellStyleRecord(style);
-    const existing = this.cellStyles.get(normalized.id);
-    if (existing) {
-      this.styleKeys.delete(cellStyleKey(existing));
-    }
-    this.cellStyles.set(normalized.id, normalized);
-    this.styleKeys.set(cellStyleKey(normalized), normalized.id);
-    this.bumpStyleId(normalized.id);
-    return normalized;
+    return storeCellStyle(this, style, (id) => this.bumpStyleId(id));
   }
 
   internCellStyle(style: Omit<WorkbookCellStyleRecord, "id">): WorkbookCellStyleRecord {
-    const normalized = normalizeCellStyleRecord({
-      id: WorkbookStore.defaultStyleId,
-      ...style,
-    });
-    const key = cellStyleKey(normalized);
-    const existingId = this.styleKeys.get(key);
-    if (existingId) {
-      return this.cellStyles.get(existingId)!;
-    }
-    return { ...normalized, id: cellStyleIdForKey(key) };
+    return internWorkbookCellStyle(this, style, WorkbookStore.defaultStyleId);
   }
 
   getCellStyle(id: string | undefined): WorkbookCellStyleRecord | undefined {
-    if (!id) {
-      return this.cellStyles.get(WorkbookStore.defaultStyleId);
-    }
-    return this.cellStyles.get(id) ?? this.cellStyles.get(WorkbookStore.defaultStyleId);
+    return readCellStyle(this, id, WorkbookStore.defaultStyleId);
   }
 
   listCellStyles(): WorkbookCellStyleRecord[] {
-    return [...this.cellStyles.values()].toSorted((left, right) => left.id.localeCompare(right.id));
+    return listWorkbookCellStyles(this);
   }
 
   upsertCellNumberFormat(format: CellNumberFormatRecord): WorkbookCellNumberFormatRecord {
-    const normalized = normalizeCellNumberFormatRecord(format);
-    const existing = this.cellNumberFormats.get(normalized.id);
-    if (existing) {
-      this.numberFormatKeys.delete(existing.code);
-    }
-    this.cellNumberFormats.set(normalized.id, normalized);
-    this.numberFormatKeys.set(normalized.code, normalized.id);
-    this.bumpFormatId(normalized.id);
-    return normalized;
+    return storeCellNumberFormat(this, format, (id) => this.bumpFormatId(id));
   }
 
   internCellNumberFormat(format: string | CellNumberFormatRecord): WorkbookCellNumberFormatRecord {
-    const normalized =
-      typeof format === "string"
-        ? normalizeCellNumberFormatRecord({
-            id: WorkbookStore.defaultFormatId,
-            code: format,
-            kind: getCellNumberFormatKind(format),
-          })
-        : normalizeCellNumberFormatRecord(format);
-    const existingId = this.numberFormatKeys.get(normalized.code);
-    if (existingId) {
-      return this.cellNumberFormats.get(existingId)!;
-    }
-    return { ...normalized, id: cellNumberFormatIdForCode(normalized.code) };
+    return internWorkbookCellNumberFormat(this, format, WorkbookStore.defaultFormatId);
   }
 
   getCellNumberFormat(id: string | undefined): WorkbookCellNumberFormatRecord | undefined {
-    if (!id) {
-      return this.cellNumberFormats.get(WorkbookStore.defaultFormatId);
-    }
-    return (
-      this.cellNumberFormats.get(id) ?? this.cellNumberFormats.get(WorkbookStore.defaultFormatId)
-    );
+    return readCellNumberFormat(this, id, WorkbookStore.defaultFormatId);
   }
 
   listCellNumberFormats(): WorkbookCellNumberFormatRecord[] {
-    return [...this.cellNumberFormats.values()].toSorted((left, right) =>
-      left.id.localeCompare(right.id),
-    );
+    return listWorkbookCellNumberFormats(this);
   }
 
   setStyleRange(range: CellRangeRef, styleId: string): WorkbookStyleRangeRecord {
-    if (!this.cellStyles.has(styleId)) {
-      throw new Error(`Unknown cell style: ${styleId}`);
-    }
-    const sheet = this.getOrCreateSheet(range.sheetName);
-    const stored: WorkbookStyleRangeRecord = {
-      range: { ...range },
+    return storeStyleRange(
+      this,
+      this.getOrCreateSheet(range.sheetName),
+      range,
       styleId,
-    };
-    sheet.styleRanges = overlayWorkbookRangeRecords(
-      sheet.styleRanges,
-      stored,
-      (nextRange, record) => ({
-        range: nextRange,
-        styleId: record.styleId,
-      }),
-      (record) => record.styleId === WorkbookStore.defaultStyleId,
+      WorkbookStore.defaultStyleId,
     );
-    return stored;
   }
 
   listStyleRanges(sheetName: string): WorkbookStyleRangeRecord[] {
-    return cloneWorkbookRangeRecords(
-      this.getSheet(sheetName)?.styleRanges ?? [],
-      (range, record) => ({
-        range,
-        styleId: record.styleId,
-      }),
-    );
+    return listWorkbookStyleRanges(this.getSheet(sheetName));
   }
 
   setStyleRanges(
     sheetName: string,
     ranges: readonly SheetStyleRangeSnapshot[],
   ): WorkbookStyleRangeRecord[] {
-    const sheet = this.getOrCreateSheet(sheetName);
-    const nextRanges = replaceWorkbookRangeRecords(
-      ranges.map((entry) => ({
-        range: { ...entry.range },
-        styleId: entry.styleId,
-      })),
-      (range, record) => ({
-        range,
-        styleId: record.styleId,
-      }),
-      (entry) => {
-        if (!this.cellStyles.has(entry.styleId)) {
-          throw new Error(`Unknown cell style: ${entry.styleId}`);
-        }
-      },
-    );
-    sheet.styleRanges = nextRanges;
-    return this.listStyleRanges(sheetName);
+    return replaceStyleRanges(this, this.getOrCreateSheet(sheetName), ranges);
   }
 
   getStyleId(sheetName: string, row: number, col: number): string {
-    const sheet = this.getSheet(sheetName);
-    if (!sheet) {
-      return WorkbookStore.defaultStyleId;
-    }
-    return (
-      findWorkbookRangeRecord(sheet.styleRanges, row, col)?.styleId ?? WorkbookStore.defaultStyleId
-    );
+    return readStyleId(this.getSheet(sheetName), row, col, WorkbookStore.defaultStyleId);
   }
 
   setFormatRange(range: CellRangeRef, formatId: string): WorkbookFormatRangeRecord {
-    if (!this.cellNumberFormats.has(formatId)) {
-      throw new Error(`Unknown cell number format: ${formatId}`);
-    }
-    const sheet = this.getOrCreateSheet(range.sheetName);
-    const stored: WorkbookFormatRangeRecord = {
-      range: { ...range },
+    return storeFormatRange(
+      this,
+      this.getOrCreateSheet(range.sheetName),
+      range,
       formatId,
-    };
-    sheet.formatRanges = overlayWorkbookRangeRecords(
-      sheet.formatRanges,
-      stored,
-      (nextRange, record) => ({
-        range: nextRange,
-        formatId: record.formatId,
-      }),
-      (record) => record.formatId === WorkbookStore.defaultFormatId,
+      WorkbookStore.defaultFormatId,
     );
-    return stored;
   }
 
   listFormatRanges(sheetName: string): WorkbookFormatRangeRecord[] {
-    return cloneWorkbookRangeRecords(
-      this.getSheet(sheetName)?.formatRanges ?? [],
-      (range, record) => ({
-        range,
-        formatId: record.formatId,
-      }),
-    );
+    return listWorkbookFormatRanges(this.getSheet(sheetName));
   }
 
   setFormatRanges(
     sheetName: string,
     ranges: readonly SheetFormatRangeSnapshot[],
   ): WorkbookFormatRangeRecord[] {
-    const sheet = this.getOrCreateSheet(sheetName);
-    const nextRanges = replaceWorkbookRangeRecords(
-      ranges.map((entry) => ({
-        range: { ...entry.range },
-        formatId: entry.formatId,
-      })),
-      (range, record) => ({
-        range,
-        formatId: record.formatId,
-      }),
-      (entry) => {
-        if (!this.cellNumberFormats.has(entry.formatId)) {
-          throw new Error(`Unknown cell number format: ${entry.formatId}`);
-        }
-      },
-    );
-    sheet.formatRanges = nextRanges;
-    return this.listFormatRanges(sheetName);
+    return replaceFormatRanges(this, this.getOrCreateSheet(sheetName), ranges);
   }
 
   getRangeFormatId(sheetName: string, row: number, col: number): string {
-    const sheet = this.getSheet(sheetName);
-    if (!sheet) {
-      return WorkbookStore.defaultFormatId;
-    }
-    return (
-      findWorkbookRangeRecord(sheet.formatRanges, row, col)?.formatId ??
-      WorkbookStore.defaultFormatId
-    );
+    return readRangeFormatId(this.getSheet(sheetName), row, col, WorkbookStore.defaultFormatId);
   }
 
   setWorkbookProperty(key: string, value: LiteralInput): WorkbookPropertyRecord | undefined {
