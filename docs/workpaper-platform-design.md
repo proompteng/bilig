@@ -118,6 +118,52 @@ It must satisfy two constraints at the same time:
 - benchmarked performance targets instead of generic speed claims
 - clearer migration and API stability rules
 
+## Evidence Policy
+
+This document is intentionally stricter than a normal design memo.
+
+It separates four classes of statement:
+
+1. audited fact
+   - derived from the local HyperFormula checkout or the current `bilig` source tree
+2. shipped capability
+   - backed by code, tests, CI wiring, or a checked-in artifact in this repo
+3. engineering target
+   - an intended outcome with a defined verification path, not yet proven
+4. deliberate non-goal
+   - explicitly out of scope until a later semantics design exists
+
+Rules:
+
+- method-count and config-key parity may be stated as current fact because they are snapshot-tested
+- support beyond HyperFormula known limitations may be stated only when there is code and test evidence in `bilig`
+- a `10x better` claim is never allowed as a blanket package-level claim
+- a `10x` claim is allowed only for a named workload, against a named HyperFormula version, with a checked-in artifact and exact measurement method
+- if a comparison is not apples-to-apples, this document must say so explicitly instead of presenting a numeric win
+
+## Current Proof State
+
+As of this revision, the following are already proved in-repo:
+
+- `WorkPaper` is the canonical public API and `HeadlessWorkbook` remains a compatibility alias
+- HyperFormula public method/category and config-key parity by surface name is checked against the local checkout snapshot
+- external consumers can install the runtime tarballs into clean Node and Vite projects without monorepo context
+- the runtime package workflow verifies publishability, smoke installs, parity tests, and benchmark-baseline shape
+- rebuild semantics, deterministic change ordering, adapter immutability, and documentation example usage all have direct tests
+
+The following are not yet proved and therefore must not be claimed as current fact:
+
+- that WorkPaper is `10x` faster than HyperFormula in general
+- that WorkPaper is better on every axis simultaneously in one aggregate sense
+- that deferred feature families such as async custom functions and relative named expressions are solved
+
+The current state is therefore:
+
+- production-grade headless contract: shipped
+- HyperFormula surface parity by public API shape: shipped
+- stronger feature coverage in selected areas such as dynamic arrays and structured references: shipped
+- competitive-performance leadership over HyperFormula on matched workloads: not yet fully proved
+
 ## WorkPaper Contract
 
 Canonical public import:
@@ -221,6 +267,13 @@ Shipped enforcement for this repo:
 - external-consumer smoke command: `pnpm workpaper:smoke:external`
 - runtime-package CI workflow also verifies clean Node and Vite consumers from packed tarballs
 
+Reliability claims earned today:
+
+- deterministic rebuild semantics are covered by direct tests
+- stable change ordering is covered by direct tests
+- adapter immutability is covered by direct tests
+- published usage examples are covered by direct tests
+
 ## Performance Standard
 
 HyperFormula documents batching, evaluation suspension, address mapping policy, and column indexing as performance levers. WorkPaper keeps those controls and raises the bar.
@@ -256,6 +309,53 @@ Shipped benchmark harness:
 
 WorkPaper is allowed to claim a `10x` win only when a benchmark and fixture suite proves it for a defined workload. Until then, the doc treats `10x better` as an engineering target, not a blanket claim.
 
+## Competitive Benchmark Program
+
+This is the missing proof program required before any broad superiority claim is acceptable.
+
+The comparison target must be explicit:
+
+- HyperFormula version: `3.2.0`
+- HyperFormula commit: `6de904b8876f920f287b63a95934c479acf78307`
+- Node version, CPU architecture, OS, and benchmark fixture sizes must be recorded in the artifact
+
+Workloads must be separated into three categories:
+
+1. directly comparable workloads
+   - workbook build from arrays or named sheets
+   - single-cell edit with downstream recalculation
+   - batched edits
+   - range reads
+   - lookup-heavy workloads with and without column indexing where both engines support the scenario
+2. leadership workloads
+   - dynamic arrays
+   - structured references and tables
+   - multiple workbook instances per process
+   - these may demonstrate capability leadership, but not apples-to-apples speed comparisons
+3. non-comparable workloads
+   - any workload where one engine lacks feature support or uses materially different semantics
+   - these must be labeled `unsupported`, not silently omitted
+
+Benchmark reporting requirements:
+
+- artifact path for future cross-engine output: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- every comparable workload must include:
+  - exact fixture definition
+  - warmup count and sample count
+  - elapsed metrics
+  - memory metrics when available
+  - engine version metadata
+- any `10x` claim must reference:
+  - the exact workload name
+  - the exact artifact path
+  - the exact measured ratio
+
+Until `workpaper-vs-hyperformula.json` exists and is reviewed, the correct statement is:
+
+- WorkPaper has stronger feature coverage and stronger release/reliability gates than HyperFormula
+- WorkPaper has a benchmark harness and baseline discipline
+- WorkPaper does not yet have a checked-in cross-engine performance proof artifact
+
 ## What Exceeds HyperFormula Today
 
 From the local repo state, `bilig` already exceeds the limitations listed in HyperFormula's own docs in these areas:
@@ -274,6 +374,15 @@ These are not hidden gaps. They are deliberate scope decisions:
 - async custom functions are out of scope for v1
 - UI-metadata-aware functions remain outside the headless package until a stable metadata contract exists
 - relative named expressions continue to reject relative references until a complete semantics model is specified
+
+Deferred-feature exit criteria:
+
+| Deferred area | Why it is deferred | What must exist before implementation is considered correct |
+| --- | --- | --- |
+| Async custom functions | changes evaluation determinism, batching, and event timing | async execution model, cancellation semantics, timeout/error policy, deterministic event contract |
+| Relative named expressions | requires clear scope and rebasing semantics | formal semantics for insert/delete/move/reorder operations plus round-trip tests |
+| UI-metadata-aware functions | would leak product/UI concerns into the engine | stable metadata contract owned outside `@bilig/headless`, adapter boundary, and isolation tests |
+| 3D references | expands parser, dependency graph, and structure-change semantics | workbook-wide reference model, dependency fanout rules, and Excel-compat correctness cases |
 
 ## Execution Plan
 
@@ -325,6 +434,15 @@ This design is complete only when all of the following are true:
 - external consumers can install and use `@bilig/headless` without monorepo context
 - the WorkPaper tests and parity suite pass
 - the docs do not claim unmeasured performance wins
+
+Completion states:
+
+- platform-complete
+  - all acceptance criteria above are true
+- competitively-proved
+  - platform-complete is true
+  - `packages/benchmarks/baselines/workpaper-vs-hyperformula.json` exists
+  - any comparative superiority claims point to workload-specific evidence in that artifact
 
 ## Bottom Line
 
