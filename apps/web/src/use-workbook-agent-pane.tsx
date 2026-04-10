@@ -154,7 +154,9 @@ export function useWorkbookAgentPane(input: {
     getContextRef.current = getContext;
   }, [getContext]);
 
-  const loadThreadSummaries = useCallback(async (): Promise<WorkbookAgentThreadSummary[]> => {
+  const loadThreadSummaries = useCallback(async (): Promise<
+    readonly WorkbookAgentThreadSummary[]
+  > => {
     const response = await fetch(`/v2/documents/${encodeURIComponent(documentId)}/agent/threads`);
     const payload = (await response.json()) as unknown;
     if (!response.ok) {

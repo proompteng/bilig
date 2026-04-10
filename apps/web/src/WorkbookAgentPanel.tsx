@@ -13,6 +13,7 @@ import type {
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
+  WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
 } from "@bilig/contracts";
@@ -43,6 +44,62 @@ function contextLabel(context: WorkbookAgentUiContext | null): string {
     return "";
   }
   return `${context.selection.sheetName}!${context.selection.address}`;
+}
+
+function formatThreadEntryCount(entryCount: number): string {
+  return `${entryCount} ${entryCount === 1 ? "item" : "items"}`;
+}
+
+function ThreadSummaryStrip(props: {
+  readonly activeThreadId: string | null;
+  readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
+  readonly onSelectThread: (threadId: string) => void;
+}) {
+  if (props.threadSummaries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+      {props.threadSummaries.map((threadSummary) => {
+        const isActive = threadSummary.threadId === props.activeThreadId;
+        return (
+          <button
+            key={threadSummary.threadId}
+            aria-label={`Open ${threadSummary.scope} thread ${threadSummary.threadId}`}
+            aria-pressed={isActive}
+            className={cn(
+              workbookButtonClass({
+                size: "sm",
+                tone: isActive ? "accent" : "neutral",
+                weight: isActive ? "strong" : "regular",
+              }),
+              "h-auto min-w-[8.5rem] shrink-0 flex-col items-start gap-1 px-3 py-2 text-left",
+            )}
+            data-testid={`workbook-agent-thread-${threadSummary.threadId}`}
+            type="button"
+            onClick={() => {
+              props.onSelectThread(threadSummary.threadId);
+            }}
+          >
+            <div className="flex w-full items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-[var(--wb-text)]">
+                {threadSummary.scope === "shared" ? "Shared" : "Private"}
+              </span>
+              {threadSummary.hasPendingBundle ? (
+                <span className={workbookPillClass({ tone: "accent", weight: "strong" })}>
+                  Pending
+                </span>
+              ) : null}
+            </div>
+            <div className="text-[11px] text-[var(--wb-text-subtle)]">
+              {formatThreadEntryCount(threadSummary.entryCount)}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function ToolStatusPill(props: { readonly status: WorkbookAgentTimelineEntry["toolStatus"] }) {
@@ -619,12 +676,14 @@ function ExecutionRecordRow(props: {
 }
 
 export function WorkbookAgentPanel(props: {
+  readonly activeThreadId: string | null;
   readonly currentContext: WorkbookAgentUiContext | null;
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
+  readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly draft: string;
   readonly isLoading: boolean;
   readonly isApplyingBundle: boolean;
@@ -633,6 +692,7 @@ export function WorkbookAgentPanel(props: {
   readonly onDismissPendingBundle: () => void;
   readonly onInterrupt: () => void;
   readonly onSelectAllPendingCommands: () => void;
+  readonly onSelectThread: (threadId: string) => void;
   readonly onTogglePendingCommand: (commandIndex: number) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onSubmit: () => void;
@@ -659,6 +719,11 @@ export function WorkbookAgentPanel(props: {
         <div className="min-w-0 text-[12px] font-medium text-[var(--wb-text)]">
           {contextLabel(props.snapshot?.context ?? props.currentContext)}
         </div>
+        <ThreadSummaryStrip
+          activeThreadId={props.activeThreadId}
+          threadSummaries={props.threadSummaries}
+          onSelectThread={props.onSelectThread}
+        />
       </div>
       <div
         ref={scrollRef}
