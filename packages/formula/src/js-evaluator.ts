@@ -4,111 +4,22 @@ import { indexToColumn, parseCellAddress, parseRangeAddress } from "./addressing
 import { getBuiltin, hasBuiltin } from "./builtins.js";
 import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
 import { evaluateGroupBy, evaluatePivotBy, type MatrixValue } from "./group-pivot-evaluator.js";
+import { evaluateArraySpecialCall } from "./js-evaluator-array-special-calls.js";
+import type {
+  EvaluationContext,
+  JsPlanInstruction,
+  ReferenceOperand,
+  StackValue,
+} from "./js-evaluator-types.js";
 import {
   isArrayValue,
   scalarFromEvaluationResult,
-  type ArrayValue,
   type EvaluationResult,
   type RangeLikeValue,
 } from "./runtime-values.js";
 import { rewriteSpecialCall } from "./special-call-rewrites.js";
-
-export interface EvaluationContext {
-  sheetName: string;
-  currentAddress?: string;
-  resolveCell: (sheetName: string, address: string) => CellValue;
-  resolveRange: (
-    sheetName: string,
-    start: string,
-    end: string,
-    refKind: "cells" | "rows" | "cols",
-  ) => CellValue[];
-  resolveName?: (name: string) => CellValue;
-  resolveFormula?: (sheetName: string, address: string) => string | undefined;
-  resolvePivotData?: (request: {
-    dataField: string;
-    sheetName: string;
-    address: string;
-    filters: ReadonlyArray<{ field: string; item: CellValue }>;
-  }) => CellValue | undefined;
-  resolveMultipleOperations?: (request: {
-    formulaSheetName: string;
-    formulaAddress: string;
-    rowCellSheetName: string;
-    rowCellAddress: string;
-    rowReplacementSheetName: string;
-    rowReplacementAddress: string;
-    columnCellSheetName?: string;
-    columnCellAddress?: string;
-    columnReplacementSheetName?: string;
-    columnReplacementAddress?: string;
-  }) => CellValue | undefined;
-  listSheetNames?: () => string[];
-  resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined;
-}
-
-interface ReferenceOperand {
-  kind: "cell" | "range" | "row" | "col";
-  sheetName?: string;
-  address?: string;
-  start?: string;
-  end?: string;
-  refKind?: "cells" | "rows" | "cols";
-}
-
-export type JsPlanInstruction =
-  | { opcode: "push-number"; value: number }
-  | { opcode: "push-boolean"; value: boolean }
-  | { opcode: "push-string"; value: string }
-  | { opcode: "push-error"; code: ErrorCode }
-  | { opcode: "push-name"; name: string }
-  | { opcode: "push-cell"; sheetName?: string; address: string }
-  | {
-      opcode: "push-range";
-      sheetName?: string;
-      start: string;
-      end: string;
-      refKind: "cells" | "rows" | "cols";
-    }
-  | { opcode: "push-lambda"; params: string[]; body: JsPlanInstruction[] }
-  | { opcode: "unary"; operator: "+" | "-" }
-  | {
-      opcode: "binary";
-      operator: "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | ">" | ">=" | "<" | "<=";
-    }
-  | {
-      opcode: "call";
-      callee: string;
-      argc: number;
-      argRefs?: Array<ReferenceOperand | undefined>;
-    }
-  | { opcode: "invoke"; argc: number }
-  | { opcode: "begin-scope" }
-  | { opcode: "bind-name"; name: string }
-  | { opcode: "end-scope" }
-  | { opcode: "jump-if-false"; target: number }
-  | { opcode: "jump"; target: number }
-  | { opcode: "return" };
-
 type BinaryOperator = Extract<JsPlanInstruction, { opcode: "binary" }>["operator"];
-
-type StackValue =
-  | { kind: "scalar"; value: CellValue }
-  | { kind: "omitted" }
-  | {
-      kind: "range";
-      values: CellValue[];
-      refKind: "cells" | "rows" | "cols";
-      rows: number;
-      cols: number;
-    }
-  | {
-      kind: "lambda";
-      params: string[];
-      body: JsPlanInstruction[];
-      scopes: Array<Map<string, StackValue>>;
-    }
-  | ArrayValue;
+export type { EvaluationContext, JsPlanInstruction } from "./js-evaluator-types.js";
 
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty };
@@ -745,36 +656,6 @@ function isCellValueError(value: number | boolean | string | CellValue): value i
   return typeof value === "object" && value !== null && "tag" in value;
 }
 
-function indexOfWithMatchMode(
-  text: string,
-  delimiter: string,
-  startIndex: number,
-  matchMode: 0 | 1,
-): number {
-  if (matchMode === 1) {
-    return text.toLowerCase().indexOf(delimiter.toLowerCase(), startIndex);
-  }
-  return text.indexOf(delimiter, startIndex);
-}
-
-function splitTextByDelimiter(text: string, delimiter: string, matchMode: 0 | 1): string[] {
-  if (delimiter === "") {
-    return [text];
-  }
-  const parts: string[] = [];
-  let cursor = 0;
-  while (cursor <= text.length) {
-    const found = indexOfWithMatchMode(text, delimiter, cursor, matchMode);
-    if (found === -1) {
-      parts.push(text.slice(cursor));
-      break;
-    }
-    parts.push(text.slice(cursor, found));
-    cursor = found + delimiter.length;
-  }
-  return parts;
-}
-
 function makeArrayStack(rows: number, cols: number, values: CellValue[]): StackValue {
   return { kind: "array", rows, cols, values };
 }
@@ -850,10 +731,6 @@ function aggregateRangeSubset(
   }
   const result = builtin(...subset);
   return isArrayValue(result) ? scalarFromEvaluationResult(result) : result;
-}
-
-function isTrimRangeEmptyCell(value: CellValue): boolean {
-  return value.tag === ValueTag.Empty;
 }
 
 function applyLambda(
@@ -1261,345 +1138,27 @@ function evaluateSpecialCall(
       const resolvedName = context.resolveName?.(normalizedRefText);
       return stackScalar(resolvedName ?? error(ErrorCode.Ref));
     }
-    case "EXPAND": {
-      if (rawArgs.length < 2 || rawArgs.length > 4) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const source = toRangeLike(rawArgs[0]!);
-      const rows = coerceOptionalPositiveIntegerArgument(rawArgs[1], source.rows);
-      const cols = coerceOptionalPositiveIntegerArgument(rawArgs[2], source.cols);
-      if (isCellValueError(rows)) {
-        return stackScalar(rows);
-      }
-      if (isCellValueError(cols)) {
-        return stackScalar(cols);
-      }
-      const padArgument = rawArgs[3];
-      const padValue =
-        padArgument === undefined
-          ? error(ErrorCode.NA)
-          : ((): CellValue => {
-              const scalar = isSingleCellValue(padArgument);
-              return scalar ?? error(ErrorCode.Value);
-            })();
-      if (padValue.tag === ValueTag.Error && padArgument !== undefined) {
-        const scalar = isSingleCellValue(padArgument);
-        if (!scalar) {
-          return stackScalar(error(ErrorCode.Value));
-        }
-      }
-      if (rows < source.rows || cols < source.cols) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const values: CellValue[] = [];
-      for (let row = 0; row < rows; row += 1) {
-        for (let col = 0; col < cols; col += 1) {
-          values.push(
-            row < source.rows && col < source.cols ? getRangeCell(source, row, col) : padValue,
-          );
-        }
-      }
-      return makeArrayStack(rows, cols, values);
-    }
-    case "TEXTSPLIT": {
-      if (rawArgs.length < 2 || rawArgs.length > 6) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const text = coerceScalarTextArgument(rawArgs[0]);
-      const columnDelimiter = coerceScalarTextArgument(rawArgs[1]);
-      const rowDelimiter =
-        rawArgs[2] === undefined ? undefined : coerceScalarTextArgument(rawArgs[2]);
-      const ignoreEmpty = coerceOptionalBooleanArgument(rawArgs[3], false);
-      const matchMode = coerceOptionalMatchModeArgument(rawArgs[4], 0);
-      if (isCellValueError(text)) {
-        return stackScalar(text);
-      }
-      if (isCellValueError(columnDelimiter)) {
-        return stackScalar(columnDelimiter);
-      }
-      if (rowDelimiter !== undefined && isCellValueError(rowDelimiter)) {
-        return stackScalar(rowDelimiter);
-      }
-      if (isCellValueError(ignoreEmpty)) {
-        return stackScalar(ignoreEmpty);
-      }
-      if (isCellValueError(matchMode)) {
-        return stackScalar(matchMode);
-      }
-      if (columnDelimiter === "" && rowDelimiter === undefined) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const padArgument = rawArgs[5];
-      const padValue =
-        padArgument === undefined
-          ? error(ErrorCode.NA)
-          : ((): CellValue => {
-              const scalar = isSingleCellValue(padArgument);
-              return scalar ?? error(ErrorCode.Value);
-            })();
-      if (padArgument !== undefined && !isSingleCellValue(padArgument)) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-
-      const rowSlices =
-        rowDelimiter === undefined || rowDelimiter === ""
-          ? [text]
-          : splitTextByDelimiter(text, rowDelimiter, matchMode);
-      const matrix = rowSlices.map((rowSlice) => {
-        const parts =
-          columnDelimiter === ""
-            ? [rowSlice]
-            : splitTextByDelimiter(rowSlice, columnDelimiter, matchMode);
-        const filtered = ignoreEmpty ? parts.filter((part) => part !== "") : parts;
-        return filtered.length === 0 ? [] : filtered;
-      });
-      const rows = Math.max(matrix.length, 1);
-      const cols = Math.max(1, ...matrix.map((row) => row.length));
-      const values: CellValue[] = [];
-      for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
-        const row = matrix[rowIndex] ?? [];
-        for (let colIndex = 0; colIndex < cols; colIndex += 1) {
-          values.push(colIndex < row.length ? stringValue(row[colIndex]!) : padValue);
-        }
-      }
-      return makeArrayStack(rows, cols, values);
-    }
-    case "TRIMRANGE": {
-      if (rawArgs.length < 1 || rawArgs.length > 3) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const source = toRangeLike(rawArgs[0]!);
-      const trimRows = coerceOptionalTrimModeArgument(rawArgs[1], 3);
-      const trimCols = coerceOptionalTrimModeArgument(rawArgs[2], 3);
-      if (isCellValueError(trimRows)) {
-        return stackScalar(trimRows);
-      }
-      if (isCellValueError(trimCols)) {
-        return stackScalar(trimCols);
-      }
-
-      let startRow = 0;
-      let endRow = source.rows - 1;
-      let startCol = 0;
-      let endCol = source.cols - 1;
-
-      const trimLeadingRows = trimRows === 1 || trimRows === 3;
-      const trimTrailingRows = trimRows === 2 || trimRows === 3;
-      const trimLeadingCols = trimCols === 1 || trimCols === 3;
-      const trimTrailingCols = trimCols === 2 || trimCols === 3;
-
-      if (trimLeadingRows) {
-        while (startRow <= endRow) {
-          let hasNonEmpty = false;
-          for (let col = 0; col < source.cols; col += 1) {
-            if (!isTrimRangeEmptyCell(getRangeCell(source, startRow, col))) {
-              hasNonEmpty = true;
-              break;
-            }
-          }
-          if (hasNonEmpty) {
-            break;
-          }
-          startRow += 1;
-        }
-      }
-
-      if (trimTrailingRows) {
-        while (endRow >= startRow) {
-          let hasNonEmpty = false;
-          for (let col = 0; col < source.cols; col += 1) {
-            if (!isTrimRangeEmptyCell(getRangeCell(source, endRow, col))) {
-              hasNonEmpty = true;
-              break;
-            }
-          }
-          if (hasNonEmpty) {
-            break;
-          }
-          endRow -= 1;
-        }
-      }
-
-      if (startRow > endRow) {
-        return makeArrayStack(1, 1, [emptyValue()]);
-      }
-
-      if (trimLeadingCols) {
-        while (startCol <= endCol) {
-          let hasNonEmpty = false;
-          for (let row = startRow; row <= endRow; row += 1) {
-            if (!isTrimRangeEmptyCell(getRangeCell(source, row, startCol))) {
-              hasNonEmpty = true;
-              break;
-            }
-          }
-          if (hasNonEmpty) {
-            break;
-          }
-          startCol += 1;
-        }
-      }
-
-      if (trimTrailingCols) {
-        while (endCol >= startCol) {
-          let hasNonEmpty = false;
-          for (let row = startRow; row <= endRow; row += 1) {
-            if (!isTrimRangeEmptyCell(getRangeCell(source, row, endCol))) {
-              hasNonEmpty = true;
-              break;
-            }
-          }
-          if (hasNonEmpty) {
-            break;
-          }
-          endCol -= 1;
-        }
-      }
-
-      if (startCol > endCol) {
-        return makeArrayStack(1, 1, [emptyValue()]);
-      }
-
-      const rows = endRow - startRow + 1;
-      const cols = endCol - startCol + 1;
-      const values: CellValue[] = [];
-      for (let row = startRow; row <= endRow; row += 1) {
-        for (let col = startCol; col <= endCol; col += 1) {
-          values.push(getRangeCell(source, row, col));
-        }
-      }
-      return makeArrayStack(rows, cols, values);
-    }
-    case "MAKEARRAY": {
-      if (rawArgs.length !== 3) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const rows = toPositiveInteger(rawArgs[0]);
-      const cols = toPositiveInteger(rawArgs[1]);
-      if (rows === undefined || cols === undefined) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const lambda = rawArgs[2]!;
-      const values: CellValue[] = [];
-      for (let row = 1; row <= rows; row += 1) {
-        for (let col = 1; col <= cols; col += 1) {
-          const result = applyLambda(
-            lambda,
-            [
-              stackScalar({ tag: ValueTag.Number, value: row }),
-              stackScalar({ tag: ValueTag.Number, value: col }),
-            ],
-            context,
-          );
-          const scalar = isSingleCellValue(result);
-          if (!scalar) {
-            return stackScalar(error(ErrorCode.Value));
-          }
-          values.push(scalar);
-        }
-      }
-      return { kind: "array", rows, cols, values };
-    }
-    case "MAP": {
-      if (rawArgs.length < 2) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const lambda = rawArgs[rawArgs.length - 1]!;
-      const inputs = rawArgs.slice(0, -1);
-      const shape = getBroadcastShape(inputs);
-      if (!shape) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const ranges = inputs.map(toRangeLike);
-      const values: CellValue[] = [];
-      for (let row = 0; row < shape.rows; row += 1) {
-        for (let col = 0; col < shape.cols; col += 1) {
-          const lambdaArgs = ranges.map((range) =>
-            stackScalar(
-              getRangeCell(range, Math.min(row, range.rows - 1), Math.min(col, range.cols - 1)),
-            ),
-          );
-          const result = applyLambda(lambda, lambdaArgs, context);
-          const scalar = isSingleCellValue(result);
-          if (!scalar) {
-            return stackScalar(error(ErrorCode.Value));
-          }
-          values.push(scalar);
-        }
-      }
-      return { kind: "array", rows: shape.rows, cols: shape.cols, values };
-    }
-    case "BYROW":
-    case "BYCOL": {
-      if (rawArgs.length !== 2) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const source = toRangeLike(rawArgs[0]!);
-      const lambda = rawArgs[1]!;
-      const values: CellValue[] = [];
-      if (callee === "BYROW") {
-        for (let row = 0; row < source.rows; row += 1) {
-          const rowValues: CellValue[] = [];
-          for (let col = 0; col < source.cols; col += 1) {
-            rowValues.push(getRangeCell(source, row, col));
-          }
-          const result = applyLambda(
-            lambda,
-            [{ kind: "range", values: rowValues, rows: 1, cols: source.cols, refKind: "cells" }],
-            context,
-          );
-          const scalar = isSingleCellValue(result);
-          if (!scalar) {
-            return stackScalar(error(ErrorCode.Value));
-          }
-          values.push(scalar);
-        }
-        return { kind: "array", rows: source.rows, cols: 1, values };
-      }
-      for (let col = 0; col < source.cols; col += 1) {
-        const colValues: CellValue[] = [];
-        for (let row = 0; row < source.rows; row += 1) {
-          colValues.push(getRangeCell(source, row, col));
-        }
-        const result = applyLambda(
-          lambda,
-          [{ kind: "range", values: colValues, rows: source.rows, cols: 1, refKind: "cells" }],
-          context,
-        );
-        const scalar = isSingleCellValue(result);
-        if (!scalar) {
-          return stackScalar(error(ErrorCode.Value));
-        }
-        values.push(scalar);
-      }
-      return { kind: "array", rows: 1, cols: source.cols, values };
-    }
-    case "REDUCE":
-    case "SCAN": {
-      if (rawArgs.length !== 2 && rawArgs.length !== 3) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const hasInitial = rawArgs.length === 3;
-      let accumulator = hasInitial ? cloneStackValue(rawArgs[0]!) : stackScalar(emptyValue());
-      const source = toRangeLike(rawArgs[hasInitial ? 1 : 0]!);
-      const lambda = rawArgs[hasInitial ? 2 : 1]!;
-      const scanValues: CellValue[] = [];
-      for (const cell of source.values) {
-        accumulator = applyLambda(lambda, [accumulator, stackScalar(cell)], context);
-        if (callee === "SCAN") {
-          const scalar = isSingleCellValue(accumulator);
-          if (!scalar) {
-            return stackScalar(error(ErrorCode.Value));
-          }
-          scanValues.push(scalar);
-        }
-      }
-      return callee === "SCAN"
-        ? { kind: "array", rows: source.rows, cols: source.cols, values: scanValues }
-        : accumulator;
-    }
     default:
-      return undefined;
+      return evaluateArraySpecialCall(callee, rawArgs, context, {
+        error,
+        emptyValue,
+        numberValue,
+        stringValue,
+        stackScalar,
+        toRangeLike,
+        getRangeCell,
+        getBroadcastShape,
+        makeArrayStack,
+        applyLambda,
+        toPositiveInteger,
+        coerceScalarTextArgument,
+        coerceOptionalBooleanArgument,
+        coerceOptionalMatchModeArgument,
+        coerceOptionalPositiveIntegerArgument,
+        coerceOptionalTrimModeArgument,
+        isCellValueError,
+        isSingleCellValue,
+      });
   }
 }
 
