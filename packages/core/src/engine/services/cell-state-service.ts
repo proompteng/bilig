@@ -15,6 +15,13 @@ import type { EngineRuntimeState } from "../runtime-state.js";
 import { EngineCellStateError } from "../errors.js";
 
 export interface EngineCellStateService {
+  readonly captureStoredCellOps: (
+    cellIndex: number,
+    sheetName: string,
+    address: string,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ) => Effect.Effect<EngineOp[], EngineCellStateError>;
   readonly restoreCellOps: (
     sheetName: string,
     address: string,
@@ -58,6 +65,7 @@ export function createEngineCellStateService(args: {
     snapshot: CellSnapshot,
     sourceSheetName?: string,
     sourceAddress?: string,
+    formatOverride: string | null = snapshot.format ?? null,
   ): EngineOp[] => {
     const ops: EngineOp[] = [];
     if (snapshot.formula !== undefined) {
@@ -91,18 +99,42 @@ export function createEngineCellStateService(args: {
       kind: "setCellFormat",
       sheetName,
       address,
-      format: snapshot.format ?? null,
+      format: formatOverride,
     });
     return ops;
   };
 
+  const captureStoredCellOpsNow = (
+    cellIndex: number,
+    sheetName: string,
+    address: string,
+    sourceSheetName?: string,
+    sourceAddress?: string,
+  ): EngineOp[] =>
+    toCellStateOpsNow(
+      sheetName,
+      address,
+      args.getCellByIndex(cellIndex),
+      sourceSheetName,
+      sourceAddress,
+      args.state.workbook.getCellFormat(cellIndex) ?? null,
+    );
+
   const restoreCellOpsNow = (sheetName: string, address: string): EngineOp[] => {
     const cellIndex = args.state.workbook.getCellIndex(sheetName, address);
     if (cellIndex === undefined) {
-      return [{ kind: "clearCell", sheetName, address }];
+      return [
+        { kind: "clearCell", sheetName, address },
+        { kind: "setCellFormat", sheetName, address, format: null },
+      ];
     }
-    return toCellStateOpsNow(sheetName, address, args.getCellByIndex(cellIndex)).filter(
-      (op) => op.kind !== "setCellFormat",
+    return toCellStateOpsNow(
+      sheetName,
+      address,
+      args.getCellByIndex(cellIndex),
+      undefined,
+      undefined,
+      args.state.workbook.getCellFormat(cellIndex) ?? null,
     );
   };
 
@@ -120,6 +152,26 @@ export function createEngineCellStateService(args: {
   };
 
   return {
+    captureStoredCellOps(cellIndex, sheetName, address, sourceSheetName, sourceAddress) {
+      return Effect.try({
+        try: () =>
+          captureStoredCellOpsNow(
+            cellIndex,
+            sheetName,
+            address,
+            sourceSheetName,
+            sourceAddress,
+          ),
+        catch: (cause) =>
+          new EngineCellStateError({
+            message: cellStateErrorMessage(
+              `Failed to capture stored cell ops for ${sheetName}!${address}`,
+              cause,
+            ),
+            cause,
+          }),
+      });
+    },
     restoreCellOps(sheetName, address) {
       return Effect.try({
         try: () => restoreCellOpsNow(sheetName, address),

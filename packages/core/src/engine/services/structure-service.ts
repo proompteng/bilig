@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 import type {
-  CellSnapshot,
   SheetFormatRangeSnapshot,
   SheetStyleRangeSnapshot,
 } from "@bilig/protocol";
@@ -68,11 +67,10 @@ export interface EngineStructureService {
 
 export function createEngineStructureService(args: {
   readonly state: EngineStructureState;
-  readonly getCellByIndex: (cellIndex: number) => CellSnapshot;
-  readonly toCellStateOps: (
+  readonly captureStoredCellOps: (
+    cellIndex: number,
     sheetName: string,
     address: string,
-    snapshot: CellSnapshot,
     sourceSheetName?: string,
     sourceAddress?: string,
   ) => EngineOp[];
@@ -87,10 +85,10 @@ export function createEngineStructureService(args: {
     sourceSheetName?: string,
     sourceAddress?: string,
   ): EngineOp[] =>
-    args.toCellStateOps(
+    args.captureStoredCellOps(
+      cellIndex,
       sheetName,
       address,
-      args.getCellByIndex(cellIndex),
       sourceSheetName,
       sourceAddress,
     );

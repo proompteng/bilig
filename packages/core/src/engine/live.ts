@@ -401,10 +401,15 @@ export function createEngineServiceRuntime(args: {
       formulas: args.state.formulas,
       pivotOutputOwners: args.pivotState.pivotOutputOwners,
     },
-    getCellByIndex: (cellIndex) => runEngineEffect(read.getCellByIndex(cellIndex)),
-    toCellStateOps: (sheetName, address, snapshot, sourceSheetName, sourceAddress) =>
+    captureStoredCellOps: (cellIndex, sheetName, address, sourceSheetName, sourceAddress) =>
       runEngineEffect(
-        cellState.toCellStateOps(sheetName, address, snapshot, sourceSheetName, sourceAddress),
+        cellState.captureStoredCellOps(
+          cellIndex,
+          sheetName,
+          address,
+          sourceSheetName,
+          sourceAddress,
+        ),
       ),
     removeFormula: (cellIndex) => runEngineEffect(binding.clearFormula(cellIndex)),
     clearOwnedPivot: (pivotRecord) =>
