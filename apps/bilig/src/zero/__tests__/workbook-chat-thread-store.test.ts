@@ -295,6 +295,7 @@ describe("workbook-chat-thread-store", () => {
               {
                 threadId: "thr-2",
                 scope: "shared",
+                ownerUserId: "alex@example.com",
                 updatedAtUnixMs: 200,
                 entryCount: 3,
                 hasPendingBundle: false,
@@ -303,6 +304,7 @@ describe("workbook-chat-thread-store", () => {
               {
                 threadId: "thr-1",
                 scope: "private",
+                ownerUserId: "alex@example.com",
                 updatedAtUnixMs: 100,
                 entryCount: 1,
                 hasPendingBundle: true,
@@ -321,6 +323,7 @@ describe("workbook-chat-thread-store", () => {
       {
         threadId: "thr-2",
         scope: "shared",
+        ownerUserId: "alex@example.com",
         updatedAtUnixMs: 200,
         entryCount: 3,
         hasPendingBundle: false,
@@ -329,6 +332,7 @@ describe("workbook-chat-thread-store", () => {
       {
         threadId: "thr-1",
         scope: "private",
+        ownerUserId: "alex@example.com",
         updatedAtUnixMs: 100,
         entryCount: 1,
         hasPendingBundle: true,
@@ -345,6 +349,7 @@ describe("workbook-chat-thread-store", () => {
               {
                 threadId: "thr-shared",
                 scope: "shared",
+                ownerUserId: "alex@example.com",
                 updatedAtUnixMs: 300,
                 entryCount: 2,
                 hasPendingBundle: false,
@@ -363,6 +368,7 @@ describe("workbook-chat-thread-store", () => {
       {
         threadId: "thr-shared",
         scope: "shared",
+        ownerUserId: "alex@example.com",
         updatedAtUnixMs: 300,
         entryCount: 2,
         hasPendingBundle: false,

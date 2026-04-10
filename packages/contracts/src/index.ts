@@ -96,6 +96,7 @@ export type WorkbookAgentThreadScope = Schema.Schema.Type<typeof WorkbookAgentTh
 export const WorkbookAgentThreadSummarySchema = Schema.Struct({
   threadId: Schema.String,
   scope: WorkbookAgentThreadScopeSchema,
+  ownerUserId: Schema.String,
   updatedAtUnixMs: Schema.Number,
   entryCount: Schema.Number,
   hasPendingBundle: Schema.Boolean,

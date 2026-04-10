@@ -69,6 +69,7 @@ interface WorkbookPendingBundleRow extends QueryResultRow {
 interface WorkbookChatThreadSummaryRow extends QueryResultRow {
   readonly threadId?: unknown;
   readonly scope?: unknown;
+  readonly ownerUserId?: unknown;
   readonly updatedAtUnixMs?: unknown;
   readonly entryCount?: unknown;
   readonly hasPendingBundle?: unknown;
@@ -268,6 +269,7 @@ function normalizeThreadSummary(
   if (
     typeof row.threadId !== "string" ||
     (row.scope !== "private" && row.scope !== "shared") ||
+    typeof row.ownerUserId !== "string" ||
     updatedAtUnixMs === null ||
     entryCount === null ||
     typeof row.hasPendingBundle !== "boolean" ||
@@ -280,6 +282,7 @@ function normalizeThreadSummary(
   return {
     threadId: row.threadId,
     scope: row.scope,
+    ownerUserId: row.ownerUserId,
     updatedAtUnixMs,
     entryCount,
     hasPendingBundle: row.hasPendingBundle,
@@ -551,6 +554,7 @@ export async function listWorkbookAgentThreadSummaries(
       SELECT
         thread.thread_id AS "threadId",
         thread.scope AS "scope",
+        thread.actor_user_id AS "ownerUserId",
         thread.updated_at_unix_ms AS "updatedAtUnixMs",
         COALESCE(item_counts.entry_count, 0) AS "entryCount",
         pending.bundle_id IS NOT NULL AS "hasPendingBundle",

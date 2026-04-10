@@ -135,6 +135,7 @@ function createThreadSummary(overrides: Record<string, unknown> = {}) {
   return {
     threadId: "thr-1",
     scope: "private",
+    ownerUserId: "alex@example.com",
     updatedAtUnixMs: 100,
     entryCount: 1,
     hasPendingBundle: false,
@@ -144,9 +145,11 @@ function createThreadSummary(overrides: Record<string, unknown> = {}) {
 }
 
 function AgentHarness(props: {
+  readonly currentUserId?: string;
   readonly previewBundle?: Parameters<typeof useWorkbookAgentPane>[0]["previewBundle"];
 }) {
   const { agentError, agentPanel, clearAgentError } = useWorkbookAgentPane({
+    currentUserId: props.currentUserId ?? "alex@example.com",
     documentId: "doc-1",
     enabled: true,
     getContext: () => ({
@@ -1701,6 +1704,127 @@ describe("workbook agent pane", () => {
       requestUrl(input).endsWith("/bundles/bundle-shared-1/apply"),
     );
     expect(applyCall).toBeUndefined();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("blocks collaborator approval of shared medium-risk bundles in the panel", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        threadId: "thr-shared",
+      }),
+    );
+    const preview = createPreviewSummary({
+      structuralChanges: ["Format selected range"],
+    });
+    const previewBundle = vi.fn(async () => preview);
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads") && (init?.method ?? "GET") === "GET") {
+        return new Response(
+          JSON.stringify([
+            createThreadSummary({
+              threadId: "thr-shared",
+              scope: "shared",
+              ownerUserId: "alex@example.com",
+              entryCount: 3,
+              hasPendingBundle: true,
+              latestEntryText: "Preview bundle staged",
+            }),
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.endsWith("/agent/threads") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              threadId: "thr-shared",
+              scope: "shared",
+              pendingBundle: {
+                id: "bundle-shared-2",
+                documentId: "doc-1",
+                threadId: "thr-shared",
+                turnId: "turn-2",
+                goalText: "Normalize the imported sheet",
+                summary: "Normalize Sheet1!A1:A20",
+                scope: "sheet",
+                riskClass: "medium",
+                approvalMode: "explicit",
+                baseRevision: 4,
+                createdAtUnixMs: 20,
+                context: {
+                  selection: {
+                    sheetName: "Sheet1",
+                    address: "A1",
+                  },
+                  viewport: {
+                    rowStart: 0,
+                    rowEnd: 10,
+                    colStart: 0,
+                    colEnd: 5,
+                  },
+                },
+                commands: [
+                  {
+                    kind: "formatRange",
+                    range: {
+                      sheetName: "Sheet1",
+                      startAddress: "A1",
+                      endAddress: "A20",
+                    },
+                    patch: {
+                      font: {
+                        bold: true,
+                      },
+                    },
+                  },
+                ],
+                affectedRanges: [
+                  {
+                    sheetName: "Sheet1",
+                    startAddress: "A1",
+                    endAddress: "A20",
+                    role: "target",
+                  },
+                ],
+                estimatedAffectedCells: 20,
+              },
+            }),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness currentUserId="casey@example.com" previewBundle={previewBundle} />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = host.querySelector("[data-testid='workbook-agent-apply-pending']");
+    if (!(applyButton instanceof HTMLButtonElement)) {
+      throw new Error("Expected apply button to render");
+    }
+    expect(applyButton.disabled).toBe(true);
+    expect(host.textContent).toContain(
+      "Only Alex can approve medium/high-risk changes on this shared thread.",
+    );
 
     await act(async () => {
       root.unmount();

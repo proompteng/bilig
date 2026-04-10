@@ -374,6 +374,7 @@ describe("sync-server workbook agent", () => {
       {
         threadId: "thr-2",
         scope: "shared" as const,
+        ownerUserId: "alex@example.com",
         updatedAtUnixMs: 200,
         entryCount: 3,
         hasPendingBundle: false,
@@ -382,6 +383,7 @@ describe("sync-server workbook agent", () => {
       {
         threadId: "thr-1",
         scope: "private" as const,
+        ownerUserId: "alex@example.com",
         updatedAtUnixMs: 100,
         entryCount: 1,
         hasPendingBundle: true,
@@ -442,6 +444,7 @@ describe("sync-server workbook agent", () => {
         {
           threadId: "thr-2",
           scope: "shared",
+          ownerUserId: "alex@example.com",
           updatedAtUnixMs: 200,
           entryCount: 3,
           hasPendingBundle: false,
@@ -450,6 +453,7 @@ describe("sync-server workbook agent", () => {
         {
           threadId: "thr-1",
           scope: "private",
+          ownerUserId: "alex@example.com",
           updatedAtUnixMs: 100,
           entryCount: 1,
           hasPendingBundle: true,

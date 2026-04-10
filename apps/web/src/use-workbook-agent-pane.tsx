@@ -187,6 +187,7 @@ function normalizeWorkbookAgentErrorMessage(error: string): string {
 }
 
 export function useWorkbookAgentPane(input: {
+  readonly currentUserId: string;
   readonly documentId: string;
   readonly enabled: boolean;
   readonly getContext: () => WorkbookAgentUiContext;
@@ -194,7 +195,7 @@ export function useWorkbookAgentPane(input: {
     bundle: WorkbookAgentCommandBundle,
   ) => Promise<WorkbookAgentPreviewSummary>;
 }) {
-  const { documentId, enabled, getContext, previewBundle } = input;
+  const { currentUserId, documentId, enabled, getContext, previewBundle } = input;
   const [snapshot, setSnapshot] = useState<WorkbookAgentSessionSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -293,6 +294,20 @@ export function useWorkbookAgentPane(input: {
     const candidates = snapshot?.executionRecords ?? [];
     return candidates.flatMap((entry) => (isWorkbookAgentExecutionRecord(entry) ? [entry] : []));
   }, [snapshot?.executionRecords]);
+  const activeThreadSummary = useMemo(
+    () =>
+      threadSummaries.find(
+        (threadSummary) =>
+          threadSummary.threadId === (snapshot?.threadId ?? sessionRef.current?.threadId ?? null),
+      ) ?? null,
+    [snapshot?.threadId, threadSummaries],
+  );
+  const sharedApplyRequiresOwnerApproval =
+    snapshot?.scope === "shared" &&
+    pendingBundle?.riskClass !== undefined &&
+    pendingBundle.riskClass !== "low" &&
+    activeThreadSummary !== null &&
+    activeThreadSummary.ownerUserId !== currentUserId;
 
   const closeStream = useCallback(() => {
     eventSourceRef.current?.close();
@@ -501,6 +516,10 @@ export function useWorkbookAgentPane(input: {
       if (!activeSession || !pendingBundle || !selectedPendingBundle || !preview) {
         return;
       }
+      if (sharedApplyRequiresOwnerApproval) {
+        setError("Only the shared thread owner can approve medium/high-risk workbook changes.");
+        return;
+      }
       try {
         setIsApplyingBundle(true);
         const response = await fetch(
@@ -543,6 +562,7 @@ export function useWorkbookAgentPane(input: {
       persistSessionSnapshot,
       preview,
       selectedPendingBundle,
+      sharedApplyRequiresOwnerApproval,
     ],
   );
 
@@ -886,6 +906,9 @@ export function useWorkbookAgentPane(input: {
         isLoading={isLoading}
         pendingBundle={pendingBundle}
         preview={preview}
+        sharedApprovalOwnerUserId={
+          sharedApplyRequiresOwnerApproval ? (activeThreadSummary?.ownerUserId ?? null) : null
+        }
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
         threadScope={threadScope}
@@ -927,10 +950,12 @@ export function useWorkbookAgentPane(input: {
       normalizedCommandIndexes,
       pendingBundle,
       preview,
+      activeThreadSummary?.ownerUserId,
       replayExecutionRecord,
       sendPrompt,
       selectThread,
       snapshot,
+      sharedApplyRequiresOwnerApproval,
       selectAllPendingCommands,
       setThreadScope,
       startNewThread,

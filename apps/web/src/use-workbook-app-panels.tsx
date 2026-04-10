@@ -60,6 +60,7 @@ export function useWorkbookAppPanels(input: {
 
   const { agentPanel, agentError, clearAgentError, pendingCommandCount, previewRanges } =
     useWorkbookAgentPane({
+      currentUserId,
       documentId,
       enabled: runtimeReady,
       getContext: getAgentContext,

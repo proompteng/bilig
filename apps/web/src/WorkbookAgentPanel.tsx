@@ -26,6 +26,7 @@ import {
   workbookPillClass,
   workbookSurfaceClass,
 } from "./workbook-shell-chrome.js";
+import { formatWorkbookCollaboratorLabel } from "./workbook-presence-model.js";
 
 const toolStatusPillClass = cva(
   "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.04em]",
@@ -106,7 +107,9 @@ function ThreadSummaryStrip(props: {
               ) : null}
             </div>
             <div className="text-[11px] text-[var(--wb-text-subtle)]">
-              {formatThreadEntryCount(threadSummary.entryCount)}
+              {threadSummary.scope === "shared"
+                ? `${formatWorkbookCollaboratorLabel(threadSummary.ownerUserId)} · ${formatThreadEntryCount(threadSummary.entryCount)}`
+                : formatThreadEntryCount(threadSummary.entryCount)}
             </div>
             {latestActivity ? (
               <div className="line-clamp-2 text-[11px] leading-4 text-[var(--wb-text-muted)]">
@@ -550,6 +553,7 @@ function PreviewRangeList(props: {
 function PendingBundleCard(props: {
   readonly bundle: WorkbookAgentCommandBundle;
   readonly preview: WorkbookAgentPreviewSummary | null;
+  readonly sharedApprovalOwnerUserId: string | null;
   readonly selectedCommandIndexes: readonly number[];
   readonly isApplyingBundle: boolean;
   readonly onApply: () => void;
@@ -559,7 +563,14 @@ function PendingBundleCard(props: {
 }) {
   const selectedCount = props.selectedCommandIndexes.length;
   const hasFullSelection = selectedCount === props.bundle.commands.length;
-  const canApply = props.preview !== null && !props.isApplyingBundle && selectedCount > 0;
+  const sharedApprovalOwnerLabel = props.sharedApprovalOwnerUserId
+    ? formatWorkbookCollaboratorLabel(props.sharedApprovalOwnerUserId)
+    : null;
+  const canApply =
+    props.preview !== null &&
+    !props.isApplyingBundle &&
+    selectedCount > 0 &&
+    sharedApprovalOwnerLabel === null;
   const applyLabel =
     selectedCount > 0 && !hasFullSelection
       ? props.isApplyingBundle
@@ -649,6 +660,17 @@ function PendingBundleCard(props: {
           )}
         >
           {props.preview.structuralChanges.join(" · ")}
+        </div>
+      ) : null}
+      {sharedApprovalOwnerLabel ? (
+        <div
+          className={cn(
+            workbookAlertClass({ tone: "warning" }),
+            "mt-2 border-[var(--wb-border-strong)] text-[11px] leading-5",
+          )}
+        >
+          Only {sharedApprovalOwnerLabel} can approve medium/high-risk changes on this shared
+          thread.
         </div>
       ) : null}
       {props.preview?.cellDiffs?.length ? (
@@ -744,6 +766,7 @@ export function WorkbookAgentPanel(props: {
   readonly snapshot: WorkbookAgentSessionSnapshot | null;
   readonly pendingBundle: WorkbookAgentCommandBundle | null;
   readonly preview: WorkbookAgentPreviewSummary | null;
+  readonly sharedApprovalOwnerUserId: string | null;
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
   readonly threadScope: WorkbookAgentThreadScope;
@@ -805,6 +828,7 @@ export function WorkbookAgentPanel(props: {
             <PendingBundleCard
               bundle={props.pendingBundle}
               preview={props.preview}
+              sharedApprovalOwnerUserId={props.sharedApprovalOwnerUserId}
               selectedCommandIndexes={props.selectedCommandIndexes}
               isApplyingBundle={props.isApplyingBundle}
               onApply={props.onApplyPendingBundle}

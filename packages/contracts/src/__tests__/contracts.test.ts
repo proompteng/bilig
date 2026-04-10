@@ -4,6 +4,7 @@ import {
   DocumentStateSummarySchema,
   ErrorEnvelopeSchema,
   RuntimeSessionSchema,
+  WorkbookAgentThreadSummarySchema,
 } from "../index.js";
 
 describe("@bilig/contracts", () => {
@@ -41,5 +42,20 @@ describe("@bilig/contracts", () => {
     });
 
     expect(decoded.retryable).toBe(false);
+  });
+
+  it("decodes workbook agent thread summaries with owner metadata", () => {
+    const decoded = decodeUnknownSync(WorkbookAgentThreadSummarySchema, {
+      threadId: "thr-1",
+      scope: "shared",
+      ownerUserId: "alex@example.com",
+      updatedAtUnixMs: 42,
+      entryCount: 3,
+      hasPendingBundle: true,
+      latestEntryText: "Preview bundle staged",
+    });
+
+    expect(decoded.ownerUserId).toBe("alex@example.com");
+    expect(decoded.hasPendingBundle).toBe(true);
   });
 });
