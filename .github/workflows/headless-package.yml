@@ -279,16 +279,28 @@ jobs:
           pnpm --filter @bilig/core build
           pnpm --filter @bilig/headless build
 
+      - name: Pack headless tarball
+        run: |
+          set -euo pipefail
+          rm -rf build/npm-packages-headless
+          mkdir -p build/npm-packages-headless
+          pnpm --filter @bilig/headless pack --pack-destination build/npm-packages-headless
+
       - name: Publish package to npm
-        working-directory: packages/headless
         env:
           NPM_DIST_TAG: ${{ steps.release_meta.outputs.npm_tag }}
           DRY_RUN: ${{ steps.release_meta.outputs.dry_run }}
         run: |
           set -euo pipefail
+          tarball_path=$(find build/npm-packages-headless -maxdepth 1 -name '*.tgz' -print -quit)
+          if [[ -z "${tarball_path}" ]]; then
+            echo 'Packed headless tarball not found' >&2
+            exit 1
+          fi
+
           if [[ "${DRY_RUN}" == "true" ]]; then
             echo 'Running npm publish in dry-run mode'
-            npm publish --tag "$NPM_DIST_TAG" --access public --provenance --dry-run
+            npm publish "$tarball_path" --tag "$NPM_DIST_TAG" --access public --provenance --dry-run
           else
-            npm publish --tag "$NPM_DIST_TAG" --access public --provenance
+            npm publish "$tarball_path" --tag "$NPM_DIST_TAG" --access public --provenance
           fi
