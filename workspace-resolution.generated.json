@@ -39,6 +39,10 @@
     "packageDir": "packages/grid",
     "sourceEntry": "packages/grid/src/index.ts"
   },
+  "@bilig/headless": {
+    "packageDir": "packages/headless",
+    "sourceEntry": "packages/headless/src/index.ts"
+  },
   "@bilig/protocol": {
     "packageDir": "packages/protocol",
     "sourceEntry": "packages/protocol/src/index.ts"

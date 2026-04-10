@@ -11,6 +11,7 @@
 ## Stable packages
 
 - `@bilig/core`
+- `@bilig/headless`
 - `@bilig/formula`
 - `@bilig/wasm-kernel`
 - `@bilig/workbook-domain`
@@ -66,6 +67,25 @@ The canonical engine surface includes:
 - `connectSyncClient`
 - `disconnectSyncClient`
 - `getSyncState`
+
+## Headless workbook surface
+
+`@bilig/headless` exposes a HyperFormula-style headless workbook API on top of
+`@bilig/core`:
+
+- `HeadlessWorkbook.buildEmpty`
+- `HeadlessWorkbook.buildFromArray`
+- `HeadlessWorkbook.buildFromSheets`
+- workbook reads for cells, ranges, sheets, and named expressions
+- workbook mutations for cells, rows, columns, sheets, clipboard, and history
+- `batch`, `suspendEvaluation`, `resumeEvaluation`, `undo`, and `redo`
+- formula helpers such as address parsing, normalization, validation, and scratch evaluation
+- static language and custom-function registration
+- HyperFormula-style positional events through `on`, `once`, and `off`
+- additive structured events through `onDetailed`, `onceDetailed`, and `offDetailed`
+- stable internal adapter getters: `graph`, `rangeMapping`, `arrayMapping`,
+  `sheetMapping`, `addressMapping`, `dependencyGraph`, `evaluator`,
+  `columnSearch`, and `lazilyTransformingAstService`
 
 ### Core types added in the current tranche
 

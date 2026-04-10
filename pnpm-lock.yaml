@@ -364,6 +364,18 @@ importers:
         specifier: ^19.0.0
         version: 19.2.4
 
+  packages/headless:
+    dependencies:
+      '@bilig/core':
+        specifier: workspace:*
+        version: link:../core
+      '@bilig/formula':
+        specifier: workspace:*
+        version: link:../formula
+      '@bilig/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/protocol: {}
 
   packages/renderer:

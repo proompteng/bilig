@@ -16,6 +16,7 @@
     { "path": "./packages/excel-import" },
     { "path": "./packages/wasm-kernel" },
     { "path": "./packages/core" },
+    { "path": "./packages/headless" },
     { "path": "./packages/worker-transport" },
     { "path": "./packages/renderer" },
     { "path": "./packages/grid" },

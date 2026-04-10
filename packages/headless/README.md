@@ -1,0 +1,49 @@
+# @bilig/headless
+
+Headless workbook facade for `bilig`.
+
+`@bilig/headless` exposes a HyperFormula-style workbook API on top of `@bilig/core`'s
+`SpreadsheetEngine` for server-side and headless workflows.
+
+## Install
+
+```sh
+pnpm add @bilig/headless
+```
+
+## Usage
+
+```ts
+import { HeadlessWorkbook } from "@bilig/headless";
+
+const workbook = HeadlessWorkbook.buildFromSheets({
+  Sheet1: [[1, "=A1*2"]],
+});
+
+const sheetId = workbook.getSheetId("Sheet1")!;
+const value = workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 });
+```
+
+## Supported Workflows
+
+- Build empty workbooks or initialize from arrays or named sheets.
+- Read cell, range, and sheet values, formulas, and serialized contents.
+- Mutate cells, rows, columns, sheets, and named expressions with change tracking.
+- Use `batch()`, `undo()`, `redo()`, `suspendEvaluation()`, and `resumeEvaluation()`.
+- Register custom functions and language translations before workbook construction.
+- Use copy, cut, paste, fill-range translation, and formula normalization helpers.
+- Subscribe with HyperFormula-style positional listeners through `on()`, `once()`, and `off()`.
+- Subscribe with richer payload objects through `onDetailed()`, `onceDetailed()`, and `offDetailed()`.
+- Use stable compatibility adapters through `graph`, `rangeMapping`, `arrayMapping`,
+  `sheetMapping`, `addressMapping`, `dependencyGraph`, `evaluator`,
+  `columnSearch`, and `lazilyTransformingAstService`.
+
+## Compatibility Notes
+
+- The facade follows HyperFormula's public workbook workflow closely, but it is not a
+  byte-for-byte drop-in replacement.
+- Public lookup helpers such as `getSheetId()`, `getSheetName()`,
+  `simpleCellAddressFromString()`, `simpleCellRangeFromString()`, and named-expression
+  reads return `undefined` on misses in the HyperFormula style.
+- `@bilig/headless` keeps `bilig`'s richer change arrays and also exposes additive
+  detailed-event payloads instead of cloning HyperFormula's exact exported change types.

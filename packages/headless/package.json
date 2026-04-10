@@ -1,0 +1,51 @@
+{
+  "name": "@bilig/headless",
+  "version": "0.1.0",
+  "description": "Headless spreadsheet workbook facade for bilig with HyperFormula-style workflows.",
+  "keywords": [
+    "bilig",
+    "formula",
+    "headless",
+    "spreadsheet",
+    "workbook"
+  ],
+  "homepage": "https://github.com/proompteng/bilig/tree/main/packages/headless#readme",
+  "bugs": {
+    "url": "https://github.com/proompteng/bilig/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/proompteng/bilig.git",
+    "directory": "packages/headless"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bilig/core": "workspace:*",
+    "@bilig/formula": "workspace:*",
+    "@bilig/protocol": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

@@ -12,6 +12,7 @@
       "@bilig/excel-import": ["./packages/excel-import/src/index.ts"],
       "@bilig/formula": ["./packages/formula/src/index.ts"],
       "@bilig/grid": ["./packages/grid/src/index.ts"],
+      "@bilig/headless": ["./packages/headless/src/index.ts"],
       "@bilig/protocol": ["./packages/protocol/src/index.ts"],
       "@bilig/renderer": ["./packages/renderer/src/index.ts"],
       "@bilig/runtime-kernel": ["./packages/runtime-kernel/src/index.ts"],

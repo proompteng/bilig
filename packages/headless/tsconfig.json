@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.workspace-paths.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "references": [
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../formula"
+    },
+    {
+      "path": "../core"
+    }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["src/**/__tests__/**"]
+}

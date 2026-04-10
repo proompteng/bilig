@@ -279,6 +279,7 @@ function buildCellSourceRowFromEngineCell(
   col: number,
   cell: {
     value: CellValue;
+    version: number;
     formula?: string;
     format?: string;
     styleId?: string;
