@@ -380,14 +380,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       thread.id,
     );
     const resolvedScope = durableThreadState?.scope ?? parsed.scope ?? "private";
-    const executionRecords =
-      resolvedScope === "shared"
-        ? await this.zeroSyncService.listWorkbookAgentThreadRuns(
-            input.documentId,
-            input.session.userID,
-            thread.id,
-          )
-        : await this.zeroSyncService.listWorkbookAgentRuns(input.documentId, input.session.userID);
+    const executionRecords = await this.zeroSyncService.listWorkbookAgentThreadRuns(
+      input.documentId,
+      input.session.userID,
+      thread.id,
+    );
     const codexEntries = buildEntriesFromThread(thread);
 
     const snapshot: MutableWorkbookAgentSessionSnapshot = {

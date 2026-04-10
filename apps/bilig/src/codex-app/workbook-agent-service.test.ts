@@ -1155,4 +1155,94 @@ describe("workbook agent service", () => {
       await service.close();
     }
   });
+
+  it("loads only thread-scoped execution history for private threads", async () => {
+    const threadExecutionRecord = {
+      id: "run-private-1",
+      bundleId: "bundle-private-1",
+      documentId: "doc-1",
+      threadId: "thr-private",
+      turnId: "turn-1",
+      actorUserId: "alex@example.com",
+      goalText: "Fix the selected range",
+      planText: "Repair formulas in the active thread",
+      summary: "Write formulas in Sheet1!C2:C5",
+      scope: "selection" as const,
+      riskClass: "low" as const,
+      approvalMode: "auto" as const,
+      acceptedScope: "full" as const,
+      appliedBy: "auto" as const,
+      baseRevision: 7,
+      appliedRevision: 8,
+      createdAtUnixMs: 100,
+      appliedAtUnixMs: 110,
+      context: null,
+      commands: [
+        {
+          kind: "writeRange" as const,
+          sheetName: "Sheet1",
+          startAddress: "C2",
+          values: [[42]],
+        },
+      ],
+      preview: null,
+    };
+    const foreignExecutionRecord = {
+      ...threadExecutionRecord,
+      id: "run-foreign-1",
+      bundleId: "bundle-foreign-1",
+      threadId: "thr-other",
+      goalText: "Foreign thread run",
+      summary: "Should never hydrate into thr-private",
+    };
+    const listWorkbookAgentThreadRuns = vi.fn(async () => [threadExecutionRecord]);
+    const listWorkbookAgentRuns = vi.fn(async () => [foreignExecutionRecord]);
+    const service = createWorkbookAgentService(
+      createZeroSyncStub({
+        listWorkbookAgentRuns,
+        listWorkbookAgentThreadRuns,
+        async loadWorkbookAgentThreadState() {
+          return {
+            documentId: "doc-1",
+            threadId: "thr-private",
+            actorUserId: "alex@example.com",
+            scope: "private",
+            context: null,
+            entries: [],
+            pendingBundle: null,
+            updatedAtUnixMs: 100,
+          };
+        },
+      }),
+      {
+        codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport =>
+          new FakeCodexTransport(),
+      },
+    );
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: "doc-1",
+        session: {
+          userID: "alex@example.com",
+          roles: ["editor"],
+        },
+        body: {
+          sessionId: "agent-session-private",
+          threadId: "thr-private",
+        },
+      });
+
+      expect(snapshot.scope).toBe("private");
+      expect(snapshot.executionRecords).toEqual([threadExecutionRecord]);
+      expect(listWorkbookAgentThreadRuns).toHaveBeenCalledWith(
+        "doc-1",
+        "alex@example.com",
+        "thr-private",
+      );
+      expect(listWorkbookAgentRuns).not.toHaveBeenCalled();
+    } finally {
+      await service.close();
+    }
+  });
 });
