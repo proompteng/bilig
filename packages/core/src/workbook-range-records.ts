@@ -25,10 +25,7 @@ export function overlayWorkbookRangeRecords<RecordType extends WorkbookRangeReco
   cloneRecord: (range: CellRangeRef, record: RecordType) => RecordType,
   isDefaultRecord: (record: RecordType) => boolean,
 ): RecordType[] {
-  const normalizedNext = cloneRecord(
-    canonicalWorkbookRangeRef(nextRecord.range),
-    nextRecord,
-  );
+  const normalizedNext = cloneRecord(canonicalWorkbookRangeRef(nextRecord.range), nextRecord);
   const remainders = records.flatMap((record) =>
     subtractWorkbookRangeRecord(record.range, normalizedNext.range).map((remainder) =>
       cloneRecord(remainder, record),
@@ -65,12 +62,12 @@ export function findWorkbookRangeRecord<RecordType extends WorkbookRangeRecord>(
   return undefined;
 }
 
-export function workbookRangeContainsCell(range: CellRangeRef, row: number, col: number): boolean {
+function workbookRangeContainsCell(range: CellRangeRef, row: number, col: number): boolean {
   const { startRow, endRow, startCol, endCol } = normalizeWorkbookRangeRef(range);
   return row >= startRow && row <= endRow && col >= startCol && col <= endCol;
 }
 
-export function normalizeWorkbookRangeRef(range: CellRangeRef): NormalizedWorkbookRangeRef {
+function normalizeWorkbookRangeRef(range: CellRangeRef): NormalizedWorkbookRangeRef {
   const start = parseCellAddress(range.startAddress, range.sheetName);
   const end = parseCellAddress(range.endAddress, range.sheetName);
   const startRow = Math.min(start.row, end.row);
@@ -97,7 +94,7 @@ export function canonicalWorkbookAddress(sheetName: string, address: string): st
   return formatAddress(parsed.row, parsed.col);
 }
 
-export function subtractWorkbookRangeRecord(existing: CellRangeRef, cut: CellRangeRef): CellRangeRef[] {
+function subtractWorkbookRangeRecord(existing: CellRangeRef, cut: CellRangeRef): CellRangeRef[] {
   if (existing.sheetName !== cut.sheetName) {
     return [toPlainWorkbookRangeRef(existing)];
   }

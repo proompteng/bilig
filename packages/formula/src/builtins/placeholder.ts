@@ -561,7 +561,7 @@ function blockedResult(): CellValue {
   return { tag: ValueTag.Error, code: ErrorCode.Blocked };
 }
 
-export function createBlockedBuiltin(): PlaceholderBuiltin {
+function createBlockedBuiltin(): PlaceholderBuiltin {
   return () => blockedResult();
 }
 

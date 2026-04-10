@@ -14,7 +14,7 @@ export function toColumnLabel(column: number): string | undefined {
   return label;
 }
 
-export function formatThousands(value: string): string {
+function formatThousands(value: string): string {
   return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 

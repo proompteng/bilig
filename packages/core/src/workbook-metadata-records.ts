@@ -15,7 +15,9 @@ import {
   type WorkbookTableRecord,
 } from "./workbook-metadata-types.js";
 
-export function cloneDefinedNameRecord(record: WorkbookDefinedNameRecord): WorkbookDefinedNameRecord {
+export function cloneDefinedNameRecord(
+  record: WorkbookDefinedNameRecord,
+): WorkbookDefinedNameRecord {
   return {
     name: record.name,
     value: cloneDefinedNameValue(record.value),
@@ -106,7 +108,7 @@ export function cloneSpillRecord(record: WorkbookSpillRecord): WorkbookSpillReco
   };
 }
 
-export function axisMetadataKey(sheetName: string, start: number, count: number): string {
+function axisMetadataKey(sheetName: string, start: number, count: number): string {
   return `${sheetName}:${start}:${count}`;
 }
 

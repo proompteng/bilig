@@ -19,7 +19,7 @@ function cloneSnapshotRangeRef(range: CellRangeRef): CellRangeRef {
   };
 }
 
-export function axisMetadataToSnapshot(
+function axisMetadataToSnapshot(
   records: readonly WorkbookAxisMetadataRecord[],
 ): WorkbookAxisMetadataSnapshot[] {
   return records.map((record) => {
@@ -37,7 +37,7 @@ export function axisMetadataToSnapshot(
   });
 }
 
-export function freezePaneToSnapshot(
+function freezePaneToSnapshot(
   record: WorkbookFreezePaneRecord | undefined,
 ): WorkbookFreezePaneSnapshot | undefined {
   if (!record) {
