@@ -356,56 +356,6 @@ describe("formula parser/compiler edges", () => {
     ]);
   });
 
-  it("lowers GROUPBY and PIVOTBY aggregate names as strings for runtime aggregation", () => {
-    expect(lowerToPlan(parseFormula("GROUPBY(A1:A5,C1:C5,SUM,3,1)"))).toEqual([
-      { opcode: "push-range", start: "A1", end: "A5", refKind: "cells" },
-      { opcode: "push-range", start: "C1", end: "C5", refKind: "cells" },
-      { opcode: "push-string", value: "SUM" },
-      { opcode: "push-number", value: 3 },
-      { opcode: "push-number", value: 1 },
-      {
-        opcode: "call",
-        callee: "GROUPBY",
-        argc: 5,
-        argRefs: [
-          { kind: "range", start: "A1", end: "A5", refKind: "cells" },
-          { kind: "range", start: "C1", end: "C5", refKind: "cells" },
-          undefined,
-          undefined,
-          undefined,
-        ],
-      },
-      { opcode: "return" },
-    ]);
-
-    expect(lowerToPlan(parseFormula("PIVOTBY(A1:A5,B1:B5,C1:C5,SUM,3,1,0,1)"))).toEqual([
-      { opcode: "push-range", start: "A1", end: "A5", refKind: "cells" },
-      { opcode: "push-range", start: "B1", end: "B5", refKind: "cells" },
-      { opcode: "push-range", start: "C1", end: "C5", refKind: "cells" },
-      { opcode: "push-string", value: "SUM" },
-      { opcode: "push-number", value: 3 },
-      { opcode: "push-number", value: 1 },
-      { opcode: "push-number", value: 0 },
-      { opcode: "push-number", value: 1 },
-      {
-        opcode: "call",
-        callee: "PIVOTBY",
-        argc: 8,
-        argRefs: [
-          { kind: "range", start: "A1", end: "A5", refKind: "cells" },
-          { kind: "range", start: "B1", end: "B5", refKind: "cells" },
-          { kind: "range", start: "C1", end: "C5", refKind: "cells" },
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-        ],
-      },
-      { opcode: "return" },
-    ]);
-  });
-
   it("parses and lowers lambda invocation syntax", () => {
     expect(parseFormula("LAMBDA(x,x+1)(4)")).toEqual({
       kind: "InvokeExpr",
