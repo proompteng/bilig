@@ -19,8 +19,8 @@
 - Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **497**
-- Not yet registered in codebase: **28**
+- Registered in codebase: **487**
+- Not yet registered in codebase: **38**
 - Placeholder-backed registrations: **0**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
@@ -29,16 +29,16 @@
 | Function | ODF status | In Office list | Implemented in codebase |
 | --- | --- | --- | --- |
 | ABS | Not in ODF 1.4 mandatory | Yes | Yes |
-| ACCRINT | Implemented | Yes | Yes |
-| ACCRINTM | Implemented | Yes | Yes |
+| ACCRINT | Implemented | Yes | No |
+| ACCRINTM | Implemented | Yes | No |
 | ACOS | Not in ODF 1.4 mandatory | Yes | Yes |
 | ACOSH | Implemented | Yes | Yes |
 | ACOT | Implemented | Yes | Yes |
 | ACOTH | Implemented | Yes | Yes |
 | ADDRESS | Placeholder (blocked) | Yes | Yes |
 | AGGREGATE | Not in ODF 1.4 mandatory | Yes | Yes |
-| AMORDEGRC | Not in ODF 1.4 mandatory | Yes | Yes |
-| AMORLINC | Implemented | Yes | Yes |
+| AMORDEGRC | Not in ODF 1.4 mandatory | Yes | No |
+| AMORLINC | Implemented | Yes | No |
 | AND | Not in ODF 1.4 mandatory | Yes | Yes |
 | ARABIC | Implemented | Yes | No |
 | AREAS | Placeholder (blocked) | Yes | Yes |
@@ -49,7 +49,7 @@
 | ATAN | Not in ODF 1.4 mandatory | Yes | Yes |
 | ATAN2 | Not in ODF 1.4 mandatory | Yes | Yes |
 | ATANH | Implemented | Yes | Yes |
-| AVEDEV | Placeholder (blocked) | Yes | Yes |
+| AVEDEV | Placeholder (blocked) | Yes | No |
 | AVERAGE | Not in ODF 1.4 mandatory | Yes | Yes |
 | AVERAGEA | Placeholder (blocked) | Yes | Yes |
 | AVERAGEIF | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -161,7 +161,7 @@
 | DEGREES | Not in ODF 1.4 mandatory | Yes | Yes |
 | DELTA | Placeholder (blocked) | Yes | Yes |
 | DETECTLANGUAGE | Not in ODF 1.4 mandatory | Yes | Yes |
-| DEVSQ | Placeholder (blocked) | Yes | Yes |
+| DEVSQ | Placeholder (blocked) | Yes | No |
 | DGET | Not in ODF 1.4 mandatory | Yes | Yes |
 | DISC | Placeholder (blocked) | Yes | Yes |
 | DMAX | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -305,8 +305,8 @@
 | LEGACY.CHITEST | Legacy not implemented | No | Yes |
 | LEGACY.FDIST | Legacy not implemented | No | Yes |
 | LEGACY.FINV | Legacy not implemented | No | Yes |
-| LEGACY.NORMSDIST | Legacy not implemented | No | Yes |
-| LEGACY.NORMSINV | Legacy not implemented | No | Yes |
+| LEGACY.NORMSDIST | Legacy not implemented | No | No |
+| LEGACY.NORMSINV | Legacy not implemented | No | No |
 | LEN | Not in ODF 1.4 mandatory | Yes | Yes |
 | LENB | Missing | Yes | Yes |
 | LET | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -345,7 +345,7 @@
 | MODE.SNGL | Not in ODF 1.4 mandatory | Yes | Yes |
 | MONTH | Not in ODF 1.4 mandatory | Yes | Yes |
 | MROUND | Implemented | Yes | Yes |
-| MULTINOMIAL | Implemented | Yes | Yes |
+| MULTINOMIAL | Implemented | Yes | No |
 | MULTIPLE.OPERATIONS | Missing | No | Yes |
 | MUNIT | Implemented | Yes | Yes |
 | N | Not in ODF 1.4 mandatory | Yes | Yes |
@@ -452,7 +452,7 @@
 | SINH | Implemented | Yes | Yes |
 | SKEW | Placeholder (blocked) | Yes | Yes |
 | SKEW.P | Not in ODF 1.4 mandatory | Yes | Yes |
-| SKEWP | Missing | No | Yes |
+| SKEWP | Missing | No | No |
 | SLN | Not in ODF 1.4 mandatory | Yes | Yes |
 | SLOPE | Placeholder (blocked) | Yes | Yes |
 | SMALL | Placeholder (blocked) | Yes | Yes |
