@@ -287,17 +287,6 @@ export function useWorkbookSync(input: {
           mutation = { method, args: [sheetName, startCol, count, width, hidden] };
           break;
         }
-        case "updateColumnWidth": {
-          const [sheetName, columnIndex, width] = args;
-          assert(
-            typeof sheetName === "string" &&
-              typeof columnIndex === "number" &&
-              typeof width === "number",
-            "Invalid updateColumnWidth args",
-          );
-          mutation = { method, args: [sheetName, columnIndex, width] };
-          break;
-        }
         case "setFreezePane": {
           const [sheetName, rows, cols] = args;
           assert(
@@ -381,7 +370,7 @@ export function useWorkbookSync(input: {
         }
       }
       try {
-        await invokeMutation("updateColumnWidth", sheetName, columnIndex, width);
+        await invokeMutation("updateColumnMetadata", sheetName, columnIndex, 1, width, null);
       } catch (error) {
         if (viewportStore && viewportStore.getColumnWidths(sheetName)[columnIndex] === width) {
           viewportStore.rollbackColumnWidth(sheetName, columnIndex, previousWidth);
