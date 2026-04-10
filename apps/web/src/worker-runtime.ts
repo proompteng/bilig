@@ -65,6 +65,10 @@ import {
 } from "./worker-runtime-engine-access.js";
 import { restoreBootstrapPersistence } from "./worker-runtime-bootstrap-persistence.js";
 import {
+  resolveProjectionOverlayScopeForPersist,
+  WorkerRuntimePersistCoordinator,
+} from "./worker-runtime-persist-coordinator.js";
+import {
   acquireProjectionEngine,
   scheduleProjectionEngineMaterialization,
 } from "./worker-runtime-projection-engine.js";
@@ -100,7 +104,6 @@ import {
 import { buildWorkbookLocalAuthoritativeDelta } from "./worker-local-authoritative-delta.js";
 import {
   collectProjectionOverlayScopeFromEngineEvents,
-  createEmptyProjectionOverlayScope,
   mergeProjectionOverlayScopes,
   type ProjectionOverlayScope,
 } from "./worker-local-overlay.js";
@@ -166,8 +169,6 @@ export class WorkbookWorkerRuntime {
   private engineSubscription: (() => void) | null = null;
   private externalSyncState: SyncState | null = null;
   private runtimeStateCache: WorkbookWorkerStateSnapshot | null = null;
-  private persistInFlight: Promise<void> | null = null;
-  private persistQueued = false;
   private mutationJournalEntries: PendingWorkbookMutation[] = [];
   private pendingMutations: PendingWorkbookMutation[] = [];
   private nextPendingMutationSeq = 1;
@@ -194,6 +195,30 @@ export class WorkbookWorkerRuntime {
       });
     },
     scheduleProjectionEngineMaterialization: () => this.scheduleProjectionEngineMaterialization(),
+  });
+  private readonly persistCoordinator = new WorkerRuntimePersistCoordinator({
+    canPersistState: () => this.canPersistState(),
+    getLocalStore: () => this.localStore,
+    getAuthoritativeEngine: () => this.getAuthoritativeEngine(),
+    getProjectionEngine: () => this.getProjectionEngine(),
+    buildPersistedState: ({ authoritativeEngine, projectionEngine }) =>
+      buildPersistedWorkerState({
+        snapshotCaches: this.snapshotCaches,
+        authoritativeEngine,
+        projectionEngine,
+        hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
+        authoritativeRevision: this.authoritativeRevision,
+        appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
+      }),
+    getProjectionOverlayScope: () =>
+      resolveProjectionOverlayScopeForPersist({
+        projectionOverlayScope: this.projectionOverlayScope,
+        pendingMutationCount: this.pendingMutations.length,
+      }),
+    saveState: (input) => persistProjectionStateToLocalStore(input),
+    markProjectionMatchesLocalStore: () => {
+      this.projectionMatchesLocalStore = true;
+    },
   });
 
   constructor(
@@ -278,7 +303,7 @@ export class WorkbookWorkerRuntime {
       this.projectionOverlayScope = overlayScope;
       this.installEngine(engine);
       if (!requiresAuthoritativeHydrate && !projectionMatchesRestoredLocalStore) {
-        await this.persistStateNow();
+        await this.persistCoordinator.queuePersist();
       }
     }
 
@@ -352,7 +377,7 @@ export class WorkbookWorkerRuntime {
     this.projectionMatchesLocalStore = false;
     this.viewportTileStore.reset();
     this.snapshotCaches.invalidateProjectionSnapshot();
-    await this.persistStateNow();
+    await this.persistCoordinator.queuePersist();
     this.broadcastViewportPatches(null, engine.getLastMetrics());
     return this.getRuntimeState();
   }
@@ -427,7 +452,10 @@ export class WorkbookWorkerRuntime {
         authoritativeDelta,
         authoritativeEngine,
         projectionEngine: engine,
-        projectionOverlayScope: this.getProjectionOverlayScopeForPersist(),
+        projectionOverlayScope: resolveProjectionOverlayScopeForPersist({
+          projectionOverlayScope: this.projectionOverlayScope,
+          pendingMutationCount: this.pendingMutations.length,
+        }),
         removePendingMutationIds: [...absorbedMutationIds],
       });
       this.projectionMatchesLocalStore = true;
@@ -513,7 +541,7 @@ export class WorkbookWorkerRuntime {
       });
     }
     applyPendingWorkbookMutationToEngine(await this.getProjectionEngine(), nextMutation);
-    await this.persistStateNow();
+    await this.persistCoordinator.queuePersist();
     return {
       ...nextMutation,
       args: [...nextMutation.args],
@@ -550,7 +578,7 @@ export class WorkbookWorkerRuntime {
     this.projectionMatchesLocalStore = false;
     if (this.bootstrapOptions?.persistState && this.localStore) {
       await this.localStore.updatePendingMutation(result.updatedMutation);
-      await this.persistStateNow();
+      await this.persistCoordinator.queuePersist();
     }
   }
 
@@ -585,7 +613,7 @@ export class WorkbookWorkerRuntime {
     this.projectionMatchesLocalStore = false;
     if (this.bootstrapOptions?.persistState && this.localStore) {
       await this.localStore.updatePendingMutation(result.updatedMutation);
-      await this.persistStateNow();
+      await this.persistCoordinator.queuePersist();
     }
   }
 
@@ -602,7 +630,7 @@ export class WorkbookWorkerRuntime {
     this.projectionMatchesLocalStore = false;
     if (this.bootstrapOptions?.persistState && this.localStore) {
       await this.localStore.updatePendingMutation(result.updatedMutation);
-      await this.persistStateNow();
+      await this.persistCoordinator.queuePersist();
     }
   }
 
@@ -780,7 +808,7 @@ export class WorkbookWorkerRuntime {
     this.engineSubscription?.();
     this.engineSubscription = null;
     this.projectionEnginePromise = null;
-    this.persistQueued = false;
+    this.persistCoordinator.reset();
     this.viewportPatchPublisher.reset();
     this.runtimeStateCache = null;
     this.snapshotCaches.reset();
@@ -967,7 +995,9 @@ export class WorkbookWorkerRuntime {
       getProjectionBuildVersion: () => this.projectionBuildVersion,
       getProjectionEngine: () => this.getProjectionEngine(),
       schedule: (callback) => {
-        setTimeout(callback, 0);
+        setTimeout(() => {
+          callback();
+        }, 0);
       },
     });
   }
@@ -987,69 +1017,6 @@ export class WorkbookWorkerRuntime {
       this.updateRuntimeStateFromEngine(engine);
       this.broadcastViewportPatches(event);
     });
-  }
-
-  private getProjectionOverlayScopeForPersist(): ProjectionOverlayScope | null {
-    if (this.projectionOverlayScope) {
-      return this.projectionOverlayScope;
-    }
-    return this.pendingMutations.length === 0 ? createEmptyProjectionOverlayScope() : null;
-  }
-
-  private async persistStateNow(): Promise<void> {
-    if (!this.canPersistState()) {
-      return;
-    }
-    this.persistQueued = true;
-    await this.flushPersistState();
-  }
-
-  private async flushPersistState(): Promise<void> {
-    if (!this.persistQueued || !this.canPersistState()) {
-      return;
-    }
-    if (this.persistInFlight) {
-      await this.persistInFlight;
-      if (this.persistQueued) {
-        await this.flushPersistState();
-      }
-      return;
-    }
-
-    const authoritativeEngine = await this.getAuthoritativeEngine();
-    const projectionEngine = await this.getProjectionEngine();
-    const persisted = buildPersistedWorkerState({
-      snapshotCaches: this.snapshotCaches,
-      authoritativeEngine,
-      projectionEngine,
-      hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
-      authoritativeRevision: this.authoritativeRevision,
-      appliedPendingLocalSeq: this.pendingMutations.at(-1)?.localSeq ?? 0,
-    });
-    this.persistQueued = false;
-    const localStore = this.localStore;
-    if (!localStore) {
-      return;
-    }
-    const savePromise = persistProjectionStateToLocalStore({
-      localStore,
-      state: persisted,
-      authoritativeEngine,
-      projectionEngine,
-      projectionOverlayScope: this.getProjectionOverlayScopeForPersist(),
-    });
-    this.persistInFlight = savePromise;
-    try {
-      await savePromise;
-      this.projectionMatchesLocalStore = true;
-    } finally {
-      if (this.persistInFlight === savePromise) {
-        this.persistInFlight = null;
-      }
-    }
-    if (this.persistQueued) {
-      await this.flushPersistState();
-    }
   }
 
   private broadcastViewportPatches(
