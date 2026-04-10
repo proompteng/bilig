@@ -85,7 +85,7 @@ export function formatWorkbookCollaboratorLabel(userId: string): string {
   return titleCaseSegments(userId);
 }
 
-export function formatWorkbookCollaboratorInitials(label: string): string {
+function formatWorkbookCollaboratorInitials(label: string): string {
   const words = label
     .split(/\s+/u)
     .map((entry) => entry.trim())

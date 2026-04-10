@@ -182,11 +182,7 @@ function isMacPlatform(platform?: string): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
-export function listWorkbookShortcutEntries(): readonly WorkbookShortcutEntry[] {
-  return WORKBOOK_SHORTCUTS;
-}
-
-export function getWorkbookShortcutEntry(id: string): WorkbookShortcutEntry | undefined {
+function getWorkbookShortcutEntry(id: string): WorkbookShortcutEntry | undefined {
   return SHORTCUT_BY_ID.get(id);
 }
 
@@ -218,9 +214,7 @@ export function searchWorkbookShortcutEntries(query: string): readonly WorkbookS
   });
 }
 
-export function groupWorkbookShortcutEntries(
-  entries: readonly WorkbookShortcutEntry[],
-): readonly {
+export function groupWorkbookShortcutEntries(entries: readonly WorkbookShortcutEntry[]): readonly {
   readonly category: WorkbookShortcutEntry["category"];
   readonly entries: readonly WorkbookShortcutEntry[];
 }[] {

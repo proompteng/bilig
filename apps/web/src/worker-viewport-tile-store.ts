@@ -2,8 +2,8 @@ import type { WorkbookLocalStore, WorkbookLocalViewportBase } from "@bilig/stora
 import { MAX_COLS, MAX_ROWS } from "@bilig/protocol";
 import type { ViewportPatchSubscription } from "@bilig/worker-transport";
 
-export const VIEWPORT_TILE_COLUMN_COUNT = 128;
-export const VIEWPORT_TILE_ROW_COUNT = 32;
+const VIEWPORT_TILE_COLUMN_COUNT = 128;
+const VIEWPORT_TILE_ROW_COUNT = 32;
 const DEFAULT_MAX_CACHED_TILES = 96;
 
 type ViewportBounds = Pick<
