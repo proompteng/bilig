@@ -61,6 +61,13 @@ function requestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function requestBody(init: RequestInit | undefined): unknown {
+  if (!init || typeof init.body !== "string") {
+    return null;
+  }
+  return JSON.parse(init.body) as unknown;
+}
+
 function createSnapshot(overrides: Record<string, unknown> = {}) {
   return {
     sessionId: "agent-session-1",
@@ -692,11 +699,107 @@ describe("workbook agent pane", () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(requestBody(fetchSpy.mock.calls[0]?.[1])).toEqual({
+      threadId: "thr-1",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+    });
+    expect(requestBody(fetchSpy.mock.calls[1]?.[1])).toEqual({
+      threadId: "thr-1",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+    });
     expect(MockEventSource.latest?.url).toContain(
       "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
     );
     expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
       '"sessionId":"agent-session-2"',
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("bootstraps from a stored durable thread id without requiring a stored session id", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    window.sessionStorage.setItem(
+      "bilig:workbook-agent:doc-1",
+      JSON.stringify({
+        threadId: "thr-1",
+      }),
+    );
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/sessions")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-2",
+              threadId: "thr-1",
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(requestBody(fetchSpy.mock.calls[0]?.[1])).toEqual({
+      threadId: "thr-1",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+    });
+    expect(MockEventSource.latest?.url).toContain(
+      "/v2/documents/doc-1/agent/sessions/agent-session-2/events",
+    );
+    expect(window.sessionStorage.getItem("bilig:workbook-agent:doc-1")).toContain(
+      '"threadId":"thr-1"',
     );
 
     await act(async () => {

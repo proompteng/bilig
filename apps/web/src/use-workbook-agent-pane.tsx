@@ -21,7 +21,12 @@ import { WorkbookAgentPanel } from "./WorkbookAgentPanel.js";
 
 const STORAGE_KEY_PREFIX = "bilig:workbook-agent:";
 
-interface StoredWorkbookAgentSession {
+interface StoredWorkbookAgentThreadRef {
+  threadId: string;
+  sessionId?: string;
+}
+
+interface WorkbookAgentLiveSession {
   sessionId: string;
   threadId: string;
 }
@@ -34,10 +39,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isStoredWorkbookAgentSession(value: unknown): value is StoredWorkbookAgentSession {
+function isStoredWorkbookAgentSession(value: unknown): value is StoredWorkbookAgentThreadRef {
   return (
     isRecord(value) &&
-    typeof value["sessionId"] === "string" &&
+    (value["sessionId"] === undefined || typeof value["sessionId"] === "string") &&
     typeof value["threadId"] === "string"
   );
 }
@@ -52,7 +57,7 @@ function readMessageEventData(event: Event): string | null {
   return event instanceof MessageEvent && typeof event.data === "string" ? event.data : null;
 }
 
-function loadStoredSession(documentId: string): StoredWorkbookAgentSession | null {
+function loadStoredSession(documentId: string): StoredWorkbookAgentThreadRef | null {
   try {
     const raw = window.sessionStorage.getItem(storageKey(documentId));
     if (!raw) {
@@ -66,8 +71,23 @@ function loadStoredSession(documentId: string): StoredWorkbookAgentSession | nul
   return null;
 }
 
-function persistStoredSession(documentId: string, value: StoredWorkbookAgentSession): void {
+function persistStoredSession(documentId: string, value: StoredWorkbookAgentThreadRef): void {
   window.sessionStorage.setItem(storageKey(documentId), JSON.stringify(value));
+}
+
+function createSessionResumeBody(
+  storedSession: StoredWorkbookAgentThreadRef | null,
+  context: WorkbookAgentUiContext,
+): {
+  readonly threadId?: string;
+  readonly context: WorkbookAgentUiContext;
+} {
+  return storedSession?.threadId
+    ? {
+        threadId: storedSession.threadId,
+        context,
+      }
+    : { context };
 }
 
 function updateSnapshotFromDelta(
@@ -118,7 +138,7 @@ export function useWorkbookAgentPane(input: {
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
   const autoApplyBundleIdRef = useRef<string | null>(null);
-  const sessionRef = useRef<StoredWorkbookAgentSession | null>(null);
+  const sessionRef = useRef<WorkbookAgentLiveSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const recoveringStreamRef = useRef(false);
   const lastContextKeyRef = useRef<string>("");
@@ -231,10 +251,9 @@ export function useWorkbookAgentPane(input: {
                 headers: {
                   "content-type": "application/json",
                 },
-                body: JSON.stringify({
-                  ...storedSession,
-                  context: getContextRef.current(),
-                }),
+                body: JSON.stringify(
+                  createSessionResumeBody(storedSession, getContextRef.current()),
+                ),
               },
             );
             const payload = (await response.json()) as unknown;
@@ -263,10 +282,7 @@ export function useWorkbookAgentPane(input: {
   );
 
   const createOrResumeSession = useCallback(
-    async (
-      storedSession: StoredWorkbookAgentSession | null,
-      context: WorkbookAgentUiContext,
-    ): Promise<WorkbookAgentSessionSnapshot> => {
+    async (storedSession: StoredWorkbookAgentThreadRef | null, context: WorkbookAgentUiContext) => {
       const response = await fetch(
         `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
         {
@@ -274,10 +290,7 @@ export function useWorkbookAgentPane(input: {
           headers: {
             "content-type": "application/json",
           },
-          body: JSON.stringify({
-            ...storedSession,
-            context,
-          }),
+          body: JSON.stringify(createSessionResumeBody(storedSession, context)),
         },
       );
       const payload = (await response.json()) as unknown;
@@ -294,7 +307,7 @@ export function useWorkbookAgentPane(input: {
     [documentId],
   );
 
-  const ensureSession = useCallback(async (): Promise<StoredWorkbookAgentSession> => {
+  const ensureSession = useCallback(async (): Promise<WorkbookAgentLiveSession> => {
     const activeSession = sessionRef.current;
     if (activeSession) {
       return activeSession;
@@ -305,10 +318,12 @@ export function useWorkbookAgentPane(input: {
       persistSessionSnapshot(nextSnapshot);
       connectStream(nextSnapshot.sessionId);
       setError(null);
-      return {
+      const nextSession = {
         sessionId: nextSnapshot.sessionId,
         threadId: nextSnapshot.threadId,
       };
+      sessionRef.current = nextSession;
+      return nextSession;
     } finally {
       setIsLoading(false);
     }
@@ -463,7 +478,7 @@ export function useWorkbookAgentPane(input: {
     let cancelled = false;
     lastContextKeyRef.current = "";
     const storedSession = loadStoredSession(documentId);
-    sessionRef.current = storedSession;
+    sessionRef.current = null;
     if (!storedSession) {
       setIsLoading(false);
       return () => {
