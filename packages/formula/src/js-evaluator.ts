@@ -5,6 +5,7 @@ import { getBuiltin, hasBuiltin } from "./builtins.js";
 import { getLookupBuiltin, type RangeBuiltinArgument } from "./builtins/lookup.js";
 import { evaluateGroupBy, evaluatePivotBy, type MatrixValue } from "./group-pivot-evaluator.js";
 import { evaluateArraySpecialCall } from "./js-evaluator-array-special-calls.js";
+import { evaluateContextSpecialCall } from "./js-evaluator-context-special-calls.js";
 import type {
   EvaluationContext,
   JsPlanInstruction,
@@ -768,71 +769,6 @@ function evaluateSpecialCall(
   argRefs: readonly (ReferenceOperand | undefined)[] = [],
 ): StackValue | undefined {
   switch (callee) {
-    case "ROW": {
-      if (rawArgs.length > 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const row = referenceRowNumber(argRefs[0], context);
-      return stackScalar(row === undefined ? error(ErrorCode.Value) : numberValue(row));
-    }
-    case "COLUMN": {
-      if (rawArgs.length > 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const column = referenceColumnNumber(argRefs[0], context);
-      return stackScalar(column === undefined ? error(ErrorCode.Value) : numberValue(column));
-    }
-    case "ISOMITTED": {
-      if (rawArgs.length !== 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      return stackScalar({ tag: ValueTag.Boolean, value: rawArgs[0]?.kind === "omitted" });
-    }
-    case "FORMULATEXT": {
-      if (rawArgs.length !== 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const address = referenceTopLeftAddress(argRefs[0]);
-      const sheetName = referenceSheetName(argRefs[0], context);
-      if (!address || !sheetName) {
-        return stackScalar(error(ErrorCode.Ref));
-      }
-      const formula = context.resolveFormula?.(sheetName, address);
-      return stackScalar(
-        formula
-          ? stringValue(formula.startsWith("=") ? formula : `=${formula}`)
-          : error(ErrorCode.NA),
-      );
-    }
-    case "FORMULA": {
-      if (rawArgs.length !== 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const address = referenceTopLeftAddress(argRefs[0]);
-      const sheetName = referenceSheetName(argRefs[0], context);
-      if (!address || !sheetName) {
-        return stackScalar(error(ErrorCode.Ref));
-      }
-      const formula = context.resolveFormula?.(sheetName, address);
-      return stackScalar(
-        formula
-          ? stringValue(formula.startsWith("=") ? formula : `=${formula}`)
-          : error(ErrorCode.NA),
-      );
-    }
-    case "PHONETIC": {
-      if (rawArgs.length !== 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const target = rawArgs[0]!;
-      if (target.kind === "scalar") {
-        return stackScalar(stringValue(toStringValue(target.value)));
-      }
-      if (target.kind === "range") {
-        return stackScalar(stringValue(toStringValue(target.values[0] ?? emptyValue())));
-      }
-      return stackScalar(error(ErrorCode.Value));
-    }
     case "GETPIVOTDATA": {
       if (rawArgs.length < 2 || (rawArgs.length - 2) % 2 !== 0) {
         return stackScalar(error(ErrorCode.Value));
@@ -978,111 +914,6 @@ function evaluateSpecialCall(
       };
       return stackScalar(context.resolveMultipleOperations?.(request) ?? error(ErrorCode.Ref));
     }
-    case "CHOOSE": {
-      if (rawArgs.length < 2) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const indexValue = isSingleCellValue(rawArgs[0]!);
-      const choice = indexValue ? toNumber(indexValue) : undefined;
-      if (choice === undefined || !Number.isFinite(choice)) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const truncated = Math.trunc(choice);
-      if (truncated < 1 || truncated >= rawArgs.length) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      return cloneStackValue(rawArgs[truncated]!);
-    }
-    case "SHEET": {
-      if (rawArgs.length > 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      if (rawArgs.length === 0) {
-        const index = sheetIndexByName(context.sheetName, context);
-        return stackScalar(index === undefined ? error(ErrorCode.NA) : numberValue(index));
-      }
-      if (argRefs[0]) {
-        const index = sheetIndexByName(
-          referenceSheetName(argRefs[0], context) ?? context.sheetName,
-          context,
-        );
-        return stackScalar(index === undefined ? error(ErrorCode.NA) : numberValue(index));
-      }
-      const scalar = isSingleCellValue(rawArgs[0]!);
-      if (scalar?.tag !== ValueTag.String) {
-        return stackScalar(error(ErrorCode.NA));
-      }
-      const index = sheetIndexByName(scalar.value, context);
-      return stackScalar(index === undefined ? error(ErrorCode.NA) : numberValue(index));
-    }
-    case "SHEETS": {
-      if (rawArgs.length > 1) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      if (rawArgs.length === 0) {
-        return stackScalar(numberValue(sheetNames(context).length));
-      }
-      if (argRefs[0]) {
-        return stackScalar(numberValue(1));
-      }
-      const scalar = isSingleCellValue(rawArgs[0]!);
-      if (scalar?.tag !== ValueTag.String) {
-        return stackScalar(error(ErrorCode.NA));
-      }
-      return stackScalar(
-        sheetIndexByName(scalar.value, context) === undefined
-          ? error(ErrorCode.NA)
-          : numberValue(1),
-      );
-    }
-    case "CELL": {
-      if (rawArgs.length < 1 || rawArgs.length > 2) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const infoType = isSingleCellValue(rawArgs[0]!);
-      if (infoType?.tag !== ValueTag.String) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const ref = rawArgs.length === 2 ? argRefs[1] : currentCellReference(context);
-      if (!ref) {
-        return stackScalar(error(ErrorCode.Value));
-      }
-      const normalizedInfoType = infoType.value.trim().toLowerCase();
-      switch (normalizedInfoType) {
-        case "address": {
-          const address = absoluteAddress(ref, context);
-          return stackScalar(address ? stringValue(address) : error(ErrorCode.Value));
-        }
-        case "row": {
-          const row = referenceRowNumber(ref, context);
-          return stackScalar(row === undefined ? error(ErrorCode.Value) : numberValue(row));
-        }
-        case "col": {
-          const column = referenceColumnNumber(ref, context);
-          return stackScalar(column === undefined ? error(ErrorCode.Value) : numberValue(column));
-        }
-        case "contents": {
-          const address = referenceTopLeftAddress(ref);
-          const sheetName = referenceSheetName(ref, context);
-          if (!address || !sheetName) {
-            return stackScalar(error(ErrorCode.Value));
-          }
-          return stackScalar(context.resolveCell(sheetName, address));
-        }
-        case "type": {
-          const address = referenceTopLeftAddress(ref);
-          const sheetName = referenceSheetName(ref, context);
-          if (!address || !sheetName) {
-            return stackScalar(error(ErrorCode.Value));
-          }
-          return stackScalar(stringValue(cellTypeCode(context.resolveCell(sheetName, address))));
-        }
-        case "filename":
-          return stackScalar(stringValue(""));
-        default:
-          return stackScalar(error(ErrorCode.Value));
-      }
-    }
     case "INDIRECT": {
       if (rawArgs.length < 1 || rawArgs.length > 2) {
         return stackScalar(error(ErrorCode.Value));
@@ -1139,11 +970,32 @@ function evaluateSpecialCall(
       return stackScalar(resolvedName ?? error(ErrorCode.Ref));
     }
     default:
-      return evaluateArraySpecialCall(callee, rawArgs, context, {
-        error,
-        emptyValue,
-        numberValue,
-        stringValue,
+      return (
+        evaluateContextSpecialCall(callee, rawArgs, context, argRefs, {
+          error,
+          emptyValue,
+          numberValue,
+          stringValue,
+          stackScalar,
+          cloneStackValue,
+          toNumber,
+          toStringValue,
+          isSingleCellValue,
+          currentCellReference,
+          referenceSheetName,
+          referenceTopLeftAddress,
+          referenceRowNumber,
+          referenceColumnNumber,
+          absoluteAddress,
+          cellTypeCode,
+          sheetNames,
+          sheetIndexByName,
+        }) ??
+        evaluateArraySpecialCall(callee, rawArgs, context, {
+          error,
+          emptyValue,
+          numberValue,
+          stringValue,
         stackScalar,
         toRangeLike,
         getRangeCell,
@@ -1155,10 +1007,11 @@ function evaluateSpecialCall(
         coerceOptionalBooleanArgument,
         coerceOptionalMatchModeArgument,
         coerceOptionalPositiveIntegerArgument,
-        coerceOptionalTrimModeArgument,
-        isCellValueError,
-        isSingleCellValue,
-      });
+          coerceOptionalTrimModeArgument,
+          isCellValueError,
+          isSingleCellValue,
+        })
+      );
   }
 }
 
