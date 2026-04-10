@@ -371,6 +371,141 @@ describe("workbook agent pane", () => {
     });
   });
 
+  it("starts a shared thread when the shared scope is selected", async () => {
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    let sessionBody: unknown = null;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (url.endsWith("/agent/threads")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/agent/sessions")) {
+        sessionBody = requestBody(init);
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-shared",
+              threadId: "thr-shared",
+              entries: [],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/turns")) {
+        return new Response(
+          JSON.stringify(
+            createSnapshot({
+              sessionId: "agent-session-shared",
+              threadId: "thr-shared",
+              status: "inProgress",
+              activeTurnId: "turn-1",
+              entries: [
+                {
+                  id: "optimistic-user:turn-1",
+                  kind: "user",
+                  turnId: "turn-1",
+                  text: "Share this thread",
+                  phase: null,
+                  toolName: null,
+                  toolStatus: null,
+                  argumentsText: null,
+                  outputText: null,
+                  success: null,
+                },
+              ],
+            }),
+          ),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<AgentHarness />);
+    });
+
+    const sharedScopeButton = host.querySelector("[data-testid='workbook-agent-scope-shared']");
+    expect(sharedScopeButton instanceof HTMLButtonElement).toBe(true);
+
+    await act(async () => {
+      if (!(sharedScopeButton instanceof HTMLButtonElement)) {
+        throw new Error("Shared scope button not found");
+      }
+      sharedScopeButton.click();
+    });
+
+    const input = host.querySelector("[data-testid='workbook-agent-input']");
+    expect(input instanceof HTMLTextAreaElement).toBe(true);
+
+    await act(async () => {
+      if (!(input instanceof HTMLTextAreaElement)) {
+        throw new Error("Agent input not found");
+      }
+      const valueDescriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      );
+      const valueSetter = valueDescriptor ? Reflect.get(valueDescriptor, "set") : null;
+      if (typeof valueSetter !== "function") {
+        throw new Error("Textarea value setter not found");
+      }
+      Reflect.apply(valueSetter, input, ["Share this thread"]);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+        }),
+      );
+    });
+
+    expect(MockEventSource.latest?.url).toBe(
+      "/v2/documents/doc-1/agent/sessions/agent-session-shared/events",
+    );
+    expect(sessionBody).toEqual({
+      scope: "shared",
+      context: {
+        selection: {
+          sheetName: "Sheet1",
+          address: "A1",
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 10,
+          colStart: 0,
+          colEnd: 5,
+        },
+      },
+    });
+    expect(
+      fetchSpy.mock.calls.some(([requestInput]) =>
+        requestUrl(requestInput).endsWith("/agent/sessions/agent-session-shared/turns"),
+      ),
+    ).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("submits the draft on Enter from the chat composer", async () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }

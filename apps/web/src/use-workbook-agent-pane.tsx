@@ -12,10 +12,12 @@ import {
 import {
   WorkbookAgentSessionSnapshotSchema,
   WorkbookAgentStreamEventSchema,
+  WorkbookAgentThreadScopeSchema,
   WorkbookAgentThreadSummarySchema,
   decodeUnknownSync,
   type WorkbookAgentSessionSnapshot,
   type WorkbookAgentStreamEvent,
+  type WorkbookAgentThreadScope,
   type WorkbookAgentThreadSummary,
   type WorkbookAgentUiContext,
 } from "@bilig/contracts";
@@ -79,19 +81,28 @@ function persistStoredSession(documentId: string, value: StoredWorkbookAgentThre
   window.sessionStorage.setItem(storageKey(documentId), JSON.stringify(value));
 }
 
+function clearStoredSession(documentId: string): void {
+  window.sessionStorage.removeItem(storageKey(documentId));
+}
+
 function createSessionResumeBody(
   storedSession: StoredWorkbookAgentThreadRef | null,
   context: WorkbookAgentUiContext,
+  scope: WorkbookAgentThreadScope,
 ): {
   readonly threadId?: string;
   readonly context: WorkbookAgentUiContext;
+  readonly scope?: WorkbookAgentThreadScope;
 } {
   return storedSession?.threadId
     ? {
         threadId: storedSession.threadId,
         context,
       }
-    : { context };
+    : {
+        context,
+        scope: decodeUnknownSync(WorkbookAgentThreadScopeSchema, scope),
+      };
 }
 
 function updateSnapshotFromDelta(
@@ -142,6 +153,7 @@ export function useWorkbookAgentPane(input: {
   const [preview, setPreview] = useState<WorkbookAgentPreviewSummary | null>(null);
   const [selectedCommandIndexes, setSelectedCommandIndexes] = useState<number[]>([]);
   const [threadSummaries, setThreadSummaries] = useState<readonly WorkbookAgentThreadSummary[]>([]);
+  const [threadScope, setThreadScope] = useState<WorkbookAgentThreadScope>("private");
   const autoApplyBundleIdRef = useRef<string | null>(null);
   const sessionRef = useRef<WorkbookAgentLiveSession | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -279,7 +291,7 @@ export function useWorkbookAgentPane(input: {
                   "content-type": "application/json",
                 },
                 body: JSON.stringify(
-                  createSessionResumeBody(storedSession, getContextRef.current()),
+                  createSessionResumeBody(storedSession, getContextRef.current(), threadScope),
                 ),
               },
             );
@@ -305,11 +317,15 @@ export function useWorkbookAgentPane(input: {
       });
       eventSourceRef.current = source;
     },
-    [closeStream, documentId, persistSessionSnapshot],
+    [closeStream, documentId, persistSessionSnapshot, threadScope],
   );
 
   const createOrResumeSession = useCallback(
-    async (storedSession: StoredWorkbookAgentThreadRef | null, context: WorkbookAgentUiContext) => {
+    async (
+      storedSession: StoredWorkbookAgentThreadRef | null,
+      context: WorkbookAgentUiContext,
+      scope: WorkbookAgentThreadScope,
+    ) => {
       const response = await fetch(
         `/v2/documents/${encodeURIComponent(documentId)}/agent/sessions`,
         {
@@ -317,7 +333,7 @@ export function useWorkbookAgentPane(input: {
           headers: {
             "content-type": "application/json",
           },
-          body: JSON.stringify(createSessionResumeBody(storedSession, context)),
+          body: JSON.stringify(createSessionResumeBody(storedSession, context, scope)),
         },
       );
       const payload = (await response.json()) as unknown;
@@ -341,7 +357,7 @@ export function useWorkbookAgentPane(input: {
     }
     setIsLoading(true);
     try {
-      const nextSnapshot = await createOrResumeSession(null, getContextRef.current());
+      const nextSnapshot = await createOrResumeSession(null, getContextRef.current(), threadScope);
       persistSessionSnapshot(nextSnapshot);
       connectStream(nextSnapshot.sessionId);
       setError(null);
@@ -354,7 +370,7 @@ export function useWorkbookAgentPane(input: {
     } finally {
       setIsLoading(false);
     }
-  }, [connectStream, createOrResumeSession, persistSessionSnapshot]);
+  }, [connectStream, createOrResumeSession, persistSessionSnapshot, threadScope]);
 
   useEffect(() => {
     autoApplyBundleIdRef.current = null;
@@ -533,7 +549,11 @@ export function useWorkbookAgentPane(input: {
     const bootstrapStoredSession = async () => {
       try {
         setIsLoading(true);
-        const nextSnapshot = await createOrResumeSession(storedSession, getContextRef.current());
+        const nextSnapshot = await createOrResumeSession(
+          storedSession,
+          getContextRef.current(),
+          threadScope,
+        );
         if (cancelled) {
           return;
         }
@@ -563,6 +583,7 @@ export function useWorkbookAgentPane(input: {
     enabled,
     loadThreadSummaries,
     persistSessionSnapshot,
+    threadScope,
   ]);
 
   const selectThread = useCallback(
@@ -573,7 +594,11 @@ export function useWorkbookAgentPane(input: {
       try {
         setIsLoading(true);
         setError(null);
-        const nextSnapshot = await createOrResumeSession({ threadId }, getContextRef.current());
+        const nextSnapshot = await createOrResumeSession(
+          { threadId },
+          getContextRef.current(),
+          threadScope,
+        );
         persistSessionSnapshot(nextSnapshot);
         connectStream(nextSnapshot.sessionId);
       } catch (nextError) {
@@ -582,8 +607,19 @@ export function useWorkbookAgentPane(input: {
         setIsLoading(false);
       }
     },
-    [connectStream, createOrResumeSession, persistSessionSnapshot],
+    [connectStream, createOrResumeSession, persistSessionSnapshot, threadScope],
   );
+
+  const startNewThread = useCallback(() => {
+    closeStream();
+    clearStoredSession(documentId);
+    recoveringStreamRef.current = false;
+    sessionRef.current = null;
+    setSnapshot(null);
+    setPreview(null);
+    setSelectedCommandIndexes([]);
+    setError(null);
+  }, [closeStream, documentId]);
 
   useEffect(() => {
     if (!enabled || !snapshot) {
@@ -758,6 +794,7 @@ export function useWorkbookAgentPane(input: {
         preview={preview}
         selectedCommandIndexes={normalizedCommandIndexes}
         snapshot={snapshot}
+        threadScope={threadScope}
         threadSummaries={threadSummaries}
         onApplyPendingBundle={() => {
           void applyPendingBundle("user");
@@ -770,6 +807,7 @@ export function useWorkbookAgentPane(input: {
           void interrupt();
         }}
         onSelectAllPendingCommands={selectAllPendingCommands}
+        onSelectThreadScope={setThreadScope}
         onTogglePendingCommand={togglePendingCommand}
         onReplayExecutionRecord={(recordId) => {
           void replayExecutionRecord(recordId);
@@ -777,6 +815,7 @@ export function useWorkbookAgentPane(input: {
         onSelectThread={(threadId) => {
           void selectThread(threadId);
         }}
+        onStartNewThread={startNewThread}
         onSubmit={() => {
           void sendPrompt();
         }}
@@ -799,6 +838,9 @@ export function useWorkbookAgentPane(input: {
       selectThread,
       snapshot,
       selectAllPendingCommands,
+      setThreadScope,
+      startNewThread,
+      threadScope,
       threadSummaries,
       togglePendingCommand,
     ],

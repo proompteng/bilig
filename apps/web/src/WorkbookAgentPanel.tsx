@@ -13,6 +13,7 @@ import type {
 } from "@bilig/agent-api";
 import type {
   WorkbookAgentSessionSnapshot,
+  WorkbookAgentThreadScope,
   WorkbookAgentThreadSummary,
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
@@ -98,6 +99,51 @@ function ThreadSummaryStrip(props: {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function ThreadComposerControls(props: {
+  readonly threadScope: WorkbookAgentThreadScope;
+  readonly onSelectThreadScope: (scope: WorkbookAgentThreadScope) => void;
+  readonly onStartNewThread: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-1">
+        {(["private", "shared"] as const).map((scope) => {
+          const isActive = props.threadScope === scope;
+          return (
+            <button
+              key={scope}
+              aria-pressed={isActive}
+              className={cn(
+                workbookButtonClass({
+                  size: "sm",
+                  tone: isActive ? "accent" : "neutral",
+                  weight: isActive ? "strong" : "regular",
+                }),
+                "px-2.5",
+              )}
+              data-testid={`workbook-agent-scope-${scope}`}
+              type="button"
+              onClick={() => {
+                props.onSelectThreadScope(scope);
+              }}
+            >
+              {scope === "shared" ? "Shared" : "Private"}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        className={workbookButtonClass({ size: "sm", tone: "neutral", weight: "strong" })}
+        data-testid="workbook-agent-new-thread"
+        type="button"
+        onClick={props.onStartNewThread}
+      >
+        New thread
+      </button>
     </div>
   );
 }
@@ -683,6 +729,7 @@ export function WorkbookAgentPanel(props: {
   readonly preview: WorkbookAgentPreviewSummary | null;
   readonly selectedCommandIndexes: readonly number[];
   readonly executionRecords: readonly WorkbookAgentExecutionRecord[];
+  readonly threadScope: WorkbookAgentThreadScope;
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[];
   readonly draft: string;
   readonly isLoading: boolean;
@@ -692,7 +739,9 @@ export function WorkbookAgentPanel(props: {
   readonly onDismissPendingBundle: () => void;
   readonly onInterrupt: () => void;
   readonly onSelectAllPendingCommands: () => void;
+  readonly onSelectThreadScope: (scope: WorkbookAgentThreadScope) => void;
   readonly onSelectThread: (threadId: string) => void;
+  readonly onStartNewThread: () => void;
   readonly onTogglePendingCommand: (commandIndex: number) => void;
   readonly onReplayExecutionRecord: (recordId: string) => void;
   readonly onSubmit: () => void;
@@ -719,6 +768,11 @@ export function WorkbookAgentPanel(props: {
         <div className="min-w-0 text-[12px] font-medium text-[var(--wb-text)]">
           {contextLabel(props.snapshot?.context ?? props.currentContext)}
         </div>
+        <ThreadComposerControls
+          threadScope={props.threadScope}
+          onSelectThreadScope={props.onSelectThreadScope}
+          onStartNewThread={props.onStartNewThread}
+        />
         <ThreadSummaryStrip
           activeThreadId={props.activeThreadId}
           threadSummaries={props.threadSummaries}
