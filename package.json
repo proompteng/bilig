@@ -31,6 +31,7 @@
     "lint": "oxlint --config .oxlintrc.json --type-aware --deny-warnings packages apps e2e scripts",
     "lint:fix": "oxlint --config .oxlintrc.json --type-aware --fix packages apps e2e scripts",
     "analyze:dead-code": "knip -c knip.config.ts --workspace apps/web --workspace packages/core --workspace packages/formula --workspace packages/grid --workspace packages/runtime-kernel --workspace packages/worker-transport --include files,dependencies --no-config-hints --no-progress",
+    "analyze:exports": "knip -c knip.config.ts --workspace apps/web --workspace packages/core --workspace packages/formula --workspace packages/grid --workspace packages/runtime-kernel --workspace packages/worker-transport --include exports --no-config-hints --no-progress",
     "analyze:cycles": "depcruise --config .dependency-cruiser.cjs apps/web/src packages/core/src packages/formula/src packages/grid/src packages/runtime-kernel/src packages/worker-transport/src",
     "analyze:quality": "pnpm analyze:dead-code && pnpm analyze:cycles",
     "hooks:pre-commit": "lint-staged",

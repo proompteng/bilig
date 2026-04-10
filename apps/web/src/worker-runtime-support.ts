@@ -18,7 +18,7 @@ import {
   type WorkbookSnapshot,
 } from "@bilig/protocol";
 import type { ViewportAxisPatch, ViewportPatchSubscription } from "@bilig/worker-transport";
-import { isPendingWorkbookMutationList, type PendingWorkbookMutation } from "./workbook-sync.js";
+import type { PendingWorkbookMutation } from "./workbook-sync.js";
 
 export interface WorkerSheet {
   name: string;
@@ -157,21 +157,6 @@ export function styleSignature(style: CellStyleRecord): string {
   ].join("|");
 }
 
-export function parsePersistedWorkbookState(value: unknown): PersistedWorkbookState | null {
-  return isPersistedWorkbookState(value) ? value : null;
-}
-
-export function parsePersistedPendingMutationState(
-  value: unknown,
-): PersistedPendingMutationState | null {
-  if (!isRecord(value) || !isPendingWorkbookMutationList(value["pendingMutations"])) {
-    return null;
-  }
-  return {
-    pendingMutations: [...value["pendingMutations"]],
-  };
-}
-
 export function buildAxisPatches(
   start: number,
   end: number,
@@ -256,7 +241,7 @@ export function collectViewportCells(
   return positions;
 }
 
-export function collectAxisIndices(
+function collectAxisIndices(
   start: number,
   end: number,
   invalidatedAxes: readonly { startIndex: number; endIndex: number }[] | null,
@@ -458,21 +443,4 @@ export function viewportPatchMayBeImpacted(
   }
 
   return false;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isPersistedWorkbookState(value: unknown): value is PersistedWorkbookState {
-  if (!isRecord(value) || !isRecord(value["snapshot"]) || !isRecord(value["replica"])) {
-    return false;
-  }
-  const snapshot = value["snapshot"];
-  const replica = value["replica"];
-  return (
-    Array.isArray(snapshot["sheets"]) &&
-    isRecord(replica["replica"]) &&
-    Array.isArray(replica["entityVersions"])
-  );
 }

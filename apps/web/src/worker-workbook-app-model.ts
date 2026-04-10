@@ -52,7 +52,7 @@ export function normalizeSheetNameKey(value: string): string {
   return value.trim().toUpperCase();
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 

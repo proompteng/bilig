@@ -10,7 +10,7 @@ import {
 
 export type { BiligRuntimeSession };
 
-export function loadRuntimeSessionEffect(
+function loadRuntimeSessionEffect(
   fetchImpl: typeof fetch = fetch,
 ): Effect.Effect<BiligRuntimeSession, DecodeError | HttpError | TransportError> {
   return Effect.tryPromise({

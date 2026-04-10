@@ -25,7 +25,3 @@ export function resolveWorkbookNavigationUrl(input: WorkbookNavigationTarget): s
   }
   return url.toString();
 }
-
-export function navigateToWorkbook(input: WorkbookNavigationTarget): void {
-  window.location.assign(resolveWorkbookNavigationUrl(input));
-}
